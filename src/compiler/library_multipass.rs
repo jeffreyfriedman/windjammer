@@ -1007,9 +1007,6 @@ pub(crate) fn build_library_multipass(
     // Always (re)generate Cargo.toml in the output directory for Rust builds.
     super::generate_cargo_manifests(base_path, output, target, true)?;
 
-    // Record the compiler version so the next build can detect upgrades.
-    let _ = super::cache_management::write_compiler_stamp(output);
-
     let stale = super::cache_management::find_stale_codegen_outputs_with_dep_epoch(
         &sources,
         &src_base,
@@ -1032,6 +1029,9 @@ pub(crate) fn build_library_multipass(
             deferred_lint_errors.join("\n")
         ));
     }
+
+    // Record the compiler version only after stale-output validation passes.
+    let _ = super::cache_management::write_compiler_stamp(output);
 
     Ok(())
 }

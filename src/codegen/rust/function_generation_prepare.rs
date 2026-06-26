@@ -263,10 +263,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let mut param_types = Vec::new();
+        let mut formal_param_types = Vec::new();
         let mut param_ownership = Vec::new();
 
         for (idx, param) in func.parameters.iter().enumerate() {
             if param.name != "self" {
+                let ast_owned_string = crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !matches!(
+                        param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    );
+                let is_module_level = func.parent_type.is_none();
+
                 let mut p_type = analyzed
                     .inferred_param_types
                     .get(idx)
@@ -291,9 +299,28 @@ impl<'ast> CodeGenerator<'ast> {
                         .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 };
 
-                if matches!(&p_type, Type::Reference(_)) {
+                // Module-level `string` formals stay owned; impl methods may converge to &str.
+                if ast_owned_string && is_module_level {
+                    p_type = param.type_.clone();
+                    ownership = crate::analyzer::OwnershipMode::Owned;
+                } else if let Some(reg) = registry_sig {
+                    if let Some(formal) = reg.formal_param_type(idx) {
+                        if crate::codegen::rust::types::is_windjammer_text_type(formal)
+                            && !matches!(
+                                formal,
+                                Type::Reference(_) | Type::MutableReference(_)
+                            )
+                            && is_module_level
+                        {
+                            p_type = formal.clone();
+                            ownership = crate::analyzer::OwnershipMode::Owned;
+                        }
+                    }
+                }
+
+                if matches!(&p_type, Type::Reference(_)) && !ast_owned_string {
                     ownership = crate::analyzer::OwnershipMode::Borrowed;
-                } else if matches!(&p_type, Type::MutableReference(_)) {
+                } else if matches!(&p_type, Type::MutableReference(_)) && !ast_owned_string {
                     ownership = crate::analyzer::OwnershipMode::MutBorrowed;
                 }
 
@@ -319,7 +346,11 @@ impl<'ast> CodeGenerator<'ast> {
                             Type::Reference(_) | Type::MutableReference(_)
                         ) && !type_analysis::is_copy_type(&p_type) =>
                     {
-                        Type::Reference(Box::new(p_type))
+                        if crate::codegen::rust::types::is_windjammer_text_type(&p_type) {
+                            Type::Reference(Box::new(Type::Custom("str".into())))
+                        } else {
+                            Type::Reference(Box::new(p_type))
+                        }
                     }
                     crate::analyzer::OwnershipMode::MutBorrowed
                         if !matches!(&p_type, Type::MutableReference(_)) =>
@@ -329,18 +360,20 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => p_type,
                 };
                 param_types.push(stored_type);
+                formal_param_types.push(param.type_.clone());
                 param_ownership.push(ownership);
             }
         }
 
-        let signature = crate::codegen::rust::generator::MethodSignature::new(
-            impl_type.to_string(),
-            func.name.clone(),
+        let signature = crate::codegen::rust::generator::MethodSignature {
+            receiver_type: impl_type.to_string(),
+            method_name: func.name.clone(),
             param_types,
+            formal_param_types,
             param_ownership,
-            func.return_type.clone(),
+            return_type: func.return_type.clone(),
             has_self_receiver,
-        );
+        };
 
         self.register_method_signature(signature);
     }

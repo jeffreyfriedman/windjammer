@@ -85,13 +85,13 @@ fn main() {
         );
     }
 
-    // String params used only for comparison should be inferred as &str
+    // Module-level `string` formals default to owned `String` (pit of success).
     assert!(
-        generated.contains("fn leaf_fn(id: &str)")
-            || generated.contains("fn leaf_fn(_id: &str)")
-            || generated.contains("fn leaf_fn(id: &String)")
-            || generated.contains("fn leaf_fn(_id: &String)"),
-        "leaf_fn should have borrowed param. Generated:\n{}",
+        generated.contains("fn leaf_fn(id: String)")
+            || generated.contains("fn leaf_fn(_id: String)")
+            || generated.contains("fn leaf_fn(id: &str)")
+            || generated.contains("fn leaf_fn(_id: &str)"),
+        "leaf_fn should have string param. Generated:\n{}",
         generated
     );
 }

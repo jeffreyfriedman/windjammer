@@ -2685,7 +2685,8 @@ impl SceneManager {
     assert!(
         rs.contains("contains(&name)")
             || rs.contains("contains(name.as_str())")
-            || (rs.contains("contains(name)") && rs.contains("name: &String")),
+            || (rs.contains("contains(name)")
+                && (rs.contains("name: &String") || rs.contains("name: &str"))),
         "Vec/Set contains must borrow string param without to_string(). Got:\n{rs}"
     );
     assert!(

@@ -28,9 +28,8 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // 0b. Explicit Rust type `String` (not Windjammer `string`) stays Owned.
-        // When user writes `path: String`, they're explicitly requesting Rust's String type,
-        // which should be respected as owned. Do NOT infer it as borrowed.
-        // This is different from `path: string` (lowercase), which can infer to &str.
+        // Windjammer `string` ownership is resolved at the end: module-level formals default
+        // to owned; impl-method passthrough helpers may infer borrowed `&str`.
         if matches!(param_type, Type::Custom(name) if name == "String") {
             return Ok(OwnershipMode::Owned);
         }
@@ -96,6 +95,11 @@ impl<'ast> Analyzer<'ast> {
 
         // 1. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
+            // Copy formals (e.g. @derive(Copy) AppDeps) stay owned — field dispatch copies,
+            // never &mut AppDeps (financial-management-platform composition root).
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -178,6 +182,28 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
+        // 6d. Bare identifier passed to a **function** call uses move semantics (non-Copy)
+        // when callees consume the value. Method-call passthrough (e.g. HashSet::contains)
+        // is handled by step 7 / default Borrowed — not this rule.
+        if !self.is_copy_type(param_type)
+            && self.is_passed_by_value_as_function_call_arg(param_name, body)
+        {
+            if let Some(mode) = self.infer_passthrough_ownership(
+                param_name,
+                param_type,
+                body,
+                registry,
+                current_func_name,
+                func,
+            ) {
+                // Passthrough to a borrowed callee: wrapper keeps Borrowed so signatures
+                // chain (`fn wrapper(items: &Vec<T>) { process(items) }`).
+                // Owned callees still propagate Owned via infer_passthrough_ownership.
+                return Ok(mode);
+            }
+            return Ok(OwnershipMode::Owned);
+        }
+
         // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need
         // &mut self — do not infer Borrowed for the receiver. Scoped to `?` only so
         // unknown methods on typed params still default to borrowed (multi-pass refines).
@@ -211,6 +237,9 @@ impl<'ast> Analyzer<'ast> {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
                 OwnershipMode::MutBorrowed => {
+                    if self.is_copy_type(param_type) {
+                        return Ok(OwnershipMode::Owned);
+                    }
                     // `mut param` used only as an argument to a &mut callee keeps an owned
                     // binding; the call site adds `&mut`. Method calls on the param (e.g.
                     // `c.increment()`) need `&mut T` in the signature itself.
@@ -254,7 +283,7 @@ impl<'ast> Analyzer<'ast> {
         //   stored, iterated, used in binary ops, pattern matched)
         // - If none of those apply, the parameter is truly read-only
         // - Read-only non-Copy parameters should be &T in generated Rust
-        // - Copy types are overridden to Owned in build_signature
+        // - Copy types default to Owned (pass-by-value); see step 9 below
         //
         // This matches the Windjammer philosophy: users write `data: Vec<f32>`
         // and the compiler infers `&Vec<f32>` when data is only read.
@@ -262,7 +291,313 @@ impl<'ast> Analyzer<'ast> {
         //
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
+        //
+        // Module-level `string` formals default to owned `String` (pit of success — the
+        // type annotation is the API contract). Impl-method passthrough helpers still infer
+        // borrowed `&str` when only forwarding to other borrowed callees.
+        // Exception: params only used as `&param` in the body (e.g. `a + &b + &c`) stay Borrowed.
+        if Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_none() {
+            if self.is_only_used_as_borrow(param_name, body) {
+                return Ok(OwnershipMode::Borrowed);
+            }
+            return Ok(OwnershipMode::Owned);
+        }
+        // Copy types (primitives, @derive(Copy) structs): always owned in the signature.
+        // Borrowing Copy formals produces `&i64` / `&Entity` and breaks arithmetic, unary
+        // ops, and call sites that pass Copy values by value (see copy_type_parameter_inference_test,
+        // fmp_copy_param_owned_inference_test).
+        if self.is_copy_type(param_type) {
+            return Ok(OwnershipMode::Owned);
+        }
         Ok(OwnershipMode::Borrowed)
+    }
+
+    /// True when `param_name` appears as a bare identifier argument in a function/method call
+    /// (not wrapped in `&` / `&mut`), indicating move semantics at the call site.
+    pub(crate) fn is_passed_by_value_as_call_arg(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut found = false;
+        for stmt in body {
+            self.stmt_collect_pass_by_value_call_arg(param_name, stmt, &mut found);
+            if found {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// True when `param_name` appears as a bare identifier argument in a **function** call
+    /// (not a method call), indicating move semantics when the callee consumes the value.
+    pub(crate) fn is_passed_by_value_as_function_call_arg(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut found = false;
+        for stmt in body {
+            self.stmt_collect_pass_by_value_function_call_arg(param_name, stmt, &mut found);
+            if found {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_collect_pass_by_value_function_call_arg(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match stmt {
+            Statement::Let { value, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, value, found)
+            }
+            Statement::Return { value, .. } => {
+                if let Some(v) = value {
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, v, found)
+                }
+            }
+            Statement::Expression { expr, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, expr, found)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, condition, found);
+                if *found {
+                    return;
+                }
+                for s in then_block {
+                    self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, value, found);
+                if *found {
+                    return;
+                }
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        self.expr_collect_pass_by_value_function_call_arg(param_name, guard, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, arm.body, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                for s in body {
+                    self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn expr_collect_pass_by_value_function_call_arg(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match expr {
+            Expression::Call { arguments, .. } => {
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        *found = true;
+                        return;
+                    }
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, left, found);
+                self.expr_collect_pass_by_value_function_call_arg(param_name, right, found);
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, operand, found);
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
+                self.expr_collect_pass_by_value_function_call_arg(param_name, index, found);
+            }
+            Expression::TryOp { expr, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, expr, found);
+            }
+            Expression::MethodCall { object, arguments, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
+                for (_, arg) in arguments {
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn stmt_collect_pass_by_value_call_arg(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match stmt {
+            Statement::Let { value, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, value, found)
+            }
+            Statement::Return { value, .. } => {
+                if let Some(v) = value {
+                    self.expr_collect_pass_by_value_call_arg(param_name, v, found)
+                }
+            }
+            Statement::Expression { expr, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, expr, found)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, condition, found);
+                if *found {
+                    return;
+                }
+                for s in then_block {
+                    self.stmt_collect_pass_by_value_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.stmt_collect_pass_by_value_call_arg(param_name, s, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, value, found);
+                if *found {
+                    return;
+                }
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        self.expr_collect_pass_by_value_call_arg(param_name, guard, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                    self.expr_collect_pass_by_value_call_arg(param_name, arm.body, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                for s in body {
+                    self.stmt_collect_pass_by_value_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn expr_collect_pass_by_value_call_arg(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match expr {
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        *found = true;
+                        return;
+                    }
+                    self.expr_collect_pass_by_value_call_arg(param_name, arg, found);
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    self.stmt_collect_pass_by_value_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, left, found);
+                self.expr_collect_pass_by_value_call_arg(param_name, right, found);
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, operand, found);
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, object, found);
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, object, found);
+                self.expr_collect_pass_by_value_call_arg(param_name, index, found);
+            }
+            Expression::TryOp { expr, .. } => {
+                self.expr_collect_pass_by_value_call_arg(param_name, expr, found);
+            }
+            _ => {}
+        }
     }
 
     /// True when the parameter is the receiver of a method call (e.g. `grid.set()`), not
@@ -357,7 +692,17 @@ impl<'ast> Analyzer<'ast> {
                 operand,
                 ..
             } => self.expr_param_only_borrowed(param_name, operand, true),
-            Expression::Binary { left, right, .. } => {
+            Expression::Binary { left, right, op, .. } => {
+                use crate::parser::BinaryOp;
+                // String concatenation `lhs + rhs`: codegen emits `lhs + &rhs` — RHS is borrow-only.
+                if matches!(op, BinaryOp::Add) {
+                    if self.expr_is_identifier(right, param_name) {
+                        return self.expr_param_only_borrowed(param_name, left, false);
+                    }
+                    if self.expr_is_identifier(left, param_name) {
+                        return false;
+                    }
+                }
                 self.expr_param_only_borrowed(param_name, left, false)
                     && self.expr_param_only_borrowed(param_name, right, false)
             }

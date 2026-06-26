@@ -377,6 +377,70 @@ pub fn resolve_method_for_call_site(
     };
 
     pick_best_resolved_signature(local_filtered, global_filtered)
+        .map(|mut resolved| {
+            if let Some(g) = global {
+                apply_trait_owned_string_call_site_contracts(g, method, &mut resolved.sig);
+            }
+            resolved.sig = finalize_call_site_signature(resolved.sig);
+            resolved
+        })
+}
+
+/// When an impl method body converged `string` to `&str`, restore trait declaration owned
+/// `String` call-site contracts from the global registry (port traits / E0053).
+pub(crate) fn apply_trait_owned_string_call_site_contracts(
+    global: &SignatureRegistry,
+    method: &str,
+    sig: &mut FunctionSignature,
+) {
+    // Trait owned-string call-site contracts apply to instance methods only (port traits /
+    // E0053). Static associated methods (`Squad::new`, `BuildFingerprint::collect_wj_files`)
+    // keep body-converged `&str` — global declaration stubs must not downgrade them.
+    if !sig.has_self_receiver {
+        return;
+    }
+    let suffix = format!("::{method}");
+    for (key, trait_sig) in &global.signatures {
+        if key == &sig.name || !key.ends_with(&suffix) {
+            continue;
+        }
+        if trait_sig.has_self_receiver != sig.has_self_receiver {
+            continue;
+        }
+        for idx in 0..sig.param_ownership.len() {
+            if sig.has_self_receiver && idx == 0 {
+                continue;
+            }
+            if !formal_is_plain_windjammer_string(trait_sig, idx) {
+                continue;
+            }
+            if !matches!(
+                trait_sig.param_ownership.get(idx),
+                Some(OwnershipMode::Owned)
+            ) {
+                continue;
+            }
+            let impl_converged_borrow = sig.param_types.get(idx).is_some_and(|ty| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+            }) || param_types_indicate_borrowed_text(sig, idx);
+            let ownership_stale_borrow =
+                sig.param_ownership.get(idx) == Some(&OwnershipMode::Borrowed);
+            if !impl_converged_borrow && !ownership_stale_borrow {
+                continue;
+            }
+            if let Some(t) = sig.param_types.get_mut(idx) {
+                *t = Type::String;
+            }
+            if let Some(o) = sig.param_ownership.get_mut(idx) {
+                *o = OwnershipMode::Owned;
+            }
+            if sig.formal_param_types.len() <= idx {
+                sig.formal_param_types.resize(idx + 1, Type::String);
+            } else {
+                sig.formal_param_types[idx] = Type::String;
+            }
+        }
+    }
 }
 
 /// Try receiver-type-qualified lookup with base-type stripping.
@@ -470,15 +534,78 @@ fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
     }
 }
 
-pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
-    // E0053: plain `string` in a trait/item signature is owned `String` in Rust. Stale str_ref
-    // metadata in `param_types` must not force `&` / `&str` at call sites.
-    if sig.formal_param_type(param_idx).is_some_and(|t| {
+fn formal_is_plain_windjammer_string(sig: &FunctionSignature, param_idx: usize) -> bool {
+    sig.formal_param_type(param_idx).is_some_and(|t| {
         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             && crate::codegen::rust::types::is_windjammer_text_type(t)
-    }) {
+    })
+}
+
+/// Trait/instance methods pass owned `String` for plain `string` trait formals at call sites.
+fn trait_instance_owned_string_at_call_site(sig: &FunctionSignature, param_idx: usize) -> bool {
+    sig.has_self_receiver
+        && param_idx > 0
+        && formal_is_plain_windjammer_string(sig, param_idx)
+        && is_type_qualified_associated_call(&sig.name)
+}
+
+fn param_types_indicate_borrowed_text(sig: &FunctionSignature, param_idx: usize) -> bool {
+    sig.param_types.get(param_idx).is_some_and(|ty| {
+        let ownership_borrowed = matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        );
+        if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
+            return ownership_borrowed;
+        }
+        matches!(
+            ty,
+            Type::Reference(inner)
+                if crate::codegen::rust::types::is_windjammer_text_type(inner)
+        ) && ownership_borrowed
+    })
+}
+
+pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
+    if static_impl_text_borrows_at_call_site(sig, param_idx) {
+        return OwnershipMode::Borrowed;
+    }
+
+    if trait_instance_owned_string_at_call_site(sig, param_idx) {
         return OwnershipMode::Owned;
     }
+
+    // Phase-3 converged `&str` in param_types → borrow at call site.
+    if sig.param_types.get(param_idx).is_some_and(|ty| {
+        crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+    }) {
+        return OwnershipMode::Borrowed;
+    }
+
+    if param_types_indicate_borrowed_text(sig, param_idx) {
+        return OwnershipMode::Borrowed;
+    }
+
+    if let Some(ty) = sig.param_types.get(param_idx) {
+        match ty {
+            Type::Reference(_) => return OwnershipMode::Borrowed,
+            Type::MutableReference(_) => return OwnershipMode::MutBorrowed,
+            _ => {}
+        }
+    }
+
+    // Plain `string` formals are owned `String` at call sites unless body/registry converged
+    // the param to Borrowed (read-only concat RHS, passthrough wrappers, impl helpers).
+    if formal_is_plain_windjammer_string(sig, param_idx) {
+        if matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) {
+            return sig.param_ownership[param_idx];
+        }
+        return OwnershipMode::Owned;
+    }
+
     // Registry may list `Reference(str)` in `param_types` while `param_ownership`/`formal_params`
     // still record the owned `string` contract (see `.wj.meta` formal_params vs params).
     if matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
@@ -494,30 +621,17 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         return OwnershipMode::Owned;
     }
 
-    if let Some(ty) = sig.param_types.get(param_idx) {
-        if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
-            return OwnershipMode::Borrowed;
-        }
-        // Phase 3 converged signatures wrap borrowed params as Reference(T) in param_types.
-        // That wrapper is authoritative even when param_ownership still says Owned.
-        match ty {
-            Type::Reference(_) => return OwnershipMode::Borrowed,
-            Type::MutableReference(_) => return OwnershipMode::MutBorrowed,
-            _ => {}
-        }
-    }
-
-    // Bare owned formal type is authoritative for call-site lowering when Phase 3 did not
-    // wrap `param_types` as `Reference(T)` (Copy structs and true owned formals).
-    // Non-copy params with body-inferred Borrowed still honor param_ownership (Vec<AABB>).
+    // Bare owned formal in `param_types` (no `Reference` wrapper).
+    // Type-qualified methods pass by value even when body inferred Borrowed (Copy struct double-use).
+    // Module-level legacy signatures may still honor stale Borrowed metadata (VoxelGrid).
     if param_type_is_owned_non_text(sig, param_idx)
-        && sig
-            .formal_param_type(param_idx)
-            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
         && sig.param_types.get(param_idx).is_some_and(|t| {
             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
         })
     {
+        if is_type_qualified_associated_call(&sig.name) {
+            return OwnershipMode::Owned;
+        }
         if let Some(own) = sig.param_ownership.get(param_idx) {
             if matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) {
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
@@ -548,6 +662,145 @@ pub(crate) fn is_external_module_qualified_call(func_name: &str) -> bool {
 pub fn effective_param_ownership_for_arg(sig: &FunctionSignature, arg_index: usize) -> OwnershipMode {
     let idx = sig.arg_param_index(arg_index);
     effective_param_ownership(sig, idx)
+}
+
+/// Static impl methods borrow at call sites only when body analysis converged the param
+/// (`Reference(str)` in `param_types` and/or `Borrowed` in `param_ownership`).
+pub(crate) fn static_impl_text_borrows_at_call_site(sig: &FunctionSignature, param_idx: usize) -> bool {
+    is_type_qualified_associated_call(&sig.name)
+        && (static_impl_converged_str_ref_param(sig, param_idx)
+            || static_impl_borrowed_text_param(sig, param_idx))
+}
+
+/// Like [`effective_param_ownership_for_arg`] but honors body-converged static impl text borrows.
+pub fn effective_param_ownership_for_method_arg(
+    sig: &FunctionSignature,
+    arg_index: usize,
+    _receiver_type: Option<&str>,
+) -> OwnershipMode {
+    let idx = sig.arg_param_index(arg_index);
+    if static_impl_text_borrows_at_call_site(sig, idx) {
+        return OwnershipMode::Borrowed;
+    }
+    effective_param_ownership(sig, idx)
+}
+
+/// Static associated methods (`Squad::new`) with body-converged `&str` formals.
+fn static_impl_converged_str_ref_param(sig: &FunctionSignature, idx: usize) -> bool {
+    !sig.has_self_receiver
+        && sig.param_types.get(idx).is_some_and(|ty| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+        })
+}
+
+/// Static associated methods whose body inference marked text params Borrowed (registry may
+/// still carry bare `String` in `param_types` before Phase 3 wrap on cross-file entries).
+fn static_impl_borrowed_text_param(sig: &FunctionSignature, idx: usize) -> bool {
+    !sig.has_self_receiver
+        && matches!(
+            sig.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        )
+        && sig.param_types.get(idx).is_some_and(|t| {
+            crate::codegen::rust::types::is_windjammer_text_type(t)
+        })
+}
+
+/// E0053: plain `string` trait/item formals are owned `String` at call sites even when body
+/// analysis converged `param_types` to `Reference(str)` and/or stale `param_ownership`.
+pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) {
+    for idx in 0..sig.param_ownership.len() {
+        if sig.has_self_receiver && idx == 0 {
+            continue;
+        }
+
+        // Static impl methods with converged `&str` or body-inferred borrow: borrow at call sites.
+        if static_impl_converged_str_ref_param(sig, idx)
+            || static_impl_borrowed_text_param(sig, idx)
+        {
+            continue;
+        }
+
+        // Instance impl/type methods with body-inferred borrow: keep &str (skip upgrade).
+        if is_type_qualified_associated_call(&sig.name)
+            && sig.param_types.get(idx).is_some_and(|ty| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+            })
+            && matches!(
+                sig.param_ownership.get(idx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            )
+            && !formal_is_plain_windjammer_string(sig, idx)
+        {
+            continue;
+        }
+        if is_type_qualified_associated_call(&sig.name)
+            && sig.param_types.get(idx).is_some_and(|ty| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+            })
+            && matches!(sig.param_ownership.get(idx), Some(OwnershipMode::Owned))
+        {
+            continue;
+        }
+
+        // Body-inferred borrow on plain `string` formals stays `&str` at call sites only
+        // when param_types were not converged to `&str` (passthrough wrappers, concat RHS).
+        // Trait impl methods with converged `Reference(str)` + formal `string` upgrade below.
+        if formal_is_plain_windjammer_string(sig, idx)
+            && matches!(
+                sig.param_ownership.get(idx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            )
+            && !sig.param_types.get(idx).is_some_and(|ty| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+            })
+        {
+            continue;
+        }
+
+        let formal_plain_string = formal_is_plain_windjammer_string(sig, idx);
+
+        let owned_string_contract = formal_plain_string
+            || matches!(sig.param_ownership.get(idx), Some(OwnershipMode::Owned))
+                && sig.param_types.get(idx).is_some_and(|t| {
+                    matches!(t, Type::String)
+                        || matches!(
+                            t,
+                            Type::Reference(inner)
+                                if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                        )
+                });
+
+        if !owned_string_contract {
+            continue;
+        }
+
+        if let Some(slot) = sig.param_ownership.get_mut(idx) {
+            *slot = OwnershipMode::Owned;
+        }
+        if let Some(t) = sig.param_types.get_mut(idx) {
+            if matches!(
+                t,
+                Type::Reference(inner)
+                    if crate::codegen::rust::types::is_windjammer_text_type(inner)
+            ) {
+                *t = Type::String;
+            }
+        }
+        if formal_plain_string {
+            continue;
+        }
+        if sig.formal_param_types.len() <= idx {
+            sig.formal_param_types.resize(idx + 1, Type::String);
+        } else if crate::codegen::rust::types::is_windjammer_text_type(&sig.formal_param_types[idx]) {
+            sig.formal_param_types[idx] = Type::String;
+        }
+    }
+}
+
+pub fn finalize_call_site_signature(mut sig: FunctionSignature) -> FunctionSignature {
+    normalize_owned_string_formal_for_call_site(&mut sig);
+    sig
 }
 
 /// `MannequinMesh::generate`, `Vec::push` — not `foo::bar` module paths.
@@ -707,6 +960,129 @@ mod tests {
     }
 
     #[test]
+    fn apply_trait_owned_string_skips_static_associated_methods() {
+        let mut global = SignatureRegistry::new();
+        global.add_function(
+            "Squad::new".into(),
+            FunctionSignature {
+                name: "new".into(),
+                param_types: vec![Type::String, Type::String],
+                formal_param_types: vec![Type::String, Type::String],
+                param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                return_type: Some(Type::Custom("Squad".into())),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+            },
+        );
+
+        let mut sig = FunctionSignature {
+            name: "new".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+
+        apply_trait_owned_string_call_site_contracts(&global, "new", &mut sig);
+        assert!(
+            sig.param_types.iter().all(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            }),
+            "static impl must keep converged &str despite global owned stub"
+        );
+    }
+
+    #[test]
+    fn normalize_converged_str_ref_to_owned_string_call_site() {
+        let mut sig = FunctionSignature {
+            name: "PostgresTrialBalanceReader::trial_balance_lines".into(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Parameterized(
+                "Vec".into(),
+                vec![Type::Custom("TrialBalanceLine".into())],
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+        };
+        normalize_owned_string_formal_for_call_site(&mut sig);
+        assert_eq!(
+            sig.param_types.get(1),
+            Some(&Type::String),
+            "call-site sig should use owned String param type"
+        );
+        assert_eq!(
+            effective_param_ownership_for_arg(&sig, 0),
+            OwnershipMode::Owned,
+            "owned string formal must not borrow at call site"
+        );
+    }
+
+    #[test]
+    fn impl_method_str_ref_wins_over_stale_owned_metadata() {
+        let sig = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership_for_arg(&sig, 0),
+            OwnershipMode::Borrowed,
+            "converged &str param_types must borrow at call site even if param_ownership is stale Owned"
+        );
+        let mut normalized = sig.clone();
+        normalize_owned_string_formal_for_call_site(&mut normalized);
+        assert!(
+            normalized.param_types.iter().all(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            }),
+            "normalize must not upgrade converged &str impl params to String"
+        );
+    }
+
+    #[test]
+    fn associated_plain_string_formal_owned_at_call_site_despite_body_borrow() {
+        let sig = FunctionSignature {
+            name: "EnvAccountReader::list_accounts".into(),
+            param_types: vec![Type::Custom("Self".into()), Type::String],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Parameterized(
+                "Vec".into(),
+                vec![Type::Custom("Account".into())],
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership_for_arg(&sig, 0),
+            OwnershipMode::Owned,
+            "plain string trait formal must pass owned String at call site"
+        );
+    }
+
+    #[test]
     fn arg_count_mismatch_rejects() {
         let mut reg = SignatureRegistry::new();
         reg.add_function("Foo::new".into(), make_sig("new", 3, false));
@@ -831,7 +1207,7 @@ impl BuildFingerprint {
                 Type::Reference(Box::new(Type::Custom("str".into()))),
             ],
             formal_param_types: vec![Type::Custom("Self".into()), Type::String],
-            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             return_type: Some(Type::Parameterized(
                 "Vec".into(),
                 vec![Type::Custom("Account".into())],
@@ -843,7 +1219,7 @@ impl BuildFingerprint {
         assert_eq!(
             effective_param_ownership(&sig, 1),
             OwnershipMode::Owned,
-            "trait `string` param must pass by value at call sites"
+            "trait owned string formal passes String by value even when body converged param_types to &str"
         );
     }
 
@@ -1214,6 +1590,59 @@ impl BuildFingerprint {
         assert!(
             !rs.contains("hash_files(files.clone())"),
             "library-style codegen must not clone borrowed Vec arg. Got:\n{rs}"
+        );
+    }
+
+    #[test]
+    fn multipass_cross_file_squad_new_borrows_string_args() {
+        use crate::compiler::build_project_ext;
+        use crate::CompilationTarget;
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().expect("tempdir");
+        let src = temp.path().join("src");
+        let build = temp.path().join("build");
+        fs::create_dir_all(&src).expect("src");
+        fs::create_dir_all(&build).expect("build");
+        fs::write(
+            src.join("squad.wj"),
+            r#"
+pub struct Squad {
+    id: string,
+}
+
+impl Squad {
+    pub fn new(id: string, leader_id: string) -> Squad {
+        Squad { id: id }
+    }
+}
+"#,
+        )
+        .expect("squad.wj");
+        fs::write(
+            src.join("caller.wj"),
+            r#"
+use squad::Squad
+
+pub fn make_squad(squad_id: string, leader_id: string) -> Squad {
+    Squad::new(squad_id, leader_id)
+}
+"#,
+        )
+        .expect("caller.wj");
+
+        build_project_ext(&src, &build, CompilationTarget::Rust, false, true, &[])
+            .expect("build_project_ext");
+
+        let rs = fs::read_to_string(build.join("caller.rs")).expect("caller.rs");
+        assert!(
+            rs.contains("Squad::new(&squad_id") || rs.contains("Squad::new( &squad_id"),
+            "cross-file static new must borrow owned String args. Got:\n{rs}"
+        );
+        assert!(
+            !rs.contains("Squad::new(squad_id.to_string()"),
+            "must not spuriously to_string. Got:\n{rs}"
         );
     }
 
@@ -1730,6 +2159,159 @@ pub fn test_mannequin_default_generation() {
         assert_eq!(
             picked.unwrap().sig.param_ownership[0],
             OwnershipMode::Owned
+        );
+    }
+
+    #[test]
+    fn static_impl_text_borrow_requires_body_convergence_not_receiver_alone() {
+        let owned_stub = FunctionSignature {
+            name: "new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership_for_method_arg(&owned_stub, 0, Some("Squad")),
+            OwnershipMode::Owned,
+            "declaration stub without body Borrowed must stay owned at call sites",
+        );
+        let converged = FunctionSignature {
+            name: "new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert_eq!(
+            effective_param_ownership_for_method_arg(&converged, 0, Some("Squad")),
+            OwnershipMode::Borrowed,
+        );
+    }
+
+    #[test]
+    fn pick_best_prefers_global_borrowed_text_over_local_owned_stub() {
+        use crate::codegen::rust::signature_promotion::pick_best_resolved_signature;
+
+        let local = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let global = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let picked = pick_best_resolved_signature(
+            Some(ResolvedSignature {
+                sig: local,
+                qualified_key: "Squad::new".into(),
+                resolution_method: ResolutionMethod::ReceiverQualified,
+                has_collision: false,
+            }),
+            Some(ResolvedSignature {
+                sig: global,
+                qualified_key: "Squad::new".into(),
+                resolution_method: ResolutionMethod::ReceiverQualified,
+                has_collision: false,
+            }),
+        )
+        .expect("should pick global converged");
+        assert_eq!(
+            effective_param_ownership_for_arg(&picked.sig, 0),
+            OwnershipMode::Borrowed,
+        );
+    }
+
+    #[test]
+    fn squad_new_static_impl_resolves_str_borrow_at_call_site() {
+        use crate::analyzer::Analyzer;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+
+        let squad_src = r#"
+pub struct Squad {
+    id: string,
+}
+
+impl Squad {
+    pub fn new(id: string, leader_id: string) -> Squad {
+        Squad { id: id }
+    }
+}
+"#;
+        let mut lexer = Lexer::new(squad_src);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse squad");
+
+        let stub_registry = SignatureRegistry::from_program_declarations(&program);
+        let mut global = SignatureRegistry::new();
+        global.merge(&stub_registry);
+        let global = std::sync::Arc::new(global);
+
+        let mut analyzer = Analyzer::for_library_pass(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
+        analyzer.ownership_preconverged = true;
+        let (_, registry, _) = analyzer
+            .analyze_program_with_global_arc(&program, &global)
+            .expect("analyze squad");
+
+        let stored = registry
+            .get_signature("Squad::new")
+            .expect("Squad::new stored");
+        assert!(
+            stored.param_types.iter().any(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            }) || stored.param_types.iter().all(|t| matches!(t, Type::String)),
+            "stored param_types {:?}",
+            stored.param_types
+        );
+
+        let resolved = resolve_method_for_call_site(
+            &registry,
+            Some(global.as_ref()),
+            "Squad",
+            "new",
+            2,
+        )
+        .expect("Squad::new in registry");
+        assert!(
+            resolved
+                .sig
+                .param_types
+                .iter()
+                .all(crate::codegen::rust::string_utilities::param_is_rust_str_ref),
+            "expected converged &str params, got {:?}",
+            resolved.sig.param_types
+        );
+        assert_eq!(
+            effective_param_ownership_for_arg(&resolved.sig, 0),
+            OwnershipMode::Borrowed,
+        );
+        assert_eq!(
+            effective_param_ownership_for_arg(&resolved.sig, 1),
+            OwnershipMode::Borrowed,
         );
     }
 }

@@ -282,7 +282,7 @@ fn test_collections_vecdeque() {
 
 #[test]
 fn test_crypto_sha256() {
-    let hash = crypto::sha256(b"hello world");
+    let hash = crypto::sha256_bytes(b"hello world");
     assert!(!hash.is_empty());
     assert_eq!(hash.len(), 64); // SHA256 produces 64 hex characters
 }
@@ -361,14 +361,10 @@ fn test_db_open_sqlite() {
 
 #[test]
 fn test_db_open_postgres() {
-    let result = db::open_postgres("postgres://localhost/test");
-    assert!(
-        result.is_ok(),
-        "Failed to create Postgres connection: {:?}",
-        result
-    );
+    assert!(db::open_postgres("invalid://connection").is_err());
 
-    let conn = result.unwrap();
+    // Valid URL shape succeeds; pool connects lazily on first query (no server required here).
+    let conn = db::open_postgres("postgres://localhost/test").expect("valid postgres url");
     assert_eq!(conn.db_type(), &db::DatabaseType::Postgres);
 }
 
@@ -377,7 +373,7 @@ fn test_db_auto_detect() {
     let sqlite = db::open(":memory:").unwrap();
     assert_eq!(sqlite.db_type(), &db::DatabaseType::SQLite);
 
-    let postgres = db::open("postgres://localhost/test").unwrap();
+    let postgres = db::open("postgres://localhost/test").expect("valid postgres url");
     assert_eq!(postgres.db_type(), &db::DatabaseType::Postgres);
 }
 

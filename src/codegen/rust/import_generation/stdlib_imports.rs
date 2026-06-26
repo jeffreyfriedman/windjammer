@@ -85,6 +85,7 @@ impl CodeGenerator<'_> {
             "http" => "windjammer_runtime::http",
             "mime" => "windjammer_runtime::mime",
             "json" => "windjammer_runtime::json",
+            "jwt" => "windjammer_runtime::jwt",
             "io" => "windjammer_runtime::io",
             "subprocess" => "windjammer_runtime::subprocess",
 

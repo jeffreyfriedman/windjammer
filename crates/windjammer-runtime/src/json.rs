@@ -2,10 +2,16 @@
 //!
 //! Windjammer's `std::json` module maps to these functions.
 
+use serde::Deserialize;
 use serde_json::Value;
 
 /// Parse JSON string into a Value
 pub fn parse(s: &str) -> Result<Value, String> {
+    serde_json::from_str(s).map_err(|e| e.to_string())
+}
+
+/// Deserialize JSON into any type implementing `Deserialize`.
+pub fn parse_string<T: for<'de> Deserialize<'de>>(s: &str) -> Result<T, String> {
     serde_json::from_str(s).map_err(|e| e.to_string())
 }
 
@@ -152,6 +158,18 @@ pub fn get_index(value: &Value, index: usize) -> Option<&Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_string_typed() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Payload {
+            name: String,
+            age: i64,
+        }
+        let payload: Payload = parse_string(r#"{"name":"Alice","age":30}"#).expect("parse");
+        assert_eq!(payload.name, "Alice");
+        assert_eq!(payload.age, 30);
+    }
 
     #[test]
     fn test_parse_stringify() {
