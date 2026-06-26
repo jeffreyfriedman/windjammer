@@ -24,6 +24,7 @@ pub mod numeric_types;
 pub mod safety_type;
 pub mod solver;
 pub mod taint;
+pub mod target_encodings;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
