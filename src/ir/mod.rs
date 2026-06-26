@@ -22,9 +22,11 @@ pub mod numeric_solver;
 pub mod numeric_types;
 pub mod safety_type;
 pub mod solver;
+pub mod taint;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
+pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use node::{IrFunction, IrNode, IrNodeKind};
 pub use numeric_solver::NumericSolver;
