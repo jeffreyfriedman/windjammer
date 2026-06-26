@@ -4,6 +4,29 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## Branch Strategy (Parallel Development)
+
+This repository has two active development tracks:
+
+| Branch | Purpose | Owner | Worktree |
+|--------|---------|-------|----------|
+| `fix/post-0.48.0-bugs` (→ `main`) | Stable compiler: bugfixes, dogfooding | Game/bugfix agent | `windjammer/` |
+| `next/safety-typed-ir` | Next-gen architecture: Safety-Typed IR | Architecture agent | `windjammer-next/` |
+
+### Rules for `next/safety-typed-ir` (this branch)
+
+- This branch introduces `src/ir/` — the Safety-Typed IR layer
+- Periodically sync from `main` to pick up bugfixes: `git merge main`
+- All 4180+ existing tests must pass at every commit
+- Cutover to `main` as v0.50.0 only after full validation (tests + game build + playtest)
+
+### Rules for `main` / `fix/*` (other agents)
+
+- Do NOT modify `src/ir/` — that module belongs to the architecture branch
+- All other compiler work (bugfixes, ownership inference, codegen) continues normally
+- Tag releases as v0.48.x or v0.49.x
+- The game projects (`breach-protocol`, `windjammer-ui`) use the stable compiler from this track
+
 ## Quick Reference
 
 ```bash
