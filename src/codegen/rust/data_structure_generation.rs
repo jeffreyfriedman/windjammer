@@ -28,10 +28,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut s = self.generate_expression(e);
                 if let Some(ref tuple_types) = return_tuple_types {
                     if let Some(expected) = tuple_types.get(i) {
-                        if !matches!(
-                            expected,
-                            Type::Reference(_) | Type::MutableReference(_)
-                        ) {
+                        if !matches!(expected, Type::Reference(_) | Type::MutableReference(_)) {
                             if let Some(stripped) = s.strip_prefix("&mut ") {
                                 s = stripped.to_string();
                             } else if let Some(stripped) = s.strip_prefix("& ") {
@@ -74,22 +71,19 @@ impl<'ast> CodeGenerator<'ast> {
                             Type::Reference(inner) => !self.is_type_copy(inner),
                             Type::MutableReference(_) => false,
                             Type::Option(inner)
-                                if matches!(
-                                    inner.as_ref(),
-                                    Type::MutableReference(_)
-                                ) =>
+                                if matches!(inner.as_ref(), Type::MutableReference(_)) =>
                             {
                                 false
                             }
                             _ => false,
                         })
                         || matches!(e, Expression::Identifier { name, .. }
-                            if self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                                a.needs_clone_anywhere(name)
-                            }) && !matches!(
-                                self.infer_expression_type(e),
-                                Some(Type::Reference(_)) | Some(Type::MutableReference(_))
-                            ));
+                        if self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone_anywhere(name)
+                        }) && !matches!(
+                            self.infer_expression_type(e),
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                        ));
                     if !needs_clone {
                         // Also clone non-Copy field accesses through references
                         // (e.g. from_stack.item.id where from_stack is behind &)
@@ -558,7 +552,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 matches!(field_type, Type::String)
                                     || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String")
                             })
-                            || struct_name.len() > 0;
+                            || !struct_name.is_empty();
                         if field_is_string {
                             expr_str = format!("{}.to_string()", expr_str);
                         }

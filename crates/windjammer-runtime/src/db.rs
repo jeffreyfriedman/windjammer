@@ -16,7 +16,9 @@ fn runtime() -> Result<&'static tokio::runtime::Runtime, String> {
     }
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     let _ = RUNTIME.set(rt);
-    RUNTIME.get().ok_or_else(|| "failed to init tokio runtime".to_string())
+    RUNTIME
+        .get()
+        .ok_or_else(|| "failed to init tokio runtime".to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,12 +209,7 @@ impl Connection {
                 let rt = runtime()?;
                 let url = url.clone();
                 let created = rt
-                    .block_on(async {
-                        PgPoolOptions::new()
-                            .max_connections(5)
-                            .connect(&url)
-                            .await
-                    })
+                    .block_on(async { PgPoolOptions::new().max_connections(5).connect(&url).await })
                     .map_err(|e| e.to_string())?;
                 let arc = Arc::new(created);
                 let _ = pool.set(arc.clone());
@@ -299,11 +296,8 @@ mod tests {
     #[test]
     fn sqlite_memory_query_roundtrip() {
         let conn = open_sqlite(":memory:").expect("open");
-        conn.execute(
-            "CREATE TABLE items (id INTEGER, name TEXT)",
-            vec![],
-        )
-        .expect("create");
+        conn.execute("CREATE TABLE items (id INTEGER, name TEXT)", vec![])
+            .expect("create");
         conn.execute(
             "INSERT INTO items (id, name) VALUES (?, ?)",
             vec!["1".into(), "Alice".into()],

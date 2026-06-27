@@ -80,12 +80,18 @@ pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
 
     // Try the compiler executable location (wj in target/release/ or ~/.cargo/bin/)
     if let Ok(exe_path) = std::env::current_exe() {
-        let mut search = exe_path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        let mut search = exe_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
         for _ in 0..6 {
             if search.join("crates/windjammer-runtime/Cargo.toml").exists() {
                 return search.join("crates/windjammer-runtime");
             }
-            if search.join("windjammer/crates/windjammer-runtime/Cargo.toml").exists() {
+            if search
+                .join("windjammer/crates/windjammer-runtime/Cargo.toml")
+                .exists()
+            {
                 return search.join("windjammer/crates/windjammer-runtime");
             }
             if !search.pop() {
@@ -109,55 +115,6 @@ pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
     panic!(
         "windjammer-runtime not found. Set WINDJAMMER_RUNTIME_PATH or install wj from the Windjammer source tree."
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn find_runtime_uses_compiler_manifest_when_cwd_unrelated() {
-        let compiler_runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("crates/windjammer-runtime");
-        assert!(
-            compiler_runtime.join("Cargo.toml").exists(),
-            "test requires windjammer-runtime crate in tree"
-        );
-
-        let temp = tempfile::TempDir::new().expect("tempdir");
-        let prev = std::env::current_dir().expect("cwd");
-        std::env::set_current_dir(temp.path()).expect("chdir");
-        let found = find_windjammer_runtime_path();
-        std::env::set_current_dir(&prev).expect("restore cwd");
-
-        let found_canon = found.canonicalize().unwrap_or(found);
-        let expected_canon = compiler_runtime.canonicalize().unwrap();
-        assert_eq!(found_canon, expected_canon);
-    }
-
-    #[test]
-    fn find_runtime_respects_windjammer_runtime_path_env() {
-        let compiler_runtime = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("crates/windjammer-runtime");
-        let temp = tempfile::TempDir::new().expect("tempdir");
-        let fake = temp.path().join("runtime");
-        fs::create_dir_all(&fake).expect("mkdir");
-        fs::write(
-            fake.join("Cargo.toml"),
-            "[package]\nname = \"windjammer-runtime\"\n",
-        )
-        .expect("write");
-
-        std::env::set_var("WINDJAMMER_RUNTIME_PATH", fake.to_str().unwrap());
-        let found = find_windjammer_runtime_path();
-        std::env::remove_var("WINDJAMMER_RUNTIME_PATH");
-
-        assert_eq!(found, fake);
-
-        // Restore default path discovery for other tests
-        let _ = compiler_runtime;
-    }
 }
 
 /// Convert a `DependencySpec` into a Cargo.toml dependency line.
@@ -455,4 +412,53 @@ pub(crate) fn read_package_name(cargo_toml_path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn find_runtime_uses_compiler_manifest_when_cwd_unrelated() {
+        let compiler_runtime =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
+        assert!(
+            compiler_runtime.join("Cargo.toml").exists(),
+            "test requires windjammer-runtime crate in tree"
+        );
+
+        let temp = tempfile::TempDir::new().expect("tempdir");
+        let prev = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(temp.path()).expect("chdir");
+        let found = find_windjammer_runtime_path();
+        std::env::set_current_dir(&prev).expect("restore cwd");
+
+        let found_canon = found.canonicalize().unwrap_or(found);
+        let expected_canon = compiler_runtime.canonicalize().unwrap();
+        assert_eq!(found_canon, expected_canon);
+    }
+
+    #[test]
+    fn find_runtime_respects_windjammer_runtime_path_env() {
+        let compiler_runtime =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
+        let temp = tempfile::TempDir::new().expect("tempdir");
+        let fake = temp.path().join("runtime");
+        fs::create_dir_all(&fake).expect("mkdir");
+        fs::write(
+            fake.join("Cargo.toml"),
+            "[package]\nname = \"windjammer-runtime\"\n",
+        )
+        .expect("write");
+
+        std::env::set_var("WINDJAMMER_RUNTIME_PATH", fake.to_str().unwrap());
+        let found = find_windjammer_runtime_path();
+        std::env::remove_var("WINDJAMMER_RUNTIME_PATH");
+
+        assert_eq!(found, fake);
+
+        // Restore default path discovery for other tests
+        let _ = compiler_runtime;
+    }
 }

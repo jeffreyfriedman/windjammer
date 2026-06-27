@@ -12,22 +12,15 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone)]
 pub enum EffectConstraint {
     /// A function directly performs this effect (leaf constraint from stdlib).
-    Performs {
-        function: String,
-        effect: Effect,
-    },
+    Performs { function: String, effect: Effect },
     /// A function's effects include all effects of its callees.
-    CallsInto {
-        caller: String,
-        callee: String,
-    },
+    CallsInto { caller: String, callee: String },
     /// A function is declared pure (no effects allowed).
-    IsPure {
-        function: String,
-    },
+    IsPure { function: String },
 }
 
 /// The effect solver — propagates effects up the call graph.
+#[derive(Default)]
 pub struct EffectSolver {
     /// Direct effects declared for each function (from stdlib annotations).
     direct_effects: HashMap<String, EffectSet>,
@@ -56,10 +49,7 @@ impl EffectSolver {
                     .insert(effect);
             }
             EffectConstraint::CallsInto { caller, callee } => {
-                self.call_graph
-                    .entry(caller)
-                    .or_default()
-                    .insert(callee);
+                self.call_graph.entry(caller).or_default().insert(callee);
             }
             EffectConstraint::IsPure { function } => {
                 self.pure_functions.insert(function);
@@ -146,10 +136,7 @@ impl EffectSolver {
                 errors.push(EffectError {
                     kind: EffectErrorKind::ManifestViolation,
                     function: entry_point.to_string(),
-                    message: format!(
-                        "program requires effects not in manifest: {:?}",
-                        violations
-                    ),
+                    message: format!("program requires effects not in manifest: {:?}", violations),
                 });
             }
         }
@@ -288,8 +275,16 @@ mod tests {
         let result = solver.solve();
 
         // Effects should propagate: read_file -> process -> main
-        assert!(result.resolved.get("process").unwrap().contains(&Effect::FsRead));
-        assert!(result.resolved.get("main").unwrap().contains(&Effect::FsRead));
+        assert!(result
+            .resolved
+            .get("process")
+            .unwrap()
+            .contains(&Effect::FsRead));
+        assert!(result
+            .resolved
+            .get("main")
+            .unwrap()
+            .contains(&Effect::FsRead));
     }
 
     #[test]

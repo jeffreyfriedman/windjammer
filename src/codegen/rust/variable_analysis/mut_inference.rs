@@ -361,9 +361,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                         if let Some(ref type_name) = type_name {
                             let qualified_name = format!("{}::{}", type_name, method);
-                            if let Some(sig) =
-                                self.get_signature_with_global(&qualified_name)
-                            {
+                            if let Some(sig) = self.get_signature_with_global(&qualified_name) {
                                 if sig.has_self_receiver {
                                     if let Some(ownership) = sig.param_ownership.first() {
                                         if matches!(

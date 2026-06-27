@@ -34,9 +34,7 @@ pub struct SafetyEncoding {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OwnershipEncoding {
     /// Rust: native &T, &mut T, T, clone
-    RustNative {
-        emit: String,
-    },
+    RustNative { emit: String },
     /// Go: value type, *T with sync.RWMutex wrapper
     GoMutex {
         needs_lock: bool,
@@ -50,10 +48,7 @@ pub enum OwnershipEncoding {
         emit: String,
     },
     /// WASM: linear memory pointer with no ownership transfer
-    WasmLinear {
-        offset: u32,
-        emit: String,
-    },
+    WasmLinear { offset: u32, emit: String },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -95,18 +90,14 @@ pub enum EffectEncoding {
 pub fn encode_ownership(ownership: &OwnedType, target: Target) -> OwnershipEncoding {
     match target {
         Target::Rust => match ownership {
-            OwnedType::Owned => OwnershipEncoding::RustNative {
-                emit: "T".into(),
-            },
+            OwnedType::Owned => OwnershipEncoding::RustNative { emit: "T".into() },
             OwnedType::Ref(Region(r)) => OwnershipEncoding::RustNative {
                 emit: format!("&'r{} T", r),
             },
             OwnedType::MutRef(Region(r)) => OwnershipEncoding::RustNative {
                 emit: format!("&'r{} mut T", r),
             },
-            OwnedType::Copy => OwnershipEncoding::RustNative {
-                emit: "T".into(),
-            },
+            OwnedType::Copy => OwnershipEncoding::RustNative { emit: "T".into() },
             OwnedType::Inferred => OwnershipEncoding::RustNative {
                 emit: "T /* inferred */".into(),
             },
@@ -246,7 +237,8 @@ pub fn standard_equivalence_tests() -> Vec<SemanticEquivalenceTest> {
                     consume(s)
                     // s is moved — cannot use here
                 }
-            "#.into(),
+            "#
+            .into(),
             expected_behavior: ExpectedBehavior::Returns("5".into()),
         },
         SemanticEquivalenceTest {
@@ -255,10 +247,9 @@ pub fn standard_equivalence_tests() -> Vec<SemanticEquivalenceTest> {
                 fn handler(body: Tainted<String>) {
                     db.query(body)  // ERROR: tainted
                 }
-            "#.into(),
-            expected_behavior: ExpectedBehavior::CompileError(
-                "tainted data reaches sink".into(),
-            ),
+            "#
+            .into(),
+            expected_behavior: ExpectedBehavior::CompileError("tainted data reaches sink".into()),
         },
         SemanticEquivalenceTest {
             name: "effect_blocks_unauthorized_io".into(),
@@ -267,10 +258,9 @@ pub fn standard_equivalence_tests() -> Vec<SemanticEquivalenceTest> {
                 fn process() {
                     std::fs::read("secret.txt")  // ERROR: fs_read not allowed
                 }
-            "#.into(),
-            expected_behavior: ExpectedBehavior::CompileError(
-                "effect not in manifest".into(),
-            ),
+            "#
+            .into(),
+            expected_behavior: ExpectedBehavior::CompileError("effect not in manifest".into()),
         },
         SemanticEquivalenceTest {
             name: "spawn_produces_join_handle".into(),
@@ -280,7 +270,8 @@ pub fn standard_equivalence_tests() -> Vec<SemanticEquivalenceTest> {
                     let handle = spawn compute()
                     handle.join()
                 }
-            "#.into(),
+            "#
+            .into(),
             expected_behavior: ExpectedBehavior::Returns("42".into()),
         },
     ]
@@ -300,7 +291,11 @@ mod tests {
     fn test_go_mutref_uses_mutex() {
         let enc = encode_ownership(&OwnedType::MutRef(Region(1)), Target::Go);
         match enc {
-            OwnershipEncoding::GoMutex { needs_lock, lock_type, .. } => {
+            OwnershipEncoding::GoMutex {
+                needs_lock,
+                lock_type,
+                ..
+            } => {
                 assert!(needs_lock);
                 assert_eq!(lock_type, GoLockType::Mutex);
             }
@@ -312,7 +307,11 @@ mod tests {
     fn test_go_ref_uses_rwmutex() {
         let enc = encode_ownership(&OwnedType::Ref(Region(1)), Target::Go);
         match enc {
-            OwnershipEncoding::GoMutex { needs_lock, lock_type, .. } => {
+            OwnershipEncoding::GoMutex {
+                needs_lock,
+                lock_type,
+                ..
+            } => {
                 assert!(needs_lock);
                 assert_eq!(lock_type, GoLockType::RWMutex);
             }
@@ -324,7 +323,11 @@ mod tests {
     fn test_typescript_ref_is_readonly() {
         let enc = encode_ownership(&OwnedType::Ref(Region(1)), Target::TypeScript);
         match enc {
-            OwnershipEncoding::JsFrozen { readonly_type, emit, .. } => {
+            OwnershipEncoding::JsFrozen {
+                readonly_type,
+                emit,
+                ..
+            } => {
                 assert!(readonly_type);
                 assert!(emit.contains("Readonly"));
             }
@@ -336,7 +339,11 @@ mod tests {
     fn test_js_ref_uses_freeze() {
         let enc = encode_ownership(&OwnedType::Ref(Region(1)), Target::JavaScript);
         match enc {
-            OwnershipEncoding::JsFrozen { freeze_in_dev, emit, .. } => {
+            OwnershipEncoding::JsFrozen {
+                freeze_in_dev,
+                emit,
+                ..
+            } => {
                 assert!(freeze_in_dev);
                 assert!(emit.contains("Object.freeze"));
             }
@@ -374,7 +381,13 @@ mod tests {
 
     #[test]
     fn test_all_targets_encode_owned() {
-        for target in [Target::Rust, Target::Go, Target::JavaScript, Target::TypeScript, Target::Wasm] {
+        for target in [
+            Target::Rust,
+            Target::Go,
+            Target::JavaScript,
+            Target::TypeScript,
+            Target::Wasm,
+        ] {
             let enc = encode_ownership(&OwnedType::Owned, target);
             // All targets should produce some encoding for owned
             match enc {

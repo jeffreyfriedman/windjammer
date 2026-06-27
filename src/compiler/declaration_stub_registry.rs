@@ -121,7 +121,8 @@ pub fn collect_per_file_declaration_stubs(
         &mut struct_defining_module_paths,
     );
 
-    let stub_registry = SignatureRegistry::from_program_declarations_in_module(program, &file_module);
+    let stub_registry =
+        SignatureRegistry::from_program_declarations_in_module(program, &file_module);
     let file_stem = file
         .file_stem()
         .and_then(|s| s.to_str())

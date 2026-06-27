@@ -136,9 +136,9 @@ pub fn expression_is_owned_string_for_asref_borrow<'ast>(
             local_var_types
                 .get(name)
                 .is_some_and(param_is_owned_string_type)
-                || current_function_params.iter().any(|p| {
-                    p.name == *name && param_is_owned_string_type(&p.type_)
-                })
+                || current_function_params
+                    .iter()
+                    .any(|p| p.name == *name && param_is_owned_string_type(&p.type_))
         }
         Expression::FieldAccess { .. } => true,
         _ => false,
@@ -147,9 +147,7 @@ pub fn expression_is_owned_string_for_asref_borrow<'ast>(
 
 /// Module-level `pub const …: string` identifiers that lower to `&'static str` in Rust.
 pub fn is_windjammer_string_const_name(name: &str) -> bool {
-    name.starts_with("SCOPE_")
-        || name.starts_with("AUDIT_")
-        || name.starts_with("PERIOD_STATUS_")
+    name.starts_with("SCOPE_") || name.starts_with("AUDIT_") || name.starts_with("PERIOD_STATUS_")
 }
 
 /// Identifier is a string constant (`SCOPE_*` or a variable bound to a string literal).
@@ -174,24 +172,28 @@ pub fn callee_borrows_string_param(
     }
     matches!(
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-            sig, sig_param_idx,
+            sig,
+            sig_param_idx,
         ),
         crate::analyzer::OwnershipMode::Borrowed
     )
 }
 
 /// Engine `Blackboard` stores keys as borrowed `&str` at the API boundary (see game-core gen).
-fn is_blackboard_borrowed_key_method(
-    receiver_type: &str,
-    method: &str,
-    arg_index: usize,
-) -> bool {
+fn is_blackboard_borrowed_key_method(receiver_type: &str, method: &str, arg_index: usize) -> bool {
     receiver_type == "Blackboard"
         && arg_index == 0
         && matches!(
             method,
-            "set_bool" | "set_f32" | "set_i32" | "set_string" | "get_bool" | "get_f32"
-                | "get_i32" | "get_string" | "find_index"
+            "set_bool"
+                | "set_f32"
+                | "set_i32"
+                | "set_string"
+                | "get_bool"
+                | "get_f32"
+                | "get_i32"
+                | "get_string"
+                | "find_index"
         )
 }
 
@@ -204,8 +206,16 @@ pub fn is_readonly_string_key_method(method: &str, arg_index: usize) -> bool {
     method.starts_with("get_")
         || matches!(
             method,
-            "get" | "contains" | "contains_key" | "has" | "has_key" | "has_value" | "find_index"
-                | "add_condition" | "add_action" | "remove"
+            "get"
+                | "contains"
+                | "contains_key"
+                | "has"
+                | "has_key"
+                | "has_value"
+                | "find_index"
+                | "add_condition"
+                | "add_action"
+                | "remove"
         )
 }
 
@@ -285,8 +295,7 @@ pub fn string_literal_needs_owned_coercion_with_enum(
         }
         if matches!(
             m,
-            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add"
-                | "fill"
+            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill"
         ) && arg_index == 0
         {
             return true;
@@ -345,8 +354,11 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     if param_is_owned_string_type(param_type) {
         if !sig.has_self_receiver
             && matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
-                crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    sig, idx
+                ),
+                crate::analyzer::OwnershipMode::Borrowed
+                    | crate::analyzer::OwnershipMode::MutBorrowed
             )
         {
             return false;
@@ -379,8 +391,9 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     };
 
     let effective =
-        if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(&sig.name)
-        {
+        if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            &sig.name,
+        ) {
             let receiver = receiver_type.or_else(|| sig.name.rsplit_once("::").map(|(rt, _)| rt));
             crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
                 sig, arg_index, receiver,

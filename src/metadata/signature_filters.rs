@@ -73,10 +73,7 @@ mod tests {
     fn drop_keeps_module_qualified_local_type_metadata() {
         let locals: HashSet<String> = ["VoxelScene".to_string()].into_iter().collect();
         let mut sigs = std::collections::HashMap::from([
-            (
-                "VoxelScene::new".to_string(),
-                "bare_homonym",
-            ),
+            ("VoxelScene::new".to_string(), "bare_homonym"),
             (
                 "quick_start::voxel_scene::VoxelScene::new".to_string(),
                 "module_qualified",

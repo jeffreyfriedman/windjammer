@@ -18,12 +18,8 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
-        let resolved_signature = self.mc_select_call_site_signature(
-            object,
-            method,
-            arguments,
-            method_signature,
-        );
+        let resolved_signature =
+            self.mc_select_call_site_signature(object, method, arguments, method_signature);
         let receiver_type_name = self
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));

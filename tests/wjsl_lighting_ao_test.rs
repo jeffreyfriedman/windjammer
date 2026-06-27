@@ -23,7 +23,6 @@ mod wjsl_shader_fixtures;
 // 4. Contains shadow ray tracing
 // 5. Uses roughness/metallic from material palette
 
-use std::path::Path;
 
 #[test]
 fn test_lighting_shader_transpiles() {

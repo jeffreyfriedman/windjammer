@@ -251,7 +251,8 @@ impl<'ast> CodeGenerator<'ast> {
             })
             .or_else(|| {
                 self.find_signature_by_name_and_arg_count_with_global(method, call_arg_count)
-            }) else {
+            })
+        else {
             return false;
         };
         let param_idx = if sig.has_self_receiver {

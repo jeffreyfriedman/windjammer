@@ -22,7 +22,8 @@ pub(super) fn ref_from_known_method_signature(
         param_idx
     };
     let ownership = crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-        sig, sig_param_idx,
+        sig,
+        sig_param_idx,
     );
     if !matches!(ownership, OwnershipMode::Borrowed) {
         return Some(false);

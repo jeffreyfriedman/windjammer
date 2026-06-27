@@ -785,7 +785,7 @@ impl<'ast> CodeGenerator<'ast> {
         arms: &[crate::parser::MatchArm<'ast>],
     ) -> bool {
         arms.iter()
-            .any(|arm| self.expression_calls_self_method(&arm.body))
+            .any(|arm| self.expression_calls_self_method(arm.body))
     }
 
     fn expression_calls_self_method(&self, expr: &Expression<'ast>) -> bool {
@@ -816,16 +816,16 @@ impl<'ast> CodeGenerator<'ast> {
                 then_block
                     .iter()
                     .any(|s| self.statement_calls_self_method(s))
-                    || else_block.as_ref().is_some_and(|b| {
-                        b.iter().any(|s| self.statement_calls_self_method(s))
-                    })
+                    || else_block
+                        .as_ref()
+                        .is_some_and(|b| b.iter().any(|s| self.statement_calls_self_method(s)))
             }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expression_calls_self_method(&arm.body)
-            }),
-            Statement::For { body, .. } | Statement::While { body, .. } => body
+            Statement::Match { arms, .. } => arms
                 .iter()
-                .any(|s| self.statement_calls_self_method(s)),
+                .any(|arm| self.expression_calls_self_method(arm.body)),
+            Statement::For { body, .. } | Statement::While { body, .. } => {
+                body.iter().any(|s| self.statement_calls_self_method(s))
+            }
             _ => false,
         }
     }
@@ -872,14 +872,14 @@ impl<'ast> CodeGenerator<'ast> {
         if self.match_scrutinee_option_yields_copy(expr) {
             return true;
         }
-        if let Expression::MethodCall {
-            object,
-            method,
-            ..
-        } = expr
-        {
+        if let Expression::MethodCall { object, method, .. } = expr {
             if method == "get" {
-                if let Expression::FieldAccess { object: root, field, .. } = &**object {
+                if let Expression::FieldAccess {
+                    object: root,
+                    field,
+                    ..
+                } = &**object
+                {
                     if matches!(&**root, Expression::Identifier { name, .. } if name == "self") {
                         if let Some(struct_name) = &self.current_struct_name {
                             let base = struct_name.split('<').next().unwrap_or(struct_name);
@@ -998,11 +998,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn statement_assigns_to_expression(
-        &self,
-        stmt: &Statement<'ast>,
-        target: &Expression,
-    ) -> bool {
+    fn statement_assigns_to_expression(&self, stmt: &Statement<'ast>, target: &Expression) -> bool {
         match stmt {
             Statement::Assignment { target: lhs, .. } => {
                 self.expressions_equivalent_for_assign(lhs, target)
@@ -1029,13 +1025,33 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expressions_equivalent_for_assign(&self, left: &Expression, target: &Expression) -> bool {
         match (left, target) {
-            (Expression::FieldAccess { object: l_obj, field: l_field, .. }, Expression::FieldAccess { object: r_obj, field: r_field, .. }) => {
-                l_field == r_field && self.expressions_equivalent_for_assign(l_obj, r_obj)
-            }
+            (
+                Expression::FieldAccess {
+                    object: l_obj,
+                    field: l_field,
+                    ..
+                },
+                Expression::FieldAccess {
+                    object: r_obj,
+                    field: r_field,
+                    ..
+                },
+            ) => l_field == r_field && self.expressions_equivalent_for_assign(l_obj, r_obj),
             (Expression::Identifier { name: l, .. }, Expression::Identifier { name: r, .. }) => {
                 l == r
             }
-            (Expression::Index { object: l_obj, index: l_idx, .. }, Expression::Index { object: r_obj, index: r_idx, .. }) => {
+            (
+                Expression::Index {
+                    object: l_obj,
+                    index: l_idx,
+                    ..
+                },
+                Expression::Index {
+                    object: r_obj,
+                    index: r_idx,
+                    ..
+                },
+            ) => {
                 self.expressions_equivalent_for_assign(l_obj, r_obj)
                     && self.expressions_equivalent_for_assign(l_idx, r_idx)
             }

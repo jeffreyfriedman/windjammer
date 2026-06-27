@@ -167,7 +167,7 @@ pub fn compute_dirty_files_with_dep_epoch(
     wj_files: &[(PathBuf, String)],
     src_base: &Path,
     output: &Path,
-    dep_roots: &[PathBuf],
+    _dep_roots: &[PathBuf],
     dep_epoch: u64,
 ) -> (Vec<usize>, usize) {
     let compiler_changed = !is_compiler_stamp_fresh(output);

@@ -205,9 +205,7 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             false
         }
         Expression::FieldAccess { object, field, .. } => {
-            if field == "data"
-                && matches!(&**object, Expression::Identifier { .. })
-            {
+            if field == "data" && matches!(&**object, Expression::Identifier { .. }) {
                 return true;
             }
             if field == "dense" && is_self_dense_access(expr) {

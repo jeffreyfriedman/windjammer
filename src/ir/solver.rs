@@ -122,10 +122,7 @@ impl Solver {
                         (Some(ta), Some(tb)) if ta != tb => {
                             self.diagnostics.push(SolverDiagnostic {
                                 kind: DiagnosticKind::TypeError,
-                                message: format!(
-                                    "type conflict: {:?} vs {:?}",
-                                    ta, tb
-                                ),
+                                message: format!("type conflict: {:?} vs {:?}", ta, tb),
                                 vars: vec![*a, *b],
                             });
                         }
@@ -212,9 +209,8 @@ mod tests {
 
         assert!(result.diagnostics.is_empty());
         // Both should resolve to I32
-        let root_a = {
+        let _root_a = {
             let mut uf = UnionFind::new(cs.num_vars());
-            // Re-run find to check
             uf.find(a.0)
         };
         // After solving, `b` should have inherited I32 from `a`
@@ -241,7 +237,10 @@ mod tests {
         let mut cs = ConstraintSet::new();
         let a = cs.fresh_var();
 
-        cs.add(Constraint::OwnershipIs(a, OwnedType::Ref(crate::ir::safety_type::Region::fresh(1))));
+        cs.add(Constraint::OwnershipIs(
+            a,
+            OwnedType::Ref(crate::ir::safety_type::Region::fresh(1)),
+        ));
 
         let solver = Solver::new(&cs);
         let result = solver.solve(&cs);

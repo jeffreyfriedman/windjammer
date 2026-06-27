@@ -164,7 +164,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn emit_runtime_print_call(io_fn: &str, format_literal: &str, format_args: &[String]) -> String {
+    fn emit_runtime_print_call(
+        io_fn: &str,
+        format_literal: &str,
+        format_args: &[String],
+    ) -> String {
         if format_args.is_empty() {
             format!("{io_fn}({format_literal})")
         } else {
@@ -291,11 +295,7 @@ impl<'ast> CodeGenerator<'ast> {
             Some(Self::emit_runtime_print_call(io_fn, "\"{}\"", &args))
         } else if first_arg_is_string_literal {
             // println("fmt {}", a, b) — first arg is format template
-            Some(Self::emit_runtime_print_call(
-                io_fn,
-                &args[0],
-                &args[1..],
-            ))
+            Some(Self::emit_runtime_print_call(io_fn, &args[0], &args[1..]))
         } else {
             // Multiple non-literal args — join with spaces
             let format_str = format!("\"{}\"", " ".repeat(args.len()));

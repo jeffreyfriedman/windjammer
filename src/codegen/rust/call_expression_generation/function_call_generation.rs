@@ -22,7 +22,10 @@ fn signature_lookup_for_call<'ast>(
             }
             if let Some((qualifier, method)) = func_name.rsplit_once("::") {
                 if qualifier == tn.as_str()
-                    && qualifier.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                    && qualifier
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase())
                     && !method.contains("::")
                 {
                     return (func_name.to_string(), Some(tn.clone()));
@@ -39,8 +42,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     func_name: &str,
     function: &Expression<'ast>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
-    ) -> String {
-        let mut func_str = gen.generate_expression(function);
+) -> String {
+    let mut func_str = gen.generate_expression(function);
 
     // Windjammer stdlib type mapping: Map::method → HashMap::method
     if func_str.starts_with("Map::") {
@@ -353,7 +356,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
             arguments.len(),
         ) {
             let method = sig_lookup_name.rsplit("::").next().unwrap_or(func_name);
-            let accept = sig_receiver_type.as_ref().map_or(true, |tn| {
+            let accept = sig_receiver_type.as_ref().is_none_or(|tn| {
                 crate::codegen::rust::call_signature_resolution::accept_method_resolution_for_receiver(
                     &r, tn, method,
                 )

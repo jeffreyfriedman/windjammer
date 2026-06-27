@@ -194,9 +194,9 @@ impl<'ast> CodeGenerator<'ast> {
                     return true;
                 }
             }
-            body_stmts.iter().any(|stmt| {
-                self.statement_nonreadonly_method_call_on_var(stmt, name)
-            })
+            body_stmts
+                .iter()
+                .any(|stmt| self.statement_nonreadonly_method_call_on_var(stmt, name))
         };
         match pattern {
             Pattern::Identifier(name) => {
