@@ -61,11 +61,13 @@ impl<'ast> CodeGenerator<'ast> {
             let is_shared_borrowed_param =
                 self.inferred_borrowed_params.contains(name) && !is_type_preserving;
             if is_borrowed_iter || is_mut_borrowed_param || is_shared_borrowed_param {
-                let qualified_from_self = (name == "self").then(|| {
-                    self.current_struct_name
-                        .as_ref()
-                        .map(|sn| format!("{sn}::{method}"))
-                }).flatten();
+                let qualified_from_self = (name == "self")
+                    .then(|| {
+                        self.current_struct_name
+                            .as_ref()
+                            .map(|sn| format!("{sn}::{method}"))
+                    })
+                    .flatten();
                 if let Some(recv_ty) = self.infer_expression_type(object) {
                     if !self.is_type_copy(&recv_ty) {
                         let sig_opt = if let Some(ref qualified) = qualified_from_self {
@@ -107,10 +109,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 && self.current_impl_consuming_self_methods.contains(method);
                             if sig.has_self_receiver
                                 && (callee_consumes_self
-                                    || self.method_requires_consuming_self_receiver(
-                                        &qualified,
-                                        sig,
-                                    ))
+                                    || self
+                                        .method_requires_consuming_self_receiver(&qualified, sig))
                                 && !obj_str.ends_with(".clone()")
                             {
                                 obj_str = format!("{}.clone()", obj_str);
@@ -184,19 +184,18 @@ impl<'ast> CodeGenerator<'ast> {
                     let mut needs_clone = false;
                     if let Some(tn) = Self::type_to_name(&recv_ty) {
                         let qualified = format!("{}::{}", tn, method);
-                        let sig_opt = self
-                            .signature_registry
-                            .get_signature(&qualified)
-                            .or_else(|| {
-                                let base = tn.split('<').next().unwrap_or(&tn);
-                                self.get_signature_with_global(&format!("{base}::{method}"))
-                            });
-                        needs_clone = sig_opt
-                            .is_some_and(|sig| {
-                                sig.has_self_receiver
-                                    && sig.param_ownership.first()
-                                        == Some(&crate::analyzer::OwnershipMode::Owned)
-                            });
+                        let sig_opt =
+                            self.signature_registry
+                                .get_signature(&qualified)
+                                .or_else(|| {
+                                    let base = tn.split('<').next().unwrap_or(&tn);
+                                    self.get_signature_with_global(&format!("{base}::{method}"))
+                                });
+                        needs_clone = sig_opt.is_some_and(|sig| {
+                            sig.has_self_receiver
+                                && sig.param_ownership.first()
+                                    == Some(&crate::analyzer::OwnershipMode::Owned)
+                        });
                     }
                     if needs_clone {
                         obj_str = format!("{}.clone()", obj_str);

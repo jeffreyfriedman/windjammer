@@ -31,8 +31,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.current_impl_generic_type_params,
             );
             if !inferred.is_empty() {
-                where_clause =
-                    codegen_helpers::merge_where_clauses(where_clause, inferred);
+                where_clause = codegen_helpers::merge_where_clauses(where_clause, inferred);
             }
         }
         output.push_str(&codegen_helpers::format_where_clause(&where_clause));

@@ -41,18 +41,19 @@ pub(crate) fn wj_module_declared_in_subtree(src_root: &Path, name: &str) -> bool
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                if path.file_name().and_then(|n| n.to_str()) == Some(name) {
-                    if path.join("mod.wj").exists() {
-                        return !is_root;
-                    }
+                if path.file_name().and_then(|n| n.to_str()) == Some(name)
+                    && path.join("mod.wj").exists()
+                {
+                    return !is_root;
                 }
                 if walk(&path, name, false) {
                     return true;
                 }
-            } else if path.extension().and_then(|e| e.to_str()) == Some("wj") {
-                if path.file_stem().and_then(|s| s.to_str()) == Some(name) && !is_root {
-                    return true;
-                }
+            } else if path.extension().and_then(|e| e.to_str()) == Some("wj")
+                && path.file_stem().and_then(|s| s.to_str()) == Some(name)
+                && !is_root
+            {
+                return true;
             }
         }
         false

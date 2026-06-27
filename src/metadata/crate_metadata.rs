@@ -12,7 +12,8 @@ use super::function_metadata::{try_analyzer_signature_from_metadata, FunctionSig
 use super::ModuleMetadata;
 
 fn parent_has_manifest(dir: &Path) -> bool {
-    dir.parent().is_some_and(|p| p.join("Cargo.toml").exists() || p.join("wj.toml").exists())
+    dir.parent()
+        .is_some_and(|p| p.join("Cargo.toml").exists() || p.join("wj.toml").exists())
 }
 
 /// True for manifests that must not become the `.wj-cache` project root.

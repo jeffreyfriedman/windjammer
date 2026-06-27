@@ -49,12 +49,11 @@ impl<'ast> CodeGenerator<'ast> {
                         let has_method = self.method_exists_on_type_name(&receiver_type, method);
                         let base = receiver_type.split('<').next().unwrap_or(&receiver_type);
                         let trivial_key = format!("{base}::{method}");
-                        let is_trivial_accessor = self
-                            .trivial_copy_field_accessors
-                            .contains(&trivial_key)
-                            || self
-                                .trivial_copy_field_accessors
-                                .contains(&format!("{receiver_type}::{method}"));
+                        let is_trivial_accessor =
+                            self.trivial_copy_field_accessors.contains(&trivial_key)
+                                || self
+                                    .trivial_copy_field_accessors
+                                    .contains(&format!("{receiver_type}::{method}"));
                         if recv_is_ref || !has_method || is_trivial_accessor {
                             return format!("{}.{}", self.generate_expression(object), method);
                         }

@@ -242,7 +242,7 @@ impl<'ast> Analyzer<'ast> {
                             .map(|s| self.statement_count_self_method_calls(s, method))
                             .sum::<usize>()
                     } else {
-                        self.expression_count_self_method_calls(&arm.body, method)
+                        self.expression_count_self_method_calls(arm.body, method)
                     }
                 })
                 .sum(),
@@ -324,7 +324,11 @@ impl<'ast> Analyzer<'ast> {
                         self.statement_calls_explicit_owned_self_method(s, parent_type, registry)
                     })
                 } else {
-                    self.expression_calls_explicit_owned_self_method(&arm.body, parent_type, registry)
+                    self.expression_calls_explicit_owned_self_method(
+                        arm.body,
+                        parent_type,
+                        registry,
+                    )
                 }
             }),
             _ => false,
@@ -353,9 +357,9 @@ impl<'ast> Analyzer<'ast> {
                 }
                 self.expression_calls_explicit_owned_self_method(object, parent_type, registry)
             }
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_calls_explicit_owned_self_method(s, parent_type, registry)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_calls_explicit_owned_self_method(s, parent_type, registry)),
             _ => false,
         }
     }
@@ -369,15 +373,13 @@ impl<'ast> Analyzer<'ast> {
         visited: &mut HashSet<String>,
     ) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } => {
-                self.expression_calls_consuming_method_on_self(
-                    expr,
-                    registry,
-                    parent_type,
-                    caller_name,
-                    visited,
-                )
-            }
+            Statement::Expression { expr, .. } => self.expression_calls_consuming_method_on_self(
+                expr,
+                registry,
+                parent_type,
+                caller_name,
+                visited,
+            ),
             Statement::Return {
                 value: Some(expr), ..
             } => self.expression_calls_consuming_method_on_self(
@@ -387,15 +389,13 @@ impl<'ast> Analyzer<'ast> {
                 caller_name,
                 visited,
             ),
-            Statement::Let { value, .. } => {
-                self.expression_calls_consuming_method_on_self(
-                    value,
-                    registry,
-                    parent_type,
-                    caller_name,
-                    visited,
-                )
-            }
+            Statement::Let { value, .. } => self.expression_calls_consuming_method_on_self(
+                value,
+                registry,
+                parent_type,
+                caller_name,
+                visited,
+            ),
             Statement::If {
                 then_block,
                 else_block,

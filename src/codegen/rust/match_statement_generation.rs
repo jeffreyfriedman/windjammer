@@ -438,9 +438,9 @@ impl<'ast> CodeGenerator<'ast> {
         let some_arm = arms.iter().find(|arm| {
             matches!(&arm.pattern, Pattern::EnumVariant(name, _) if name == "Some" || name.ends_with("::Some"))
         });
-        let option_reassigns = some_arm.as_ref().is_some_and(|arm| {
-            self.option_arm_reassigns_scrutinee_field(value, &arm.body)
-        });
+        let option_reassigns = some_arm
+            .as_ref()
+            .is_some_and(|arm| self.option_arm_reassigns_scrutinee_field(value, arm.body));
         let match_scrutinee_ref_prefix: &str;
         let value_str = if let Some(arm) = some_arm {
             let p = if option_reassigns {
@@ -565,10 +565,7 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_owned_copy_borrow_break {
-                output.push_str(&format!(
-                    "let __match_borrow_break = {};\n",
-                    value_str
-                ));
+                output.push_str(&format!("let __match_borrow_break = {};\n", value_str));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_owned_clone_borrow_break {
@@ -641,23 +638,24 @@ impl<'ast> CodeGenerator<'ast> {
         // When the scrutinee has been dereferenced (`*self`, `*e`, etc.) for a Copy type,
         // the match operates on an owned value and pattern bindings are owned — NOT refs.
         // Generalized from the original `value_str == "*self"` to handle all Copy params.
-        let mut owned_bindings_from_copy_deref = if let Some(deref_name) = value_str.strip_prefix('*') {
-            if deref_name == "self" {
-                self.current_struct_name
-                    .as_ref()
-                    .is_some_and(|sn| self.is_type_copy(&Type::Custom(sn.clone())))
-            } else if let Some(ty) = self.infer_expression_type(value) {
-                let inner = match &ty {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                    other => other,
-                };
-                self.is_type_copy(inner) && !Self::type_contains_reference(inner)
+        let mut owned_bindings_from_copy_deref =
+            if let Some(deref_name) = value_str.strip_prefix('*') {
+                if deref_name == "self" {
+                    self.current_struct_name
+                        .as_ref()
+                        .is_some_and(|sn| self.is_type_copy(&Type::Custom(sn.clone())))
+                } else if let Some(ty) = self.infer_expression_type(value) {
+                    let inner = match &ty {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    self.is_type_copy(inner) && !Self::type_contains_reference(inner)
+                } else {
+                    false
+                }
             } else {
                 false
-            }
-        } else {
-            false
-        };
+            };
         if use_copied_borrow_break || use_owned_copy_borrow_break || use_owned_clone_borrow_break {
             owned_bindings_from_copy_deref = true;
         }
@@ -721,10 +719,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             inferred.iter().any(|(name, ty)| {
                                 name == *var
-                                    && matches!(
-                                        ty,
-                                        Type::Reference(_) | Type::MutableReference(_)
-                                    )
+                                    && matches!(ty, Type::Reference(_) | Type::MutableReference(_))
                             })
                         })
                         .cloned()
@@ -770,7 +765,9 @@ impl<'ast> CodeGenerator<'ast> {
             } else if !skip_ref_wrap_on_bound_types
                 && (match_scrutinee_ref_prefix == "& "
                     || match_scrutinee_ref_prefix == "&"
-                    || ((match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
+                    || ((match_binds_refs
+                        || scrutinee_type_has_ref
+                        || scrutinee_prefix_binds_refs)
                         && !owned_bindings_from_copy_deref))
             {
                 for entry in &mut match_bound_type_entries {

@@ -134,19 +134,21 @@ impl<'ast> Analyzer<'ast> {
             || (!snapshot_factory
                 && (returns_self
                     || self.function_body_consumes_bare_self(func)
-                    || self.function_calls_consuming_method_on_self_with_visited(func, registry, visited)
+                    || self.function_calls_consuming_method_on_self_with_visited(
+                        func, registry, visited,
+                    )
                     || self.function_calls_explicit_owned_self_method(func, registry)
                     || self.function_matches_on_self(func)
                     || self.function_consumes_self_field_elements(func, Some(registry))));
-        let calls_owned_on_self = self.function_calls_consuming_method_on_self_with_visited(func, registry, visited)
+        let calls_owned_on_self = self
+            .function_calls_consuming_method_on_self_with_visited(func, registry, visited)
             || self.function_calls_explicit_owned_self_method(func, registry);
         let mut mutating_call_visited = HashSet::new();
-        let calls_mutating = self
-            .function_calls_mutating_self_methods_with_registry(
-                func,
-                Some(registry),
-                &mut mutating_call_visited,
-            );
+        let calls_mutating = self.function_calls_mutating_self_methods_with_registry(
+            func,
+            Some(registry),
+            &mut mutating_call_visited,
+        );
         self.resolve_impl_self_receiver_ownership(
             func,
             modifies_fields,
@@ -231,12 +233,11 @@ impl<'ast> Analyzer<'ast> {
                         || self.function_matches_on_self(func)
                         || self.function_consumes_self_field_elements(func, Some(registry))));
             let mut mutating_call_visited = HashSet::new();
-            let calls_mutating = self
-                .function_calls_mutating_self_methods_with_registry(
-                    func,
-                    Some(registry),
-                    &mut mutating_call_visited,
-                );
+            let calls_mutating = self.function_calls_mutating_self_methods_with_registry(
+                func,
+                Some(registry),
+                &mut mutating_call_visited,
+            );
             let calls_owned_on_self = self.function_calls_consuming_method_on_self(func, registry)
                 || self.function_calls_explicit_owned_self_method(func, registry);
             let self_ownership = self.resolve_impl_self_receiver_ownership(
@@ -431,9 +432,8 @@ impl<'ast> Analyzer<'ast> {
             let str_ref_optimizable_params =
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
-            str_ref_optimizable_params.retain(|name| {
-                inferred_ownership.get(name) != Some(&OwnershipMode::Owned)
-            });
+            str_ref_optimizable_params
+                .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
             let inferred_param_types: Vec<Type> = func
                 .parameters
                 .iter()
@@ -486,9 +486,8 @@ impl<'ast> Analyzer<'ast> {
             let str_ref_optimizable_params =
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
-            str_ref_optimizable_params.retain(|name| {
-                inferred_ownership.get(name) != Some(&OwnershipMode::Owned)
-            });
+            str_ref_optimizable_params
+                .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
 
             let inferred_param_types: Vec<Type> = func
                 .parameters
@@ -710,13 +709,10 @@ impl<'ast> Analyzer<'ast> {
                         }
                         if Self::trait_param_is_owned_string(&trait_param.type_) {
                             if let Some(impl_param) = func.parameters.get(i) {
-                                analyzed.inferred_ownership.insert(
-                                    impl_param.name.clone(),
-                                    OwnershipMode::Owned,
-                                );
                                 analyzed
-                                    .str_ref_optimizable_params
-                                    .remove(&impl_param.name);
+                                    .inferred_ownership
+                                    .insert(impl_param.name.clone(), OwnershipMode::Owned);
+                                analyzed.str_ref_optimizable_params.remove(&impl_param.name);
                             }
                             analyzed.inferred_param_types[i] = trait_param.type_.clone();
                         } else if let Some(trait_ty) =
@@ -760,11 +756,7 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
 
-                if self.is_only_hashmap_lookup_key_param(
-                    &param.name,
-                    &func.decl.body,
-                    &func.decl,
-                ) {
+                if self.is_only_hashmap_lookup_key_param(&param.name, &func.decl.body, &func.decl) {
                     if self.is_copy_type(&param.type_) {
                         return OwnershipMode::Owned;
                     }

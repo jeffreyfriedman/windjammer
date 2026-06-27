@@ -374,7 +374,7 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
 
 /// True when the method's trailing return moves non-Copy `self.field` values into a struct literal.
 pub fn function_return_moves_self_fields(func: &FunctionDecl) -> bool {
-    use crate::parser::{Expression, Statement};
+    use crate::parser::Statement;
 
     let return_expr = match func.body.last() {
         Some(Statement::Return {
@@ -389,14 +389,12 @@ pub fn function_return_moves_self_fields(func: &FunctionDecl) -> bool {
 
 fn expression_moves_self_fields_in_struct_literal(expr: &Expression) -> bool {
     match expr {
-        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
-            match v {
-                Expression::Identifier { name, .. } if name == "self" => true,
-                Expression::FieldAccess { object, .. } => {
-                    matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-                }
-                _ => false,
+        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| match v {
+            Expression::Identifier { name, .. } if name == "self" => true,
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == "self")
             }
+            _ => false,
         }),
         _ => false,
     }
@@ -942,7 +940,13 @@ pub fn statement_modifies_self(
                 statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
             }) || else_block.as_ref().is_some_and(|block| {
                 block.iter().any(|s| {
-                    statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+                    statement_modifies_self(
+                        s,
+                        registry,
+                        struct_name,
+                        field_types,
+                        receiver_upgrades,
+                    )
                 })
             })
         }
@@ -950,13 +954,24 @@ pub fn statement_modifies_self(
             statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
         }),
         Statement::For { iterable, body, .. } => {
-            expression_modifies_self(iterable, registry, struct_name, field_types, receiver_upgrades)
-                || body.iter().any(|s| {
-                    statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
-                })
+            expression_modifies_self(
+                iterable,
+                registry,
+                struct_name,
+                field_types,
+                receiver_upgrades,
+            ) || body.iter().any(|s| {
+                statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+            })
         }
         Statement::Match { arms, .. } => arms.iter().any(|arm| {
-            expression_modifies_self(arm.body, registry, struct_name, field_types, receiver_upgrades)
+            expression_modifies_self(
+                arm.body,
+                registry,
+                struct_name,
+                field_types,
+                receiver_upgrades,
+            )
         }),
         _ => false,
     }
@@ -1143,20 +1158,30 @@ pub fn expression_modifies_self(
                 return true;
             }
 
-            arguments
-                .iter()
-                .any(|(_, arg)| expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades))
+            arguments.iter().any(|(_, arg)| {
+                expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades)
+            })
         }
         Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
             expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades)
         }),
         Expression::Binary { left, right, .. } => {
             expression_modifies_self(left, registry, struct_name, field_types, receiver_upgrades)
-                || expression_modifies_self(right, registry, struct_name, field_types, receiver_upgrades)
+                || expression_modifies_self(
+                    right,
+                    registry,
+                    struct_name,
+                    field_types,
+                    receiver_upgrades,
+                )
         }
-        Expression::Unary { operand, .. } => {
-            expression_modifies_self(operand, registry, struct_name, field_types, receiver_upgrades)
-        }
+        Expression::Unary { operand, .. } => expression_modifies_self(
+            operand,
+            registry,
+            struct_name,
+            field_types,
+            receiver_upgrades,
+        ),
         Expression::Cast { expr, .. } => {
             expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades)
         }
@@ -1203,7 +1228,12 @@ fn method_is_mutating_on_receiver(
                         }
                     }
                 }
-                return method_is_mutating(method, registry, Some(recv_type.as_str()), receiver_upgrades);
+                return method_is_mutating(
+                    method,
+                    registry,
+                    Some(recv_type.as_str()),
+                    receiver_upgrades,
+                );
             }
         }
     }
@@ -1294,9 +1324,11 @@ pub(crate) fn is_self_field_chain(expr: &Expression) -> bool {
 pub fn resolve_self_field_chain_type_name(
     expr: &Expression,
     struct_name: &str,
-    field_types: &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    field_types: &std::collections::HashMap<
+        String,
+        std::collections::HashMap<String, crate::parser::Type>,
+    >,
 ) -> Option<String> {
-    use crate::parser::Type;
     let fields = field_types.get(struct_name)?;
     resolve_self_field_chain_type(expr, fields).and_then(|ty| type_to_custom_name(&ty))
 }

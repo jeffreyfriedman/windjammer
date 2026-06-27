@@ -243,7 +243,7 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
 
     fn enum_ctor_from_call_callee(function: &Expression) -> Option<(String, String)> {
         if let Expression::FieldAccess { object, field, .. } = function {
-            if let Expression::Identifier { name, .. } = &*object {
+            if let Expression::Identifier { name, .. } = object {
                 return Some((name.clone(), field.clone()));
             }
         }
@@ -259,9 +259,9 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
         args: &[(Option<String>, &Expression)],
         param_names: &HashSet<String>,
     ) -> bool {
-        args.iter().any(|(_, e)| {
-            matches!(e, Expression::Identifier { name, .. } if param_names.contains(name))
-        })
+        args.iter().any(
+            |(_, e)| matches!(e, Expression::Identifier { name, .. } if param_names.contains(name)),
+        )
     }
 
     fn walk_expr_for_factory<'ast>(
@@ -273,7 +273,11 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
         out: &mut HashMap<String, Vec<crate::parser::Type>>,
     ) {
         match expr {
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 if let Some((enum_name, variant)) = enum_ctor_from_call_callee(function) {
                     let variant_key = format!("{enum_name}::{variant}");
                     if call_uses_any_param(arguments, param_names) {
@@ -282,42 +286,135 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
                         }
                     }
                 }
-                walk_expr_for_factory(function, param_names, variant_types, receiver_type, method_name, out);
+                walk_expr_for_factory(
+                    function,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
                 for (_, arg) in arguments {
-                    walk_expr_for_factory(arg, param_names, variant_types, receiver_type, method_name, out);
+                    walk_expr_for_factory(
+                        arg,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                 }
             }
             Expression::StructLiteral { fields, .. } => {
                 for (_, v) in fields {
-                    walk_expr_for_factory(v, param_names, variant_types, receiver_type, method_name, out);
+                    walk_expr_for_factory(
+                        v,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                 }
             }
-            Expression::MethodCall { object, arguments, .. } => {
-                walk_expr_for_factory(object, param_names, variant_types, receiver_type, method_name, out);
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                walk_expr_for_factory(
+                    object,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
                 for (_, arg) in arguments {
-                    walk_expr_for_factory(arg, param_names, variant_types, receiver_type, method_name, out);
+                    walk_expr_for_factory(
+                        arg,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                 }
             }
             Expression::Binary { left, right, .. } => {
-                walk_expr_for_factory(left, param_names, variant_types, receiver_type, method_name, out);
-                walk_expr_for_factory(right, param_names, variant_types, receiver_type, method_name, out);
+                walk_expr_for_factory(
+                    left,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
+                walk_expr_for_factory(
+                    right,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
             }
             Expression::Unary { operand, .. } => {
-                walk_expr_for_factory(operand, param_names, variant_types, receiver_type, method_name, out);
+                walk_expr_for_factory(
+                    operand,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
             }
             Expression::FieldAccess { object, .. } => {
-                walk_expr_for_factory(object, param_names, variant_types, receiver_type, method_name, out);
+                walk_expr_for_factory(
+                    object,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
             }
             Expression::Cast { expr, .. } | Expression::TryOp { expr, .. } => {
-                walk_expr_for_factory(expr, param_names, variant_types, receiver_type, method_name, out);
+                walk_expr_for_factory(
+                    expr,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
             }
             Expression::Index { object, index, .. } => {
-                walk_expr_for_factory(object, param_names, variant_types, receiver_type, method_name, out);
-                walk_expr_for_factory(index, param_names, variant_types, receiver_type, method_name, out);
+                walk_expr_for_factory(
+                    object,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
+                walk_expr_for_factory(
+                    index,
+                    param_names,
+                    variant_types,
+                    receiver_type,
+                    method_name,
+                    out,
+                );
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                 for el in elements {
-                    walk_expr_for_factory(el, param_names, variant_types, receiver_type, method_name, out);
+                    walk_expr_for_factory(
+                        el,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                 }
             }
             Expression::Block { statements, .. } => {
@@ -344,12 +441,30 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
     ) {
         for stmt in stmts {
             match stmt {
-                Statement::Return { value: Some(expr), .. }
-                | Statement::Expression { expr, .. } => {
-                    walk_expr_for_factory(expr, param_names, variant_types, receiver_type, method_name, out);
+                Statement::Return {
+                    value: Some(expr), ..
                 }
-                Statement::Let { value, else_block, .. } => {
-                    walk_expr_for_factory(value, param_names, variant_types, receiver_type, method_name, out);
+                | Statement::Expression { expr, .. } => {
+                    walk_expr_for_factory(
+                        expr,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
+                }
+                Statement::Let {
+                    value, else_block, ..
+                } => {
+                    walk_expr_for_factory(
+                        value,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                     if let Some(stmts) = else_block {
                         walk_stmts_for_factory(
                             stmts,
@@ -362,8 +477,22 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
                     }
                 }
                 Statement::Assignment { target, value, .. } => {
-                    walk_expr_for_factory(target, param_names, variant_types, receiver_type, method_name, out);
-                    walk_expr_for_factory(value, param_names, variant_types, receiver_type, method_name, out);
+                    walk_expr_for_factory(
+                        target,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
+                    walk_expr_for_factory(
+                        value,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                 }
                 Statement::If {
                     then_block,
@@ -371,7 +500,14 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
                     condition,
                     ..
                 } => {
-                    walk_expr_for_factory(condition, param_names, variant_types, receiver_type, method_name, out);
+                    walk_expr_for_factory(
+                        condition,
+                        param_names,
+                        variant_types,
+                        receiver_type,
+                        method_name,
+                        out,
+                    );
                     walk_stmts_for_factory(
                         then_block,
                         param_names,
@@ -405,11 +541,8 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
             match item {
                 Item::Impl { block, .. } => {
                     for func in &block.functions {
-                        let param_names: HashSet<String> = func
-                            .parameters
-                            .iter()
-                            .map(|p| p.name.clone())
-                            .collect();
+                        let param_names: HashSet<String> =
+                            func.parameters.iter().map(|p| p.name.clone()).collect();
                         walk_stmts_for_factory(
                             &func.body,
                             &param_names,

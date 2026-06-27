@@ -7,11 +7,11 @@ use crate::analyzer::{FunctionSignature, OwnershipMode};
 use crate::codegen::rust::call_signature_resolution::{
     effective_param_ownership_for_arg, param_type_is_owned_non_text,
 };
-use crate::codegen::rust::type_analysis_pure;
 use crate::codegen::rust::expression_utilities;
 use crate::codegen::rust::rust_coercion_rules::Coercion;
 use crate::codegen::rust::stdlib_method_traits;
 use crate::codegen::rust::string_utilities;
+use crate::codegen::rust::type_analysis_pure;
 use crate::codegen::rust::types;
 use crate::parser::{Expression, Literal, Type};
 
@@ -25,7 +25,10 @@ pub struct CallSiteBorrowDecision {
 }
 
 /// Effective ownership for call argument `arg_index`, honoring formal owned types.
-pub fn effective_ownership_for_call_arg(sig: &FunctionSignature, arg_index: usize) -> OwnershipMode {
+pub fn effective_ownership_for_call_arg(
+    sig: &FunctionSignature,
+    arg_index: usize,
+) -> OwnershipMode {
     effective_param_ownership_for_arg(sig, arg_index)
 }
 
@@ -56,7 +59,10 @@ fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
     matches!(
         arg_expr,
         Expression::Literal {
-            value: Literal::Int(_) | Literal::IntSuffixed(_, _) | Literal::Float(_) | Literal::Bool(_),
+            value: Literal::Int(_)
+                | Literal::IntSuffixed(_, _)
+                | Literal::Float(_)
+                | Literal::Bool(_),
             ..
         }
     )
@@ -89,7 +95,10 @@ pub fn should_borrow_at_call_site(
     }) {
         return CallSiteBorrowDecision::default();
     }
-    if matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned)) {
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Owned)
+    ) {
         return CallSiteBorrowDecision::default();
     }
 
@@ -275,8 +284,12 @@ mod tests {
             name: "walls".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "walls", "check_collisions", false);
-        assert!(decision.add_ref, "Vec formal with converged borrow must add &");
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "walls", "check_collisions", false);
+        assert!(
+            decision.add_ref,
+            "Vec formal with converged borrow must add &"
+        );
         assert_eq!(
             effective_ownership_for_call_arg(&sig, 0),
             OwnershipMode::Borrowed
@@ -299,7 +312,8 @@ mod tests {
             name: "quest_id".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active", false);
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active", false);
         assert!(decision.add_ref, "converged borrow must add &");
     }
 
@@ -334,17 +348,17 @@ mod tests {
             location: Default::default(),
         };
         let decision = should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "println", false);
-        assert!(!decision.add_ref, "string literal to &str must not add extra &");
+        assert!(
+            !decision.add_ref,
+            "string literal to &str must not add extra &"
+        );
     }
 
     #[test]
     fn copy_map_key_still_borrows() {
         let sig = sig_with_formal(
             "HashMap::get",
-            vec![
-                Type::Custom("Self".into()),
-                Type::Custom("u32".into()),
-            ],
+            vec![Type::Custom("Self".into()), Type::Custom("u32".into())],
             vec![Type::Custom("Self".into()), Type::Custom("u32".into())],
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             true,
@@ -354,7 +368,10 @@ mod tests {
             location: Default::default(),
         };
         let decision = should_borrow_at_call_site(&sig, 0, &arg, "node", "get", false);
-        assert!(decision.add_ref, "Copy map keys must still get & at call site");
+        assert!(
+            decision.add_ref,
+            "Copy map keys must still get & at call site"
+        );
     }
 
     #[test]

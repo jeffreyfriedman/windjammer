@@ -668,7 +668,9 @@ pub(crate) fn build_library_multipass(
         }
 
         let merged_program = crate::parser::Program { items: all_items };
-        match shared_analyzer.infer_trait_signatures_from_impls(&merged_program, global_registry.as_ref()) {
+        match shared_analyzer
+            .infer_trait_signatures_from_impls(&merged_program, global_registry.as_ref())
+        {
             Ok(()) => shared_analyzer.analyzed_trait_methods.clone(),
             Err(e) => {
                 eprintln!("Cross-file trait inference warning: {}", e);
@@ -949,10 +951,7 @@ pub(crate) fn build_library_multipass(
         }
     }
     profile_phase("Step 4B-b: Codegen (sequential)", step4b_codegen_start);
-    profile_phase(
-        "Step 4B: Analysis + codegen (sequential)",
-        step4b_start,
-    );
+    profile_phase("Step 4B: Analysis + codegen (sequential)", step4b_start);
 
     // Emit metadata.json — refresh ONLY locally-defined function signatures from the
     // converged registry. Dumping the full merged registry (engine + game) creates

@@ -268,11 +268,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         for (idx, param) in func.parameters.iter().enumerate() {
             if param.name != "self" {
-                let ast_owned_string = crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                    && !matches!(
-                        param.type_,
-                        Type::Reference(_) | Type::MutableReference(_)
-                    );
+                let ast_owned_string =
+                    crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                        && !matches!(param.type_, Type::Reference(_) | Type::MutableReference(_));
                 let is_module_level = func.parent_type.is_none();
 
                 let mut p_type = analyzed
@@ -293,8 +291,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .get(&param.name)
                         .copied()
                         .or_else(|| {
-                            registry_sig
-                                .and_then(|sig| sig.param_ownership.get(idx).copied())
+                            registry_sig.and_then(|sig| sig.param_ownership.get(idx).copied())
                         })
                         .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 };
@@ -306,10 +303,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if let Some(reg) = registry_sig {
                     if let Some(formal) = reg.formal_param_type(idx) {
                         if crate::codegen::rust::types::is_windjammer_text_type(formal)
-                            && !matches!(
-                                formal,
-                                Type::Reference(_) | Type::MutableReference(_)
-                            )
+                            && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
                             && is_module_level
                         {
                             p_type = formal.clone();
@@ -341,10 +335,8 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let stored_type = match ownership {
                     crate::analyzer::OwnershipMode::Borrowed
-                        if !matches!(
-                            &p_type,
-                            Type::Reference(_) | Type::MutableReference(_)
-                        ) && !type_analysis::is_copy_type(&p_type) =>
+                        if !matches!(&p_type, Type::Reference(_) | Type::MutableReference(_))
+                            && !type_analysis::is_copy_type(&p_type) =>
                     {
                         if crate::codegen::rust::types::is_windjammer_text_type(&p_type) {
                             Type::Reference(Box::new(Type::Custom("str".into())))

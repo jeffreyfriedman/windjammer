@@ -319,22 +319,24 @@ impl<'ast> CodeGenerator<'ast> {
                     matches!(t, Type::Int)
                         || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                 };
-                let right_is_int = self.infer_expression_type(right).as_ref().is_some_and(is_int_type)
+                let right_is_int = self
+                    .infer_expression_type(right)
+                    .as_ref()
+                    .is_some_and(is_int_type)
                     || if let Expression::Identifier { name, .. } = right {
-                        self.local_var_types
-                            .get(name)
-                            .is_some_and(is_int_type)
+                        self.local_var_types.get(name).is_some_and(is_int_type)
                     } else {
                         false
                     };
                 if right_is_int {
                     return;
                 }
-                let left_is_int = self.infer_expression_type(left).as_ref().is_some_and(is_int_type)
+                let left_is_int = self
+                    .infer_expression_type(left)
+                    .as_ref()
+                    .is_some_and(is_int_type)
                     || if let Expression::Identifier { name, .. } = left {
-                        self.local_var_types
-                            .get(name)
-                            .is_some_and(is_int_type)
+                        self.local_var_types.get(name).is_some_and(is_int_type)
                     } else {
                         false
                     };
@@ -391,22 +393,24 @@ impl<'ast> CodeGenerator<'ast> {
                     matches!(t, Type::Int)
                         || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
                 };
-                let right_is_int = self.infer_expression_type(right).as_ref().is_some_and(is_int_type)
+                let right_is_int = self
+                    .infer_expression_type(right)
+                    .as_ref()
+                    .is_some_and(is_int_type)
                     || if let Expression::Identifier { name, .. } = right {
-                        self.local_var_types
-                            .get(name)
-                            .is_some_and(is_int_type)
+                        self.local_var_types.get(name).is_some_and(is_int_type)
                     } else {
                         false
                     };
                 if right_is_int {
                     return;
                 }
-                let left_is_int = self.infer_expression_type(left).as_ref().is_some_and(is_int_type)
+                let left_is_int = self
+                    .infer_expression_type(left)
+                    .as_ref()
+                    .is_some_and(is_int_type)
                     || if let Expression::Identifier { name, .. } = left {
-                        self.local_var_types
-                            .get(name)
-                            .is_some_and(is_int_type)
+                        self.local_var_types.get(name).is_some_and(is_int_type)
                     } else {
                         false
                     };
@@ -993,17 +997,11 @@ impl<'ast> CodeGenerator<'ast> {
 
         if let (Some(lb), Some(rb)) = (lhs_base, rhs_base) {
             if lb == rb && self.is_type_copy(lb) {
-                if left_is_ref
-                    && !right_is_ref
-                    && !match_binding_skips_copy_deref(right)
-                {
+                if left_is_ref && !right_is_ref && !match_binding_skips_copy_deref(right) {
                     *left_str = expression_utilities::star_for_deref_compare(left, left_str);
                     return;
                 }
-                if right_is_ref
-                    && !left_is_ref
-                    && !match_binding_skips_copy_deref(left)
-                {
+                if right_is_ref && !left_is_ref && !match_binding_skips_copy_deref(left) {
                     *right_str = expression_utilities::star_for_deref_compare(right, right_str);
                     return;
                 }

@@ -8,7 +8,7 @@
 //! Taint propagates through assignments, function returns, and region sharing.
 //! The solver catches violations at compile time with full provenance traces.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Identifier for a value in the taint analysis.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -29,10 +29,7 @@ pub enum TaintConstraint {
         source_kind: TaintSourceKind,
     },
     /// Taint flows from one value to another (assignment, return, field access).
-    FlowsTo {
-        from: TaintVar,
-        to: TaintVar,
-    },
+    FlowsTo { from: TaintVar, to: TaintVar },
     /// A function sanitizes its input — output is clean.
     Sanitizes {
         input: TaintVar,
@@ -40,10 +37,7 @@ pub enum TaintConstraint {
         sanitizer: String,
     },
     /// A sink requires clean data — tainted input is a compile error.
-    RequiresClean {
-        var: TaintVar,
-        sink: String,
-    },
+    RequiresClean { var: TaintVar, sink: String },
 }
 
 /// Source of tainted data.
@@ -67,12 +61,16 @@ pub enum TaintStatus {
     /// Tainted — came from an untrusted source.
     Tainted(TaintSourceKind),
     /// Was tainted but passed through a sanitizer.
-    Sanitized { original_source: TaintSourceKind, sanitizer: String },
+    Sanitized {
+        original_source: TaintSourceKind,
+        sanitizer: String,
+    },
     /// Unknown — not yet determined.
     Unknown,
 }
 
 /// The taint solver.
+#[derive(Default)]
 pub struct TaintSolver {
     constraints: Vec<TaintConstraint>,
 }
@@ -121,24 +119,31 @@ impl TaintSolver {
                         let from_status = status.get(from).cloned().unwrap_or(TaintStatus::Unknown);
                         let to_status = status.get(to).cloned().unwrap_or(TaintStatus::Unknown);
 
-                        match (&from_status, &to_status) {
-                            (TaintStatus::Tainted(src), TaintStatus::Unknown | TaintStatus::Clean) => {
-                                status.insert(to.clone(), TaintStatus::Tainted(src.clone()));
-                                changed = true;
-                            }
-                            _ => {}
+                        if let (
+                            TaintStatus::Tainted(src),
+                            TaintStatus::Unknown | TaintStatus::Clean,
+                        ) = (&from_status, &to_status)
+                        {
+                            status.insert(to.clone(), TaintStatus::Tainted(src.clone()));
+                            changed = true;
                         }
                     }
 
-                    TaintConstraint::Sanitizes { input, output, sanitizer } => {
-                        let input_status = status.get(input).cloned().unwrap_or(TaintStatus::Unknown);
+                    TaintConstraint::Sanitizes {
+                        input,
+                        output,
+                        sanitizer,
+                    } => {
+                        let input_status =
+                            status.get(input).cloned().unwrap_or(TaintStatus::Unknown);
 
                         if let TaintStatus::Tainted(src) = &input_status {
                             let sanitized = TaintStatus::Sanitized {
                                 original_source: src.clone(),
                                 sanitizer: sanitizer.clone(),
                             };
-                            let current = status.get(output).cloned().unwrap_or(TaintStatus::Unknown);
+                            let current =
+                                status.get(output).cloned().unwrap_or(TaintStatus::Unknown);
                             if current != sanitized {
                                 status.insert(output.clone(), sanitized);
                                 changed = true;
@@ -175,10 +180,7 @@ impl TaintSolver {
             }
         }
 
-        TaintSolverResult {
-            status,
-            errors,
-        }
+        TaintSolverResult { status, errors }
     }
 }
 

@@ -85,7 +85,10 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
 
 /// Derive `(output_root, source_root)` for scoped `--module-file` generation after a single-file
 /// or directory transpile into a subdirectory (e.g. `src/ffi/api.wj` → `gen/ffi/`).
-pub(crate) fn mod_file_layout_for_build(input_path: &Path, output_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+pub(crate) fn mod_file_layout_for_build(
+    input_path: &Path,
+    output_dir: &Path,
+) -> Option<(PathBuf, PathBuf)> {
     if input_path.is_file() {
         let source_root = crate::project_paths::find_source_root(input_path)?;
         let file_dir = input_path.parent()?;

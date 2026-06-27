@@ -75,9 +75,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
                         if let Some(struct_name) = &self.current_struct_name {
-                            if let Some(fields) = self
-                                .lookup_struct_field_types(struct_name)
-                                .or_else(|| {
+                            if let Some(fields) =
+                                self.lookup_struct_field_types(struct_name).or_else(|| {
                                     struct_name
                                         .split('<')
                                         .next()
@@ -149,12 +148,14 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     let owner_type = self.infer_type_name(field_obj);
                     if let Some(ref owner) = owner_type {
-                        if let Some(field_types) = self.lookup_struct_field_types(owner).or_else(|| {
-                            owner
-                                .split('<')
-                                .next()
-                                .and_then(|base| self.lookup_struct_field_types(base))
-                        }) {
+                        if let Some(field_types) =
+                            self.lookup_struct_field_types(owner).or_else(|| {
+                                owner
+                                    .split('<')
+                                    .next()
+                                    .and_then(|base| self.lookup_struct_field_types(base))
+                            })
+                        {
                             if let Some(field_type) = field_types.get(field.as_str()) {
                                 if let Some(elem_type) =
                                     Self::extract_iterator_element_type(field_type)

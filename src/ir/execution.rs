@@ -14,7 +14,7 @@
 //! The execution mode is a property of the call EXPRESSION, not the function
 //! DECLARATION. This eliminates function coloring entirely.
 
-use crate::ir::safety_type::{Effect, EffectSet, ExecutionMode};
+use crate::ir::safety_type::{EffectSet, ExecutionMode};
 use std::collections::HashMap;
 
 /// A call site with its execution mode.
@@ -39,22 +39,16 @@ pub struct CallLocation {
 #[derive(Debug, Clone)]
 pub enum ExecutionConstraint {
     /// A call site uses a specific execution mode.
-    CallMode {
-        site: CallSite,
-    },
+    CallMode { site: CallSite },
     /// A function is marked as not suitable for spawning
     /// (e.g., it captures mutable references that can't be sent across threads).
-    NotSpawnable {
-        function: String,
-        reason: String,
-    },
+    NotSpawnable { function: String, reason: String },
     /// A function requires async context (it uses .await internally).
-    RequiresAsyncContext {
-        function: String,
-    },
+    RequiresAsyncContext { function: String },
 }
 
 /// Validates execution mode choices at call sites.
+#[derive(Default)]
 pub struct ExecutionValidator {
     call_sites: Vec<CallSite>,
     not_spawnable: HashMap<String, String>,
@@ -105,10 +99,7 @@ impl ExecutionValidator {
                         errors.push(ExecutionError {
                             kind: ExecutionErrorKind::NotSpawnable,
                             call_site: site.clone(),
-                            message: format!(
-                                "cannot spawn '{}': {}",
-                                site.callee, reason
-                            ),
+                            message: format!("cannot spawn '{}': {}", site.callee, reason),
                         });
                     }
 
