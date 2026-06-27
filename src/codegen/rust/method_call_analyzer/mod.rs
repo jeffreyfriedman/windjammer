@@ -174,9 +174,11 @@ impl MethodCallAnalyzer {
                     } else {
                         param_idx
                     };
-                    let ownership = crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                        sig, sig_param_idx,
-                    );
+                    let ownership =
+                        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                            sig,
+                            sig_param_idx,
+                        );
                     if matches!(ownership, OwnershipMode::Borrowed) {
                         return true;
                     }

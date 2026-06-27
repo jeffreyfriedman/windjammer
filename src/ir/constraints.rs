@@ -3,7 +3,7 @@
 //! Phase 1: Type definitions only — the solver is a stub.
 //! Phase 2: Constraint generation from AST + union-find unification.
 
-use crate::ir::safety_type::{BaseType, Effect, EffectSet, OwnedType, TaintStatus};
+use crate::ir::safety_type::{BaseType, EffectSet, OwnedType, TaintStatus};
 
 /// A constraint variable — an opaque handle into the solver's union-find.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -66,7 +66,7 @@ impl<'ast> CodeGenerator<'ast> {
                     |n| crate::codegen::rust::stdlib_method_traits::is_map_type_name(n),
                 );
                 let receiver_is_set = self.infer_expression_type(object).as_ref().is_some_and(
-                    |t| crate::codegen::rust::stdlib_method_traits::is_set_type(t),
+                    crate::codegen::rust::stdlib_method_traits::is_set_type,
                 ) || type_name.as_ref().is_some_and(
                     |n| crate::codegen::rust::stdlib_method_traits::is_set_type_name(n),
                 );
@@ -408,7 +408,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Windjammer philosophy: "sword" should work whether parameter wants String or &String
                 // CRITICAL: Do NOT convert for explicit &str parameters! Only for inferred &String.
                 let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });
-                let param_ownership = method_signature
+                let _param_ownership = method_signature
                     .as_ref()
                     .and_then(|sig| sig.param_ownership_for_arg(i));
                 let string_literal_converted = if is_string_literal {
@@ -920,15 +920,14 @@ impl<'ast> CodeGenerator<'ast> {
                 if borrow_decision.strip_clone {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     // Owned-path may have added `.to_string()` before we knew callee takes &str.
-                    if param_expects_borrowed && arg_str.ends_with(".to_string()") {
-                        if method_signature.as_ref().and_then(|sig| {
+                    if param_expects_borrowed && arg_str.ends_with(".to_string()")
+                        && method_signature.as_ref().and_then(|sig| {
                             sig.param_type_for_arg(i)
                         }).is_some_and(|t| {
                             crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                         }) {
                             arg_str = arg_str[..arg_str.len() - 12].to_string();
                         }
-                    }
                 }
 
                 if borrow_decision.add_ref
@@ -1247,7 +1246,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let is_set_method = crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(method)
                     && i == 0
                     && (self.infer_expression_type(object).as_ref().is_some_and(
-                        |t| crate::codegen::rust::stdlib_method_traits::is_set_type(t),
+                        crate::codegen::rust::stdlib_method_traits::is_set_type,
                     ) || self
                         .infer_type_name(object)
                         .as_ref()

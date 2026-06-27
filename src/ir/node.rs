@@ -93,18 +93,9 @@ pub enum IrNodeKind {
     /// Placeholder for the current AST-direct codegen path.
     AstPassthrough,
     /// A call expression with resolved signature.
-    Call {
-        callee: String,
-        args: Vec<IrNode>,
-    },
+    Call { callee: String, args: Vec<IrNode> },
     /// A local variable binding.
-    Let {
-        name: String,
-        mutable: bool,
-    },
+    Let { name: String, mutable: bool },
     /// A field access.
-    FieldAccess {
-        base: Box<IrNode>,
-        field: String,
-    },
+    FieldAccess { base: Box<IrNode>, field: String },
 }

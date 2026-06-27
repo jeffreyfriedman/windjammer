@@ -739,8 +739,7 @@ impl<'ast> Analyzer<'ast> {
                                     } else {
                                         registry.add_function(qualified_name, signature.clone());
                                     }
-                                    if is_trait_impl
-                                        && registry.get_signature(&func.name).is_none()
+                                    if is_trait_impl && registry.get_signature(&func.name).is_none()
                                     {
                                         registry.add_function(func.name.clone(), signature);
                                     }

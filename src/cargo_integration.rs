@@ -620,7 +620,6 @@ opt-level = 3
 
 /// Create WASM-specific Cargo.toml
 pub fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<String>) -> Result<()> {
-    use std::env;
     use std::fs;
 
     // Check if platform APIs are used (requires windjammer-runtime)

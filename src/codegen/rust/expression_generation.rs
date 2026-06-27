@@ -431,7 +431,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let callee_wants_borrowed_str = |sig: &crate::analyzer::FunctionSignature, idx: usize| {
             matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    sig, idx
+                ),
                 OwnershipMode::Borrowed,
             )
         };
@@ -443,11 +445,13 @@ impl<'ast> CodeGenerator<'ast> {
             sig.formal_param_type(sig_param_idx).is_some_and(|t| {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && crate::codegen::rust::types::is_windjammer_text_type(t)
-            }) || matches!(sig.param_ownership.get(sig_param_idx), Some(OwnershipMode::Owned))
-                || sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                    matches!(t, Type::String)
-                        || matches!(t, Type::Custom(n) if n == "string" || n == "String")
-                })
+            }) || matches!(
+                sig.param_ownership.get(sig_param_idx),
+                Some(OwnershipMode::Owned)
+            ) || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                matches!(t, Type::String)
+                    || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+            })
         }) {
             return arg_str;
         }

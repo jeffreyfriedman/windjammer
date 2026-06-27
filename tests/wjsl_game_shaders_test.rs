@@ -15,7 +15,6 @@
 //! Validates that game shaders written in WJSL can be correctly transpiled
 //! to WGSL by the transpile_wjsl() pipeline.
 
-use std::path::Path;
 use windjammer::wjsl::transpile_wjsl;
 
 #[path = "common/wjsl_shader_fixtures.rs"]

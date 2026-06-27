@@ -365,8 +365,7 @@ impl ServerResponse {
 
 impl IntoResponse for ServerResponse {
     fn into_response(self) -> AxumResponse {
-        let status =
-            StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status = StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         let mut response = if let Some(binary) = self.binary_body {
             (status, binary).into_response()
@@ -650,11 +649,7 @@ where
                 let headers: Vec<(String, String)> = req
                     .headers()
                     .iter()
-                    .filter_map(|(k, v)| {
-                        v.to_str()
-                            .ok()
-                            .map(|s| (k.to_string(), s.to_string()))
-                    })
+                    .filter_map(|(k, v)| v.to_str().ok().map(|s| (k.to_string(), s.to_string())))
                     .collect();
                 let body_bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
                     .await
@@ -673,15 +668,13 @@ where
         });
 
         let addr = format!("{}:{}", address, port);
-        let socket_addr: SocketAddr = addr.parse().map_err(|e: std::net::AddrParseError| {
-            e.to_string()
-        })?;
+        let socket_addr: SocketAddr = addr
+            .parse()
+            .map_err(|e: std::net::AddrParseError| e.to_string())?;
         let listener = tokio::net::TcpListener::bind(socket_addr)
             .await
             .map_err(|e| e.to_string())?;
-        axum::serve(listener, app)
-            .await
-            .map_err(|e| e.to_string())
+        axum::serve(listener, app).await.map_err(|e| e.to_string())
     })
 }
 

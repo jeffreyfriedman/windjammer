@@ -694,9 +694,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(sig) = self.signature_registry.get_signature(name) {
             return Some(sig);
         }
-        self.global_signature_registry
-            .as_ref()?
-            .get_signature(name)
+        self.global_signature_registry.as_ref()?.get_signature(name)
     }
 
     pub(crate) fn find_method_on_receiver_with_global(
@@ -711,9 +709,9 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return Some(sig);
         }
-        self.global_signature_registry.as_ref().and_then(|g| {
-            g.find_method_on_receiver_type(type_name, method, arg_count)
-        })
+        self.global_signature_registry
+            .as_ref()
+            .and_then(|g| g.find_method_on_receiver_type(type_name, method, arg_count))
     }
 
     pub(crate) fn find_signature_by_name_and_arg_count_with_global(
@@ -761,8 +759,10 @@ impl<'ast> CodeGenerator<'ast> {
             crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
             crate::analyzer::OwnershipMode::Owned,
         ) && sig.formal_param_type(idx).is_some_and(|t| {
-            !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_))
-                && crate::codegen::rust::types::is_windjammer_text_type(t)
+            !matches!(
+                t,
+                crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)
+            ) && crate::codegen::rust::types::is_windjammer_text_type(t)
         })
     }
 
@@ -879,9 +879,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if let Some(sig) = self
-            .signature_registry
-            .find_method_on_receiver_type(receiver_type, method, arg_count)
+        if let Some(sig) =
+            self.signature_registry
+                .find_method_on_receiver_type(receiver_type, method, arg_count)
         {
             return Some(sig.clone());
         }
@@ -896,7 +896,9 @@ impl<'ast> CodeGenerator<'ast> {
         let suffix = format!("::{receiver_type}::{method}");
         for (key, sig) in self.signature_registry.all_signatures() {
             if key.ends_with(&suffix)
-                && crate::codegen::rust::call_signature_resolution::validate_arg_count(sig, arg_count)
+                && crate::codegen::rust::call_signature_resolution::validate_arg_count(
+                    sig, arg_count,
+                )
             {
                 return Some(sig.clone());
             }
@@ -929,15 +931,16 @@ impl<'ast> CodeGenerator<'ast> {
         method: &str,
         qualified_key: Option<&str>,
     ) -> bool {
-        if self
-            .signature_registry
-            .should_skip_int_to_float_auto_cast(type_name, method, qualified_key)
-        {
+        if self.signature_registry.should_skip_int_to_float_auto_cast(
+            type_name,
+            method,
+            qualified_key,
+        ) {
             return true;
         }
-        self.global_signature_registry.as_ref().is_some_and(|g| {
-            g.should_skip_int_to_float_auto_cast(type_name, method, qualified_key)
-        })
+        self.global_signature_registry
+            .as_ref()
+            .is_some_and(|g| g.should_skip_int_to_float_auto_cast(type_name, method, qualified_key))
     }
 
     /// Used with multipass library builds to resolve `use super::...::Type` across sibling `.wj` modules.
@@ -1359,8 +1362,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                         });
                     if is_ref_text || is_borrowed_string_param {
-                        *expr_str =
-                            super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                        *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);
                     }
                 }
             }
@@ -1415,10 +1417,7 @@ impl<'ast> CodeGenerator<'ast> {
                 });
                 let is_inferred_borrowed = self.inferred_borrowed_params.contains(name);
 
-                if (is_self_field
-                    || is_borrowed_iter
-                    || is_explicit_ref
-                    || is_inferred_borrowed)
+                if (is_self_field || is_borrowed_iter || is_explicit_ref || is_inferred_borrowed)
                     && !arg_str.ends_with(".clone()")
                 {
                     let is_copy = self

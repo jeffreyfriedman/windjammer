@@ -231,9 +231,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Statement::Return {
                 value: Some(expr), ..
-            } => self.expression_calls_self_method_with_recorded_receiver(
-                expr, struct_name, mode,
-            ),
+            } => self.expression_calls_self_method_with_recorded_receiver(expr, struct_name, mode),
             Statement::Let { value, .. } => {
                 self.expression_calls_self_method_with_recorded_receiver(value, struct_name, mode)
             }
@@ -247,7 +245,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }) || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
                         self.statement_calls_self_method_with_recorded_receiver(
-                            s, struct_name, mode,
+                            s,
+                            struct_name,
+                            mode,
                         )
                     })
                 })
@@ -259,12 +259,16 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Expression::Block { statements, .. } = arm.body {
                     statements.iter().any(|s| {
                         self.statement_calls_self_method_with_recorded_receiver(
-                            s, struct_name, mode,
+                            s,
+                            struct_name,
+                            mode,
                         )
                     })
                 } else {
                     self.expression_calls_self_method_with_recorded_receiver(
-                        arm.body, struct_name, mode,
+                        arm.body,
+                        struct_name,
+                        mode,
                     )
                 }
             }),
@@ -279,11 +283,7 @@ impl<'ast> CodeGenerator<'ast> {
         mode: OwnershipMode,
     ) -> bool {
         match expr {
-            Expression::MethodCall {
-                object,
-                method,
-                ..
-            } if matches!(&**object, Expression::Identifier { name, .. } if name == "self") =>
+            Expression::MethodCall { object, method, .. } if matches!(&**object, Expression::Identifier { name, .. } if name == "self") =>
             {
                 let qualified = format!("{struct_name}::{method}");
                 if self
@@ -305,11 +305,14 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Binary { left, right, .. } => {
                 self.expression_calls_self_method_with_recorded_receiver(left, struct_name, mode)
                     || self.expression_calls_self_method_with_recorded_receiver(
-                        right, struct_name, mode,
+                        right,
+                        struct_name,
+                        mode,
                     )
             }
-            Expression::Unary { operand, .. } => self
-                .expression_calls_self_method_with_recorded_receiver(operand, struct_name, mode),
+            Expression::Unary { operand, .. } => {
+                self.expression_calls_self_method_with_recorded_receiver(operand, struct_name, mode)
+            }
             Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
                 self.expression_calls_self_method_with_recorded_receiver(arg, struct_name, mode)
             }),

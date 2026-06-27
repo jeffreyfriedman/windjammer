@@ -13,10 +13,7 @@ use super::util::copy_dir_recursive;
 pub fn rewrite_test_crate_imports(rust_code: &str, lib_crate_name: &str) -> String {
     let mut out = rust_code.to_string();
     // `pub use crate::` must be rewritten before bare `use crate::`.
-    out = out.replace(
-        "pub use crate::",
-        &format!("pub use {}::", lib_crate_name),
-    );
+    out = out.replace("pub use crate::", &format!("pub use {}::", lib_crate_name));
     out = out.replace("use crate::", &format!("use {}::", lib_crate_name));
     out
 }
@@ -876,7 +873,7 @@ pub(crate) fn generate_test_harness(
 
     // Tests compiled above still contain `use crate::...`; point them at the library crate.
     if let Some((lib_crate_name, _, _)) = &library_dependency {
-        for (file, _) in &tests_by_file {
+        for file in tests_by_file.keys() {
             let output_file = output_dir.join(format!(
                 "{}.rs",
                 file.file_stem().unwrap().to_string_lossy()

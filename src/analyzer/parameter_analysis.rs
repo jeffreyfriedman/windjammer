@@ -62,7 +62,8 @@ impl<'ast> Analyzer<'ast> {
                     } else {
                         self.is_returned(param_name, body)
                             || self.is_stored(param_name, body)
-                            || (!string_like && self.param_is_consumed_into_return(param_name, body))
+                            || (!string_like
+                                && self.param_is_consumed_into_return(param_name, body))
                     };
                     if force_owned {
                         return Ok(OwnershipMode::Owned);
@@ -410,7 +411,9 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => {
                 for s in body {
                     self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
                     if *found {
@@ -466,7 +469,9 @@ impl<'ast> Analyzer<'ast> {
             Expression::TryOp { expr, .. } => {
                 self.expr_collect_pass_by_value_function_call_arg(param_name, expr, found);
             }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
                 for (_, arg) in arguments {
                     self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
@@ -540,7 +545,9 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => {
                 for s in body {
                     self.stmt_collect_pass_by_value_call_arg(param_name, s, found);
                     if *found {
@@ -692,7 +699,9 @@ impl<'ast> Analyzer<'ast> {
                 operand,
                 ..
             } => self.expr_param_only_borrowed(param_name, operand, true),
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 use crate::parser::BinaryOp;
                 // String concatenation `lhs + rhs`: codegen emits `lhs + &rhs` — RHS is borrow-only.
                 if matches!(op, BinaryOp::Add) {

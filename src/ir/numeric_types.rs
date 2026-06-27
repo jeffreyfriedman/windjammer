@@ -259,10 +259,7 @@ mod tests {
             NumericType::Unknown.resolve_conflict(&NumericType::F32),
             Some(NumericType::F32)
         );
-        assert_eq!(
-            NumericType::F32.resolve_conflict(&NumericType::F64),
-            None
-        );
+        assert_eq!(NumericType::F32.resolve_conflict(&NumericType::F64), None);
     }
 
     #[test]

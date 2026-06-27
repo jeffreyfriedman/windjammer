@@ -12,9 +12,7 @@ impl<'ast> CodeGenerator<'ast> {
         object: &Expression<'ast>,
     ) -> Option<String> {
         if let Expression::FieldAccess {
-            object: obj,
-            field,
-            ..
+            object: obj, field, ..
         } = object
         {
             if let Expression::Identifier { name, .. } = &**obj {
@@ -62,7 +60,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(ref tn) = type_name {
             use crate::codegen::rust::call_signature_resolution::{
                 finalize_call_site_signature, resolve_method_for_call_site, validate_arg_count,
-                ResolvedSignature, ResolutionMethod,
+                ResolutionMethod, ResolvedSignature,
             };
 
             let from_method_registry = self.lookup_method_signature(tn, method).and_then(|ms| {
@@ -198,10 +196,6 @@ impl<'ast> CodeGenerator<'ast> {
                         .map(finalize_call_site_signature)
                 })
             })
-            .or_else(|| {
-                resolved_from_mc
-                    .clone()
-                    .map(finalize_call_site_signature)
-            })
+            .or_else(|| resolved_from_mc.clone().map(finalize_call_site_signature))
     }
 }

@@ -27,10 +27,9 @@ pub mod taint;
 pub mod target_encodings;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
+pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
 pub use execution::{ExecutionConstraint, ExecutionValidator};
-pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};
-pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use node::{IrFunction, IrNode, IrNodeKind};
 pub use numeric_solver::NumericSolver;
 pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
@@ -39,3 +38,4 @@ pub use safety_type::{
     TaintStatus,
 };
 pub use solver::Solver;
+pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};

@@ -35,6 +35,7 @@ pub enum NumericErrorKind {
 }
 
 /// Union-find for expression IDs, mapping to numeric types.
+#[derive(Default)]
 struct NumericUnionFind {
     /// Map from ExprId to its canonical slot index.
     id_to_slot: HashMap<UnifiedExprId, u32>,
@@ -81,7 +82,7 @@ impl NumericUnionFind {
         if rx == ry {
             return rx;
         }
-        let root = if self.rank[rx as usize] < self.rank[ry as usize] {
+        if self.rank[rx as usize] < self.rank[ry as usize] {
             self.parent[rx as usize] = ry;
             ry
         } else if self.rank[rx as usize] > self.rank[ry as usize] {
@@ -91,8 +92,7 @@ impl NumericUnionFind {
             self.parent[ry as usize] = rx;
             self.rank[rx as usize] += 1;
             rx
-        };
-        root
+        }
     }
 
     fn get_type(&mut self, slot: u32) -> NumericType {
@@ -107,6 +107,7 @@ impl NumericUnionFind {
 }
 
 /// The unified numeric solver.
+#[derive(Default)]
 pub struct NumericSolver {
     uf: NumericUnionFind,
     constraints: Vec<NumericConstraint>,
@@ -242,9 +243,7 @@ impl NumericSolver {
                                 if type_a == type_b {
                                     // Already agree — unify
                                     self.uf.union(slot_a, slot_b);
-                                } else if let Some(resolved) =
-                                    type_a.resolve_conflict(&type_b)
-                                {
+                                } else if let Some(resolved) = type_a.resolve_conflict(&type_b) {
                                     let root = self.uf.union(slot_a, slot_b);
                                     self.uf.set_type(root, resolved);
                                     if resolved != type_a || resolved != type_b {

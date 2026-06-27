@@ -341,9 +341,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis.needs_clone_anywhere(name)
-                            && !value_str.ends_with(".clone()")
-                        {
+                        if analysis.needs_clone_anywhere(name) && !value_str.ends_with(".clone()") {
                             value_str = self.maybe_auto_clone(name, &value_str);
                             if !value_str.ends_with(".clone()") {
                                 value_str = format!("{}.clone()", value_str);
@@ -417,17 +415,17 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !string_utilities::already_owned_string_expr(&value_str)
                     && matches!(value, Expression::Identifier { name, .. }
-                        if self.current_function_params.iter().any(|p| {
-                            p.name == *name
-                                && (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                                    || matches!(
-                                        &p.type_,
-                                        Type::Reference(inner)
-                                            if crate::codegen::rust::types::is_windjammer_text_type(
-                                                inner,
-                                            )
-                                    ))
-                        }))
+                    if self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && (crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                || matches!(
+                                    &p.type_,
+                                    Type::Reference(inner)
+                                        if crate::codegen::rust::types::is_windjammer_text_type(
+                                            inner,
+                                        )
+                                ))
+                    }))
                 {
                     value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                 }
@@ -439,9 +437,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis.needs_clone_anywhere(name)
-                            && !value_str.ends_with(".clone()")
-                        {
+                        if analysis.needs_clone_anywhere(name) && !value_str.ends_with(".clone()") {
                             value_str = self.maybe_auto_clone(name, &value_str);
                             if !value_str.ends_with(".clone()") {
                                 value_str = format!("{}.clone()", value_str);
@@ -581,23 +577,23 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !string_utilities::already_owned_string_expr(&value_str)
                     && matches!(value, Expression::Identifier { name, .. }
-                        if self.current_function_params.iter().any(|p| {
-                            p.name == *name
-                                && (p.type_ == Type::String
-                                    || matches!(
-                                        &p.type_,
-                                        Type::Custom(n) if n == "string" || n == "String"
-                                    )
-                                    || matches!(
-                                        &p.type_,
-                                        Type::Reference(inner)
-                                            if matches!(inner.as_ref(), Type::String)
-                                                || matches!(
-                                                    inner.as_ref(),
-                                                    Type::Custom(s) if s == "str"
-                                                )
-                                    ))
-                        }))
+                    if self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && (p.type_ == Type::String
+                                || matches!(
+                                    &p.type_,
+                                    Type::Custom(n) if n == "string" || n == "String"
+                                )
+                                || matches!(
+                                    &p.type_,
+                                    Type::Reference(inner)
+                                        if matches!(inner.as_ref(), Type::String)
+                                            || matches!(
+                                                inner.as_ref(),
+                                                Type::Custom(s) if s == "str"
+                                            )
+                                ))
+                    }))
                 {
                     value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                 }
@@ -609,9 +605,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis.needs_clone_anywhere(name)
-                            && !value_str.ends_with(".clone()")
-                        {
+                        if analysis.needs_clone_anywhere(name) && !value_str.ends_with(".clone()") {
                             value_str = self.maybe_auto_clone(name, &value_str);
                             if !value_str.ends_with(".clone()") {
                                 value_str = format!("{}.clone()", value_str);

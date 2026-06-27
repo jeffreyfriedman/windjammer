@@ -59,8 +59,10 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         })
     });
 
-    let resolved =
-        call_signature_resolution::pick_best_resolved_signature(from_registry, from_method_registry);
+    let resolved = call_signature_resolution::pick_best_resolved_signature(
+        from_registry,
+        from_method_registry,
+    );
     let method_signature = resolved.as_ref().map(|r| {
         let mut sig = r.sig.clone();
         if let Some(global) = gen.global_signature_registry() {

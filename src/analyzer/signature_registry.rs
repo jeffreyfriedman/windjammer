@@ -158,11 +158,14 @@ impl SignatureRegistry {
             if name.contains("::") && existing.has_self_receiver && !sig.has_self_receiver {
                 // Declaration stubs may incorrectly include synthetic `self`; direct impl
                 // static methods must be able to replace them for Self:: call-site lowering.
-                let existing_is_declaration_stub = existing.param_ownership.iter().all(|o| {
-                    matches!(o, OwnershipMode::Owned)
-                }) && !existing.param_types.iter().any(|t| {
-                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                });
+                let existing_is_declaration_stub = existing
+                    .param_ownership
+                    .iter()
+                    .all(|o| matches!(o, OwnershipMode::Owned))
+                    && !existing
+                        .param_types
+                        .iter()
+                        .any(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
                 if !existing_is_declaration_stub {
                     return;
                 }
@@ -223,9 +226,9 @@ impl SignatureRegistry {
         if self.has_method_name_collision_for_type(type_name, method) {
             return true;
         }
-        self.global_fallback.as_ref().is_some_and(|g| {
-            g.should_skip_int_to_float_auto_cast(type_name, method, qualified_key)
-        })
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.should_skip_int_to_float_auto_cast(type_name, method, qualified_key))
     }
 
     /// Like [`has_method_name_collision`] but only considers signatures whose key
@@ -236,9 +239,10 @@ impl SignatureRegistry {
         method: &str,
     ) -> bool {
         let Some(keys) = self.method_index.get(method) else {
-            return self.global_fallback.as_ref().is_some_and(|g| {
-                g.has_method_name_collision_for_type(type_name, method)
-            });
+            return self
+                .global_fallback
+                .as_ref()
+                .is_some_and(|g| g.has_method_name_collision_for_type(type_name, method));
         };
         let filtered: Vec<&String> = if let Some(tn) = type_name {
             keys.iter()
@@ -267,9 +271,9 @@ impl SignatureRegistry {
                 }
             }
         }
-        self.global_fallback.as_ref().is_some_and(|g| {
-            g.has_method_name_collision_for_type(type_name, method)
-        })
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.has_method_name_collision_for_type(type_name, method))
     }
 
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
@@ -347,9 +351,9 @@ impl SignatureRegistry {
                 }
             }
         }
-        self.global_fallback.as_ref().and_then(|g| {
-            g.find_signature_by_name_and_arg_count(name, arg_count)
-        })
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.find_signature_by_name_and_arg_count(name, arg_count))
     }
 
     fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
@@ -371,9 +375,7 @@ impl SignatureRegistry {
         }
         if let Some(keys) = self.method_index.get(method) {
             for key in keys {
-                if !key.ends_with(&format!("::{method}"))
-                    || !key.contains(type_name)
-                {
+                if !key.ends_with(&format!("::{method}")) || !key.contains(type_name) {
                     continue;
                 }
                 if let Some(sig) = self.signatures.get(key) {
@@ -383,9 +385,9 @@ impl SignatureRegistry {
                 }
             }
         }
-        self.global_fallback.as_ref().and_then(|g| {
-            g.find_method_on_receiver_type(type_name, method, arg_count)
-        })
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.find_method_on_receiver_type(type_name, method, arg_count))
     }
 
     /// Register module-qualified aliases for all signatures in `source`.
@@ -691,9 +693,7 @@ mod tests {
 
         global.merge(&{
             let mut caller = SignatureRegistry::new();
-            caller
-                .signatures
-                .insert("Squad::new".into(), caller_stub);
+            caller.signatures.insert("Squad::new".into(), caller_stub);
             caller
         });
 

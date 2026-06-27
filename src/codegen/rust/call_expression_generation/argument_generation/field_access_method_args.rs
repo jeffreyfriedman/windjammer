@@ -99,11 +99,7 @@ fn arg_expression_is_copy_non_text_scalar<'ast>(
         return gen.is_type_copy(&t) && !crate::codegen::rust::types::is_windjammer_text_type(&t);
     }
     if let Expression::Identifier { name, .. } = arg {
-        if let Some(param) = gen
-            .current_function_params
-            .iter()
-            .find(|p| p.name == *name)
-        {
+        if let Some(param) = gen.current_function_params.iter().find(|p| p.name == *name) {
             return gen.is_type_copy(&param.type_)
                 && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_);
         }
@@ -132,14 +128,14 @@ fn borrow_runtime_std_str_arg<'ast>(
     arg: &'ast Expression<'ast>,
     arg_str: String,
 ) -> String {
-    let asref_str_module =
-        asref_str_module_for_receiver(gen, runtime_module, type_name);
-    let arg_is_string = crate::codegen::rust::string_utilities::expression_is_owned_string_for_asref_borrow(
-        arg,
-        gen.infer_expression_type(arg).as_ref(),
-        &gen.local_var_types,
-        &gen.current_function_params,
-    );
+    let asref_str_module = asref_str_module_for_receiver(gen, runtime_module, type_name);
+    let arg_is_string =
+        crate::codegen::rust::string_utilities::expression_is_owned_string_for_asref_borrow(
+            arg,
+            gen.infer_expression_type(arg).as_ref(),
+            &gen.local_var_types,
+            &gen.current_function_params,
+        );
     if asref_str_module
         && arg_is_string
         && matches!(
@@ -168,12 +164,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 ) -> Vec<String> {
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
     let runtime_module = runtime_module.or_else(|| {
-        qualified_name
-            .split("::")
-            .next()
-            .filter(|m| {
-                crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
-            })
+        qualified_name.split("::").next().filter(|m| {
+            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
+        })
     });
     arguments
         .iter()
@@ -450,12 +443,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
 ) -> Vec<String> {
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
     let runtime_module = runtime_module.or_else(|| {
-        qualified_name
-            .split("::")
-            .next()
-            .filter(|m| {
-                crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
-            })
+        qualified_name.split("::").next().filter(|m| {
+            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
+        })
     });
     let fallback_sig = type_name
         .as_ref()

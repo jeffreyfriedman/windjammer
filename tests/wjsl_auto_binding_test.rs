@@ -19,7 +19,6 @@ mod wjsl_shader_fixtures;
 // Tests that binding metadata produces valid WJSL declarations that
 // can be prepended to a shader body and transpiled successfully.
 
-use std::path::Path;
 
 #[test]
 fn test_auto_generated_preamble_transpiles() {
