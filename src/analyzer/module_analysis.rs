@@ -108,6 +108,17 @@ impl<'ast> Analyzer<'ast> {
         program: &Program<'ast>,
         global_signatures: &SignatureRegistry,
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
+        let global_arc = std::sync::Arc::new(global_signatures.clone());
+        self.analyze_program_with_global_arc(program, &global_arc)
+    }
+
+    /// Like [`analyze_program_with_global_signatures`] but shares the global registry via
+    /// `Arc` — avoids cloning the full crate registry for every file in library builds.
+    pub fn analyze_program_with_global_arc(
+        &mut self,
+        program: &Program<'ast>,
+        global_signatures: &std::sync::Arc<SignatureRegistry>,
+    ) -> Result<ProgramAnalysisResult<'ast>, String> {
         // THE PROPER SOLUTION: Multi-pass ownership analysis
         // Iterate until convergence - no workarounds, no heuristics, just correctness
 
@@ -207,8 +218,18 @@ impl<'ast> Analyzer<'ast> {
         // Continue analyzing until ownership signatures stabilize (convergence)
         const MAX_PASSES: usize = 10; // Safety limit to prevent infinite loops
 
-        let mut registry = global_signatures.clone();
+        let mut registry = SignatureRegistry::layered(std::sync::Arc::clone(global_signatures));
         let mut pass_number = 1;
+
+        if self.ownership_preconverged {
+            let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
+            self.infer_trait_signatures_from_impls(program, &new_registry)?;
+            return Ok((
+                new_analyzed,
+                new_registry,
+                self.analyzed_trait_methods.clone(),
+            ));
+        }
 
         loop {
             let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
@@ -473,7 +494,9 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
-                        if !is_trait_impl || registry.get_signature(&func.name).is_none() {
+                        // Direct impl methods must not register bare names — homonyms like
+                        // `check_collision` would overwrite imported free functions in the global registry.
+                        if is_trait_impl && registry.get_signature(&func.name).is_none() {
                             registry.add_function(func.name.clone(), signature);
                         }
 
@@ -716,8 +739,7 @@ impl<'ast> Analyzer<'ast> {
                                     } else {
                                         registry.add_function(qualified_name, signature.clone());
                                     }
-                                    if !is_trait_impl
-                                        || registry.get_signature(&func.name).is_none()
+                                    if is_trait_impl && registry.get_signature(&func.name).is_none()
                                     {
                                         registry.add_function(func.name.clone(), signature);
                                     }

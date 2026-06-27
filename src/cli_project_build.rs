@@ -38,8 +38,8 @@ pub fn build_project_ext(
     library: bool,
     external_metadata: &[(&str, &Path)],
 ) -> Result<()> {
-    // When we have metadata or library, use the compiler's simpler build (handles cross-crate)
-    if !external_metadata.is_empty() || (library && path.is_file()) {
+    // Library builds and cross-crate metadata require the multipass compiler pipeline.
+    if !external_metadata.is_empty() || library {
         return crate::compiler::build_project_ext(
             path,
             output,

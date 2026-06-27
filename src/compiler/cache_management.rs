@@ -158,6 +158,18 @@ pub fn compute_dirty_files(
     output: &Path,
     dep_roots: &[PathBuf],
 ) -> (Vec<usize>, usize) {
+    let dep_epoch = crate::compiler::incremental::dep_metadata_epoch(dep_roots);
+    compute_dirty_files_with_dep_epoch(wj_files, src_base, output, dep_roots, dep_epoch)
+}
+
+/// Like [`compute_dirty_files`] but pins dep-metadata epoch for the whole build.
+pub fn compute_dirty_files_with_dep_epoch(
+    wj_files: &[(PathBuf, String)],
+    src_base: &Path,
+    output: &Path,
+    _dep_roots: &[PathBuf],
+    dep_epoch: u64,
+) -> (Vec<usize>, usize) {
     let compiler_changed = !is_compiler_stamp_fresh(output);
     if compiler_changed {
         return ((0..wj_files.len()).collect(), 0);
@@ -176,7 +188,16 @@ pub fn compute_dirty_files(
                 }
             };
 
-        if is_library_codegen_cache_valid(source, file, &output_file, src_base, output, dep_roots) {
+        // Match post-build stale detection: re-read from disk and use dep epoch snapshot.
+        let source = std::fs::read_to_string(file).unwrap_or_else(|_| source.clone());
+        if is_library_codegen_cache_valid_with_dep_epoch(
+            &source,
+            file,
+            &output_file,
+            src_base,
+            output,
+            dep_epoch,
+        ) {
             skipped += 1;
         } else {
             dirty_indices.push(i);
@@ -206,6 +227,23 @@ pub fn is_compiler_stamp_fresh(output: &Path) -> bool {
 /// Write (or refresh) the compiler stamp in the output directory.
 pub fn write_compiler_stamp(output: &Path) -> std::io::Result<()> {
     crate::compiler::incremental::write_compiler_stamp(output)
+}
+
+/// When the compiler binary changed since the last build, drop stale analysis meta so
+/// fingerprint checks cannot falsely treat old generated Rust as fresh.
+pub fn invalidate_meta_cache_on_compiler_change(src_base: &Path, output: &Path) -> bool {
+    if crate::compiler::incremental::is_compiler_stamp_fresh(output) {
+        return false;
+    }
+    let cache_root = crate::metadata::meta_cache_root(src_base);
+    if cache_root.exists() {
+        let _ = std::fs::remove_dir_all(&cache_root);
+        eprintln!(
+            "⟳ Compiler changed — cleared analysis cache at {}",
+            cache_root.display()
+        );
+    }
+    true
 }
 
 /// Check if ALL source files are fresh (whole-crate fast path).

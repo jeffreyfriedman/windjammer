@@ -77,24 +77,6 @@ impl<'ast> Analyzer<'ast> {
             } else {
                 // No decorator - use automatic analysis
 
-                // If the function returns String and this param is returned directly,
-                // it needs to be owned String (not &str)
-                let returns_string = func
-                    .return_type
-                    .as_ref()
-                    .map(|rt| {
-                        matches!(rt, Type::String)
-                            || matches!(rt, Type::Custom(ref n) if n == "string")
-                    })
-                    .unwrap_or(false);
-
-                let param_is_returned =
-                    returns_string && self.param_is_returned_directly(&param.name, &func.body);
-
-                if param_is_returned {
-                    continue;
-                }
-
                 let needs_string_ref =
                     self.param_needs_string_ref(&param.name, &func.body, registry);
 

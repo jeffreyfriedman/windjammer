@@ -583,6 +583,8 @@ impl<'ast> CodeGenerator<'ast> {
         // This handles match arm bindings (owned Copy types like i32) in >=, <=, >, < too
         if is_comparison {
             self.balance_eq_operands_for_rust(left, right, &mut left_str, &mut right_str);
+            left_str = self.peel_copy_ref_match_binding_for_value(left, &left_str);
+            right_str = self.peel_copy_ref_match_binding_for_value(right, &right_str);
         }
 
         // Auto-deref borrowed bool operands in logical ops (&&, ||).

@@ -52,6 +52,31 @@ pub fn strip_trailing_clone(arg_str: &mut String) {
     }
 }
 
+/// True when prefix `&` would bind to the first sub-expression only (e.g. `&a + b`).
+fn expr_needs_borrow_parentheses(expr_str: &str) -> bool {
+    if expr_str.starts_with('(') {
+        return false;
+    }
+    [
+        " + ", " - ", " * ", " / ", " % ", " == ", " != ", " < ", " > ", " <= ", " >= ", " && ",
+        " || ",
+    ]
+    .iter()
+    .any(|op| expr_str.contains(op))
+}
+
+/// Prefix shared borrow on generated Rust, parenthesizing compound expressions.
+pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
+    if expr_str.starts_with('&') && !expr_str.starts_with("&&") {
+        return;
+    }
+    if expr_needs_borrow_parentheses(expr_str) {
+        *expr_str = format!("&({expr_str})");
+    } else {
+        *expr_str = format!("&{expr_str}");
+    }
+}
+
 /// Check whether an identifier is already a `&mut` reference, either through
 /// explicit declaration (`param: &mut T`) or through ownership inference.
 pub fn is_identifier_already_mut_ref(
@@ -83,7 +108,25 @@ pub fn apply_mut_borrow_coercion(
         return false;
     }
     if is_identifier_already_mut_ref(arg, current_function_params, inferred_mut_borrowed_params) {
+        // Reborrow of an existing `&mut` binding — strip spurious `.clone()` from
+        // auto-clone / owned-context lowering inside loop bodies.
+        strip_trailing_clone(arg_str);
         return false;
+    }
+    // Owned non-mut parameters cannot be `&mut` coerced (E0596). Downgrade to shared borrow
+    // when the callee signature was over-inferred as MutBorrowed (read-only field/index chains).
+    if let Expression::Identifier { name, .. } = arg {
+        let is_owned_non_mut_param = current_function_params.iter().any(|p| {
+            p.name == *name
+                && !matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
+                && !inferred_mut_borrowed_params.contains(name)
+        });
+        if is_owned_non_mut_param {
+            if !arg_str.starts_with('&') {
+                super::rust_coercion_rules::Coercion::Borrow.apply(arg_str);
+            }
+            return true;
+        }
     }
     strip_trailing_clone(arg_str);
     if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
@@ -91,4 +134,23 @@ pub fn apply_mut_borrow_coercion(
     }
     super::rust_coercion_rules::Coercion::BorrowMut.apply(arg_str);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_borrow_parenthesizes_string_concat() {
+        let mut s = "prev_hash_hex + &canonical_payload".to_string();
+        apply_shared_borrow_prefix(&mut s);
+        assert_eq!(s, "&(prev_hash_hex + &canonical_payload)");
+    }
+
+    #[test]
+    fn shared_borrow_leaves_simple_identifiers_unwrapped() {
+        let mut s = "tenant_slug".to_string();
+        apply_shared_borrow_prefix(&mut s);
+        assert_eq!(s, "&tenant_slug");
+    }
 }

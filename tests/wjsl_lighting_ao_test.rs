@@ -10,6 +10,10 @@
     feature = "parser_tests",
 ))]
 
+#[path = "common/wjsl_shader_fixtures.rs"]
+mod wjsl_shader_fixtures;
+
+
 // TDD Test: Voxel Lighting with Ambient Occlusion and PBR
 //
 // Verifies that the enhanced voxel_lighting.wjsl shader:
@@ -19,30 +23,10 @@
 // 4. Contains shadow ray tracing
 // 5. Uses roughness/metallic from material palette
 
-use std::fs;
-use std::path::Path;
-
-fn game_shaders_available() -> bool {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders")
-        .exists()
-}
-
-fn transpile(wjsl_path: &str) -> Result<String, String> {
-    let source = fs::read_to_string(wjsl_path)
-        .map_err(|e| format!("Failed to read {}: {}", wjsl_path, e))?;
-    let base_dir = Path::new(wjsl_path).parent().unwrap_or(Path::new("."));
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, base_dir)
-        .map_err(|e| format!("WJSL transpilation failed: {}", e))
-}
 
 #[test]
 fn test_lighting_shader_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/voxel_lighting.wjsl")
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader("voxel_lighting.wjsl")
         .expect("voxel_lighting.wjsl should transpile");
     assert!(!wgsl.is_empty(), "Generated WGSL should not be empty");
     assert!(wgsl.contains("fn main"), "Should contain main entry point");
@@ -50,11 +34,7 @@ fn test_lighting_shader_transpiles() {
 
 #[test]
 fn test_lighting_has_ao_sampling() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/voxel_lighting.wjsl")
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader("voxel_lighting.wjsl")
         .expect("transpilation should succeed");
     assert!(
         wgsl.contains("compute_ao")
@@ -67,11 +47,7 @@ fn test_lighting_has_ao_sampling() {
 
 #[test]
 fn test_lighting_has_pbr_specular() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/voxel_lighting.wjsl")
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader("voxel_lighting.wjsl")
         .expect("transpilation should succeed");
     assert!(
         wgsl.contains("roughness") && wgsl.contains("metallic"),
@@ -85,11 +61,7 @@ fn test_lighting_has_pbr_specular() {
 
 #[test]
 fn test_lighting_has_shadow_rays() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/voxel_lighting.wjsl")
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader("voxel_lighting.wjsl")
         .expect("transpilation should succeed");
     assert!(
         wgsl.contains("trace_shadow") || wgsl.contains("shadow_factor"),
@@ -99,11 +71,7 @@ fn test_lighting_has_shadow_rays() {
 
 #[test]
 fn test_lighting_has_sky_gradient() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile("../windjammer-game/windjammer-game-core/shaders/voxel_lighting.wjsl")
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader("voxel_lighting.wjsl")
         .expect("transpilation should succeed");
     assert!(
         wgsl.contains("sky_color") || wgsl.contains("ground_color"),

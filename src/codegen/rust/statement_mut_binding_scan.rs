@@ -232,10 +232,27 @@ impl<'ast> CodeGenerator<'ast> {
         let recv_type = self.infer_expression_type(receiver);
         let type_name = match recv_type.as_ref() {
             Some(Type::Custom(name)) => name.as_str(),
-            _ => return false,
+            _ => "",
         };
-        let qualified = format!("{}::{}", type_name, method);
-        let Some(sig) = self.signature_registry.get_signature(&qualified) else {
+        let qualified = if type_name.is_empty() {
+            method.to_string()
+        } else {
+            format!("{}::{}", type_name, method)
+        };
+        let call_arg_count = arg_idx + 1;
+        let Some(sig) = self
+            .get_signature_with_global(&qualified)
+            .or_else(|| {
+                if type_name.is_empty() {
+                    None
+                } else {
+                    self.find_method_on_receiver_with_global(type_name, method, call_arg_count)
+                }
+            })
+            .or_else(|| {
+                self.find_signature_by_name_and_arg_count_with_global(method, call_arg_count)
+            })
+        else {
             return false;
         };
         let param_idx = if sig.has_self_receiver {
@@ -259,7 +276,7 @@ impl<'ast> CodeGenerator<'ast> {
             _ => return false,
         };
         let qualified = format!("{}::{}", type_name, method);
-        if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+        if let Some(sig) = self.get_signature_with_global(&qualified) {
             if sig.has_self_receiver && !sig.param_ownership.is_empty() {
                 return sig.param_ownership[0] == crate::analyzer::OwnershipMode::MutBorrowed;
             }

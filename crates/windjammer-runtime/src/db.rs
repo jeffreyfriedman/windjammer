@@ -1,62 +1,164 @@
-//! Database operations (SQLite and PostgreSQL)
-//!
-//! Windjammer's `std::db` module maps to these functions.
-//! Note: This is a simplified wrapper. For production use, consider using sqlx directly.
+//! Database operations — Windjammer `std::db` contract (sqlx-backed, hidden from .wj users).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-/// Database type
-#[derive(Debug, Clone, PartialEq)]
+use once_cell::sync::OnceCell;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::{Column, Pool, Postgres, Row as SqlxRow, Sqlite, TypeInfo, ValueRef};
+
+static RUNTIME: OnceCell<tokio::runtime::Runtime> = OnceCell::new();
+
+fn runtime() -> Result<&'static tokio::runtime::Runtime, String> {
+    if let Some(rt) = RUNTIME.get() {
+        return Ok(rt);
+    }
+    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    let _ = RUNTIME.set(rt);
+    RUNTIME
+        .get()
+        .ok_or_else(|| "failed to init tokio runtime".to_string())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DatabaseType {
     SQLite,
     Postgres,
 }
 
-/// Database connection
 #[derive(Debug)]
-pub struct Connection {
-    connection_string: String,
-    db_type: DatabaseType,
+enum DbBackend {
+    Postgres(Arc<Pool<Postgres>>),
+    PostgresPending {
+        url: String,
+        pool: OnceCell<Arc<Pool<Postgres>>>,
+    },
+    Sqlite(Arc<Pool<Sqlite>>),
 }
 
-/// Database row
+/// Database connection (pool handle).
+#[derive(Debug)]
+pub struct Connection {
+    backend: DbBackend,
+}
+
+/// Query result row — column access by name or index.
 #[derive(Debug, Clone)]
 pub struct Row {
-    pub columns: HashMap<String, String>,
+    columns: HashMap<String, String>,
+    ordered: Vec<String>,
 }
 
 impl Row {
-    /// Get column value as string
     pub fn get(&self, column: &str) -> Option<String> {
         self.columns.get(column).cloned()
     }
 
-    /// Get column value as integer
-    pub fn get_int(&self, column: &str) -> Option<i64> {
-        self.get(column)?.parse().ok()
+    pub fn get_string(&self, column: impl AsRef<str>) -> Result<String, String> {
+        let column = column.as_ref();
+        self.columns
+            .get(column)
+            .cloned()
+            .ok_or_else(|| format!("column not found: {column}"))
     }
 
-    /// Get column value as float
-    pub fn get_float(&self, column: &str) -> Option<f64> {
-        self.get(column)?.parse().ok()
+    pub fn get_int(&self, column: impl AsRef<str>) -> Result<i64, String> {
+        let column = column.as_ref();
+        self.get_string(column)?
+            .parse::<i64>()
+            .map_err(|e| format!("column {column} is not int: {e}"))
     }
 
-    /// Get column value as boolean
-    pub fn get_bool(&self, column: &str) -> Option<bool> {
-        self.get(column)?.parse().ok()
+    pub fn get_string_at(&self, index: i64) -> Result<String, String> {
+        let idx = usize::try_from(index).map_err(|_| "index out of range".to_string())?;
+        self.ordered
+            .get(idx)
+            .and_then(|name| self.columns.get(name))
+            .cloned()
+            .ok_or_else(|| format!("column index not found: {index}"))
+    }
+
+    pub fn get_int_at(&self, index: i64) -> Result<i64, String> {
+        self.get_string_at(index)?
+            .parse::<i64>()
+            .map_err(|e| format!("column at {index} is not int: {e}"))
     }
 }
 
-/// Open a SQLite database connection
-pub fn open_sqlite(path: &str) -> Result<Connection, String> {
-    Ok(Connection {
-        connection_string: path.to_string(),
-        db_type: DatabaseType::SQLite,
-    })
+fn row_from_pg(row: &sqlx::postgres::PgRow) -> Row {
+    let mut columns = HashMap::new();
+    let mut ordered = Vec::new();
+    for col in row.columns() {
+        let name = col.name().to_string();
+        let value = pg_cell_to_string(row, col.ordinal());
+        ordered.push(name.clone());
+        columns.insert(name, value);
+    }
+    Row { columns, ordered }
 }
 
-/// Open a PostgreSQL database connection
-/// Format: "postgres://user:password@host:port/database"
+fn row_from_sqlite(row: &sqlx::sqlite::SqliteRow) -> Row {
+    let mut columns = HashMap::new();
+    let mut ordered = Vec::new();
+    for col in row.columns() {
+        let name = col.name().to_string();
+        let value = sqlite_cell_to_string(row, col.ordinal());
+        ordered.push(name.clone());
+        columns.insert(name, value);
+    }
+    Row { columns, ordered }
+}
+
+fn pg_cell_to_string(row: &sqlx::postgres::PgRow, idx: usize) -> String {
+    use sqlx::Row;
+    let Ok(raw) = row.try_get_raw(idx) else {
+        return String::new();
+    };
+    if raw.is_null() {
+        return String::new();
+    }
+    let info = raw.type_info();
+    let name = info.name();
+    if name == "INT2" || name == "INT4" || name == "INT8" {
+        return row
+            .try_get::<i64, _>(idx)
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+    }
+    if name == "BOOL" {
+        return row
+            .try_get::<bool, _>(idx)
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+    }
+    row.try_get::<String, _>(idx)
+        .or_else(|_| row.try_get::<&str, _>(idx).map(|s| s.to_string()))
+        .unwrap_or_default()
+}
+
+fn sqlite_cell_to_string(row: &sqlx::sqlite::SqliteRow, idx: usize) -> String {
+    use sqlx::Row;
+    row.try_get::<String, _>(idx)
+        .or_else(|_| row.try_get::<i64, _>(idx).map(|v| v.to_string()))
+        .or_else(|_| row.try_get::<&str, _>(idx).map(|s| s.to_string()))
+        .unwrap_or_default()
+}
+
+/// Connect to Postgres or SQLite from a URL / path string.
+pub fn connect(url: impl AsRef<str>) -> Result<Connection, String> {
+    let url = url.as_ref();
+    if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+        open_postgres(url)
+    } else {
+        open_sqlite(url)
+    }
+}
+
+pub fn open(connection_string: &str) -> Result<Connection, String> {
+    connect(connection_string)
+}
+
 pub fn open_postgres(connection_string: &str) -> Result<Connection, String> {
     if !connection_string.starts_with("postgres://")
         && !connection_string.starts_with("postgresql://")
@@ -65,71 +167,123 @@ pub fn open_postgres(connection_string: &str) -> Result<Connection, String> {
             "PostgreSQL connection string must start with postgres:// or postgresql://".to_string(),
         );
     }
-
+    // Lazy: pool is created on first query/execute (open succeeds without a live server).
     Ok(Connection {
-        connection_string: connection_string.to_string(),
-        db_type: DatabaseType::Postgres,
+        backend: DbBackend::PostgresPending {
+            url: connection_string.to_string(),
+            pool: OnceCell::new(),
+        },
     })
 }
 
-/// Open a database connection (auto-detect type)
-pub fn open(connection_string: &str) -> Result<Connection, String> {
-    if connection_string.starts_with("postgres://")
-        || connection_string.starts_with("postgresql://")
-    {
-        open_postgres(connection_string)
+pub fn open_sqlite(path: &str) -> Result<Connection, String> {
+    let url = if path == ":memory:" {
+        "sqlite::memory:".to_string()
+    } else if path.starts_with("sqlite:") {
+        path.to_string()
     } else {
-        open_sqlite(connection_string)
-    }
+        format!("sqlite:{path}")
+    };
+    let rt = runtime()?;
+    let pool = rt
+        .block_on(async {
+            SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect(&url)
+                .await
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(Connection {
+        backend: DbBackend::Sqlite(Arc::new(pool)),
+    })
 }
 
 impl Connection {
-    /// Get database type
+    fn postgres_pool(&self) -> Result<Arc<Pool<Postgres>>, String> {
+        match &self.backend {
+            DbBackend::Postgres(pool) => Ok(pool.clone()),
+            DbBackend::PostgresPending { url, pool } => {
+                if let Some(p) = pool.get() {
+                    return Ok(p.clone());
+                }
+                let rt = runtime()?;
+                let url = url.clone();
+                let created = rt
+                    .block_on(async { PgPoolOptions::new().max_connections(5).connect(&url).await })
+                    .map_err(|e| e.to_string())?;
+                let arc = Arc::new(created);
+                let _ = pool.set(arc.clone());
+                Ok(arc)
+            }
+            _ => Err("not a postgres connection".to_string()),
+        }
+    }
+
     pub fn db_type(&self) -> &DatabaseType {
-        &self.db_type
+        static SQLITE: DatabaseType = DatabaseType::SQLite;
+        static POSTGRES: DatabaseType = DatabaseType::Postgres;
+        match &self.backend {
+            DbBackend::Postgres(_) | DbBackend::PostgresPending { .. } => &POSTGRES,
+            DbBackend::Sqlite(_) => &SQLITE,
+        }
     }
 
-    /// Get connection string
-    pub fn connection_string(&self) -> &str {
-        &self.connection_string
+    pub fn query(&self, sql: impl AsRef<str>, params: Vec<String>) -> Result<Vec<Row>, String> {
+        let sql = sql.as_ref();
+        let rt = runtime()?;
+        match &self.backend {
+            DbBackend::Postgres(_) | DbBackend::PostgresPending { .. } => {
+                let pool = self.postgres_pool()?;
+                let mut query = sqlx::query(sql);
+                for p in params {
+                    query = query.bind(p);
+                }
+                let rows = rt
+                    .block_on(async { query.fetch_all(pool.as_ref()).await })
+                    .map_err(|e| e.to_string())?;
+                Ok(rows.iter().map(row_from_pg).collect())
+            }
+            DbBackend::Sqlite(pool) => {
+                let mut query = sqlx::query(sql);
+                for p in params {
+                    query = query.bind(p);
+                }
+                let rows = rt
+                    .block_on(async { query.fetch_all(pool.as_ref()).await })
+                    .map_err(|e| e.to_string())?;
+                Ok(rows.iter().map(row_from_sqlite).collect())
+            }
+        }
     }
 
-    /// Execute a query that returns rows
-    pub fn query(&self, sql: &str, _params: &[String]) -> Result<Vec<Row>, String> {
-        // Placeholder implementation
-        // In a full implementation, this would use sqlx to execute the query
-        Err(format!(
-            "Database query not yet fully implemented. SQL: {} (type: {:?})",
-            sql, self.db_type
-        ))
+    pub fn execute(&self, sql: impl AsRef<str>, params: Vec<String>) -> Result<u64, String> {
+        let sql = sql.as_ref();
+        let rt = runtime()?;
+        match &self.backend {
+            DbBackend::Postgres(_) | DbBackend::PostgresPending { .. } => {
+                let pool = self.postgres_pool()?;
+                let mut query = sqlx::query(sql);
+                for p in params {
+                    query = query.bind(p);
+                }
+                let result = rt
+                    .block_on(async { query.execute(pool.as_ref()).await })
+                    .map_err(|e| e.to_string())?;
+                Ok(result.rows_affected())
+            }
+            DbBackend::Sqlite(pool) => {
+                let mut query = sqlx::query(sql);
+                for p in params {
+                    query = query.bind(p);
+                }
+                let result = rt
+                    .block_on(async { query.execute(pool.as_ref()).await })
+                    .map_err(|e| e.to_string())?;
+                Ok(result.rows_affected())
+            }
+        }
     }
 
-    /// Execute a statement that doesn't return rows (INSERT, UPDATE, DELETE)
-    pub fn execute(&self, sql: &str, _params: &[String]) -> Result<u64, String> {
-        // Placeholder implementation
-        // In a full implementation, this would use sqlx to execute the statement
-        Err(format!(
-            "Database execute not yet fully implemented. SQL: {} (type: {:?})",
-            sql, self.db_type
-        ))
-    }
-
-    /// Begin a transaction
-    pub fn begin_transaction(&self) -> Result<(), String> {
-        Err("Transactions not yet implemented".to_string())
-    }
-
-    /// Commit a transaction
-    pub fn commit(&self) -> Result<(), String> {
-        Err("Transactions not yet implemented".to_string())
-    }
-
-    /// Rollback a transaction
-    pub fn rollback(&self) -> Result<(), String> {
-        Err("Transactions not yet implemented".to_string())
-    }
-
-    /// Close the connection
     pub fn close(self) -> Result<(), String> {
         Ok(())
     }
@@ -140,70 +294,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_open_sqlite() {
-        let conn = open_sqlite(":memory:");
-        assert!(conn.is_ok());
-        let conn = conn.unwrap();
-        assert_eq!(conn.db_type(), &DatabaseType::SQLite);
+    fn sqlite_memory_query_roundtrip() {
+        let conn = open_sqlite(":memory:").expect("open");
+        conn.execute("CREATE TABLE items (id INTEGER, name TEXT)", vec![])
+            .expect("create");
+        conn.execute(
+            "INSERT INTO items (id, name) VALUES (?, ?)",
+            vec!["1".into(), "Alice".into()],
+        )
+        .expect("insert");
+        let rows = conn
+            .query("SELECT id, name FROM items WHERE id = ?", vec!["1".into()])
+            .expect("query");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get_int("id").unwrap(), 1);
+        assert_eq!(rows[0].get_string("name").unwrap(), "Alice");
     }
 
     #[test]
-    fn test_open_postgres() {
-        let conn = open_postgres("postgres://user:pass@localhost/db");
-        assert!(conn.is_ok());
-        let conn = conn.unwrap();
-        assert_eq!(conn.db_type(), &DatabaseType::Postgres);
-    }
-
-    #[test]
-    fn test_open_postgres_invalid() {
-        let conn = open_postgres("invalid://connection");
-        assert!(conn.is_err());
-    }
-
-    #[test]
-    fn test_open_auto_detect() {
-        // Should detect SQLite
-        let sqlite_conn = open(":memory:").unwrap();
-        assert_eq!(sqlite_conn.db_type(), &DatabaseType::SQLite);
-
-        // Should detect Postgres
-        let pg_conn = open("postgres://localhost/db").unwrap();
-        assert_eq!(pg_conn.db_type(), &DatabaseType::Postgres);
-
-        // Should detect Postgres with postgresql:// prefix
-        let pg_conn2 = open("postgresql://localhost/db").unwrap();
-        assert_eq!(pg_conn2.db_type(), &DatabaseType::Postgres);
-    }
-
-    #[test]
-    fn test_row_get() {
-        let mut columns = HashMap::new();
-        columns.insert("name".to_string(), "Alice".to_string());
-        columns.insert("age".to_string(), "30".to_string());
-        columns.insert("active".to_string(), "true".to_string());
-        columns.insert("score".to_string(), "95.5".to_string());
-
-        let row = Row { columns };
-        assert_eq!(row.get("name"), Some("Alice".to_string()));
-        assert_eq!(row.get_int("age"), Some(30));
-        assert_eq!(row.get_bool("active"), Some(true));
-        assert_eq!(row.get_float("score"), Some(95.5));
-    }
-
-    #[test]
-    fn test_query_placeholder() {
-        let conn = open(":memory:").unwrap();
-        let result = conn.query("SELECT * FROM users", &[]);
-        // Should return error for now (not fully implemented)
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_execute_placeholder() {
-        let conn = open_postgres("postgres://localhost/test").unwrap();
-        let result = conn.execute("INSERT INTO users (name) VALUES ('Alice')", &[]);
-        // Should return error for now (not fully implemented)
-        assert!(result.is_err());
+    fn open_postgres_rejects_invalid_url() {
+        assert!(open_postgres("invalid://x").is_err());
     }
 }

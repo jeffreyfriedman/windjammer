@@ -58,55 +58,69 @@ impl<'ast> CodeGenerator<'ast> {
                 self.borrowed_iterator_vars.contains(name) && !is_type_preserving;
             let is_mut_borrowed_param =
                 self.inferred_mut_borrowed_params.contains(name) && !is_type_preserving;
-            if is_borrowed_iter || is_mut_borrowed_param {
+            let is_shared_borrowed_param =
+                self.inferred_borrowed_params.contains(name) && !is_type_preserving;
+            if is_borrowed_iter || is_mut_borrowed_param || is_shared_borrowed_param {
+                let qualified_from_self = (name == "self")
+                    .then(|| {
+                        self.current_struct_name
+                            .as_ref()
+                            .map(|sn| format!("{sn}::{method}"))
+                    })
+                    .flatten();
                 if let Some(recv_ty) = self.infer_expression_type(object) {
                     if !self.is_type_copy(&recv_ty) {
-                        if let Some(tn) = Self::type_to_name(&recv_ty) {
+                        let sig_opt = if let Some(ref qualified) = qualified_from_self {
+                            self.get_signature_with_global(qualified)
+                                .or_else(|| self.signature_registry.get_signature(qualified))
+                        } else if let Some(tn) = Self::type_to_name(&recv_ty) {
                             let qualified = format!("{}::{}", tn, method);
-                            let sig_opt = self
-                                .signature_registry
+                            self.signature_registry
                                 .get_signature(&qualified)
                                 .or_else(|| {
                                     let base = tn.split('<').next().unwrap_or(&tn);
                                     if base != tn {
                                         let base_q = format!("{base}::{method}");
-                                        self.signature_registry.get_signature(&base_q)
+                                        self.get_signature_with_global(&base_q)
                                     } else {
                                         None
                                     }
                                 })
                                 .or_else(|| {
-                                    // For `Box<dyn Trait>`, extract the trait name from
-                                    // the Parameterized type and look up `Trait::method`.
                                     Self::extract_dyn_trait_name(&recv_ty).and_then(|trait_name| {
                                         let trait_q = format!("{trait_name}::{method}");
-                                        self.signature_registry.get_signature(&trait_q)
+                                        self.get_signature_with_global(&trait_q)
                                     })
                                 })
                                 .or_else(|| {
-                                    // Suffix match: find any `::method` in the registry.
-                                    // Conservative for ownership check (any mutating method
-                                    // prevents spurious clone).
                                     self.signature_registry
                                         .find_signature_ending_with(&format!("::{method}"))
-                                });
-                            if let Some(sig) = sig_opt {
-                                if sig.has_self_receiver
-                                    && sig.param_ownership.first()
-                                        == Some(&crate::analyzer::OwnershipMode::Owned)
-                                    && !obj_str.ends_with(".clone()")
-                                {
-                                    obj_str = format!("{}.clone()", obj_str);
-                                }
-                            } else if is_borrowed_iter
-                                && !is_mut_borrowed_param
+                                })
+                        } else {
+                            None
+                        };
+                        if let Some(sig) = sig_opt {
+                            let qualified = qualified_from_self.unwrap_or_else(|| {
+                                Self::type_to_name(&recv_ty)
+                                    .map(|tn| format!("{tn}::{method}"))
+                                    .unwrap_or_else(|| method.to_string())
+                            });
+                            let callee_consumes_self = name == "self"
+                                && self.current_impl_consuming_self_methods.contains(method);
+                            if sig.has_self_receiver
+                                && (callee_consumes_self
+                                    || self
+                                        .method_requires_consuming_self_receiver(&qualified, sig))
                                 && !obj_str.ends_with(".clone()")
                             {
-                                // Unknown signature on borrowed iterator var — clone conservatively (E0507).
                                 obj_str = format!("{}.clone()", obj_str);
                             }
-                            // For &mut params with unknown signatures, do NOT clone.
-                            // &mut refs can call &self and &mut self methods without cloning.
+                        } else if is_borrowed_iter
+                            && !is_mut_borrowed_param
+                            && !is_shared_borrowed_param
+                            && !obj_str.ends_with(".clone()")
+                        {
+                            obj_str = format!("{}.clone()", obj_str);
                         }
                     }
                 }
@@ -157,6 +171,37 @@ impl<'ast> CodeGenerator<'ast> {
             && !obj_str.contains(".as_ref()")
         {
             obj_str = format!("{}.as_ref()", obj_str);
+        }
+
+        // E0507: `self.nested.field.method()` on borrowed self when method consumes owned receiver.
+        if self.codegen_expression_traces_to_self(object)
+            && (self.inferred_mut_borrowed_params.contains("self")
+                || self.inferred_borrowed_params.contains("self"))
+            && !obj_str.ends_with(".clone()")
+        {
+            if let Some(recv_ty) = self.infer_expression_type(object) {
+                if !self.is_type_copy(&recv_ty) {
+                    let mut needs_clone = false;
+                    if let Some(tn) = Self::type_to_name(&recv_ty) {
+                        let qualified = format!("{}::{}", tn, method);
+                        let sig_opt =
+                            self.signature_registry
+                                .get_signature(&qualified)
+                                .or_else(|| {
+                                    let base = tn.split('<').next().unwrap_or(&tn);
+                                    self.get_signature_with_global(&format!("{base}::{method}"))
+                                });
+                        needs_clone = sig_opt.is_some_and(|sig| {
+                            sig.has_self_receiver
+                                && sig.param_ownership.first()
+                                    == Some(&crate::analyzer::OwnershipMode::Owned)
+                        });
+                    }
+                    if needs_clone {
+                        obj_str = format!("{}.clone()", obj_str);
+                    }
+                }
+            }
         }
 
         obj_str

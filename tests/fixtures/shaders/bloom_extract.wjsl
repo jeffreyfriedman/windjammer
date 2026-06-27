@@ -1,0 +1,45 @@
+// Bloom Extract Compute Shader (WJSL)
+//
+// Extracts bright pixels from HDR color buffer based on luminance threshold.
+// Output is used as input for the Gaussian blur passes.
+// Workgroup: 8x8 threads (64 total)
+
+struct BloomExtractParams {
+    threshold: f32,
+    soft_knee: f32,
+    _pad1: f32,
+    _pad2: f32,
+}
+
+@group(0) @binding(0) uniform params: BloomExtractParams;
+@group(0) @binding(1) storage read hdr_input: array<vec4<f32> >;
+@group(0) @binding(2) storage read_write bloom_output: array<vec4<f32> >;
+@group(0) @binding(3) uniform screen_size: vec2<u32 >;
+
+fn luminance(c: vec3<f32>) -> f32 {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let idx = id.y * width + id.x;
+    let color = hdr_input[idx].rgb;
+    let lum = luminance(color);
+
+    // Soft threshold with smooth knee to avoid harsh cutoff
+    let knee = params.threshold * params.soft_knee;
+    let soft = lum - params.threshold + knee;
+    let contribution = clamp(soft / (2.0 * knee + 0.0001), 0.0, 1.0);
+    let weight = contribution * contribution;
+
+    let extracted = color * weight;
+    // Desaturate bloom to prevent pure single-channel color glow
+    let bloom_lum = luminance(extracted);
+    let desaturated = mix(extracted, vec3(bloom_lum), 0.5);
+    let capped = min(desaturated, vec3(0.6));
+    bloom_output[idx] = vec4(capped, 1.0);
+}

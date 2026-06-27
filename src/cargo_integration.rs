@@ -10,6 +10,7 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use crate::cargo_toml::{find_windjammer_runtime_path, path_to_toml_string};
 use crate::test_runner;
 use crate::{error_mapper, source_map, CompilationTarget};
 pub enum RustFileType {
@@ -252,80 +253,27 @@ pub fn create_cargo_toml_with_deps(
 
     // If ANY stdlib module is used, add windjammer-runtime
     if !imported_modules.is_empty() {
-        // Add windjammer-runtime dependency (path-based for now)
-        // Always search for workspace root, don't trust CARGO_MANIFEST_DIR
-        let windjammer_runtime_path = {
-            // Start from current directory and search upward
-            let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let mut found = false;
-
-            // Try current directory first (if we're in windjammer repo)
-            if current
-                .join("crates/windjammer-runtime/Cargo.toml")
-                .exists()
-            {
-                current.join("crates/windjammer-runtime")
-            }
-            // Check if windjammer is a sibling directory (e.g., we're in windjammer-ui)
-            else if let Some(parent) = current.parent() {
-                if parent
-                    .join("windjammer/crates/windjammer-runtime/Cargo.toml")
-                    .exists()
-                {
-                    parent.join("windjammer/crates/windjammer-runtime")
-                } else {
-                    // Search upward (up to 5 levels)
-                    for _ in 0..5 {
-                        if let Some(parent) = current.parent() {
-                            // Check for windjammer/crates/windjammer-runtime (sibling repo)
-                            if parent
-                                .join("windjammer/crates/windjammer-runtime/Cargo.toml")
-                                .exists()
-                            {
-                                found = true;
-                                current = parent.to_path_buf();
-                                break;
-                            }
-                            // Check for crates/windjammer-runtime (legacy path)
-                            if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
-                                current = parent.to_path_buf();
-                                found = true;
-                                break;
-                            }
-                            current = parent.to_path_buf();
-                        } else {
-                            break;
-                        }
-                    }
-
-                    if found {
-                        if current
-                            .join("windjammer/crates/windjammer-runtime/Cargo.toml")
-                            .exists()
-                        {
-                            current.join("windjammer/crates/windjammer-runtime")
-                        } else {
-                            current.join("crates/windjammer-runtime")
-                        }
-                    } else {
-                        // Fallback: try sibling first, then legacy path
-                        let sibling_path = PathBuf::from("../windjammer/crates/windjammer-runtime");
-                        if sibling_path.join("Cargo.toml").exists() {
-                            sibling_path
-                        } else {
-                            PathBuf::from("./crates/windjammer-runtime")
-                        }
-                    }
-                }
-            } else {
-                // Fallback when no parent
-                PathBuf::from("../windjammer/crates/windjammer-runtime")
-            }
+        let windjammer_runtime_path = find_windjammer_runtime_path();
+        let mut runtime_features: Vec<&str> = Vec::new();
+        if imported_modules.iter().any(|m| m == "http") {
+            runtime_features.push("server");
+        }
+        let feature_clause = if runtime_features.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", features = [{}]",
+                runtime_features
+                    .iter()
+                    .map(|f| format!("\"{}\"", f))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
         };
-
         deps.push(format!(
-            "windjammer-runtime = {{ path = \"{}\" }}",
-            test_runner::path_to_toml_string(&windjammer_runtime_path)
+            "windjammer-runtime = {{ path = \"{}\"{} }}",
+            path_to_toml_string(&windjammer_runtime_path),
+            feature_clause
         ));
     }
 
@@ -672,7 +620,6 @@ opt-level = 3
 
 /// Create WASM-specific Cargo.toml
 pub fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<String>) -> Result<()> {
-    use std::env;
     use std::fs;
 
     // Check if platform APIs are used (requires windjammer-runtime)
@@ -690,38 +637,7 @@ pub fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<Stri
     });
 
     // Find windjammer-runtime path
-    let windjammer_runtime_path = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        PathBuf::from(manifest_dir).join("crates/windjammer-runtime")
-    } else {
-        let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let mut found = false;
-
-        if current
-            .join("crates/windjammer-runtime/Cargo.toml")
-            .exists()
-        {
-            current.join("crates/windjammer-runtime")
-        } else {
-            for _ in 0..5 {
-                if let Some(parent) = current.parent() {
-                    if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
-                        current = parent.to_path_buf();
-                        found = true;
-                        break;
-                    }
-                    current = parent.to_path_buf();
-                } else {
-                    break;
-                }
-            }
-
-            if found {
-                current.join("crates/windjammer-runtime")
-            } else {
-                PathBuf::from("./crates/windjammer-runtime")
-            }
-        }
-    };
+    let windjammer_runtime_path = find_windjammer_runtime_path();
 
     // Find the first .rs file in the output directory to use as lib.rs
     let lib_file = fs::read_dir(output_dir)?

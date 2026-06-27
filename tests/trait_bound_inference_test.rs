@@ -142,3 +142,31 @@ fn main() {
         generated
     );
 }
+
+#[test]
+fn test_while_index_loop_does_not_add_partial_ord_to_unrelated_generic() {
+    let source = r#"
+trait Reader {
+    fn items(self) -> Vec<int>
+}
+
+fn process<R: Reader>(reader: R) -> int {
+    let items = reader.items()
+    let mut idx = 0
+    while idx < items.len() {
+        idx = idx + 1
+    }
+    idx
+}
+
+fn main() {}
+"#;
+
+    let generated = test_utils::compile_single_result(source).expect("Compilation failed");
+
+    assert!(
+        !generated.contains("R: PartialOrd"),
+        "while idx < items.len() must not add PartialOrd to generic R:\n{}",
+        generated
+    );
+}

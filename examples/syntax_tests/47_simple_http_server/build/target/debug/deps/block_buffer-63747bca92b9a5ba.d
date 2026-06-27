@@ -1,0 +1,8 @@
+/Users/jeffreyfriedman/src/wj/windjammer/examples/syntax_tests/47_simple_http_server/build/target/debug/deps/block_buffer-63747bca92b9a5ba.d: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs
+
+/Users/jeffreyfriedman/src/wj/windjammer/examples/syntax_tests/47_simple_http_server/build/target/debug/deps/libblock_buffer-63747bca92b9a5ba.rlib: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs
+
+/Users/jeffreyfriedman/src/wj/windjammer/examples/syntax_tests/47_simple_http_server/build/target/debug/deps/libblock_buffer-63747bca92b9a5ba.rmeta: /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs /Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs
+
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/lib.rs:
+/Users/jeffreyfriedman/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/block-buffer-0.10.4/src/sealed.rs:

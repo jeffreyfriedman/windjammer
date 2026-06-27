@@ -24,12 +24,41 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         struct_name: &str,
     ) -> Option<&std::collections::HashMap<String, Type>> {
-        self.struct_field_types.get(struct_name).or_else(|| {
-            struct_name
-                .rsplit("::")
-                .next()
-                .and_then(|short| self.struct_field_types.get(short))
-        })
+        if let Some(fields) = self.struct_field_types.get(struct_name) {
+            return Some(fields);
+        }
+        if let Some(short) = struct_name.rsplit("::").next() {
+            if short != struct_name {
+                if let Some(fields) = self.struct_field_types.get(short) {
+                    return Some(fields);
+                }
+            }
+            if let Some(src_root) = self.library_source_root.as_ref() {
+                if !self.current_wj_file.as_os_str().is_empty() {
+                    if let Some(module_path) =
+                        crate::analyzer::type_collector::wj_file_to_module_path(
+                            src_root,
+                            &self.current_wj_file,
+                        )
+                    {
+                        let key = crate::type_inference::struct_field_registry::qualify_struct_key(
+                            &module_path,
+                            short,
+                        );
+                        if let Some(fields) = self.struct_field_types.get(&key) {
+                            return Some(fields);
+                        }
+                    }
+                }
+            }
+            let suffix = format!("::{short}");
+            for (key, fields) in &self.struct_field_types {
+                if key.ends_with(&suffix) {
+                    return Some(fields);
+                }
+            }
+        }
+        None
     }
 
     /// Inside `S { field: [...] }`, returns element type `T` when `field` is `[T; N]`.
@@ -235,6 +264,18 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver_type.as_deref(),
                         arguments.len(),
                         &self.module_alias_map,
+                        self.library_source_root.as_ref().and_then(|root| {
+                            if self.current_wj_file.as_os_str().is_empty() {
+                                None
+                            } else {
+                                crate::analyzer::type_collector::wj_file_to_module_path(
+                                    root,
+                                    &self.current_wj_file,
+                                )
+                                .map(|parts| parts.join("::"))
+                            }
+                        })
+                        .as_deref(),
                     )
                     .filter(|r| {
                         !matches!(
@@ -389,16 +430,29 @@ impl<'ast> CodeGenerator<'ast> {
         string_literal_converted: bool,
     ) -> String {
         let callee_wants_borrowed_str = |sig: &crate::analyzer::FunctionSignature, idx: usize| {
-            sig.param_ownership
-                .get(idx)
-                .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
-                && sig
-                    .param_types
-                    .get(idx)
-                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+            matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    sig, idx
+                ),
+                OwnershipMode::Borrowed,
+            )
         };
 
         if string_literal_converted {
+            return arg_str;
+        }
+        if method_signature.as_ref().is_some_and(|sig| {
+            sig.formal_param_type(sig_param_idx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && crate::codegen::rust::types::is_windjammer_text_type(t)
+            }) || matches!(
+                sig.param_ownership.get(sig_param_idx),
+                Some(OwnershipMode::Owned)
+            ) || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                matches!(t, Type::String)
+                    || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+            })
+        }) {
             return arg_str;
         }
         if arg_str.starts_with('&') {
@@ -424,18 +478,41 @@ impl<'ast> CodeGenerator<'ast> {
         // &String auto-derefs to &str. Only skip for bare string literals
         // (already &str) which are handled by string_literal_converted above.
         let is_bare_str_literal = arg_str.starts_with('"') && !arg_str.ends_with(".to_string()");
-        if !is_bare_str_literal {
-            return format!("&{arg_str}");
+        if is_bare_str_literal {
+            return arg_str;
+        }
+        if arg_str.starts_with('&') {
+            return arg_str;
+        }
+        if self
+            .infer_expression_type(arg_to_generate)
+            .as_ref()
+            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+        {
+            let mut borrowed = arg_str;
+            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(&mut borrowed);
+            return borrowed;
+        }
+        if matches!(
+            arg_to_generate,
+            Expression::Identifier { .. } | Expression::FieldAccess { .. }
+        ) {
+            let mut borrowed = arg_str;
+            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(&mut borrowed);
+            return borrowed;
         }
         arg_str
     }
 
-    /// `if let` / `match` on `&enum` binds `&U` for Copy fields; struct literals need `U` (E0308).
-    pub(in crate::codegen::rust) fn peel_copy_ref_binding_for_struct_field(
+    /// `match` / `if let` on `&enum` binds `&U` for Copy payloads; value contexts need `U`.
+    pub(in crate::codegen::rust) fn peel_copy_ref_match_binding_for_value(
         &self,
         expr: &Expression<'ast>,
         generated: &str,
     ) -> String {
+        if generated.starts_with('*') {
+            return generated.to_string();
+        }
         let Some(ty) = self.infer_expression_type(expr) else {
             return generated.to_string();
         };
@@ -446,7 +523,25 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.is_type_copy(pointee) {
             return generated.to_string();
         }
+        if let Expression::Identifier { name, .. } = expr {
+            if self.match_arm_bindings.contains(name.as_str()) {
+                // HashMap/Option match arms already lower Copy payloads as owned locals.
+                return generated.to_string();
+            }
+            if generated == *name {
+                return format!("*{generated}");
+            }
+        }
         format!("*({generated})")
+    }
+
+    /// Back-compat alias for struct literal field emission.
+    pub(in crate::codegen::rust) fn peel_copy_ref_binding_for_struct_field(
+        &self,
+        expr: &Expression<'ast>,
+        generated: &str,
+    ) -> String {
+        self.peel_copy_ref_match_binding_for_value(expr, generated)
     }
 
     /// After `peel_copy_ref_binding_for_struct_field`, non-Copy `&T` bindings still need `.clone()`

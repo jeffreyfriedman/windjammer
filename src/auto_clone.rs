@@ -121,11 +121,12 @@ impl AutoCloneAnalysis {
 
         match stmt {
             Statement::Let { pattern, value, .. } => {
-                // Field reads in let bindings move non-Copy sub-values (partial move).
-                let value_kind = if matches!(value, Expression::FieldAccess { .. }) {
-                    UsageKind::Move
-                } else {
-                    UsageKind::Read
+                // `let copy = param` moves the param; field reads partial-move too.
+                let value_kind = match value {
+                    Expression::FieldAccess { .. } | Expression::Identifier { .. } => {
+                        UsageKind::Move
+                    }
+                    _ => UsageKind::Read,
                 };
                 Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map);
 
@@ -352,7 +353,13 @@ impl AutoCloneAnalysis {
             }
             Expression::Tuple { elements, .. } => {
                 for elem in elements {
-                    Self::collect_usages_from_expression(elem, idx, UsageKind::Read, in_loop, map);
+                    let elem_kind = match elem {
+                        Expression::Identifier { .. } | Expression::FieldAccess { .. } => {
+                            UsageKind::Move
+                        }
+                        _ => UsageKind::Read,
+                    };
+                    Self::collect_usages_from_expression(elem, idx, elem_kind, in_loop, map);
                 }
             }
             Expression::Array { elements, .. } => {
@@ -442,11 +449,20 @@ impl AutoCloneAnalysis {
                 let has_later_use = total_uses
                     .iter()
                     .any(|u| u.statement_idx > move_usage.statement_idx);
+                let same_stmt_read_after_move = total_uses.iter().any(|u| {
+                    u.statement_idx == move_usage.statement_idx
+                        && u.kind == UsageKind::Read
+                        && move_usage.kind == UsageKind::Move
+                });
                 let same_stmt_moves = moves
                     .iter()
                     .filter(|m| m.statement_idx == move_usage.statement_idx)
                     .count();
-                if has_later_use || same_stmt_moves > 1 || move_usage.in_loop {
+                if has_later_use
+                    || same_stmt_read_after_move
+                    || same_stmt_moves > 1
+                    || move_usage.in_loop
+                {
                     self.clone_sites.insert(
                         (var_name.to_string(), move_usage.statement_idx),
                         CloneReason::MovedButUsedLater,
@@ -481,6 +497,14 @@ impl AutoCloneAnalysis {
                 .iter()
                 .any(|u| u.statement_idx > move_usage.statement_idx);
 
+            // Same statement: `visit_cycle(doc, doc.root_id, ...)` moves `doc` then reads
+            // `doc.root_id` — clone the move site so the field access still compiles.
+            let same_stmt_read_after_move = total_uses.iter().any(|u| {
+                u.statement_idx == move_usage.statement_idx
+                    && u.kind == UsageKind::Read
+                    && move_usage.kind == UsageKind::Move
+            });
+
             let same_stmt_moves = moves
                 .iter()
                 .filter(|m| m.statement_idx == move_usage.statement_idx)
@@ -488,7 +512,10 @@ impl AutoCloneAnalysis {
 
             // Moves inside loops always need clone -- the loop body executes
             // multiple times, consuming the value on each iteration.
-            let needs_clone = has_later_use || same_stmt_moves > 1 || move_usage.in_loop;
+            let needs_clone = has_later_use
+                || same_stmt_read_after_move
+                || same_stmt_moves > 1
+                || move_usage.in_loop;
 
             if needs_clone {
                 self.clone_sites.insert(
@@ -553,6 +580,15 @@ impl AutoCloneAnalysis {
             return None;
         }
         self.clone_sites.get(&(var_name.to_string(), statement_idx))
+    }
+
+    /// True when analysis recorded any clone site for this binding (used when nested
+    /// statement indices in codegen don't match flat auto_clone indices).
+    pub fn needs_clone_anywhere(&self, var_name: &str) -> bool {
+        if self.string_literal_vars.contains(var_name) {
+            return false;
+        }
+        self.clone_sites.keys().any(|(n, _)| n == var_name)
     }
 
     /// Find variables that are bound to string literals
@@ -723,6 +759,81 @@ mod tests {
         assert_eq!(
             analysis.needs_clone("x", 1),
             Some(&CloneReason::MovedButUsedLater)
+        );
+    }
+
+    #[test]
+    fn test_param_let_alias_then_reuse_needs_clone_at_alias() {
+        let func = FunctionDecl {
+            name: "send".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "message".to_string(),
+                pattern: None,
+                type_: Type::Custom("Message".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("msg_copy".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Identifier {
+                        name: "message".to_string(),
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "msg_copy".to_string(),
+                            location: None,
+                        }),
+                        method: "use_it".to_string(),
+                        arguments: vec![],
+                        type_args: None,
+                        location: None,
+                    }),
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "push".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "message".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("message", 0).is_some(),
+            "let msg_copy = message moves param; push(message) later needs clone at let"
         );
     }
 

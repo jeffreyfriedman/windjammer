@@ -75,7 +75,14 @@ impl<'ast> CodeGenerator<'ast> {
                     | CompoundOp::Mod
             ) {
                 let val_ty = self.infer_expression_type(value);
-                let tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type);
+                let tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type)
+                    || if let Expression::Identifier { name, .. } = target {
+                        self.local_var_types
+                            .get(name)
+                            .is_some_and(Self::is_int_numeric_type)
+                    } else {
+                        false
+                    };
                 if !tgt_is_int {
                     if let Some(v) = &val_ty {
                         if Self::is_int_numeric_type(v) {
@@ -325,7 +332,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         if let Expression::Identifier { ref name, .. } = value {
             // Match/for bindings from borrowed scrutinees: Copy targets need * not .clone().
-            if self.borrowed_iterator_vars.contains(name) && !value_str.starts_with('*') {
+            let is_owned_match_binding = self.match_arm_bindings.contains(name.as_str())
+                && !self.borrowed_iterator_vars.contains(name);
+            if self.borrowed_iterator_vars.contains(name)
+                && !is_owned_match_binding
+                && !value_str.starts_with('*')
+            {
                 let target_type = self.infer_expression_type(target);
                 if target_type.as_ref().is_some_and(|t| self.is_type_copy(t)) {
                     value_str = format!("*{}", value_str);

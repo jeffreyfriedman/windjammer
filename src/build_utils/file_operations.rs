@@ -2,24 +2,43 @@
 
 use std::path::Path;
 
-/// Copy top-level `*.rs` files and `*/mod.rs` module trees from `<project>/src/` into the output
+/// Copy top-level `*.rs` files and `*/mod.rs` module trees from the source root into the output
 /// directory when they are not already present. This keeps hand-written Rust under `<project>/src/`
 /// discoverable in `out/` without pulling in unrelated trees (output is usually `out/`, not under
 /// `src/`).
-pub(crate) fn copy_project_src_tree_into_output(output_dir: &Path) -> std::io::Result<()> {
+///
+/// When `layout` is `Some((out_root, src_root))`, only runs at `out_root` and copies from
+/// `src_root` — never from `output_dir.parent()/src` (which would treat `gen/` as a project root).
+pub(crate) fn copy_project_src_tree_into_output(
+    output_dir: &Path,
+    layout: Option<(&Path, &Path)>,
+) -> std::io::Result<()> {
     use std::fs;
-    let Some(root) = output_dir.parent() else {
-        return Ok(());
-    };
-    let root = if root.as_os_str().is_empty() {
-        Path::new(".")
+
+    let src_dir = if let Some((out_root, src_root)) = layout {
+        if output_dir != out_root {
+            return Ok(());
+        }
+        if !src_root.is_dir() {
+            return Ok(());
+        }
+        src_root.to_path_buf()
     } else {
-        root
+        let Some(root) = output_dir.parent() else {
+            return Ok(());
+        };
+        let root = if root.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            root
+        };
+        let candidate = root.join("src");
+        if !candidate.is_dir() {
+            return Ok(());
+        }
+        candidate
     };
-    let src_dir = root.join("src");
-    if !src_dir.is_dir() {
-        return Ok(());
-    }
+
     for entry in fs::read_dir(&src_dir)? {
         let entry = entry?;
         let p = entry.path();
@@ -35,6 +54,11 @@ pub(crate) fn copy_project_src_tree_into_output(output_dir: &Path) -> std::io::R
                 if src_dir.join(stem).is_dir() {
                     continue;
                 }
+            }
+            // Skip Windjammer sources — only hand-written Rust belongs here.
+            let wj_sibling = p.with_extension("wj");
+            if wj_sibling.exists() {
+                continue;
             }
             if !dest.exists() {
                 fs::copy(&p, &dest)?;
@@ -67,23 +91,47 @@ pub(crate) fn copy_dir_merge_shallow(src: &Path, dst: &Path) -> std::io::Result<
     Ok(())
 }
 
-/// Copy hand-written sibling `*.rs` from the parent directory into `output_dir` when the file
-/// does not already exist in the output (Windjammer-emitted files take precedence).
+/// Copy hand-written sibling `*.rs` from the corresponding **source** directory into `output_dir`
+/// when the file does not already exist in the output (Windjammer-emitted files take precedence).
 ///
 /// This picks up:
 /// - `components/platform.rs` next to `components/generated/` (same parent as `generated/`)
 /// - `ffi.rs` (or other root modules) next to `out/` when building into a crate output folder
-pub(crate) fn copy_sibling_rs_from_parent(output_dir: &Path) -> std::io::Result<()> {
+///
+/// With `layout = Some((out_root, src_root))`, copies from the source tree path that mirrors
+/// `output_dir` — never from `output_dir.parent()` (which would pull stale `gen/*.rs` into
+/// `gen/ffi/` during scoped rebuilds).
+pub(crate) fn copy_sibling_rs_from_parent(
+    output_dir: &Path,
+    layout: Option<(&Path, &Path)>,
+) -> std::io::Result<()> {
     use std::fs;
-    let Some(parent) = output_dir.parent() else {
-        return Ok(());
-    };
-    let parent = if parent.as_os_str().is_empty() {
-        Path::new(".")
+
+    let copy_from = if let Some((_out_root, _src_root)) = layout {
+        match super::path_utilities::source_dir_for_output(output_dir, layout) {
+            Some(src_dir) => src_dir,
+            None => return Ok(()),
+        }
     } else {
-        parent
+        let Some(parent) = output_dir.parent() else {
+            return Ok(());
+        };
+        let parent_path = if parent.as_os_str().is_empty() {
+            Path::new(".").to_path_buf()
+        } else {
+            parent.to_path_buf()
+        };
+        if super::path_utilities::is_transpile_output_directory(&parent_path) {
+            return Ok(());
+        }
+        parent_path
     };
-    for entry in fs::read_dir(parent)? {
+
+    if !copy_from.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(&copy_from)? {
         let entry = entry?;
         let p = entry.path();
         if !p.is_file() {
@@ -104,6 +152,15 @@ pub(crate) fn copy_sibling_rs_from_parent(output_dir: &Path) -> std::io::Result<
             || stem.starts_with("test_")
             || stem == "tests"
         {
+            continue;
+        }
+        // Skip generated/transpiled siblings (only hand-written Rust FFI stubs).
+        let wj_sibling = copy_from.join(format!("{stem}.wj"));
+        if wj_sibling.exists() {
+            continue;
+        }
+        // Skip stale flat `src/query.rs` when the real module is `src/ecs/query.wj`.
+        if super::path_utilities::wj_module_declared_in_subtree(&copy_from, stem) {
             continue;
         }
         let dest = output_dir.join(p.file_name().unwrap());

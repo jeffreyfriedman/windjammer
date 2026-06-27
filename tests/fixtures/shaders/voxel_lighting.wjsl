@@ -1,0 +1,779 @@
+// Voxel Lighting Compute Shader (WJSL)
+//
+// PBR lighting pipeline:
+// - Cook-Torrance specular (GGX/Smith/Schlick)
+// - SVO shadow ray tracing with soft penumbra
+// - Contact shadows for ground-contact detail
+// - One-bounce diffuse + specular GI with emissive light pickup
+// - Multi-scale voxel AO + SSAO
+// - Hemisphere sky ambient with ground color
+// - Material emission with HDR clamp
+// - Screen-space environment reflections for metallics
+// - Surface micro-detail noise (multi-octave)
+// - Color temperature grading (warm highlights, cool shadows)
+// - Distance fog with atmospheric perspective
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/raymarch.wjsl"
+use "wjsl_std/camera.wjsl"
+
+struct MaterialData {
+    color: vec4<f32>,
+    roughness: f32,
+    metallic: f32,
+    emission_r: f32,
+    emission_g: f32,
+    emission_b: f32,
+    emission_strength: f32,
+    transparency: f32,
+    ior: f32,
+    material_type: f32,
+    _pad1: f32,
+    _pad2: f32,
+    _pad3: f32,
+}
+
+@group(0) @binding(0) uniform lighting: LightingParams;
+@group(0) @binding(1) storage read gbuffer: array<GBufferPixel >;
+@group(0) @binding(2) storage read materials: array<f32 >;
+@group(0) @binding(3) storage read svo_nodes: array<u32 >;
+@group(0) @binding(4) uniform ray_params: RayMarchParams;
+@group(0) @binding(5) storage read_write color_output: array<vec4<f32> >;
+@group(0) @binding(6) uniform screen_size: vec2<u32 >;
+@group(0) @binding(7) storage read ssao_output: array<f32 >;
+@group(0) @binding(8) uniform camera: CameraUniforms;
+@group(0) @binding(9) storage read ssgi_indirect: array<u32>;
+
+// === Material Accessors ===
+
+fn get_material_color(material_id: u32) -> vec4<f32> {
+    let base = material_id * 16u;
+    return vec4(materials[base], materials[base + 1u], materials[base + 2u], materials[base + 3u]);
+}
+
+fn get_material_roughness(material_id: u32) -> f32 {
+    return materials[material_id * 16u + 4u];
+}
+
+fn get_material_metallic(material_id: u32) -> f32 {
+    return materials[material_id * 16u + 5u];
+}
+
+fn get_material_emission(material_id: u32) -> vec3<f32> {
+    let base = material_id * 16u;
+    return vec3(materials[base + 6u], materials[base + 7u], materials[base + 8u]);
+}
+
+fn get_material_emission_strength(material_id: u32) -> f32 {
+    return materials[material_id * 16u + 9u];
+}
+
+// === SVO Lookup ===
+
+fn svo_get_material(node: u32) -> u32 { return node & 0xFFu; }
+fn svo_is_leaf(node: u32) -> bool { return (node & 0x100u) != 0u; }
+fn svo_child_ptr(node: u32) -> u32 { return node >> 9u; }
+
+fn get_child_index_64(p: vec3<f32>, node_min: vec3<f32>, node_size: f32) -> u32 {
+    let quarter = node_size * 0.25;
+    let rel = p - node_min;
+    let xi = clamp(u32(rel.x / quarter), 0u, 3u);
+    let yi = clamp(u32(rel.y / quarter), 0u, 3u);
+    let zi = clamp(u32(rel.z / quarter), 0u, 3u);
+    return xi + yi * 4u + zi * 16u;
+}
+
+struct SvoResult {
+    material: u32,
+    node_size: f32,
+}
+
+fn lookup_svo_full(pos: vec3<f32>) -> SvoResult {
+    var result: SvoResult;
+    result.material = 0u;
+    result.node_size = ray_params.world_size.x;
+
+    if (ray_params.node_count == 0u) { return result; }
+
+    let scale = 1.0 / ray_params.voxel_size;
+    let grid_pos = pos * scale;
+    let grid_size = ray_params.world_size.x * scale;
+
+    let mut node_idx = 0u;
+    let mut node_min = vec3(0.0);
+    let mut node_size = grid_size;
+
+    for (var depth = 0u; depth < ray_params.svo_depth; depth++) {
+        if (node_idx >= ray_params.node_count) { return result; }
+        let node = svo_nodes[node_idx];
+        if (svo_is_leaf(node)) {
+            result.material = svo_get_material(node);
+            result.node_size = node_size * ray_params.voxel_size;
+            return result;
+        }
+        let quarter = node_size * 0.25;
+        let child_idx = get_child_index_64(grid_pos, node_min, node_size);
+        let child_base = svo_child_ptr(node);
+        node_idx = child_base + child_idx;
+        let xi = child_idx & 3u;
+        let yi = (child_idx >> 2u) & 3u;
+        let zi = (child_idx >> 4u) & 3u;
+        node_min = node_min + vec3(f32(xi) * quarter, f32(yi) * quarter, f32(zi) * quarter);
+        node_size = quarter;
+    }
+    if (node_idx < ray_params.node_count) {
+        result.material = svo_get_material(svo_nodes[node_idx]);
+        result.node_size = node_size * ray_params.voxel_size;
+    }
+    return result;
+}
+
+fn lookup_svo(pos: vec3<f32>) -> u32 {
+    return lookup_svo_full(pos).material;
+}
+
+// === Multi-Scale Voxel Ambient Occlusion ===
+
+fn sample_ao_dir(pos: vec3<f32>, offset: vec3<f32>, normal: vec3<f32>) -> vec2<f32> {
+    let d = dot(offset, normal);
+    if (d >= -0.1) {
+        let sample_pos = pos + offset;
+        if (all(sample_pos >= vec3(0.0)) && all(sample_pos < ray_params.world_size)) {
+            let mat = lookup_svo(sample_pos);
+            if (mat >= 1u && mat < 240u) {
+                return vec2(max(d, 0.2), 1.0);
+            }
+        }
+        return vec2(0.0, 1.0);
+    }
+    return vec2(0.0, 0.0);
+}
+
+fn compute_ao(pos: vec3<f32>, normal: vec3<f32>) -> f32 {
+    let mut occlusion = 0.0;
+    let mut samples = 0.0;
+
+    // 6 cardinal directions + 1 above normal (7 lookups total)
+    let mut r = sample_ao_dir(pos, vec3(1.0, 0.0, 0.0), normal);
+    occlusion += r.x; samples += r.y;
+    r = sample_ao_dir(pos, vec3(-1.0, 0.0, 0.0), normal);
+    occlusion += r.x; samples += r.y;
+    r = sample_ao_dir(pos, vec3(0.0, 1.0, 0.0), normal);
+    occlusion += r.x; samples += r.y;
+    r = sample_ao_dir(pos, vec3(0.0, -1.0, 0.0), normal);
+    occlusion += r.x; samples += r.y;
+    r = sample_ao_dir(pos, vec3(0.0, 0.0, 1.0), normal);
+    occlusion += r.x; samples += r.y;
+    r = sample_ao_dir(pos, vec3(0.0, 0.0, -1.0), normal);
+    occlusion += r.x; samples += r.y;
+
+    let above1 = pos + normal;
+    if (all(above1 >= vec3(0.0)) && all(above1 < ray_params.world_size)) {
+        let mat = lookup_svo(above1);
+        if (mat >= 1u && mat < 240u) { occlusion += 1.5; }
+        samples += 1.0;
+    }
+
+    if (samples == 0.0) { return 1.0; }
+    let ao_factor = 1.0 - clamp(occlusion / (samples * 0.8), 0.0, 1.0);
+    return ao_factor * ao_factor;
+}
+
+// === Shadows ===
+
+fn trace_shadow(origin: vec3<f32>, dir: vec3<f32>, max_dist: f32) -> f32 {
+    let mut t = 1.0;
+    let mut penumbra = 1.0;
+    let light_size = 3.0;
+
+    for (var i = 0u; i < 6u; i++) {
+        if (t >= max_dist) { break; }
+        let sample_pos = origin + dir * t;
+        if (any(sample_pos < vec3(0.0)) || any(sample_pos >= ray_params.world_size)) {
+            break;
+        }
+        let hit = lookup_svo_full(sample_pos);
+        if (hit.material >= 1u && hit.material < 240u) {
+            return 0.0;
+        }
+
+        let nearest_dist = hit.node_size * 0.5;
+        penumbra = min(penumbra, light_size * nearest_dist / max(t, 0.1));
+
+        let step = max(hit.node_size * 0.7, 1.5);
+        t += step;
+    }
+    return clamp(penumbra, 0.0, 1.0);
+}
+
+fn trace_contact_shadow(origin: vec3<f32>, dir: vec3<f32>) -> f32 {
+    let max_dist = 2.5;
+    let steps = 4u;
+    let step_size = max_dist / f32(steps);
+
+    for (var i = 1u; i <= steps; i++) {
+        let t = f32(i) * step_size;
+        let sample_pos = origin + dir * t;
+        if (any(sample_pos < vec3(0.0)) || any(sample_pos >= ray_params.world_size)) {
+            break;
+        }
+        let mat = lookup_svo(sample_pos);
+        if (mat >= 1u && mat < 240u) {
+            let fade = f32(i) / f32(steps);
+            return fade * fade;
+        }
+    }
+    return 1.0;
+}
+
+// === One-Bounce GI ===
+
+fn hash_gi(seed: u32) -> f32 {
+    let mut h = seed;
+    h = h ^ (h >> 16u);
+    h = h * 0x45d9f3bu;
+    h = h ^ (h >> 16u);
+    return f32(h & 0xFFFFu) / 65535.0;
+}
+
+fn trace_gi_ray(origin: vec3<f32>, dir: vec3<f32>) -> vec3<f32> {
+    let max_dist = 16.0;
+    let mut t = 1.5;
+
+    for (var i = 0u; i < 5u; i++) {
+        if (t >= max_dist) { break; }
+        let sample_pos = origin + dir * t;
+        if (any(sample_pos < vec3(0.0)) || any(sample_pos >= ray_params.world_size)) {
+            break;
+        }
+        let mat = lookup_svo(sample_pos);
+        if (mat > 0u && mat < 240u) {
+            let hit_color = get_material_color(mat).rgb;
+            let hit_emission = get_material_emission(mat);
+            let hit_emission_strength = get_material_emission_strength(mat);
+            if (hit_emission_strength > 0.01) {
+                return hit_emission * hit_emission_strength * 1.5;
+            }
+            return hit_color * lighting.ambient_intensity * 1.8;
+        }
+        t += 2.5 + t * 0.4;
+    }
+    let sky_t = max(dir.y, 0.0);
+    return mix(lighting.ground_color, lighting.sky_color, sky_t) * 0.4;
+}
+
+fn compute_gi(pos: vec3<f32>, normal: vec3<f32>, pixel_idx: u32) -> vec3<f32> {
+    let num_samples = min(lighting.gi_samples, 4u);
+    if (num_samples == 0u) { return vec3(0.0); }
+
+    let mut gi_accum = vec3(0.0);
+    let seed_base = pixel_idx * 7u + 13u;
+
+    for (var i = 0u; i < num_samples; i++) {
+        let r1 = hash_gi(seed_base + i * 3u);
+        let r2 = hash_gi(seed_base + i * 3u + 1u);
+        let phi = 6.28318 * r1;
+        let cos_theta = sqrt(r2);
+        let sin_theta = sqrt(1.0 - r2);
+
+        let w = normal;
+        let u_raw = select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(w.y) > 0.9);
+        let u = normalize(cross(w, u_raw));
+        let v = cross(w, u);
+
+        let dir = normalize(u * cos(phi) * sin_theta + v * sin(phi) * sin_theta + w * cos_theta);
+        gi_accum += trace_gi_ray(pos + normal * 0.5, dir);
+    }
+
+    return gi_accum / f32(num_samples);
+}
+
+// === Volumetric Light Scattering ===
+
+fn trace_shadow_cheap(origin: vec3<f32>, dir: vec3<f32>, max_dist: f32) -> f32 {
+    let mut t = 2.0;
+    for (var i = 0u; i < 3u; i++) {
+        if (t >= max_dist) { break; }
+        let sample_pos = origin + dir * t;
+        if (any(sample_pos < vec3(0.0)) || any(sample_pos >= ray_params.world_size)) {
+            break;
+        }
+        let mat = lookup_svo(sample_pos);
+        if (mat >= 1u && mat < 240u) {
+            return 0.0;
+        }
+        t += max(3.0, t * 0.5);
+    }
+    return 1.0;
+}
+
+fn compute_volumetric_fog(cam_pos: vec3<f32>, surface_pos: vec3<f32>, L: vec3<f32>) -> vec3<f32> {
+    let ray = surface_pos - cam_pos;
+    let dist = length(ray);
+    if (dist < 5.0) { return vec3(0.0); }
+
+    let ray_dir = ray / dist;
+    let march_dist = min(dist, 20.0);
+    let steps = 2u;
+    let step_size = march_dist / f32(steps);
+    let mut scattered = vec3(0.0);
+    let phase = 0.25 + 0.75 * pow(max(dot(ray_dir, L), 0.0), 4.0);
+
+    for (var i = 0u; i < steps; i++) {
+        let t = step_size * (f32(i) + 0.5);
+        let sample_pos = cam_pos + ray_dir * t;
+
+        if (any(sample_pos < vec3(0.5)) || any(sample_pos >= ray_params.world_size - vec3(0.5))) {
+            continue;
+        }
+
+        let shadow = trace_shadow_cheap(sample_pos, L, 10.0);
+
+        let density = 0.006;
+        scattered += lighting.sun_color * lighting.sun_intensity * shadow * density * phase * step_size;
+        scattered += lighting.sky_color * lighting.ambient_intensity * density * 0.15 * step_size;
+    }
+
+    return scattered;
+}
+
+// === Voxel-Traced Reflections ===
+
+fn trace_reflection(origin: vec3<f32>, dir: vec3<f32>) -> vec3<f32> {
+    let max_dist = 15.0;
+    let mut t = 1.5;
+
+    for (var i = 0u; i < 4u; i++) {
+        if (t >= max_dist) { break; }
+        let sample_pos = origin + dir * t;
+        if (any(sample_pos < vec3(0.0)) || any(sample_pos >= ray_params.world_size)) {
+            break;
+        }
+        let mat = lookup_svo(sample_pos);
+        if (mat > 0u && mat < 240u) {
+            let ref_albedo = get_material_color(mat).rgb;
+            let ref_emission_strength = get_material_emission_strength(mat);
+
+            if (ref_emission_strength > 0.01) {
+                return get_material_emission(mat) * ref_emission_strength * 0.10;
+            }
+
+            let L = normalize(-lighting.sun_dir);
+            let approx_n_dot_l = max(dot(-dir, L), 0.0) * 0.5 + 0.5;
+            let ref_lit = ref_albedo * (lighting.sun_color * lighting.sun_intensity * approx_n_dot_l * 0.3
+                                        + lighting.sky_color * lighting.ambient_intensity * 0.6);
+
+            let dist_fade = 1.0 - clamp(t / max_dist, 0.0, 1.0);
+            return ref_lit * dist_fade;
+        }
+        t += 2.5 + t * 0.3;
+    }
+
+    let sky_t = dir.y * 0.5 + 0.5;
+    return mix(lighting.ground_color, lighting.sky_color, sky_t) * lighting.ambient_intensity;
+}
+
+// === Surface Micro-Detail ===
+
+fn hash3d_detail(p: vec3<f32>) -> f32 {
+    let k = vec3(0.3183099, 0.3678794, 0.2246822);
+    let q = p * k + vec3(0.1, 0.2, 0.3);
+    let n = dot(floor(q), vec3(127.1, 311.7, 74.7));
+    return fract(sin(n) * 43758.5453);
+}
+
+fn surface_noise(pos: vec3<f32>) -> f32 {
+    let p = pos * 1.5;
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+
+    let n000 = hash3d_detail(i);
+    let n100 = hash3d_detail(i + vec3(1.0, 0.0, 0.0));
+    let n010 = hash3d_detail(i + vec3(0.0, 1.0, 0.0));
+    let n110 = hash3d_detail(i + vec3(1.0, 1.0, 0.0));
+    let n001 = hash3d_detail(i + vec3(0.0, 0.0, 1.0));
+    let n101 = hash3d_detail(i + vec3(1.0, 0.0, 1.0));
+    let n011 = hash3d_detail(i + vec3(0.0, 1.0, 1.0));
+    let n111 = hash3d_detail(i + vec3(1.0, 1.0, 1.0));
+
+    let nx00 = mix(n000, n100, u.x);
+    let nx10 = mix(n010, n110, u.x);
+    let nx01 = mix(n001, n101, u.x);
+    let nx11 = mix(n011, n111, u.x);
+    let nxy0 = mix(nx00, nx10, u.y);
+    let nxy1 = mix(nx01, nx11, u.y);
+    return mix(nxy0, nxy1, u.z);
+}
+
+// Procedural panel lines: simulate metal plating seams on flat surfaces.
+// Wider edges and beveling create visible industrial surface detail.
+fn panel_line(pos: vec3<f32>, normal: vec3<f32>, panel_size: f32) -> f32 {
+    let abs_n = abs(normal);
+    var uv: vec2<f32>;
+    if (abs_n.y > abs_n.x && abs_n.y > abs_n.z) {
+        uv = pos.xz;
+    } else if (abs_n.x > abs_n.z) {
+        uv = pos.yz;
+    } else {
+        uv = pos.xy;
+    }
+    let grid_uv = fract(uv / panel_size);
+    let ew = 0.28;
+    let edge_x = smoothstep(0.0, ew, grid_uv.x) * smoothstep(1.0, 1.0 - ew, grid_uv.x);
+    let edge_y = smoothstep(0.0, ew, grid_uv.y) * smoothstep(1.0, 1.0 - ew, grid_uv.y);
+    return edge_x * edge_y;
+}
+
+// Rivet/bolt detail: small bright spots at panel corners
+fn rivet_pattern(pos: vec3<f32>, normal: vec3<f32>, panel_size: f32) -> f32 {
+    let abs_n = abs(normal);
+    var uv: vec2<f32>;
+    if (abs_n.y > abs_n.x && abs_n.y > abs_n.z) {
+        uv = pos.xz;
+    } else if (abs_n.x > abs_n.z) {
+        uv = pos.yz;
+    } else {
+        uv = pos.xy;
+    }
+    let cell = fract(uv / panel_size);
+    let corner_dist = min(min(length(cell), length(cell - vec2(1.0, 0.0))),
+                         min(length(cell - vec2(0.0, 1.0)), length(cell - vec2(1.0, 1.0))));
+    return 1.0 - smoothstep(0.04, 0.08, corner_dist);
+}
+
+// Dev grid material: Unreal-style grid lines for clean visual scale reference.
+// Minor grid every 1 unit, major grid every 4 units.
+fn dev_grid(pos: vec3<f32>, normal: vec3<f32>) -> f32 {
+    let abs_n = abs(normal);
+    var uv: vec2<f32>;
+    if (abs_n.y > abs_n.x && abs_n.y > abs_n.z) {
+        uv = pos.xz;
+    } else if (abs_n.x > abs_n.z) {
+        uv = pos.yz;
+    } else {
+        uv = pos.xy;
+    }
+
+    let minor_spacing = 1.0;
+    let major_spacing = 4.0;
+
+    let minor_uv = fract(uv / minor_spacing);
+    let minor_line_w = 0.05;
+    let minor_x = smoothstep(0.0, minor_line_w, minor_uv.x) * smoothstep(1.0, 1.0 - minor_line_w, minor_uv.x);
+    let minor_y = smoothstep(0.0, minor_line_w, minor_uv.y) * smoothstep(1.0, 1.0 - minor_line_w, minor_uv.y);
+    let minor_fill = minor_x * minor_y;
+
+    let major_uv = fract(uv / major_spacing);
+    let major_line_w = 0.025;
+    let major_x = smoothstep(0.0, major_line_w, major_uv.x) * smoothstep(1.0, 1.0 - major_line_w, major_uv.x);
+    let major_y = smoothstep(0.0, major_line_w, major_uv.y) * smoothstep(1.0, 1.0 - major_line_w, major_uv.y);
+    let major_fill = major_x * major_y;
+
+    let minor_darken = mix(0.78, 1.0, minor_fill);
+    let major_darken = mix(0.60, 1.0, major_fill);
+
+    return minor_darken * major_darken;
+}
+
+fn apply_surface_detail(base_color: vec3<f32>, pos: vec3<f32>, roughness: f32, metallic: f32, normal: vec3<f32>) -> vec3<f32> {
+    // Gentle noise for subtle surface variation (prevents flat CG look)
+    let noise = surface_noise(pos * 2.0 + vec3(42.0, 0.0, 0.0));
+    let variation = mix(0.96, 1.04, noise);
+
+    // Dev grid lines for scale reference
+    let grid = dev_grid(pos, normal);
+
+    // Per-voxel color variation (very subtle for coherence)
+    let voxel_hash = hash3d_detail(floor(pos + vec3(0.5)));
+    let color_var = (voxel_hash - 0.5) * 0.04;
+
+    let result = base_color * (1.0 + color_var) * variation * grid;
+    return max(result, base_color * 0.50);
+}
+
+fn roughness_detail(base_roughness: f32, pos: vec3<f32>, normal: vec3<f32>) -> f32 {
+    let noise = surface_noise(pos * 3.0 + vec3(7.0, 0.0, 0.0));
+    return clamp(base_roughness + (noise - 0.5) * 0.10, 0.04, 1.0);
+}
+
+fn perturb_normal(N: vec3<f32>, pos: vec3<f32>, roughness: f32) -> vec3<f32> {
+    let p1 = pos * 3.0;
+    let h0 = hash3d_detail(floor(p1));
+    let h1 = hash3d_detail(floor(p1) + vec3(1.0, 0.0, 0.0));
+    let h2 = hash3d_detail(floor(p1) + vec3(0.0, 1.0, 0.0));
+    let h3 = hash3d_detail(floor(p1) + vec3(0.0, 0.0, 1.0));
+    let grad = vec3(h1 - h0, h2 - h0, h3 - h0);
+    let bump_strength = 0.12 + roughness * 0.08;
+    let tangent_component = grad - N * dot(grad, N);
+    return normalize(N + tangent_component * bump_strength);
+}
+
+// === PBR Functions ===
+
+fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
+    let t = 1.0 - cos_theta;
+    let t2 = t * t;
+    let t5 = t2 * t2 * t;
+    return f0 + (vec3(1.0) - f0) * t5;
+}
+
+fn fresnel_schlick_roughness(cos_theta: f32, f0: vec3<f32>, roughness: f32) -> vec3<f32> {
+    let t = 1.0 - cos_theta;
+    let t2 = t * t;
+    let t5 = t2 * t2 * t;
+    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * t5;
+}
+
+fn distribution_ggx(n_dot_h: f32, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let d = n_dot_h * n_dot_h * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159265 * d * d + 0.0001);
+}
+
+fn geometry_smith(n_dot_v: f32, n_dot_l: f32, roughness: f32) -> f32 {
+    let r = roughness + 1.0;
+    let k = r * r / 8.0;
+    let g1 = n_dot_v / (n_dot_v * (1.0 - k) + k);
+    let g2 = n_dot_l / (n_dot_l * (1.0 - k) + k);
+    return g1 * g2;
+}
+
+fn cook_torrance(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, albedo: vec3<f32>, roughness: f32, metallic: f32) -> vec3<f32> {
+    let H = normalize(V + L);
+    let n_dot_v = max(dot(N, V), 0.001);
+    let n_dot_l = max(dot(N, L), 0.0);
+    let n_dot_h = max(dot(N, H), 0.0);
+    let v_dot_h = max(dot(V, H), 0.0);
+
+    let f0 = mix(vec3(0.04), albedo, metallic);
+    let F = fresnel_schlick(v_dot_h, f0);
+    let D = distribution_ggx(n_dot_h, roughness);
+    let G = geometry_smith(n_dot_v, n_dot_l, roughness);
+
+    let specular = (D * F * G) / (4.0 * n_dot_v * n_dot_l + 0.0001);
+    let kd = (vec3(1.0) - F) * (1.0 - metallic);
+    let diffuse = kd * albedo / 3.14159265;
+
+    return (diffuse + specular) * n_dot_l;
+}
+
+// === Hemisphere Sky Ambient ===
+fn hemisphere_ambient(normal: vec3<f32>, albedo: vec3<f32>, metallic: f32, roughness: f32, n_dot_v: f32) -> vec3<f32> {
+    let sky_factor = normal.y * 0.5 + 0.5;
+    let sky_ambient = mix(lighting.ground_color, lighting.sky_color, sky_factor);
+
+    let kd = (1.0 - metallic) * 0.96;
+    let diffuse_ambient = albedo * sky_ambient * lighting.ambient_intensity * kd;
+
+    let f0 = mix(vec3(0.04), albedo, metallic);
+    let F_env = fresnel_schlick_roughness(n_dot_v, f0, roughness);
+    let metallic_ambient = F_env * sky_ambient * lighting.ambient_intensity * 0.4 * (1.0 - roughness * 0.5);
+
+    return diffuse_ambient + metallic_ambient;
+}
+
+// === Main ===
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    let gbuf = gbuffer[pixel_idx];
+    let mat_id = u32(gbuf.normal.w);
+
+    if (mat_id == 0u) {
+        let ndc_y = 1.0 - 2.0 * f32(id.y) / f32(height);
+        let sky_t = clamp(ndc_y * 0.5 + 0.5, 0.0, 1.0);
+        let base_sky = mix(lighting.ground_color, lighting.sky_color, sky_t);
+        let sky = base_sky * lighting.ambient_intensity * 2.0;
+        color_output[pixel_idx] = vec4(max(sky, vec3(0.12)), 1.0);
+        return;
+    }
+
+    let N_flat = normalize(gbuf.normal.xyz);
+    let P = gbuf.position.xyz;
+
+    let base_albedo = get_material_color(mat_id).rgb;
+    let base_roughness = clamp(get_material_roughness(mat_id), 0.04, 1.0);
+    let metallic = clamp(get_material_metallic(mat_id), 0.0, 1.0);
+    let emission = get_material_emission(mat_id);
+    let emission_strength = get_material_emission_strength(mat_id);
+
+    let albedo = apply_surface_detail(base_albedo, P, base_roughness, metallic, N_flat);
+    let roughness = roughness_detail(base_roughness, P, N_flat);
+    let N = perturb_normal(N_flat, P, roughness);
+
+    let L = normalize(-lighting.sun_dir);
+    let V = normalize(camera.position - P);
+    let n_dot_v = max(dot(N, V), 0.001);
+    let n_dot_l = max(dot(N, L), 0.0);
+    let f0 = mix(vec3(0.04), albedo, metallic);
+
+    // Distance-based quality tiers (computed early for guards below)
+    let cam_dist = length(P - camera.position);
+    let is_near = cam_dist < 6.0;
+    let is_mid = cam_dist < 15.0;
+
+    // Far pixels: simplified lighting (ambient + direct + fill + cheap ceiling probe)
+    if (cam_dist > 25.0) {
+        let simple_n_dot_l = max(dot(N, L), 0.0);
+        let simple_direct = albedo * lighting.sun_color * lighting.sun_intensity * simple_n_dot_l * 0.5;
+        let ambient = hemisphere_ambient(N, albedo, metallic, roughness, n_dot_v);
+        let simple_fill_dir = normalize(vec3(-L.x, 0.3, -L.z));
+        let simple_fill = albedo * lighting.sky_color * max(dot(N, simple_fill_dir), 0.0) * 0.45;
+        let simple_back = albedo * lighting.sky_color * max(dot(N, vec3(0.0, 1.0, 0.0)), 0.0) * 0.25;
+        let simple_wrap = albedo * lighting.sky_color * 0.08 * lighting.ambient_intensity;
+        let emissive_raw = emission * emission_strength;
+        let emissive = min(emissive_raw, vec3(0.5));
+        // Cheap ceiling emissive probe: sample upward for overhead light
+        var ceiling_light = vec3(0.0);
+        let up_sample = P + vec3(0.0, 3.0, 0.0);
+        if (all(up_sample >= vec3(0.0)) && all(up_sample < ray_params.world_size)) {
+            let ceil_mat = lookup_svo(up_sample);
+            if (ceil_mat > 0u && ceil_mat < 240u) {
+                let ceil_em = get_material_emission(ceil_mat);
+                let ceil_es = get_material_emission_strength(ceil_mat);
+                if (ceil_es > 0.01) {
+                    ceiling_light = ceil_em * ceil_es * 0.5 * max(dot(N, vec3(0.0, 1.0, 0.0)), 0.1);
+                }
+            }
+        }
+        let fog_density = 0.003;
+        let fog_amount = 1.0 - exp(-cam_dist * cam_dist * fog_density * fog_density);
+        let fog_color = mix(lighting.ground_color, lighting.sky_color, 0.5) * lighting.ambient_intensity;
+        var lit = simple_direct + ambient + simple_fill + simple_back + simple_wrap + emissive + ceiling_light;
+        let far_floor = albedo * lighting.sky_color * lighting.ambient_intensity * 0.15;
+        lit = max(lit, far_floor);
+        let color = mix(lit, fog_color, clamp(fog_amount, 0.0, 0.30));
+        color_output[pixel_idx] = vec4(min(color, vec3(4.0)), 1.0);
+        return;
+    }
+
+    // Direct sunlight with soft shadows
+    let shadow_origin = P + N * 0.6;
+    var shadow_factor = select(trace_shadow(shadow_origin, L, 12.0), trace_shadow(shadow_origin, L, 6.0), cam_dist > 10.0);
+
+    if (is_near) {
+        let contact = trace_contact_shadow(P + N * 0.3, L);
+        shadow_factor = shadow_factor * contact;
+    }
+
+    let direct = cook_torrance(N, V, L, albedo, roughness, metallic)
+                 * lighting.sun_color * lighting.sun_intensity
+                 * shadow_factor;
+
+    // Key fill light (opposite sun direction)
+    let fill_dir = normalize(vec3(-L.x, 0.3, -L.z));
+    let fill_n_dot_l = max(dot(N, fill_dir), 0.0);
+    let fill_color = mix(lighting.sky_color, lighting.ground_color, 0.3) * 0.60;
+    let shadow_fill = mix(0.4, 1.0, shadow_factor);
+    let fill = albedo * fill_color * fill_n_dot_l * (1.0 - metallic * 0.5) * shadow_fill;
+
+    // Back fill (perpendicular to sun, simulates corridor ceiling lights)
+    let back_fill_dir = normalize(vec3(L.z, 0.2, -L.x));
+    let back_fill_ndl = max(dot(N, back_fill_dir), 0.0);
+    let back_fill = albedo * lighting.sky_color * back_fill_ndl * 0.30;
+
+    // Secondary fill from below (floor bounce)
+    let bounce_dir = vec3(0.0, 1.0, 0.0);
+    let bounce_n_dot_l = max(dot(N, bounce_dir), 0.0);
+    let bounce_color = lighting.ground_color * 0.35;
+    let bounce = albedo * bounce_color * bounce_n_dot_l * shadow_fill;
+
+    // 6-point fill: ensure all faces get some light regardless of sun direction
+    let wrap_light = albedo * lighting.sky_color * 0.08 * lighting.ambient_intensity;
+
+    let min_ambient = albedo * lighting.sky_color * lighting.ambient_intensity * 0.40;
+
+    // Ambient occlusion (voxel + SSAO)
+    let ambient = hemisphere_ambient(N, albedo, metallic, roughness, n_dot_v);
+    var combined_ao = 1.0;
+    if (is_mid) {
+        let voxel_ao = compute_ao(P, N);
+        let ssao = ssao_output[pixel_idx];
+        let raw_ao = min(voxel_ao, ssao);
+        combined_ao = pow(raw_ao, 1.2);
+    }
+    let ambient_ao = ambient * combined_ao;
+
+    // One-bounce GI (near: full samples, mid: reduced samples for emissive pickup)
+    var gi_contrib = vec3(0.0);
+    if (is_mid && lighting.gi_samples > 0u) {
+        let gi = compute_gi(P, N, pixel_idx);
+        let kd_gi = (1.0 - metallic) * 0.96;
+        let gi_diffuse = albedo * gi * lighting.gi_intensity * kd_gi * combined_ao;
+        let gi_specular = f0 * gi * lighting.gi_intensity * metallic * 0.5 * combined_ao;
+        gi_contrib = gi_diffuse + gi_specular;
+    }
+
+    // SSGI contribution (half-res nearest fetch)
+    {
+        let half_w = max(width / 2u, 1u);
+        let half_h = max(height / 2u, 1u);
+        let half_x = min(id.x / 2u, half_w - 1u);
+        let half_y = min(id.y / 2u, half_h - 1u);
+        let ssgi_idx = (half_y * half_w + half_x) * 4u;
+        let ssgi_r = bitcast<f32>(ssgi_indirect[ssgi_idx]);
+        let ssgi_g = bitcast<f32>(ssgi_indirect[ssgi_idx + 1u]);
+        let ssgi_b = bitcast<f32>(ssgi_indirect[ssgi_idx + 2u]);
+        let ssgi_color = vec3<f32>(ssgi_r, ssgi_g, ssgi_b);
+        let kd_ssgi = (1.0 - metallic) * 0.96;
+        gi_contrib += albedo * ssgi_color * kd_ssgi * combined_ao;
+    }
+
+    // Environment specular
+    let R = reflect(-V, N);
+    let F_env = fresnel_schlick_roughness(n_dot_v, f0, roughness);
+    let smooth_factor = (1.0 - roughness) * (1.0 - roughness);
+
+    var env_specular = vec3(0.0);
+    if (metallic > 0.15 && roughness < 0.55 && is_near) {
+        let ref_origin = P + N * 0.8;
+        let ref_color = trace_reflection(ref_origin, R);
+        env_specular = F_env * ref_color * smooth_factor * 1.5 * combined_ao;
+    } else {
+        let env_r_factor = R.y * 0.5 + 0.5;
+        let env_color = mix(lighting.ground_color, lighting.sky_color, env_r_factor);
+        env_specular = F_env * env_color * lighting.ambient_intensity * smooth_factor * 2.0 * combined_ao;
+    }
+
+    // Rim light
+    let rim_power = pow(1.0 - n_dot_v, 3.5);
+    let rim_mask = smoothstep(0.0, 0.4, rim_power);
+    let rim_color = lighting.sky_color * rim_mask * 0.10 * lighting.ambient_intensity;
+
+    // Emission
+    let emissive_raw = emission * emission_strength;
+    let emissive = min(emissive_raw, vec3(0.5));
+
+    var lit_color = direct + fill + back_fill + bounce + min_ambient + wrap_light + ambient_ao + gi_contrib + env_specular + rim_color + emissive;
+
+    // Minimum brightness floor: simulates multi-bounce GI in interiors.
+    let brightness_floor = albedo * 0.25;
+    lit_color = max(lit_color, brightness_floor);
+    lit_color = min(lit_color, vec3(4.0));
+
+    // Color temperature grading (very subtle warmth only)
+    let luminance = dot(lit_color, vec3(0.2126, 0.7152, 0.0722));
+    let warm_shift = vec3(1.004, 1.001, 0.996);
+    let cool_shift = vec3(0.998, 0.999, 1.003);
+    let temp_factor = smoothstep(0.03, 0.25, luminance);
+    let temp_color = lit_color * mix(cool_shift, warm_shift, temp_factor);
+
+    // Distance fog
+    let fog_density = 0.005;
+    let fog_amount = 1.0 - exp(-cam_dist * cam_dist * fog_density * fog_density);
+    let fog_color = mix(lighting.ground_color, lighting.sky_color, 0.5) * lighting.ambient_intensity;
+    var color = mix(temp_color, fog_color, clamp(fog_amount, 0.0, 0.50));
+
+    let min_brightness = albedo * lighting.sky_color * lighting.ambient_intensity * 0.05;
+    color = max(color, min_brightness);
+
+    color_output[pixel_idx] = vec4(color, 1.0);
+}

@@ -7,6 +7,12 @@ use std::collections::HashSet;
 use super::MethodCallAnalyzer;
 
 impl MethodCallAnalyzer {
+    /// Phase-2 lookup-key APIs: first `string` param becomes `&str` in Rust even when
+    /// stale metadata still lists `String` + `Owned` (Blackboard, SaveData getters, etc.).
+    pub fn is_lookup_key_string_param(method: &str, param_idx: usize) -> bool {
+        crate::codegen::rust::string_utilities::is_readonly_string_key_method(method, param_idx)
+    }
+
     /// Determine if we should add .clone() to this argument
     #[allow(clippy::too_many_arguments)]
     pub fn should_add_clone(
@@ -92,38 +98,11 @@ impl MethodCallAnalyzer {
         method: &str,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
     ) -> bool {
-        if let Some(sig) = method_signature {
-            let resolved_idx = sig.arg_param_index(param_idx);
-            if Self::callee_param_is_rust_str_slice(method_signature, resolved_idx) {
-                return false;
-            }
-        }
-
-        if matches!(
-            method,
-            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill"
-        ) && param_idx == 0
-        {
-            return true;
-        }
-
-        if let Some(sig) = method_signature {
-            if let Some(&ownership) = sig.param_ownership_for_arg(param_idx) {
-                return matches!(ownership, OwnershipMode::Owned);
-            }
-        }
-
-        if param_idx == 0 {
-            if method.starts_with("add_")
-                || method.starts_with("set_")
-                || method == "new"
-                || method.ends_with("_new")
-            {
-                return true;
-            }
-        }
-
-        false
+        crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion(
+            method_signature.as_ref(),
+            param_idx,
+            Some(method),
+        )
     }
 
     /// Determine if we should add .cloned() for Option<&T> -> Option<T>

@@ -26,6 +26,19 @@ impl<'ast> CodeGenerator<'ast> {
             .enumerate()
             .map(|(i, e)| {
                 let mut s = self.generate_expression(e);
+                if let Some(ref tuple_types) = return_tuple_types {
+                    if let Some(expected) = tuple_types.get(i) {
+                        if !matches!(expected, Type::Reference(_) | Type::MutableReference(_)) {
+                            if let Some(stripped) = s.strip_prefix("&mut ") {
+                                s = stripped.to_string();
+                            } else if let Some(stripped) = s.strip_prefix("& ") {
+                                s = stripped.to_string();
+                            } else if s.starts_with('&') && !s.starts_with("&&") {
+                                s = s[1..].trim_start().to_string();
+                            }
+                        }
+                    }
+                }
                 if matches!(
                     e,
                     Expression::Literal {
@@ -45,14 +58,32 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if !s.ends_with(".clone()")
                     && !crate::codegen::rust::literals::is_already_owned_string(&s)
+                    && !self.suppress_borrowed_clone
                 {
                     let ty = self.infer_expression_type(e);
-                    let needs_clone = ty.as_ref().is_some_and(|t| match t {
-                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                            !self.is_type_copy(inner)
-                        }
-                        _ => false,
-                    });
+                    let is_borrowed_binding = matches!(
+                        e,
+                        Expression::Identifier { name, .. }
+                            if self.borrowed_iterator_vars.contains(name)
+                    );
+                    let needs_clone = is_borrowed_binding
+                        || ty.as_ref().is_some_and(|t| match t {
+                            Type::Reference(inner) => !self.is_type_copy(inner),
+                            Type::MutableReference(_) => false,
+                            Type::Option(inner)
+                                if matches!(inner.as_ref(), Type::MutableReference(_)) =>
+                            {
+                                false
+                            }
+                            _ => false,
+                        })
+                        || matches!(e, Expression::Identifier { name, .. }
+                        if self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone_anywhere(name)
+                        }) && !matches!(
+                            self.infer_expression_type(e),
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                        ));
                     if !needs_clone {
                         // Also clone non-Copy field accesses through references
                         // (e.g. from_stack.item.id where from_stack is behind &)
@@ -61,6 +92,19 @@ impl<'ast> CodeGenerator<'ast> {
                             if root_is_ref {
                                 let is_copy = ty.as_ref().is_some_and(|t| self.is_type_copy(t));
                                 if !is_copy {
+                                    s = format!("{}.clone()", s);
+                                }
+                            }
+                        } else if let Expression::Index { object, .. } = e {
+                            let root_is_ref = self.field_access_root_is_behind_reference(object)
+                                || matches!(
+                                    object,
+                                    Expression::FieldAccess { .. }
+                                        if self.field_access_root_is_behind_reference(object)
+                                );
+                            if root_is_ref {
+                                let is_copy = ty.as_ref().is_some_and(|t| self.is_type_copy(t));
+                                if !is_copy && !s.ends_with(".clone()") {
                                     s = format!("{}.clone()", s);
                                 }
                             }
@@ -428,7 +472,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // branches, match arms, blocks) also coerce their string literals.
                 let prev_coerce = self.coerce_string_literals_to_owned;
                 self.coerce_string_literals_to_owned = true;
+                let prev_expr_ctx = self.in_expression_context;
+                self.in_expression_context = true;
                 let mut expr_str = self.generate_expression(expr);
+                self.in_expression_context = prev_expr_ctx;
                 self.coerce_string_literals_to_owned = prev_coerce;
 
                 // Restore previous context
@@ -486,6 +533,28 @@ impl<'ast> CodeGenerator<'ast> {
                                     expr_str = format!("{}.to_string()", expr_str);
                                 }
                             }
+                        }
+                    }
+                }
+
+                // `pub const FOO: string` lowers to &'static str; owned String fields need .to_string().
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if string_utilities::is_string_const_identifier(
+                        id,
+                        self.auto_clone_analysis.as_ref(),
+                    ) && !expr_str.ends_with(".to_string()")
+                    {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        let field_is_string = self
+                            .lookup_struct_field_types(struct_name)
+                            .and_then(|fields| fields.get(field_name))
+                            .is_some_and(|field_type| {
+                                matches!(field_type, Type::String)
+                                    || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String")
+                            })
+                            || !struct_name.is_empty();
+                        if field_is_string {
+                            expr_str = format!("{}.to_string()", expr_str);
                         }
                     }
                 }
@@ -582,6 +651,28 @@ impl<'ast> CodeGenerator<'ast> {
                         self.clone_non_copy_ref_binding_for_struct_field(expr, &expr_str);
                 }
 
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if let Some(ref analysis) = self.auto_clone_analysis {
+                        if analysis.needs_clone_anywhere(id)
+                            && !expr_str.ends_with(".clone()")
+                            && !expr_str.ends_with(".to_string()")
+                        {
+                            let is_copy = self
+                                .local_var_types
+                                .get(id)
+                                .is_some_and(|t| self.is_type_copy(t))
+                                || self
+                                    .current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *id)
+                                    .is_some_and(|p| self.is_type_copy(&p.type_));
+                            if !is_copy {
+                                expr_str = format!("{}.clone()", expr_str);
+                            }
+                        }
+                    }
+                }
+
                 // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
                 // Only use shorthand if the generated expression exactly matches the field name
                 // (no .to_string(), .clone(), etc. conversions)
@@ -651,6 +742,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let mut idx_str = self.generate_expression(index);
+
+        // Match/if-let on `.as_ref()` binds `&usize` etc.; array indexing needs owned index.
+        if let Some(ty) = self.infer_expression_type(index) {
+            let pointee = match &ty {
+                Type::Reference(inner) | Type::MutableReference(inner) => Some(inner.as_ref()),
+                _ => None,
+            };
+            if pointee.is_some_and(|t| self.is_type_copy(t)) {
+                idx_str = format!("*({idx_str})");
+            }
+        }
 
         self.maybe_cast_index_to_usize(&mut idx_str, index);
         let final_idx = idx_str;

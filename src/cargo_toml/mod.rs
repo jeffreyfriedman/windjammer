@@ -151,6 +151,8 @@ pub fn generate_single_file_cargo_toml(
 pub use toml_generation::generate_wasm_cargo_toml;
 pub use toml_generation::infer_project_name_from;
 
+pub(crate) use dependency_management::{find_windjammer_runtime_path, path_to_toml_string};
+
 #[cfg(test)]
 mod tests {
     use super::toml_generation::{infer_project_name, resolve_package_name_with_existing_cargo};

@@ -1,0 +1,139 @@
+// WJSL Standard Library: Subgroup emulation (shared memory + barriers)
+//
+// wgpu 0.19 does not expose subgroup intrinsics. These helpers implement
+// wave-style reductions and exclusive prefix sums for sort/compact shaders.
+// When upgrading wgpu, prefer native subgroup ops and keep this as fallback.
+//
+// Requires: @compute stage, workgroup size >= MAX_WORKGROUP_SIZE if you index
+// all lanes. Callers must not interleave these ops on overlapping scratch
+// without sequencing (broadcast uses sg_scratch[0] / sg_scratch_f32[0]).
+
+const SUBGROUP_SIZE: u32 = 32u;
+const MAX_WORKGROUP_SIZE: u32 = 256u;
+
+var<workgroup> sg_scratch: array<u32, 256>;
+var<workgroup> sg_scratch_f32: array<f32, 256>;
+
+fn next_pow2_u32(x: u32) -> u32 {
+    let mut p = 1u;
+    while (p < x) {
+        p = p * 2u;
+    }
+    return p;
+}
+
+// Parallel sum across active lanes [0, wg_size). Every lane receives the total.
+fn subgroup_add_u32(local_id: u32, value: u32, wg_size: u32) -> u32 {
+    if (local_id < wg_size) {
+        sg_scratch[local_id] = value;
+    } else {
+        sg_scratch[local_id] = 0u;
+    }
+    workgroupBarrier();
+    let n = next_pow2_u32(max(wg_size, 1u));
+    for (var s = n / 2u; s > 0u; s = s / 2u) {
+        if (local_id < s) {
+            let b = local_id + s;
+            let addend = select(0u, sg_scratch[b], b < n);
+            sg_scratch[local_id] = sg_scratch[local_id] + addend;
+        }
+        workgroupBarrier();
+    }
+    let total = sg_scratch[0];
+    workgroupBarrier();
+    return total;
+}
+
+fn subgroup_add_f32(local_id: u32, value: f32, wg_size: u32) -> f32 {
+    if (local_id < wg_size) {
+        sg_scratch_f32[local_id] = value;
+    } else {
+        sg_scratch_f32[local_id] = 0.0;
+    }
+    workgroupBarrier();
+    let n = next_pow2_u32(max(wg_size, 1u));
+    for (var s = n / 2u; s > 0u; s = s / 2u) {
+        if (local_id < s) {
+            let b = local_id + s;
+            let addend = select(0.0, sg_scratch_f32[b], b < n);
+            sg_scratch_f32[local_id] = sg_scratch_f32[local_id] + addend;
+        }
+        workgroupBarrier();
+    }
+    let total = sg_scratch_f32[0];
+    workgroupBarrier();
+    return total;
+}
+
+// Broadcast value from src_lane to all lanes (undefined if src_lane >= wg_size).
+fn subgroup_broadcast_u32(local_id: u32, value: u32, src_lane: u32) -> u32 {
+    if (local_id == 0u) {
+        sg_scratch[0] = 0u;
+    }
+    workgroupBarrier();
+    if (local_id == src_lane) {
+        sg_scratch[0] = value;
+    }
+    workgroupBarrier();
+    return sg_scratch[0];
+}
+
+fn subgroup_broadcast_f32(local_id: u32, value: f32, src_lane: u32) -> f32 {
+    if (local_id == 0u) {
+        sg_scratch_f32[0] = 0.0;
+    }
+    workgroupBarrier();
+    if (local_id == src_lane) {
+        sg_scratch_f32[0] = value;
+    }
+    workgroupBarrier();
+    return sg_scratch_f32[0];
+}
+
+// Exclusive prefix sum per lane: sum of inputs from lane 0 .. local_id-1.
+// Hillis-Steele inclusive scan on padded power-of-two size, then subtract local.
+fn subgroup_prefix_sum_u32(local_id: u32, value: u32, wg_size: u32) -> u32 {
+    let orig = select(0u, value, local_id < wg_size);
+    sg_scratch[local_id] = orig;
+    if (local_id >= wg_size && local_id < MAX_WORKGROUP_SIZE) {
+        sg_scratch[local_id] = 0u;
+    }
+    workgroupBarrier();
+    let n = next_pow2_u32(max(wg_size, 1u));
+    for (var stride = 1u; stride < n; stride = stride * 2u) {
+        let mut add = 0u;
+        if (local_id >= stride && local_id < n) {
+            add = sg_scratch[local_id - stride];
+        }
+        workgroupBarrier();
+        if (local_id >= stride && local_id < n) {
+            sg_scratch[local_id] = sg_scratch[local_id] + add;
+        }
+        workgroupBarrier();
+    }
+    if (local_id >= wg_size) {
+        return 0u;
+    }
+    return sg_scratch[local_id] - orig;
+}
+
+fn subgroup_max_u32(local_id: u32, value: u32, wg_size: u32) -> u32 {
+    if (local_id < wg_size) {
+        sg_scratch[local_id] = value;
+    } else {
+        sg_scratch[local_id] = 0u;
+    }
+    workgroupBarrier();
+    let n = next_pow2_u32(max(wg_size, 1u));
+    for (var s = n / 2u; s > 0u; s = s / 2u) {
+        if (local_id < s) {
+            let b = local_id + s;
+            let other = select(0u, sg_scratch[b], b < n);
+            sg_scratch[local_id] = max(sg_scratch[local_id], other);
+        }
+        workgroupBarrier();
+    }
+    let total = sg_scratch[0];
+    workgroupBarrier();
+    return total;
+}

@@ -10,6 +10,11 @@ fn parse(s: string) -> Result<Value, string> {
     Err("use std::json import — maps to runtime")
 }
 
+/// Deserialize JSON text into a typed struct (`@derive(Serialize, Deserialize)`).
+fn parse_string<T>(s: string) -> Result<T, string> {
+    Err("use std::json import — maps to runtime")
+}
+
 /// Serialize Value → compact JSON string
 fn stringify(value: Value) -> Result<string, string> {
     Err("use std::json import — maps to runtime")
@@ -37,6 +42,9 @@ fn as_f64(value: Value) -> Option<f64> { None }
 fn as_bool(value: Value) -> Option<bool> { None }
 fn len(value: Value) -> int { 0 }
 fn is_empty(value: Value) -> bool { true }
+
+/// Array element by index (objects use `get`).
+fn get_index(value: Value, index: usize) -> Option<Value> { None }
 
 fn object() -> Value { Value {} }
 fn array() -> Value { Value {} }

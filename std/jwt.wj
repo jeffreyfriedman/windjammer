@@ -1,0 +1,35 @@
+// std::jwt — HS256 JWT verify/sign (implementation: windjammer_runtime::jwt)
+//
+// Phase 0 platform auth: tenant scope travels in signed claims (`tenant_slug`), not query params.
+
+pub struct JwtClaims {
+    pub sub: string,
+    pub tenant_slug: string,
+    pub tenant_id: Option<string>,
+    pub entity_id: Option<string>,
+    pub email: Option<string>,
+    pub exp: int,
+}
+
+/// Verify an HS256 JWT and return claims (checks signature + expiration).
+fn verify_hs256(token: string, secret: string) -> Result<JwtClaims, string> {
+    Err("import std::jwt — maps to windjammer_runtime::jwt")
+}
+
+/// Mint an HS256 JWT (tests, dev tooling — production issuance lives in auth service).
+fn sign_hs256(sub: string, tenant_slug: string, secret: string, ttl_secs: int) -> Result<string, string> {
+    Err("import std::jwt — maps to windjammer_runtime::jwt")
+}
+
+/// Mint HS256 JWT with tenant_id, entity_id, and email claims.
+fn sign_hs256_scoped(
+    sub: string,
+    tenant_slug: string,
+    tenant_id: string,
+    entity_id: string,
+    email: string,
+    secret: string,
+    ttl_secs: int,
+) -> Result<string, string> {
+    Err("import std::jwt — maps to windjammer_runtime::jwt")
+}

@@ -10,6 +10,23 @@ fn create_project(base: &std::path::Path, subdirs: &[&str]) {
 }
 
 #[test]
+fn test_skeleton_param_ownership_defaults() {
+    use crate::parser::Type;
+
+    let owned = default_skeleton_param_ownership_from_types(&[Type::Custom("QuestId".into())]);
+    assert_eq!(owned, vec!["Owned"]);
+
+    let borrowed = default_skeleton_param_ownership_from_types(&[Type::String]);
+    assert_eq!(borrowed, vec!["Borrowed"]);
+
+    let mixed = default_skeleton_param_ownership_from_types(&[
+        Type::String,
+        Type::Custom("MannequinConfig".into()),
+    ]);
+    assert_eq!(mixed, vec!["Borrowed", "Owned"]);
+}
+
+#[test]
 fn test_metadata_round_trip() {
     let mut meta = ModuleMetadata::new("math::vec3".to_string());
 
@@ -21,6 +38,7 @@ fn test_metadata_round_trip() {
                 "Custom(\"f32\")".to_string(),
                 "Custom(\"f32\")".to_string(),
             ],
+            formal_params: vec![],
             return_type: Some("Custom(\"Vec3\")".to_string()),
             is_associated: true,
             parent_type: Some("Vec3".to_string()),
@@ -166,6 +184,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
                         "Custom(\"VoxelRenderer\")".to_string(),
                         "Custom(\"CameraData\")".to_string(),
                     ],
+                    formal_params: vec![],
                     return_type: None,
                     is_associated: true,
                     parent_type: Some("VoxelRenderer".to_string()),
@@ -198,6 +217,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
                         "Custom(\"VoxelRenderer\")".to_string(),
                         "Custom(\"CameraData\")".to_string(),
                     ],
+                    formal_params: vec![],
                     return_type: None,
                     is_associated: true,
                     parent_type: Some("VoxelRenderer".to_string()),

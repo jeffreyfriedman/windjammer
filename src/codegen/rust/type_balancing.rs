@@ -18,6 +18,16 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression,
     ) -> Option<FloatType> {
+        // Shadowed loop counters (e.g. inner `dx: i32` vs outer `dx: f32`) must use the
+        // inner binding from local_var_types — float inference is name-based and can misclassify.
+        if let Expression::Identifier { name, .. } = expr {
+            if let Some(ty) = self.local_var_types.get(name) {
+                if Self::is_int_numeric_type(ty) {
+                    return None;
+                }
+            }
+        }
+
         let is_float_literal = matches!(
             expr,
             Expression::Literal {
@@ -190,20 +200,38 @@ impl<'ast> CodeGenerator<'ast> {
             lc = Some(FloatType::F32);
         }
 
-        let cast_f32_to_f64 = |s: &str, e: &Expression| {
-            let inner = if matches!(e, Expression::Binary { .. }) || s.contains(" as ") {
+        let deref_if_ref_for_cast = |this: &Self, s: &str, e: &Expression| -> String {
+            if let Expression::Identifier { name, .. } = e {
+                if !s.starts_with('*')
+                    && (this.local_var_types.get(name).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    }) || this.borrowed_iterator_vars.contains(name)
+                        || this.inferred_borrowed_params.contains(name))
+                {
+                    return format!("*{}", s);
+                }
+            }
+            if !s.starts_with('*') {
+                if let Some(Type::Reference(inner) | Type::MutableReference(inner)) =
+                    this.infer_expression_type(e)
+                {
+                    if this.is_type_copy(inner.as_ref()) {
+                        return format!("*{}", s);
+                    }
+                }
+            }
+            if matches!(e, Expression::Binary { .. }) || s.contains(" as ") {
                 format!("({})", s)
             } else {
                 s.to_string()
-            };
+            }
+        };
+        let cast_f32_to_f64 = |s: &str, e: &Expression| {
+            let inner = deref_if_ref_for_cast(self, s, e);
             format!("{} as f64", inner)
         };
         let cast_to_f32 = |s: &str, e: &Expression| {
-            let inner = if matches!(e, Expression::Binary { .. }) || s.contains(" as ") {
-                format!("({})", s)
-            } else {
-                s.to_string()
-            };
+            let inner = deref_if_ref_for_cast(self, s, e);
             format!("{} as f32", inner)
         };
         // Compound / simple assignment to `f32`: keep arithmetic in f32 (cast f64 operand down).
@@ -287,6 +315,35 @@ impl<'ast> CodeGenerator<'ast> {
             //   2. The expression is an explicit Cast to float, OR
             //   3. The generated string already contains float markers
             (Some(ft), None) if !right_float_lit => {
+                let is_int_type = |t: &Type| {
+                    matches!(t, Type::Int)
+                        || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
+                };
+                let right_is_int = self
+                    .infer_expression_type(right)
+                    .as_ref()
+                    .is_some_and(is_int_type)
+                    || if let Expression::Identifier { name, .. } = right {
+                        self.local_var_types.get(name).is_some_and(is_int_type)
+                    } else {
+                        false
+                    };
+                if right_is_int {
+                    return;
+                }
+                let left_is_int = self
+                    .infer_expression_type(left)
+                    .as_ref()
+                    .is_some_and(is_int_type)
+                    || if let Expression::Identifier { name, .. } = left {
+                        self.local_var_types.get(name).is_some_and(is_int_type)
+                    } else {
+                        false
+                    };
+                if left_is_int {
+                    return;
+                }
+
                 // Type::Float is generic "expression involves floats" — NOT proof the
                 // result is f32/f64. E.g. `Vec3 * 0.5` yields Vec3, not f32, even though
                 // float inference marks it F32 due to the literal.
@@ -325,15 +382,42 @@ impl<'ast> CodeGenerator<'ast> {
                     FloatType::F64 => "f64",
                     _ => return,
                 };
-                let inner =
-                    if matches!(right, Expression::Binary { .. }) || right_str.contains(" as ") {
-                        format!("({})", right_str)
-                    } else {
-                        right_str.to_string()
-                    };
-                *right_str = format!("{} as {}", inner, target);
+                *right_str = if target == "f32" {
+                    cast_to_f32(right_str, right)
+                } else {
+                    cast_f32_to_f64(right_str, right)
+                };
             }
             (None, Some(ft)) if !left_float_lit => {
+                let is_int_type = |t: &Type| {
+                    matches!(t, Type::Int)
+                        || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
+                };
+                let right_is_int = self
+                    .infer_expression_type(right)
+                    .as_ref()
+                    .is_some_and(is_int_type)
+                    || if let Expression::Identifier { name, .. } = right {
+                        self.local_var_types.get(name).is_some_and(is_int_type)
+                    } else {
+                        false
+                    };
+                if right_is_int {
+                    return;
+                }
+                let left_is_int = self
+                    .infer_expression_type(left)
+                    .as_ref()
+                    .is_some_and(is_int_type)
+                    || if let Expression::Identifier { name, .. } = left {
+                        self.local_var_types.get(name).is_some_and(is_int_type)
+                    } else {
+                        false
+                    };
+                if left_is_int {
+                    return;
+                }
+
                 let is_confirmed_float =
                     |t: &Type| matches!(t, Type::Custom(n) if n == "f32" || n == "f64");
                 let right_confirmed_float = self
@@ -369,13 +453,11 @@ impl<'ast> CodeGenerator<'ast> {
                     FloatType::F64 => "f64",
                     _ => return,
                 };
-                let inner =
-                    if matches!(left, Expression::Binary { .. }) || left_str.contains(" as ") {
-                        format!("({})", left_str)
-                    } else {
-                        left_str.to_string()
-                    };
-                *left_str = format!("{} as {}", inner, target);
+                *left_str = if target == "f32" {
+                    cast_to_f32(left_str, left)
+                } else {
+                    cast_f32_to_f64(left_str, left)
+                };
             }
             _ => {}
         }
@@ -414,6 +496,17 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Auto-cast integer operands to float when mixed with float operands in arithmetic.
+    /// Resolve operand type for int/float promotion, preferring inner `local_var_types`
+    /// over global float inference (shadowed `dx: i32` vs outer `dx: f32`).
+    fn effective_type_for_mixed_arithmetic(&self, expr: &Expression) -> Option<Type> {
+        if let Expression::Identifier { name, .. } = expr {
+            if let Some(ty) = self.local_var_types.get(name) {
+                return Some(ty.clone());
+            }
+        }
+        self.infer_expression_type(expr)
+    }
+
     /// Windjammer Philosophy: the compiler handles type conversions automatically.
     /// Rust rejects `i32 + f32`, `usize * f32`, etc. — we insert the cast.
     pub(in crate::codegen::rust) fn promote_int_to_float_in_mixed_arithmetic(
@@ -423,8 +516,8 @@ impl<'ast> CodeGenerator<'ast> {
         left_str: &mut String,
         right_str: &mut String,
     ) {
-        let lt = self.infer_expression_type(left);
-        let rt = self.infer_expression_type(right);
+        let lt = self.effective_type_for_mixed_arithmetic(left);
+        let rt = self.effective_type_for_mixed_arithmetic(right);
 
         match (lt.as_ref(), rt.as_ref()) {
             (Some(l), Some(r))
@@ -888,29 +981,27 @@ impl<'ast> CodeGenerator<'ast> {
         let left_is_ref = matches!(lt.as_ref(), Some(Type::Reference(_)));
         let right_is_ref = matches!(rt.as_ref(), Some(Type::Reference(_)));
 
-        // TDD FIX for E0614: Check if either side is a match arm binding (owned value)
-        // Match arm bindings extract OWNED values from enums, never references
-        // So we should NEVER add * to them, even if type inference suggests they're refs
-        let left_is_match_binding = if let Expression::Identifier { name, .. } = left {
-            self.match_arm_bindings.contains(name.as_str())
-        } else {
-            false
-        };
-        let right_is_match_binding = if let Expression::Identifier { name, .. } = right {
-            self.match_arm_bindings.contains(name.as_str())
-        } else {
-            false
+        let match_binding_skips_copy_deref = |expr: &Expression| -> bool {
+            let Expression::Identifier { name, .. } = expr else {
+                return false;
+            };
+            if !self.match_arm_bindings.contains(name.as_str()) {
+                return false;
+            }
+            // Owned-scrutinee bindings stay `T`; only skip deref for those, not `&T` from `match &self`.
+            !self
+                .local_var_types
+                .get(name.as_str())
+                .is_some_and(|ty| matches!(ty, Type::Reference(_) | Type::MutableReference(_)))
         };
 
         if let (Some(lb), Some(rb)) = (lhs_base, rhs_base) {
             if lb == rb && self.is_type_copy(lb) {
-                // Don't add * if right side is a match arm binding (owned, not ref)
-                if left_is_ref && !right_is_ref && !right_is_match_binding {
+                if left_is_ref && !right_is_ref && !match_binding_skips_copy_deref(right) {
                     *left_str = expression_utilities::star_for_deref_compare(left, left_str);
                     return;
                 }
-                // Don't add * if left side is a match arm binding (owned, not ref)
-                if right_is_ref && !left_is_ref && !left_is_match_binding {
+                if right_is_ref && !left_is_ref && !match_binding_skips_copy_deref(left) {
                     *right_str = expression_utilities::star_for_deref_compare(right, right_str);
                     return;
                 }

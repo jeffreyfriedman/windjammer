@@ -27,17 +27,9 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn infer_type_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => {
-                // "self" refers to the current struct type
-                if name == "self" && self.in_impl_block {
+                // "self" / "Self" refer to the current impl struct type
+                if (name == "self" || name == "Self") && self.in_impl_block {
                     return self.current_struct_name.clone();
-                }
-                // Try to infer from struct name if we're in an impl block
-                if self.in_impl_block {
-                    if let Some(struct_name) = &self.current_struct_name {
-                        if self.current_struct_fields.contains(name) {
-                            return Some(struct_name.clone());
-                        }
-                    }
                 }
                 // TDD FIX: Check function parameters for type info
                 // e.g., fn test(validator: Validator) → infer_type_name("validator") = "Validator"
@@ -51,14 +43,22 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // TDD FIX: Check local variable types
-                // e.g., let stack = Stack { .. } → infer_type_name("stack") = "Stack"
+                // Locals shadow struct fields (e.g. `let mut registry = ...` in `new()` when
+                // the struct also has a `registry` field). Must win over field-name fallback.
                 if let Some(var_type) = self.local_var_types.get(name) {
                     if let Some(tn) = Self::type_to_name(var_type) {
                         if tn == "Self" && self.in_impl_block {
                             return self.current_struct_name.clone();
                         }
                         return Some(tn);
+                    }
+                }
+                // Field name in impl without a local binding → current struct type
+                if self.in_impl_block {
+                    if let Some(struct_name) = &self.current_struct_name {
+                        if self.current_struct_fields.contains(name) {
+                            return Some(struct_name.clone());
+                        }
                     }
                 }
                 // TDD FIX: Recognize CamelCase identifiers as type names for static method calls.
@@ -72,17 +72,35 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, field, .. } => {
                 // TDD FIX: Try to resolve field type from struct field type tracking
                 // e.g., self.transforms → World.transforms → ComponentArray<int> → "ComponentArray"
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        if let Some(struct_name) = &self.current_struct_name {
+                            if let Some(fields) =
+                                self.lookup_struct_field_types(struct_name).or_else(|| {
+                                    struct_name
+                                        .split('<')
+                                        .next()
+                                        .and_then(|base| self.lookup_struct_field_types(base))
+                                })
+                            {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    if let Some(name) = Self::type_to_name(field_type) {
+                                        return Some(name);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 let owner_type = self.infer_type_name(object);
                 if let Some(ref owner) = owner_type {
                     // TDD FIX: For generic types like "ComponentArray<T>", also try base name "ComponentArray"
-                    if let Some(field_types) =
-                        self.struct_field_types.get(owner.as_str()).or_else(|| {
-                            owner
-                                .split('<')
-                                .next()
-                                .and_then(|base| self.struct_field_types.get(base))
-                        })
-                    {
+                    if let Some(field_types) = self.lookup_struct_field_types(owner).or_else(|| {
+                        owner
+                            .split('<')
+                            .next()
+                            .and_then(|base| self.lookup_struct_field_types(base))
+                    }) {
                         if let Some(field_type) = field_types.get(field) {
                             if let Some(name) = Self::type_to_name(field_type) {
                                 return Some(name);
@@ -90,8 +108,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // Fallback: use the owner type (for self.field_name → current struct type)
-                owner_type
+                None
             }
             Expression::Unary {
                 op:
@@ -110,7 +127,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let obj_type = self.infer_type_name(object);
                 if let Some(ref tn) = obj_type {
                     let qualified = format!("{}::{}", tn, method);
-                    if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                    if let Some(sig) = self.get_signature_with_global(&qualified) {
                         if let Some(ref ret_type) = sig.return_type {
                             if let Some(ret_name) = Self::type_to_name(ret_type) {
                                 return Some(ret_name);
@@ -132,11 +149,11 @@ impl<'ast> CodeGenerator<'ast> {
                     let owner_type = self.infer_type_name(field_obj);
                     if let Some(ref owner) = owner_type {
                         if let Some(field_types) =
-                            self.struct_field_types.get(owner.as_str()).or_else(|| {
+                            self.lookup_struct_field_types(owner).or_else(|| {
                                 owner
                                     .split('<')
                                     .next()
-                                    .and_then(|base| self.struct_field_types.get(base))
+                                    .and_then(|base| self.lookup_struct_field_types(base))
                             })
                         {
                             if let Some(field_type) = field_types.get(field.as_str()) {
@@ -180,7 +197,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Type::method() — infer type from the object (Type name)
                         if let Some(type_name) = self.infer_type_name(object) {
                             let qualified = format!("{}::{}", type_name, field);
-                            if let Some(sig) = self.signature_registry.get_signature(&qualified) {
+                            if let Some(sig) = self.get_signature_with_global(&qualified) {
                                 if let Some(ref ret_type) = sig.return_type {
                                     if let Some(ret_name) = Self::type_to_name(ret_type) {
                                         return Some(ret_name);
@@ -193,7 +210,7 @@ impl<'ast> CodeGenerator<'ast> {
                         None
                     }
                     Expression::Identifier { name, .. } => {
-                        if let Some(sig) = self.signature_registry.get_signature(name) {
+                        if let Some(sig) = self.get_signature_with_global(name) {
                             if let Some(ref ret_type) = sig.return_type {
                                 return Self::type_to_name(ret_type);
                             }
@@ -240,5 +257,39 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
+    }
+
+    /// When `expr` is `collection[i]`, return the element type name for method lookup.
+    pub(in crate::codegen::rust) fn infer_indexed_element_type_name(
+        &self,
+        expr: &Expression,
+    ) -> Option<String> {
+        let Expression::Index { object, .. } = expr else {
+            return None;
+        };
+        self.infer_expression_type(object)
+            .and_then(|container_ty| Self::extract_iterator_element_type(&container_ty))
+            .and_then(|elem_ty| Self::type_to_name(&elem_ty))
+    }
+
+    /// True when `type_name` declares a method (registry or `Type::method` signature).
+    pub(in crate::codegen::rust) fn method_exists_on_type_name(
+        &self,
+        type_name: &str,
+        method: &str,
+    ) -> bool {
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        let in_method_map = self
+            .method_signatures_by_type
+            .get(type_name)
+            .or_else(|| self.method_signatures_by_type.get(base))
+            .is_some_and(|methods| methods.contains_key(method));
+        in_method_map
+            || self
+                .get_signature_with_global(&format!("{type_name}::{method}"))
+                .is_some()
+            || self
+                .get_signature_with_global(&format!("{base}::{method}"))
+                .is_some()
     }
 }

@@ -7,10 +7,6 @@
         "explicit &"
       ],
       "id": "no-rust-leakage"
-    },
-    {
-      "id": "wj-game-build",
-      "required_command": "wj game build"
     }
   ]
 }

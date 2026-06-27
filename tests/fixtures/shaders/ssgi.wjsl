@@ -1,0 +1,212 @@
+// Screen-Space Global Illumination (SSGI) Compute Shader (WJSL)
+//
+// Half-resolution compute pass: short screen-space rays in random
+// cosine-weighted hemisphere directions (Hammersley), depth ray-march
+// against the G-buffer (Hi-Z acceleration), gather lit color,
+// cosine weight, temporal EMA into storage buffer.
+//
+// Workgroup: 8x8 (each invocation = one half-res pixel)
+
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/noise.wjsl"
+
+struct GiParams {
+    inv_view_proj: mat4x4<f32>,
+    view: mat4x4<f32>,
+    proj: mat4x4<f32>,
+    screen_width: u32,
+    screen_height: u32,
+    sample_count: u32,
+    frame_index: u32,
+    max_distance: f32,
+    intensity: f32,
+    temporal_blend: f32,
+    _pad: f32,
+}
+
+@group(0) @binding(0) uniform gi: GiParams;
+@group(0) @binding(1) storage read gbuffer: array<f32>;
+@group(0) @binding(2) storage read color_buffer: array<u32>;
+@group(0) @binding(3) storage read depth_buffer: array<f32>;
+@group(0) @binding(4) storage read prev_indirect: array<u32>;
+@group(0) @binding(5) storage read_write out_indirect: array<u32>;
+
+const LINEAR_STEPS: u32 = 20u;
+
+fn world_pos_from_depth(uv: vec2<f32>, depth: f32) -> vec3<f32> {
+    let ndc = vec4<f32>(uv * 2.0 - 1.0, depth, 1.0);
+    let ndc_flipped = vec4<f32>(ndc.x, -ndc.y, ndc.z, 1.0);
+    var world = gi.inv_view_proj * ndc_flipped;
+    return world.xyz / world.w;
+}
+
+fn project_view_to_uv(view_p: vec3<f32>) -> vec3<f32> {
+    let clip = gi.proj * vec4<f32>(view_p, 1.0);
+    let inv_w = 1.0 / clip.w;
+    let ndc_xy = clip.xy * inv_w;
+    let ndc_z = clip.z * inv_w;
+    let uv = vec2<f32>(ndc_xy.x * 0.5 + 0.5, (-ndc_xy.y) * 0.5 + 0.5);
+    return vec3<f32>(uv, ndc_z);
+}
+
+fn radical_inverse_vdc(bits_in: u32) -> f32 {
+    var bits = bits_in;
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return f32(bits) * 2.3283064365386963e-10;
+}
+
+fn hammersley(i: u32, n: u32) -> vec2<f32> {
+    return vec2<f32>(f32(i) / f32(max(n, 1u)), radical_inverse_vdc(i));
+}
+
+fn build_tbn(n: vec3<f32>) -> mat3x3<f32> {
+    let up = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(n.y) > 0.99);
+    let t = normalize(cross(up, n));
+    let b = cross(n, t);
+    return mat3x3<f32>(t, b, n);
+}
+
+fn sample_cosine_hemisphere(u: vec2<f32>) -> vec3<f32> {
+    let phi = 6.28318530718 * u.x;
+    let sin_theta = sqrt(u.y);
+    let cos_theta = sqrt(1.0 - u.y);
+    return vec3<f32>(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}
+
+fn rotate_hammersley(base: vec2<f32>, pix: vec2<u32>, frame: u32) -> vec2<f32> {
+    let f = f32(frame % 1024u);
+    let a = (f * 0.0245436926 + f32(pix.x & 127u) * 0.01 + f32(pix.y & 127u) * 0.013) * 6.28318530718;
+    let c = cos(a);
+    let s = sin(a);
+    return vec2<f32>(base.x * c - base.y * s, base.x * s + base.y * c);
+}
+
+fn read_color_rgb(idx: u32) -> vec3<f32> {
+    return vec3<f32>(
+        bitcast<f32>(color_buffer[idx * 4u]),
+        bitcast<f32>(color_buffer[idx * 4u + 1u]),
+        bitcast<f32>(color_buffer[idx * 4u + 2u]),
+    );
+}
+
+fn trace_gi_ray(
+    world_pos: vec3<f32>,
+    world_n: vec3<f32>,
+    dir_world: vec3<f32>,
+    full_w: u32,
+    full_h: u32,
+) -> vec3<f32> {
+    let view_start = (gi.view * vec4<f32>(world_pos, 1.0)).xyz;
+    let dir_view = normalize((gi.view * vec4<f32>(dir_world, 0.0)).xyz);
+    let step_len = gi.max_distance / f32(LINEAR_STEPS);
+
+    for (var s = 1u; s <= LINEAR_STEPS; s++) {
+        let t = f32(s) * step_len;
+        let p_v = view_start + dir_view * t;
+        let p_uvz = project_view_to_uv(p_v);
+        let p_uv = p_uvz.xy;
+        let ray_z = p_uvz.z;
+
+        if (p_uv.x <= 0.0 || p_uv.x >= 1.0 || p_uv.y <= 0.0 || p_uv.y >= 1.0) {
+            break;
+        }
+
+        let px = u32(clamp(p_uv.x * f32(full_w), 0.0, f32(full_w - 1u)));
+        let py = u32(clamp(p_uv.y * f32(full_h), 0.0, f32(full_h - 1u)));
+        let pixel_idx = py * full_w + px;
+        let scene_d = gbuffer[pixel_idx * 12u + 8u];
+
+        if (ray_z >= scene_d) {
+            let radiance = read_color_rgb(pixel_idx);
+            let cos_theta = max(dot(world_n, dir_world), 0.0);
+            return radiance * cos_theta;
+        }
+    }
+    return vec3<f32>(0.0, 0.0, 0.0);
+}
+
+fn pack_rgb_to_u32(c: vec3<f32>) -> vec4<u32> {
+    return vec4<u32>(
+        bitcast<u32>(c.r),
+        bitcast<u32>(c.g),
+        bitcast<u32>(c.b),
+        bitcast<u32>(1.0),
+    );
+}
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let full_w = gi.screen_width;
+    let full_h = gi.screen_height;
+    let half_w = max(full_w / 2u, 1u);
+    let half_h = max(full_h / 2u, 1u);
+
+    if (id.x >= half_w || id.y >= half_h) {
+        return;
+    }
+
+    let full_px_x = min(id.x * 2u + 1u, full_w - 1u);
+    let full_px_y = min(id.y * 2u + 1u, full_h - 1u);
+    let full_idx = full_px_y * full_w + full_px_x;
+
+    let uv = vec2<f32>(
+        (f32(full_px_x) + 0.5) / f32(full_w),
+        (f32(full_px_y) + 0.5) / f32(full_h)
+    );
+
+    let gb_base = full_idx * 12u;
+    let normal = vec3<f32>(
+        gbuffer[gb_base + 4u],
+        gbuffer[gb_base + 5u],
+        gbuffer[gb_base + 6u],
+    );
+    let depth = gbuffer[gb_base + 8u];
+
+    let out_idx = id.y * half_w + id.x;
+
+    if (depth >= 0.99999 || depth <= 0.0) {
+        out_indirect[out_idx * 4u] = bitcast<u32>(0.0);
+        out_indirect[out_idx * 4u + 1u] = bitcast<u32>(0.0);
+        out_indirect[out_idx * 4u + 2u] = bitcast<u32>(0.0);
+        out_indirect[out_idx * 4u + 3u] = bitcast<u32>(1.0);
+        return;
+    }
+
+    let N = normalize(normal);
+    let world_pos = world_pos_from_depth(uv, depth);
+    let tbn = build_tbn(N);
+
+    let n_samples = min(gi.sample_count, 32u);
+    var accum = vec3<f32>(0.0, 0.0, 0.0);
+
+    for (var i = 0u; i < 32u; i++) {
+        if (i >= n_samples) {
+            break;
+        }
+        let h0 = hammersley(i, n_samples);
+        let h = rotate_hammersley(h0, vec2<u32>(id.x, id.y), gi.frame_index);
+        let local = sample_cosine_hemisphere(h);
+        let dir_w = normalize(tbn * local);
+        accum += trace_gi_ray(world_pos, N, dir_w, full_w, full_h);
+    }
+
+    let gi_rgb = (accum / f32(max(n_samples, 1u))) * gi.intensity;
+
+    let prev_r = bitcast<f32>(prev_indirect[out_idx * 4u]);
+    let prev_g = bitcast<f32>(prev_indirect[out_idx * 4u + 1u]);
+    let prev_b = bitcast<f32>(prev_indirect[out_idx * 4u + 2u]);
+    let prev = vec3<f32>(prev_r, prev_g, prev_b);
+
+    let a = clamp(gi.temporal_blend, 0.0, 1.0);
+    let blended = prev * (1.0 - a) + gi_rgb * a;
+
+    out_indirect[out_idx * 4u] = bitcast<u32>(blended.r);
+    out_indirect[out_idx * 4u + 1u] = bitcast<u32>(blended.g);
+    out_indirect[out_idx * 4u + 2u] = bitcast<u32>(blended.b);
+    out_indirect[out_idx * 4u + 3u] = bitcast<u32>(1.0);
+}
