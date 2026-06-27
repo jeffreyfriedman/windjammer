@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.49.0] - 2026-06-26
+
+### Added
+- **Safety-Typed IR**: New intermediate representation (`src/ir/`) with first-class ownership, effects, taint, and execution mode types
+  - Unified constraint solver using union-find algorithm (replaces sequential int/float inference passes)
+  - Effect system (WJ-SEC-01): call-graph effect propagation with manifest enforcement
+  - Taint tracking (WJ-SEC-02): source→sink flow analysis with sanitization support
+  - Caller-controlled execution modes (WJ-CONC-01): Sync/Async/Spawn without function coloring
+  - Multi-target safety encodings: Rust native, Go sync.Mutex, TypeScript branded types, JS Object.freeze
+  - 49 unit tests covering all IR subsystems
+
+### Improved
+- **Auto-derive inference**: Removed ~93 redundant `@derive(Copy/Clone/Debug/PartialEq)` annotations from game projects; compiler infers all derivable traits automatically from field types
+- **Compilation verified**: All four major projects (breach-protocol 127 files, windjammer-game-core 664 files, windjammer-ui, financial-management-platform 114 files) compile cleanly
+
+### Tests
+- 489 library unit tests passing
+- 40 auto-derive integration tests passing
+- Full project transpilation verified for all downstream consumers
+
+---
+
 ## [0.48.0] - 2026-06-14
 
 ### Changed
