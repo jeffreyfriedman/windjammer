@@ -247,6 +247,96 @@ fn expression_contains_match_on_self(expr: &Expression) -> bool {
     }
 }
 
+/// True when the body calls `self.method(...)` where the callee requires owned `self`.
+pub fn function_calls_owned_self_method(
+    func: &FunctionDecl,
+    registry: &SignatureRegistry,
+    struct_name: Option<&str>,
+) -> bool {
+    func.body.iter().any(|stmt| {
+        statement_calls_owned_self_method(stmt, registry, struct_name)
+    })
+}
+
+fn statement_calls_owned_self_method(
+    stmt: &Statement,
+    registry: &SignatureRegistry,
+    struct_name: Option<&str>,
+) -> bool {
+    match stmt {
+        Statement::Expression { expr, .. } => {
+            expression_calls_owned_self_method(expr, registry, struct_name)
+        }
+        Statement::Return {
+            value: Some(expr), ..
+        } => expression_calls_owned_self_method(expr, registry, struct_name),
+        Statement::Let { value, .. } => {
+            expression_calls_owned_self_method(value, registry, struct_name)
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| statement_calls_owned_self_method(s, registry, struct_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| statement_calls_owned_self_method(s, registry, struct_name))
+                })
+        }
+        _ => false,
+    }
+}
+
+fn expression_calls_owned_self_method(
+    expr: &Expression,
+    registry: &SignatureRegistry,
+    struct_name: Option<&str>,
+) -> bool {
+    match expr {
+        Expression::MethodCall { object, method, .. } => {
+            if !matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
+                return false;
+            }
+            if method_takes_owned_self(method, registry, struct_name) {
+                return true;
+            }
+            false
+        }
+        Expression::Block { statements, .. } => statements.iter().any(|s| {
+            statement_calls_owned_self_method(s, registry, struct_name)
+        }),
+        _ => false,
+    }
+}
+
+fn method_takes_owned_self(
+    method: &str,
+    registry: &SignatureRegistry,
+    struct_name: Option<&str>,
+) -> bool {
+    if let Some(sig) = registry.get_signature(method) {
+        if sig.has_self_receiver {
+            if let Some(&ownership) = sig.param_ownership.first() {
+                return ownership == OwnershipMode::Owned;
+            }
+        }
+    }
+    if let Some(sn) = struct_name {
+        let key = format!("{}::{}", sn, method);
+        if let Some(sig) = registry.get_signature(&key) {
+            if sig.has_self_receiver {
+                if let Some(&ownership) = sig.param_ownership.first() {
+                    return ownership == OwnershipMode::Owned;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Check if the body consumes `self` by value — i.e., uses bare `self` (not `self.field`)
 /// as a struct literal field, function argument, or other value position.
 pub fn function_consumes_self(func: &FunctionDecl) -> bool {
@@ -334,12 +424,24 @@ fn expression_is_bare_self(expr: &Expression) -> bool {
 
 fn expression_consumes_self(expr: &Expression) -> bool {
     match expr {
-        Expression::StructLiteral { fields, .. } => {
-            fields.iter().any(|(_, val)| expression_is_bare_self(val))
-        }
+        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, val)| {
+            expression_is_bare_self(val) || expression_moves_self_field_value(val)
+        }),
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_consumes_self(s))
         }
+        _ => false,
+    }
+}
+
+/// True when `self.field` (or chain) is used as a moved value.
+fn expression_moves_self_field_value(expr: &Expression) -> bool {
+    match expr {
+        Expression::FieldAccess { object, .. } => {
+            matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+                || expression_moves_self_field_value(object)
+        }
+        Expression::Index { object, .. } => expression_moves_self_field_value(object),
         _ => false,
     }
 }
@@ -353,7 +455,8 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
             expression_is_bare_self(expr) || expression_consumes_self(expr)
         }
         Statement::Let { value, .. } => {
-            expression_is_bare_self(value) || expression_consumes_self(value)
+            expression_is_bare_self(value)
+                || expression_consumes_self(value)
         }
         Statement::If {
             then_block,
@@ -1162,9 +1265,43 @@ pub fn expression_modifies_self(
                 expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades)
             })
         }
-        Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
-            expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades)
-        }),
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            if let Some(reg) = registry {
+                let func_name = crate::codegen::rust::ast_utilities::extract_function_name(function);
+                if !func_name.is_empty() {
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if is_self_field_chain(arg) {
+                            let sig = reg.get_signature(&func_name).or_else(|| {
+                                struct_name.and_then(|sn| {
+                                    reg.get_signature(&format!("{}::{}", sn, func_name))
+                                })
+                            });
+                            if let Some(sig) = sig {
+                                let param_idx = if sig.has_self_receiver {
+                                    i + 1
+                                } else {
+                                    i
+                                };
+                                if sig
+                                    .param_ownership
+                                    .get(param_idx)
+                                    .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            arguments.iter().any(|(_, arg)| {
+                expression_modifies_self(arg, registry, struct_name, field_types, receiver_upgrades)
+            })
+        }
         Expression::Binary { left, right, .. } => {
             expression_modifies_self(left, registry, struct_name, field_types, receiver_upgrades)
                 || expression_modifies_self(

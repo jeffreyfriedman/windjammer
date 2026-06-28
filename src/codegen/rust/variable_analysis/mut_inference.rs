@@ -199,6 +199,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
+                        if matches!(
+                            method.as_str(),
+                            "len" | "is_empty" | "chars" | "contains" | "starts_with" | "ends_with"
+                        ) {
+                            return false;
+                        }
                         let recv_type = self.infer_type_name(object);
                         return !crate::codegen::rust::stdlib_method_traits::is_known_readonly_qualified(
                             method,

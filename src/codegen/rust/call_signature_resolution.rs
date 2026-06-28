@@ -40,6 +40,22 @@ pub enum ResolutionMethod {
     MethodRegistry,
 }
 
+/// When true, call-site auto-borrow / auto-mut-borrow must be skipped.
+///
+/// Unambiguous module-qualified keys (`draw::draw_text`) keep auto-borrow even if the
+/// bare method name collides across modules. Bare calls and fallback resolutions that
+/// hit a colliding simple name cannot trust Borrowed ownership from the wrong module.
+pub(crate) fn skip_auto_borrow_on_signature_collision(
+    func_name: &str,
+    signature_has_collision: bool,
+    signature_from_simple_fallback: bool,
+    has_registry_collision: bool,
+) -> bool {
+    signature_has_collision
+        || (has_registry_collision
+            && (signature_from_simple_fallback || !func_name.contains("::")))
+}
+
 /// Resolve a call signature from the registry.
 ///
 /// Resolution precedence (each step tried only if previous returned `None`):
@@ -557,12 +573,21 @@ fn formal_is_plain_windjammer_string(sig: &FunctionSignature, param_idx: usize) 
     })
 }
 
-/// Trait/instance methods pass owned `String` for plain `string` trait formals at call sites.
+/// Trait/instance methods pass owned `String` for plain `string` trait formals at call sites,
+/// unless body analysis converged the param to `&str` or marked it `Borrowed` (read-only use).
 fn trait_instance_owned_string_at_call_site(sig: &FunctionSignature, param_idx: usize) -> bool {
     sig.has_self_receiver
         && param_idx > 0
         && formal_is_plain_windjammer_string(sig, param_idx)
         && is_type_qualified_associated_call(&sig.name)
+        && !sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+        && !matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        )
 }
 
 fn param_types_indicate_borrowed_text(sig: &FunctionSignature, param_idx: usize) -> bool {
@@ -653,7 +678,12 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             return OwnershipMode::Owned;
         }
         if let Some(own) = sig.param_ownership.get(param_idx) {
-            if matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) {
+            // MutBorrowed always honored — even for Copy types, &mut is required
+            // when the callee mutates the parameter and the caller needs to see it.
+            if matches!(own, OwnershipMode::MutBorrowed) {
+                return *own;
+            }
+            if matches!(own, OwnershipMode::Borrowed) {
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
                     if formal_type_honors_converged_borrow(formal_ty) {
                         return *own;
@@ -773,18 +803,14 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
             continue;
         }
 
-        // Body-inferred borrow on plain `string` formals stays `&str` at call sites only
-        // when param_types were not converged to `&str` (passthrough wrappers, concat RHS).
-        // Trait impl methods with converged `Reference(str)` + formal `string` upgrade below.
+        // Body-inferred borrow on plain `string` formals stays `&str` at call sites
+        // (read-only impl helpers, passthrough wrappers). Trait impls force `Owned` in
+        // analyzer merge when the trait item declares plain `string` (E0053).
         if formal_is_plain_windjammer_string(sig, idx)
             && matches!(
                 sig.param_ownership.get(idx),
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
             )
-            && !sig
-                .param_types
-                .get(idx)
-                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
         {
             continue;
         }

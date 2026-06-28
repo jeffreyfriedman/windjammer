@@ -88,11 +88,11 @@ impl<'ast> Analyzer<'ast> {
                 );
 
                 if is_arithmetic {
-                    // String concatenation `a + b` consumes only the LHS (`a` must be
-                    // `String`); the RHS can stay `&str`. Numeric ops still treat both
-                    // sides as participating (Copy types are unaffected).
+                    // String concatenation: any operand position consumes a `string` param.
                     if matches!(op, BinaryOp::Add) {
-                        if self.expr_is_identifier(left, name) {
+                        if self.expr_is_identifier(left, name)
+                            || self.expr_is_identifier(right, name)
+                        {
                             return true;
                         }
                     } else if self.expr_is_identifier(left, name)

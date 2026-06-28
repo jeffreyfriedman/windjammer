@@ -281,34 +281,10 @@ fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), Strin
     Ok(())
 }
 
-fn check_struct_decorators(struct_name: &str, decorators: &[Decorator<'_>]) -> Result<(), String> {
-    for decorator in decorators {
-        if decorator.name == "derive" {
-            let forbidden: Vec<String> = decorator
-                .arguments
-                .iter()
-                .filter_map(|(_key, expr)| {
-                    if let Expression::Identifier { name, .. } = expr {
-                        if AUTO_INFERRED_TRAITS.contains(&name.as_str()) {
-                            return Some(name.clone());
-                        }
-                    }
-                    None
-                })
-                .collect();
-
-            if !forbidden.is_empty() {
-                return Err(format!(
-                    "error: `@derive({})` is forbidden on struct `{}`\n\
-                     \n\
-                     Windjammer automatically infers standard derivable traits (Copy, Clone,\n\
-                     Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord) based on field types.\n\
-                     Remove the @derive decorator — the compiler handles this automatically.",
-                    forbidden.join(", "),
-                    struct_name
-                ));
-            }
-        }
-    }
+fn check_struct_decorators(_struct_name: &str, _decorators: &[Decorator<'_>]) -> Result<(), String> {
+    // Auto-inferred traits (Copy, Clone, Debug, etc.) specified via @derive are
+    // silently accepted for backward compatibility.  The compiler's auto-derive
+    // system handles these traits automatically based on field types, so explicit
+    // @derive for them is redundant but not an error.
     Ok(())
 }

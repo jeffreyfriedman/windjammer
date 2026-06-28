@@ -15,6 +15,12 @@ pub(crate) fn copy_project_src_tree_into_output(
 ) -> std::io::Result<()> {
     use std::fs;
 
+    // Submodule outputs (e.g. src/components/generated/) must not mirror the entire src/
+    // tree — only WJ-emitted files and scoped sibling hand-written Rust belong there.
+    if super::path_utilities::is_submodule_output_dir(output_dir) {
+        return Ok(());
+    }
+
     let src_dir = if let Some((out_root, src_root)) = layout {
         if output_dir != out_root {
             return Ok(());
@@ -161,6 +167,77 @@ pub(crate) fn copy_sibling_rs_from_parent(
         }
         // Skip stale flat `src/query.rs` when the real module is `src/ecs/query.wj`.
         if super::path_utilities::wj_module_declared_in_subtree(&copy_from, stem) {
+            continue;
+        }
+        // Skip `foo.rs` when `foo/` exists (Rust split module layout: parent file + subfolder).
+        if copy_from.join(stem).is_dir() {
+            continue;
+        }
+        let dest = output_dir.join(p.file_name().unwrap());
+        if !dest.exists() {
+            fs::copy(&p, &dest)?;
+        }
+    }
+
+    // Hand-written Rust next to the output folder (e.g. components/platform.rs beside
+    // components/generated/) is not mirrored under the WJ source dir (components_wj/).
+    if let Some(out_parent) = output_dir.parent() {
+        if out_parent.is_dir()
+            && !super::path_utilities::is_transpile_output_directory(out_parent)
+            && out_parent != copy_from.as_path()
+        {
+            copy_sibling_rs_files_from_dir(out_parent, output_dir)?;
+        }
+    }
+
+    // Crate-root FFI stubs live beside src/ (e.g. project/ffi.rs), not inside src/.
+    if let Some((out_root, src_root)) = layout {
+        if output_dir == out_root
+            && !super::path_utilities::is_submodule_output_dir(output_dir)
+            && src_root.file_name().and_then(|n| n.to_str()) == Some("src")
+        {
+            if let Some(project_root) = src_root.parent() {
+                if project_root.is_dir() && project_root != copy_from.as_path() {
+                    copy_sibling_rs_files_from_dir(project_root, output_dir)?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn copy_sibling_rs_files_from_dir(copy_from: &Path, output_dir: &Path) -> std::io::Result<()> {
+    use std::fs;
+
+    for entry in fs::read_dir(copy_from)? {
+        let entry = entry?;
+        let p = entry.path();
+        if !p.is_file() {
+            continue;
+        }
+        if p.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        if matches!(stem, "build" | "main" | "lib") {
+            continue;
+        }
+        if stem.ends_with("_test")
+            || stem.ends_with("_tests")
+            || stem.starts_with("test_")
+            || stem == "tests"
+        {
+            continue;
+        }
+        let wj_sibling = copy_from.join(format!("{stem}.wj"));
+        if wj_sibling.exists() {
+            continue;
+        }
+        if super::path_utilities::wj_module_declared_in_subtree(copy_from, stem) {
+            continue;
+        }
+        if copy_from.join(stem).is_dir() {
             continue;
         }
         let dest = output_dir.join(p.file_name().unwrap());
