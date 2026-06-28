@@ -21,6 +21,7 @@ pub mod execution;
 pub mod node;
 pub mod numeric_solver;
 pub mod numeric_types;
+pub mod pipeline;
 pub mod safety_type;
 pub mod solver;
 pub mod taint;
@@ -37,5 +38,6 @@ pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,
     TaintStatus,
 };
+pub use pipeline::{IrModule, IrPipeline, IrPipelineConfig};
 pub use solver::Solver;
 pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};
