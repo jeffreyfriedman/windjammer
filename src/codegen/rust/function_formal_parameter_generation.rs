@@ -86,6 +86,15 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if param.name == "self"
                     && !self.in_trait_impl
+                    && !super::self_analysis::function_calls_owned_self_method(
+                        &analyzed.decl,
+                        &self.signature_registry,
+                        self.current_struct_name.as_deref(),
+                    )
+                    && !matches!(
+                        self.get_effective_self_ownership(&func.name, analyzed),
+                        Some(OwnershipMode::Owned)
+                    )
                     && self.function_calls_self_with_recorded_receiver(
                         &analyzed.decl,
                         OwnershipMode::MutBorrowed,
@@ -166,6 +175,18 @@ impl<'ast> CodeGenerator<'ast> {
                                 self_str,
                             );
                             return self_str.to_string();
+                        }
+                        // Check if the analyzer inferred MutBorrowed (e.g., Copy type
+                        // mutated through method call — caller wants mutation visible).
+                        if let Some(OwnershipMode::MutBorrowed) =
+                            analyzed.inferred_ownership.get(&param.name).copied()
+                        {
+                            self.inferred_mut_borrowed_params
+                                .insert(param.name.clone());
+                            return format!(
+                                "&mut {}",
+                                self.type_to_rust(formal_type)
+                            );
                         }
                         // Owned parameters are always mutable in Windjammer
                         return format!("mut {}: {}", param.name, self.type_to_rust(formal_type));
@@ -249,15 +270,32 @@ impl<'ast> CodeGenerator<'ast> {
                             let body_modifies = body_modifies;
                             let returns_self = self.method_returns_impl_struct(&analyzed.decl);
                             let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
-                                || super::self_analysis::function_return_moves_self_fields(&analyzed.decl);
+                                || super::self_analysis::function_return_moves_self_fields(&analyzed.decl)
+                                || super::self_analysis::function_calls_owned_self_method(
+                                    &analyzed.decl,
+                                    &self.signature_registry,
+                                    self.current_struct_name.as_deref(),
+                                );
                             let self_str = if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
+                                    OwnershipMode::Owned => {
+                                        if body_modifies {
+                                            "mut self"
+                                        } else {
+                                            "self"
+                                        }
+                                    }
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl && (returns_self || consumes_self) =>
                                     {
                                         if body_modifies { "mut self" } else { "self" }
+                                    }
+                                    OwnershipMode::MutBorrowed
+                                        if consumes_self && !body_modifies =>
+                                    {
+                                        "self"
                                     }
                                     OwnershipMode::MutBorrowed => "&mut self",
                                     OwnershipMode::Borrowed => {
@@ -265,17 +303,6 @@ impl<'ast> CodeGenerator<'ast> {
                                             "&mut self"
                                         } else {
                                             "&self"
-                                        }
-                                    }
-                                    OwnershipMode::Owned => {
-                                        if self.in_trait_impl {
-                                            if body_modifies {
-                                                "mut self"
-                                            } else {
-                                                "self"
-                                            }
-                                        } else {
-                                            self.owned_self_receiver(&analyzed.decl)
                                         }
                                     }
                                 }
@@ -322,22 +349,24 @@ impl<'ast> CodeGenerator<'ast> {
                             // Already has & or &mut - just convert
                             self.type_to_rust(formal_type)
                         } else {
-                            // Apply ownership mode from analyzer
-                            // TDD FIX: Default to Owned, not Borrowed
-                            // THE WINDJAMMER WAY: Parameters are owned by default unless analyzer
-                            // detects they should be borrowed (e.g., only read, passed to & functions)
-                            let ownership_mode = analyzed
+                            // Apply ownership mode from analyzer, falling back to converged registry.
+                            let registry_ownership = self
+                                .get_signature_with_global(&func.name)
+                                .and_then(|sig| sig.param_ownership.get(param_idx).copied());
+                            let mut ownership_mode = analyzed
                                 .inferred_ownership
                                 .get(&param.name)
-                                .unwrap_or(&OwnershipMode::Owned);
+                                .copied()
+                                .or(registry_ownership)
+                                .unwrap_or(OwnershipMode::Owned);
 
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's
                             // method signature and use its ownership for each parameter.
-                            let ownership_mode = if trait_impl_owned_string {
-                                &OwnershipMode::Owned
+                            if trait_impl_owned_string {
+                                ownership_mode = OwnershipMode::Owned;
                             } else if self.in_trait_impl {
-                                let trait_param_ownership = self
+                                if let Some(trait_own) = self
                                     .current_trait_impl_name
                                     .as_ref()
                                     .and_then(|trait_name| {
@@ -354,20 +383,21 @@ impl<'ast> CodeGenerator<'ast> {
                                             });
                                         methods.and_then(|m| {
                                             m.get(func.name.as_str()).and_then(|trait_fn| {
-                                                trait_fn.inferred_ownership.get(&param.name)
+                                                trait_fn.inferred_ownership.get(&param.name).copied()
                                             })
                                         })
-                                    });
-                                trait_param_ownership.unwrap_or(&OwnershipMode::Owned)
-                            } else {
-                                ownership_mode
-                            };
+                                    })
+                                {
+                                    ownership_mode = trait_own;
+                                }
+                            }
 
                             match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(formal_type),
-                                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                                    if self.is_type_copy(formal_type) =>
-                                {
+                                OwnershipMode::MutBorrowed => {
+                                    format!("&mut {}", self.type_to_rust(formal_type))
+                                }
+                                OwnershipMode::Borrowed if self.is_type_copy(formal_type) => {
                                     self.type_to_rust(formal_type)
                                 }
                                 OwnershipMode::Borrowed => {
@@ -379,9 +409,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else {
                                         format!("&{}", self.type_to_rust(formal_type))
                                     }
-                                }
-                                OwnershipMode::MutBorrowed => {
-                                    format!("&mut {}", self.type_to_rust(formal_type))
                                 }
                             }
                         }
@@ -417,7 +444,9 @@ impl<'ast> CodeGenerator<'ast> {
                     && matches!(type_str.as_str(), s if !s.starts_with("&"))
                     && !self.is_type_copy(formal_type)
                     && self.variable_needs_mut(&param.name);
-                let mut_prefix = if param.is_mutable || auto_needs_mut {
+                let mut_prefix = if (param.is_mutable || auto_needs_mut)
+                    && !type_str.starts_with('&')
+                {
                     "mut "
                 } else {
                     ""

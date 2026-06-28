@@ -24,6 +24,18 @@ impl<'ast> CodeGenerator<'ast> {
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));
         let args = if let Some(ref sig) = resolved_signature {
+            let receiver_is_map = receiver_type_name.as_ref().is_some_and(|n| {
+                crate::codegen::rust::stdlib_method_traits::is_map_type_name(n)
+            }) || self
+                .infer_expression_type(object)
+                .as_ref()
+                .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_type);
+            let receiver_is_set = receiver_type_name.as_ref().is_some_and(|n| {
+                crate::codegen::rust::stdlib_method_traits::is_set_type_name(n)
+            }) || self
+                .infer_expression_type(object)
+                .as_ref()
+                .is_some_and(crate::codegen::rust::stdlib_method_traits::is_set_type);
             args.into_iter()
                 .enumerate()
                 .map(|(i, mut arg_str)| {
@@ -38,6 +50,12 @@ impl<'ast> CodeGenerator<'ast> {
                     let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                         self.is_type_copy(t)
                     });
+                    let is_collection_key = i == 0
+                        && ((crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
+                            && receiver_is_map)
+                            || (crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(
+                                method,
+                            ) && receiver_is_set));
                     let apply_borrow = |arg_str: &mut String| {
                         if matches!(
                             sig.param_ownership.get(sig_param_idx),
@@ -61,7 +79,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 ..
                             })
                         );
-                        if param_is_str_ref || arg_is_string_literal || param_is_copy {
+                        if param_is_str_ref || arg_is_string_literal || (param_is_copy && !is_collection_key) {
                             return;
                         }
                         if let Some((_, arg_expr)) = arguments.get(i) {
@@ -131,7 +149,7 @@ impl<'ast> CodeGenerator<'ast> {
                             let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                             });
-                            if arg_str.starts_with('&') && !param_is_str_ref {
+                            if arg_str.starts_with('&') && !param_is_str_ref && !is_collection_key {
                                 arg_str.trim_start_matches('&').to_string()
                             } else {
                                 arg_str

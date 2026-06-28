@@ -187,8 +187,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 &qualified_name,
                 i,
                 arg_to_generate,
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                    sig, sig_param_idx,
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                    sig,
+                    i,
+                    type_name.as_deref(),
                 ),
             );
 
@@ -211,29 +213,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         let mut string_literal_converted_here = false;
 
                         if is_string_literal {
-                            let param_is_str_ref =
-                                sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                                    matches!(
-                                        t,
-                                        Type::Reference(inner)
-                                            if matches!(**inner, Type::Custom(ref name) if name == "str")
-                                    )
-                                });
-
-                            let asref_str_module =
-                                asref_str_module_for_receiver(gen, runtime_module, type_name);
-
-                            if !param_is_str_ref && !asref_str_module {
-                                let param_is_string =
-                                    sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                                        matches!(t, Type::String)
-                                            || matches!(t, Type::Custom(ref name) if name == "string")
-                                    });
-                                if param_is_string {
-                                    arg_str = format!("&{}.to_string()", arg_str);
-                                    string_literal_converted_here = true;
-                                }
-                            }
+                            // Borrowed text formals accept bare `"lit"` as `&str` — never
+                            // allocate `&"lit".to_string()` here.
+                            let _ = string_literal_converted_here;
                         } else if !is_user_closure_param {
                             let param_already_ref = if let Expression::Identifier { name, .. } = arg_to_generate {
                                 gen.identifier_already_ref(name)
@@ -326,6 +308,20 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         {
                             let asref_str_module =
                                 asref_str_module_for_receiver(gen, runtime_module, type_name);
+                            let static_impl_borrows =
+                                crate::codegen::rust::call_signature_resolution::static_impl_text_borrows_at_call_site(
+                                    sig,
+                                    sig_param_idx,
+                                );
+                            let needs_owned_literal =
+                                crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
+                                    Some(sig),
+                                    i,
+                                    Some(call_method),
+                                    type_name.as_deref(),
+                                    Some(&gen.enum_variant_types),
+                                    runtime_module,
+                                );
                             let is_explicit_str_ref = sig.param_types.get(sig_param_idx).is_some_and(
                                 |t| {
                                     matches!(t, Type::Reference(inner) if
@@ -334,7 +330,11 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     )
                                 },
                             );
-                            if !is_explicit_str_ref && !asref_str_module {
+                            if !is_explicit_str_ref
+                                && !asref_str_module
+                                && !static_impl_borrows
+                                && needs_owned_literal
+                            {
                                 arg_str = format!("{}.to_string()", arg_str);
                             }
                         }
@@ -427,6 +427,22 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 runtime_module,
             );
 
+            let arg_already_rust_ref = matches!(
+                arg_to_generate,
+                Expression::Identifier { name, .. }
+                    if gen.identifier_already_ref(name)
+                        || gen.str_ref_optimized_params.contains(name.as_str())
+                        || gen.inferred_borrowed_params.contains(name)
+            );
+            crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+                call_method,
+                i,
+                arg_to_generate,
+                &mut arg_str,
+                arg_already_rust_ref,
+                type_name.as_deref(),
+            );
+
             vec![arg_str]
         })
         .collect()
@@ -511,11 +527,16 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 let asref_str_module =
                     asref_str_module_for_receiver(gen, runtime_module, type_name);
                 let needs_to_string = !asref_str_module
-                    && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_to_string(
-                        i,
-                        call_method,
-                        &fallback_sig,
-                    );
+                    && fallback_sig.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
+                            Some(sig),
+                            i,
+                            Some(call_method),
+                            type_name.as_deref(),
+                            Some(&gen.enum_variant_types),
+                            runtime_module,
+                        )
+                    });
                 if needs_to_string {
                     arg_str = format!("{}.to_string()", arg_str);
                 }
@@ -647,6 +668,21 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                 }
             }
+            let arg_already_rust_ref = matches!(
+                arg_to_generate,
+                Expression::Identifier { name, .. }
+                    if gen.identifier_already_ref(name)
+                        || gen.str_ref_optimized_params.contains(name.as_str())
+                        || gen.inferred_borrowed_params.contains(name)
+            );
+            crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+                call_method,
+                i,
+                arg_to_generate,
+                &mut arg_str,
+                arg_already_rust_ref,
+                type_name.as_deref(),
+            );
             arg_str
         })
         .collect()

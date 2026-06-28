@@ -662,8 +662,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             return vec![arg_str];
                         }
                         OwnershipMode::Owned => {
-                            // Cross-file static `Type::new` with caller-owned `String` formals:
-                            // borrow at the call site (body uses struct-literal field init).
+                            // Static `Type::new` with owned `string` formals: pass `String` by
+                            // value. Only add `&` when callee analysis converged to borrow (&str).
                             if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
                                 func_name,
                             ) && !sig.has_self_receiver && func_name.ends_with("::new")
@@ -677,9 +677,23 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                                 && crate::codegen::rust::types::is_windjammer_text_type(
                                                     &p.type_,
                                                 )
+                                                && !matches!(
+                                                    &p.type_,
+                                                    Type::Reference(_)
+                                                        | Type::MutableReference(_)
+                                                )
                                         });
                                     if is_caller_owned_string && !arg_str.starts_with('&') {
-                                        return vec![format!("&{}", arg_str)];
+                                        let effective =
+                                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                                sig, i,
+                                            );
+                                        if matches!(
+                                            effective,
+                                            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                        ) {
+                                            return vec![format!("&{}", arg_str)];
+                                        }
                                     }
                                 }
                             }
@@ -860,8 +874,27 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                                         crate::codegen::rust::types::is_windjammer_text_type(t)
                                                     });
                                             if is_text {
-                                                arg_str =
-                                                    format!("{}.to_string()", arg_str);
+                                                let callee_wants_owned =
+                                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                                        sig, i,
+                                                    ) == OwnershipMode::Owned;
+                                                let arg_is_owned_string = gen
+                                                    .current_function_params
+                                                    .iter()
+                                                    .find(|p| p.name == *name)
+                                                    .is_some_and(|p| {
+                                                        crate::codegen::rust::types::is_windjammer_text_type(
+                                                            &p.type_,
+                                                        ) && !matches!(
+                                                            &p.type_,
+                                                            Type::Reference(_)
+                                                                | Type::MutableReference(_)
+                                                        )
+                                                    });
+                                                if !callee_wants_owned && !arg_is_owned_string {
+                                                    arg_str =
+                                                        format!("{}.to_string()", arg_str);
+                                                }
                                             } else if !is_text {
                                                 let src_is_copy = gen
                                                     .infer_expression_type(arg)
@@ -1046,7 +1079,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     );
                     let decision =
                         crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
-                            sig, i, arg, &arg_str, method_name, arg_already_rust_ref,
+                            sig, i, arg, &arg_str, method_name, arg_already_rust_ref, None,
                         );
                     crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
                         &decision, &mut arg_str,

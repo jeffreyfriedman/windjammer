@@ -212,6 +212,27 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         }
         _ => ".",
     };
+
+    for (i, arg_str) in args.iter_mut().enumerate() {
+        if let Some((_, arg_expr)) = arguments.get(i) {
+            let arg_already_rust_ref = matches!(
+                arg_expr,
+                Expression::Identifier { name, .. }
+                    if gen.identifier_already_ref(name)
+                        || gen.str_ref_optimized_params.contains(name.as_str())
+                        || gen.inferred_borrowed_params.contains(name)
+            );
+            crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+                call_method,
+                i,
+                arg_expr,
+                arg_str,
+                arg_already_rust_ref,
+                type_name.as_deref(),
+            );
+        }
+    }
+
     let call_str = format!(
         "{}{}{}({})",
         obj_str,
