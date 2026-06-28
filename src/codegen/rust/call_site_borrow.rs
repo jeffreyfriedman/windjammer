@@ -47,12 +47,21 @@ pub fn is_stale_borrow_on_owned_copy_formal(sig: &FunctionSignature, arg_index: 
         .is_some_and(type_analysis_pure::is_copy_type)
 }
 
-fn is_collection_key_arg(method_name: &str, arg_index: usize) -> bool {
+fn is_collection_key_arg(method_name: &str, arg_index: usize, receiver_type: Option<&str>) -> bool {
     if arg_index != 0 {
         return false;
     }
-    stdlib_method_traits::is_map_key_method(method_name)
-        || stdlib_method_traits::is_set_lookup_method(method_name)
+    let is_key_method = stdlib_method_traits::is_map_key_method(method_name)
+        || stdlib_method_traits::is_set_lookup_method(method_name);
+    if !is_key_method {
+        return false;
+    }
+    if let Some(rt) = receiver_type {
+        let base = rt.split('<').next().unwrap_or(rt);
+        return stdlib_method_traits::is_map_type_name(base)
+            || stdlib_method_traits::is_set_type_name(base);
+    }
+    true
 }
 
 fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
@@ -86,27 +95,46 @@ pub fn should_borrow_at_call_site(
     arg_str: &str,
     method_name: &str,
     arg_already_rust_ref: bool,
+    receiver_type: Option<&str>,
 ) -> CallSiteBorrowDecision {
     let param_idx = sig.arg_param_index(arg_index);
-    // Plain owned `string` formals are always `String` at the call site — never prefix `&`.
+    let effective = effective_ownership_for_call_arg(sig, arg_index);
+    let is_collection_key = is_collection_key_arg(method_name, arg_index, receiver_type);
+
+    // Plain owned `string` formals pass by value unless body analysis converged to borrow.
     if sig.formal_param_type(param_idx).is_some_and(|t| {
         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             && types::is_windjammer_text_type(t)
-    }) {
+    }) && effective == OwnershipMode::Owned
+    {
         return CallSiteBorrowDecision::default();
     }
+    // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Owned)
-    ) {
+    ) && effective == OwnershipMode::Owned
+        && !is_collection_key
+    {
         return CallSiteBorrowDecision::default();
     }
 
-    let effective = effective_ownership_for_call_arg(sig, arg_index);
     let param_expects_borrowed = matches!(effective, OwnershipMode::Borrowed);
-    let is_collection_key = is_collection_key_arg(method_name, arg_index);
+    let param_expects_mut_borrowed = matches!(effective, OwnershipMode::MutBorrowed);
 
     let mut decision = CallSiteBorrowDecision::default();
+
+    // &mut parameters: insert `&mut` at call site (skip literals and already-ref args).
+    if param_expects_mut_borrowed {
+        if arg_str.starts_with("&mut ") || arg_str.starts_with("&") {
+            return decision;
+        }
+        if expression_is_copy_literal(arg_expr) || arg_already_rust_ref {
+            return decision;
+        }
+        decision.add_mut_ref = true;
+        return decision;
+    }
 
     if param_expects_borrowed && arg_str.ends_with(".clone()") {
         decision.strip_clone = true;
@@ -150,9 +178,13 @@ pub fn should_borrow_at_call_site(
             .is_some_and(string_utilities::param_is_rust_str_ref);
         let arg_is_string_literal = expression_is_string_literal(arg_expr);
         if param_is_str_ref {
+            // Literals coerce to `&str`; owned locals/fields still need `&`.
+            if !arg_is_string_literal {
+                decision.add_ref = true;
+            }
             return decision;
         }
-        if !arg_is_string_literal {
+        if !arg_is_string_literal && !(is_collection_key && arg_already_rust_ref) {
             decision.add_ref = true;
         }
     } else if is_collection_key {
@@ -171,6 +203,31 @@ pub fn should_borrow_at_call_site(
     }
 
     decision
+}
+
+/// Final pass: map/set lookup keys need `&K` at the Rust call site.
+pub fn finalize_collection_key_call_site_arg(
+    method_name: &str,
+    arg_index: usize,
+    arg_expr: &Expression,
+    arg_str: &mut String,
+    arg_already_rust_ref: bool,
+    receiver_type: Option<&str>,
+) {
+    if !is_collection_key_arg(method_name, arg_index, receiver_type) || arg_str.starts_with('&') {
+        return;
+    }
+    if expression_is_string_literal(arg_expr) {
+        return;
+    }
+    if arg_already_rust_ref {
+        return;
+    }
+    if matches!(arg_expr, Expression::Cast { .. }) {
+        *arg_str = format!("&({arg_str})");
+    } else {
+        crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);
+    }
 }
 
 /// Apply [`CallSiteBorrowDecision`] to generated argument Rust source.
@@ -234,7 +291,7 @@ mod tests {
             name: "config".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "config", "generate", false);
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "config", "generate", false, None);
         assert!(!decision.add_ref, "owned Copy formal must not add &");
         assert_eq!(
             effective_ownership_for_call_arg(&sig, 0),
@@ -262,6 +319,7 @@ mod tests {
             "tenant_slug.clone()",
             "trial_balance_lines",
             false,
+            None,
         );
         assert!(
             !decision.add_ref,
@@ -285,7 +343,7 @@ mod tests {
             location: Default::default(),
         };
         let decision =
-            should_borrow_at_call_site(&sig, 0, &arg, "walls", "check_collisions", false);
+            should_borrow_at_call_site(&sig, 0, &arg, "walls", "check_collisions", false, None);
         assert!(
             decision.add_ref,
             "Vec formal with converged borrow must add &"
@@ -313,7 +371,7 @@ mod tests {
             location: Default::default(),
         };
         let decision =
-            should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active", false);
+            should_borrow_at_call_site(&sig, 0, &arg, "quest_id", "is_quest_active", false, None);
         assert!(decision.add_ref, "converged borrow must add &");
     }
 
@@ -330,7 +388,8 @@ mod tests {
             value: Literal::Int(42),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "42", "push", false);
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "42", "push", false, Some("Vec"));
         assert!(!decision.add_ref, "Copy scalar literal must not add &");
     }
 
@@ -347,7 +406,8 @@ mod tests {
             value: Literal::String("hello".into()),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "println", false);
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "println", false, None);
         assert!(
             !decision.add_ref,
             "string literal to &str must not add extra &"
@@ -367,7 +427,8 @@ mod tests {
             name: "node".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "node", "get", false);
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "node", "get", false, Some("HashMap"));
         assert!(
             decision.add_ref,
             "Copy map keys must still get & at call site"

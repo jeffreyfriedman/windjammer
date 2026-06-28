@@ -94,13 +94,23 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Borrowed);
         }
 
+        // FFI string wrappers: passthrough to extern keeps Borrowed API even when the
+        // callee consumes owned String at the boundary (codegen adds string_to_ffi).
+        if Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_none() {
+            if let Some(OwnershipMode::Borrowed) = self.infer_passthrough_ownership(
+                param_name,
+                param_type,
+                body,
+                registry,
+                current_func_name,
+                func,
+            ) {
+                return Ok(OwnershipMode::Borrowed);
+            }
+        }
+
         // 1. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
-            // Copy formals (e.g. @derive(Copy) AppDeps) stay owned — field dispatch copies,
-            // never &mut AppDeps (financial-management-platform composition root).
-            if self.is_copy_type(param_type) {
-                return Ok(OwnershipMode::Owned);
-            }
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -145,11 +155,7 @@ impl<'ast> Analyzer<'ast> {
 
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored(param_name, body) {
-            if !(Self::is_windjammer_text_param_type(param_type)
-                && self.is_stored_via_text_struct_fields_only(param_name, body))
-            {
-                return Ok(OwnershipMode::Owned);
-            }
+            return Ok(OwnershipMode::Owned);
         }
 
         // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
@@ -199,10 +205,15 @@ impl<'ast> Analyzer<'ast> {
             ) {
                 // Passthrough to a borrowed callee: wrapper keeps Borrowed so signatures
                 // chain (`fn wrapper(items: &Vec<T>) { process(items) }`).
-                // Owned callees still propagate Owned via infer_passthrough_ownership.
+                // Extern FFI callees still surface Borrowed for `string` wrappers via
+                // infer_passthrough_ownership's extern rule.
                 return Ok(mode);
             }
-            return Ok(OwnershipMode::Owned);
+            // Plain `string` may passthrough to extern on a later convergence pass — do not
+            // pin Owned here or FFI wrappers never reach Borrowed (module_qualified autoborrow).
+            if !Self::is_windjammer_text_param_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
         }
 
         // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need
@@ -293,21 +304,45 @@ impl<'ast> Analyzer<'ast> {
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
         //
-        // Module-level `string` formals default to owned `String` (pit of success — the
-        // type annotation is the API contract). Impl-method passthrough helpers still infer
-        // borrowed `&str` when only forwarding to other borrowed callees.
-        // Exception: params only used as `&param` in the body (e.g. `a + &b + &c`) stay Borrowed.
+        // Module-level `string`: owned when passed to calls or used in comparisons;
+        // Phase-2 `&str` for read-only receiver usage (`text.len()`) and struct-literal storage.
         if Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_none() {
-            if self.is_only_used_as_borrow(param_name, body) {
+            // Function/method calls only — macro args (format!/println!) are Display reads, not moves.
+            if self.is_passed_by_value_as_function_call_arg(param_name, body) {
+                if let Some(OwnershipMode::Borrowed) = self.infer_passthrough_ownership(
+                    param_name,
+                    param_type,
+                    body,
+                    registry,
+                    current_func_name,
+                    func,
+                ) {
+                    return Ok(OwnershipMode::Borrowed);
+                }
+                return Ok(OwnershipMode::Owned);
+            }
+            if self.is_used_in_binary_op(param_name, body)
+                && !self.is_used_in_arithmetic_op(param_name, body)
+            {
+                return Ok(OwnershipMode::Owned);
+            }
+            if !self.param_needs_string_ref(param_name, body, registry) {
                 return Ok(OwnershipMode::Borrowed);
             }
             return Ok(OwnershipMode::Owned);
         }
-        // Copy types (primitives, @derive(Copy) structs): always owned in the signature.
-        // Borrowing Copy formals produces `&i64` / `&Entity` and breaks arithmetic, unary
-        // ops, and call sites that pass Copy values by value (see copy_type_parameter_inference_test,
-        // fmp_copy_param_owned_inference_test).
+        // Copy types default to Owned unless passthrough to a mutating callee needs &mut.
         if self.is_copy_type(param_type) {
+            if let Some(OwnershipMode::MutBorrowed) = self.infer_passthrough_ownership(
+                param_name,
+                param_type,
+                body,
+                registry,
+                current_func_name,
+                func,
+            ) {
+                return Ok(OwnershipMode::MutBorrowed);
+            }
             return Ok(OwnershipMode::Owned);
         }
         Ok(OwnershipMode::Borrowed)
@@ -578,6 +613,15 @@ impl<'ast> Analyzer<'ast> {
                     self.expr_collect_pass_by_value_call_arg(param_name, arg, found);
                 }
             }
+            Expression::MacroInvocation { args, .. } => {
+                for arg in args {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        *found = true;
+                        return;
+                    }
+                    self.expr_collect_pass_by_value_call_arg(param_name, arg, found);
+                }
+            }
             Expression::Block { statements, .. } => {
                 for s in statements {
                     self.stmt_collect_pass_by_value_call_arg(param_name, s, found);
@@ -775,6 +819,12 @@ impl<'ast> Analyzer<'ast> {
     /// from unrelated impls forcing Owned on `str` / `string` parameters (E0382).
     pub(super) fn passthrough_types_compatible(&self, sig_ty: &Type, decl_ty: &Type) -> bool {
         if self.types_equal(sig_ty, decl_ty) {
+            return true;
+        }
+        // Windjammer `string` formals passthrough to extern `String` / owned string callees.
+        if Self::is_windjammer_text_param_type(decl_ty)
+            && Self::is_windjammer_text_param_type(sig_ty)
+        {
             return true;
         }
         // Callee signature uses `&T` / `&mut T` while the caller declares owned `T`.

@@ -275,7 +275,9 @@ impl<'ast> Analyzer<'ast> {
             } else {
                 *arg_position
             };
-            if adjusted_position >= sig.param_ownership.len() {
+            if adjusted_position >= sig.param_ownership.len()
+                && !(sig.is_extern && Self::is_windjammer_text_param_type(param_type))
+            {
                 continue;
             }
             if let Some(expected_ty) = sig.param_types.get(adjusted_position) {
@@ -283,7 +285,13 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
             }
-            let Some(&ownership) = sig.param_ownership.get(adjusted_position) else {
+            // Extern FFI callees take owned `String`, but Windjammer wrappers with `string`
+            // formals keep Borrowed — codegen converts at the FFI boundary (string_to_ffi).
+            let ownership = if sig.is_extern && Self::is_windjammer_text_param_type(param_type) {
+                OwnershipMode::Borrowed
+            } else if let Some(&own) = sig.param_ownership.get(adjusted_position) {
+                own
+            } else {
                 continue;
             };
             // TDD FIX: Use the STRONGEST ownership mode, not Owned on conflict.
@@ -477,6 +485,9 @@ impl<'ast> Analyzer<'ast> {
             // TDD FIX: Recurse into TryOp (?) expressions
             // Example: loader.load(...)? wraps the method call in TryOp
             Expression::TryOp { expr, .. } => {
+                self.collect_method_calls_from_expr(param_name, expr, results);
+            }
+            Expression::Cast { expr, .. } => {
                 self.collect_method_calls_from_expr(param_name, expr, results);
             }
             _ => {}

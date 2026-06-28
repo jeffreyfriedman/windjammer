@@ -217,23 +217,29 @@ pub fn build_project_ext(
             super::ensure_output_parent_dir(&output_file)?;
             output_file
         } else if wj_files.len() == 1 {
-            let flat_rs = || {
-                let stem = file
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("output");
-                output.join(format!("{}.rs", stem))
+            let stem = file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
+            let flat_rs = || -> anyhow::Result<std::path::PathBuf> {
+                let p = output.join(format!("{stem}.rs"));
+                super::ensure_output_parent_dir(&p)?;
+                Ok(p)
             };
-            if let Some(root) = crate::project_paths::find_source_root(file) {
+            if library {
+                // Standalone library transpile (test harness, single-file crates): always emit
+                // under `output/` — do not mirror into the source tree beside the `.wj` file.
+                flat_rs()?
+            } else if let Some(root) = crate::project_paths::find_source_root(file) {
                 match crate::project_paths::get_relative_output_path(root, file, output) {
                     Ok(p) => {
                         super::ensure_output_parent_dir(&p)?;
                         p
                     }
-                    Err(_) => flat_rs(),
+                    Err(_) => flat_rs()?,
                 }
             } else {
-                flat_rs()
+                flat_rs()?
             }
         } else {
             let stem = file

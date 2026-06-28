@@ -489,7 +489,7 @@ impl SignatureRegistry {
                         let param_ownership: Vec<OwnershipMode> = method
                             .parameters
                             .iter()
-                            .map(|p| Self::declaration_stub_param_ownership(p))
+                            .map(|p| Self::declaration_stub_param_ownership(p, false))
                             .collect();
                         let sig = FunctionSignature {
                             name: method.name.clone(),
@@ -531,7 +531,7 @@ impl SignatureRegistry {
         let param_ownership: Vec<OwnershipMode> = func
             .parameters
             .iter()
-            .map(|p| Self::declaration_stub_param_ownership(p))
+            .map(|p| Self::declaration_stub_param_ownership(p, func.is_extern))
             .collect();
 
         FunctionSignature {
@@ -556,10 +556,16 @@ impl SignatureRegistry {
         param.type_.clone()
     }
 
-    fn declaration_stub_param_ownership(param: &crate::parser::Parameter<'_>) -> OwnershipMode {
+    fn declaration_stub_param_ownership(
+        param: &crate::parser::Parameter<'_>,
+        is_extern: bool,
+    ) -> OwnershipMode {
         match param.name.as_str() {
             "mut self" => OwnershipMode::MutBorrowed,
             "self" => OwnershipMode::Borrowed,
+            _ if is_extern && Self::is_declaration_stub_text_type(&param.type_) => {
+                OwnershipMode::Borrowed
+            }
             _ if Self::is_declaration_stub_text_type(&param.type_) => OwnershipMode::Owned,
             _ => OwnershipMode::Owned,
         }

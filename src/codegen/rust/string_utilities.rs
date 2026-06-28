@@ -350,17 +350,14 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     }
 
     // Rust formal is owned `String` — allocate even when stale metadata still says Borrowed.
-    // Exception: static associated methods (`Squad::new`) with body-inferred borrow pass `&owned`.
+    // Exception: static/instance associated methods with body-inferred borrow pass bare literals.
     if param_is_owned_string_type(param_type) {
-        if !sig.has_self_receiver
-            && matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                    sig, idx
-                ),
-                crate::analyzer::OwnershipMode::Borrowed
-                    | crate::analyzer::OwnershipMode::MutBorrowed
-            )
-        {
+        if matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                sig, idx
+            ),
+            crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
+        ) {
             return false;
         }
         return true;

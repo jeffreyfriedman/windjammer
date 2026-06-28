@@ -475,7 +475,10 @@ impl<'ast> CodeGenerator<'ast> {
                 if is_string_literal
                     && !string_literal_converted
                     && method_signature.as_ref().is_some_and(|sig| {
-                        matches!(
+                        let pi = sig.arg_param_index(i);
+                        !crate::codegen::rust::call_signature_resolution::static_impl_text_borrows_at_call_site(
+                            sig, pi,
+                        ) && matches!(
                             crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
                                 sig, i, receiver_type_name,
                             ),
@@ -826,6 +829,7 @@ impl<'ast> CodeGenerator<'ast> {
                             &arg_str,
                             method,
                             arg_already_rust_ref,
+                            receiver_type_name,
                         );
                 } else if let Some(receiver_tn) = self
                     .mc_infer_method_receiver_type_name(object)
@@ -854,6 +858,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 &arg_str,
                                 method,
                                 arg_already_rust_ref,
+                                receiver_type_name,
                             );
                     } else if is_collection_key_arg && !arg_str.starts_with('&') {
                         borrow_decision.add_ref = true;
@@ -932,7 +937,8 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if borrow_decision.add_ref
                     && !arg_str.starts_with('&')
-                    && !matches!(effective_ownership, Some(OwnershipMode::Owned))
+                    && (!matches!(effective_ownership, Some(OwnershipMode::Owned))
+                        || is_collection_key_arg)
                 {
                     crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
                         .apply(&mut arg_str);
@@ -940,8 +946,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // `if let Some(x) = &self.opt` — pass owned values via `.clone()`, not `&x` / `&mut x`.
                 // Skip when callee expects a borrow (HashMap keys, &str params, etc.).
+                // Match-arm bindings (owned enum payloads) need `&binding`, not `.clone()`.
                 if !param_expects_borrowed && !is_collection_key_arg && !external_module_mut_reborrow {
                     if let Expression::Identifier { name, .. } = arg_to_generate {
+                    if self.match_arm_bindings.contains(name.as_str()) {
+                        // Fall through to should_add_ref / borrow_decision below.
+                    } else {
                     let inferred = self.infer_expression_type(arg_to_generate);
                     let is_ref_binding = inferred
                         .as_ref()
@@ -977,6 +987,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 arg_str = format!("{}.clone()", base);
                             }
                         }
+                    }
                     }
                     }
                 }
@@ -1096,15 +1107,19 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if borrow_decision.add_ref
                     && !arg_str.starts_with('&')
-                    && !callee_expects_owned
-                    && !matches!(effective_ownership, Some(OwnershipMode::Owned))
+                    && (!callee_expects_owned || is_collection_key_arg)
+                    && (!matches!(effective_ownership, Some(OwnershipMode::Owned))
+                        || is_collection_key_arg)
+                    && !matches!(effective_ownership, Some(OwnershipMode::Borrowed))
                     && !method_signature.as_ref().is_some_and(|sig| {
                         let idx = sig.arg_param_index(i);
                         matches!(sig.param_ownership.get(idx), Some(OwnershipMode::Owned))
-                            || sig.param_types.get(idx).is_some_and(|t| {
-                                matches!(t, Type::String)
-                                    || matches!(t, Type::Custom(n) if n == "string" || n == "String")
-                            })
+                            && !matches!(
+                                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                                    sig, i, receiver_type_name,
+                                ),
+                                OwnershipMode::Borrowed,
+                            )
                     })
                 {
                     if let Expression::Cast { .. } = arg_to_generate {
@@ -1296,7 +1311,9 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Cast { .. }
                         );
                         if needs_borrow {
-                            arg_str = format!("&{}", arg_str);
+                            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                                &mut arg_str,
+                            );
                         }
                     }
                 }
@@ -1367,6 +1384,24 @@ impl<'ast> CodeGenerator<'ast> {
                     arg_to_generate,
                     &mut arg_str,
                 );
+
+                if is_collection_key_arg {
+                    let arg_already_rust_ref = matches!(
+                        arg_to_generate,
+                        Expression::Identifier { name, .. }
+                            if self.identifier_already_ref(name)
+                                || self.str_ref_optimized_params.contains(name.as_str())
+                                || self.inferred_borrowed_params.contains(name)
+                    );
+                    crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+                        method,
+                        i,
+                        arg_to_generate,
+                        &mut arg_str,
+                        arg_already_rust_ref,
+                        receiver_type_name,
+                    );
+                }
 
                 arg_str
             })

@@ -59,7 +59,7 @@ fn expr_needs_borrow_parentheses(expr_str: &str) -> bool {
     }
     [
         " + ", " - ", " * ", " / ", " % ", " == ", " != ", " < ", " > ", " <= ", " >= ", " && ",
-        " || ",
+        " || ", " as ",
     ]
     .iter()
     .any(|op| expr_str.contains(op))

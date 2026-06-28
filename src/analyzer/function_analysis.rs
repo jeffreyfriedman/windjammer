@@ -123,6 +123,7 @@ impl<'ast> Analyzer<'ast> {
         if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
             return OwnershipMode::MutBorrowed;
         }
+
         let modifies_fields =
             self.function_modifies_self_fields_with_registry(func, Some(registry));
         let returns_self = self.function_returns_self(func);
@@ -336,10 +337,10 @@ impl<'ast> Analyzer<'ast> {
                         // Mutated Copy types should be &mut, not Owned
                         let is_copy = self.is_copy_type(&param.type_);
 
-                        if param.is_mutable {
-                            // Windjammer `mut name: T` is an owned mutable binding (`mut name: T`
-                            // in Rust), not `name: &mut T`. MutBorrowed comes from inference only.
+                        if param.is_mutable && !is_copy {
                             OwnershipMode::Owned
+                        } else if param.is_mutable && is_copy {
+                            OwnershipMode::MutBorrowed
                         } else if is_copy {
                             let mutated = self.is_mutated(
                                 &param.name,
@@ -364,9 +365,8 @@ impl<'ast> Analyzer<'ast> {
                                     param.name, func.name, mutated, passthrough_mut, param.type_
                                 );
                             }
-                            // Copy formals stay owned — field dispatch copies, never &mut AppDeps.
                             if mutated || passthrough_mut {
-                                OwnershipMode::Owned
+                                OwnershipMode::MutBorrowed
                             } else {
                                 self.infer_parameter_ownership(
                                     &param.name,
@@ -776,10 +776,11 @@ impl<'ast> Analyzer<'ast> {
                     return OwnershipMode::Owned;
                 }
 
-                // Copy types: always owned in signatures and at call sites.
-                // Body-inferred MutBorrowed on @derive(Copy) structs (e.g. AppDeps) must not
-                // become `&mut T` — field dispatch copies, composition root passes by value.
-                if self.is_copy_type(&param.type_) {
+                // Copy types: usually owned, but respect MutBorrowed when the analyzer
+                // determined the parameter is actually mutated. This ensures `fn increment(x: int)`
+                // where `x = x + 1` generates `fn increment(x: &mut i64)` and the call site
+                // auto-inserts `&mut`. Read-only Copy params stay Owned (pass by value).
+                if self.is_copy_type(&param.type_) && inferred != OwnershipMode::MutBorrowed {
                     return OwnershipMode::Owned;
                 }
                 // THE WINDJAMMER WAY: The compiler infers ownership, not the user.
