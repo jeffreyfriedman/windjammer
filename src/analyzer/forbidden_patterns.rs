@@ -1,12 +1,22 @@
-//! Rejects Rust-leakage patterns (e.g. `.as_str()`) before analysis runs.
+//! Rejects Rust-leakage patterns before analysis runs.
+//!
+//! Forbidden patterns include:
+//! - `.as_str()` calls (compiler handles String → &str automatically)
+//! - `@derive(Copy)`, `@derive(Clone)`, etc. for standard traits
+//!   (compiler auto-infers derivable traits from struct field types)
 
 use crate::parser::ast::core::Expression;
 use crate::parser::*;
+
+const AUTO_INFERRED_TRAITS: &[&str] = &[
+    "Copy", "Clone", "Debug", "PartialEq", "Eq", "Hash", "Default", "PartialOrd", "Ord",
+];
 
 /// Walk the AST and fail if forbidden Rust-specific patterns appear in user source.
 pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
     program: &Program<'ast>,
 ) -> Result<(), String> {
+    check_forbidden_decorators(program)?;
     fn check_expr(expr: &Expression) -> Result<(), String> {
         match expr {
             Expression::MethodCall {
@@ -250,5 +260,55 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
         }
     }
 
+    Ok(())
+}
+
+fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), String> {
+    for item in &program.items {
+        match item {
+            Item::Struct { decl, .. } => {
+                check_struct_decorators(&decl.name, &decl.decorators)?;
+            }
+            Item::Mod { items, .. } => {
+                let mod_program = Program {
+                    items: items.clone(),
+                };
+                check_forbidden_decorators(&mod_program)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn check_struct_decorators(struct_name: &str, decorators: &[Decorator<'_>]) -> Result<(), String> {
+    for decorator in decorators {
+        if decorator.name == "derive" {
+            let forbidden: Vec<String> = decorator
+                .arguments
+                .iter()
+                .filter_map(|(_key, expr)| {
+                    if let Expression::Identifier { name, .. } = expr {
+                        if AUTO_INFERRED_TRAITS.contains(&name.as_str()) {
+                            return Some(name.clone());
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            if !forbidden.is_empty() {
+                return Err(format!(
+                    "error: `@derive({})` is forbidden on struct `{}`\n\
+                     \n\
+                     Windjammer automatically infers standard derivable traits (Copy, Clone,\n\
+                     Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord) based on field types.\n\
+                     Remove the @derive decorator — the compiler handles this automatically.",
+                    forbidden.join(", "),
+                    struct_name
+                ));
+            }
+        }
+    }
     Ok(())
 }
