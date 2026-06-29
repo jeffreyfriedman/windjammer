@@ -407,9 +407,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 OwnershipMode::Borrowed => {
                                     let is_string = matches!(formal_type, Type::String)
                                         || matches!(formal_type, Type::Custom(ref name) if name == "string");
-                                    // Impl read-only `string` → `&str` (HashSet::contains(name), not &name).
                                     if is_string && !trait_impl_owned_string {
-                                        "&str".to_string()
+                                        if self.str_ref_optimized_params.contains(&param.name) {
+                                            "&str".to_string()
+                                        } else {
+                                            "&String".to_string()
+                                        }
                                     } else {
                                         format!("&{}", self.type_to_rust(formal_type))
                                     }
