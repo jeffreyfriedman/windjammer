@@ -12,15 +12,19 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         func: &FunctionDecl<'ast>,
     ) -> HashSet<String> {
-        // TDD FIX: Pre-compute which parameters are actually used in the function body.
-        // Unused parameters get prefixed with `_` to suppress "unused variable" warnings.
-        // THE WINDJAMMER WAY: The compiler handles this automatically — developers don't
-        // need to manually prefix unused parameters with `_`.
         let body_refs: Vec<&Statement> = func.body.to_vec();
         func.parameters
             .iter()
             .filter(|p| p.name != "self")
-            .filter(|p| !Self::variable_used_in_statements(&body_refs, &p.name))
+            .filter(|p| {
+                let used_in_body = Self::variable_used_in_statements(&body_refs, &p.name);
+                let used_in_decorators = func.decorators.iter().any(|d| {
+                    d.arguments
+                        .iter()
+                        .any(|(_, expr)| Self::variable_used_in_expression(expr, &p.name))
+                });
+                !used_in_body && !used_in_decorators
+            })
             .map(|p| p.name.clone())
             .collect()
     }
