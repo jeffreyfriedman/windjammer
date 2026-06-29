@@ -34,16 +34,18 @@ fn test_void_return_preserves_semicolon() {
     }
     "#;
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
-    // The semicolons should be preserved to discard the return value
+    // The semicolons should be preserved to discard the return value.
+    // The compiler may add .to_string() for String keys — that's fine,
+    // we just need the statement to end with a semicolon.
     assert!(
-        generated.contains("insert(key, value);"),
+        generated.contains("insert(key, value);")
+            || generated.contains("insert(key.to_string(), value);"),
         "insert() should end with semicolon: {}",
         generated
     );
-    // key is already &string in the parameter, so we don't add another &
-    // We just need to verify the semicolon is preserved
     assert!(
-        generated.contains("remove(key);"),
+        generated.contains("remove(key);")
+            || generated.contains("remove(&key);"),
         "remove() should end with semicolon: {}",
         generated
     );

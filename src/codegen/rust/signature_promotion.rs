@@ -41,7 +41,10 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
                 ty,
             );
         match own {
-            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed => bare_non_copy,
+            OwnershipMode::Borrowed => bare_non_copy,
+            // MutBorrowed is a genuine inference from mutation analysis, not a stale
+            // stub artifact — never treat it as stale.
+            OwnershipMode::MutBorrowed => false,
             // Method args after `self` marked Owned with bare struct type are engine stubs.
             OwnershipMode::Owned => sig.has_self_receiver && idx > 0 && bare_non_copy,
         }
