@@ -326,10 +326,11 @@ impl<'ast> Analyzer<'ast> {
             {
                 return Ok(OwnershipMode::Owned);
             }
-            if !self.param_needs_string_ref(param_name, body, registry) {
-                return Ok(OwnershipMode::Borrowed);
-            }
-            return Ok(OwnershipMode::Owned);
+            // param_needs_string_ref == false → can use &str → Borrowed
+            // param_needs_string_ref == true → needs &String (e.g. Vec::contains) → still Borrowed
+            // (consuming patterns like push/insert are caught by is_stored above)
+            // Codegen distinguishes &str vs &String via str_ref_optimized_params.
+            return Ok(OwnershipMode::Borrowed);
         }
         // Copy types default to Owned unless passthrough to a mutating callee needs &mut.
         if self.is_copy_type(param_type) {
