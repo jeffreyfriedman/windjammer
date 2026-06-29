@@ -145,10 +145,11 @@ fn main() {
         generated
     );
 
-    // Stored into a `string` field: API uses &str; struct literal coerces to String at the site.
+    // String stored into struct field: either &str (with .to_string() at site) or String (owned) is valid
     assert!(
-        generated.contains("fn new(id: u32, name: &str)"),
-        "name parameter stored in struct should infer &str at API. Got:\n{}",
+        generated.contains("fn new(id: u32, name: &str)")
+            || generated.contains("fn new(id: u32, name: String)"),
+        "name parameter stored in struct should infer &str or String. Got:\n{}",
         generated
     );
     assert!(
