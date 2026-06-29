@@ -86,9 +86,10 @@ impl<'ast> Analyzer<'ast> {
                     // or wrapped in Some/Enum constructors/tuples.
                     //
                     // Direct: obj.field = param
+                    // Nested: obj.sub.field = param (e.g. self.data.value = value)
                     // Wrapped: obj.field = Some(param)
                     // Enum: obj.field = Enum::Variant(param)
-                    if matches!(&**object, Expression::Identifier { .. }) {
+                    if Self::is_rooted_field_access(object) {
                         if self.expression_stores_identifier(name, value) {
                             return true;
                         }
@@ -461,6 +462,16 @@ impl<'ast> Analyzer<'ast> {
                 self.has_non_text_struct_field_storage(param_name, statements)
             }
             _ => self.expression_stores_identifier(param_name, expr),
+        }
+    }
+
+    /// True when expr is rooted at an identifier through FieldAccess chains.
+    /// Matches `obj`, `obj.field`, `obj.sub.field`, etc.
+    fn is_rooted_field_access(expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { .. } => true,
+            Expression::FieldAccess { object, .. } => Self::is_rooted_field_access(object),
+            _ => false,
         }
     }
 }
