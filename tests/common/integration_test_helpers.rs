@@ -254,7 +254,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-windjammer-runtime = {{ path = "{}" }}
+windjammer-runtime = {{ path = "{}", default-features = false }}
 smallvec = "1.13"
 serde = {{ version = "1.0", features = ["derive"] }}
 
