@@ -97,7 +97,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = {{ path = "{}" }}
+windjammer-runtime = {{ path = "{}", default-features = false }}
 
 [lib]
 name = "test_lib"
@@ -139,10 +139,14 @@ impl TestStruct {
     fs::write(lib_output.join("mod_file.rs"), mod_rs).unwrap();
 
     // Verify the library compiles
+    let local_target = lib_output.join("target");
     let output = Command::new("cargo")
         .arg("check")
         .arg("--lib")
+        .arg("--target-dir")
+        .arg(&local_target)
         .current_dir(&lib_output)
+        .env_remove("CARGO_TARGET_DIR")
         .output();
 
     match output {
@@ -200,9 +204,13 @@ path = "test.rs"
     fs::write(test_output.join("Cargo.toml"), test_cargo_toml).unwrap();
 
     // Verify the test compiles and can import from library
+    let test_target = test_output.join("target");
     let test_result = Command::new("cargo")
         .arg("test")
+        .arg("--target-dir")
+        .arg(&test_target)
         .current_dir(&test_output)
+        .env_remove("CARGO_TARGET_DIR")
         .output();
 
     match test_result {

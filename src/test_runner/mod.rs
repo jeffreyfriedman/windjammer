@@ -147,7 +147,9 @@ pub fn run_tests(
     }
 
     let mut cmd = Command::new("cargo");
-    cmd.arg("test").current_dir(&temp_dir);
+    cmd.arg("test")
+        .current_dir(&temp_dir)
+        .env_remove("CARGO_TARGET_DIR");
 
     if !parallel {
         cmd.arg("--").arg("--test-threads").arg("1");
