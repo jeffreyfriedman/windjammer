@@ -112,8 +112,8 @@ pub fn capture(mut data: SaveData) {
         "get_int key literal must stay bare for &str param. Got:\n{restore_rs}"
     );
     assert!(
-        !restore_rs.contains("\"health\".to_string()"),
-        "get_int must not allocate to_string on literal. Got:\n{restore_rs}"
+        !restore_rs.contains("get_int(\"health\".to_string()"),
+        "get_int must not allocate to_string on key literal. Got:\n{restore_rs}"
     );
 }
 

@@ -113,12 +113,10 @@ impl<'ast> Analyzer<'ast> {
             return OwnershipMode::Borrowed;
         }
 
-        // Multiple recursive `self.method(...)` calls cannot take owned `self` — check first
-        // to avoid re-entering inference while analyzing callees (stack overflow).
-        // Read-only recursion still needs a borrowed receiver, but `&self` not `&mut self`.
-        if self.count_self_method_calls(func, func.name.as_str()) >= 2 {
-            return OwnershipMode::MutBorrowed;
-        }
+        // Multiple recursive `self.method(...)` calls cannot take owned `self`.
+        // But read-only recursion should get `&self`, not `&mut self`.
+        // Let the normal analysis run and only prevent Owned at the end.
+        let has_multi_recursive = self.count_self_method_calls(func, func.name.as_str()) >= 2;
 
         if func.is_extern && func.body.is_empty() && func.parent_type.is_some() {
             return OwnershipMode::MutBorrowed;
@@ -130,20 +128,27 @@ impl<'ast> Analyzer<'ast> {
         let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
         let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
-        let consumes_self = body_moves_fields
-            || self.function_moves_self_into_return(func)
-            || (!snapshot_factory
-                && (returns_self
-                    || self.function_body_consumes_bare_self(func)
-                    || self.function_calls_consuming_method_on_self_with_visited(
-                        func, registry, visited,
-                    )
-                    || self.function_calls_explicit_owned_self_method(func, registry)
-                    || self.function_matches_on_self(func)
-                    || self.function_consumes_self_field_elements(func, Some(registry))));
-        let calls_owned_on_self = self
-            .function_calls_consuming_method_on_self_with_visited(func, registry, visited)
-            || self.function_calls_explicit_owned_self_method(func, registry);
+        let consumes_self = if has_multi_recursive {
+            false
+        } else {
+            body_moves_fields
+                || self.function_moves_self_into_return(func)
+                || (!snapshot_factory
+                    && (returns_self
+                        || self.function_body_consumes_bare_self(func)
+                        || self.function_calls_consuming_method_on_self_with_visited(
+                            func, registry, visited,
+                        )
+                        || self.function_calls_explicit_owned_self_method(func, registry)
+                        || self.function_matches_on_self(func)
+                        || self.function_consumes_self_field_elements(func, Some(registry))))
+        };
+        let calls_owned_on_self = if has_multi_recursive {
+            false
+        } else {
+            self.function_calls_consuming_method_on_self_with_visited(func, registry, visited)
+                || self.function_calls_explicit_owned_self_method(func, registry)
+        };
         let mut mutating_call_visited = HashSet::new();
         let calls_mutating = self.function_calls_mutating_self_methods_with_registry(
             func,
@@ -733,7 +738,11 @@ impl<'ast> Analyzer<'ast> {
 
         Ok(analyzed)
     }
-    pub(crate) fn build_signature(&self, func: &AnalyzedFunction) -> FunctionSignature {
+    pub(crate) fn build_signature(
+        &self,
+        func: &AnalyzedFunction,
+        registry: &SignatureRegistry,
+    ) -> FunctionSignature {
         let param_ownership: Vec<OwnershipMode> = func
             .decl
             .parameters
@@ -805,15 +814,12 @@ impl<'ast> Analyzer<'ast> {
             .iter()
             .enumerate()
             .map(|(idx, param)| {
-                // Use inferred type if available (Phase 2 optimization)
-                // Otherwise fall back to explicit type annotation
                 func.inferred_param_types
                     .get(idx)
                     .cloned()
                     .unwrap_or_else(|| param.type_.clone())
             })
             .collect();
-
         let explicit_self = func
             .decl
             .parameters
@@ -923,6 +929,15 @@ impl<'ast> Analyzer<'ast> {
         // so call-site lowering agrees with formal parameter codegen. Stale engine metadata
         // that marks owned `Custom(T)` as Borrowed keeps bare `T` and is handled separately.
         // Only `param_types` is wrapped — `formal_param_types` stays bare AST types.
+        //
+        // For borrowed string params, use str_ref optimization to determine &str vs &String:
+        // - Params that are str_ref-optimizable → &str (performance)
+        // - Params that need &String (e.g., passed to Vec::contains) → &String (correctness)
+        let str_ref_optimized = if !func.decl.is_extern {
+            self.analyze_str_ref_optimizable_params(&func.decl, registry)
+        } else {
+            std::collections::HashSet::new()
+        };
         for (idx, ownership) in param_ownership.iter().enumerate() {
             if has_self_receiver && idx == 0 {
                 continue;
@@ -943,7 +958,13 @@ impl<'ast> Analyzer<'ast> {
                                 .is_some_and(|p| Self::trait_param_is_owned_string(&p.type_))) =>
                 {
                     *ty = if Self::is_windjammer_text_param_type(ty) {
-                        PType::Reference(Box::new(PType::Custom("str".into())))
+                        let adj_idx = if has_self_receiver { idx - 1 } else { idx };
+                        let param_name = func.decl.parameters.get(adj_idx).map(|p| p.name.as_str());
+                        if param_name.is_some_and(|n| str_ref_optimized.contains(n)) {
+                            PType::Reference(Box::new(PType::Custom("str".into())))
+                        } else {
+                            PType::Reference(Box::new(PType::String))
+                        }
                     } else {
                         PType::Reference(Box::new(ty.clone()))
                     };
@@ -984,7 +1005,7 @@ impl<'ast> Analyzer<'ast> {
     ) {
         for (trait_name, methods) in trait_methods {
             for (method_name, analyzed_func) in methods {
-                let sig = self.build_signature(analyzed_func);
+                let sig = self.build_signature(analyzed_func, registry);
                 let qualified_name = format!("{}::{}", trait_name, method_name);
                 registry.add_function(qualified_name, sig);
             }

@@ -28,7 +28,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             let mut arg_str = gen.generate_expression(arg);
             gen.restore_arg_gen_scope(scope);
             arg_str = gen.peel_copy_ref_match_binding_for_value(arg, &arg_str);
-
             let is_copy_literal = matches!(
                 arg,
                 Expression::Literal {
@@ -39,6 +38,18 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     ..
                 }
             );
+
+            // Pre-compute ownership collision for the whole argument.
+            // Use the narrow explicit-ownership collision check: `type_collision_keys`
+            // has false positives from multi-pass re-registration of the same function
+            // as ownership inference refines param types.  Only genuine ownership
+            // collisions (different param_ownership from different modules) should
+            // suppress auto-borrow.
+            let has_ownership_collision = {
+                let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
+                gen.has_explicit_ownership_collision_with_global(func_name)
+                    || gen.has_explicit_ownership_collision_with_global(simple_name)
+            };
 
             // TDD FIX: Cast int arguments to usize for stdlib methods
             // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
@@ -223,16 +234,18 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 func_name.split("::").next(),
             );
 
-            crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
-                signature.as_ref(),
-                i,
-                func_name
-                    .rsplit_once("::")
-                    .filter(|(rt, _)| rt.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
-                    .map(|(rt, _)| rt),
-                arg,
-                &mut arg_str,
-            );
+            if !has_ownership_collision {
+                crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
+                    signature.as_ref(),
+                    i,
+                    func_name
+                        .rsplit_once("::")
+                        .filter(|(rt, _)| rt.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+                        .map(|(rt, _)| rt),
+                    arg,
+                    &mut arg_str,
+                );
+            }
 
             // `const SCOPE_*: string` lowers to &'static str; callee params typed `String` need owned.
             if let Expression::Identifier { name, .. } = arg {
@@ -298,8 +311,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             }
 
             if let Some(ref sig) = signature {
+                let is_cross_module = func_name.contains("::");
                 let all_params_borrowed = !is_extern_call
                     && !sig.is_extern
+                    && !(is_cross_module && has_ownership_collision)
                     && !sig.param_ownership.is_empty()
                     && sig
                         .param_ownership
@@ -370,31 +385,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     }
                     return vec![arg_str];
                 }
-
-                // COLLISION GUARD: When the signature was resolved via a
-                // simple-name fallback from a module-qualified call AND the
-                // simple name has a collision, skip auto-borrow/auto-mutborrow.
-                // The looked-up signature may be from the wrong module,
-                // so applying its ownership blindly can produce incorrect
-                // `&` or `&mut` prefixes.
-                //
-                // We only guard fallback-resolved signatures because:
-                // - Direct qualified lookups are unambiguous (right signature)
-                // - Bare-name calls within the same file are also unambiguous
-                // - Only fallback from module::fn → fn is risky (wrong module)
-                let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
-                let has_registry_collision = gen.has_collision_with_global(func_name)
-                    || gen.has_collision_with_global(simple_name);
-                let has_ownership_collision = has_registry_collision
-                    && {
-                        let sig_args =
-                            crate::codegen::rust::call_signature_resolution::effective_user_arg_count(
-                                sig,
-                            );
-                        // Only suppress when resolution was ambiguous (fallback/suffix) or
-                        // arg count doesn't match the resolved signature.
-                        signature_from_simple_fallback && sig_args != arguments.len()
-                    };
 
                 let mut ownership =
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
@@ -556,6 +546,21 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 if param_is_str_ref || asref_str_runtime {
                                     return vec![arg_str];
                                 }
+
+                                // &String param: string literal → &"lit".to_string()
+                                let param_is_string_ref = sig.param_type_for_arg(i).is_some_and(|t| {
+                                    crate::codegen::rust::string_utilities::param_is_rust_string_ref(t)
+                                });
+                                if param_is_string_ref {
+                                    let base = arg_str.trim_start_matches('&');
+                                    let base = if base.ends_with(".to_string()") {
+                                        base.to_string()
+                                    } else {
+                                        format!("{}.to_string()", base)
+                                    };
+                                    return vec![format!("&{}", base)];
+                                }
+
                                 return vec![arg_str];
                             }
 
@@ -972,7 +977,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             // Coerce owned String → &str when callee expects explicit &str (Phase 2 / FFI wrappers).
             // Also handle stale metadata with empty param_ownership: Windjammer `string`
             // params lower to borrowed &str at the callee definition site.
+            // Skip when ownership collision detected — wrong module's metadata could apply bad &.
             if let Some(ref sig) = signature {
+                if !has_ownership_collision {
                 if let Some(param_ty) = sig.param_types.get(i) {
                     let param_is_str_ref = matches!(
                         param_ty,
@@ -1016,6 +1023,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     {
                         arg_str = format!("&{}", arg_str);
                     }
+                }
                 }
             }
 
@@ -1068,8 +1076,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             }
 
             // Unified borrow lowering (auto-clone strip + & insertion).
+            // Skip when ownership collision detected — the registry may hold the
+            // wrong module's inference, so adding & or &mut could be incorrect.
             if let Some(ref sig) = signature {
-                if !is_extern_call && !sig.is_extern {
+                if !is_extern_call && !sig.is_extern && !has_ownership_collision {
                     let method_name = func_name.rsplit("::").next().unwrap_or(func_name);
                     let arg_already_rust_ref = matches!(
                         arg,

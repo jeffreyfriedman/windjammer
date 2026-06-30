@@ -83,7 +83,7 @@ pub fn build_project_ext(
     };
     let has_nested_structure = wj_files.iter().any(|f| {
         f.strip_prefix(base_path)
-            .map(|r| r.parent().is_some())
+            .map(|r| r.components().count() > 1)
             .unwrap_or(false)
     });
     if wj_files.len() > 1 || (library && has_nested_structure) {

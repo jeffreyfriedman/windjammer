@@ -79,11 +79,22 @@ impl<'ast> CodeGenerator<'ast> {
                                 ..
                             })
                         );
-                        if param_is_str_ref || arg_is_string_literal || (param_is_copy && !is_collection_key) {
+                        // After .to_string() stripping, a MethodCall like "lit".to_string()
+                        // becomes bare "lit" in arg_str. Check if arg_str is now a string
+                        // literal — it's already &str, adding & would create &&str.
+                        let arg_str_is_bare_literal = arg_str.starts_with('"')
+                            || arg_str.starts_with("r\"")
+                            || arg_str.starts_with("r#\"");
+                        if param_is_str_ref || arg_is_string_literal || arg_str_is_bare_literal
+                            || (param_is_copy && !is_collection_key) {
                             return;
                         }
                         if let Some((_, arg_expr)) = arguments.get(i) {
-                            if let Expression::Identifier { name, .. } = arg_expr {
+                            let inner = match arg_expr {
+                                Expression::Unary { op: UnaryOp::Ref, operand, .. } => operand,
+                                other => other,
+                            };
+                            if let Expression::Identifier { name, .. } = inner {
                                 if self.identifier_already_ref(name)
                                     || self.str_ref_optimized_params.contains(name.as_str())
                                 {

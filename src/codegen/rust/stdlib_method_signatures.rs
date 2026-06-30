@@ -46,6 +46,17 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
             true,
         ),
     );
+    vec_methods.insert(
+        "remove".to_string(),
+        MethodSignature::new(
+            "Vec",
+            "remove",
+            vec![Type::Uint], // index: usize (owned, not &usize)
+            vec![OwnershipMode::Owned],
+            Some(Type::Custom("T".to_string())),
+            true,
+        ),
+    );
     map.insert("Vec".to_string(), vec_methods);
 
     // String methods

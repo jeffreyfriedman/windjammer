@@ -140,6 +140,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
 
                         // Implicit return of `self.field` on borrowed `self` with owned return type.
+                        // Skip for Copy types — they don't need .clone() (bool, i32, f32, etc.)
                         if super::self_analysis::is_self_field_chain(expr)
                             && (self.inferred_mut_borrowed_params.contains("self")
                                 || self.inferred_borrowed_params.contains("self"))
@@ -148,7 +149,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 &self.current_function_return_type,
                                 Some(Type::Reference(_)) | Some(Type::MutableReference(_))
                             );
-                            if !returns_ref && !expr_str.ends_with(".clone()") {
+                            let is_copy = self
+                                .infer_expression_type(expr)
+                                .as_ref()
+                                .is_some_and(|t| self.is_type_copy(t));
+                            if !returns_ref && !is_copy && !expr_str.ends_with(".clone()") {
                                 if expr_str.starts_with('&') && !expr_str.starts_with("&mut") {
                                     expr_str = format!("({}).clone()", expr_str);
                                 } else {

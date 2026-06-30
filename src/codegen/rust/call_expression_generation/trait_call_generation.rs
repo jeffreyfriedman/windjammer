@@ -111,7 +111,12 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
 
     // Borrow owned String args when the resolved signature says the callee
     // takes `string` by borrow (lowers to `&str` in Rust).
+    // Skip when ownership collision detected for this method name.
+    let has_method_collision = gen.has_collision_with_global(call_method);
     if let Some(ref sig) = method_signature {
+        if has_method_collision {
+            // Collision detected — skip post-processing auto-borrow entirely.
+        } else {
         let callee_is_extern = sig.is_extern;
         args = args
             .iter()
@@ -196,6 +201,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 }
             })
             .collect();
+        }
     }
 
     // Type constructors: Vec::new(), HashMap::with_capacity() — not instance methods.

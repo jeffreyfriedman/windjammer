@@ -19,6 +19,10 @@ impl<'ast> Analyzer<'ast> {
                 t,
                 Type::Custom(name) if matches!(name.as_str(), "string" | "String" | "str")
             )
+            || matches!(
+                t,
+                Type::Reference(inner) if matches!(&**inner, Type::Custom(s) if s == "str")
+            )
     }
 
     /// Resolve struct field map using module-qualified keys (`dialogue::tree::DialogueNodeTree`).

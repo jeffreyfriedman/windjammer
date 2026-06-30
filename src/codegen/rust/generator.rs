@@ -925,6 +925,17 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|g| g.has_collision(name))
     }
 
+    /// Narrower collision check: only explicit ownership_collision_keys, avoiding
+    /// false positives from `has_method_name_collision` on common names like "get".
+    pub(crate) fn has_explicit_ownership_collision_with_global(&self, name: &str) -> bool {
+        self.signature_registry
+            .has_explicit_ownership_collision(name)
+            || self
+                .global_signature_registry
+                .as_ref()
+                .is_some_and(|g| g.has_explicit_ownership_collision(name))
+    }
+
     pub(crate) fn should_skip_int_to_float_auto_cast_with_global(
         &self,
         type_name: Option<&str>,

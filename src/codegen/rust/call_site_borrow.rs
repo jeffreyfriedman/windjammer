@@ -61,10 +61,12 @@ fn is_collection_key_arg(method_name: &str, arg_index: usize, receiver_type: Opt
         return stdlib_method_traits::is_map_type_name(base)
             || stdlib_method_traits::is_set_type_name(base);
     }
-    true
+    // When receiver type is unknown, don't assume collection key —
+    // the method signature's ownership mode handles borrowing correctly.
+    false
 }
 
-fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
+pub fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
     matches!(
         arg_expr,
         Expression::Literal {
@@ -77,13 +79,20 @@ fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
     )
 }
 
-fn expression_is_string_literal(arg_expr: &Expression) -> bool {
+pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
     matches!(
         arg_expr,
         Expression::Literal {
             value: Literal::String(_),
             ..
         }
+    ) || matches!(
+        arg_expr,
+        Expression::MethodCall { method, object, .. }
+        if method.as_str() == "to_string" && matches!(
+            &**object,
+            Expression::Literal { value: Literal::String(_), .. }
+        )
     )
 }
 
@@ -217,7 +226,7 @@ pub fn finalize_collection_key_call_site_arg(
     if !is_collection_key_arg(method_name, arg_index, receiver_type) || arg_str.starts_with('&') {
         return;
     }
-    if expression_is_string_literal(arg_expr) {
+    if expression_is_string_literal(arg_expr) || expression_is_copy_literal(arg_expr) {
         return;
     }
     if arg_already_rust_ref {

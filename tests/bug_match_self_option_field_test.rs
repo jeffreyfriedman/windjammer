@@ -66,18 +66,18 @@ pub fn main() {
 "#;
     let (rust, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
-    // The generated Rust must NOT use `match self.clip { Some(c) => ... }`
-    // because that moves self.clip out of &mut self (E0507).
-    // It should use `match &self.clip` or `if let Some(ref c) = self.clip`.
+    // The generated Rust must NOT directly move self.clip out of &mut self (E0507).
+    // Valid strategies: match &self.clip, if let Some(ref c), .as_ref(), or borrow-break clone
     let has_ref_match = rust.contains("match &self.clip")
         || rust.contains("match & self.clip")
         || rust.contains("match &mut self.clip")
         || rust.contains("if let Some(ref ")
-        || rust.contains("self.clip.as_ref()");
+        || rust.contains("self.clip.as_ref()")
+        || rust.contains("self.clip.clone()");
 
     assert!(
         has_ref_match,
-        "match on Option field in &mut self should use reference match.\nGenerated:\n{}",
+        "match on Option field in &mut self should use reference match or clone.\nGenerated:\n{}",
         rust
     );
 

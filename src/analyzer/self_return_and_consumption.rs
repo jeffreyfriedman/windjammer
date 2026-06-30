@@ -438,23 +438,15 @@ impl<'ast> Analyzer<'ast> {
                 let is_self_receiver =
                     matches!(&**object, Expression::Identifier { name, .. } if name == "self");
                 if is_self_receiver {
-                    if caller_name.is_some_and(|n| n == method.as_str()) {
-                        return true;
-                    }
                     if let Some(impl_functions) = &self.current_impl_functions {
                         if let Some(called_func) = impl_functions.get(method.as_str()) {
-                            let callee_self_owned = called_func
-                                .parameters
-                                .iter()
-                                .find(|p| p.name == "self")
-                                .is_some_and(|p| {
-                                    matches!(p.ownership, OwnershipHint::Owned)
-                                        || self.infer_impl_self_receiver_ownership_inner(
-                                            called_func,
-                                            registry,
-                                            visited,
-                                        ) == super::OwnershipMode::Owned
-                                });
+                            let callee_self_owned = self
+                                .infer_impl_self_receiver_ownership_inner(
+                                    called_func,
+                                    registry,
+                                    visited,
+                                )
+                                == super::OwnershipMode::Owned;
                             if callee_self_owned {
                                 return true;
                             }
