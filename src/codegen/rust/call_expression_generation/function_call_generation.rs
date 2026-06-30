@@ -366,6 +366,33 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     r.resolution_method,
                     crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
                 );
+                // Module-qualified lowercase calls (draw::draw_text): if
+                // the resolution's qualified_key comes from a different
+                // module (e.g., rendering_api::draw_text matched via
+                // unqualified fallback), treat as fallback to prevent
+                // trusting wrong ownership metadata.
+                if !resolved_via_fallback && func_name.contains("::") {
+                    let qualifier = func_name.split("::").next().unwrap_or("");
+                    if qualifier.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
+                        let key_qualifier = r.qualified_key.split("::").next().unwrap_or("");
+                        if key_qualifier != qualifier && !r.qualified_key.contains(&format!("{}::", qualifier)) {
+                            resolved_via_fallback = true;
+                        }
+                        // ExactQualified resolution that only exists in a
+                        // fallback chain (not in the codegen registry's own
+                        // signatures map) means the key was synthesized
+                        // during registry merges — don't trust ownership.
+                        if !resolved_via_fallback
+                            && matches!(
+                                r.resolution_method,
+                                crate::codegen::rust::call_signature_resolution::ResolutionMethod::ExactQualified
+                            )
+                            && !gen.signature_registry.has_signature_locally(&r.qualified_key)
+                        {
+                            resolved_via_fallback = true;
+                        }
+                    }
+                }
                 signature = Some(r.sig);
             }
         }

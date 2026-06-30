@@ -319,19 +319,56 @@ pub fn resolve_call_signature(
                 return None;
             }
         }
-        if let Some(sig) = registry.find_signature_by_name_and_arg_count(method_part, arg_count) {
-            let qualified_key = registry
-                .signatures
-                .iter()
-                .find(|(_, v)| std::ptr::eq(*v, sig))
-                .map(|(k, _)| k.clone())
-                .unwrap_or_else(|| method_part.to_string());
-            return Some(ResolvedSignature {
-                sig: sig.clone(),
-                qualified_key,
-                resolution_method: ResolutionMethod::ArgCountValidated,
-                has_collision: registry.has_collision(method_part),
-            });
+        // Module-qualified lowercase calls (draw::draw_text): only accept
+        // signatures from the SAME module. Falling back to an unrelated
+        // module's homonym (rendering_api::draw_text) would apply wrong
+        // ownership metadata.
+        if let Some(pos) = func_name.rfind("::") {
+            let module_qualifier = &func_name[..pos];
+            if module_qualifier
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase())
+            {
+                let module_suffix = format!("{}::", module_qualifier);
+                if let Some(sig) =
+                    registry.find_signature_by_name_and_arg_count(method_part, arg_count)
+                {
+                    let qualified_key = registry
+                        .signatures
+                        .iter()
+                        .find(|(_, v)| std::ptr::eq(*v, sig))
+                        .map(|(k, _)| k.clone())
+                        .unwrap_or_else(|| method_part.to_string());
+                    if qualified_key.contains(&module_suffix)
+                        || qualified_key == method_part
+                        || !qualified_key.contains("::")
+                    {
+                        return Some(ResolvedSignature {
+                            sig: sig.clone(),
+                            qualified_key,
+                            resolution_method: ResolutionMethod::ArgCountValidated,
+                            has_collision: registry.has_collision(method_part),
+                        });
+                    }
+                }
+                // No match from the same module — don't fall back to a different module.
+            } else if let Some(sig) =
+                registry.find_signature_by_name_and_arg_count(method_part, arg_count)
+            {
+                let qualified_key = registry
+                    .signatures
+                    .iter()
+                    .find(|(_, v)| std::ptr::eq(*v, sig))
+                    .map(|(k, _)| k.clone())
+                    .unwrap_or_else(|| method_part.to_string());
+                return Some(ResolvedSignature {
+                    sig: sig.clone(),
+                    qualified_key,
+                    resolution_method: ResolutionMethod::ArgCountValidated,
+                    has_collision: registry.has_collision(method_part),
+                });
+            }
         }
     }
 

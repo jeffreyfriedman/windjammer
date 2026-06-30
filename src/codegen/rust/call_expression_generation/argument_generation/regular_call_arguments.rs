@@ -633,7 +633,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 && !is_copy_scalar
                                 && !is_copy_literal
                                 && !is_temp_variable
-                                && !is_user_closure_param
                             {
                                 crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
                                     .apply(&mut arg_str);

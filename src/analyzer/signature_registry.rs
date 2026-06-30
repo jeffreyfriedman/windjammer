@@ -189,6 +189,13 @@ impl SignatureRegistry {
             .and_then(|g| g.get_signature(name))
     }
 
+    /// Check if a key exists in this registry's own `signatures` map (not the
+    /// fallback chain).  Used by codegen to distinguish locally-registered
+    /// signatures from those inherited through `global_fallback`.
+    pub fn has_signature_locally(&self, name: &str) -> bool {
+        self.signatures.contains_key(name)
+    }
+
     /// Check if a signature key has been registered with conflicting param types
     /// from different modules (namespace collision).
     pub fn has_collision(&self, name: &str) -> bool {
