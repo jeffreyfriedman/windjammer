@@ -1076,6 +1076,12 @@ pub fn statement_modifies_self(
                 receiver_upgrades,
             )
         }),
+        Statement::Return { value: Some(expr), .. } => {
+            expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades)
+        }
+        Statement::Loop { body, .. } => body.iter().any(|s| {
+            statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+        }),
         _ => false,
     }
 }
@@ -1158,6 +1164,9 @@ pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool
                 expression_mutates_fields(ctx, arm.body)
             })
         }
+        Statement::Return { value: Some(expr), .. } => expression_mutates_fields(ctx, expr),
+        Statement::Loop { body, .. } => body.iter().any(|s| statement_mutates_fields(ctx, s)),
+        Statement::Let { value, .. } => expression_mutates_fields(ctx, value),
         _ => false,
     }
 }

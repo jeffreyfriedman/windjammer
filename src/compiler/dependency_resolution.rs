@@ -142,10 +142,23 @@ pub(crate) fn find_dependency_metadata_roots(
     let canonical =
         std::fs::canonicalize(file_parent).unwrap_or_else(|_| file_parent.to_path_buf());
     let mut current = canonical.as_path();
+
+    // Find the nearest project root so we don't walk past it into unrelated projects.
+    let project_root = crate::metadata::find_project_root(&canonical);
+
     for _ in 0..6 {
         let Some(parent) = current.parent() else {
             break;
         };
+
+        // Stop walking if we've passed the project root boundary — scanning further
+        // would pick up metadata from unrelated sibling projects.
+        if let Some(ref root) = project_root {
+            if !parent.starts_with(root) && parent != root.as_path() {
+                break;
+            }
+        }
+
         if let Ok(entries) = std::fs::read_dir(parent) {
             for entry in entries.flatten() {
                 let p = entry.path();

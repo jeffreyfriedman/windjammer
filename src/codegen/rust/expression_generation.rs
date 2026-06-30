@@ -475,9 +475,10 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str;
         }
         // When callee expects &str and arg produces an owned String, add &.
-        // &String auto-derefs to &str. Only skip for bare string literals
-        // (already &str) which are handled by string_literal_converted above.
-        let is_bare_str_literal = arg_str.starts_with('"') && !arg_str.ends_with(".to_string()");
+        // &String auto-derefs to &str. Skip for string literals — they are already
+        // &str. After later passes strip .to_string(), bare "lit" would become
+        // &"lit" (&&str), so we must also skip "lit".to_string().
+        let is_bare_str_literal = arg_str.starts_with('"');
         if is_bare_str_literal {
             return arg_str;
         }

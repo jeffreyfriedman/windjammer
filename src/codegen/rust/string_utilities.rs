@@ -121,6 +121,16 @@ pub fn param_is_owned_string_type(param_type: &Type) -> bool {
         || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
 }
 
+/// Parameter type is `&String` — a reference to an owned String.
+/// Distinct from `&str` (`param_is_rust_str_ref`). String literals passed to
+/// `&String` params need `&"literal".to_string()` conversion.
+pub fn param_is_rust_string_ref(param_type: &Type) -> bool {
+    matches!(
+        param_type,
+        Type::Reference(inner) if param_is_owned_string_type(inner)
+    )
+}
+
 /// Whether a call-site expression should be borrowed for runtime std `AsRef<str>` APIs.
 pub fn expression_is_owned_string_for_asref_borrow<'ast>(
     expr: &Expression<'ast>,
@@ -425,6 +435,12 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         crate::codegen::rust::expression_utilities::strip_trailing_clone(arg_str);
     }
 
+    // String literals are already &str — adding & would create &&str.
+    // After stripping .to_string(), a MethodCall like "lit".to_string() becomes "lit",
+    // which is a bare string literal. Don't re-add & in that case.
+    let is_bare_string_literal =
+        arg_str.starts_with('"') || arg_str.starts_with("r\"") || arg_str.starts_with("r#\"");
+
     if matches!(
         arg,
         Expression::Identifier { .. }
@@ -433,6 +449,7 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
             | Expression::Index { .. }
     ) && !arg_str.starts_with('&')
         && !arg_str.starts_with("&mut ")
+        && !is_bare_string_literal
     {
         *arg_str = format!("&{arg_str}");
     }
@@ -473,6 +490,21 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
             *arg_str = coerce_expr_to_owned_string(arg_str);
         }
     } else {
+        // &String param: string literal → &"lit".to_string()
+        let is_string_ref_param = sig
+            .and_then(|s| s.param_type_for_arg(arg_index))
+            .is_some_and(param_is_rust_string_ref);
+        if is_string_ref_param {
+            let base = arg_str.trim_start_matches('&');
+            let base = if base.ends_with(".to_string()") {
+                base.to_string()
+            } else {
+                format!("{}.to_string()", base)
+            };
+            *arg_str = format!("&{}", base);
+            return;
+        }
+
         if arg_str.ends_with(".to_string()") {
             *arg_str = arg_str[..arg_str.len() - 12].to_string();
         } else if arg_str.ends_with(".into()") {

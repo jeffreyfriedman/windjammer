@@ -203,6 +203,18 @@ impl SignatureRegistry {
             .is_some_and(|g| g.has_collision(name))
     }
 
+    /// Narrower check: only explicit ownership collision keys (from `add_function`
+    /// or `merge` detecting different `param_ownership`). Does NOT check
+    /// `has_method_name_collision`, avoiding false positives on common method names.
+    pub fn has_explicit_ownership_collision(&self, name: &str) -> bool {
+        if self.ownership_collision_keys.contains(name) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.has_explicit_ownership_collision(name))
+    }
+
     /// True when multiple qualified methods share this suffix (e.g. `new`) with
     /// incompatible param types — used for unqualified calls like `Emitter::new`.
     pub fn has_method_name_collision(&self, method: &str) -> bool {
@@ -406,7 +418,7 @@ impl SignatureRegistry {
             if !name.contains("::") {
                 self.add_function(format!("{}::{}", file_stem, name), sig.clone());
             }
-            if !module_path.is_empty() {
+            if !module_path.is_empty() && !name.starts_with(&format!("{}::", module_path)) {
                 self.add_function(format!("{}::{}", module_path, name), sig.clone());
             }
         }

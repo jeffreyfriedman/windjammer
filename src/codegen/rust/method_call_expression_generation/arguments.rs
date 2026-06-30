@@ -149,9 +149,6 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::stdlib_method_traits::is_map_key_method(method) && i == 0;
 
                     if is_hashmap_key_method {
-                        // Strip explicit `&ident` for map keys: `should_add_ref` will add `&` back when the
-                        // Rust type is owned or a Copy `K` that still needs `&K`. For `key: &str` / `&String`
-                        // parameters, `should_add_ref` stays false → we emit `get(key)` not `get(&key)` (E0277).
                         if let Expression::Identifier { .. } = &**operand {
                             operand
                         } else {
@@ -860,10 +857,14 @@ impl<'ast> CodeGenerator<'ast> {
                                 arg_already_rust_ref,
                                 receiver_type_name,
                             );
-                    } else if is_collection_key_arg && !arg_str.starts_with('&') {
+                    } else if is_collection_key_arg && !arg_str.starts_with('&')
+                        && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_to_generate)
+                    {
                         borrow_decision.add_ref = true;
                     }
-                } else if is_collection_key_arg && !arg_str.starts_with('&') {
+                } else if is_collection_key_arg && !arg_str.starts_with('&')
+                    && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_to_generate)
+                {
                     borrow_decision.add_ref = true;
                 }
 
@@ -915,7 +916,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                 )
                                         })
                             );
-                            if !(param_is_str_ref && arg_already_str_ref) && !arg_already_rust_ref {
+                            let arg_is_str_literal = crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_to_generate);
+                            if !(param_is_str_ref && (arg_already_str_ref || arg_is_str_literal)) && !arg_already_rust_ref {
                                 borrow_decision.add_ref = true;
                             }
                         }
@@ -1237,11 +1239,26 @@ impl<'ast> CodeGenerator<'ast> {
                                     .as_ref()
                                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
                             {
-                                let mut borrowed = arg_str.clone();
-                                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
-                                    &mut borrowed,
+                                // String literals are already &str — adding & creates &&str.
+                                // This covers both bare literals and "lit".to_string().
+                                let is_string_literal_expr = matches!(
+                                    arg_to_generate,
+                                    Expression::Literal { value: Literal::String(_), .. }
+                                ) || matches!(
+                                    arg_to_generate,
+                                    Expression::MethodCall { method: m, object, .. }
+                                    if *m == "to_string" && matches!(
+                                        &**object,
+                                        Expression::Literal { value: Literal::String(_), .. }
+                                    )
                                 );
-                                arg_str = borrowed;
+                                if !is_string_literal_expr {
+                                    let mut borrowed = arg_str.clone();
+                                    crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                                        &mut borrowed,
+                                    );
+                                    arg_str = borrowed;
+                                }
                             }
                         }
                     }
@@ -1338,7 +1355,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 || crate::codegen::rust::float_type_utilities::float_type_from_wj_ty(t)
                                     .is_some()
                         });
-                        if !skip_cast && receiver_is_float {
+                        if !skip_cast {
                             if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
                                 let arg_ty = self.infer_expression_type(arg);
                                 crate::codegen::rust::type_classification_utilities::maybe_cast_int_arg_to_float(

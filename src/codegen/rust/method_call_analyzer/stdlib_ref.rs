@@ -75,13 +75,19 @@ impl MethodCallAnalyzer {
                 return true;
             }
 
+            // Receiver type unknown — `remove` has incompatible semantics across types
+            // (Vec::remove takes owned usize, HashMap::remove takes &K). Don't assume
+            // collection key borrow; let the method signature system handle it.
+            if method == "remove" {
+                return false;
+            }
+
             if Self::is_copy_type_with_locals(
                 arg,
                 usize_variables,
                 current_function_params,
                 local_var_types,
             ) {
-                // Copy keys still need `&K` for HashMap/BTreeMap lookups when the receiver is a map.
                 return true;
             }
 

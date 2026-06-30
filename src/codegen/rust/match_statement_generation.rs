@@ -717,6 +717,9 @@ impl<'ast> CodeGenerator<'ast> {
                             if struct_enum_fields {
                                 return true;
                             }
+                            if scrutinee_prefix_binds_refs {
+                                return true;
+                            }
                             inferred.iter().any(|(name, ty)| {
                                 name == *var
                                     && matches!(ty, Type::Reference(_) | Type::MutableReference(_))

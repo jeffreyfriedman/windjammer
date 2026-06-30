@@ -17,8 +17,8 @@ pub use signature_filters::{
 };
 
 pub use crate_metadata::{
-    load_merged_external_struct_fields, load_struct_field_types_from_file, meta_cache_path,
-    meta_cache_root, CrateMetadata,
+    find_project_root, load_merged_external_struct_fields, load_struct_field_types_from_file,
+    meta_cache_path, meta_cache_root, CrateMetadata,
 };
 pub use function_metadata::{
     default_skeleton_param_ownership_from_types, metadata_function_sig_from_analyzer,
