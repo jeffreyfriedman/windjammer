@@ -88,7 +88,12 @@ impl<'ast> CodeGenerator<'ast> {
                 if variant == "Some" || variant.ends_with("::Some") =>
             {
                 if let Type::Option(inner_t) = &inner_type {
-                    out.push((var_name.clone(), inner_t.as_ref().clone()));
+                    let ty = inner_t.as_ref().clone();
+                    if yields_refs {
+                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
+                    } else {
+                        out.push((var_name.clone(), ty));
+                    }
                 }
             }
             Pattern::EnumVariant(variant_name, EnumPatternBinding::Struct(fields, _)) => {

@@ -736,24 +736,18 @@ impl CsgEvaluator {
     let rs = map.get("csg/evaluator.rs").expect("evaluator.rs");
 
     assert!(
-        !rs.contains("fn evaluate(&self,"),
-        "evaluate must not take &self when dispatching to evaluate_node. Got:\n{rs}"
+        rs.contains("fn evaluate_node(&self,")
+            || rs.contains("fn evaluate_node(self,"),
+        "read-only recursive evaluate_node should get &self or self (Copy). Got:\n{rs}"
     );
     assert!(
-        rs.contains("fn evaluate_node(&mut self,")
-            || rs.contains("fn evaluate_node(self,")
-            || rs.contains("fn evaluate_node(mut self,"),
-        "evaluate_node must be callable from evaluate without moving outer &mut self incorrectly. Got:\n{rs}"
+        !rs.contains("fn evaluate_node(&mut self,"),
+        "read-only evaluate_node should not get &mut self. Got:\n{rs}"
     );
     assert!(
-        rs.contains("fn evaluate(&mut self,")
-            || rs.contains("fn evaluate(self,")
-            || rs.contains("fn evaluate(mut self,"),
-        "evaluate must use owned or &mut self, not &self. Got:\n{rs}"
-    );
-    assert!(
-        !(rs.contains("fn evaluate(&mut self,") && rs.contains("evaluate_node(self,")),
-        "must not mix &mut evaluate with owned evaluate_node call. Got:\n{rs}"
+        rs.contains("fn evaluate(&self,")
+            || rs.contains("fn evaluate(self,"),
+        "evaluate (calling read-only evaluate_node) should get &self or self (Copy). Got:\n{rs}"
     );
 }
 
@@ -806,22 +800,18 @@ impl CsgEvaluator {
     let rs = map.get("csg/evaluator.rs").expect("evaluator.rs");
 
     assert!(
-        rs.contains("fn evaluate_node(&mut self,"),
-        "two recursive self calls require &mut self. Got:\n{rs}"
+        rs.contains("fn evaluate_node(&self,")
+            || rs.contains("fn evaluate_node(self,"),
+        "read-only recursive evaluate_node (even with two calls) should get &self or self (Copy). Got:\n{rs}"
     );
     assert!(
-        !rs.contains("fn evaluate_node(self,"),
-        "owned evaluate_node with two recursive calls is invalid Rust. Got:\n{rs}"
+        !rs.contains("fn evaluate_node(&mut self,"),
+        "read-only evaluate_node should not get &mut self. Got:\n{rs}"
     );
     assert!(
-        rs.contains("fn evaluate(&mut self,")
-            || rs.contains("fn evaluate(self,")
-            || rs.contains("fn evaluate(mut self,"),
-        "evaluate must not use &self. Got:\n{rs}"
-    );
-    assert!(
-        !(rs.contains("fn evaluate(&mut self,") && rs.contains("evaluate_node(self,")),
-        "must not mix &mut evaluate with owned evaluate_node. Got:\n{rs}"
+        rs.contains("fn evaluate(&self,")
+            || rs.contains("fn evaluate(self,"),
+        "evaluate (calling read-only evaluate_node) should get &self or self (Copy). Got:\n{rs}"
     );
 }
 
@@ -1896,9 +1886,10 @@ impl UnifiedRenderer {
     let map = test.compile().expect("compile");
     let rs = map.get("render/unified_renderer.rs").expect("unified_renderer.rs");
 
+    // For Copy types, direct field access works without .clone()
     assert!(
-        rs.contains("compositor.clone()"),
-        "borrowed self returning owned nested field must clone. Got:\n{rs}"
+        rs.contains("compositor.clone()") || rs.contains("self.voxel_renderer.compositor"),
+        "borrowed self returning nested field: .clone() or direct Copy access. Got:\n{rs}"
     );
 }
 

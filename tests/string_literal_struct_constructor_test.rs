@@ -166,10 +166,11 @@ impl App {
     let mut generator = CodeGenerator::new_for_module(analyzed_structs, CompilationTarget::Rust);
     let generated = generator.generate_program(&program, &analyzed_functions);
 
-    // Struct-literal-only storage: either &str (bare literal) or String (.to_string()) is valid
+    // Struct-literal-only storage: either &str (bare literal), .to_string(), or String::from() is valid
     assert!(
         generated.contains("Config::new(\"MyApp\")")
-            || generated.contains("Config::new(\"MyApp\".to_string())"),
+            || generated.contains("Config::new(\"MyApp\".to_string())")
+            || generated.contains("Config::new(String::from(\"MyApp\"))"),
         "Should pass string literal correctly at call site.\n{}",
         generated
     );

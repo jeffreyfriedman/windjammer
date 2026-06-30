@@ -182,6 +182,11 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 
             let sig_param_idx = sig.arg_param_index(i);
 
+            // Check for ownership collision on this method — skip auto-borrow if
+            // the registry has conflicting ownership for the same function name.
+            let has_method_collision = gen.has_collision_with_global(call_method)
+                || gen.has_collision_with_global(&qualified_name);
+
             let ownership = infer_external_module_mut_borrow_upgrade(
                 gen,
                 &qualified_name,
@@ -195,7 +200,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             );
 
             match ownership {
-                    OwnershipMode::Borrowed => {
+                    OwnershipMode::Borrowed if !has_method_collision => {
                         let is_string_literal = matches!(
                             arg_to_generate,
                             Expression::Literal {
@@ -257,7 +262,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             string_literal_converted_here,
                         );
                     }
-                    OwnershipMode::MutBorrowed => {
+                    OwnershipMode::MutBorrowed if !has_method_collision => {
                         crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
                             arg_to_generate,
                             &mut arg_str,
@@ -340,6 +345,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         }
                         gen.maybe_clone_borrowed_field_for_owned_param(arg_to_generate, &mut arg_str);
                     }
+                    _ => {
+                        // Collision guard triggered for Borrowed/MutBorrowed.
+                        // Pass argument as-is; don't apply auto-borrow.
+                    }
                 }
 
             // AUTO-CAST int → float
@@ -384,12 +393,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             }
 
             // Borrow owned String/expr args when callee's `string` param is Borrowed (&str in Rust).
-            if matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                    sig, sig_param_idx,
-                ),
-                OwnershipMode::Borrowed
-            ) && sig.param_types.get(sig_param_idx).is_some_and(
+            // Skip when ownership collision detected for this method.
+            if !has_method_collision
+                && matches!(
+                    crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                        sig, sig_param_idx,
+                    ),
+                    OwnershipMode::Borrowed
+                ) && sig.param_types.get(sig_param_idx).is_some_and(
                     crate::codegen::rust::types::is_windjammer_text_type,
                 )
                 && gen
@@ -408,13 +419,15 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 arg_str = format!("&{arg_str}");
             }
 
-            arg_str = coerce_string_arg_for_borrowed_callee(
-                gen,
-                sig,
-                sig_param_idx,
-                arg_to_generate,
-                arg_str,
-            );
+            if !has_method_collision {
+                arg_str = coerce_string_arg_for_borrowed_callee(
+                    gen,
+                    sig,
+                    sig_param_idx,
+                    arg_to_generate,
+                    arg_str,
+                );
+            }
 
             crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
                 Some(sig),

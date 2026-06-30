@@ -154,7 +154,8 @@ impl<'ast> Analyzer<'ast> {
         // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // 3. Check if parameter is stored in a struct or collection
-        if self.is_stored(param_name, body) {
+        let stored = self.is_stored(param_name, body);
+        if stored {
             return Ok(OwnershipMode::Owned);
         }
 

@@ -338,7 +338,7 @@ impl<'ast> Analyzer<'ast> {
                         analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
                     }
 
-                    let signature = self.build_signature(&analyzed_func);
+                    let signature = self.build_signature(&analyzed_func, &registry);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
                 }
@@ -391,7 +391,7 @@ impl<'ast> Analyzer<'ast> {
 
                         // Update local registry with current analyzed signatures
                         for (name, analyzed_func) in &analyzed_funcs {
-                            let signature = self.build_signature(analyzed_func);
+                            let signature = self.build_signature(analyzed_func, &local_registry);
                             let qualified_name = format!("{}::{}", impl_block.type_name, name);
                             local_registry.add_function(qualified_name, signature.clone());
                             local_registry.add_function(name.clone(), signature);
@@ -463,7 +463,7 @@ impl<'ast> Analyzer<'ast> {
                                 self.analyze_cache_locality(program, func);
                         }
 
-                        let signature = self.build_signature(&analyzed_func);
+                        let signature = self.build_signature(&analyzed_func, &registry);
 
                         let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
                         if is_trait_impl {
@@ -582,7 +582,7 @@ impl<'ast> Analyzer<'ast> {
 
                         // Add trait methods to analyzed list so codegen can access ownership info
                         // They won't be generated as standalone functions (codegen skips trait methods)
-                        let signature = self.build_signature(&analyzed_func);
+                        let signature = self.build_signature(&analyzed_func, &registry);
                         registry.add_function(func.name.clone(), signature.clone());
                         // Also register as TraitName::method for cross-file meta lookup
                         let qualified_name = format!("{}::{}", decl.name, func.name);
@@ -613,7 +613,7 @@ impl<'ast> Analyzer<'ast> {
                                     self.detect_cow_opportunities(func);
                                 analyzed_func.cache_locality =
                                     self.analyze_cache_locality(program, func);
-                                let signature = self.build_signature(&analyzed_func);
+                                let signature = self.build_signature(&analyzed_func, &registry);
                                 registry.add_function(func.name.clone(), signature);
                                 // Add to analyzed list for codegen to access (but marked as in-module)
                                 analyzed.push(analyzed_func);
@@ -661,7 +661,8 @@ impl<'ast> Analyzer<'ast> {
 
                                     // Update registry
                                     for (name, analyzed_func) in &analyzed_funcs {
-                                        let signature = self.build_signature(analyzed_func);
+                                        let signature =
+                                            self.build_signature(analyzed_func, &local_registry);
                                         local_registry.add_function(name.clone(), signature);
                                     }
 
@@ -722,7 +723,7 @@ impl<'ast> Analyzer<'ast> {
                                     analyzed_func.cache_locality =
                                         self.analyze_cache_locality(program, func);
 
-                                    let signature = self.build_signature(&analyzed_func);
+                                    let signature = self.build_signature(&analyzed_func, &registry);
                                     let qualified_name =
                                         format!("{}::{}", impl_block.type_name, func.name);
                                     if is_trait_impl {

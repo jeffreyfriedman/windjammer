@@ -55,7 +55,7 @@ fn meta_cache_path_under_root(project_root: &Path, relative: &Path) -> PathBuf {
 ///
 /// Returns the **closest** valid manifest (not the workspace parent) and skips auxiliary
 /// nested manifests so `.wj-cache` lives at the real crate root.
-pub(in crate::metadata) fn find_project_root(start: &Path) -> Option<PathBuf> {
+pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut dir = if start.is_file() {
         start.parent()?
     } else {

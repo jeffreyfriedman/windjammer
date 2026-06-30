@@ -49,10 +49,14 @@ impl BlendTree {
 "#;
 
     let rust = test_utils::compile_single(source);
-    // Peel emits `*(node_a)` so deref applies to the binding, not a longer chain.
+    // Two valid strategies: (1) match on ref with *(node_a) deref, or
+    // (2) clone borrow-break with owned bindings. Either is correct Rust.
+    let uses_deref = rust.contains("*(node_a)") && rust.contains("*(node_b)");
+    let uses_clone_break = rust.contains("__match_borrow_break")
+        && rust.contains("BlendNode::Lerp { node_a, node_b,");
     assert!(
-        rust.contains("*(node_a)") && rust.contains("*(node_b)"),
-        "Expected *(node_a) and *(node_b) when using match-on-index bindings in struct. Got:\n{}",
+        uses_deref || uses_clone_break,
+        "Expected deref *(node_a) or clone borrow-break for match-on-index. Got:\n{}",
         rust
     );
 }

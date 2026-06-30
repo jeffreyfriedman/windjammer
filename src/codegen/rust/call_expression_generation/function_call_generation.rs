@@ -400,7 +400,67 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     // Borrow owned args when registry says callee takes `&T` / `&mut T`.
     // Never borrow `string_to_ffi(...)` — extern FFI expects owned FfiString.
+    // Skip when ownership collision detected — the wrong module's signature
+    // may be active and adding & or &mut could be incorrect.
+    let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
+    let has_ownership_collision = gen.has_collision_with_global(func_name)
+        || gen.has_explicit_ownership_collision_with_global(simple_name);
     if let Some(ref sig) = signature {
+        // When there's a genuine explicit ownership collision (two modules define
+        // the same function with different ownership), skip auto-borrow entirely.
+        // But when the collision is only from method_name_collision (unrelated types
+        // share a method suffix), MutBorrowed auto-borrow is still safe since
+        // MutBorrowed is inferred from mutation analysis.
+        let explicit_ownership_collision = gen.has_explicit_ownership_collision_with_global(simple_name);
+        if has_ownership_collision && explicit_ownership_collision {
+            // Genuine collision — skip all auto-borrow.
+        } else if has_ownership_collision {
+            // Soft collision (method name collision only) — still apply MutBorrowed.
+            let has_mut_borrowed_param = sig
+                .param_ownership
+                .iter()
+                .any(|o| matches!(o, OwnershipMode::MutBorrowed));
+            if has_mut_borrowed_param {
+                args = args
+                    .iter()
+                    .enumerate()
+                    .map(|(i, arg_str)| {
+                        if is_extern_call || sig.is_extern || arg_str.contains("string_to_ffi(") {
+                            return arg_str.clone();
+                        }
+                        let ownership =
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                sig, i,
+                            );
+                        if matches!(ownership, OwnershipMode::MutBorrowed)
+                            && !arg_str.starts_with("&mut ")
+                        {
+                            let arg_already_mut_ref = if let Some((_, arg_expr)) = arguments.get(i) {
+                                if let Expression::Identifier { name, .. } = arg_expr {
+                                    gen.identifier_already_mut_ref(name)
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            };
+                            if arg_already_mut_ref {
+                                return arg_str.clone();
+                            }
+                            let mut s = arg_str.clone();
+                            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);
+                            if s.starts_with('&') && !s.starts_with("&mut ") {
+                                format!("&mut {}", s.trim_start_matches('&'))
+                            } else {
+                                format!("&mut {s}")
+                            }
+                        } else {
+                            arg_str.clone()
+                        }
+                    })
+                    .collect();
+            }
+        } else {
         args = args
             .iter()
             .enumerate()
@@ -501,6 +561,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 }
             })
             .collect();
+        }
     }
     let needs_format_temp = |arg_str: &str| -> bool {
         arg_str.contains("format!(")

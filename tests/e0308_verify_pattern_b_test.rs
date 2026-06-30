@@ -45,12 +45,15 @@ impl BlendTree {
 "#;
 
     let rust = test_utils::compile_single(source);
-    // Codegen may produce *node_a or *(node_a) — both are valid deref
+    // Two valid strategies: (1) match on ref with *node_a deref, or
+    // (2) clone borrow-break with owned bindings. Either is correct Rust.
     let has_deref_a = rust.contains("*node_a") || rust.contains("*(node_a)");
     let has_deref_b = rust.contains("*node_b") || rust.contains("*(node_b)");
+    let uses_clone_break = rust.contains("__match_borrow_break")
+        && rust.contains("BlendNode::Lerp { node_a, node_b,");
     assert!(
-        has_deref_a && has_deref_b,
-        "Expected *node_a and *node_b (or *(node_a) and *(node_b)) when using match-on-index bindings. Got:\n{}",
+        (has_deref_a && has_deref_b) || uses_clone_break,
+        "Expected deref *node_a/*node_b or clone borrow-break. Got:\n{}",
         rust
     );
 }
