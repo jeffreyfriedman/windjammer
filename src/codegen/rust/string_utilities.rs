@@ -314,10 +314,15 @@ pub fn string_literal_needs_owned_coercion_with_enum(
 
     let Some(sig) = sig else {
         if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
-            return enum_factory_string_param_needs_owned(variants, tn, m, arg_index);
+            if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
+                return true;
+            }
         }
-        // Without a signature, do not coerce identifiers to `.to_string()` for `Type::new`.
-        // String literals are handled by dedicated literal lowering once a signature is resolved.
+        // Cross-crate constructor heuristic: Type::new("literal") / Type::from("literal")
+        // always need .to_string() since Windjammer `string` params map to `String`.
+        if matches!(method, Some("new" | "from")) && receiver_type.is_some() {
+            return true;
+        }
         return false;
     };
 
