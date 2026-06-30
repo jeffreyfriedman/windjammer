@@ -535,6 +535,47 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
+            // Macros that consume their arguments (vec![], assert_eq![], etc.)
+            // need owned values. Formatting macros (format!, println!, etc.)
+            // only borrow, so &str is fine for those.
+            Expression::MacroInvocation { name, args, .. } => {
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format" | "println" | "print" | "eprintln" | "eprint"
+                        | "write" | "writeln" | "panic" | "debug" | "info"
+                        | "warn" | "error" | "trace" | "log"
+                );
+                if borrows_only {
+                    for arg in args {
+                        if self.expr_uses_param_in_string_ref_context(param_name, arg, registry) {
+                            return true;
+                        }
+                    }
+                    false
+                } else {
+                    for arg in args {
+                        if self.expr_is_param_or_ref_to_param(param_name, arg) {
+                            return true;
+                        }
+                        if self.expr_uses_param_in_string_ref_context(param_name, arg, registry) {
+                            return true;
+                        }
+                    }
+                    false
+                }
+            }
+            // Array literals [param, ...] also consume elements as owned values
+            Expression::Array { elements, .. } => {
+                for element in elements {
+                    if self.expr_is_param_or_ref_to_param(param_name, element) {
+                        return true;
+                    }
+                    if self.expr_uses_param_in_string_ref_context(param_name, element, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
             // Identifiers by themselves don't require &String (only when passed to methods)
             Expression::Identifier { .. } => false,
             // Other expressions

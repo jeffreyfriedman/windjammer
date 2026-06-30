@@ -222,8 +222,17 @@ impl<'ast> CodeGenerator<'ast> {
                         if self.inferred_borrowed_params.contains(name)
                             || self.inferred_mut_borrowed_params.contains(name)
                 );
+                let is_borrowed_iter_collecting_refs = matches!(
+                    arg_to_generate,
+                    Expression::Identifier { name, .. }
+                        if self.borrowed_iterator_vars.contains(name)
+                ) && matches!(
+                    &self.current_function_return_type,
+                    Some(Type::Vec(inner)) if matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
+                );
                 if !external_module_mut_reborrow
                     && !is_collection_key_arg
+                    && !is_borrowed_iter_collecting_refs
                     && !self.in_user_written_closure
                     && !matches!(arg_to_generate, Expression::Closure { .. })
                     && !callee_wants_str_borrow

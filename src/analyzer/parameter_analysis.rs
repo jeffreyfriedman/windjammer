@@ -514,6 +514,24 @@ impl<'ast> Analyzer<'ast> {
                     self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
                 }
             }
+            Expression::MacroInvocation { name, args, .. } => {
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format" | "println" | "print" | "eprintln" | "eprint"
+                        | "write" | "writeln" | "panic" | "debug" | "info"
+                        | "warn" | "error" | "trace" | "log"
+                );
+                if !borrows_only {
+                    for arg in args {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        {
+                            *found = true;
+                            return;
+                        }
+                        self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -615,13 +633,22 @@ impl<'ast> Analyzer<'ast> {
                     self.expr_collect_pass_by_value_call_arg(param_name, arg, found);
                 }
             }
-            Expression::MacroInvocation { args, .. } => {
-                for arg in args {
-                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
-                        *found = true;
-                        return;
+            Expression::MacroInvocation { name, args, .. } => {
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format" | "println" | "print" | "eprintln" | "eprint"
+                        | "write" | "writeln" | "panic" | "debug" | "info"
+                        | "warn" | "error" | "trace" | "log"
+                );
+                if !borrows_only {
+                    for arg in args {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        {
+                            *found = true;
+                            return;
+                        }
+                        self.expr_collect_pass_by_value_call_arg(param_name, arg, found);
                     }
-                    self.expr_collect_pass_by_value_call_arg(param_name, arg, found);
                 }
             }
             Expression::Block { statements, .. } => {
