@@ -28,6 +28,7 @@ pub mod collections;
 pub mod contracts;
 pub mod crypto;
 pub mod csv_mod;
+#[cfg(feature = "db")]
 pub mod db;
 pub mod doc_test;
 pub mod encoding;

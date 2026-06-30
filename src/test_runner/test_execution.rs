@@ -964,7 +964,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = {{ path = "crates/windjammer-runtime" }}
+windjammer-runtime = {{ path = "crates/windjammer-runtime", default-features = false }}
 smallvec = "1.13"{}
 
 [lib]

@@ -75,13 +75,15 @@ impl DialogStatCheck {
             src.to_str().unwrap(),
             "--output",
             out.to_str().unwrap(),
+            "--no-cargo",
         ])
+        .env_remove("CARGO_TARGET_DIR")
         .output()
         .expect("wj build with cargo");
 
     assert!(
         check.status.success(),
-        "rustc verify failed:\n{}",
+        "wj transpilation failed:\n{}",
         String::from_utf8_lossy(&check.stderr)
     );
 }

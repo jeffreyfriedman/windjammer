@@ -11,6 +11,37 @@ use super::dependency_management::{
 };
 use super::feature_management::{wasm_output_needs_runtime, WEB_SYS_CARGO_FEATURES};
 
+/// Scan generated `.rs` files to determine which windjammer-runtime features are needed.
+fn detect_runtime_features(output_dir: &Path) -> Vec<&'static str> {
+    let mut features = Vec::new();
+    let mut uses_db = false;
+    let mut uses_server = false;
+
+    if let Ok(entries) = walk_rs_files(output_dir) {
+        for path in entries {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if content.contains("windjammer_runtime::db")
+                    || content.contains("use crate::db")
+                    || content.contains("sqlx::")
+                {
+                    uses_db = true;
+                }
+                if content.contains("tower::") || content.contains("tower_http::") {
+                    uses_server = true;
+                }
+            }
+        }
+    }
+
+    if uses_db {
+        features.push("db");
+    }
+    if uses_server {
+        features.push("server");
+    }
+    features
+}
+
 /// Search for `wj.toml` starting from `source_dir` and walking up parents.
 pub(crate) fn find_wj_config(source_dir: &Path) -> crate::config::WjConfig {
     let mut dir = source_dir;
@@ -39,8 +70,25 @@ pub(crate) fn write_cargo_toml(
     let runtime_path = find_windjammer_runtime_path();
     let runtime_path_str = path_to_toml_string(&runtime_path);
 
+    let runtime_features = detect_runtime_features(output_dir);
+    let runtime_dep = if runtime_features.is_empty() {
+        format!(
+            "windjammer-runtime = {{ path = \"{}\", default-features = false }}",
+            runtime_path_str
+        )
+    } else {
+        format!(
+            "windjammer-runtime = {{ path = \"{}\", default-features = false, features = [{}] }}",
+            runtime_path_str,
+            runtime_features
+                .iter()
+                .map(|f| format!("\"{}\"", f))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
     let mut deps = vec![
-        format!("windjammer-runtime = {{ path = \"{}\" }}", runtime_path_str),
+        runtime_dep,
         "smallvec = \"1.13\"".to_string(),
         "serde = { version = \"1.0\", features = [\"derive\"] }".to_string(),
     ];

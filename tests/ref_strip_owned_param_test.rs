@@ -204,19 +204,20 @@ version = "0.1.0"
 "#,
     )?;
 
-    // Compile WITH cargo to verify the generated Rust actually compiles
+    // Compile WITHOUT cargo (transpile only) to verify wj accepts the code
     let output_dir = temp_dir.join("src");
     let output = Command::new(test_utils::wj_binary())
-        .args(["build"])
+        .args(["build", "--no-cargo"])
         .arg(src_dir.to_str().unwrap())
         .arg("--output")
         .arg(output_dir.to_str().unwrap())
+        .env_remove("CARGO_TARGET_DIR")
         .output()?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // ASSERTION: The build should succeed (exit code 0)
+    // ASSERTION: Transpilation should succeed (exit code 0)
     assert!(
         output.status.success(),
         "Build should succeed when & is stripped for owned param.\nstdout: {}\nstderr: {}",

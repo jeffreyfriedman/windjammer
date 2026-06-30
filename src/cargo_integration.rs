@@ -716,10 +716,14 @@ pub fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> 
 
     println!("\n{} Rust compilation...", "Checking".cyan().bold());
 
+    let target_dir = output_dir.join("target");
     let output = Command::new("cargo")
         .arg("build")
         .arg("--message-format=json")
+        .arg("--target-dir")
+        .arg(&target_dir)
         .current_dir(output_dir)
+        .env_remove("CARGO_TARGET_DIR")
         .output()?;
 
     if output.status.success() {
