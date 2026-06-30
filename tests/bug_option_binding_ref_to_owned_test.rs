@@ -100,45 +100,28 @@ impl UnifiedRenderer {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let generated = fs::read_to_string(test_dir.join("out").join("option_ref_owned.rs")).unwrap();
+    let rs_path = test_dir.join("out").join("option_ref_owned.rs");
+    let generated = fs::read_to_string(&rs_path).unwrap();
 
-    // Key assertion: the generated code must compile with rustc.
-    // The binding from `if let Some(cam) = &mut self.last_camera` is &mut CameraData,
-    // but set_camera/update_camera expect owned CameraData.
-    // The compiler must add .clone() to pass &mut T where T is expected.
-
-    // Check that the code doesn't pass a bare `cam` to set_camera without cloning,
-    // when cam is behind a &mut scrutinee.
-    // Either: 1) Don't use &mut on scrutinee (use .clone() on the Option)
-    //     or: 2) Clone cam when passing as owned argument.
-    let has_type_error = generated.contains("set_camera(cam)")
-        && generated.contains("&mut self.last_camera");
-
-    if has_type_error {
-        // If scrutinee is &mut and cam is passed without clone, this is a bug
-        panic!(
-            "Bug: Generated code passes &mut binding as owned without .clone().\n\
-             The compiler should either:\n\
-             1. Not add &mut to scrutinee when binding is passed as owned\n\
-             2. Add .clone() to the argument\n\
-             Generated code:\n{}",
-            generated
-        );
-    }
-
-    // Verify the code would compile by checking one of:
-    // - cam.clone() is used for the argument to set_camera
-    // - self.last_camera.clone() is used (no &mut on scrutinee)
-    // - some other valid pattern
-    let valid = generated.contains("set_camera(cam.clone())")
-        || generated.contains("self.last_camera.clone()")
-        || (!generated.contains("&mut self.last_camera")
-            && generated.contains("set_camera(cam)"));
+    // The compiler may infer cam as borrowed (&CameraData) since set_camera/update_camera
+    // only read cam.fov.  In that case, cam from `&mut self.last_camera` auto-reborrows
+    // to &CameraData which is valid Rust. The definitive check is: does the generated code
+    // compile with rustc?
+    let rustc = Command::new("rustc")
+        .arg("--crate-type")
+        .arg("lib")
+        .arg("--edition")
+        .arg("2021")
+        .arg(&rs_path)
+        .arg("-o")
+        .arg(test_dir.join("option_ref_owned.rlib"))
+        .output()
+        .expect("Failed to run rustc");
 
     assert!(
-        valid,
-        "Generated code doesn't handle Option binding to owned parameter correctly.\n\
-         Generated code:\n{}",
+        rustc.status.success(),
+        "Generated code must compile with rustc.\nstderr:\n{}\nGenerated:\n{}",
+        String::from_utf8_lossy(&rustc.stderr),
         generated
     );
 }

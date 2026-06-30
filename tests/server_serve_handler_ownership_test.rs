@@ -80,12 +80,18 @@ pub fn run_server() {
     let map = test.compile().expect("compile");
     let rs = map.get("server.rs").expect("server.rs");
 
+    // The ownership analyzer may infer handle_request(request: &ServerRequest)
+    // since the function only reads from request. In that case the closure
+    // call site correctly inserts &request (auto-borrow). Both patterns are
+    // valid and should compile.
+    let has_call = rs.contains("handle_request(request")
+        || rs.contains("handle_request( request")
+        || rs.contains("handle_request(&request");
+    assert!(has_call, "serve closure must call handle_request. Got:\n{rs}");
+
+    // Must NOT have double-borrow (&&request)
     assert!(
-        rs.contains("handle_request(request") || rs.contains("handle_request( request"),
-        "serve closure must pass request by value to handler fn. Got:\n{rs}"
-    );
-    assert!(
-        !rs.contains("handle_request(&request"),
+        !rs.contains("handle_request(&&request") && !rs.contains("handle_request( &&request"),
         "must not double-borrow request in serve closure. Got:\n{rs}"
     );
     test.assert_compiles_without_error();

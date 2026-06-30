@@ -182,12 +182,13 @@ impl AutoCloneAnalysis {
                 }
             }
             Statement::For {
-                pattern: _,
+                pattern,
                 iterable,
                 body,
                 ..
             } => {
                 Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map);
+                Self::register_pattern_definitions(pattern, idx, true, map);
                 for stmt in body.iter() {
                     Self::collect_usages_from_statement(stmt, counter, true, map);
                 }
@@ -419,13 +420,39 @@ impl AutoCloneAnalysis {
         }
     }
 
+    /// Register pattern bindings as definitions (for for-loop variables, match bindings, etc.)
+    fn register_pattern_definitions(
+        pattern: &crate::parser::Pattern,
+        statement_idx: usize,
+        in_loop: bool,
+        map: &mut HashMap<String, Vec<Usage>>,
+    ) {
+        match pattern {
+            crate::parser::Pattern::Identifier(name) => {
+                map.entry(name.clone()).or_default().push(Usage {
+                    statement_idx,
+                    kind: UsageKind::Definition,
+                    is_move: false,
+                    in_loop,
+                });
+            }
+            crate::parser::Pattern::Tuple(patterns) => {
+                for p in patterns {
+                    Self::register_pattern_definitions(p, statement_idx, in_loop, map);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Analyze usages of a single variable to determine where clones are needed
     fn analyze_variable_usages(&mut self, var_name: &str, usages: &[Usage]) {
         // Find the definition
-        let definition_idx = usages
+        let definition = usages
             .iter()
-            .find(|u| u.kind == UsageKind::Definition)
-            .map(|u| u.statement_idx);
+            .find(|u| u.kind == UsageKind::Definition);
+        let definition_idx = definition.map(|u| u.statement_idx);
+        let definition_is_loop_scoped = definition.is_some_and(|u| u.in_loop);
 
         // Field accesses (e.g., "config.paths"), method calls (e.g., "source.get_items()"),
         // and index expressions (e.g., "items[0]") don't have definitions.
@@ -510,12 +537,16 @@ impl AutoCloneAnalysis {
                 .filter(|m| m.statement_idx == move_usage.statement_idx)
                 .count();
 
-            // Moves inside loops always need clone -- the loop body executes
-            // multiple times, consuming the value on each iteration.
+            // Moves inside loops need clone when the variable is captured from
+            // an outer scope (each iteration re-uses the same binding). But
+            // loop-scoped variables (for-loop pattern vars, let bindings inside
+            // the body) get fresh bindings each iteration — no clone needed.
+            let loop_capture_needs_clone =
+                move_usage.in_loop && !definition_is_loop_scoped;
             let needs_clone = has_later_use
                 || same_stmt_read_after_move
                 || same_stmt_moves > 1
-                || move_usage.in_loop;
+                || loop_capture_needs_clone;
 
             if needs_clone {
                 self.clone_sites.insert(
