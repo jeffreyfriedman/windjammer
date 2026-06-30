@@ -5,7 +5,6 @@ use std::async
 use std::time
 use std::regex
 use std::crypto
-use std::db
 use std::cli
 use std::math
 use std::mime
