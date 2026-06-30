@@ -410,6 +410,44 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // CALLBACK BRIDGE: When a bare function identifier is passed as a
+                // callback argument and the function's parameters have been auto-borrowed,
+                // wrap it in a closure so the caller's owned args are correctly borrowed.
+                // e.g. server.serve(handle_request) → server.serve(|__cb0| handle_request(&__cb0))
+                if let Expression::Identifier { name, .. } = arg {
+                    if let Some(func_sig) = self.signature_registry.get_signature(name) {
+                        if !func_sig.has_self_receiver && !func_sig.is_extern {
+                            let has_borrowed: Vec<usize> = func_sig
+                                .param_ownership
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, o)| {
+                                    matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                                })
+                                .map(|(idx, _)| idx)
+                                .collect();
+                            if !has_borrowed.is_empty() {
+                                let n = func_sig.param_ownership.len();
+                                let wrapper: Vec<String> =
+                                    (0..n).map(|j| format!("__cb{}", j)).collect();
+                                let call: Vec<String> = (0..n)
+                                    .map(|j| match func_sig.param_ownership[j] {
+                                        OwnershipMode::MutBorrowed => format!("&mut __cb{}", j),
+                                        OwnershipMode::Borrowed => format!("&__cb{}", j),
+                                        _ => format!("__cb{}", j),
+                                    })
+                                    .collect();
+                                arg_str = format!(
+                                    "|{}| {}({})",
+                                    wrapper.join(", "),
+                                    name,
+                                    call.join(", ")
+                                );
+                            }
+                        }
+                    }
+                }
+
                 // TDD FIX: String literal ownership conversion
                 // Windjammer philosophy: "sword" should work whether parameter wants String or &String
                 // CRITICAL: Do NOT convert for explicit &str parameters! Only for inferred &String.
