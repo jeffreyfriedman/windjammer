@@ -540,7 +540,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 let asref_str_module =
                     asref_str_module_for_receiver(gen, runtime_module, type_name);
                 let needs_to_string = !asref_str_module
-                    && fallback_sig.as_ref().is_some_and(|sig| {
+                    && (fallback_sig.as_ref().is_some_and(|sig| {
                         crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             Some(sig),
                             i,
@@ -549,7 +549,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             Some(&gen.enum_variant_types),
                             runtime_module,
                         )
-                    });
+                    })
+                    || (fallback_sig.is_none()
+                        && is_string_literal
+                        && matches!(call_method, "new" | "from")));
                 if needs_to_string {
                     arg_str = format!("{}.to_string()", arg_str);
                 }
