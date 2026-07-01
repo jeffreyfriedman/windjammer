@@ -29,6 +29,7 @@ pub enum DatabaseType {
 
 #[derive(Debug)]
 enum DbBackend {
+    #[allow(dead_code)]
     Postgres(Arc<Pool<Postgres>>),
     PostgresPending {
         url: String,

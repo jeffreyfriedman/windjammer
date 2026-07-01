@@ -290,7 +290,6 @@ pub fn process(d: Data) -> i32 {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_explicit_mut_borrowed_respected() {
     let code = r#"
-@derive(Clone, Debug)
 pub struct Data {
     value: i32,
 }

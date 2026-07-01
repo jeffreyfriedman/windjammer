@@ -158,7 +158,6 @@ impl<'ast> Analyzer<'ast> {
         let mut explicit_non_copy: HashSet<String> = HashSet::new();
         for item in &program.items {
             if let Item::Struct { decl, .. } = item {
-                let has_derive = decl.decorators.iter().any(|d| d.name == "derive");
                 let has_copy_derive = decl.decorators.iter().any(|decorator| {
                     decorator.name == "derive"
                         && decorator.arguments.iter().any(|(_, arg)| {
@@ -169,11 +168,26 @@ impl<'ast> Analyzer<'ast> {
                             }
                         })
                 });
+                let has_drop_derive = decl.decorators.iter().any(|decorator| {
+                    decorator.name == "derive"
+                        && decorator.arguments.iter().any(|(_, arg)| {
+                            if let crate::parser::ast::Expression::Identifier { name, .. } = arg {
+                                name == "Drop"
+                            } else {
+                                false
+                            }
+                        })
+                });
                 if has_copy_derive {
                     Arc::make_mut(&mut self.copy_structs).insert(decl.name.clone());
-                } else if has_derive {
+                } else if has_drop_derive {
+                    // Drop and Copy are mutually exclusive — explicit Drop suppresses auto-Copy.
                     explicit_non_copy.insert(decl.name.clone());
                 }
+                // Redundant @derive(Clone, Debug, ...) without Copy does NOT suppress
+                // auto-Copy detection. The fixed-point loop below handles Copy inference
+                // based on field types. @derive with only auto-inferred traits is Rust
+                // leakage and should eventually be forbidden.
                 struct_infos.push((
                     decl.name.clone(),
                     decl.fields.iter().map(|f| f.field_type.clone()).collect(),
