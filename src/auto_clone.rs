@@ -448,9 +448,7 @@ impl AutoCloneAnalysis {
     /// Analyze usages of a single variable to determine where clones are needed
     fn analyze_variable_usages(&mut self, var_name: &str, usages: &[Usage]) {
         // Find the definition
-        let definition = usages
-            .iter()
-            .find(|u| u.kind == UsageKind::Definition);
+        let definition = usages.iter().find(|u| u.kind == UsageKind::Definition);
         let definition_idx = definition.map(|u| u.statement_idx);
         let definition_is_loop_scoped = definition.is_some_and(|u| u.in_loop);
 
@@ -541,8 +539,7 @@ impl AutoCloneAnalysis {
             // an outer scope (each iteration re-uses the same binding). But
             // loop-scoped variables (for-loop pattern vars, let bindings inside
             // the body) get fresh bindings each iteration — no clone needed.
-            let loop_capture_needs_clone =
-                move_usage.in_loop && !definition_is_loop_scoped;
+            let loop_capture_needs_clone = move_usage.in_loop && !definition_is_loop_scoped;
             let needs_clone = has_later_use
                 || same_stmt_read_after_move
                 || same_stmt_moves > 1

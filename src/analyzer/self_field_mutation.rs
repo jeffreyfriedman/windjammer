@@ -243,9 +243,8 @@ impl<'ast> Analyzer<'ast> {
                     if let Some(func_name) = self.extract_function_name(function) {
                         for (i, (_, arg)) in arguments.iter().enumerate() {
                             if self.expression_is_self_field_access(arg)
-                                && self.function_call_argument_expects_mut_borrow(
-                                    &func_name, i, reg,
-                                )
+                                && self
+                                    .function_call_argument_expects_mut_borrow(&func_name, i, reg)
                             {
                                 return true;
                             }
@@ -266,9 +265,7 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         let sig = reg
             .get_signature(func_name)
-            .or_else(|| {
-                reg.get_signature(&format!("Self::{}", func_name))
-            });
+            .or_else(|| reg.get_signature(&format!("Self::{}", func_name)));
         let Some(sig) = sig else {
             return false;
         };

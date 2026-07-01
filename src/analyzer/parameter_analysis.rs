@@ -517,9 +517,20 @@ impl<'ast> Analyzer<'ast> {
             Expression::MacroInvocation { name, args, .. } => {
                 let borrows_only = matches!(
                     name.as_str(),
-                    "format" | "println" | "print" | "eprintln" | "eprint"
-                        | "write" | "writeln" | "panic" | "debug" | "info"
-                        | "warn" | "error" | "trace" | "log"
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
                 );
                 if !borrows_only {
                     for arg in args {
@@ -636,9 +647,20 @@ impl<'ast> Analyzer<'ast> {
             Expression::MacroInvocation { name, args, .. } => {
                 let borrows_only = matches!(
                     name.as_str(),
-                    "format" | "println" | "print" | "eprintln" | "eprint"
-                        | "write" | "writeln" | "panic" | "debug" | "info"
-                        | "warn" | "error" | "trace" | "log"
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
                 );
                 if !borrows_only {
                     for arg in args {

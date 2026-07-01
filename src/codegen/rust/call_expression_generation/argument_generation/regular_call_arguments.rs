@@ -607,7 +607,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
 
                             // Insert & if not already a reference and not a string literal and not a temp var
                             // THE WINDJAMMER WAY: Preserve user-written closure params
-                            let is_user_closure_param =
+                            let _is_user_closure_param =
                                 if let Expression::Identifier { name, .. } = arg {
                                     gen.in_user_written_closure && gen.user_closure_params.contains(name)
                                 } else {

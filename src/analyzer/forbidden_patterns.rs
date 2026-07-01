@@ -9,7 +9,15 @@ use crate::parser::ast::core::Expression;
 use crate::parser::*;
 
 const AUTO_INFERRED_TRAITS: &[&str] = &[
-    "Copy", "Clone", "Debug", "PartialEq", "Eq", "Hash", "Default", "PartialOrd", "Ord",
+    "Copy",
+    "Clone",
+    "Debug",
+    "PartialEq",
+    "Eq",
+    "Hash",
+    "Default",
+    "PartialOrd",
+    "Ord",
 ];
 
 /// Walk the AST and fail if forbidden Rust-specific patterns appear in user source.
@@ -281,7 +289,10 @@ fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), Strin
     Ok(())
 }
 
-fn check_struct_decorators(_struct_name: &str, _decorators: &[Decorator<'_>]) -> Result<(), String> {
+fn check_struct_decorators(
+    _struct_name: &str,
+    _decorators: &[Decorator<'_>],
+) -> Result<(), String> {
     // Auto-inferred traits (Copy, Clone, Debug, etc.) specified via @derive are
     // silently accepted for backward compatibility.  The compiler's auto-derive
     // system handles these traits automatically based on field types, so explicit

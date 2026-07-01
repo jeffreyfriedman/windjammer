@@ -397,8 +397,7 @@ mod tests {
             value: Literal::Int(42),
             location: Default::default(),
         };
-        let decision =
-            should_borrow_at_call_site(&sig, 0, &arg, "42", "push", false, Some("Vec"));
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "42", "push", false, Some("Vec"));
         assert!(!decision.add_ref, "Copy scalar literal must not add &");
     }
 

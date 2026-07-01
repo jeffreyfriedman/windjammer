@@ -215,7 +215,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 false
                             };
 
-                        let mut string_literal_converted_here = false;
+                        let string_literal_converted_here = false;
 
                         if is_string_literal {
                             // Borrowed text formals accept bare `"lit"` as `&str` — never

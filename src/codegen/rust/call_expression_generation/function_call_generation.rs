@@ -373,9 +373,15 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 // trusting wrong ownership metadata.
                 if !resolved_via_fallback && func_name.contains("::") {
                     let qualifier = func_name.split("::").next().unwrap_or("");
-                    if qualifier.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
+                    if qualifier
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_lowercase())
+                    {
                         let key_qualifier = r.qualified_key.split("::").next().unwrap_or("");
-                        if key_qualifier != qualifier && !r.qualified_key.contains(&format!("{}::", qualifier)) {
+                        if key_qualifier != qualifier
+                            && !r.qualified_key.contains(&format!("{}::", qualifier))
+                        {
                             resolved_via_fallback = true;
                         }
                         // ExactQualified resolution that only exists in a
@@ -438,7 +444,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         // But when the collision is only from method_name_collision (unrelated types
         // share a method suffix), MutBorrowed auto-borrow is still safe since
         // MutBorrowed is inferred from mutation analysis.
-        let explicit_ownership_collision = gen.has_explicit_ownership_collision_with_global(simple_name);
+        let explicit_ownership_collision =
+            gen.has_explicit_ownership_collision_with_global(simple_name);
         if has_ownership_collision && explicit_ownership_collision {
             // Genuine collision — skip all auto-borrow.
         } else if has_ownership_collision {
@@ -488,7 +495,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     .collect();
             }
         } else {
-        args = args
+            args = args
             .iter()
             .enumerate()
             .map(|(i, arg_str)| {

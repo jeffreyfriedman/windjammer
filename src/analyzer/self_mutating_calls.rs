@@ -408,12 +408,9 @@ impl<'ast> Analyzer<'ast> {
                                 for (key, sig) in reg.all_signatures() {
                                     if key.ends_with(&suffix)
                                         && sig.has_self_receiver
-                                        && sig
-                                            .param_ownership
-                                            .first()
-                                            .is_some_and(|o| {
-                                                matches!(o, super::OwnershipMode::MutBorrowed)
-                                            })
+                                        && sig.param_ownership.first().is_some_and(|o| {
+                                            matches!(o, super::OwnershipMode::MutBorrowed)
+                                        })
                                     {
                                         return true;
                                     }
@@ -427,17 +424,17 @@ impl<'ast> Analyzer<'ast> {
                         self.body_calls_mutating_method_on_vars(arg, var_names, registry, visited)
                     })
             }
-            Expression::Block { statements, .. } => {
-                statements.iter().any(|s| {
-                    self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)
-                })
-            }
-            Expression::Call { arguments, function, .. } => {
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)),
+            Expression::Call {
+                arguments,
+                function,
+                ..
+            } => {
                 self.body_calls_mutating_method_on_vars(function, var_names, registry, visited)
                     || arguments.iter().any(|(_, arg)| {
-                        self.body_calls_mutating_method_on_vars(
-                            arg, var_names, registry, visited,
-                        )
+                        self.body_calls_mutating_method_on_vars(arg, var_names, registry, visited)
                     })
             }
             Expression::Unary { operand, .. } => {
@@ -474,9 +471,7 @@ impl<'ast> Analyzer<'ast> {
                     })
                     || else_block.as_ref().is_some_and(|b| {
                         b.iter().any(|s| {
-                            self.stmt_calls_mutating_method_on_vars(
-                                s, var_names, registry, visited,
-                            )
+                            self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)
                         })
                     })
             }
