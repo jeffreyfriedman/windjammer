@@ -2,7 +2,10 @@
 
 use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
-use crate::metadata::CrateMetadata;
+use crate::metadata::{
+    metadata_function_sig_from_analyzer, signature_targets_local_struct,
+    struct_name_from_method_key, CrateMetadata,
+};
 use crate::parser::ast::core::Item;
 use crate::parser::ast::types::Type;
 use crate::type_inference::{FloatInference, IntInference};
@@ -80,13 +83,13 @@ pub fn build_project_ext(
     };
     let has_nested_structure = wj_files.iter().any(|f| {
         f.strip_prefix(base_path)
-            .map(|r| r.parent().is_some())
+            .map(|r| r.components().count() > 1)
             .unwrap_or(false)
     });
     if wj_files.len() > 1 || (library && has_nested_structure) {
         return build_library(
             &wj_files,
-            path,
+            base_path,
             output,
             target,
             library,
@@ -187,12 +190,11 @@ pub fn build_project_ext(
         int_inference.infer_program(&program);
         super::bail_on_inference_errors(&int_inference.errors, "Int", Some(file))?;
 
-        let mut registry_snapshot = registry.clone();
-
         let cross_crate_field_types =
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 
-        let mut codegen = CodeGenerator::new(registry, target);
+        let mut codegen = CodeGenerator::new(registry.clone(), target);
+        codegen.set_global_signature_registry(std::sync::Arc::new(global_signatures.clone()));
         codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_float_inference(float_inference);
@@ -215,23 +217,29 @@ pub fn build_project_ext(
             super::ensure_output_parent_dir(&output_file)?;
             output_file
         } else if wj_files.len() == 1 {
-            let flat_rs = || {
-                let stem = file
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("output");
-                output.join(format!("{}.rs", stem))
+            let stem = file
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
+            let flat_rs = || -> anyhow::Result<std::path::PathBuf> {
+                let p = output.join(format!("{stem}.rs"));
+                super::ensure_output_parent_dir(&p)?;
+                Ok(p)
             };
-            if let Some(root) = crate::project_paths::find_source_root(file) {
+            if library {
+                // Standalone library transpile (test harness, single-file crates): always emit
+                // under `output/` — do not mirror into the source tree beside the `.wj` file.
+                flat_rs()?
+            } else if let Some(root) = crate::project_paths::find_source_root(file) {
                 match crate::project_paths::get_relative_output_path(root, file, output) {
                     Ok(p) => {
                         super::ensure_output_parent_dir(&p)?;
                         p
                     }
-                    Err(_) => flat_rs(),
+                    Err(_) => flat_rs()?,
                 }
             } else {
-                flat_rs()
+                flat_rs()?
             }
         } else {
             let stem = file
@@ -244,7 +252,6 @@ pub fn build_project_ext(
             &mut codegen,
             &program,
             &analyzed_functions,
-            &mut registry_snapshot,
             &output_file,
             file,
             analyzer.get_copy_structs(),
@@ -252,6 +259,40 @@ pub fn build_project_ext(
             &ancestor_roots,
             None,
         )?;
+
+        if library {
+            let local_struct_names: HashSet<String> = program
+                .items
+                .iter()
+                .filter_map(|item| {
+                    if let Item::Struct { decl, .. } = item {
+                        Some(decl.name.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let local_keys: Vec<String> = crate_metadata
+                .functions
+                .keys()
+                .filter(|name| signature_targets_local_struct(name, &local_struct_names))
+                .cloned()
+                .collect();
+            for name in local_keys {
+                if let Some(sig) = registry.get_signature(&name) {
+                    let (is_associated, parent_type) =
+                        if let Some(struct_name) = struct_name_from_method_key(&name) {
+                            (true, Some(struct_name.to_string()))
+                        } else {
+                            (false, None)
+                        };
+                    crate_metadata.functions.insert(
+                        name,
+                        metadata_function_sig_from_analyzer(sig, is_associated, parent_type),
+                    );
+                }
+            }
+        }
     }
 
     if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {

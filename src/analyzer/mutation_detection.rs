@@ -386,9 +386,101 @@ impl<'ast> Analyzer<'ast> {
                     self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
                 self.lookup_field_type_on_struct(&base, field)
             }
+            Expression::Index { object, .. } => {
+                let base =
+                    self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)?;
+                match &base {
+                    Type::Vec(inner) | Type::Array(inner, _) => Some((**inner).clone()),
+                    Type::Parameterized(name, params) if name == "Vec" && !params.is_empty() => {
+                        Some(params[0].clone())
+                    }
+                    _ => None,
+                }
+            }
             Expression::Identifier { name, .. } if name == param_name => param_type_hint.cloned(),
             _ => None,
         }
+    }
+
+    /// Look up a free-function signature from a call expression, mirroring passthrough inference.
+    fn lookup_call_signature<'a>(
+        registry: &'a SignatureRegistry,
+        func_name: &str,
+    ) -> Option<&'a FunctionSignature> {
+        registry.lookup_method(func_name).or_else(|| {
+            func_name
+                .rsplit("::")
+                .next()
+                .filter(|simple| *simple != func_name)
+                .and_then(|simple| registry.get_signature(simple))
+        })
+    }
+
+    /// `module::func` or `Type::func` style call target for registry lookup.
+    fn call_expr_qualified_name(function: &Expression) -> Option<String> {
+        match function {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name: obj, .. } = &**object {
+                    Some(format!("{}::{}", obj, field))
+                } else {
+                    Some(field.clone())
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn is_external_module_call(function: &Expression) -> bool {
+        match function {
+            Expression::FieldAccess { object, .. } => matches!(
+                &**object,
+                Expression::Identifier { name, .. }
+                    if name.chars().next().is_some_and(|c| c.is_lowercase())
+            ),
+            Expression::Identifier { name, .. } => {
+                name.contains("::") && name.chars().next().is_some_and(|c| c.is_lowercase())
+            }
+            _ => false,
+        }
+    }
+
+    /// True when `name` is passed to a call whose callee expects `&mut` at that argument index.
+    fn param_passed_to_mut_borrowed_call_arg(
+        &self,
+        name: &str,
+        function: &Expression,
+        arguments: &[(Option<String>, &Expression)],
+        registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
+    ) -> bool {
+        for (i, (_, arg)) in arguments.iter().enumerate() {
+            if !matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                continue;
+            }
+            let func_name = Self::call_expr_qualified_name(function)
+                .or_else(|| self.extract_function_name(function));
+            let Some(func_name) = func_name else {
+                continue;
+            };
+            if let Some(sig) = Self::lookup_call_signature(registry, &func_name) {
+                if sig
+                    .param_ownership_for_arg(i)
+                    .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
+                {
+                    return true;
+                }
+            } else if Self::is_external_module_call(function)
+                && i == 0
+                && param_type_hint.is_some_and(|ty| !self.is_copy_type(ty))
+            {
+                // Cross-crate module calls often mutate the first non-Copy argument (e.g.
+                // `station_builder::set_if(grid, ...)`). When engine metadata omits the callee,
+                // infer mutation from the call pattern instead of cloning at every callsite.
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn has_mutable_method_call(
@@ -506,14 +598,22 @@ impl<'ast> Analyzer<'ast> {
                     // UNKNOWN METHOD: When we attempted a type-qualified lookup
                     // (had a type hint) but the method wasn't in the registry,
                     // assume non-mutation and rely on multi-pass convergence.
-                    // Without a type hint, conservatively assume mutation.
-                    return !qualified_attempted;
+                    // Without a type hint, conservatively assume mutation only when
+                    // stdlib heuristics already failed to classify the method.
+                    if param_type_hint.is_none() {
+                        return true;
+                    }
+                    return false;
                 }
 
                 // Check if param is passed as an argument to a method whose
                 // corresponding parameter has MutBorrowed ownership.
                 // Example: obj.apply(state) where apply expects &mut DialogueState
                 // → state must be MutBorrowed.
+                // HashMap/HashSet key args are never mut-borrowed (get_mut key is &Q not &mut Q).
+                if super::stdlib_method_traits::is_collection_key_method(method) {
+                    return false;
+                }
                 if let Expression::MethodCall { arguments, .. } = expr {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
@@ -552,7 +652,20 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
-            Expression::Call { arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if self.param_passed_to_mut_borrowed_call_arg(
+                    name,
+                    function,
+                    arguments,
+                    registry,
+                    param_type_hint,
+                ) {
+                    return true;
+                }
                 for (_label, arg) in arguments {
                     if self.has_mutable_method_call(name, arg, registry, param_type_hint) {
                         return true;

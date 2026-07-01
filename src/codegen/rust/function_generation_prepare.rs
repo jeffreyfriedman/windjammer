@@ -1,6 +1,7 @@
 //! Setup and per-function analyzer state loaded before emitting a regular function.
 
 use crate::analyzer::*;
+use crate::codegen::rust::type_analysis;
 use crate::parser::*;
 
 use super::CodeGenerator;
@@ -80,49 +81,8 @@ impl<'ast> CodeGenerator<'ast> {
 
             // NEW ARCHITECTURE: Register method signature for type-based parameter resolution
             // This replaces ALL hard-coded method name heuristics
-            if let Some(impl_type) = &self.current_struct_name {
-                // Build parameter types and ownership from ANALYZED function
-                // Use the actual inferred ownership from the analyzer, not defaults!
-                let mut param_types = Vec::new();
-                let mut param_ownership = Vec::new();
-
-                // Parameter types for call-site coercion must match analyzer + Rust codegen.
-                // Phase-2 optimized `string` parameters become `Reference(str)` in
-                // `AnalyzedFunction::inferred_param_types`, but AST param.type_ stays plain
-                // `string`. Registering AST types breaks MethodCallAnalyzer's user-signatures path
-                // (wrong `param_is_str_ref`, missing `&` on String fields, spurious `.to_string()`).
-                for (idx, param) in func.parameters.iter().enumerate() {
-                    if param.name != "self" {
-                        let p_type = analyzed
-                            .inferred_param_types
-                            .get(idx)
-                            .cloned()
-                            .unwrap_or_else(|| param.type_.clone());
-                        param_types.push(p_type);
-
-                        // Use ACTUAL analyzed ownership from inferred_ownership
-                        let ownership = analyzed
-                            .inferred_ownership
-                            .get(&param.name)
-                            .copied()
-                            .unwrap_or(crate::analyzer::OwnershipMode::Borrowed);
-                        param_ownership.push(ownership);
-                    }
-                }
-
-                // Check if method has self receiver
-                let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
-
-                let signature = crate::codegen::rust::generator::MethodSignature::new(
-                    impl_type.clone(),
-                    func.name.clone(),
-                    param_types,
-                    param_ownership,
-                    func.return_type.clone(),
-                    has_self_receiver,
-                );
-
-                self.register_method_signature(signature);
+            if let Some(impl_type) = self.current_struct_name.clone() {
+                self.register_impl_method_signature_from_analyzed(&impl_type, func, analyzed);
             }
         }
 
@@ -261,5 +221,152 @@ impl<'ast> CodeGenerator<'ast> {
         // PHASE 6 OPTIMIZATION: Load defer drop optimizations
         // Track variables that should have their drops deferred to background thread
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
+    }
+
+    /// Register analyzed impl method signatures for call-site lookup (Self:: forward refs).
+    pub(in crate::codegen::rust) fn register_impl_method_signature_from_analyzed(
+        &mut self,
+        impl_type: &str,
+        func: &FunctionDecl<'ast>,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) {
+        let qualified = format!("{impl_type}::{}", func.name);
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+        let registry_sig = self.signature_registry.get_signature(&qualified);
+
+        // Static methods: register analyzed signatures for call-site lookup, except when
+        // body-inferred borrow would override an owned Copy formal (MannequinMesh::generate).
+        if !has_self_receiver {
+            if let Some(reg) = registry_sig {
+                let skip_body_borrow_over_owned_copy = func.parameters.iter().enumerate().any(
+                    |(idx, param)| {
+                        if param.name == "self" {
+                            return false;
+                        }
+                        let body_borrow = analyzed
+                            .inferred_ownership
+                            .get(&param.name)
+                            .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
+                        body_borrow
+                            && crate::codegen::rust::signature_promotion::param_type_is_owned_non_text(
+                                reg, idx,
+                            )
+                            && reg
+                                .formal_param_type(idx)
+                                .is_some_and(crate::codegen::rust::type_analysis::is_copy_type)
+                    },
+                );
+                if skip_body_borrow_over_owned_copy {
+                    return;
+                }
+            }
+        }
+
+        let mut param_types = Vec::new();
+        let mut formal_param_types = Vec::new();
+        let mut param_ownership = Vec::new();
+
+        for (idx, param) in func.parameters.iter().enumerate() {
+            if param.name != "self" {
+                let ast_owned_string =
+                    crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                        && !matches!(param.type_, Type::Reference(_) | Type::MutableReference(_));
+                let is_module_level = func.parent_type.is_none();
+
+                let mut p_type = analyzed
+                    .inferred_param_types
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| param.type_.clone());
+
+                let mut ownership = if has_self_receiver {
+                    analyzed
+                        .inferred_ownership
+                        .get(&param.name)
+                        .copied()
+                        .unwrap_or(crate::analyzer::OwnershipMode::Owned)
+                } else {
+                    analyzed
+                        .inferred_ownership
+                        .get(&param.name)
+                        .copied()
+                        .or_else(|| {
+                            registry_sig.and_then(|sig| sig.param_ownership.get(idx).copied())
+                        })
+                        .unwrap_or(crate::analyzer::OwnershipMode::Owned)
+                };
+
+                // Module-level `string` formals stay owned; impl methods may converge to &str.
+                if ast_owned_string && is_module_level {
+                    p_type = param.type_.clone();
+                    ownership = crate::analyzer::OwnershipMode::Owned;
+                } else if let Some(reg) = registry_sig {
+                    if let Some(formal) = reg.formal_param_type(idx) {
+                        if crate::codegen::rust::types::is_windjammer_text_type(formal)
+                            && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                            && is_module_level
+                        {
+                            p_type = formal.clone();
+                            ownership = crate::analyzer::OwnershipMode::Owned;
+                        }
+                    }
+                }
+
+                if matches!(&p_type, Type::Reference(_)) && !ast_owned_string {
+                    ownership = crate::analyzer::OwnershipMode::Borrowed;
+                } else if matches!(&p_type, Type::MutableReference(_)) && !ast_owned_string {
+                    ownership = crate::analyzer::OwnershipMode::MutBorrowed;
+                }
+
+                if !has_self_receiver {
+                    if let Some(reg) = registry_sig {
+                        if let Some(formal_ty) = reg.param_types.get(idx) {
+                            if matches!(ownership, crate::analyzer::OwnershipMode::Owned)
+                                && !matches!(
+                                    &p_type,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                            {
+                                p_type = formal_ty.clone();
+                            }
+                        }
+                    }
+                }
+
+                let stored_type = match ownership {
+                    crate::analyzer::OwnershipMode::Borrowed
+                        if !matches!(&p_type, Type::Reference(_) | Type::MutableReference(_))
+                            && !type_analysis::is_copy_type(&p_type) =>
+                    {
+                        if crate::codegen::rust::types::is_windjammer_text_type(&p_type) {
+                            Type::Reference(Box::new(Type::Custom("str".into())))
+                        } else {
+                            Type::Reference(Box::new(p_type))
+                        }
+                    }
+                    crate::analyzer::OwnershipMode::MutBorrowed
+                        if !matches!(&p_type, Type::MutableReference(_)) =>
+                    {
+                        Type::MutableReference(Box::new(p_type))
+                    }
+                    _ => p_type,
+                };
+                param_types.push(stored_type);
+                formal_param_types.push(param.type_.clone());
+                param_ownership.push(ownership);
+            }
+        }
+
+        let signature = crate::codegen::rust::generator::MethodSignature {
+            receiver_type: impl_type.to_string(),
+            method_name: func.name.clone(),
+            param_types,
+            formal_param_types,
+            param_ownership,
+            return_type: func.return_type.clone(),
+            has_self_receiver,
+        };
+
+        self.register_method_signature(signature);
     }
 }

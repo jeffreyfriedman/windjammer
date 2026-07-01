@@ -108,6 +108,17 @@ impl<'ast> Analyzer<'ast> {
         program: &Program<'ast>,
         global_signatures: &SignatureRegistry,
     ) -> Result<ProgramAnalysisResult<'ast>, String> {
+        let global_arc = std::sync::Arc::new(global_signatures.clone());
+        self.analyze_program_with_global_arc(program, &global_arc)
+    }
+
+    /// Like [`analyze_program_with_global_signatures`] but shares the global registry via
+    /// `Arc` — avoids cloning the full crate registry for every file in library builds.
+    pub fn analyze_program_with_global_arc(
+        &mut self,
+        program: &Program<'ast>,
+        global_signatures: &std::sync::Arc<SignatureRegistry>,
+    ) -> Result<ProgramAnalysisResult<'ast>, String> {
         // THE PROPER SOLUTION: Multi-pass ownership analysis
         // Iterate until convergence - no workarounds, no heuristics, just correctness
 
@@ -147,7 +158,6 @@ impl<'ast> Analyzer<'ast> {
         let mut explicit_non_copy: HashSet<String> = HashSet::new();
         for item in &program.items {
             if let Item::Struct { decl, .. } = item {
-                let has_derive = decl.decorators.iter().any(|d| d.name == "derive");
                 let has_copy_derive = decl.decorators.iter().any(|decorator| {
                     decorator.name == "derive"
                         && decorator.arguments.iter().any(|(_, arg)| {
@@ -158,11 +168,26 @@ impl<'ast> Analyzer<'ast> {
                             }
                         })
                 });
+                let has_drop_derive = decl.decorators.iter().any(|decorator| {
+                    decorator.name == "derive"
+                        && decorator.arguments.iter().any(|(_, arg)| {
+                            if let crate::parser::ast::Expression::Identifier { name, .. } = arg {
+                                name == "Drop"
+                            } else {
+                                false
+                            }
+                        })
+                });
                 if has_copy_derive {
                     Arc::make_mut(&mut self.copy_structs).insert(decl.name.clone());
-                } else if has_derive {
+                } else if has_drop_derive {
+                    // Drop and Copy are mutually exclusive — explicit Drop suppresses auto-Copy.
                     explicit_non_copy.insert(decl.name.clone());
                 }
+                // Redundant @derive(Clone, Debug, ...) without Copy does NOT suppress
+                // auto-Copy detection. The fixed-point loop below handles Copy inference
+                // based on field types. @derive with only auto-inferred traits is Rust
+                // leakage and should eventually be forbidden.
                 struct_infos.push((
                     decl.name.clone(),
                     decl.fields.iter().map(|f| f.field_type.clone()).collect(),
@@ -207,8 +232,18 @@ impl<'ast> Analyzer<'ast> {
         // Continue analyzing until ownership signatures stabilize (convergence)
         const MAX_PASSES: usize = 10; // Safety limit to prevent infinite loops
 
-        let mut registry = global_signatures.clone();
+        let mut registry = SignatureRegistry::layered(std::sync::Arc::clone(global_signatures));
         let mut pass_number = 1;
+
+        if self.ownership_preconverged {
+            let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
+            self.infer_trait_signatures_from_impls(program, &new_registry)?;
+            return Ok((
+                new_analyzed,
+                new_registry,
+                self.analyzed_trait_methods.clone(),
+            ));
+        }
 
         loop {
             let (new_analyzed, new_registry) = self.analyze_program_pass(program, &registry)?;
@@ -317,7 +352,7 @@ impl<'ast> Analyzer<'ast> {
                         analyzed_func.cache_locality = self.analyze_cache_locality(program, func);
                     }
 
-                    let signature = self.build_signature(&analyzed_func);
+                    let signature = self.build_signature(&analyzed_func, &registry);
                     registry.add_function(func.name.clone(), signature);
                     analyzed.push(analyzed_func);
                 }
@@ -370,7 +405,7 @@ impl<'ast> Analyzer<'ast> {
 
                         // Update local registry with current analyzed signatures
                         for (name, analyzed_func) in &analyzed_funcs {
-                            let signature = self.build_signature(analyzed_func);
+                            let signature = self.build_signature(analyzed_func, &local_registry);
                             let qualified_name = format!("{}::{}", impl_block.type_name, name);
                             local_registry.add_function(qualified_name, signature.clone());
                             local_registry.add_function(name.clone(), signature);
@@ -442,7 +477,7 @@ impl<'ast> Analyzer<'ast> {
                                 self.analyze_cache_locality(program, func);
                         }
 
-                        let signature = self.build_signature(&analyzed_func);
+                        let signature = self.build_signature(&analyzed_func, &registry);
 
                         let qualified_name = format!("{}::{}", impl_block.type_name, func.name);
                         if is_trait_impl {
@@ -473,7 +508,9 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
-                        if !is_trait_impl || registry.get_signature(&func.name).is_none() {
+                        // Direct impl methods must not register bare names — homonyms like
+                        // `check_collision` would overwrite imported free functions in the global registry.
+                        if is_trait_impl && registry.get_signature(&func.name).is_none() {
                             registry.add_function(func.name.clone(), signature);
                         }
 
@@ -559,7 +596,7 @@ impl<'ast> Analyzer<'ast> {
 
                         // Add trait methods to analyzed list so codegen can access ownership info
                         // They won't be generated as standalone functions (codegen skips trait methods)
-                        let signature = self.build_signature(&analyzed_func);
+                        let signature = self.build_signature(&analyzed_func, &registry);
                         registry.add_function(func.name.clone(), signature.clone());
                         // Also register as TraitName::method for cross-file meta lookup
                         let qualified_name = format!("{}::{}", decl.name, func.name);
@@ -590,7 +627,7 @@ impl<'ast> Analyzer<'ast> {
                                     self.detect_cow_opportunities(func);
                                 analyzed_func.cache_locality =
                                     self.analyze_cache_locality(program, func);
-                                let signature = self.build_signature(&analyzed_func);
+                                let signature = self.build_signature(&analyzed_func, &registry);
                                 registry.add_function(func.name.clone(), signature);
                                 // Add to analyzed list for codegen to access (but marked as in-module)
                                 analyzed.push(analyzed_func);
@@ -638,7 +675,8 @@ impl<'ast> Analyzer<'ast> {
 
                                     // Update registry
                                     for (name, analyzed_func) in &analyzed_funcs {
-                                        let signature = self.build_signature(analyzed_func);
+                                        let signature =
+                                            self.build_signature(analyzed_func, &local_registry);
                                         local_registry.add_function(name.clone(), signature);
                                     }
 
@@ -699,7 +737,7 @@ impl<'ast> Analyzer<'ast> {
                                     analyzed_func.cache_locality =
                                         self.analyze_cache_locality(program, func);
 
-                                    let signature = self.build_signature(&analyzed_func);
+                                    let signature = self.build_signature(&analyzed_func, &registry);
                                     let qualified_name =
                                         format!("{}::{}", impl_block.type_name, func.name);
                                     if is_trait_impl {
@@ -716,8 +754,7 @@ impl<'ast> Analyzer<'ast> {
                                     } else {
                                         registry.add_function(qualified_name, signature.clone());
                                     }
-                                    if !is_trait_impl
-                                        || registry.get_signature(&func.name).is_none()
+                                    if is_trait_impl && registry.get_signature(&func.name).is_none()
                                     {
                                         registry.add_function(func.name.clone(), signature);
                                     }

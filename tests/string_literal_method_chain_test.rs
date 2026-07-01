@@ -79,10 +79,13 @@ pub fn test_chain() {
 
     let output = compile_wj(code);
 
-    // new() stores in struct literal → &str at call site; push/assignment still need .to_string().
+    // new() stores name into struct field → String param; call site adds coercion.
     assert!(
-        output.contains("Builder::new(\"test\")") && !output.contains("Builder::new(\"test\".to_string())"),
-        "Struct-literal new() passes literal as &str: {}",
+        output.contains("Builder::new(") && (
+            output.contains("Builder::new(\"test\".to_string())")
+            || output.contains("Builder::new(String::from(\"test\"))")
+        ),
+        "Struct-literal new() passes literal as owned String: {}",
         output
     );
     assert!(

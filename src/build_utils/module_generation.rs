@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::file_operations::{copy_project_src_tree_into_output, copy_sibling_rs_from_parent};
 use super::path_utilities::{is_submodule_output_dir, source_dir_for_output};
@@ -62,7 +62,18 @@ fn should_merge_extra_module(name: &str, sibling_source_dir: Option<&Path>) -> b
         return true;
     }
     let wj_for_module = sdir.join(format!("{}.wj", name));
-    declared.contains(name) || !wj_for_module.exists()
+    if declared.contains(name) {
+        return true;
+    }
+    // Explicit mod.wj module list omits undeclared .wj siblings (honor removal from mod.wj).
+    if wj_for_module.exists() {
+        return false;
+    }
+    // `ecs/query.wj` must not become a root `pub mod query` via stale `src/query.rs`.
+    if super::path_utilities::wj_module_declared_in_subtree(sdir, name) {
+        return false;
+    }
+    true
 }
 
 /// Generate mod.rs file with pub mod declarations and re-exports.
@@ -73,14 +84,44 @@ pub fn generate_mod_file(output_dir: &Path) -> Result<()> {
     generate_mod_file_with_layout(output_dir, None)
 }
 
+/// Derive `(output_root, source_root)` for scoped `--module-file` generation after a single-file
+/// or directory transpile into a subdirectory (e.g. `src/ffi/api.wj` → `gen/ffi/`).
+pub(crate) fn mod_file_layout_for_build(
+    input_path: &Path,
+    output_dir: &Path,
+) -> Option<(PathBuf, PathBuf)> {
+    if input_path.is_file() {
+        let source_root = crate::project_paths::find_source_root(input_path)?;
+        let file_dir = input_path.parent()?;
+        let src_module = if file_dir == source_root {
+            source_root.to_path_buf()
+        } else if let Ok(rel) = file_dir.strip_prefix(source_root) {
+            if rel.as_os_str().is_empty() {
+                source_root.to_path_buf()
+            } else {
+                source_root.join(rel)
+            }
+        } else {
+            file_dir.to_path_buf()
+        };
+        Some((output_dir.to_path_buf(), src_module))
+    } else if input_path.is_dir() {
+        let src_base =
+            std::fs::canonicalize(input_path).unwrap_or_else(|_| input_path.to_path_buf());
+        Some((output_dir.to_path_buf(), src_base))
+    } else {
+        None
+    }
+}
+
 /// Same as [`generate_mod_file`], but when `layout` is `Some((output_root, source_root))`, stub-merge
 /// of extra `*.rs` siblings respects `mod.wj` (avoids re-adding removed modules).
 pub(crate) fn generate_mod_file_with_layout(
     output_dir: &Path,
     layout: Option<(&Path, &Path)>,
 ) -> Result<()> {
-    copy_project_src_tree_into_output(output_dir)?;
-    copy_sibling_rs_from_parent(output_dir)?;
+    copy_project_src_tree_into_output(output_dir, layout)?;
+    copy_sibling_rs_from_parent(output_dir, layout)?;
     generate_mod_file_recursive(output_dir, layout)?;
 
     let mod_rs = output_dir.join("mod.rs");
@@ -104,7 +145,7 @@ pub(crate) fn generate_mod_file_with_layout(
         } else {
             // Crate root: derive lib.rs from mod.rs (strip `use super::*` only used for nested modules).
             let content = std::fs::read_to_string(&mod_rs)?;
-            let cleaned: String = content
+            let mut cleaned: String = content
                 .lines()
                 .filter(|line| {
                     let t = line.trim();
@@ -112,6 +153,42 @@ pub(crate) fn generate_mod_file_with_layout(
                 })
                 .collect::<Vec<&str>>()
                 .join("\n");
+            let lib_items_path = output_dir.join("_lib_items.rs");
+            if lib_items_path.exists() {
+                if let Ok(items_content) = std::fs::read_to_string(&lib_items_path) {
+                    let has_code = items_content.lines().any(|line| {
+                        let t = line.trim();
+                        !(t.is_empty()
+                            || t.starts_with("//")
+                            || t.starts_with("#[")
+                            || t.starts_with("use ")
+                            || (t.starts_with("pub mod ") && t.ends_with(';'))
+                            || (t.starts_with("mod ") && t.ends_with(';'))
+                            || (t.starts_with("pub use ") && t.ends_with("::*;")))
+                    });
+                    if has_code {
+                        cleaned.push_str("\n// Code from lib.wj\n");
+                        for line in items_content.lines() {
+                            let trimmed = line.trim();
+                            if trimmed.starts_with("pub mod ") && trimmed.ends_with(';') {
+                                continue;
+                            }
+                            if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
+                                continue;
+                            }
+                            if trimmed.starts_with("pub use ") && trimmed.ends_with(';') {
+                                continue;
+                            }
+                            if trimmed == "#[allow(unused_imports)]" || trimmed == "use super::*;" {
+                                continue;
+                            }
+                            cleaned.push_str(line);
+                            cleaned.push('\n');
+                        }
+                    }
+                }
+                let _ = std::fs::remove_file(&lib_items_path);
+            }
             std::fs::write(&lib_rs, cleaned + "\n")?;
 
             if lib_rs.exists() {
@@ -200,6 +277,9 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     if t == "pub mod _mod_items;"
                         || t == "pub use _mod_items::*;"
                         || t == "mod _mod_items;"
+                        || t == "pub mod _lib_items;"
+                        || t == "pub use _lib_items::*;"
+                        || t == "mod _lib_items;"
                     {
                         continue;
                     }
@@ -234,6 +314,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                                 && file_name != "main.rs"
                                 && file_name != "lib.rs"
                                 && file_name != "_mod_items.rs"
+                                && file_name != "_lib_items.rs"
                             {
                                 if let Some(module_name) = file_name.strip_suffix(".rs") {
                                     if !mod_declared_in(&content, module_name)
@@ -327,8 +408,13 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     && file_name != "main.rs"
                     && file_name != "lib.rs"
                     && file_name != "_mod_items.rs"
+                    && file_name != "_lib_items.rs"
                 {
                     if let Some(module_name) = file_name.strip_suffix(".rs") {
+                        // Prefer `foo/` directory modules over stale sibling `foo.rs`.
+                        if output_dir.join(module_name).is_dir() {
+                            continue;
+                        }
                         modules.push(module_name.to_string());
 
                         let content = fs::read_to_string(&path)?;
@@ -374,6 +460,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     }
 
     modules.sort();
+    modules.dedup();
 
     // When mod.wj declares explicit modules, filter out stale .rs files for modules
     // that are no longer declared. Without this, a removed module (e.g. `beta`) stays

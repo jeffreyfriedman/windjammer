@@ -121,12 +121,52 @@ pub fn param_is_owned_string_type(param_type: &Type) -> bool {
         || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
 }
 
+/// Parameter type is `&String` — a reference to an owned String.
+/// Distinct from `&str` (`param_is_rust_str_ref`). String literals passed to
+/// `&String` params need `&"literal".to_string()` conversion.
+pub fn param_is_rust_string_ref(param_type: &Type) -> bool {
+    matches!(
+        param_type,
+        Type::Reference(inner) if param_is_owned_string_type(inner)
+    )
+}
+
+/// Whether a call-site expression should be borrowed for runtime std `AsRef<str>` APIs.
+pub fn expression_is_owned_string_for_asref_borrow<'ast>(
+    expr: &Expression<'ast>,
+    inferred_type: Option<&Type>,
+    local_var_types: &std::collections::HashMap<String, Type>,
+    current_function_params: &[crate::parser::Parameter<'ast>],
+) -> bool {
+    if inferred_type.is_some_and(param_is_owned_string_type) {
+        return true;
+    }
+    match expr {
+        Expression::Identifier { name, .. } => {
+            local_var_types
+                .get(name)
+                .is_some_and(param_is_owned_string_type)
+                || current_function_params
+                    .iter()
+                    .any(|p| p.name == *name && param_is_owned_string_type(&p.type_))
+        }
+        Expression::FieldAccess { .. } => true,
+        _ => false,
+    }
+}
+
+/// Module-level `pub const …: string` identifiers that lower to `&'static str` in Rust.
+pub fn is_windjammer_string_const_name(name: &str) -> bool {
+    name.starts_with("SCOPE_") || name.starts_with("AUDIT_") || name.starts_with("PERIOD_STATUS_")
+}
+
 /// Identifier is a string constant (`SCOPE_*` or a variable bound to a string literal).
 pub fn is_string_const_identifier(
     name: &str,
     auto_clone: Option<&crate::auto_clone::AutoCloneAnalysis>,
 ) -> bool {
-    name.starts_with("SCOPE_") || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
+    is_windjammer_string_const_name(name)
+        || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
 }
 
 /// Callee borrows a string parameter: Rust will receive `&str` or `&String`.
@@ -140,15 +180,343 @@ pub fn callee_borrows_string_param(
     if sig.is_extern {
         return false;
     }
-    let is_text = sig
-        .param_types
-        .get(sig_param_idx)
-        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+    matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+            sig,
+            sig_param_idx,
+        ),
+        crate::analyzer::OwnershipMode::Borrowed
+    )
+}
 
-    sig.param_ownership
-        .get(sig_param_idx)
-        .is_some_and(|&o| matches!(o, crate::analyzer::OwnershipMode::Borrowed))
-        || (sig.param_ownership.is_empty() && is_text)
+/// Engine `Blackboard` stores keys as borrowed `&str` at the API boundary (see game-core gen).
+fn is_blackboard_borrowed_key_method(receiver_type: &str, method: &str, arg_index: usize) -> bool {
+    receiver_type == "Blackboard"
+        && arg_index == 0
+        && matches!(
+            method,
+            "set_bool"
+                | "set_f32"
+                | "set_i32"
+                | "set_string"
+                | "get_bool"
+                | "get_f32"
+                | "get_i32"
+                | "get_string"
+                | "find_index"
+        )
+}
+
+/// Read-only lookup APIs (`get_*`, map `get`, BT conditions, etc.) lower string keys to
+/// `&str` in Rust even when stale metadata still lists owned `String`.
+pub fn is_readonly_string_key_method(method: &str, arg_index: usize) -> bool {
+    if arg_index != 0 {
+        return false;
+    }
+    method.starts_with("get_")
+        || matches!(
+            method,
+            "get"
+                | "contains"
+                | "contains_key"
+                | "has"
+                | "has_key"
+                | "has_value"
+                | "find_index"
+                | "add_condition"
+                | "add_action"
+                | "remove"
+        )
+}
+
+/// Enum variant constructor arg (e.g. `QuestReward::relationship` → `Relationship(string, i32)`).
+pub fn enum_factory_string_param_needs_owned(
+    enum_variant_types: &std::collections::HashMap<String, Vec<Type>>,
+    receiver_type: &str,
+    method: &str,
+    arg_index: usize,
+) -> bool {
+    let mut variant = String::new();
+    if let Some(first) = method.chars().next() {
+        variant.push(first.to_ascii_uppercase());
+        variant.push_str(&method[first.len_utf8()..]);
+    }
+    let key = format!("{receiver_type}::{variant}");
+    let method_key = format!("{receiver_type}::{method}");
+    for lookup in [&key, &method_key] {
+        if enum_variant_types
+            .get(lookup)
+            .and_then(|ts| ts.get(arg_index))
+            .is_some_and(param_is_owned_string_type)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
+pub fn string_literal_needs_owned_coercion(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    method: Option<&str>,
+) -> bool {
+    string_literal_needs_owned_coercion_with_enum(sig, arg_index, method, None, None, None)
+}
+
+/// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
+pub fn string_literal_needs_owned_coercion_with_enum(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    method: Option<&str>,
+    receiver_type: Option<&str>,
+    enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
+    runtime_module: Option<&str>,
+) -> bool {
+    if runtime_module
+        .is_some_and(crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str)
+    {
+        return false;
+    }
+
+    // Runtime `strings::*` / String search APIs: pattern args are `&str` in Rust (arg 1+).
+    if let Some(m) = method {
+        if arg_index >= 1
+            && matches!(
+                m,
+                "starts_with" | "ends_with" | "contains" | "replace" | "replacen" | "split"
+            )
+        {
+            return false;
+        }
+    }
+
+    if let Some(m) = method {
+        if let Some(tn) = receiver_type {
+            if is_blackboard_borrowed_key_method(tn, m, arg_index) {
+                return false;
+            }
+        }
+        if crate::codegen::rust::stdlib_method_traits::is_map_key_method(m) && arg_index == 0 {
+            return false;
+        }
+        if is_readonly_string_key_method(m, arg_index) {
+            return false;
+        }
+        if matches!(
+            m,
+            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill"
+        ) && arg_index == 0
+        {
+            return true;
+        }
+    }
+
+    let Some(sig) = sig else {
+        if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
+            if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
+                return true;
+            }
+        }
+        // Cross-crate constructor heuristic: Type::new("literal") / Type::from("literal")
+        // always need .to_string() since Windjammer `string` params map to `String`.
+        if matches!(method, Some("new" | "from")) && receiver_type.is_some() {
+            return true;
+        }
+        return false;
+    };
+
+    let idx = sig.arg_param_index(arg_index);
+    let Some(param_type) = sig.param_types.get(idx) else {
+        return false;
+    };
+
+    if !crate::codegen::rust::types::is_windjammer_text_type(param_type) {
+        return false;
+    }
+
+    if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
+        if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
+            return true;
+        }
+    }
+
+    if param_is_rust_str_ref(param_type) {
+        return false;
+    }
+    if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+        &Some(sig.clone()),
+        idx,
+    ) {
+        return false;
+    }
+
+    if crate::codegen::rust::string_utilities::callee_borrows_string_param(sig, idx) {
+        // Stale `Borrowed` on plain `string` must not suppress `.to_string()` when the
+        // converged Rust formal is owned `String` (only `&str` / `&String` stay bare).
+        if param_is_rust_str_ref(param_type)
+            || crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+                &Some(sig.clone()),
+                idx,
+            )
+        {
+            return false;
+        }
+    }
+
+    // Rust formal is owned `String` — allocate even when stale metadata still says Borrowed.
+    // Exception: static/instance associated methods with body-inferred borrow pass bare literals.
+    if param_is_owned_string_type(param_type) {
+        if matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+            crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    if matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+        crate::analyzer::OwnershipMode::Owned
+    ) {
+        return true;
+    }
+
+    false
+}
+
+/// Final pass: callee expects `&str` — pass owned locals/fields as `&expr`, never `.to_string()`.
+pub fn finalize_borrowed_text_call_site_arg<'ast>(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    receiver_type: Option<&str>,
+    arg: &Expression<'ast>,
+    arg_str: &mut String,
+) {
+    use crate::analyzer::OwnershipMode;
+
+    let Some(sig) = sig else {
+        return;
+    };
+
+    let effective =
+        if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            &sig.name,
+        ) {
+            let receiver = receiver_type.or_else(|| sig.name.rsplit_once("::").map(|(rt, _)| rt));
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                sig, arg_index, receiver,
+            )
+        } else {
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                sig, arg_index,
+            )
+        };
+
+    if !matches!(effective, OwnershipMode::Borrowed) {
+        return;
+    }
+
+    let param_is_text = sig.param_type_for_arg(arg_index).is_some_and(|t| {
+        param_is_rust_str_ref(t) || crate::codegen::rust::types::is_windjammer_text_type(t)
+    });
+    if !param_is_text {
+        return;
+    }
+
+    if arg_str.ends_with(".to_string()") {
+        *arg_str = arg_str[..arg_str.len() - 12].to_string();
+    } else if arg_str.ends_with(".into()") {
+        *arg_str = arg_str[..arg_str.len() - 7].to_string();
+    }
+
+    if matches!(
+        arg,
+        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+    ) {
+        crate::codegen::rust::expression_utilities::strip_trailing_clone(arg_str);
+    }
+
+    // String literals are already &str — adding & would create &&str.
+    // After stripping .to_string(), a MethodCall like "lit".to_string() becomes "lit",
+    // which is a bare string literal. Don't re-add & in that case.
+    let is_bare_string_literal =
+        arg_str.starts_with('"') || arg_str.starts_with("r\"") || arg_str.starts_with("r#\"");
+
+    if matches!(
+        arg,
+        Expression::Identifier { .. }
+            | Expression::FieldAccess { .. }
+            | Expression::MethodCall { .. }
+            | Expression::Index { .. }
+    ) && !arg_str.starts_with('&')
+        && !arg_str.starts_with("&mut ")
+        && !is_bare_string_literal
+    {
+        *arg_str = format!("&{arg_str}");
+    }
+}
+
+/// Final pass: align string literal emission with [`string_literal_needs_owned_coercion`].
+pub fn finalize_string_literal_call_site_arg<'ast>(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    method: Option<&str>,
+    arg: &Expression<'ast>,
+    arg_str: &mut String,
+    receiver_type: Option<&str>,
+    enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
+    runtime_module: Option<&str>,
+) {
+    let is_string_literal = matches!(
+        arg,
+        Expression::Literal {
+            value: Literal::String(_),
+            ..
+        }
+    );
+    if !is_string_literal {
+        return;
+    }
+
+    let needs_owned = string_literal_needs_owned_coercion_with_enum(
+        sig,
+        arg_index,
+        method,
+        receiver_type,
+        enum_variant_types,
+        runtime_module,
+    );
+    if needs_owned {
+        if !already_owned_string_expr(arg_str) {
+            *arg_str = coerce_expr_to_owned_string(arg_str);
+        }
+    } else {
+        // &String param: string literal → &"lit".to_string()
+        let is_string_ref_param = sig
+            .and_then(|s| s.param_type_for_arg(arg_index))
+            .is_some_and(param_is_rust_string_ref);
+        if is_string_ref_param {
+            let base = arg_str.trim_start_matches('&');
+            let base = if base.ends_with(".to_string()") {
+                base.to_string()
+            } else {
+                format!("{}.to_string()", base)
+            };
+            *arg_str = format!("&{}", base);
+            return;
+        }
+
+        if arg_str.ends_with(".to_string()") {
+            *arg_str = arg_str[..arg_str.len() - 12].to_string();
+        } else if arg_str.ends_with(".into()") {
+            *arg_str = arg_str[..arg_str.len() - 7].to_string();
+        }
+        if arg_str.starts_with('&') {
+            *arg_str = arg_str.trim_start_matches('&').to_string();
+        }
+    }
 }
 
 /// When `expr_str` ends with `.clone()` and the cloned identifier is a borrowed
@@ -208,5 +576,151 @@ pub fn maybe_append_as_str_for_match(
         value_str.to_string()
     } else {
         format!("{}.as_str()", value_str)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_std_module_skips_literal_owned_coercion() {
+        assert!(!string_literal_needs_owned_coercion_with_enum(
+            None,
+            1,
+            Some("starts_with"),
+            None,
+            None,
+            Some("strings"),
+        ));
+    }
+
+    #[test]
+    fn string_search_second_arg_literal_stays_bare() {
+        assert!(!string_literal_needs_owned_coercion_with_enum(
+            None,
+            1,
+            Some("starts_with"),
+            None,
+            None,
+            None,
+        ));
+    }
+
+    #[test]
+    fn static_impl_borrowed_string_formal_does_not_coerce_identifiers_to_owned() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        let sig = FunctionSignature {
+            name: "new".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert!(
+            !string_literal_needs_owned_coercion_with_enum(
+                Some(&sig),
+                0,
+                Some("new"),
+                Some("Squad"),
+                None,
+                None,
+            ),
+            "bare String + Borrowed static impl must not force owned coercion"
+        );
+    }
+
+    #[test]
+    fn finalize_borrowed_text_strips_clone_from_field_access_without_trailing_dot() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Expression;
+
+        let sig = FunctionSignature {
+            name: "audit_canonical_payload".into(),
+            param_types: vec![
+                Type::String,
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Borrowed],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let event = Expression::Identifier {
+            name: "event".into(),
+            location: None,
+        };
+        let arg = Expression::FieldAccess {
+            object: &event,
+            field: "occurred_at".into(),
+            location: None,
+        };
+        let mut arg_str = "event.occurred_at.clone()".to_string();
+        finalize_borrowed_text_call_site_arg(Some(&sig), 1, None, &arg, &mut arg_str);
+        assert_eq!(
+            arg_str, "&event.occurred_at",
+            "must strip .clone() fully (8 chars) before borrowing field access"
+        );
+    }
+
+    #[test]
+    fn finalize_borrowed_text_strips_to_string_and_borrows_owned_local() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Expression;
+
+        let sig = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        let arg = Expression::Identifier {
+            name: "squad_id".into(),
+            location: None,
+        };
+        let mut arg_str = "squad_id.to_string()".to_string();
+        finalize_borrowed_text_call_site_arg(Some(&sig), 0, Some("Squad"), &arg, &mut arg_str);
+        assert_eq!(arg_str, "&squad_id");
+    }
+
+    #[test]
+    fn impl_new_with_str_ref_sig_does_not_coerce_literals_to_owned() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        let sig = FunctionSignature {
+            name: "Squad::new".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("Squad".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+        };
+        assert!(
+            !string_literal_needs_owned_coercion_with_enum(
+                Some(&sig),
+                0,
+                Some("new"),
+                Some("Squad"),
+                None,
+                None,
+            ),
+            "static impl new(&str) must not use blind new→owned heuristic"
+        );
     }
 }

@@ -1,7 +1,0 @@
-fn main() {
-    let x = 5
-    assert(x > 0)
-    assert(x == 5)
-    println!("All assertions passed!")
-}
-

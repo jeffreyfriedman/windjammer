@@ -141,7 +141,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// `if choice.is_available(world, player)` where `world` came from `if let Some(world) = self.world`.
-    fn expression_passes_self_field_to_mut_method_arg(
+    pub(crate) fn expression_passes_self_field_to_mut_method_arg(
         &self,
         expr: &Expression,
         registry: Option<&super::SignatureRegistry>,
@@ -271,17 +271,17 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn method_call_argument_expects_mut_borrow(
+    pub(crate) fn method_call_argument_expects_mut_borrow(
         &self,
-        _receiver: &Expression,
+        receiver: &Expression,
         method: &str,
         arg_idx: usize,
         reg: &super::SignatureRegistry,
     ) -> bool {
-        let sig = reg.get_signature(method).or_else(|| {
-            // `choice.is_available(world, …)` — registry keys are often qualified.
-            reg.get_signature(&format!("Choice::{}", method))
-        });
+        let sig = self
+            .resolve_method_signature_for_receiver(receiver, method, reg)
+            .or_else(|| reg.get_signature(method))
+            .or_else(|| reg.get_signature(&format!("Choice::{}", method)));
         let Some(sig) = sig else {
             return false;
         };
@@ -293,6 +293,30 @@ impl<'ast> Analyzer<'ast> {
         sig.param_ownership
             .get(param_idx)
             .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
+    }
+
+    /// Type-qualified method lookup for `self.field.method` receivers.
+    fn resolve_method_signature_for_receiver<'a>(
+        &self,
+        receiver: &Expression,
+        method: &str,
+        reg: &'a super::SignatureRegistry,
+    ) -> Option<&'a super::FunctionSignature> {
+        if let Some(ctx) = &self.self_impl_context {
+            if let Some(receiver_ty) = self.static_value_type_of_self_rooted_expr(
+                ctx.program(),
+                &ctx.impl_type_base,
+                receiver,
+            ) {
+                if let Some(base) = Self::type_base_for_qualified_sig_lookup(&receiver_ty) {
+                    let key = format!("{}::{}", base, method);
+                    if let Some(sig) = reg.get_signature(&key) {
+                        return Some(sig);
+                    }
+                }
+            }
+        }
+        None
     }
 
     pub(crate) fn expr_calls_mut_self_method_on_identifier(

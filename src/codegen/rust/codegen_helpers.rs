@@ -167,6 +167,14 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             {
                 return true;
             }
+            if matches!(method.as_str(), "clone" | "to_owned")
+                && matches!(
+                    &**object,
+                    Expression::FieldAccess { field, .. } if field == "data"
+                )
+            {
+                return true;
+            }
             if expr_may_need_generic_clone_bound(object) {
                 return true;
             }
@@ -197,6 +205,9 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             false
         }
         Expression::FieldAccess { object, field, .. } => {
+            if field == "data" && matches!(&**object, Expression::Identifier { .. }) {
+                return true;
+            }
             if field == "dense" && is_self_dense_access(expr) {
                 return true;
             }
@@ -321,17 +332,31 @@ fn function_may_need_dense_clone_bound(func: &FunctionDecl<'_>) -> bool {
 /// for `Vec<T>::clone` and element clones. Infers `where T: Clone` for single-type-parameter impls.
 pub fn infer_clone_where_bounds_for_impl(impl_block: &ImplBlock<'_>) -> Vec<(String, Vec<String>)> {
     let params = impl_block_type_param_names(impl_block);
-    if params.len() != 1 {
+    infer_clone_where_bounds_for_generic_params(impl_block.functions.iter(), &params)
+}
+
+/// Per-method `T: Clone` when only that method clones generic storage/elements.
+pub fn infer_clone_where_bounds_for_function(
+    func: &FunctionDecl<'_>,
+    generic_params: &[String],
+) -> Vec<(String, Vec<String>)> {
+    infer_clone_where_bounds_for_generic_params(std::iter::once(func), generic_params)
+}
+
+fn infer_clone_where_bounds_for_generic_params<'a>(
+    functions: impl IntoIterator<Item = &'a FunctionDecl<'a>>,
+    generic_params: &[String],
+) -> Vec<(String, Vec<String>)> {
+    if generic_params.len() != 1 {
         return Vec::new();
     }
-    let needs = impl_block
-        .functions
-        .iter()
-        .any(function_may_need_dense_clone_bound);
+    let needs = functions
+        .into_iter()
+        .any(|f| function_may_need_dense_clone_bound(f));
     if !needs {
         return Vec::new();
     }
-    vec![(params[0].clone(), vec!["Clone".to_string()])]
+    vec![(generic_params[0].clone(), vec!["Clone".to_string()])]
 }
 
 /// Merge `where` clauses, deduplicating trait bounds per type parameter.

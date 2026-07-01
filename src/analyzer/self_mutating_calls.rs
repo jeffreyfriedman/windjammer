@@ -51,13 +51,15 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_calls_mutating_self_methods(expr, registry, visited)
             }
             Statement::If {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                then_block
-                    .iter()
-                    .any(|s| self.statement_calls_mutating_self_methods(s, registry, visited))
+                self.expression_calls_mutating_self_methods(condition, registry, visited)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_calls_mutating_self_methods(s, registry, visited))
                     || else_block.as_ref().is_some_and(|block| {
                         block.iter().any(|s| {
                             self.statement_calls_mutating_self_methods(s, registry, visited)
@@ -77,11 +79,21 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_calls_mutating_self_methods(value, registry, visited)
             }
             Statement::Match { value, arms, .. } => {
-                // TDD FIX: Match arms can contain mutating method calls (e.g. match choice { 0 => self.companion.adjust_loyalty(-5.0) })
                 self.expression_calls_mutating_self_methods(value, registry, visited)
                     || arms.iter().any(|arm| {
                         self.expression_calls_mutating_self_methods(arm.body, registry, visited)
                     })
+                    || (self.expression_traces_to_self(value)
+                        && arms.iter().any(|arm| {
+                            let bound_vars = Self::collect_pattern_bindings(&arm.pattern);
+                            !bound_vars.is_empty()
+                                && self.body_calls_mutating_method_on_vars(
+                                    arm.body,
+                                    &bound_vars,
+                                    registry,
+                                    visited,
+                                )
+                        }))
             }
             _ => false,
         };
@@ -233,6 +245,20 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expression_calls_mutating_self_methods(operand, registry, visited)
             }
+            Expression::Binary { left, right, .. } => {
+                self.expression_calls_mutating_self_methods(left, registry, visited)
+                    || self.expression_calls_mutating_self_methods(right, registry, visited)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_calls_mutating_self_methods(object, registry, visited)
+                    || self.expression_calls_mutating_self_methods(index, registry, visited)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_calls_mutating_self_methods(object, registry, visited)
+            }
+            Expression::Cast { expr, .. } => {
+                self.expression_calls_mutating_self_methods(expr, registry, visited)
+            }
             _ => false,
         }
     }
@@ -315,5 +341,144 @@ impl<'ast> Analyzer<'ast> {
         }
 
         false
+    }
+
+    /// Collect variable names bound by a pattern (e.g. `Some(search)` → `["search"]`).
+    fn collect_pattern_bindings(pattern: &crate::parser::Pattern) -> Vec<String> {
+        let mut names = Vec::new();
+        Self::collect_pattern_bindings_inner(pattern, &mut names);
+        names
+    }
+
+    fn collect_pattern_bindings_inner(pattern: &crate::parser::Pattern, out: &mut Vec<String>) {
+        use crate::parser::{EnumPatternBinding, Pattern};
+        match pattern {
+            Pattern::Identifier(name) => out.push(name.clone()),
+            Pattern::MutBinding(name) | Pattern::Ref(name) | Pattern::RefMut(name) => {
+                out.push(name.clone());
+            }
+            Pattern::EnumVariant(_, binding) => match binding {
+                EnumPatternBinding::Single(name) => out.push(name.clone()),
+                EnumPatternBinding::Tuple(pats) => {
+                    for p in pats {
+                        Self::collect_pattern_bindings_inner(p, out);
+                    }
+                }
+                EnumPatternBinding::Struct(fields, _) => {
+                    for (_, p) in fields {
+                        Self::collect_pattern_bindings_inner(p, out);
+                    }
+                }
+                _ => {}
+            },
+            Pattern::Tuple(pats) | Pattern::Or(pats) => {
+                for p in pats {
+                    Self::collect_pattern_bindings_inner(p, out);
+                }
+            }
+            Pattern::Reference(inner) => Self::collect_pattern_bindings_inner(inner, out),
+            _ => {}
+        }
+    }
+
+    /// Check if an expression tree contains method calls on any of the given
+    /// variable names where the method requires `&mut self`.
+    fn body_calls_mutating_method_on_vars(
+        &self,
+        expr: &Expression<'ast>,
+        var_names: &[String],
+        registry: Option<&super::SignatureRegistry>,
+        visited: &mut HashSet<String>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if var_names.contains(name) {
+                        if self.is_mutating_method(method) {
+                            return true;
+                        }
+                        if !Self::is_known_readonly_method(method) {
+                            if let Some(reg) = registry {
+                                let suffix = format!("::{}", method);
+                                for (key, sig) in reg.all_signatures() {
+                                    if key.ends_with(&suffix)
+                                        && sig.has_self_receiver
+                                        && sig.param_ownership.first().is_some_and(|o| {
+                                            matches!(o, super::OwnershipMode::MutBorrowed)
+                                        })
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                self.body_calls_mutating_method_on_vars(object, var_names, registry, visited)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.body_calls_mutating_method_on_vars(arg, var_names, registry, visited)
+                    })
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)),
+            Expression::Call {
+                arguments,
+                function,
+                ..
+            } => {
+                self.body_calls_mutating_method_on_vars(function, var_names, registry, visited)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.body_calls_mutating_method_on_vars(arg, var_names, registry, visited)
+                    })
+            }
+            Expression::Unary { operand, .. } => {
+                self.body_calls_mutating_method_on_vars(operand, var_names, registry, visited)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.body_calls_mutating_method_on_vars(left, var_names, registry, visited)
+                    || self.body_calls_mutating_method_on_vars(right, var_names, registry, visited)
+            }
+            _ => false,
+        }
+    }
+
+    fn stmt_calls_mutating_method_on_vars(
+        &self,
+        stmt: &Statement<'_>,
+        var_names: &[String],
+        registry: Option<&super::SignatureRegistry>,
+        visited: &mut HashSet<String>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.body_calls_mutating_method_on_vars(expr, var_names, registry, visited)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.body_calls_mutating_method_on_vars(condition, var_names, registry, visited)
+                    || then_block.iter().any(|s| {
+                        self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)
+                    })
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| {
+                            self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)
+                        })
+                    })
+            }
+            Statement::Return { value, .. } => value.is_some_and(|v| {
+                self.body_calls_mutating_method_on_vars(v, var_names, registry, visited)
+            }),
+            _ => false,
+        }
     }
 }

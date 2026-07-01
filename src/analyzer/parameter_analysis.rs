@@ -28,9 +28,8 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // 0b. Explicit Rust type `String` (not Windjammer `string`) stays Owned.
-        // When user writes `path: String`, they're explicitly requesting Rust's String type,
-        // which should be respected as owned. Do NOT infer it as borrowed.
-        // This is different from `path: string` (lowercase), which can infer to &str.
+        // Windjammer `string` ownership is resolved at the end: module-level formals default
+        // to owned; impl-method passthrough helpers may infer borrowed `&str`.
         if matches!(param_type, Type::Custom(name) if name == "String") {
             return Ok(OwnershipMode::Owned);
         }
@@ -52,11 +51,21 @@ impl<'ast> Analyzer<'ast> {
                     // Example: find_translation(lang, key: string) -> string only compares `key`;
                     // inferring Owned for `key` breaks callers that pass the same String twice (E0382).
                     // Non-string types keep the broader rule (transform/migrate still get Owned).
-                    let string_like = matches!(param_type, Type::String);
-                    if self.is_returned(param_name, body)
-                        || self.is_stored(param_name, body)
-                        || (!string_like && self.param_is_consumed_into_return(param_name, body))
-                    {
+                    let string_like = Self::is_windjammer_text_param_type(param_type);
+                    // Module-level identity returns (e.g. `pub fn greet(name) -> name`) need
+                    // owned `String` formals. Impl-method passthrough helpers (e.g.
+                    // `extract_extension(path) -> path` called with `self.path`) stay
+                    // borrowed so static call sites pass `&str` without cloning.
+                    let force_owned = if string_like && func.parent_type.is_some() {
+                        self.is_stored(param_name, body)
+                            || self.param_is_consumed_into_return(param_name, body)
+                    } else {
+                        self.is_returned(param_name, body)
+                            || self.is_stored(param_name, body)
+                            || (!string_like
+                                && self.param_is_consumed_into_return(param_name, body))
+                    };
+                    if force_owned {
                         return Ok(OwnershipMode::Owned);
                     }
                 }
@@ -75,13 +84,29 @@ impl<'ast> Analyzer<'ast> {
 
         // Multi-pass registry-aware inference
 
-        // 0d. HashMap lookup keys (get, contains_key, …) are always borrowed.
+        // 0d. HashMap lookup keys (get, contains_key, …) are always borrowed (or owned if Copy).
         // Match scrutinees like `match self.nodes.get(id)` must not infer Owned for `id`
         // when passthrough collides on bare `get` from unrelated types.
-        if Self::is_windjammer_text_param_type(param_type)
-            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
-        {
+        if self.is_only_hashmap_lookup_key_param(param_name, body, func) {
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::Borrowed);
+        }
+
+        // FFI string wrappers: passthrough to extern keeps Borrowed API even when the
+        // callee consumes owned String at the boundary (codegen adds string_to_ffi).
+        if Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_none() {
+            if let Some(OwnershipMode::Borrowed) = self.infer_passthrough_ownership(
+                param_name,
+                param_type,
+                body,
+                registry,
+                current_func_name,
+                func,
+            ) {
+                return Ok(OwnershipMode::Borrowed);
+            }
         }
 
         // 1. Check if parameter is mutated (uses registry for method call detection)
@@ -90,7 +115,9 @@ impl<'ast> Analyzer<'ast> {
         }
 
         // 2. Check if parameter is returned (escapes function)
-        if self.is_returned(param_name, body) {
+        if self.is_returned(param_name, body)
+            && !(Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_some())
+        {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -127,12 +154,9 @@ impl<'ast> Analyzer<'ast> {
         // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // 3. Check if parameter is stored in a struct or collection
-        if self.is_stored(param_name, body) {
-            if !(Self::is_windjammer_text_param_type(param_type)
-                && self.is_stored_via_text_struct_fields_only(param_name, body))
-            {
-                return Ok(OwnershipMode::Owned);
-            }
+        let stored = self.is_stored(param_name, body);
+        if stored {
+            return Ok(OwnershipMode::Owned);
         }
 
         // 4. Check if parameter is used in arithmetic binary operations (for Copy types)
@@ -164,6 +188,33 @@ impl<'ast> Analyzer<'ast> {
         // E0507 errors because you can't move out of a shared reference.
         if self.calls_consuming_method(param_name, body, registry) {
             return Ok(OwnershipMode::Owned);
+        }
+
+        // 6d. Bare identifier passed to a **function** call uses move semantics (non-Copy)
+        // when callees consume the value. Method-call passthrough (e.g. HashSet::contains)
+        // is handled by step 7 / default Borrowed — not this rule.
+        if !self.is_copy_type(param_type)
+            && self.is_passed_by_value_as_function_call_arg(param_name, body)
+        {
+            if let Some(mode) = self.infer_passthrough_ownership(
+                param_name,
+                param_type,
+                body,
+                registry,
+                current_func_name,
+                func,
+            ) {
+                // Passthrough to a borrowed callee: wrapper keeps Borrowed so signatures
+                // chain (`fn wrapper(items: &Vec<T>) { process(items) }`).
+                // Extern FFI callees still surface Borrowed for `string` wrappers via
+                // infer_passthrough_ownership's extern rule.
+                return Ok(mode);
+            }
+            // Plain `string` may passthrough to extern on a later convergence pass — do not
+            // pin Owned here or FFI wrappers never reach Borrowed (module_qualified autoborrow).
+            if !Self::is_windjammer_text_param_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
         }
 
         // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need
@@ -199,6 +250,9 @@ impl<'ast> Analyzer<'ast> {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
                 OwnershipMode::MutBorrowed => {
+                    if self.is_copy_type(param_type) {
+                        return Ok(OwnershipMode::Owned);
+                    }
                     // `mut param` used only as an argument to a &mut callee keeps an owned
                     // binding; the call site adds `&mut`. Method calls on the param (e.g.
                     // `c.increment()`) need `&mut T` in the signature itself.
@@ -217,18 +271,20 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        if Self::is_windjammer_text_param_type(param_type)
-            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
-        {
+        if self.is_only_hashmap_lookup_key_param(param_name, body, func) {
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::Borrowed);
         }
 
         // 8. HashMap lookup keys — pin Borrowed after registry-dependent steps.
         // Large engine metadata can flip passthrough/is_mutated heuristics on later
         // convergence passes; the body fact (only used as HashMap key) is authoritative.
-        if Self::is_windjammer_text_param_type(param_type)
-            && self.is_only_hashmap_lookup_key_param(param_name, body, func)
-        {
+        if self.is_only_hashmap_lookup_key_param(param_name, body, func) {
+            if self.is_copy_type(param_type) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::Borrowed);
         }
 
@@ -240,7 +296,7 @@ impl<'ast> Analyzer<'ast> {
         //   stored, iterated, used in binary ops, pattern matched)
         // - If none of those apply, the parameter is truly read-only
         // - Read-only non-Copy parameters should be &T in generated Rust
-        // - Copy types are overridden to Owned in build_signature
+        // - Copy types default to Owned (pass-by-value); see step 9 below
         //
         // This matches the Windjammer philosophy: users write `data: Vec<f32>`
         // and the compiler infers `&Vec<f32>` when data is only read.
@@ -248,7 +304,230 @@ impl<'ast> Analyzer<'ast> {
         //
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
+        //
+        // Module-level `string`: owned when passed to calls or used in comparisons;
+        // Phase-2 `&str` for read-only receiver usage (`text.len()`) and struct-literal storage.
+        if Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_none() {
+            // Function/method calls only — macro args (format!/println!) are Display reads, not moves.
+            if self.is_passed_by_value_as_function_call_arg(param_name, body) {
+                if let Some(OwnershipMode::Borrowed) = self.infer_passthrough_ownership(
+                    param_name,
+                    param_type,
+                    body,
+                    registry,
+                    current_func_name,
+                    func,
+                ) {
+                    return Ok(OwnershipMode::Borrowed);
+                }
+                return Ok(OwnershipMode::Owned);
+            }
+            if self.is_used_in_binary_op(param_name, body)
+                && !self.is_used_in_arithmetic_op(param_name, body)
+            {
+                return Ok(OwnershipMode::Owned);
+            }
+            // param_needs_string_ref == false → can use &str → Borrowed
+            // param_needs_string_ref == true → needs &String (e.g. Vec::contains) → still Borrowed
+            // (consuming patterns like push/insert are caught by is_stored above)
+            // Codegen distinguishes &str vs &String via str_ref_optimized_params.
+            return Ok(OwnershipMode::Borrowed);
+        }
+        // Copy types default to Owned unless passthrough to a mutating callee needs &mut.
+        if self.is_copy_type(param_type) {
+            if let Some(OwnershipMode::MutBorrowed) = self.infer_passthrough_ownership(
+                param_name,
+                param_type,
+                body,
+                registry,
+                current_func_name,
+                func,
+            ) {
+                return Ok(OwnershipMode::MutBorrowed);
+            }
+            return Ok(OwnershipMode::Owned);
+        }
         Ok(OwnershipMode::Borrowed)
+    }
+
+    /// True when `param_name` appears as a bare identifier argument in a **function** call
+    /// (not a method call), indicating move semantics when the callee consumes the value.
+    pub(crate) fn is_passed_by_value_as_function_call_arg(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut found = false;
+        for stmt in body {
+            self.stmt_collect_pass_by_value_function_call_arg(param_name, stmt, &mut found);
+            if found {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_collect_pass_by_value_function_call_arg(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match stmt {
+            Statement::Let { value, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, value, found)
+            }
+            Statement::Return { value, .. } => {
+                if let Some(v) = value {
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, v, found)
+                }
+            }
+            Statement::Expression { expr, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, expr, found)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, condition, found);
+                if *found {
+                    return;
+                }
+                for s in then_block {
+                    self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, value, found);
+                if *found {
+                    return;
+                }
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        self.expr_collect_pass_by_value_function_call_arg(param_name, guard, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, arm.body, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => {
+                for s in body {
+                    self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn expr_collect_pass_by_value_function_call_arg(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match expr {
+            Expression::Call { arguments, .. } => {
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        *found = true;
+                        return;
+                    }
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    self.stmt_collect_pass_by_value_function_call_arg(param_name, s, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, left, found);
+                self.expr_collect_pass_by_value_function_call_arg(param_name, right, found);
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, operand, found);
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
+                self.expr_collect_pass_by_value_function_call_arg(param_name, index, found);
+            }
+            Expression::TryOp { expr, .. } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, expr, found);
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expr_collect_pass_by_value_function_call_arg(param_name, object, found);
+                for (_, arg) in arguments {
+                    self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
+                }
+            }
+            Expression::MacroInvocation { name, args, .. } => {
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
+                );
+                if !borrows_only {
+                    for arg in args {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        {
+                            *found = true;
+                            return;
+                        }
+                        self.expr_collect_pass_by_value_function_call_arg(param_name, arg, found);
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// True when the parameter is the receiver of a method call (e.g. `grid.set()`), not
@@ -343,7 +622,19 @@ impl<'ast> Analyzer<'ast> {
                 operand,
                 ..
             } => self.expr_param_only_borrowed(param_name, operand, true),
-            Expression::Binary { left, right, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
+                use crate::parser::BinaryOp;
+                // String concatenation `lhs + rhs`: codegen emits `lhs + &rhs` — RHS is borrow-only.
+                if matches!(op, BinaryOp::Add) {
+                    if self.expr_is_identifier(right, param_name) {
+                        return self.expr_param_only_borrowed(param_name, left, false);
+                    }
+                    if self.expr_is_identifier(left, param_name) {
+                        return false;
+                    }
+                }
                 self.expr_param_only_borrowed(param_name, left, false)
                     && self.expr_param_only_borrowed(param_name, right, false)
             }
@@ -408,6 +699,19 @@ impl<'ast> Analyzer<'ast> {
     pub(super) fn passthrough_types_compatible(&self, sig_ty: &Type, decl_ty: &Type) -> bool {
         if self.types_equal(sig_ty, decl_ty) {
             return true;
+        }
+        // Windjammer `string` formals passthrough to extern `String` / owned string callees.
+        if Self::is_windjammer_text_param_type(decl_ty)
+            && Self::is_windjammer_text_param_type(sig_ty)
+        {
+            return true;
+        }
+        // Callee signature uses `&T` / `&mut T` while the caller declares owned `T`.
+        match sig_ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                return self.types_equal(inner, decl_ty);
+            }
+            _ => {}
         }
         let decl_str = matches!(decl_ty, Type::String);
         let sig_str = matches!(sig_ty, Type::String);

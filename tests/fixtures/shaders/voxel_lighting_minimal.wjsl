@@ -1,0 +1,37 @@
+// Minimal Voxel Lighting Shader (WJSL) - TDD Version
+//
+// This is a stripped-down version for TDD testing.
+// Only outputs MAGENTA to prove the shader executes.
+// Full lighting logic will be restored after black screen bug is fixed.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+
+struct RayMarchParams {
+    world_size: vec3<f32>,
+    voxel_size: f32,
+    max_steps: u32,
+    svo_depth: u32,
+    node_count: u32,
+    _pad2: u32,
+}
+
+@group(0) @binding(0) uniform lighting: LightingParams;
+@group(0) @binding(1) storage read gbuffer: array<GBufferPixel >;
+@group(0) @binding(2) storage read materials: array<f32 >;
+@group(0) @binding(3) storage read svo_nodes: array<u32 >;
+@group(0) @binding(4) uniform ray_params: RayMarchParams;
+@group(0) @binding(5) storage read_write color_output: array<vec4<f32> >;
+@group(0) @binding(6) uniform screen_size: vec2<u32 >;
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    
+    // TDD: Force ALL pixels to MAGENTA to prove lighting shader executes
+    color_output[pixel_idx] = vec4(1.0, 0.0, 1.0, 1.0);  // MAGENTA
+}

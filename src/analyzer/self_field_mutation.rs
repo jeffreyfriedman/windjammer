@@ -212,9 +212,17 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
 
-                self.expression_is_self_field_mutating_method_call(
+                if self.expression_is_self_field_mutating_method_call(
                     object, method, registry, visited,
-                )
+                ) {
+                    return true;
+                }
+
+                if self.expression_passes_self_field_to_mut_method_arg(expr, registry) {
+                    return true;
+                }
+
+                false
             }
             Expression::Unary { op, operand, .. } => {
                 if matches!(op, crate::parser::UnaryOp::MutRef) {
@@ -226,7 +234,48 @@ impl<'ast> Analyzer<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_modifies_self_fields(s, registry, visited)),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if let Some(reg) = registry {
+                    if let Some(func_name) = self.extract_function_name(function) {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if self.expression_is_self_field_access(arg)
+                                && self
+                                    .function_call_argument_expects_mut_borrow(&func_name, i, reg)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
+            }
             _ => false,
         }
+    }
+
+    fn function_call_argument_expects_mut_borrow(
+        &self,
+        func_name: &str,
+        arg_idx: usize,
+        reg: &super::SignatureRegistry,
+    ) -> bool {
+        let sig = reg
+            .get_signature(func_name)
+            .or_else(|| reg.get_signature(&format!("Self::{}", func_name)));
+        let Some(sig) = sig else {
+            return false;
+        };
+        let param_idx = if sig.has_self_receiver {
+            arg_idx + 1
+        } else {
+            arg_idx
+        };
+        sig.param_ownership
+            .get(param_idx)
+            .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
     }
 }

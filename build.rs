@@ -12,13 +12,18 @@ fn generate_test_all_rs() {
         return;
     }
 
+    /// `tests/all.rs` is the consolidated `cargo test --test all` entry point (includes
+    /// generated module list). Every other `tests/*.rs` file is a test module.
+    /// Shared helpers live under `tests/common/` and are wired in explicitly below.
+    const TEST_BINARY_ENTRY: &str = "all";
+
     let mut modules: Vec<String> = Vec::new();
     if let Ok(entries) = fs::read_dir(tests_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "rs") {
                 let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                if name == "all" || name == "common" || name == "lib" {
+                if name == TEST_BINARY_ENTRY {
                     continue;
                 }
                 modules.push(name);

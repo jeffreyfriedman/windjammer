@@ -11,15 +11,60 @@ use crate::parser::Type;
 use super::function_metadata::{try_analyzer_signature_from_metadata, FunctionSignature};
 use super::ModuleMetadata;
 
-/// Find the project root by walking up from `start` looking for `Cargo.toml` or `wj.toml`.
-pub(in crate::metadata) fn find_project_root(start: &Path) -> Option<PathBuf> {
+fn parent_has_manifest(dir: &Path) -> bool {
+    dir.parent()
+        .is_some_and(|p| p.join("Cargo.toml").exists() || p.join("wj.toml").exists())
+}
+
+/// True for manifests that must not become the `.wj-cache` project root.
+fn is_auxiliary_nested_manifest(dir: &Path) -> bool {
+    // Auto-generated `src/Cargo.toml` inside a real crate (e.g. windjammer-game-core/src/).
+    if dir.file_name().and_then(|n| n.to_str()) == Some("src") && parent_has_manifest(dir) {
+        return true;
+    }
+    // Auxiliary mini-manifests under `<crate>/src/<module>/` (e.g. src/rendering/Cargo.toml).
+    if let Some(parent) = dir.parent() {
+        if parent.file_name().and_then(|n| n.to_str()) == Some("src") {
+            if let Some(grandparent) = parent.parent() {
+                if grandparent.join("Cargo.toml").exists() || grandparent.join("wj.toml").exists() {
+                    return true;
+                }
+            }
+        }
+    }
+    // Compiler-emitted output manifest at `<crate>/gen/Cargo.toml` (not a real crate root).
+    if dir.file_name().and_then(|n| n.to_str()) == Some("gen") && parent_has_manifest(dir) {
+        return true;
+    }
+    false
+}
+
+fn meta_cache_path_under_root(project_root: &Path, relative: &Path) -> PathBuf {
+    let mut cache_path = project_root.join(".wj-cache");
+    cache_path.push(relative);
+    let file_name = cache_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    cache_path.set_file_name(format!("{}.meta", file_name));
+    cache_path
+}
+
+/// Find the nearest crate root by walking up from `start` looking for `Cargo.toml` or `wj.toml`.
+///
+/// Returns the **closest** valid manifest (not the workspace parent) and skips auxiliary
+/// nested manifests so `.wj-cache` lives at the real crate root.
+pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut dir = if start.is_file() {
         start.parent()?
     } else {
         start
     };
     loop {
-        if dir.join("Cargo.toml").exists() || dir.join("wj.toml").exists() {
+        if (dir.join("Cargo.toml").exists() || dir.join("wj.toml").exists())
+            && !is_auxiliary_nested_manifest(dir)
+        {
             return Some(dir.to_path_buf());
         }
         dir = dir.parent()?;
@@ -35,27 +80,16 @@ pub fn meta_cache_path(source_file: &Path) -> PathBuf {
     if let Some(project_root) = find_project_root(source_file) {
         let src_dir = project_root.join("src");
         if let Ok(relative) = source_file.strip_prefix(&src_dir) {
-            let mut cache_path = project_root.join(".wj-cache");
-            cache_path.push(relative);
-            let file_name = cache_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            cache_path.set_file_name(format!("{}.meta", file_name));
-            return cache_path;
+            return meta_cache_path_under_root(&project_root, relative);
         }
-        // File is in the project but not under src/ -- place relative to project root
+        // Output-dir mirrors (`gen/foo.wj`) share cache keys with `src/foo.wj`.
+        let gen_dir = project_root.join("gen");
+        if let Ok(relative) = source_file.strip_prefix(&gen_dir) {
+            return meta_cache_path_under_root(&project_root, relative);
+        }
+        // File is in the project but not under src/ or gen/ -- place relative to project root
         if let Ok(relative) = source_file.strip_prefix(&project_root) {
-            let mut cache_path = project_root.join(".wj-cache");
-            cache_path.push(relative);
-            let file_name = cache_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            cache_path.set_file_name(format!("{}.meta", file_name));
-            return cache_path;
+            return meta_cache_path_under_root(&project_root, relative);
         }
     }
     source_file.with_extension("wj.meta")
@@ -193,6 +227,7 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
                 .iter()
                 .map(|_| crate::analyzer::OwnershipMode::Owned)
                 .collect();
+            let formal_param_types = param_types.clone();
             let return_type = sig
                 .return_type
                 .as_ref()
@@ -202,6 +237,7 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
                 AnalyzerFunctionSignature {
                     name: name.to_string(),
                     param_types,
+                    formal_param_types,
                     param_ownership,
                     return_type,
                     return_ownership: OwnershipMode::Owned,

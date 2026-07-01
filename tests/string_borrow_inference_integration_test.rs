@@ -56,20 +56,25 @@ fn test_string_borrow_inference() {
         panic!("Compilation failed");
     }
 
-    // Read generated Rust code
-    // Try both possible output paths (see generic_owned_param_integration_test)
-    let generated_file = output_dir.join("string_borrow_inference_test.rs");
-    let generated_code = std::fs::read_to_string(&generated_file)
-        .or_else(|_| {
-            std::fs::read_to_string(
-                output_dir
-                    .join("wj")
-                    .join("windjammer")
-                    .join("tests")
-                    .join("string_borrow_inference_test.rs"),
-            )
-        })
-        .expect("Failed to read generated file (tried both possible paths)");
+    // Read generated Rust code - search recursively for worktree compatibility
+    let generated_code = {
+        fn find_rs(dir: &std::path::Path, name: &str) -> Option<String> {
+            let flat = dir.join(name);
+            if flat.exists() { return std::fs::read_to_string(&flat).ok(); }
+            for entry in std::fs::read_dir(dir).ok()? {
+                let path = entry.ok()?.path();
+                if path.is_file() && path.file_name().map_or(false, |n| n == name) {
+                    return std::fs::read_to_string(&path).ok();
+                }
+                if path.is_dir() {
+                    if let Some(s) = find_rs(&path, name) { return Some(s); }
+                }
+            }
+            None
+        }
+        find_rs(&output_dir, "string_borrow_inference_test.rs")
+            .expect("Failed to find generated string_borrow_inference_test.rs")
+    };
 
     println!("Generated code:\n{}", generated_code);
 

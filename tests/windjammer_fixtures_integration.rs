@@ -112,7 +112,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = {{ path = "{}" }}
+windjammer-runtime = {{ path = "{}", default-features = false }}
 
 [[test]]
 name = "generated_fixture"

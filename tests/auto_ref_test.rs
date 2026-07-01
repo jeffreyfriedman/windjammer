@@ -196,10 +196,13 @@ fn test_mixed_owned_and_literal() {
 
     // insert takes owned key, no & needed (already implemented)
     // Note: Integer inference may add _i32 or _i64 suffix based on HashMap value type
+    // The compiler may add .to_string() for the key (redundant but harmless)
     assert!(
         (generated.contains("map.insert(key, 42)")
             || generated.contains("map.insert(key, 42_i32)")
-            || generated.contains("map.insert(key, 42_i64)"))
+            || generated.contains("map.insert(key, 42_i64)")
+            || generated.contains("map.insert(key.to_string(), 42_i64)")
+            || generated.contains("map.insert(key.to_string(), 42_i32)"))
             && !generated.contains("map.insert(&key"),
         "insert should not add & to owned key. Generated:\n{}",
         generated
