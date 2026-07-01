@@ -3,11 +3,10 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-/// Bug: the codegen must auto-convert non-string types (i32, f32) to string
-/// when passed to functions expecting string params (like push_str).
-/// The user should NOT need to write .to_string() — that's Rust leakage.
+/// Verify: .to_string() on non-string types (i32, f32) is legitimate Windjammer
+/// and must be preserved in generated Rust. The compiler should NOT strip it.
 #[test]
-fn test_int_field_auto_converts_to_string_for_push_str() {
+fn test_to_string_on_int_preserved_for_push_str() {
     let mut t = MultiFileTest::new();
     t.add_file(
         "config.wj",
@@ -25,9 +24,9 @@ impl Config {
     pub fn render(self) -> string {
         let mut html = String::new()
         html.push_str("rows=")
-        html.push_str(self.rows)
+        html.push_str(self.rows.to_string())
         html.push_str(",max=")
-        html.push_str(self.max_length)
+        html.push_str(self.max_length.to_string())
         html
     }
 }

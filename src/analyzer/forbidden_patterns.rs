@@ -8,18 +8,6 @@
 use crate::parser::ast::core::Expression;
 use crate::parser::*;
 
-const AUTO_INFERRED_TRAITS: &[&str] = &[
-    "Copy",
-    "Clone",
-    "Debug",
-    "PartialEq",
-    "Eq",
-    "Hash",
-    "Default",
-    "PartialOrd",
-    "Ord",
-];
-
 /// Walk the AST and fail if forbidden Rust-specific patterns appear in user source.
 pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
     program: &Program<'ast>,
@@ -48,7 +36,6 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                          don't have .as_str())."
                         .to_string());
                 }
-
                 check_expr(object)?;
                 for (_label, arg) in arguments {
                     check_expr(arg)?;

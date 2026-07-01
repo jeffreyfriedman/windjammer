@@ -92,17 +92,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    pub(super) fn method_requires_owned_self_receiver(
-        &self,
-        qualified: &str,
-        sig: &crate::analyzer::FunctionSignature,
-    ) -> bool {
-        matches!(
-            self.effective_method_self_ownership(qualified, sig),
-            crate::analyzer::OwnershipMode::Owned
-        )
-    }
-
     /// Resolve the Rust receiver for a method whose analyzer ownership is `Owned`.
     ///
     /// The analyzer sets Owned for several reasons: match-on-self, consuming field
