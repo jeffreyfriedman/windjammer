@@ -440,13 +440,11 @@ impl<'ast> Analyzer<'ast> {
                 if is_self_receiver {
                     if let Some(impl_functions) = &self.current_impl_functions {
                         if let Some(called_func) = impl_functions.get(method.as_str()) {
-                            let callee_self_owned = self
-                                .infer_impl_self_receiver_ownership_inner(
-                                    called_func,
-                                    registry,
-                                    visited,
-                                )
-                                == super::OwnershipMode::Owned;
+                            let callee_self_owned = self.infer_impl_self_receiver_ownership_inner(
+                                called_func,
+                                registry,
+                                visited,
+                            ) == super::OwnershipMode::Owned;
                             if callee_self_owned {
                                 return true;
                             }

@@ -34,10 +34,10 @@ pub use execution::{ExecutionConstraint, ExecutionValidator};
 pub use node::{IrFunction, IrNode, IrNodeKind};
 pub use numeric_solver::NumericSolver;
 pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
+pub use pipeline::{IrModule, IrPipeline, IrPipelineConfig};
 pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,
     TaintStatus,
 };
-pub use pipeline::{IrModule, IrPipeline, IrPipelineConfig};
 pub use solver::Solver;
 pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};

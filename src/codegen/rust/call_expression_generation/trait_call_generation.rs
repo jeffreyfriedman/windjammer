@@ -117,8 +117,8 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         if has_method_collision {
             // Collision detected — skip post-processing auto-borrow entirely.
         } else {
-        let callee_is_extern = sig.is_extern;
-        args = args
+            let callee_is_extern = sig.is_extern;
+            args = args
             .iter()
             .enumerate()
             .map(|(i, arg_str)| {

@@ -24,18 +24,20 @@ impl<'ast> CodeGenerator<'ast> {
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));
         let args = if let Some(ref sig) = resolved_signature {
-            let receiver_is_map = receiver_type_name.as_ref().is_some_and(|n| {
-                crate::codegen::rust::stdlib_method_traits::is_map_type_name(n)
-            }) || self
-                .infer_expression_type(object)
+            let receiver_is_map = receiver_type_name
                 .as_ref()
-                .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_type);
-            let receiver_is_set = receiver_type_name.as_ref().is_some_and(|n| {
-                crate::codegen::rust::stdlib_method_traits::is_set_type_name(n)
-            }) || self
-                .infer_expression_type(object)
+                .is_some_and(|n| crate::codegen::rust::stdlib_method_traits::is_map_type_name(n))
+                || self
+                    .infer_expression_type(object)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_type);
+            let receiver_is_set = receiver_type_name
                 .as_ref()
-                .is_some_and(crate::codegen::rust::stdlib_method_traits::is_set_type);
+                .is_some_and(|n| crate::codegen::rust::stdlib_method_traits::is_set_type_name(n))
+                || self
+                    .infer_expression_type(object)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::stdlib_method_traits::is_set_type);
             args.into_iter()
                 .enumerate()
                 .map(|(i, mut arg_str)| {
