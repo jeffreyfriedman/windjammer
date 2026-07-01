@@ -1396,7 +1396,7 @@ impl<'ast> CodeGenerator<'ast> {
                             method,
                             qualified_key.as_deref(),
                         );
-                        let receiver_is_float = receiver_float_type.as_ref().is_some_and(|t| {
+                        let _receiver_is_float = receiver_float_type.as_ref().is_some_and(|t| {
                             matches!(t, Type::Float)
                                 || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
                                 || crate::codegen::rust::float_type_utilities::float_type_from_wj_ty(t)

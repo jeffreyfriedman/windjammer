@@ -368,9 +368,7 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     // Exception: static/instance associated methods with body-inferred borrow pass bare literals.
     if param_is_owned_string_type(param_type) {
         if matches!(
-            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                sig, idx
-            ),
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
             crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
         ) {
             return false;

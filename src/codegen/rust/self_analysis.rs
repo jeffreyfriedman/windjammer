@@ -253,9 +253,9 @@ pub fn function_calls_owned_self_method(
     registry: &SignatureRegistry,
     struct_name: Option<&str>,
 ) -> bool {
-    func.body.iter().any(|stmt| {
-        statement_calls_owned_self_method(stmt, registry, struct_name)
-    })
+    func.body
+        .iter()
+        .any(|stmt| statement_calls_owned_self_method(stmt, registry, struct_name))
 }
 
 fn statement_calls_owned_self_method(
@@ -305,9 +305,9 @@ fn expression_calls_owned_self_method(
             }
             false
         }
-        Expression::Block { statements, .. } => statements.iter().any(|s| {
-            statement_calls_owned_self_method(s, registry, struct_name)
-        }),
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_calls_owned_self_method(s, registry, struct_name)),
         _ => false,
     }
 }
@@ -424,9 +424,9 @@ fn expression_is_bare_self(expr: &Expression) -> bool {
 
 fn expression_consumes_self(expr: &Expression) -> bool {
     match expr {
-        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, val)| {
-            expression_is_bare_self(val) || expression_moves_self_field_value(val)
-        }),
+        Expression::StructLiteral { fields, .. } => fields
+            .iter()
+            .any(|(_, val)| expression_is_bare_self(val) || expression_moves_self_field_value(val)),
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_consumes_self(s))
         }
@@ -455,8 +455,7 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
             expression_is_bare_self(expr) || expression_consumes_self(expr)
         }
         Statement::Let { value, .. } => {
-            expression_is_bare_self(value)
-                || expression_consumes_self(value)
+            expression_is_bare_self(value) || expression_consumes_self(value)
         }
         Statement::If {
             then_block,
@@ -1076,9 +1075,9 @@ pub fn statement_modifies_self(
                 receiver_upgrades,
             )
         }),
-        Statement::Return { value: Some(expr), .. } => {
-            expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades)
-        }
+        Statement::Return {
+            value: Some(expr), ..
+        } => expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades),
         Statement::Loop { body, .. } => body.iter().any(|s| {
             statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
         }),
@@ -1164,7 +1163,9 @@ pub fn statement_mutates_fields(ctx: &AnalysisContext, stmt: &Statement) -> bool
                 expression_mutates_fields(ctx, arm.body)
             })
         }
-        Statement::Return { value: Some(expr), .. } => expression_mutates_fields(ctx, expr),
+        Statement::Return {
+            value: Some(expr), ..
+        } => expression_mutates_fields(ctx, expr),
         Statement::Loop { body, .. } => body.iter().any(|s| statement_mutates_fields(ctx, s)),
         Statement::Let { value, .. } => expression_mutates_fields(ctx, value),
         _ => false,
@@ -1280,7 +1281,8 @@ pub fn expression_modifies_self(
             ..
         } => {
             if let Some(reg) = registry {
-                let func_name = crate::codegen::rust::ast_utilities::extract_function_name(function);
+                let func_name =
+                    crate::codegen::rust::ast_utilities::extract_function_name(function);
                 if !func_name.is_empty() {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if is_self_field_chain(arg) {
@@ -1290,16 +1292,10 @@ pub fn expression_modifies_self(
                                 })
                             });
                             if let Some(sig) = sig {
-                                let param_idx = if sig.has_self_receiver {
-                                    i + 1
-                                } else {
-                                    i
-                                };
-                                if sig
-                                    .param_ownership
-                                    .get(param_idx)
-                                    .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
-                                {
+                                let param_idx = if sig.has_self_receiver { i + 1 } else { i };
+                                if sig.param_ownership.get(param_idx).is_some_and(|o| {
+                                    *o == crate::analyzer::OwnershipMode::MutBorrowed
+                                }) {
                                     return true;
                                 }
                             }

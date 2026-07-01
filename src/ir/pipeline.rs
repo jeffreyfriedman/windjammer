@@ -104,17 +104,11 @@ impl IrPipeline {
         let mut diagnostics = Vec::new();
 
         // Phase 1: Convert AnalyzedFunctions to IrFunctions
-        let functions: Vec<IrFunction> = analyzed
-            .iter()
-            .map(IrFunction::from_analyzed)
-            .collect();
+        let functions: Vec<IrFunction> = analyzed.iter().map(IrFunction::from_analyzed).collect();
 
         diagnostics.push(IrDiagnostic {
             severity: DiagnosticSeverity::Info,
-            message: format!(
-                "IR: lowered {} functions from analyzer",
-                functions.len()
-            ),
+            message: format!("IR: lowered {} functions from analyzer", functions.len()),
             span: None,
         });
 
@@ -148,8 +142,14 @@ impl IrPipeline {
         }
 
         // Emit summary diagnostic
-        let mut_count = functions.iter().filter(|f| !f.mutated_params.is_empty()).count();
-        let str_opt_count = functions.iter().filter(|f| !f.str_ref_params.is_empty()).count();
+        let mut_count = functions
+            .iter()
+            .filter(|f| !f.mutated_params.is_empty())
+            .count();
+        let str_opt_count = functions
+            .iter()
+            .filter(|f| !f.str_ref_params.is_empty())
+            .count();
         diagnostics.push(IrDiagnostic {
             severity: DiagnosticSeverity::Info,
             message: format!(
