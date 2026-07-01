@@ -89,32 +89,6 @@ impl<'ast> Analyzer<'ast> {
         optimizable
     }
 
-    /// Check if a string parameter is returned directly (explicit return or implicit last expr)
-    pub(crate) fn param_is_returned_directly(&self, param_name: &str, body: &[&Statement]) -> bool {
-        for stmt in body {
-            match stmt {
-                Statement::Return {
-                    value: Some(expr), ..
-                } => {
-                    if let Expression::Identifier { name, .. } = &**expr {
-                        if name == param_name {
-                            return true;
-                        }
-                    }
-                }
-                Statement::Expression { expr, .. } => {
-                    if let Expression::Identifier { name, .. } = &**expr {
-                        if name == param_name {
-                            return true;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        false
-    }
-
     /// Check if a parameter needs &String (passed to method that requires it)
     /// Recursively traverses the function body to find all usages
     pub(crate) fn param_needs_string_ref(
