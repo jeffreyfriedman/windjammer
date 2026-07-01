@@ -2,6 +2,8 @@
 //!
 //! Shaders live under `tests/fixtures/shaders/` — no dependency on external repos.
 
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 
 pub fn shader_fixtures_dir() -> PathBuf {
