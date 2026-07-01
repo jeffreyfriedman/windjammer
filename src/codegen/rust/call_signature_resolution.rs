@@ -40,21 +40,6 @@ pub enum ResolutionMethod {
     MethodRegistry,
 }
 
-/// When true, call-site auto-borrow / auto-mut-borrow must be skipped.
-///
-/// Unambiguous module-qualified keys (`draw::draw_text`) keep auto-borrow even if the
-/// bare method name collides across modules. Bare calls and fallback resolutions that
-/// hit a colliding simple name cannot trust Borrowed ownership from the wrong module.
-pub(crate) fn skip_auto_borrow_on_signature_collision(
-    func_name: &str,
-    signature_has_collision: bool,
-    signature_from_simple_fallback: bool,
-    has_registry_collision: bool,
-) -> bool {
-    signature_has_collision
-        || (has_registry_collision && (signature_from_simple_fallback || !func_name.contains("::")))
-}
-
 /// Resolve a call signature from the registry.
 ///
 /// Resolution precedence (each step tried only if previous returned `None`):
