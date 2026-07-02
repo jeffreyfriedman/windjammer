@@ -23,6 +23,9 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return Some(concrete);
             }
+            // No concrete type from function context. Bare float literals default to f32
+            // (see literals.rs), so Vec element type must also be f32 for consistency.
+            return Some(Type::Custom("f32".into()));
         }
         push_type
     }

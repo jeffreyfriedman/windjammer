@@ -40,11 +40,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             );
 
             // Pre-compute ownership collision for the whole argument.
-            // Use the narrow explicit-ownership collision check: `type_collision_keys`
-            // has false positives from multi-pass re-registration of the same function
-            // as ownership inference refines param types.  Only genuine ownership
-            // collisions (different param_ownership from different modules) should
-            // suppress auto-borrow.
+            // Check both the qualified func_name and the bare simple name:
+            // collisions may exist on either in the global registry from
+            // cross-module merges.
             let has_ownership_collision = {
                 let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
                 gen.has_explicit_ownership_collision_with_global(func_name)
@@ -1077,6 +1075,18 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             // Unified borrow lowering (auto-clone strip + & insertion).
             // Skip when ownership collision detected — the registry may hold the
             // wrong module's inference, so adding & or &mut could be incorrect.
+            // Temporarily log all calls where signature says Borrowed but no & is added
+            if i == 0 && arg_str == "nodes" {
+                let _ = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/wj_debug_borrow.log")
+                    .and_then(|mut f| {
+                        use std::io::Write;
+                        writeln!(f, "CALL func={} arg0=nodes sig={} extern={} collision={}", func_name, signature.is_some(), is_extern_call, has_ownership_collision)?;
+                        if let Some(ref sig) = signature {
+                            writeln!(f, "  ownership={:?} types={:?} self={}", sig.param_ownership, sig.param_types, sig.has_self_receiver)?;
+                        }
+                        Ok(())
+                    });
+            }
             if let Some(ref sig) = signature {
                 if !is_extern_call && !sig.is_extern && !has_ownership_collision {
                     let method_name = func_name.rsplit("::").next().unwrap_or(func_name);

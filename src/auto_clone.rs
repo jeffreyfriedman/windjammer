@@ -155,7 +155,16 @@ impl AutoCloneAnalysis {
                 Self::collect_usages_from_expression(expr, idx, UsageKind::Move, in_loop, map);
             }
             Statement::Expression { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
+                // A bare FieldAccess or Identifier in expression-statement position is a
+                // value expression (e.g. last expression in an if/else branch). This moves
+                // the value, so mark it Move so auto-clone detects loop-captured fields.
+                let kind = match expr {
+                    Expression::FieldAccess { .. } | Expression::Identifier { .. } => {
+                        UsageKind::Move
+                    }
+                    _ => UsageKind::Read,
+                };
+                Self::collect_usages_from_expression(expr, idx, kind, in_loop, map);
             }
             Statement::If {
                 condition,
@@ -920,5 +929,146 @@ mod tests {
 
         // Should NOT detect any clones needed
         assert!(analysis.needs_clone("x", 1).is_none());
+    }
+
+    #[test]
+    fn test_self_field_in_if_expr_inside_while_loop_needs_clone() {
+        // Reproduces rating.wj bug:
+        //   while i <= self.max {
+        //       let star_color = if filled { self.color } else { "#e2e8f0" }
+        //       html.push_str(star_color)
+        //       i += 1
+        //   }
+        // self.color is a String field used in a while loop if-expression.
+        // It must be cloned because the loop executes multiple times.
+
+        let func = FunctionDecl {
+            name: "render".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "self".to_string(),
+                pattern: None,
+                type_: Type::Custom("Rating".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: Some(Type::String),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: Some("Rating".to_string()),
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                // let mut i = 1
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("i".to_string()),
+                    mutable: true,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Literal {
+                        value: Literal::Int(1),
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                // while i <= self.max {
+                test_alloc_stmt(Statement::While {
+                    condition: test_alloc_expr(Expression::Binary {
+                        left: test_alloc_expr(Expression::Identifier {
+                            name: "i".to_string(),
+                            location: None,
+                        }),
+                        op: BinaryOp::Le,
+                        right: test_alloc_expr(Expression::FieldAccess {
+                            object: test_alloc_expr(Expression::Identifier {
+                                name: "self".to_string(),
+                                location: None,
+                            }),
+                            field: "max".to_string(),
+                            location: None,
+                        }),
+                        location: None,
+                    }),
+                    body: vec![
+                        // let star_color = if filled { self.color } else { "#e2e8f0" }
+                        test_alloc_stmt(Statement::Let {
+                            pattern: Pattern::Identifier("star_color".to_string()),
+                            mutable: false,
+                            type_: None,
+                            value: test_alloc_expr(Expression::Block {
+                                is_unsafe: false,
+                                statements: vec![test_alloc_stmt(Statement::If {
+                                    condition: test_alloc_expr(Expression::Identifier {
+                                        name: "filled".to_string(),
+                                        location: None,
+                                    }),
+                                    then_block: vec![test_alloc_stmt(Statement::Expression {
+                                        expr: test_alloc_expr(Expression::FieldAccess {
+                                            object: test_alloc_expr(Expression::Identifier {
+                                                name: "self".to_string(),
+                                                location: None,
+                                            }),
+                                            field: "color".to_string(),
+                                            location: None,
+                                        }),
+                                        location: None,
+                                    })],
+                                    else_block: Some(vec![test_alloc_stmt(
+                                        Statement::Expression {
+                                            expr: test_alloc_expr(Expression::Literal {
+                                                value: Literal::String("#e2e8f0".to_string()),
+                                                location: None,
+                                            }),
+                                            location: None,
+                                        },
+                                    )]),
+                                    location: None,
+                                })],
+                                location: None,
+                            }),
+                            else_block: None,
+                            location: None,
+                        }),
+                        // i += 1
+                        test_alloc_stmt(Statement::Assignment {
+                            target: test_alloc_expr(Expression::Identifier {
+                                name: "i".to_string(),
+                                location: None,
+                            }),
+                            value: test_alloc_expr(Expression::Binary {
+                                left: test_alloc_expr(Expression::Identifier {
+                                    name: "i".to_string(),
+                                    location: None,
+                                }),
+                                op: BinaryOp::Add,
+                                right: test_alloc_expr(Expression::Literal {
+                                    value: Literal::Int(1),
+                                    location: None,
+                                }),
+                                location: None,
+                            }),
+                            compound_op: None,
+                            location: None,
+                        }),
+                    ],
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+
+        // self.color is used inside a while loop but defined outside (it's a field
+        // of self). The loop executes multiple times, so each iteration would try
+        // to move self.color. Auto-clone must detect this.
+        assert!(
+            analysis.needs_clone_anywhere("self.color"),
+            "self.color in while loop if-expression must be flagged for clone"
+        );
     }
 }
