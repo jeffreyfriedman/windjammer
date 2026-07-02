@@ -17,6 +17,10 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
+#[path = "common/integration_test_helpers.rs"]
+mod integration_test_helpers;
+
+use integration_test_helpers::MultiFileTest;
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -47,6 +51,145 @@ fn test_extern_fn_calls_wrapped_in_unsafe() {
         Err(err) => {
             panic!("Compilation failed: {}", err);
         }
+    }
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_zero_arg_extern_fn_wrapped_in_unsafe() {
+    let code = r#"
+    extern fn deferred_geometry_execute() -> bool {}
+    extern fn gi_execute() -> bool {}
+    extern fn clear_lights() {}
+    
+    pub fn run_geometry() -> bool {
+        deferred_geometry_execute()
+    }
+    
+    pub fn run_gi() -> bool {
+        gi_execute()
+    }
+    
+    pub fn do_clear() {
+        clear_lights()
+    }
+    
+    fn main() {
+        let a = run_geometry()
+        let b = run_gi()
+        do_clear()
+    }
+    "#;
+
+    match test_utils::compile_single_result(code) {
+        Ok(generated) => {
+            // All extern function calls should be wrapped in unsafe blocks,
+            // regardless of whether they have arguments or not
+            assert!(
+                generated.contains("unsafe") && generated.contains("deferred_geometry_execute"),
+                "Zero-arg extern fn 'deferred_geometry_execute' should be wrapped in unsafe.\nGenerated code:\n{}",
+                generated
+            );
+            assert!(
+                generated.contains("unsafe") && generated.contains("gi_execute"),
+                "Zero-arg extern fn 'gi_execute' should be wrapped in unsafe.\nGenerated code:\n{}",
+                generated
+            );
+            assert!(
+                generated.contains("unsafe") && generated.contains("clear_lights"),
+                "Zero-arg extern fn 'clear_lights' should be wrapped in unsafe.\nGenerated code:\n{}",
+                generated
+            );
+
+            // Verify with rustc
+            let temp_dir = TempDir::new().expect("Failed to create temp dir");
+            let rust_file = temp_dir.path().join("test.rs");
+            std::fs::write(&rust_file, &generated).expect("Failed to write Rust file");
+            let rustc_output = Command::new("rustc")
+                .arg("--crate-type")
+                .arg("lib")
+                .arg("--emit")
+                .arg("metadata")
+                .arg(&rust_file)
+                .arg("--out-dir")
+                .arg(temp_dir.path())
+                .output()
+                .expect("Failed to run rustc");
+            assert!(
+                rustc_output.status.success(),
+                "Generated Rust for zero-arg extern calls should compile.\nrustc stderr:\n{}\nGenerated code:\n{}",
+                String::from_utf8_lossy(&rustc_output.stderr),
+                generated
+            );
+        }
+        Err(err) => {
+            panic!("Compilation failed: {}", err);
+        }
+    }
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_cross_module_zero_arg_extern_fn_unsafe() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "api.wj",
+        r#"
+extern fn deferred_geometry_execute() -> bool {}
+extern fn render_deferred_frame() -> bool {}
+extern fn gi_execute() -> bool {}
+extern fn ssr_execute() -> bool {}
+extern fn deferred_lighting_clear_lights() {}
+"#,
+    );
+    test.add_file(
+        "gpu_safe.wj",
+        r#"
+use crate::api
+
+pub fn deferred_geometry_execute() -> bool {
+    api::deferred_geometry_execute()
+}
+
+pub fn render_deferred_frame() -> bool {
+    api::render_deferred_frame()
+}
+
+pub fn gi_execute() -> bool {
+    api::gi_execute()
+}
+
+pub fn ssr_execute() -> bool {
+    api::ssr_execute()
+}
+
+pub fn deferred_lighting_clear_lights() {
+    api::deferred_lighting_clear_lights()
+}
+"#,
+    );
+
+    let results = test.compile().expect("compile");
+    let gpu_safe = results
+        .get("gpu_safe.rs")
+        .expect("gpu_safe.rs should be generated");
+
+    // Every api:: call in gpu_safe should have unsafe wrapper
+    for func in &[
+        "deferred_geometry_execute",
+        "render_deferred_frame",
+        "gi_execute",
+        "ssr_execute",
+        "deferred_lighting_clear_lights",
+    ] {
+        let has_unsafe_call = gpu_safe.lines().any(|line| {
+            line.contains(&format!("api::{}", func)) && line.contains("unsafe")
+        });
+        assert!(
+            has_unsafe_call,
+            "Cross-module zero-arg extern call 'api::{}' should be wrapped in unsafe.\nGenerated gpu_safe.rs:\n{}",
+            func, gpu_safe
+        );
     }
 }
 
