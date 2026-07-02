@@ -295,19 +295,49 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             }
-            Expression::MethodCall { method, .. } => {
+            Expression::MethodCall {
+                method,
+                object,
+                ..
+            } => {
+                // .get() on HashMap/BTreeMap always returns Option<&V> in Rust.
+                // Check object type via both type inference and struct field lookup.
+                if method == "get" {
+                    if let Some(obj_ty) = self.infer_expression_type(object) {
+                        if Self::is_hashmap_like_type(&obj_ty) {
+                            return true;
+                        }
+                    }
+                    // Fallback: check struct field types when object is self.field
+                    if let Expression::FieldAccess {
+                        object: fa_obj,
+                        field: fa_field,
+                        ..
+                    } = object
+                    {
+                        if let Expression::Identifier { name, .. } = fa_obj {
+                            if name == "self" {
+                                if let Some(ft) = self.get_struct_field_type(fa_field) {
+                                    if Self::is_hashmap_like_type(&ft) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if let Some(ty) = self.infer_expression_type(expr) {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
                         return true;
                     }
-                    // HashMap.get()/BTreeMap.get() returns Option<&V>.
-                    // Custom methods like Map::get -> Option<i32> return owned values.
                     if method == "get" {
-                        if let Type::Option(inner) = ty {
-                            return matches!(
+                        if let Type::Option(inner) = &ty {
+                            if matches!(
                                 inner.as_ref(),
                                 Type::Reference(_) | Type::MutableReference(_)
-                            );
+                            ) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -318,18 +348,50 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
                         return true;
                     }
-                    if let Expression::FieldAccess { field, .. } = function {
+                    if let Expression::FieldAccess {
+                        field, object: fa_obj, ..
+                    } = function
+                    {
                         if field == "get" {
-                            if let Type::Option(inner) = ty {
-                                return matches!(
+                            if let Type::Option(inner) = &ty {
+                                if matches!(
                                     inner.as_ref(),
                                     Type::Reference(_) | Type::MutableReference(_)
-                                );
+                                ) {
+                                    return true;
+                                }
+                            }
+                            if let Some(obj_ty) = self.infer_expression_type(fa_obj) {
+                                if Self::is_hashmap_like_type(&obj_ty) {
+                                    return true;
+                                }
                             }
                         }
                     }
                 }
                 false
+            }
+            _ => false,
+        }
+    }
+
+    fn get_struct_field_type(&self, field_name: &str) -> Option<Type> {
+        let struct_name = self.current_struct_name.as_ref()?;
+        let field_types = self.struct_field_types.get(struct_name)?;
+        field_types.get(field_name).cloned()
+    }
+
+    fn is_hashmap_like_type(ty: &Type) -> bool {
+        match ty {
+            Type::Custom(name) => {
+                // Bare "Map" without type params could be a user struct, not a HashMap alias
+                matches!(name.as_str(), "HashMap" | "BTreeMap" | "IndexMap")
+            }
+            Type::Parameterized(name, _) => {
+                matches!(
+                    name.as_str(),
+                    "HashMap" | "BTreeMap" | "Map" | "IndexMap"
+                )
             }
             _ => false,
         }
