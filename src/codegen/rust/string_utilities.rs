@@ -425,10 +425,27 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         return;
     }
 
-    if arg_str.ends_with(".to_string()") {
-        *arg_str = arg_str[..arg_str.len() - 12].to_string();
-    } else if arg_str.ends_with(".into()") {
-        *arg_str = arg_str[..arg_str.len() - 7].to_string();
+    // When the AST is a MethodCall("to_string"), the user wrote `.to_string()` for
+    // type conversion (e.g. i32→String). Stripping it would leave a non-string type
+    // where &str is expected. Only strip when the AST is an Identifier/FieldAccess
+    // (compiler-added redundant .to_string() on already-String values).
+    // Preserve .to_string() only when it's a genuine type conversion (receiver is
+    // non-string, e.g. i32.to_string()). Strip it when receiver is already a string
+    // literal ("foo".to_string()) since that's a redundant &str→String→&str round-trip.
+    let is_explicit_to_string_conversion = matches!(
+        arg,
+        Expression::MethodCall { object, method, .. }
+            if method == "to_string" && !matches!(&**object,
+                Expression::Literal { value: crate::parser::Literal::String(_), .. }
+            )
+    );
+
+    if !is_explicit_to_string_conversion {
+        if arg_str.ends_with(".to_string()") {
+            *arg_str = arg_str[..arg_str.len() - 12].to_string();
+        } else if arg_str.ends_with(".into()") {
+            *arg_str = arg_str[..arg_str.len() - 7].to_string();
+        }
     }
 
     if matches!(
@@ -693,6 +710,55 @@ mod tests {
         let mut arg_str = "squad_id.to_string()".to_string();
         finalize_borrowed_text_call_site_arg(Some(&sig), 0, Some("Squad"), &arg, &mut arg_str);
         assert_eq!(arg_str, "&squad_id");
+    }
+
+    #[test]
+    fn finalize_borrowed_text_preserves_to_string_on_method_call_ast() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Expression;
+
+        // push_str expects &str; param arrays include self at index 0
+        let sig = FunctionSignature {
+            name: "push_str".into(),
+            param_types: vec![
+                Type::Custom("String".into()), // self (index 0)
+                Type::Reference(Box::new(Type::Custom("str".into()))), // &str param (index 1)
+            ],
+            formal_param_types: vec![Type::Custom("String".into()), Type::String],
+            param_ownership: vec![OwnershipMode::MutBorrowed, OwnershipMode::Borrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+        };
+
+        // AST: self.rows.to_string() — a MethodCall with method "to_string"
+        let self_expr = Expression::Identifier {
+            name: "self".into(),
+            location: None,
+        };
+        let field_access = Expression::FieldAccess {
+            object: &self_expr,
+            field: "rows".into(),
+            location: None,
+        };
+        let arg = Expression::MethodCall {
+            object: &field_access,
+            method: "to_string".into(),
+            type_args: None,
+            arguments: vec![],
+            location: None,
+        };
+
+        let mut arg_str = "self.rows.to_string()".to_string();
+        finalize_borrowed_text_call_site_arg(Some(&sig), 0, None, &arg, &mut arg_str);
+
+        // .to_string() on a non-string type is a TYPE CONVERSION, not redundant.
+        // Must be preserved as &self.rows.to_string(), NOT stripped to &self.rows.
+        assert_eq!(
+            arg_str, "&self.rows.to_string()",
+            "must NOT strip .to_string() from MethodCall AST — it's a type conversion"
+        );
     }
 
     #[test]
