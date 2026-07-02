@@ -2,7 +2,7 @@
 //!
 //! Windjammer's `std::json` module maps to these functions.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Parse JSON string into a Value
@@ -11,8 +11,18 @@ pub fn parse(s: &str) -> Result<Value, String> {
 }
 
 /// Deserialize JSON into any type implementing `Deserialize`.
-pub fn parse_string<T: for<'de> Deserialize<'de>>(s: &str) -> Result<T, String> {
-    serde_json::from_str(s).map_err(|e| e.to_string())
+pub fn parse_string<T: for<'de> Deserialize<'de>>(s: impl AsRef<str>) -> Result<T, String> {
+    serde_json::from_str(s.as_ref()).map_err(|e| e.to_string())
+}
+
+/// Serialize a typed value to compact JSON string.
+pub fn to_string<T: Serialize>(value: T) -> Result<String, String> {
+    serde_json::to_string(&value).map_err(|e| e.to_string())
+}
+
+/// Serialize a typed value to pretty-printed JSON string.
+pub fn to_string_pretty<T: Serialize>(value: T) -> Result<String, String> {
+    serde_json::to_string_pretty(&value).map_err(|e| e.to_string())
 }
 
 /// Convert Value to JSON string
@@ -169,6 +179,42 @@ mod tests {
         let payload: Payload = parse_string(r#"{"name":"Alice","age":30}"#).expect("parse");
         assert_eq!(payload.name, "Alice");
         assert_eq!(payload.age, 30);
+    }
+
+    #[test]
+    fn test_to_string_typed() {
+        #[derive(Serialize)]
+        struct User {
+            name: String,
+            age: i64,
+        }
+        let user = User { name: "Bob".to_string(), age: 25 };
+        let json = to_string(user).expect("serialize");
+        assert!(json.contains("\"name\":\"Bob\""));
+        assert!(json.contains("\"age\":25"));
+    }
+
+    #[test]
+    fn test_to_string_pretty_typed() {
+        #[derive(Serialize)]
+        struct Config {
+            host: String,
+            port: i64,
+        }
+        let cfg = Config { host: "localhost".to_string(), port: 8080 };
+        let json = to_string_pretty(cfg).expect("serialize pretty");
+        assert!(json.contains('\n'));
+        assert!(json.contains("\"host\": \"localhost\""));
+    }
+
+    #[test]
+    fn test_serialize_deserialize_roundtrip() {
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        struct Point { x: i64, y: i64 }
+        let original = Point { x: 42, y: 99 };
+        let json = to_string(&original).expect("serialize");
+        let restored: Point = parse_string(&json).expect("deserialize");
+        assert_eq!(original, restored);
     }
 
     #[test]

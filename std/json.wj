@@ -15,6 +15,16 @@ fn parse_string<T>(s: string) -> Result<T, string> {
     Err("use std::json import — maps to runtime")
 }
 
+/// Serialize a typed struct to compact JSON string (`@derive(Serialize)` required).
+fn to_string<T>(value: T) -> Result<string, string> {
+    Err("use std::json import — maps to runtime")
+}
+
+/// Serialize a typed struct to pretty JSON string (`@derive(Serialize)` required).
+fn to_string_pretty<T>(value: T) -> Result<string, string> {
+    Err("use std::json import — maps to runtime")
+}
+
 /// Serialize Value → compact JSON string
 fn stringify(value: Value) -> Result<string, string> {
     Err("use std::json import — maps to runtime")
