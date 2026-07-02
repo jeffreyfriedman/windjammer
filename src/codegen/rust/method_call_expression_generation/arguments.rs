@@ -343,7 +343,17 @@ impl<'ast> CodeGenerator<'ast> {
                                         && crate::codegen::rust::types::is_windjammer_text_type(t)
                                 });
                         if param_is_str_slice_ref && !callee_wants_owned_string {
-                            if arg_str.ends_with(".to_string()") {
+                            // Preserve .to_string() only when it's a genuine type conversion
+                            // (receiver is non-string, e.g. i32.to_string()). Strip it when
+                            // the receiver is already a string literal ("foo".to_string()).
+                            let is_type_conversion_to_string = matches!(
+                                arg_to_generate,
+                                Expression::MethodCall { object, method: m, .. }
+                                    if m == "to_string" && !matches!(&**object,
+                                        Expression::Literal { value: crate::parser::Literal::String(_), .. }
+                                    )
+                            );
+                            if !is_type_conversion_to_string && arg_str.ends_with(".to_string()") {
                                 arg_str = arg_str[..arg_str.len() - 12].to_string();
                                 to_string_stripped_for_str_param = true;
                             } else if arg_str.ends_with(".into()") {
@@ -974,7 +984,16 @@ impl<'ast> CodeGenerator<'ast> {
                 if borrow_decision.strip_clone {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     // Owned-path may have added `.to_string()` before we knew callee takes &str.
-                    if param_expects_borrowed && arg_str.ends_with(".to_string()")
+                    // But preserve when the receiver is a non-string type (genuine conversion).
+                    let is_type_conversion_to_string = matches!(
+                        arg_to_generate,
+                        Expression::MethodCall { object, method: m, .. }
+                            if m == "to_string" && !matches!(&**object,
+                                Expression::Literal { value: crate::parser::Literal::String(_), .. }
+                            )
+                    );
+                    if !is_type_conversion_to_string
+                        && param_expects_borrowed && arg_str.ends_with(".to_string()")
                         && method_signature.as_ref().and_then(|sig| {
                             sig.param_type_for_arg(i)
                         }).is_some_and(|t| {

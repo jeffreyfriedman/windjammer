@@ -152,9 +152,11 @@ impl SignatureRegistry {
                 if !stub_like {
                     self.type_collision_keys.insert(name.clone());
                 }
-            } else if existing.param_ownership != sig.param_ownership {
-                self.ownership_collision_keys.insert(name.clone());
             }
+            // Note: ownership changes within a single registry (same file/pass)
+            // are multipass refinements (Owned→Borrowed), NOT genuine collisions
+            // between different modules. Only `merge()` flags cross-registry
+            // ownership collisions.
             if name.contains("::") && existing.has_self_receiver && !sig.has_self_receiver {
                 // Declaration stubs may incorrectly include synthetic `self`; direct impl
                 // static methods must be able to replace them for Self:: call-site lowering.
@@ -565,6 +567,58 @@ impl SignatureRegistry {
         }
     }
 
+    /// Returns true when every ownership difference between `base` and `refined`
+    /// is an Owned→Borrowed or Owned→MutBorrowed refinement on a non-text type
+    /// (i.e. body analysis narrowed the ownership from the initial stub).
+    ///
+    /// For text types (String/string), Owned→Borrowed changes the Rust type
+    /// (String → &str), so it IS a genuine collision. For non-text types like
+    /// Vec<T>, Owned→Borrowed only adds `&` which auto-borrow handles.
+    fn is_ownership_refinement(base: &FunctionSignature, refined: &FunctionSignature) -> bool {
+        if base.param_ownership.len() != refined.param_ownership.len() {
+            return false;
+        }
+        if base.param_types.len() != base.param_ownership.len() {
+            return false;
+        }
+        base.param_ownership
+            .iter()
+            .zip(refined.param_ownership.iter())
+            .zip(base.param_types.iter())
+            .enumerate()
+            .all(|(idx, ((b, r), ty))| {
+                b == r
+                    || (matches!(b, OwnershipMode::Owned)
+                        && matches!(r, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                        && !Self::is_declaration_stub_text_type(ty)
+                        && !(base.has_self_receiver && idx == 0))
+            })
+    }
+
+    /// A signature with all params Owned and at least one non-text, non-Copy
+    /// param type is almost certainly a declaration stub (pre-body-analysis),
+    /// not a genuinely different function that happens to consume its arguments.
+    fn is_likely_declaration_stub_with_nontrivial_params(sig: &FunctionSignature) -> bool {
+        if sig.param_ownership.is_empty() {
+            return false;
+        }
+        let all_owned = sig
+            .param_ownership
+            .iter()
+            .all(|o| matches!(o, OwnershipMode::Owned));
+        if !all_owned {
+            return false;
+        }
+        sig.param_types.iter().enumerate().any(|(idx, ty)| {
+            if sig.has_self_receiver && idx == 0 {
+                return false;
+            }
+            !Self::is_declaration_stub_text_type(ty)
+                && !matches!(ty, Type::Reference(_) | Type::MutableReference(_))
+                && !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(ty)
+        })
+    }
+
     fn is_declaration_stub_text_type(ty: &Type) -> bool {
         matches!(ty, Type::String)
             || matches!(ty, Type::Custom(name) if name == "string" || name == "String")
@@ -602,7 +656,26 @@ impl SignatureRegistry {
                         self.type_collision_keys.insert(name.clone());
                     }
                 } else if existing.param_ownership != sig.param_ownership {
-                    self.ownership_collision_keys.insert(name.clone());
+                    // Multipass library builds register declaration stubs (all-Owned)
+                    // before body analysis converges to refined ownership. When the
+                    // stub is later merged with the converged signature, the ownership
+                    // difference is a refinement, NOT a genuine cross-module collision.
+                    //
+                    // Owned→Borrowed and Owned→MutBorrowed are always valid refinements:
+                    // body analysis discovered the parameter's actual usage. Only flag
+                    // as collision when there is a genuine Borrowed↔MutBorrowed conflict
+                    // (one module reads, another writes the same param).
+                    if !Self::is_ownership_refinement(existing, sig)
+                        && !Self::is_ownership_refinement(sig, existing)
+                    {
+                        let ex_stub =
+                            Self::is_likely_declaration_stub_with_nontrivial_params(existing);
+                        let sig_stub =
+                            Self::is_likely_declaration_stub_with_nontrivial_params(sig);
+                        if !ex_stub && !sig_stub {
+                            self.ownership_collision_keys.insert(name.clone());
+                        }
+                    }
                 }
                 // Keep converged dependency / multi-pass ownership over per-file stubs.
                 if crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(sig)
