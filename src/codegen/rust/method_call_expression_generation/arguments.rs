@@ -424,7 +424,17 @@ impl<'ast> CodeGenerator<'ast> {
                 // callback argument and the function's parameters have been auto-borrowed,
                 // wrap it in a closure so the caller's owned args are correctly borrowed.
                 // e.g. server.serve(handle_request) → server.serve(|__cb0| handle_request(&__cb0))
+                //
+                // Skip local variables that shadow function names — they are values,
+                // not callables (e.g. `Some(parent) => path.push(parent)` where
+                // `parent` shadows a top-level function).
                 if let Expression::Identifier { name, .. } = arg {
+                    let is_local_variable = self.local_var_types.contains_key(name.as_str())
+                        || self.match_arm_bindings.contains(name.as_str())
+                        || self.inferred_borrowed_params.contains(name.as_str())
+                        || self.inferred_mut_borrowed_params.contains(name.as_str())
+                        || self.current_function_params.iter().any(|p| p.name == *name);
+                    if !is_local_variable {
                     if let Some(func_sig) = self.signature_registry.get_signature(name) {
                         if !func_sig.has_self_receiver && !func_sig.is_extern {
                             let has_borrowed: Vec<usize> = func_sig
@@ -455,6 +465,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                             }
                         }
+                    }
                     }
                 }
 
