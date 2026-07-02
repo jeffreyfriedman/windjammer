@@ -53,6 +53,12 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
 
 pub(crate) fn signature_is_declaration_stub_like(sig: &FunctionSignature) -> bool {
     if sig.param_ownership.is_empty() {
+        // Zero-argument functions have no ownership to refine — not stubs.
+        // Declaration stubs have param_types populated but param_ownership
+        // not yet inferred; zero-arg functions have both empty.
+        if sig.param_types.is_empty() {
+            return false;
+        }
         return sig
             .param_types
             .iter()

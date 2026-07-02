@@ -331,12 +331,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub fn new(registry: SignatureRegistry, target: CompilationTarget) -> Self {
-        let extern_fn_names: std::collections::HashSet<String> = registry
-            .signatures
-            .iter()
-            .filter(|(_, sig)| sig.is_extern)
-            .map(|(name, _)| name.rsplit("::").next().unwrap_or(name).to_string())
-            .collect();
+        let extern_fn_names = registry.collect_all_extern_names();
         CodeGenerator {
             indent_level: 0,
             signature_registry: registry,

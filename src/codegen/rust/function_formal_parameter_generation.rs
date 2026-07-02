@@ -182,15 +182,18 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         // Check if the analyzer inferred MutBorrowed (e.g., Copy type
                         // mutated through method call — caller wants mutation visible).
-                        if let Some(OwnershipMode::MutBorrowed) =
-                            analyzed.inferred_ownership.get(&param.name).copied()
-                        {
-                            self.inferred_mut_borrowed_params
-                                .insert(param.name.clone());
-                            return format!(
-                                "&mut {}",
-                                self.type_to_rust(formal_type)
-                            );
+                        // Skip in trait impls: trait signature must match exactly.
+                        if !self.in_trait_impl {
+                            if let Some(OwnershipMode::MutBorrowed) =
+                                analyzed.inferred_ownership.get(&param.name).copied()
+                            {
+                                self.inferred_mut_borrowed_params
+                                    .insert(param.name.clone());
+                                return format!(
+                                    "&mut {}",
+                                    self.type_to_rust(formal_type)
+                                );
+                            }
                         }
                         // Owned parameters are always mutable in Windjammer
                         return format!("mut {}: {}", param.name, self.type_to_rust(formal_type));
@@ -387,7 +390,15 @@ impl<'ast> CodeGenerator<'ast> {
                                             });
                                         methods.and_then(|m| {
                                             m.get(func.name.as_str()).and_then(|trait_fn| {
-                                                trait_fn.inferred_ownership.get(&param.name).copied()
+                                                // Use position-based lookup: impl param names
+                                                // may differ from trait (e.g., ctx vs app).
+                                                trait_fn.decl.parameters.get(param_idx)
+                                                    .and_then(|trait_param| {
+                                                        trait_fn.inferred_ownership.get(&trait_param.name).copied()
+                                                    })
+                                                    .or_else(|| {
+                                                        trait_fn.inferred_ownership.get(&param.name).copied()
+                                                    })
                                             })
                                         })
                                     })

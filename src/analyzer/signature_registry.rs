@@ -213,6 +213,26 @@ impl SignatureRegistry {
     }
 
     /// Narrower check: only explicit ownership collision keys (from `add_function`
+    /// Collect all extern function names from this registry and its global fallback.
+    pub fn collect_all_extern_names(&self) -> std::collections::HashSet<String> {
+        let mut names: std::collections::HashSet<String> = self
+            .signatures
+            .iter()
+            .filter(|(_, sig)| sig.is_extern)
+            .map(|(name, _)| name.rsplit("::").next().unwrap_or(name).to_string())
+            .collect();
+        if let Some(ref fallback) = self.global_fallback {
+            names.extend(
+                fallback
+                    .signatures
+                    .iter()
+                    .filter(|(_, sig)| sig.is_extern)
+                    .map(|(name, _)| name.rsplit("::").next().unwrap_or(name).to_string()),
+            );
+        }
+        names
+    }
+
     /// or `merge` detecting different `param_ownership`). Does NOT check
     /// `has_method_name_collision`, avoiding false positives on common method names.
     pub fn has_explicit_ownership_collision(&self, name: &str) -> bool {
