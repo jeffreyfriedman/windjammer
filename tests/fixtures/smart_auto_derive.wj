@@ -20,8 +20,7 @@ struct Container {
     items: Vec<int>,
 }
 
-// Explicit control still works
-@auto(Debug, Clone, Serialize, Deserialize)
+// Bare struct — compiler auto-derives everything
 struct Config {
     host: string,
     port: int,

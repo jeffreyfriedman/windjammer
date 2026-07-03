@@ -317,6 +317,9 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                                 && file_name != "_lib_items.rs"
                             {
                                 if let Some(module_name) = file_name.strip_suffix(".rs") {
+                                    if module_name.contains('.') {
+                                        continue;
+                                    }
                                     if !mod_declared_in(&content, module_name)
                                         && should_merge_extra_module(
                                             module_name,
@@ -413,6 +416,10 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     if let Some(module_name) = file_name.strip_suffix(".rs") {
                         // Prefer `foo/` directory modules over stale sibling `foo.rs`.
                         if output_dir.join(module_name).is_dir() {
+                            continue;
+                        }
+                        // Skip filenames with dots (e.g. "vnode.stable.rs") — invalid Rust module names.
+                        if module_name.contains('.') {
                             continue;
                         }
                         modules.push(module_name.to_string());

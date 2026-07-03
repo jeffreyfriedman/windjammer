@@ -276,13 +276,40 @@ fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), Strin
     Ok(())
 }
 
+const FORBIDDEN_DERIVE_TRAITS: &[(&str, &str)] = &[
+    ("Copy", "Copy is auto-inferred from field types — explicit @derive(Copy) is Rust leakage"),
+    ("Serialize", "Serialize is auto-derived project-wide when using std::json — remove @derive(Serialize)"),
+    ("Deserialize", "Deserialize is auto-derived project-wide when using std::json — remove @derive(Deserialize)"),
+];
+
 fn check_struct_decorators(
-    _struct_name: &str,
-    _decorators: &[Decorator<'_>],
+    struct_name: &str,
+    decorators: &[Decorator<'_>],
 ) -> Result<(), String> {
-    // Auto-inferred traits (Copy, Clone, Debug, etc.) specified via @derive are
-    // silently accepted for backward compatibility.  The compiler's auto-derive
-    // system handles these traits automatically based on field types, so explicit
-    // @derive for them is redundant but not an error.
+    for decorator in decorators {
+        if decorator.name != "derive" && decorator.name != "auto" {
+            continue;
+        }
+        let deco_name = &decorator.name;
+        for (_, expr) in &decorator.arguments {
+            if let Expression::Identifier { name: trait_name, .. } = expr {
+                for (forbidden, reason) in FORBIDDEN_DERIVE_TRAITS {
+                    if trait_name == forbidden {
+                        return Err(format!(
+                            "error: `@{deco_name}({forbidden})` on struct `{struct_name}` is a forbidden pattern\n\
+                             \n\
+                             {reason}\n\
+                             \n\
+                             The Windjammer compiler auto-derives traits based on struct field types.\n\
+                             Just define the struct without @{deco_name} — the compiler handles the rest.\n\
+                             \n\
+                             ❌ @{deco_name}({forbidden})\n\
+                             ✅ (remove the decorator entirely)",
+                        ));
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }

@@ -267,6 +267,8 @@ pub struct Analyzer<'ast> {
     // Track struct definitions with @derive(Copy) to determine if they're Copy
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ library files.
     copy_structs: Arc<HashSet<String>>,
+    /// Types explicitly annotated with `@derive(Copy)` (not auto-inferred).
+    explicit_copy_structs: Arc<HashSet<String>>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl<'ast>>,
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
@@ -304,6 +306,7 @@ impl<'ast> Analyzer<'ast> {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
             copy_structs,
+            explicit_copy_structs: Arc::new(HashSet::new()),
             trait_definitions: HashMap::new(),
             analyzed_trait_methods: HashMap::new(),
             mutated_variables: HashSet::new(),

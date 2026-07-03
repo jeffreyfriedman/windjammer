@@ -19,7 +19,7 @@ fn is_type_copy_quick_for_library(
 /// Returns (copy_structs, all_local_struct_names, explicit_non_copy_structs).
 pub(crate) fn collect_global_copy_structs_for_library(
     sources: &[(PathBuf, String)],
-) -> (HashSet<String>, HashSet<String>, HashSet<String>) {
+) -> (HashSet<String>, HashSet<String>, HashSet<String>, HashSet<String>) {
     use crate::parser::ast::EnumVariantData;
 
     struct StructInfo {
@@ -31,6 +31,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
         items: &[Item<'_>],
         all_structs: &mut Vec<StructInfo>,
         global_copy_structs: &mut HashSet<String>,
+        explicit_copy_structs: &mut HashSet<String>,
         copy_enums: &mut HashSet<String>,
         struct_names: &mut HashSet<String>,
         explicit_non_copy: &mut HashSet<String>,
@@ -54,6 +55,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
                     });
                     if has_copy {
                         global_copy_structs.insert(decl.name.clone());
+                        explicit_copy_structs.insert(decl.name.clone());
                     } else if has_derive {
                         // Struct has explicit @derive(...) without Copy — opt-out
                         explicit_non_copy.insert(decl.name.clone());
@@ -73,6 +75,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
                         inner,
                         all_structs,
                         global_copy_structs,
+                        explicit_copy_structs,
                         copy_enums,
                         struct_names,
                         explicit_non_copy,
@@ -85,6 +88,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
 
     let mut all_structs: Vec<StructInfo> = Vec::new();
     let mut global_copy_structs = HashSet::new();
+    let mut explicit_copy_structs = HashSet::new();
     let mut copy_enums = HashSet::new();
     let mut struct_names = HashSet::new();
     let mut explicit_non_copy = HashSet::new();
@@ -105,6 +109,7 @@ pub(crate) fn collect_global_copy_structs_for_library(
             &program.items,
             &mut all_structs,
             &mut global_copy_structs,
+            &mut explicit_copy_structs,
             &mut copy_enums,
             &mut struct_names,
             &mut explicit_non_copy,
@@ -143,14 +148,14 @@ pub(crate) fn collect_global_copy_structs_for_library(
     }
 
     global_copy_structs.extend(copy_enums.iter().cloned());
-    (global_copy_structs, struct_names, explicit_non_copy)
+    (global_copy_structs, struct_names, explicit_non_copy, explicit_copy_structs)
 }
 
 /// Enums that must not be treated as Copy (data-carrying variants with non-Copy fields).
 pub(crate) fn collect_non_copy_enums_for_library(sources: &[(PathBuf, String)]) -> HashSet<String> {
     use crate::parser::ast::EnumVariantData;
 
-    let (copy_structs, _, _) = collect_global_copy_structs_for_library(sources);
+    let (copy_structs, _, _, _) = collect_global_copy_structs_for_library(sources);
 
     fn variant_fields_copy(
         variant: &crate::parser::EnumVariant,

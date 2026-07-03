@@ -25,7 +25,6 @@ use tempfile::TempDir;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_passed_by_value_to_methods() {
     let source = r#"
-@derive(Copy, Clone, Debug, PartialEq, Eq, Hash)
 pub struct Entity {
     pub index: i64,
     pub generation: i64,

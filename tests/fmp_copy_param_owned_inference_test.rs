@@ -72,7 +72,6 @@ fn derive_copy_struct_formal_passed_to_owned_callee_stays_owned() {
     test.add_file(
         "deps.wj",
         r#"
-@derive(Copy)
 pub struct AppDeps {
     pub tag: int,
 }

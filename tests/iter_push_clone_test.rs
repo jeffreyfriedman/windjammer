@@ -116,13 +116,11 @@ impl Mixer {
 fn test_copy_matching_items() {
     // Copy items that match a condition
     let code = r#"
-@derive(Clone, Debug, Copy)
 pub struct Node {
     id: i32,
     parent_id: i32,
 }
 
-@derive(Clone, Debug)
 pub struct Tree {
     nodes: Vec<Node>,
 }

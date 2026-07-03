@@ -409,6 +409,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                             match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(formal_type),
+                                OwnershipMode::MutBorrowed
+                                    if self.is_explicitly_copy_type(formal_type) =>
+                                {
+                                    self.type_to_rust(formal_type)
+                                }
                                 OwnershipMode::MutBorrowed => {
                                     format!("&mut {}", self.type_to_rust(formal_type))
                                 }
@@ -447,8 +452,14 @@ impl<'ast> CodeGenerator<'ast> {
                     type_str
                 };
 
-                // Copy owned formals pass by value — clear stale borrow metadata from body analysis.
-                if self.is_type_copy(formal_type) && !type_str.starts_with('&') {
+                // Explicitly Copy types kept as owned (instead of &mut) still need `mut`
+                // when the analyzer inferred MutBorrowed — the body mutates the value.
+                let copy_mut_as_owned = self.is_explicitly_copy_type(formal_type)
+                    && !type_str.starts_with('&')
+                    && self.inferred_mut_borrowed_params.contains(&param.name);
+
+                // Explicit Copy owned formals pass by value — clear stale borrow metadata.
+                if self.is_explicitly_copy_type(formal_type) && !type_str.starts_with('&') {
                     self.inferred_borrowed_params.remove(&param.name);
                     self.inferred_mut_borrowed_params.remove(&param.name);
                 }
@@ -460,8 +471,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let auto_needs_mut = param.name != "self"
                     && !param.is_mutable
                     && matches!(type_str.as_str(), s if !s.starts_with("&"))
-                    && !self.is_type_copy(formal_type)
-                    && self.variable_needs_mut(&param.name);
+                    && (self.variable_needs_mut(&param.name) || copy_mut_as_owned);
                 let mut_prefix = if (param.is_mutable || auto_needs_mut)
                     && !type_str.starts_with('&')
                 {

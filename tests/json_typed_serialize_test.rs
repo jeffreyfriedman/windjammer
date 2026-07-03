@@ -12,9 +12,8 @@
 
 //! TDD: typed struct serialization via json.to_string()
 //!
-//! Windjammer should support serializing any @derive(Serialize) struct to JSON
-//! via json.to_string(value), symmetric with json.parse_string<T>(text) for
-//! deserialization.
+//! Windjammer auto-derives Serialize/Deserialize for all structs when
+//! the project uses std::json. No @derive annotation needed.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -22,14 +21,13 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 #[test]
-fn json_to_string_serializes_derive_serialize_struct() {
+fn json_to_string_serializes_struct() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "main.wj",
         r#"
 use std::json
 
-@derive(Serialize)
 struct UserProfile {
     name: string,
     age: int,
@@ -70,7 +68,6 @@ fn json_to_string_pretty_serializes_with_indentation() {
         r#"
 use std::json
 
-@derive(Serialize)
 struct Config {
     host: string,
     port: int,
@@ -96,7 +93,6 @@ fn json_serialize_deserialize_roundtrip() {
         r#"
 use std::json
 
-@derive(Serialize, Deserialize)
 struct Point {
     x: int,
     y: int,

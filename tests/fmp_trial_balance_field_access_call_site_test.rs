@@ -46,7 +46,6 @@ trait TrialBalanceReader {
         r#"
 use ports::readers::TrialBalanceReader
 
-@derive(Copy)
 pub struct SeedReader {}
 
 impl TrialBalanceReader for SeedReader {

@@ -20,6 +20,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_web_imports: bool,
     pub(crate) needs_js_imports: bool,
     pub(crate) needs_serde_imports: bool,   // For JSON support
+    pub(crate) serde_available: bool,      // Project-level: serde dependency exists (auto-derive Serialize)
     pub(crate) needs_write_import: bool,    // For string capacity optimization (write! macro)
     pub(crate) needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
     pub(crate) needs_cow_import: bool,      // For Phase 9 Cow optimization
@@ -207,6 +208,10 @@ pub struct CodeGenerator<'ast> {
     // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
     // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
+    /// Types explicitly annotated with `@derive(Copy)` by the user.
+    /// Distinguished from auto-derived Copy types to preserve `&mut` semantics
+    /// for auto-derived types while allowing value semantics for explicit ones.
+    pub(crate) explicit_copy_types_registry: std::collections::HashSet<String>,
     /// Enums known to be non-Copy from library scan (e.g. `Value` with `String` variants).
     pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
@@ -342,6 +347,7 @@ impl<'ast> CodeGenerator<'ast> {
             needs_web_imports: false,
             needs_js_imports: false,
             needs_serde_imports: false,
+            serde_available: false,
             needs_write_import: false,
             needs_smallvec_import: false,
             needs_cow_import: false,
@@ -424,6 +430,7 @@ impl<'ast> CodeGenerator<'ast> {
             struct_field_types: std::collections::HashMap::new(),
             tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
+            explicit_copy_types_registry: std::collections::HashSet::new(),
             non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
             in_struct_literal_field: false,
@@ -514,9 +521,33 @@ impl<'ast> CodeGenerator<'ast> {
     /// Set Copy types registry from the global compiler state.
     /// This enables is_copy_type to recognize user-defined types with @derive(Copy)
     /// (e.g., VoxelType, FaceDirection) in addition to primitive Copy types.
+    pub fn set_serde_available(&mut self, available: bool) {
+        self.serde_available = available;
+    }
+
     pub fn set_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.copy_types_registry = registry;
     }
+
+    pub fn set_explicit_copy_types_registry(
+        &mut self,
+        registry: std::collections::HashSet<String>,
+    ) {
+        self.explicit_copy_types_registry = registry;
+    }
+
+    pub fn is_explicitly_copy_type(&self, ty: &crate::parser::ast::types::Type) -> bool {
+        if let crate::parser::ast::types::Type::Custom(name) = ty {
+            self.explicit_copy_types_registry.contains(name.as_str())
+                || name
+                    .split("::")
+                    .last()
+                    .is_some_and(|b| self.explicit_copy_types_registry.contains(b))
+        } else {
+            false
+        }
+    }
+
 
     pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.non_copy_types_registry = registry;
