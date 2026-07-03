@@ -139,8 +139,7 @@ impl<'ast> CodeGenerator<'ast> {
                 for item in &program.items {
                     match item {
                         Item::Struct { decl: s, .. } => {
-                            if self.copy_types_registry.contains(&s.name)
-                                || self.types_with_drop.contains(&s.name)
+                            if self.types_with_drop.contains(&s.name)
                                 || self.non_copy_types_registry.contains(&s.name)
                             {
                                 continue;
@@ -150,17 +149,24 @@ impl<'ast> CodeGenerator<'ast> {
                             } else {
                                 s.fields.iter().map(|f| &f.field_type).collect()
                             };
-                            if all_types.iter().all(|t| self.is_copy_type_with_registry(t)) {
-                                self.copy_types_registry.insert(s.name.clone());
+                            let all_copy = all_types.iter().all(|t| self.is_copy_type_with_registry(t));
+                            if all_copy {
+                                if self.copy_types_registry.insert(s.name.clone()) {
+                                    changed = true;
+                                }
+                            } else if self.copy_types_registry.remove(&s.name) {
+                                self.non_copy_types_registry.insert(s.name.clone());
                                 changed = true;
                             }
                         }
                         Item::Enum { decl: e, .. } => {
-                            if self.copy_types_registry.contains(&e.name) {
-                                continue;
-                            }
-                            if self.all_enum_variants_are_copy(&e.variants) {
-                                self.copy_types_registry.insert(e.name.clone());
+                            let variants_copy = self.all_enum_variants_are_copy(&e.variants);
+                            if variants_copy {
+                                if self.copy_types_registry.insert(e.name.clone()) {
+                                    changed = true;
+                                }
+                            } else if self.copy_types_registry.remove(&e.name) {
+                                self.non_copy_types_registry.insert(e.name.clone());
                                 changed = true;
                             }
                         }
@@ -249,6 +255,19 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // http, time, crypto modules don't need special imports (used directly)
             }
+        }
+
+        // When serde is available (project-level flag from use std::json),
+        // ensure needs_serde_imports is set so auto-derived Serialize gets the import.
+        if self.serde_available && !self.needs_serde_imports {
+            let has_any_struct = program.items.iter().any(|item| matches!(item, Item::Struct { .. }));
+            if has_any_struct {
+                self.needs_serde_imports = true;
+            }
+        }
+        // Propagate: if this file uses serde, mark serde as available for auto-derive.
+        if self.needs_serde_imports {
+            self.serde_available = true;
         }
 
         // THE WINDJAMMER WAY: Auto-detect usage of common stdlib types and traits

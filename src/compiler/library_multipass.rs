@@ -330,7 +330,7 @@ pub(crate) fn build_library_multipass(
     }
 
     let copy_registry_start = Instant::now();
-    let (mut global_copy_structs, local_struct_names, explicit_non_copy_structs) =
+    let (mut global_copy_structs, local_struct_names, explicit_non_copy_structs, global_explicit_copy_structs) =
         super::library_copy_registry::collect_global_copy_structs_for_library(&sources);
     let global_non_copy_enums =
         super::library_copy_registry::collect_non_copy_enums_for_library(&sources);
@@ -867,6 +867,23 @@ pub(crate) fn build_library_multipass(
         }
     }
 
+    // Detect if any file in the project uses serde (via `use std::json`).
+    // When true, all structs in the project auto-derive Serialize/Deserialize.
+    let project_has_serde = parsed_programs.iter().any(|program| {
+        use crate::parser::ast::core::Item;
+        for item in &program.items {
+            if let Item::Use { path, .. } = item {
+                let path_str = path.join("::");
+                if path_str.contains("json")
+                    && (path_str.starts_with("std::") || path_str == "std")
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    });
+
     // Phase 4B-b: codegen every file using the fully merged global registry.
     let step4b_codegen_start = Instant::now();
     step_done = 0;
@@ -921,6 +938,7 @@ pub(crate) fn build_library_multipass(
         let mut codegen = CodeGenerator::new_for_module(full_registry, target);
         codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
         codegen.set_copy_types_registry((*global_copy_structs).clone());
+        codegen.set_explicit_copy_types_registry(global_explicit_copy_structs.clone());
         codegen.set_non_copy_types_registry(global_non_copy_types.clone());
         codegen.set_global_struct_field_types((*global_struct_fields).clone());
         codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
@@ -932,6 +950,7 @@ pub(crate) fn build_library_multipass(
         codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
         codegen.set_shared_float_inference(std::sync::Arc::clone(&global_float_inference));
         codegen.set_shared_int_inference(std::sync::Arc::clone(&global_int_inference));
+        codegen.set_serde_available(project_has_serde);
 
         super::apply_inferred_bounds_to_codegen(&mut codegen, program);
         super::write_generated_rust_and_meta(

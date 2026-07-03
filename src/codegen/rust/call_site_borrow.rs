@@ -106,9 +106,41 @@ pub fn should_borrow_at_call_site(
     arg_already_rust_ref: bool,
     receiver_type: Option<&str>,
 ) -> CallSiteBorrowDecision {
+    should_borrow_at_call_site_with_copy_check(
+        sig,
+        arg_index,
+        arg_expr,
+        arg_str,
+        method_name,
+        arg_already_rust_ref,
+        receiver_type,
+        false,
+    )
+}
+
+/// Same as `should_borrow_at_call_site` but with an explicit `formal_type_is_copy` flag.
+///
+/// When the formal parameter type is a known Copy type (from the copy types registry),
+/// the call site should NOT add `&` — Rust passes Copy types by value automatically.
+/// Collection key lookups (`HashMap::get`) are an exception: they always need `&K`.
+pub fn should_borrow_at_call_site_with_copy_check(
+    sig: &FunctionSignature,
+    arg_index: usize,
+    arg_expr: &Expression,
+    arg_str: &str,
+    method_name: &str,
+    arg_already_rust_ref: bool,
+    receiver_type: Option<&str>,
+    formal_type_is_copy: bool,
+) -> CallSiteBorrowDecision {
     let param_idx = sig.arg_param_index(arg_index);
     let effective = effective_ownership_for_call_arg(sig, arg_index);
     let is_collection_key = is_collection_key_arg(method_name, arg_index, receiver_type);
+
+    // Copy formal types: pass by value, don't borrow (unless collection key lookup).
+    if formal_type_is_copy && !is_collection_key {
+        return CallSiteBorrowDecision::default();
+    }
 
     // Plain owned `string` formals pass by value unless body analysis converged to borrow.
     if sig.formal_param_type(param_idx).is_some_and(|t| {

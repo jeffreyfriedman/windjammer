@@ -136,20 +136,42 @@ pub fn build_project_ext(
         );
 
         for item in &program.items {
-            if let Item::Struct { decl, .. } = item {
-                let struct_name = &decl.name;
+            match item {
+                Item::Struct { decl, .. } => {
+                    let struct_name = &decl.name;
 
-                if analyzer.is_copy_struct(struct_name) {
-                    let is_local_copy = decl.fields.is_empty()
-                        || decl
-                            .fields
-                            .iter()
-                            .all(|f| is_type_copy_for_single_file_build(&f.field_type, &analyzer));
+                    if analyzer.is_copy_struct(struct_name) {
+                        let is_local_copy = decl.fields.is_empty()
+                            || decl
+                                .fields
+                                .iter()
+                                .all(|f| {
+                                    is_type_copy_for_single_file_build(&f.field_type, &analyzer)
+                                });
 
-                    if !is_local_copy {
-                        analyzer.unregister_copy_struct(struct_name);
+                        if !is_local_copy {
+                            analyzer.unregister_copy_struct(struct_name);
+                        }
                     }
                 }
+                Item::Enum { decl, .. } => {
+                    if analyzer.is_copy_struct(&decl.name) {
+                        use crate::parser::ast::EnumVariantData;
+                        let all_copy = decl.variants.iter().all(|v| match &v.data {
+                            EnumVariantData::Unit => true,
+                            EnumVariantData::Tuple(types) => types
+                                .iter()
+                                .all(|t| is_type_copy_for_single_file_build(t, &analyzer)),
+                            EnumVariantData::Struct(fields) => fields
+                                .iter()
+                                .all(|(_, ft)| is_type_copy_for_single_file_build(ft, &analyzer)),
+                        });
+                        if !all_copy {
+                            analyzer.unregister_copy_struct(&decl.name);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -193,10 +215,15 @@ pub fn build_project_ext(
         let cross_crate_field_types =
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 
+        let copy_registry: HashSet<String> = analyzer.get_copy_structs().into_iter().collect();
+        let explicit_copy: HashSet<String> =
+            analyzer.get_explicit_copy_structs().into_iter().collect();
         let mut codegen = CodeGenerator::new(registry.clone(), target);
         codegen.set_global_signature_registry(std::sync::Arc::new(global_signatures.clone()));
         codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
+        codegen.set_copy_types_registry(copy_registry);
+        codegen.set_explicit_copy_types_registry(explicit_copy);
         codegen.set_float_inference(float_inference);
         codegen.set_int_inference(int_inference);
         super::apply_inferred_bounds_to_codegen(&mut codegen, &program);

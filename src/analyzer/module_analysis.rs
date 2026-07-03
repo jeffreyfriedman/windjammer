@@ -180,6 +180,7 @@ impl<'ast> Analyzer<'ast> {
                 });
                 if has_copy_derive {
                     Arc::make_mut(&mut self.copy_structs).insert(decl.name.clone());
+                    Arc::make_mut(&mut self.explicit_copy_structs).insert(decl.name.clone());
                 } else if has_drop_derive {
                     // Drop and Copy are mutually exclusive — explicit Drop suppresses auto-Copy.
                     explicit_non_copy.insert(decl.name.clone());

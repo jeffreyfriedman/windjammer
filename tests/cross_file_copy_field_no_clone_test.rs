@@ -36,7 +36,6 @@ fn test_cross_file_copy_enum_field_no_clone() {
     std::fs::write(
         src.join("types.wj"),
         r#"
-@derive(Copy, Clone, Debug, PartialEq)
 pub enum PassId {
     Raycast,
     Lighting,
@@ -108,7 +107,6 @@ fn test_cross_file_copy_struct_field_no_clone() {
     std::fs::write(
         src.join("math.wj"),
         r#"
-@derive(Copy, Clone, Debug)
 pub struct Vec2 {
     pub x: f32,
     pub y: f32

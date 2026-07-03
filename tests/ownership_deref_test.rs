@@ -90,7 +90,6 @@ pub fn main() {}
 #[test]
 fn test_owned_loop_var_no_deref() {
     let src = r#"
-@derive(Copy, Clone)
 pub struct Id { v: i32 }
 pub fn process(id: Id) {}
 pub fn run(ids: Vec<Id>) {
@@ -331,7 +330,6 @@ pub fn main() {}
 #[test]
 fn test_entity_copy_no_deref() {
     let src = r#"
-@derive(Copy, Clone, Debug)
 pub struct Entity { index: i64 }
 pub fn process(e: Entity) {}
 pub fn run(entities: Vec<Entity>) {
@@ -349,7 +347,6 @@ pub fn main() {}
 #[test]
 fn test_tuple_pattern_copy_no_deref() {
     let src = r#"
-@derive(Copy, Clone)
 pub struct Id { v: i32 }
 pub fn process(id: Id, x: i32) {}
 pub fn run(pairs: Vec<(Id, i32)>) {
@@ -496,7 +493,6 @@ pub fn main() {}
 #[test]
 fn test_explicit_deref_stripped_for_copy() {
     let src = r#"
-@derive(Copy, Clone)
 pub struct Id { v: i32 }
 pub fn collect(ids: Vec<Id>) -> Vec<Id> {
     let mut out = Vec::new()

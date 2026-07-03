@@ -403,7 +403,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     if !matches!(
                         formal_ty,
                         Type::Reference(_) | Type::MutableReference(_)
-                    ) && gen.is_type_copy(formal_ty)
+                    ) && gen.is_explicitly_copy_type(formal_ty)
                     {
                         ownership = OwnershipMode::Owned;
                     }
@@ -454,7 +454,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                                         &resolved.sig, i,
                                     );
+                                // Copy types stay as owned even if the callee's body
+                                // analysis converged to MutBorrowed. The formal parameter
+                                // was already kept as owned `T` (not `&mut T`) so the
+                                // call site must pass `T`, not `&mut T`.
+                                let param_is_copy = resolved
+                                    .sig
+                                    .formal_param_type(resolved.sig.arg_param_index(i))
+                                    .is_some_and(|t| gen.is_explicitly_copy_type(t));
                                 if !matches!(upgraded, OwnershipMode::Owned)
+                                    && !param_is_copy
                                     && (func_name.starts_with("Self::")
                                         || !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
                                             &lookup_name,
@@ -655,12 +664,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                         OwnershipMode::MutBorrowed if !has_ownership_collision => {
-                            crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
-                                arg,
-                                &mut arg_str,
-                                &gen.current_function_params,
-                                &gen.inferred_mut_borrowed_params,
-                            );
+                            // Copy types kept as owned by formal param generation:
+                            // don't insert &mut at the call site.
+                            let callee_copy = sig
+                                .formal_param_type(sig.arg_param_index(i))
+                                .is_some_and(|t| gen.is_type_copy(t));
+                            if !callee_copy {
+                                crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                                    arg,
+                                    &mut arg_str,
+                                    &gen.current_function_params,
+                                    &gen.inferred_mut_borrowed_params,
+                                );
+                            }
                             return vec![arg_str];
                         }
                         OwnershipMode::Owned => {
@@ -1072,37 +1088,49 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
-            // Unified borrow lowering (auto-clone strip + & insertion).
-            // Skip when ownership collision detected — the registry may hold the
-            // wrong module's inference, so adding & or &mut could be incorrect.
-            // Temporarily log all calls where signature says Borrowed but no & is added
-            if i == 0 && arg_str == "nodes" {
-                let _ = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/wj_debug_borrow.log")
-                    .and_then(|mut f| {
-                        use std::io::Write;
-                        writeln!(f, "CALL func={} arg0=nodes sig={} extern={} collision={}", func_name, signature.is_some(), is_extern_call, has_ownership_collision)?;
-                        if let Some(ref sig) = signature {
-                            writeln!(f, "  ownership={:?} types={:?} self={}", sig.param_ownership, sig.param_types, sig.has_self_receiver)?;
-                        }
-                        Ok(())
-                    });
-            }
             if let Some(ref sig) = signature {
                 if !is_extern_call && !sig.is_extern && !has_ownership_collision {
-                    let method_name = func_name.rsplit("::").next().unwrap_or(func_name);
-                    let arg_already_rust_ref = matches!(
-                        arg,
-                        Expression::Identifier { name, .. }
-                            if gen.identifier_already_ref(name)
-                                || gen.str_ref_optimized_params.contains(name.as_str())
-                    );
-                    let decision =
-                        crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
-                            sig, i, arg, &arg_str, method_name, arg_already_rust_ref, None,
+                    let callee_param_is_explicit_copy = sig
+                        .formal_param_type(sig.arg_param_index(i))
+                        .is_some_and(|t| gen.is_explicitly_copy_type(t));
+                    if !callee_param_is_explicit_copy {
+                        let method_name = func_name.rsplit("::").next().unwrap_or(func_name);
+                        let arg_already_rust_ref = matches!(
+                            arg,
+                            Expression::Identifier { name, .. }
+                                if gen.identifier_already_ref(name)
+                                    || gen.str_ref_optimized_params.contains(name.as_str())
                         );
-                    crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
-                        &decision, &mut arg_str,
-                    );
+                        let formal_is_copy = sig
+                            .formal_param_type(sig.arg_param_index(i))
+                            .is_some_and(|t| gen.is_type_copy(t));
+                        let decision =
+                            crate::codegen::rust::call_site_borrow::should_borrow_at_call_site_with_copy_check(
+                                sig, i, arg, &arg_str, method_name, arg_already_rust_ref, None, formal_is_copy,
+                            );
+                        crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
+                            &decision, &mut arg_str,
+                        );
+                    }
+                }
+            }
+
+            // Final guard: non-reference Copy-type formals should never have `&` added.
+            if let Some(ref sig) = signature {
+                let pidx = sig.arg_param_index(i);
+                let formal_is_non_ref_copy = sig
+                    .formal_param_type(pidx)
+                    .is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && gen.is_type_copy(t)
+                    });
+                let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(
+                    func_name.rsplit("::").next().unwrap_or(func_name),
+                ) && i == 0;
+                if formal_is_non_ref_copy && !is_coll_key
+                    && arg_str.starts_with('&') && !arg_str.starts_with("&mut ")
+                {
+                    arg_str = arg_str[1..].to_string();
                 }
             }
 

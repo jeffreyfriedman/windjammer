@@ -100,7 +100,6 @@ use domain::account::Account
 use adapters::postgres_queries::list_accounts_sql
 use adapters::postgres_session::query_tenant_rows
 
-@derive(Copy)
 pub struct PostgresAccountReader {}
 
 impl AccountReader for PostgresAccountReader {
@@ -122,7 +121,6 @@ use domain::trial_balance::TrialBalanceLine
 use adapters::postgres_queries::trial_balance_lines_sql
 use adapters::postgres_session::query_tenant_rows
 
-@derive(Copy)
 pub struct PostgresTrialBalanceReader {}
 
 impl TrialBalanceReader for PostgresTrialBalanceReader {

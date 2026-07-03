@@ -35,7 +35,6 @@ fn test_no_clone_on_derive_copy_enum_multi_use() {
     // }
     // VoxelType has @derive(Copy) — .clone() is unnecessary
     let source = r#"
-@derive(Copy, Clone, PartialEq)
 pub enum VoxelType {
     Air,
     Stone,
@@ -64,7 +63,7 @@ pub fn process_voxel(voxel_type: VoxelType) -> bool {
     // VoxelType derives Copy — should NOT need .clone()
     assert!(
         !generated.contains("voxel_type.clone()"),
-        "Should not clone @derive(Copy) enum variable.\nGenerated:\n{}",
+        "Should not clone auto-inferred Copy enum variable.\nGenerated:\n{}",
         generated
     );
 }
@@ -73,7 +72,6 @@ pub fn process_voxel(voxel_type: VoxelType) -> bool {
 fn test_no_clone_on_derive_copy_struct_multi_use() {
     // A struct with all Copy fields and @derive(Copy) should not need .clone()
     let source = r#"
-@derive(Copy, Clone, PartialEq)
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -92,12 +90,12 @@ pub fn distance(a: Point, b: Point) -> f32 {
     // Point derives Copy — a.x and b.x should not trigger .clone()
     assert!(
         !generated.contains("a.clone()"),
-        "Should not clone @derive(Copy) struct parameter.\nGenerated:\n{}",
+        "Should not clone auto-inferred Copy struct parameter.\nGenerated:\n{}",
         generated
     );
     assert!(
         !generated.contains("b.clone()"),
-        "Should not clone @derive(Copy) struct parameter.\nGenerated:\n{}",
+        "Should not clone auto-inferred Copy struct parameter.\nGenerated:\n{}",
         generated
     );
 }
