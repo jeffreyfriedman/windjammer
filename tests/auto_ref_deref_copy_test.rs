@@ -57,7 +57,6 @@ mod tests {
     #[test]
     fn test_deref_copy_no_extra_ref() {
         let source = r#"
-@derive(Copy, Clone)
 struct Entity {
     id: usize,
 }

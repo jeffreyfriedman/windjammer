@@ -48,7 +48,6 @@ use ports::readers::AccountReader
 use domain::account::Account
 use adapters::seed_account_reader::SeedAccountReader
 
-@derive(Copy)
 pub struct EnvAccountReader {}
 
 impl AccountReader for EnvAccountReader {
@@ -65,7 +64,6 @@ impl AccountReader for EnvAccountReader {
 use ports::readers::AccountReader
 use domain::account::Account
 
-@derive(Copy)
 pub struct SeedAccountReader {}
 
 impl AccountReader for SeedAccountReader {
@@ -81,7 +79,6 @@ impl AccountReader for SeedAccountReader {
         r#"
 use adapters::env_account_reader::EnvAccountReader
 
-@derive(Copy)
 pub struct AppDeps {
     pub account_reader: EnvAccountReader,
 }

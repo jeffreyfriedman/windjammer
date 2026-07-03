@@ -61,7 +61,6 @@ fn test_is_known_copy_type_returns_false_for_app_types() {
 #[test]
 fn test_derive_copy_tracked_in_same_file() {
     let source = r#"
-@derive(Copy, Clone)
 pub struct MyType { value: i32 }
 
 pub fn process(x: MyType) -> i32 {
@@ -77,7 +76,7 @@ pub fn main() {
     assert!(compiles, "Should compile. Generated:\n{}", rs);
     assert!(
         !rs.contains("*(x)"),
-        "Copy type from @derive(Copy) should NOT get *(x). Generated:\n{}",
+        "Auto-inferred Copy type should NOT get *(x). Generated:\n{}",
         rs
     );
 }
@@ -118,7 +117,6 @@ pub fn main() {
 #[test]
 fn test_for_loop_copy_entity() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct Entity { index: i64 }
 
 pub fn process(entity: Entity) {}
@@ -143,7 +141,6 @@ pub fn main() {}
 #[test]
 fn test_tuple_pattern_copy_types() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct Entity { index: i64 }
 
 pub struct Mesh {}

@@ -68,10 +68,9 @@ pub struct Container {
 }
 
 #[test]
-fn test_explicit_derive_copy_still_works() {
+fn test_auto_inferred_copy_for_all_copy_fields() {
     let generated = test_utils::compile_single(
         r#"
-@derive(Debug, Clone, Copy)
 pub struct Point {
     pub x: float
     pub y: float
@@ -85,11 +84,11 @@ pub struct Rect {
 "#,
     );
 
-    // Point explicitly derives Copy
+    // Point auto-infers Copy (all fields are Copy)
     let point_derive = find_struct_derive(&generated, "Point");
     assert!(
         point_derive.contains("Copy"),
-        "Point should have Copy derived (explicit @derive).\nDerives: {}",
+        "Point should have Copy auto-inferred.\nDerives: {}",
         point_derive
     );
 

@@ -886,8 +886,11 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut borrow_decision =
                     crate::codegen::rust::call_site_borrow::CallSiteBorrowDecision::default();
                 if let Some(ref sig) = call_site_sig {
+                    let formal_is_copy = sig
+                        .formal_param_type(sig.arg_param_index(i))
+                        .is_some_and(|t| self.is_type_copy(t));
                     borrow_decision =
-                        crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
+                        crate::codegen::rust::call_site_borrow::should_borrow_at_call_site_with_copy_check(
                             sig,
                             i,
                             arg_to_generate,
@@ -895,6 +898,7 @@ impl<'ast> CodeGenerator<'ast> {
                             method,
                             arg_already_rust_ref,
                             receiver_type_name,
+                            formal_is_copy,
                         );
                 } else if let Some(receiver_tn) = self
                     .mc_infer_method_receiver_type_name(object)
@@ -915,8 +919,11 @@ impl<'ast> CodeGenerator<'ast> {
                             )
                         });
                     if let Some(sig) = resolved_sig {
+                        let formal_is_copy = sig
+                            .formal_param_type(sig.arg_param_index(i))
+                            .is_some_and(|t| self.is_type_copy(t));
                         borrow_decision =
-                            crate::codegen::rust::call_site_borrow::should_borrow_at_call_site(
+                            crate::codegen::rust::call_site_borrow::should_borrow_at_call_site_with_copy_check(
                                 &sig,
                                 i,
                                 arg_to_generate,
@@ -924,6 +931,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 method,
                                 arg_already_rust_ref,
                                 receiver_type_name,
+                                formal_is_copy,
                             );
                     } else if is_collection_key_arg && !arg_str.starts_with('&')
                         && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_to_generate)
@@ -960,9 +968,16 @@ impl<'ast> CodeGenerator<'ast> {
                         sig, i, receiver_type_name,
                     );
                     if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
+                        let formal_is_non_ref_copy = sig
+                            .formal_param_type(sig_param_idx)
+                            .is_some_and(|t| {
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && self.is_type_copy(t)
+                            });
                         if matches!(param_ty, Type::Reference(_) | Type::MutableReference(_))
                             && effective != OwnershipMode::Owned
                             && !arg_str.starts_with('&')
+                            && !formal_is_non_ref_copy
                         {
                             let param_is_str_ref = crate::codegen::rust::string_utilities::param_is_rust_str_ref(
                                 param_ty,
@@ -1495,6 +1510,30 @@ impl<'ast> CodeGenerator<'ast> {
                         arg_already_rust_ref,
                         receiver_type_name,
                     );
+                }
+
+                // Final guard: Copy-type formals should never have `&` added.
+                // Multiple paths above can add `&` based on analyzer ownership metadata,
+                // but Copy types in generated Rust are always emitted by-value.
+                // Collection key lookups (`HashMap::get`) are the exception — they need `&K`.
+                // Only strip when the formal type is a non-reference Copy type (e.g. NodeId, f32).
+                // Reference formals (&str, &Vec<T>) still need the `&` at the call site.
+                if !is_collection_key_arg {
+                    let final_sig = call_site_sig.as_ref().or(method_signature.as_ref());
+                    if let Some(sig) = final_sig {
+                        let pidx = sig.arg_param_index(i);
+                        let formal_is_non_ref_copy = sig
+                            .formal_param_type(pidx)
+                            .is_some_and(|t| {
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && self.is_type_copy(t)
+                            });
+                        if formal_is_non_ref_copy
+                            && (arg_str.starts_with('&') && !arg_str.starts_with("&mut "))
+                        {
+                            arg_str = arg_str[1..].to_string();
+                        }
+                    }
                 }
 
                 arg_str

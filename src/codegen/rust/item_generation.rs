@@ -146,6 +146,9 @@ impl<'ast> CodeGenerator<'ast> {
 
                     if merged.contains(&"Copy".to_string()) {
                         self.copy_types_registry.insert(s.name.clone());
+                        if user_requested_copy {
+                            self.explicit_copy_types_registry.insert(s.name.clone());
+                        }
                     }
                 }
             } else {

@@ -466,8 +466,12 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                             crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                                 sig, i,
                             );
+                        let callee_copy_collision = sig
+                            .formal_param_type(sig.arg_param_index(i))
+                            .is_some_and(|t| gen.is_explicitly_copy_type(t));
                         if matches!(ownership, OwnershipMode::MutBorrowed)
                             && !arg_str.starts_with("&mut ")
+                            && !callee_copy_collision
                         {
                             let arg_already_mut_ref = if let Some((_, arg_expr)) = arguments.get(i) {
                                 if let Expression::Identifier { name, .. } = arg_expr {
@@ -551,6 +555,13 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 match ownership {
                     OwnershipMode::MutBorrowed if !arg_str.starts_with("&mut ") =>
                     {
+                        let param_idx = sig.arg_param_index(i);
+                        let callee_formal = sig.formal_param_type(param_idx);
+                        let callee_explicit_copy =
+                            callee_formal.is_some_and(|t| gen.is_explicitly_copy_type(t));
+                        if callee_explicit_copy {
+                            return arg_str.clone();
+                        }
                         let arg_already_mut_ref = if let Some((_, arg_expr)) = arguments.get(i) {
                             if let Expression::Identifier { name, .. } = arg_expr {
                                 gen.identifier_already_mut_ref(name)

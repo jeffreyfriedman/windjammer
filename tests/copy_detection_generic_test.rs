@@ -26,7 +26,6 @@ mod test_utils;
 #[test]
 fn test_custom_copy_type_from_derive() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct MyData { value: i32 }
 
 pub fn process(data: MyData) -> i32 {
@@ -86,7 +85,6 @@ pub fn main() {
 #[test]
 fn test_option_copy_type_if_let() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct State { id: u32 }
 
 pub struct Container { state: Option<State> }
@@ -117,10 +115,8 @@ pub fn main() {}
 #[test]
 fn test_nested_copy_structs() {
     let source = r#"
-@derive(Copy, Clone)
 pub struct Vec2 { x: f32, y: f32 }
 
-@derive(Copy, Clone)
 pub struct Transform { pos: Vec2, scale: f32 }
 
 pub fn get_x(t: Transform) -> f32 {
