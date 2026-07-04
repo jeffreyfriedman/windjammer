@@ -398,6 +398,36 @@ pub(crate) fn global_has_borrowed_text_over_local_owned_stub(
     false
 }
 
+/// `b` has `Reference(T)` params with `Borrowed`/`MutBorrowed` ownership where `a` has
+/// bare `T` with `Owned`. Indicates `b` was refined by body analysis and should be preferred.
+/// Ignores the self param (idx 0 when `has_self_receiver`).
+fn converged_has_reference_params_over_bare(
+    a: &FunctionSignature,
+    b: &FunctionSignature,
+) -> bool {
+    let min_len = a.param_ownership.len().min(b.param_ownership.len());
+    for idx in 0..min_len {
+        if a.has_self_receiver && idx == 0 {
+            continue;
+        }
+        let a_owned_bare = matches!(a.param_ownership.get(idx), Some(OwnershipMode::Owned))
+            && a.param_types
+                .get(idx)
+                .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+        let b_borrowed_ref = matches!(
+            b.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) && b
+            .param_types
+            .get(idx)
+            .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+        if a_owned_bare && b_borrowed_ref {
+            return true;
+        }
+    }
+    false
+}
+
 /// Prefer converged global signatures over per-file declaration stubs at call sites.
 pub fn pick_best_resolved_signature(
     local: Option<ResolvedSignature>,
@@ -407,14 +437,16 @@ pub fn pick_best_resolved_signature(
         (Some(l), Some(g))
             if prefer_converged_over_stub(&l.sig, &g.sig)
                 || global_has_converged_str_refs_over_local(&l.sig, &g.sig)
-                || global_has_borrowed_text_over_local_owned_stub(&l.sig, &g.sig) =>
+                || global_has_borrowed_text_over_local_owned_stub(&l.sig, &g.sig)
+                || converged_has_reference_params_over_bare(&l.sig, &g.sig) =>
         {
             Some(g)
         }
         (Some(l), Some(g))
             if prefer_converged_over_stub(&g.sig, &l.sig)
                 || global_has_converged_str_refs_over_local(&g.sig, &l.sig)
-                || global_has_borrowed_text_over_local_owned_stub(&g.sig, &l.sig) =>
+                || global_has_borrowed_text_over_local_owned_stub(&g.sig, &l.sig)
+                || converged_has_reference_params_over_bare(&g.sig, &l.sig) =>
         {
             Some(l)
         }
