@@ -244,11 +244,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                             })))
                 {
-                    let is_copy = self
-                        .infer_expression_type(arg_to_generate)
+                    let inferred_ty = self.infer_expression_type(arg_to_generate);
+                    let is_copy = inferred_ty
                         .as_ref()
                         .is_some_and(|t| self.is_type_copy(t));
-                    if !is_copy
+                    let is_ref_to_copy = !is_copy && inferred_ty
+                        .as_ref()
+                        .is_some_and(|t| matches!(t, Type::Reference(inner) | Type::MutableReference(inner) if self.is_type_copy(inner)));
+                    if is_ref_to_copy
+                        && !arg_str.starts_with('*')
+                        && !arg_str.ends_with(".clone()")
+                    {
+                        arg_str = format!("*{arg_str}");
+                    } else if !is_copy
+                        && !is_ref_to_copy
                         && !arg_str.ends_with(".clone()")
                         && !arg_str.ends_with(".to_string()")
                         && !Self::is_enum_variant_or_constructor(arg_to_generate)
@@ -815,8 +824,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 .needs_clone(name, self.current_statement_idx)
                                 .is_some()
                             && !arg_str.ends_with(".clone()")
+                            && !arg_str.starts_with('*')
                         {
-                            arg_str = format!("{}.clone()", arg_str);
+                            let ref_to_copy = self.infer_expression_type(arg_to_generate)
+                                .as_ref()
+                                .is_some_and(|t| matches!(t, Type::Reference(inner) | Type::MutableReference(inner) if self.is_type_copy(inner)));
+                            if ref_to_copy {
+                                arg_str = format!("*{arg_str}");
+                            } else {
+                                arg_str = format!("{}.clone()", arg_str);
+                            }
                         }
                     }
                 }
@@ -832,7 +849,21 @@ impl<'ast> CodeGenerator<'ast> {
                     &self.inferred_borrowed_params,
                     &self.current_function_return_type,
                 ) {
-                    arg_str = format!("{}.clone()", arg_str);
+                    let inferred_ty = self.infer_expression_type(arg);
+                    let is_ref_to_copy = inferred_ty
+                        .as_ref()
+                        .is_some_and(|t| matches!(t, Type::Reference(inner) | Type::MutableReference(inner) if self.is_type_copy(inner)));
+                    let is_already_copy = inferred_ty
+                        .as_ref()
+                        .is_some_and(|t| self.is_type_copy(t));
+                    let is_borrowed_var = matches!(arg, Expression::Identifier { name, .. } if self.borrowed_iterator_vars.contains(name));
+                    if is_ref_to_copy && !arg_str.starts_with('*') {
+                        arg_str = format!("*{arg_str}");
+                    } else if is_already_copy && is_borrowed_var && !arg_str.starts_with('*') {
+                        arg_str = format!("*{arg_str}");
+                    } else if !is_already_copy {
+                        arg_str = format!("{}.clone()", arg_str);
+                    }
                 }
 
                 // DOGFOODING FIX: Vec indexing vec[idx] passed to owned param (e.g. push)
@@ -883,6 +914,11 @@ impl<'ast> CodeGenerator<'ast> {
                     arguments,
                     method_signature,
                 );
+                if std::env::var("WJ_BORROW_TRACE").is_ok() && (method == "is_registered" || method == "get_node" || method == "register" || method == "set_name") {
+                    let has_sig = call_site_sig.is_some();
+                    let sig_info = call_site_sig.as_ref().map(|s| format!("params={:?} ownership={:?}", s.param_types, s.param_ownership));
+                    eprintln!("[BORROW-TRACE] method={method} arg#{i} arg_str={arg_str:?} has_sig={has_sig} sig={sig_info:?}");
+                }
                 let mut borrow_decision =
                     crate::codegen::rust::call_site_borrow::CallSiteBorrowDecision::default();
                 if let Some(ref sig) = call_site_sig {
