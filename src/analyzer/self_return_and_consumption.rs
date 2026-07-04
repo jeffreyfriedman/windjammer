@@ -346,12 +346,23 @@ impl<'ast> Analyzer<'ast> {
                 let is_self_receiver =
                     matches!(&**object, Expression::Identifier { name, .. } if name == "self");
                 if is_self_receiver {
-                    if let Some(pt) = parent_type {
-                        let key = format!("{}::{}", pt, method);
-                        if let Some(sig) = registry.get_signature(&key) {
-                            return sig.has_self_receiver
-                                && sig.param_ownership.first()
-                                    == Some(&super::OwnershipMode::Owned);
+                    // When the callee is in the same impl block, skip the registry
+                    // lookup — the registry may contain a stale `Owned` entry from a
+                    // previous multipass round. The AST-based check in
+                    // `function_calls_consuming_method_on_self_with_visited` already
+                    // handles same-type callees correctly with fresh inference.
+                    let in_current_impl = self
+                        .current_impl_functions
+                        .as_ref()
+                        .is_some_and(|fns| fns.contains_key(method.as_str()));
+                    if !in_current_impl {
+                        if let Some(pt) = parent_type {
+                            let key = format!("{}::{}", pt, method);
+                            if let Some(sig) = registry.get_signature(&key) {
+                                return sig.has_self_receiver
+                                    && sig.param_ownership.first()
+                                        == Some(&super::OwnershipMode::Owned);
+                            }
                         }
                     }
                 }
