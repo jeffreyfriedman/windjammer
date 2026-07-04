@@ -141,6 +141,7 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::codegen::rust::call_signature_resolution::{
             finalize_call_site_signature, has_stale_owned_non_copy_params, validate_arg_count,
         };
+        use crate::codegen::rust::signature_promotion::prefer_converged_over_stub;
 
         let is_usable = |sig: &FunctionSignature| {
             validate_arg_count(sig, arguments.len()) && !has_stale_owned_non_copy_params(sig)
@@ -148,8 +149,27 @@ impl<'ast> CodeGenerator<'ast> {
 
         let trace = std::env::var("WJ_SIGNATURE_TRACE").is_ok();
 
+        // Always try mc_resolve to find converged signatures from the global registry.
+        // A stale declaration stub in resolved_from_mc may have String params where the
+        // actual generated function has &str (converged from body analysis).
+        let mc_resolved = self
+            .mc_resolve_method_call_signature(object, method, arguments)
+            .filter(|s| is_usable(s));
+
         if let Some(sig) = resolved_from_mc {
             if is_usable(sig) {
+                if let Some(ref mc_sig) = mc_resolved {
+                    if prefer_converged_over_stub(sig, mc_sig) {
+                        if trace {
+                            eprintln!(
+                                "[wj-sig] call-site {method} arg#{}: mc_resolve UPGRADED ({:?})",
+                                arguments.len(),
+                                mc_sig.param_types
+                            );
+                        }
+                        return Some(finalize_call_site_signature(mc_sig.clone()));
+                    }
+                }
                 if trace {
                     eprintln!(
                         "[wj-sig] call-site {method} arg#{}: mc_resolve ({:?})",
@@ -161,10 +181,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if let Some(sig) = self.mc_resolve_method_call_signature(object, method, arguments) {
-            if is_usable(&sig) {
-                return Some(finalize_call_site_signature(sig));
-            }
+        if let Some(sig) = mc_resolved {
+            return Some(finalize_call_site_signature(sig));
         }
 
         let receiver_type_name = self

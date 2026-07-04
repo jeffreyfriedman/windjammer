@@ -922,6 +922,9 @@ impl<'ast> CodeGenerator<'ast> {
         for func in &impl_block.functions {
             if super::self_analysis::function_consumes_self(func)
                 || super::self_analysis::function_return_moves_self_fields(func)
+                || super::self_analysis::function_matches_on_self(func)
+                || super::self_analysis::function_flows_self_through_local(func)
+                || super::self_analysis::function_iterates_self_field_consuming(func)
             {
                 consuming_methods.insert(func.name.clone());
                 continue;
@@ -930,13 +933,19 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
             {
+                // Only trust the analyzer's Owned inference when corroborated by
+                // source-level evidence (calling a consuming method, returning Self, etc.).
+                // Stale declaration stubs in multipass builds can produce false Owned.
                 if analyzed_func
                     .inferred_ownership
                     .get("self")
                     .is_some_and(|o| *o == OwnershipMode::Owned)
                 {
-                    consuming_methods.insert(func.name.clone());
-                    continue;
+                    let has_source_evidence = self.method_returns_impl_struct(func);
+                    if has_source_evidence {
+                        consuming_methods.insert(func.name.clone());
+                        continue;
+                    }
                 }
                 let returns_self = self.method_returns_impl_struct(func);
                 let body_modifies = super::self_analysis::function_modifies_self(
@@ -955,25 +964,42 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Fixed-point pre-pass: record &mut self upgrades before generating methods so
         // `self.callee()` in callers above callees in source order sees accurate mutability.
+        // Clone the upgrades map once (not per-iteration) and batch-apply new entries to
+        // avoid O(structs * methods^2) allocation cost on large projects.
+        // Skip methods already identified as consuming (owned self) — those need `mut self`,
+        // not `&mut self`.
         {
             let struct_name = impl_block.type_name.clone();
             let max_iters = impl_block.functions.len().max(1);
-            // Do not pass `self_receiver_upgrades` here — that creates a fixed-point cycle
-            // where read-only recursive callees get upgraded to &mut self and contaminate callers.
+            let mut snapshot = self.self_receiver_upgrades.clone();
             for _ in 0..max_iters {
+                let mut new_upgrades = Vec::new();
                 for func in &impl_block.functions {
+                    if self.current_impl_consuming_self_methods.contains(&func.name) {
+                        continue;
+                    }
+                    let qualified = format!("{}::{}", struct_name, func.name);
+                    if snapshot.contains_key(&qualified) {
+                        continue;
+                    }
                     let body_modifies = super::self_analysis::function_modifies_self(
                         func,
                         Some(&self.signature_registry),
                         Some(&struct_name),
                         Some(&self.struct_field_types),
-                        None,
+                        Some(&snapshot),
                     );
                     if body_modifies {
-                        let qualified = format!("{}::{}", struct_name, func.name);
-                        self.self_receiver_upgrades
-                            .insert(qualified, OwnershipMode::MutBorrowed);
+                        new_upgrades.push(qualified);
                     }
+                }
+                if new_upgrades.is_empty() {
+                    break;
+                }
+                for key in new_upgrades {
+                    snapshot.insert(key.clone(), OwnershipMode::MutBorrowed);
+                    self.self_receiver_upgrades
+                        .insert(key, OwnershipMode::MutBorrowed);
                 }
             }
         }

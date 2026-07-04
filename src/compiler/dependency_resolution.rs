@@ -11,6 +11,14 @@ pub(crate) fn build_extern_submodule_qualifier_map(
     sources: &[(PathBuf, String)],
     base: &Path,
 ) -> Result<HashMap<(String, String), String>> {
+    build_extern_submodule_qualifier_map_with_programs(sources, base, None)
+}
+
+pub(crate) fn build_extern_submodule_qualifier_map_with_programs(
+    sources: &[(PathBuf, String)],
+    base: &Path,
+    parsed_programs: Option<&[crate::parser::Program<'static>]>,
+) -> Result<HashMap<(String, String), String>> {
     let mut map: HashMap<(String, String), String> = HashMap::new();
     let mut conflicts: HashSet<(String, String)> = HashSet::new();
 
@@ -72,18 +80,27 @@ pub(crate) fn build_extern_submodule_qualifier_map(
         }
     }
 
-    for (file, source) in sources {
-        let (_parser, program) = super::parse_wj_source(file, source)?;
+    for (i, (file, source)) in sources.iter().enumerate() {
         let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
         else {
             continue;
         };
-        merge_extern_submodule_symbols_from_items(
-            &program.items,
-            &module_path,
-            &mut map,
-            &mut conflicts,
-        );
+        if let Some(programs) = parsed_programs {
+            merge_extern_submodule_symbols_from_items(
+                &programs[i].items,
+                &module_path,
+                &mut map,
+                &mut conflicts,
+            );
+        } else {
+            let (_parser, program) = super::parse_wj_source(file, source)?;
+            merge_extern_submodule_symbols_from_items(
+                &program.items,
+                &module_path,
+                &mut map,
+                &mut conflicts,
+            );
+        }
     }
 
     for k in conflicts {
@@ -98,14 +115,36 @@ pub(crate) fn build_type_defining_modules_for_library(
     sources: &[(PathBuf, String)],
     base: &Path,
 ) -> Result<HashMap<String, Vec<Vec<String>>>> {
+    build_type_defining_modules_for_library_with_programs(sources, base, None)
+}
+
+pub(crate) fn build_type_defining_modules_for_library_with_programs(
+    sources: &[(PathBuf, String)],
+    base: &Path,
+    parsed_programs: Option<&[crate::parser::Program<'static>]>,
+) -> Result<HashMap<String, Vec<Vec<String>>>> {
     let mut map: HashMap<String, Vec<Vec<String>>> = HashMap::new();
-    for (file, source) in sources {
-        let (_parser, program) = super::parse_wj_source(file, source)?;
+    for (i, (file, source)) in sources.iter().enumerate() {
+        let program = if let Some(programs) = parsed_programs {
+            &programs[i]
+        } else {
+            // Fallback: no AST cache available, re-parse
+            let (_parser, p) = super::parse_wj_source(file, source)?;
+            let Some(module_path) =
+                crate::analyzer::type_collector::wj_file_to_module_path(base, file)
+            else {
+                continue;
+            };
+            for name in crate::analyzer::type_collector::collect_local_type_names(&p) {
+                map.entry(name).or_default().push(module_path.clone());
+            }
+            continue;
+        };
         let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
         else {
             continue;
         };
-        for name in crate::analyzer::type_collector::collect_local_type_names(&program) {
+        for name in crate::analyzer::type_collector::collect_local_type_names(program) {
             map.entry(name).or_default().push(module_path.clone());
         }
     }

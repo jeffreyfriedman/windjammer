@@ -20,6 +20,13 @@ fn is_type_copy_quick_for_library(
 pub(crate) fn collect_global_copy_structs_for_library(
     sources: &[(PathBuf, String)],
 ) -> (HashSet<String>, HashSet<String>, HashSet<String>, HashSet<String>) {
+    collect_global_copy_structs_for_library_with_programs(sources, None)
+}
+
+pub(crate) fn collect_global_copy_structs_for_library_with_programs(
+    sources: &[(PathBuf, String)],
+    parsed_programs: Option<&[crate::parser::Program<'static>]>,
+) -> (HashSet<String>, HashSet<String>, HashSet<String>, HashSet<String>) {
     use crate::parser::ast::EnumVariantData;
 
     struct StructInfo {
@@ -93,20 +100,34 @@ pub(crate) fn collect_global_copy_structs_for_library(
     let mut struct_names = HashSet::new();
     let mut explicit_non_copy = HashSet::new();
 
-    for (file, source) in sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let Ok(program) = parser.parse() else {
-            eprintln!(
-                "Warning: Skipping file for Copy registry (parse error): {}",
-                file.display()
+    for (i, (file, source)) in sources.iter().enumerate() {
+        let items = if let Some(programs) = parsed_programs {
+            &programs[i].items
+        } else {
+            let mut lexer = Lexer::new(source);
+            let tokens = lexer.tokenize_with_locations();
+            let mut parser =
+                Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+            let Ok(program) = parser.parse() else {
+                eprintln!(
+                    "Warning: Skipping file for Copy registry (parse error): {}",
+                    file.display()
+                );
+                continue;
+            };
+            walk_items(
+                &program.items,
+                &mut all_structs,
+                &mut global_copy_structs,
+                &mut explicit_copy_structs,
+                &mut copy_enums,
+                &mut struct_names,
+                &mut explicit_non_copy,
             );
             continue;
         };
         walk_items(
-            &program.items,
+            items,
             &mut all_structs,
             &mut global_copy_structs,
             &mut explicit_copy_structs,
@@ -153,9 +174,17 @@ pub(crate) fn collect_global_copy_structs_for_library(
 
 /// Enums that must not be treated as Copy (data-carrying variants with non-Copy fields).
 pub(crate) fn collect_non_copy_enums_for_library(sources: &[(PathBuf, String)]) -> HashSet<String> {
+    collect_non_copy_enums_for_library_with_programs(sources, None)
+}
+
+pub(crate) fn collect_non_copy_enums_for_library_with_programs(
+    sources: &[(PathBuf, String)],
+    parsed_programs: Option<&[crate::parser::Program<'static>]>,
+) -> HashSet<String> {
     use crate::parser::ast::EnumVariantData;
 
-    let (copy_structs, _, _, _) = collect_global_copy_structs_for_library(sources);
+    let (copy_structs, _, _, _) =
+        collect_global_copy_structs_for_library_with_programs(sources, parsed_programs);
 
     fn variant_fields_copy(
         variant: &crate::parser::EnumVariant,
@@ -197,19 +226,25 @@ pub(crate) fn collect_non_copy_enums_for_library(sources: &[(PathBuf, String)]) 
     }
 
     let mut non_copy = HashSet::new();
-    for (file, source) in sources {
-        let mut lexer = Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
-        let Ok(program) = parser.parse() else {
-            eprintln!(
-                "Warning: Skipping file for non-Copy enum registry (parse error): {}",
-                file.display()
-            );
+    for (i, (file, source)) in sources.iter().enumerate() {
+        let items = if let Some(programs) = parsed_programs {
+            &programs[i].items
+        } else {
+            let mut lexer = Lexer::new(source);
+            let tokens = lexer.tokenize_with_locations();
+            let mut parser =
+                Parser::new_with_source(tokens, file.to_string_lossy().to_string(), source.clone());
+            let Ok(program) = parser.parse() else {
+                eprintln!(
+                    "Warning: Skipping file for non-Copy enum registry (parse error): {}",
+                    file.display()
+                );
+                continue;
+            };
+            walk_items(&program.items, &mut non_copy, &copy_structs);
             continue;
         };
-        walk_items(&program.items, &mut non_copy, &copy_structs);
+        walk_items(items, &mut non_copy, &copy_structs);
     }
 
     non_copy

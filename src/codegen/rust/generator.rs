@@ -1222,6 +1222,9 @@ impl<'ast> CodeGenerator<'ast> {
         if self.str_ref_optimized_params.contains(name) {
             return true;
         }
+        if self.inferred_mut_borrowed_params.contains(name) {
+            return true;
+        }
         self.current_function_params.iter().any(|p| {
             p.name == name
                 && (matches!(

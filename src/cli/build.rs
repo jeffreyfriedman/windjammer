@@ -111,8 +111,11 @@ pub fn execute(
         &external_metadata,
     )?;
 
-    // Generate mod.rs if requested
-    if module_file {
+    // Generate mod.rs if requested.
+    // For multi-file library builds (directory input + --library), library_multipass
+    // already handles mod.rs generation, so skip it here to avoid duplication.
+    let multipass_handled_mod = path.is_dir() && library;
+    if module_file && !multipass_handled_mod {
         if let Some((out_root, src_root)) =
             crate::build_utils::mod_file_layout_for_build(path, output_dir)
         {
