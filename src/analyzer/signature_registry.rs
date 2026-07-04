@@ -711,11 +711,29 @@ impl SignatureRegistry {
                 // Cross-file: caller analysis re-registers `Type::method` with declaration
                 // `Owned` metadata after the defining module already converged borrows
                 // (e.g. squad.wj `Squad::new` → &str, then caller.wj merge overwrites).
-                if (crate::codegen::rust::signature_promotion::prefer_converged_over_stub(
-                    sig, existing,
-                ) || crate::codegen::rust::signature_promotion::global_has_borrowed_text_over_local_owned_stub(
-                    sig, existing,
-                ))
+                //
+                // Guard: if sig introduces borrows where existing has Owned, sig is a
+                // body-analysis refinement — always insert it (don't skip).
+                let sig_refines_with_borrows = sig
+                    .param_ownership
+                    .iter()
+                    .enumerate()
+                    .any(|(idx, o)| {
+                        if sig.has_self_receiver && idx == 0 {
+                            return false;
+                        }
+                        matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                            && existing
+                                .param_ownership
+                                .get(idx)
+                                .is_some_and(|eo| matches!(eo, OwnershipMode::Owned))
+                    });
+                if !sig_refines_with_borrows
+                    && (crate::codegen::rust::signature_promotion::prefer_converged_over_stub(
+                        sig, existing,
+                    ) || crate::codegen::rust::signature_promotion::global_has_borrowed_text_over_local_owned_stub(
+                        sig, existing,
+                    ))
                     && !crate::codegen::rust::signature_promotion::body_borrow_must_not_replace_owned_formal_stub(
                         existing, sig,
                     )
