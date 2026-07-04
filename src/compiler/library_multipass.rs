@@ -539,6 +539,19 @@ pub(crate) fn build_library_multipass(
                     .unwrap_or_default();
             let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
+                // Skip passthrough entries inherited from the frozen global snapshot.
+                // analyze_program_with_global_arc clones the global registry, so
+                // file_registry contains ALL entries (global + file-specific).
+                // If an entry is identical to the frozen snapshot, it's a passthrough —
+                // merging it would overwrite convergence results from earlier files.
+                let is_passthrough = global_arc
+                    .get_signature(name)
+                    .map_or(false, |arc_sig| {
+                        !SignatureRegistry::ownership_changed(arc_sig, sig)
+                    });
+                if is_passthrough {
+                    continue;
+                }
                 let should_insert = match global_registry.get_signature(name) {
                     None => true,
                     Some(old_sig) => SignatureRegistry::ownership_changed(old_sig, sig),
@@ -946,6 +959,24 @@ pub(crate) fn build_library_multipass(
                         reg.signatures.insert(key, sig.clone());
                     }
                 }
+            }
+        }
+    }
+
+    // Diagnostic: dump registry state for key methods before codegen.
+    if std::env::var("WJ_REGISTRY_TRACE").is_ok() {
+        for key in &[
+            "DialogueTree::get_node",
+            "dialogue_tree::DialogueTree::get_node",
+            "get_node",
+            "SystemScheduler::register",
+            "SceneManager::is_registered",
+        ] {
+            if let Some(sig) = final_global_registry.get_signature(key) {
+                eprintln!(
+                    "[REGISTRY-TRACE] key={} param_types={:?} param_ownership={:?} has_self={}",
+                    key, sig.param_types, sig.param_ownership, sig.has_self_receiver
+                );
             }
         }
     }
