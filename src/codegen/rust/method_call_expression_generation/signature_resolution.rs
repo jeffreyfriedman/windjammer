@@ -113,17 +113,46 @@ impl<'ast> CodeGenerator<'ast> {
             return None;
         }
 
-        // No receiver type known: only suffix-match with arg-count validation.
+        // No receiver type known: suffix-match with arg-count validation.
         // Never do bare `get_signature(method)` — it could pick any type's method.
         // Skip `remove` specifically because it has incompatible semantics across types:
         // Vec::remove(usize) takes owned index, HashMap::remove(&K) takes borrowed key.
         if method == "remove" {
             return None;
         }
-        self.signature_registry
+        let local_sig = self
+            .signature_registry
             .find_signature_by_name_and_arg_count(method, arguments.len())
-            .cloned()
-            .map(finalize_call_site_signature)
+            .cloned();
+        let global_sig = self
+            .global_signature_registry()
+            .and_then(|g| g.find_signature_by_name_and_arg_count(method, arguments.len()))
+            .cloned();
+        match (local_sig, global_sig) {
+            (Some(l), Some(g)) => {
+                use crate::codegen::rust::call_signature_resolution::ResolvedSignature;
+                use crate::codegen::rust::call_signature_resolution::ResolutionMethod;
+                let lr = ResolvedSignature {
+                    qualified_key: l.name.clone(),
+                    has_collision: false,
+                    resolution_method: ResolutionMethod::ReceiverQualified,
+                    sig: l,
+                };
+                let gr = ResolvedSignature {
+                    qualified_key: g.name.clone(),
+                    has_collision: false,
+                    resolution_method: ResolutionMethod::ReceiverQualified,
+                    sig: g,
+                };
+                crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
+                    Some(lr), Some(gr),
+                )
+                .map(|r| finalize_call_site_signature(r.sig))
+            }
+            (Some(l), None) => Some(finalize_call_site_signature(l)),
+            (None, Some(g)) => Some(finalize_call_site_signature(g)),
+            (None, None) => None,
+        }
     }
 
     /// Single source of truth for call-site signature selection.
