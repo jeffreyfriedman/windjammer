@@ -114,6 +114,21 @@ impl<'ast> CodeGenerator<'ast> {
                     return "&mut self".to_string();
                 }
 
+                // Self-delegation fallback: if the fixed-point pre-pass recorded this
+                // method as MutBorrowed (via transitive delegation), use &mut self.
+                if param.name == "self" && !self.in_trait_impl {
+                    if let Some(sn) = self.current_struct_name.as_deref() {
+                        let qualified = format!("{}::{}", sn, func.name);
+                        if self.self_receiver_upgrades.get(&qualified)
+                            == Some(&OwnershipMode::MutBorrowed)
+                        {
+                            self.inferred_mut_borrowed_params.insert("self".to_string());
+                            self.inferred_borrowed_params.remove("self");
+                            return "&mut self".to_string();
+                        }
+                    }
+                }
+
                 // Handle explicit ownership hints (self, &self, &mut self)
                 let type_str = match &param.ownership {
                     OwnershipHint::Owned => {
