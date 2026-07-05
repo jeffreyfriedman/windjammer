@@ -37,10 +37,21 @@ impl<'ast> CodeGenerator<'ast> {
         // Float method argument context: for methods like clamp/max/min on float
         // receivers, arguments should use the same float type as the receiver.
         let prev_float_target = self.assignment_float_target_type.clone();
-        let receiver_float_type = self.infer_expression_type(object);
+        let receiver_type_inferred = self.infer_expression_type(object);
+        let receiver_is_string_collection = Self::is_string_element_collection(receiver_type_inferred.as_ref())
+            || match object {
+                Expression::Identifier { name, .. } => {
+                    Self::is_string_element_collection(self.local_var_types.get(name.as_str()))
+                }
+                _ => false,
+            }
+            || Self::is_string_collection_from_return_type(
+                receiver_type_inferred.as_ref(),
+                self.current_function_return_type.as_ref(),
+            );
         let is_float_method = crate::type_classification::is_float_receiver_method(method);
         if is_float_method {
-            if let Some(ref rft) = receiver_float_type {
+            if let Some(ref rft) = receiver_type_inferred {
                 match rft {
                     Type::Custom(n) if n == "f64" => {
                         self.assignment_float_target_type = Some(Type::Custom("f64".to_string()));
@@ -522,12 +533,15 @@ impl<'ast> CodeGenerator<'ast> {
                     if asref_str_module {
                         false
                     } else if is_explicit_str_ref {
-                        // Literal is already &str-compatible; never allocate .to_string().
                         false
-                    } else if is_map_key_arg || callee_param_is_rust_str {
+                    } else if callee_param_is_rust_str {
+                        false
+                    } else if is_map_key_arg && !receiver_is_string_collection {
                         false
                     } else {
-                        let needs_owned = crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
+                        let param_is_owned = effective_ownership.is_none()
+                            || matches!(effective_ownership, Some(OwnershipMode::Owned));
+                        let needs_owned = (receiver_is_string_collection && param_is_owned) || crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             effective_sig.as_ref(),
                             i,
                             Some(method),
@@ -545,6 +559,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     false
                 };
+
 
                 if is_string_literal
                     && !string_literal_converted
@@ -654,13 +669,23 @@ impl<'ast> CodeGenerator<'ast> {
                             crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
                         })
                     }).unwrap_or(false);
-                    // `Vec<String>::push(SCOPE_*)` — push param is generic `T`; const is `&'static str`.
+                    // Signature-driven: if the resolved signature says the parameter is Owned String,
+                    // convert the string constant. For generic stdlib methods (push, insert) where
+                    // param_types is empty, check if the receiver is a String collection.
+                    let sig_says_owned_string = method_signature.as_ref()
+                        .or(call_site_sig.as_ref())
+                        .is_some_and(|sig| {
+                            let pi = sig.arg_param_index(i);
+                            let ownership_is_owned = matches!(sig.param_ownership.get(pi), Some(OwnershipMode::Owned));
+                            let type_is_string = sig.param_type_for_arg(i)
+                                .is_some_and(crate::codegen::rust::string_utilities::param_is_owned_string_type);
+                            ownership_is_owned && type_is_string
+                        });
+                    // Stdlib generic collection fallback: when no typed signature exists but
+                    // the receiver is a Vec<String>/Vec<string>, string constants need .to_string()
                     let needs_owned_string = wants_string
-                        || (matches!(
-                            method,
-                            "push" | "insert" | "extend" | "append" | "push_front" | "push_back"
-                                | "add" | "fill"
-                        ) && is_string_const);
+                        || (sig_says_owned_string && is_string_const)
+                        || (receiver_is_string_collection && is_string_const);
                     if needs_owned_string && is_string_const && !arg_str.ends_with(".to_string()")
                     {
                         arg_str = format!("{}.to_string()", arg_str);
@@ -872,13 +897,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Expression::Index { .. } = arg {
                     let param_expects_owned = method_signature
                         .as_ref()
+                        .or(call_site_sig.as_ref())
                         .and_then(|sig| sig.param_ownership_for_arg(i))
-                        .is_some_and(|&o| matches!(o, OwnershipMode::Owned))
-                        || (matches!(
-                            method,
-                            "push" | "insert" | "extend" | "append" | "push_front" | "push_back"
-                                | "add" | "fill"
-                        ) && i == 0);
+                        .is_some_and(|&o| matches!(o, OwnershipMode::Owned));
                     if param_expects_owned && !arg_str.ends_with(".clone()") {
                         let inferred = self.infer_expression_type(arg);
                         let is_copy = inferred.as_ref().is_some_and(|t| self.is_type_copy(t));
@@ -914,6 +935,29 @@ impl<'ast> CodeGenerator<'ast> {
                     arguments,
                     method_signature,
                 );
+
+                // Cross-crate string literal → String conversion:
+                // If the string literal was not already converted but the call-site signature
+                // expects an owned String parameter, add .to_string() now.
+                if is_string_literal && !string_literal_converted && !arg_str.ends_with(".to_string()") {
+                    let needs_conversion = call_site_sig.as_ref().is_some_and(|sig| {
+                        let pi = sig.arg_param_index(i);
+                        !crate::codegen::rust::call_signature_resolution::static_impl_text_borrows_at_call_site(
+                            sig, pi,
+                        ) && matches!(
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                                sig, i, receiver_type_name,
+                            ),
+                            OwnershipMode::Owned,
+                        ) && sig.param_type_for_arg(i).is_some_and(
+                            crate::codegen::rust::string_utilities::param_is_owned_string_type,
+                        )
+                    });
+                    if needs_conversion {
+                        arg_str = format!("{}.to_string()", arg_str);
+                    }
+                }
+
                 let mut borrow_decision =
                     crate::codegen::rust::call_site_borrow::CallSiteBorrowDecision::default();
                 if let Some(ref sig) = call_site_sig {
@@ -1193,16 +1237,20 @@ impl<'ast> CodeGenerator<'ast> {
                         &self.str_ref_optimized_params,
                     );
                     if should_ref {
-                        let push_owned_string = matches!(
-                            method,
-                            "push" | "insert" | "append" | "push_front" | "push_back" | "add"
-                        ) && matches!(arg_to_generate, Expression::Identifier { name, .. }
+                        let sig_owns_string_param = method_signature
+                            .as_ref()
+                            .or(call_site_sig.as_ref())
+                            .is_some_and(|sig| {
+                                let pi = sig.arg_param_index(i);
+                                matches!(sig.param_ownership.get(pi), Some(OwnershipMode::Owned))
+                            })
+                            && matches!(arg_to_generate, Expression::Identifier { name, .. }
                             if !self.inferred_borrowed_params.contains(name.as_str())
                                 && !self.borrowed_iterator_vars.contains(name)
                                 && self
                                     .infer_expression_type(arg_to_generate)
                                     .is_some_and(|t| matches!(t, Type::String)));
-                        if !push_owned_string {
+                        if !sig_owns_string_param {
                             borrow_decision.add_ref = true;
                         }
                     }
@@ -1230,8 +1278,14 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                let callee_formal_is_copy_mc = method_signature.as_ref().is_some_and(|sig| {
+                    let idx = sig.arg_param_index(i);
+                    sig.formal_param_type(idx)
+                        .is_some_and(|t| self.is_type_copy(t))
+                });
                 if borrow_decision.add_ref
                     && !arg_str.starts_with('&')
+                    && !callee_formal_is_copy_mc
                     && (!callee_expects_owned || is_collection_key_arg)
                     && (!matches!(effective_ownership, Some(OwnershipMode::Owned))
                         || is_collection_key_arg)
@@ -1472,7 +1526,7 @@ impl<'ast> CodeGenerator<'ast> {
                             method,
                             qualified_key.as_deref(),
                         );
-                        let _receiver_is_float = receiver_float_type.as_ref().is_some_and(|t| {
+                        let _receiver_is_float = receiver_type_inferred.as_ref().is_some_and(|t| {
                             matches!(t, Type::Float)
                                 || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
                                 || crate::codegen::rust::float_type_utilities::float_type_from_wj_ty(t)
@@ -1503,16 +1557,18 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     .or_else(|| method_signature.clone());
 
-                crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
-                    effective_sig.as_ref(),
-                    i,
-                    Some(method),
-                    arg_to_generate,
-                    &mut arg_str,
-                    type_name.as_deref(),
-                    Some(&self.enum_variant_types),
-                    None,
-                );
+                if !string_literal_converted {
+                    crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+                        effective_sig.as_ref(),
+                        i,
+                        Some(method),
+                        arg_to_generate,
+                        &mut arg_str,
+                        type_name.as_deref(),
+                        Some(&self.enum_variant_types),
+                        None,
+                    );
+                }
 
                 crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
                     call_site_sig
@@ -1591,6 +1647,58 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::FieldAccess { object, .. } => {
                 matches!(&**object, Expression::Identifier { name, .. } if name.chars().next().is_some_and(|c| c.is_uppercase()))
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns true if the type is a collection whose element/key type is String.
+    /// Covers Vec<String>, HashMap<String, _>, HashSet<String>, etc.
+    fn is_string_element_collection(ty: Option<&Type>) -> bool {
+        let Some(t) = ty else { return false };
+        match t {
+            Type::Vec(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
+            Type::Parameterized(name, args) => {
+                if args.is_empty() {
+                    return false;
+                }
+                let is_known_collection = matches!(
+                    name.as_str(),
+                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "VecDeque" | "LinkedList"
+                );
+                is_known_collection
+                    && crate::codegen::rust::types::is_windjammer_text_type(&args[0])
+            }
+            _ => false,
+        }
+    }
+
+    /// Fallback: when `infer_expression_type` returns an unparameterized `Custom("HashMap")`
+    /// etc., check if the function return type matches a known String-keyed collection and
+    /// the receiver type name matches.
+    fn is_string_collection_from_return_type(
+        receiver_ty: Option<&Type>,
+        return_ty: Option<&Type>,
+    ) -> bool {
+        let Some(ret) = return_ty else { return false };
+        let receiver_name = match receiver_ty {
+            Some(Type::Custom(n)) => Some(n.as_str()),
+            None => None,
+            _ => return false,
+        };
+        match ret {
+            Type::Vec(inner) if receiver_name.is_none() || receiver_name == Some("Vec") => {
+                crate::codegen::rust::types::is_windjammer_text_type(inner)
+            }
+            Type::Parameterized(name, args) if !args.is_empty() => {
+                let name_matches = receiver_name.is_none() || receiver_name == Some(name.as_str());
+                let is_known_collection = matches!(
+                    name.as_str(),
+                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "VecDeque" | "LinkedList"
+                );
+                name_matches
+                    && is_known_collection
+                    && crate::codegen::rust::types::is_windjammer_text_type(&args[0])
             }
             _ => false,
         }

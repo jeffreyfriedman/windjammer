@@ -4,6 +4,7 @@
 //! These are pure functions with no state dependencies.
 
 use crate::parser::{Expression, Literal, Statement, Type};
+use crate::analyzer::OwnershipMode;
 
 /// Untyped `let`/`let mut` with string literal or string-producing `match` RHS needs `: String`
 /// so `"x".into()` resolves (Rust cannot infer from `&str`-accepting call sites alone).
@@ -189,26 +190,8 @@ pub fn callee_borrows_string_param(
     )
 }
 
-/// Engine `Blackboard` stores keys as borrowed `&str` at the API boundary (see game-core gen).
-fn is_blackboard_borrowed_key_method(receiver_type: &str, method: &str, arg_index: usize) -> bool {
-    receiver_type == "Blackboard"
-        && arg_index == 0
-        && matches!(
-            method,
-            "set_bool"
-                | "set_f32"
-                | "set_i32"
-                | "set_string"
-                | "get_bool"
-                | "get_f32"
-                | "get_i32"
-                | "get_string"
-                | "find_index"
-        )
-}
-
-/// Read-only lookup APIs (`get_*`, map `get`, BT conditions, etc.) lower string keys to
-/// `&str` in Rust even when stale metadata still lists owned `String`.
+/// Types whose read-only methods (get_*, has_value, etc.) converge string keys to `&str`.
+/// Used only by `clone_string.rs` to suppress `.clone()` on lookup keys.
 pub fn is_readonly_string_key_method(method: &str, arg_index: usize) -> bool {
     if arg_index != 0 {
         return false;
@@ -223,8 +206,6 @@ pub fn is_readonly_string_key_method(method: &str, arg_index: usize) -> bool {
                 | "has_key"
                 | "has_value"
                 | "find_index"
-                | "add_condition"
-                | "add_action"
                 | "remove"
         )
 }
@@ -292,23 +273,8 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     }
 
     if let Some(m) = method {
-        if let Some(tn) = receiver_type {
-            if is_blackboard_borrowed_key_method(tn, m, arg_index) {
-                return false;
-            }
-        }
         if crate::codegen::rust::stdlib_method_traits::is_map_key_method(m) && arg_index == 0 {
             return false;
-        }
-        if is_readonly_string_key_method(m, arg_index) {
-            return false;
-        }
-        if matches!(
-            m,
-            "push" | "insert" | "extend" | "append" | "push_front" | "push_back" | "add" | "fill"
-        ) && arg_index == 0
-        {
-            return true;
         }
     }
 
@@ -318,8 +284,8 @@ pub fn string_literal_needs_owned_coercion_with_enum(
                 return true;
             }
         }
-        // Cross-crate constructor heuristic: Type::new("literal") / Type::from("literal")
-        // always need .to_string() since Windjammer `string` params map to `String`.
+        // TEMPORARY: Cross-crate constructor fallback when no signature is available.
+        // TODO: Remove once all constructors are reliably in the global registry.
         if matches!(method, Some("new" | "from")) && receiver_type.is_some() {
             return true;
         }
@@ -328,6 +294,16 @@ pub fn string_literal_needs_owned_coercion_with_enum(
 
     let idx = sig.arg_param_index(arg_index);
     let Some(param_type) = sig.param_types.get(idx) else {
+        // No type info available. Check ownership + method context:
+        // Only convert if ownership says Owned AND we're confident this is a string param.
+        let ownership = sig.param_ownership.get(idx);
+        if matches!(ownership, Some(OwnershipMode::Owned)) {
+            if let Some(ft) = sig.formal_param_types.get(idx) {
+                if crate::codegen::rust::types::is_windjammer_text_type(ft) {
+                    return true;
+                }
+            }
+        }
         return false;
     };
 

@@ -222,6 +222,13 @@ impl<'ast> CodeGenerator<'ast> {
                         self.runtime_std_module_imports.insert(path[1].clone());
                     }
                 }
+                // Track modules imported from `ffi` paths so calls through them
+                // are wrapped in `unsafe {}` (e.g., `use engine::ffi::input` → input is FFI).
+                if path.iter().any(|seg| seg == "ffi") {
+                    if let Some(last) = path.last() {
+                        self.ffi_module_aliases.insert(last.clone());
+                    }
+                }
             }
         }
 
