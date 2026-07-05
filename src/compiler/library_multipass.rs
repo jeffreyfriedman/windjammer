@@ -1052,89 +1052,118 @@ pub(crate) fn build_library_multipass(
     let global_explicit_copy_structs_arc = std::sync::Arc::new(global_explicit_copy_structs);
     let global_non_copy_types_arc = std::sync::Arc::new(global_non_copy_types);
 
-    // Parallel codegen: each file generates code independently, collecting
-    // self-receiver upgrades to merge after.
+    // Batched parallel codegen: process files in batches to bound peak memory.
+    // Each worker deep-clones shared registries, so unbounded parallelism on
+    // large codebases (2000+ files) can exceed available RAM.
     type UpgradeMap = Vec<(String, crate::analyzer::OwnershipMode)>;
+    const CODEGEN_BATCH_SIZE: usize = 64;
 
-    let codegen_results: Vec<Result<UpgradeMap>> = codegen_indices
-        .par_iter()
-        .map(|i| -> Result<UpgradeMap> {
-            let file = &sources[*i].0;
-            let analysis = step4b_analyses[*i]
-                .as_ref()
-                .expect("analysis must exist after phase 4B-a");
-            let program: &crate::parser::Program<'static> =
-                stripped_programs[*i].as_ref().unwrap_or(&parsed_programs[*i]);
+    let total_codegen = codegen_indices.len();
+    let mut _codegen_done = 0usize;
 
-            let mut full_registry = analysis.registry.clone();
-            {
-                let mut tmp_analyzer = Analyzer::for_library_pass(
-                    global_copy_structs.clone(),
-                    global_struct_fields.clone(),
-                    struct_defining_module_paths.clone(),
-                );
-                tmp_analyzer.analyzed_trait_methods = analysis.merged_trait_methods.clone();
-                tmp_analyzer.register_trait_methods_in_registry(
-                    &analysis.merged_trait_methods,
-                    &mut full_registry,
-                );
-            }
+    for batch_start in (0..total_codegen).step_by(CODEGEN_BATCH_SIZE) {
+        let batch_end = (batch_start + CODEGEN_BATCH_SIZE).min(total_codegen);
+        let batch = &codegen_indices[batch_start..batch_end];
 
-            let mut codegen = CodeGenerator::new_for_module(full_registry, target);
-            codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
-            codegen.set_copy_types_registry((*global_copy_structs).clone());
-            codegen.set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
-            codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
-            codegen.set_global_struct_field_types((*global_struct_fields).clone());
-            codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
-            codegen.set_output_file(&analysis.output_file);
-            codegen.set_source_file(file);
-            codegen.set_library_source_root(src_base.clone());
-            codegen.set_type_defining_modules((*type_defining_modules_arc).clone());
-            codegen.set_extern_submodule_qualifiers((*extern_submodule_qualifiers_arc).clone());
-            codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
-            codegen.set_shared_float_inference(std::sync::Arc::clone(&global_float_inference));
-            codegen.set_shared_int_inference(std::sync::Arc::clone(&global_int_inference));
-            codegen.set_serde_available(project_has_serde);
+        if total_codegen > 50 {
+            eprintln!(
+                "⚙️  Codegen batch {}-{}/{}",
+                batch_start + 1,
+                batch_end,
+                total_codegen
+            );
+        }
 
-            super::apply_inferred_bounds_to_codegen(&mut codegen, program);
-            super::write_generated_rust_and_meta(
-                &mut codegen,
-                program,
-                &analysis.analyzed_functions,
-                &analysis.output_file,
-                file,
-                analysis.copy_structs.clone(),
-                target,
-                &dep_roots,
-                Some(dep_epoch_snapshot),
-            )?;
+        let batch_results: Vec<Result<UpgradeMap>> = batch
+            .par_iter()
+            .map(|i| -> Result<UpgradeMap> {
+                let file = &sources[*i].0;
+                let analysis = step4b_analyses[*i]
+                    .as_ref()
+                    .expect("analysis must exist after phase 4B-a");
+                let program: &crate::parser::Program<'static> =
+                    stripped_programs[*i].as_ref().unwrap_or(&parsed_programs[*i]);
 
-            let upgrades: UpgradeMap = codegen
-                .self_receiver_upgrades
-                .iter()
-                .map(|(k, v)| (k.clone(), *v))
-                .collect();
-            Ok(upgrades)
-        })
-        .collect();
+                let mut full_registry = analysis.registry.clone();
+                {
+                    let mut tmp_analyzer = Analyzer::for_library_pass(
+                        global_copy_structs.clone(),
+                        global_struct_fields.clone(),
+                        struct_defining_module_paths.clone(),
+                    );
+                    tmp_analyzer.analyzed_trait_methods = analysis.merged_trait_methods.clone();
+                    tmp_analyzer.register_trait_methods_in_registry(
+                        &analysis.merged_trait_methods,
+                        &mut full_registry,
+                    );
+                }
 
-    // Apply self-receiver upgrades from all codegen workers.
-    for result in codegen_results {
-        let upgrades = result?;
-        if !upgrades.is_empty() {
-            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-            for (name, mode) in upgrades {
-                if let Some(sig) = reg.signatures.get_mut(&name) {
-                    sig.has_self_receiver = true;
-                    if sig.param_ownership.is_empty() {
-                        sig.param_ownership.push(mode);
-                    } else if sig.param_ownership[0] != mode {
-                        sig.param_ownership[0] = mode;
+                let mut codegen = CodeGenerator::new_for_module(full_registry, target);
+                codegen
+                    .set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
+                codegen.set_copy_types_registry((*global_copy_structs).clone());
+                codegen
+                    .set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
+                codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
+                codegen.set_global_struct_field_types((*global_struct_fields).clone());
+                codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
+                codegen.set_output_file(&analysis.output_file);
+                codegen.set_source_file(file);
+                codegen.set_library_source_root(src_base.clone());
+                codegen.set_type_defining_modules((*type_defining_modules_arc).clone());
+                codegen
+                    .set_extern_submodule_qualifiers((*extern_submodule_qualifiers_arc).clone());
+                codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
+                codegen.set_shared_float_inference(std::sync::Arc::clone(&global_float_inference));
+                codegen.set_shared_int_inference(std::sync::Arc::clone(&global_int_inference));
+                codegen.set_serde_available(project_has_serde);
+
+                super::apply_inferred_bounds_to_codegen(&mut codegen, program);
+                super::write_generated_rust_and_meta(
+                    &mut codegen,
+                    program,
+                    &analysis.analyzed_functions,
+                    &analysis.output_file,
+                    file,
+                    analysis.copy_structs.clone(),
+                    target,
+                    &dep_roots,
+                    Some(dep_epoch_snapshot),
+                )?;
+
+                let upgrades: UpgradeMap = codegen
+                    .self_receiver_upgrades
+                    .iter()
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                Ok(upgrades)
+            })
+            .collect();
+
+        // Apply self-receiver upgrades from this batch.
+        for result in batch_results {
+            let upgrades = result?;
+            if !upgrades.is_empty() {
+                let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+                for (name, mode) in upgrades {
+                    if let Some(sig) = reg.signatures.get_mut(&name) {
+                        sig.has_self_receiver = true;
+                        if sig.param_ownership.is_empty() {
+                            sig.param_ownership.push(mode);
+                        } else if sig.param_ownership[0] != mode {
+                            sig.param_ownership[0] = mode;
+                        }
                     }
                 }
             }
         }
+
+        // Release per-file analysis data for completed files to reclaim memory.
+        for idx in batch {
+            step4b_analyses[*idx] = None;
+        }
+
+        _codegen_done += batch.len();
     }
 
     profile_phase("Step 4B-b: Codegen (parallel)", step4b_codegen_start);

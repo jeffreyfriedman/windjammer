@@ -197,37 +197,43 @@ pub(crate) fn find_dependency_metadata_roots(
             break;
         };
 
-        // Stop walking if we've passed the project root boundary.
-        if !parent.starts_with(&root) && parent != root.as_path() {
+        // Never walk above the project root. Workspace sibling crates (e.g. `engine/src`
+        // when building `game-core/src/...`) carry stale `metadata.json` / `.wj.meta`
+        // entries that overwrite converged local ownership and break call-site auto-borrow.
+        if parent == root || !root.starts_with(parent) {
             break;
         }
 
-        if let Ok(entries) = std::fs::read_dir(parent) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if !p.is_dir() {
-                    continue;
-                }
-                if canonical.starts_with(&p) {
-                    continue;
-                }
-                let src_dir = p.join("src");
-                if src_dir.is_dir() {
-                    roots.push(src_dir);
-                }
-                if let Ok(sub_entries) = std::fs::read_dir(&p) {
-                    for sub_entry in sub_entries.flatten() {
-                        let sub = sub_entry.path();
-                        if sub.is_dir() {
-                            let sub_src = sub.join("src");
-                            if sub_src.is_dir() {
-                                roots.push(sub_src);
+        // Peer `src/` trees within the same crate only (e.g. cross-module `.wj.meta`).
+        if current.starts_with(&root) && current != root {
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if !p.is_dir() {
+                        continue;
+                    }
+                    if canonical.starts_with(&p) {
+                        continue;
+                    }
+                    let src_dir = p.join("src");
+                    if src_dir.is_dir() {
+                        roots.push(src_dir);
+                    }
+                    if let Ok(sub_entries) = std::fs::read_dir(&p) {
+                        for sub_entry in sub_entries.flatten() {
+                            let sub = sub_entry.path();
+                            if sub.is_dir() {
+                                let sub_src = sub.join("src");
+                                if sub_src.is_dir() {
+                                    roots.push(sub_src);
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
         current = parent;
     }
 
@@ -262,6 +268,13 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
+            let dir_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            if matches!(dir_name, "build" | "gen" | "target" | ".git" | "node_modules") {
+                continue;
+            }
             find_wj_files_recursive(&path, files)?;
         }
     }
