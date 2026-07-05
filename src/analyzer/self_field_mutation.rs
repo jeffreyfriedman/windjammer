@@ -207,6 +207,22 @@ impl<'ast> Analyzer<'ast> {
                                         }
                                     }
                                 }
+                                // Qualified lookup for self.method() using impl type
+                                if let Some(ctx) = &self.self_impl_context {
+                                    let qkey = format!("{}::{}", ctx.impl_type_base, method);
+                                    if let Some(sig) = reg.get_signature(&qkey) {
+                                        if sig.has_self_receiver {
+                                            if let Some(&ownership) = sig.param_ownership.first() {
+                                                if matches!(
+                                                    ownership,
+                                                    super::OwnershipMode::MutBorrowed
+                                                ) {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

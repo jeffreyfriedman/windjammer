@@ -116,6 +116,9 @@ pub struct CrateMetadata {
     pub structs: HashMap<String, HashMap<String, String>>,
     /// All function signatures: name → signature
     pub functions: HashMap<String, FunctionSignature>,
+    /// Structs that implement Copy (enables cross-crate Copy detection)
+    #[serde(default)]
+    pub copy_structs: Vec<String>,
     /// Version for compatibility
     pub version: String,
 }
@@ -131,6 +134,7 @@ impl CrateMetadata {
         CrateMetadata {
             structs: HashMap::new(),
             functions: HashMap::new(),
+            copy_structs: Vec::new(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
@@ -203,8 +207,8 @@ pub fn load_merged_external_struct_fields(
 pub(in crate::metadata) fn merge_crate_metadata_file(
     path: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,
-    _copy_structs: &mut Vec<String>,
-    _all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+    copy_structs: &mut Vec<String>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
@@ -212,6 +216,14 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
     let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
         return;
     };
+    copy_structs.extend(crate_meta.copy_structs.iter().cloned());
+    for (struct_name, fields) in &crate_meta.structs {
+        let field_types: Vec<String> = fields.iter().map(|(_, ty)| ty.clone()).collect();
+        all_struct_fields
+            .entry(struct_name.clone())
+            .or_default()
+            .push(field_types);
+    }
     for (name, sig) in &crate_meta.functions {
         if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
             registry.add_function(name.clone(), a_sig);

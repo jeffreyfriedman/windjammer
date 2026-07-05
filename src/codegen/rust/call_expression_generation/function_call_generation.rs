@@ -416,7 +416,27 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         // handles cross-module extern calls like `api::gpu_create_buffer()`
         // where signature resolution may miss the extern flag.
         let base_name = func_name.rsplit("::").next().unwrap_or(func_name);
-        gen.extern_function_names.contains(base_name)
+        if gen.extern_function_names.contains(base_name) {
+            true
+        } else if let Some(ref global) = gen.global_signature_registry {
+            // Cross-crate extern: check global registry for any qualified key
+            // ending with this base name that is marked extern.
+            if global
+                .get_signature(func_name)
+                .or_else(|| global.get_signature(base_name))
+                .is_some_and(|s| s.is_extern)
+            {
+                true
+            } else {
+                let module_prefix = func_name.split("::").next().unwrap_or("");
+                !module_prefix.is_empty() && gen.ffi_module_aliases.contains(module_prefix)
+            }
+        } else {
+            // Check if the call is through a module imported from an ffi path.
+            // E.g., `use engine::ffi::input` → input::func() is extern.
+            let module_prefix = func_name.split("::").next().unwrap_or("");
+            !module_prefix.is_empty() && gen.ffi_module_aliases.contains(module_prefix)
+        }
     } else {
         gen.extern_function_names.contains(func_name)
     };
@@ -585,6 +605,13 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     OwnershipMode::Borrowed
                         if !arg_str.starts_with('&') && !arg_str.starts_with('"') =>
                     {
+                        let param_idx_b = sig.arg_param_index(i);
+                        let callee_formal_copy = sig
+                            .formal_param_type(param_idx_b)
+                            .is_some_and(|t| gen.is_type_copy(t));
+                        if callee_formal_copy {
+                            return arg_str.clone();
+                        }
                         let mut s = arg_str.clone();
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);
                         let arg_already_ref = if let Some((_, arg_expr)) = arguments.get(i) {

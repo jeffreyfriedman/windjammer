@@ -229,6 +229,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
             fns
         },
         version: "0.1.0".to_string(),
+        copy_structs: Vec::new(),
     };
     std::fs::write(
         proj.join("metadata.json"),

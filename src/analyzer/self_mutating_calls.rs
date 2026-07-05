@@ -335,12 +335,88 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
+                        // When metadata lacks self_receiver/ownership info but the
+                        // method matches a known mutating name pattern, trust that.
+                        if !sig.has_self_receiver && sig.param_ownership.is_empty() {
+                            if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check self.struct_field_types for the field type when
+        // self_impl_context / static_value_type_of_self_rooted_expr fails.
+        // This handles common patterns like self.player_controller.update(dt).
+        if let (Some(ctx), Some(reg)) = (&self.self_impl_context, registry) {
+            if let Some(field_name) = Self::extract_direct_self_field_name(object) {
+                if let Some(field_type) =
+                    self.struct_field_types_lookup(&ctx.impl_type_base, &field_name)
+                {
+                    if let Some(base) = Self::type_base_for_qualified_sig_lookup(&field_type) {
+                        let key = format!("{}::{}", base, method);
+                        if let Some(sig) = reg.get_signature(&key) {
+                            if sig.has_self_receiver {
+                                if let Some(&ownership) = sig.param_ownership.first() {
+                                    if matches!(ownership, super::OwnershipMode::MutBorrowed) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            if !sig.has_self_receiver && sig.param_ownership.is_empty() {
+                                if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                    return true;
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
         false
+    }
+
+    /// Extract the field name from `self.field` or `self.field.subfield...`.
+    /// Returns the immediate field name after `self`.
+    fn extract_direct_self_field_name(expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if name == "self" {
+                        return Some(field.clone());
+                    }
+                }
+                Self::extract_direct_self_field_name(object)
+            }
+            _ => None,
+        }
+    }
+
+    /// Look up a field's type from the global struct field type map.
+    fn struct_field_types_lookup(
+        &self,
+        struct_name: &str,
+        field_name: &str,
+    ) -> Option<crate::parser::Type> {
+        if let Some(fields) = self.global_struct_field_types.get(struct_name) {
+            if let Some(ty) = fields.get(field_name) {
+                return Some(ty.clone());
+            }
+        }
+        // Try unqualified base name
+        if let Some(base) = struct_name.rsplit("::").next() {
+            if base != struct_name {
+                if let Some(fields) = self.global_struct_field_types.get(base) {
+                    if let Some(ty) = fields.get(field_name) {
+                        return Some(ty.clone());
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Collect variable names bound by a pattern (e.g. `Some(search)` → `["search"]`).

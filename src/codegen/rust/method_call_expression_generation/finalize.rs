@@ -111,10 +111,16 @@ impl<'ast> CodeGenerator<'ast> {
                             );
                         }
                     };
+                    let callee_formal_is_copy = sig
+                        .formal_param_type(sig_param_idx)
+                        .is_some_and(|t| self.is_type_copy(t));
                     match ownership {
                         crate::analyzer::OwnershipMode::MutBorrowed
                             if !arg_str.starts_with("&mut ") =>
                         {
+                            if callee_formal_is_copy {
+                                return arg_str;
+                            }
                             if let Some((_, arg_expr)) = arguments.get(i) {
                                 if let Expression::Identifier { name, .. } = arg_expr {
                                     if self.identifier_already_mut_ref(name) {
@@ -138,6 +144,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     Some(OwnershipMode::Owned)
                                 ) =>
                         {
+                            if callee_formal_is_copy {
+                                return arg_str;
+                            }
                             if sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                 matches!(t, Type::String)
                                     || matches!(t, Type::Custom(n) if n == "string" || n == "String")
@@ -153,7 +162,8 @@ impl<'ast> CodeGenerator<'ast> {
                         }) && !matches!(
                             ownership,
                             crate::analyzer::OwnershipMode::Owned,
-                        ) && !arg_str.starts_with('&') =>
+                        ) && !arg_str.starts_with('&')
+                            && !callee_formal_is_copy =>
                         {
                             apply_borrow(&mut arg_str);
                             arg_str

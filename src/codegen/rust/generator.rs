@@ -256,7 +256,7 @@ pub struct CodeGenerator<'ast> {
     // Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
     pub(crate) int_inference: Option<std::sync::Arc<crate::type_inference::IntInference>>,
     /// Full-crate converged registry for multipass library codegen (avoids cloning into every file).
-    global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
+    pub(crate) global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
     /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
     pub(crate) library_source_root: Option<std::path::PathBuf>,
     /// Maps locally defined type names to Rust module paths (multiple entries when names collide).
@@ -277,6 +277,9 @@ pub struct CodeGenerator<'ast> {
     /// Simple names of all extern (FFI) functions across all modules.
     /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
     pub(crate) extern_function_names: std::collections::HashSet<String>,
+    /// Module aliases that resolve to `ffi` paths (e.g., `use engine::ffi::input` → "input").
+    /// Calls through these modules are assumed to be extern C and wrapped in `unsafe {}`.
+    pub(crate) ffi_module_aliases: std::collections::HashSet<String>,
     /// Names of inline modules declared in the current program (Item::Mod).
     /// Used by generate_use to add `self::` prefix for `pub use` re-exports
     /// of items from inline sibling modules (Rust requires `self::` for these).
@@ -454,6 +457,7 @@ impl<'ast> CodeGenerator<'ast> {
             module_alias_map: std::collections::HashMap::new(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
+            ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
             self_receiver_upgrades: std::collections::HashMap::new(),
         }
@@ -573,6 +577,16 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(methods) = self.method_signatures_by_type.get(receiver_type) {
             if let Some(sig) = methods.get(method_name) {
                 return Some(sig);
+            }
+        }
+
+        // Try leaf type name for cross-crate qualified types (e.g. "engine::bt::BehaviorTree" → "BehaviorTree")
+        let leaf = receiver_type.rsplit("::").next().unwrap_or(receiver_type);
+        if leaf != receiver_type {
+            if let Some(methods) = self.method_signatures_by_type.get(leaf) {
+                if let Some(sig) = methods.get(method_name) {
+                    return Some(sig);
+                }
             }
         }
 
@@ -713,6 +727,8 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Attach the converged crate-wide registry for lookup fallback (library multipass codegen).
     pub fn set_global_signature_registry(&mut self, registry: std::sync::Arc<SignatureRegistry>) {
+        self.extern_function_names
+            .extend(registry.collect_all_extern_names());
         self.global_signature_registry = Some(registry);
     }
 
