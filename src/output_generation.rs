@@ -176,6 +176,10 @@ pub(crate) fn generate_main_rust_code<'ast>(
         ));
     }
 
+    // Unified numeric resolution: cross-type constraint propagation
+    let _numeric_result =
+        crate::ir::numeric_bridge::unify_numeric_inference(&mut float_inference, &mut int_inference);
+
     let mut generator_signatures = module_compiler.global_signatures.clone();
     generator_signatures.merge(signatures);
     let mut generator = if is_multi_file_project {

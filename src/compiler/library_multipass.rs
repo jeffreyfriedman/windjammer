@@ -667,6 +667,16 @@ pub(crate) fn build_library_multipass(
     profile_phase("Step 4A: Float/Int inference", step4a_start);
     profile_phase("Re-exports + Step 4A total", reexports_start);
 
+    // Unified numeric resolution: cross-type constraint propagation
+    let unified_start = Instant::now();
+    let mut global_float_inference = global_float_inference;
+    let mut global_int_inference = global_int_inference;
+    let _numeric_result = crate::ir::numeric_bridge::unify_numeric_inference(
+        &mut global_float_inference,
+        &mut global_int_inference,
+    );
+    profile_phase("Step 4A+: Unified numeric solver", unified_start);
+
     let global_float_inference = std::sync::Arc::new(global_float_inference);
     let global_int_inference = std::sync::Arc::new(global_int_inference);
 
