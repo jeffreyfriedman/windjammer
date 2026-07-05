@@ -544,6 +544,13 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
+            let dir_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+            if matches!(dir_name, "build" | "gen" | "target" | ".git" | "node_modules") {
+                continue;
+            }
             find_wj_files_recursive(&path, files)?;
         }
     }

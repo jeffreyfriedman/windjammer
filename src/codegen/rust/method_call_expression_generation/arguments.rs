@@ -914,11 +914,6 @@ impl<'ast> CodeGenerator<'ast> {
                     arguments,
                     method_signature,
                 );
-                if std::env::var("WJ_BORROW_TRACE").is_ok() && (method == "is_registered" || method == "get_node" || method == "register" || method == "set_name") {
-                    let has_sig = call_site_sig.is_some();
-                    let sig_info = call_site_sig.as_ref().map(|s| format!("params={:?} ownership={:?}", s.param_types, s.param_ownership));
-                    eprintln!("[BORROW-TRACE] method={method} arg#{i} arg_str={arg_str:?} has_sig={has_sig} sig={sig_info:?}");
-                }
                 let mut borrow_decision =
                     crate::codegen::rust::call_site_borrow::CallSiteBorrowDecision::default();
                 if let Some(ref sig) = call_site_sig {
