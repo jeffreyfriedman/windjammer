@@ -247,8 +247,11 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         args.join(", ")
     );
 
+    let qualified_name = format!("{}::{}", obj_str, call_method);
     let is_extern_call = method_signature.as_ref().is_some_and(|sig| sig.is_extern)
-        || gen.extern_function_names.contains(call_method);
+        || gen.extern_function_names.contains(call_method)
+        || gen.extern_function_names.contains(&qualified_name)
+        || gen.ffi_module_aliases.contains(&obj_str);
 
     if is_extern_call && !gen.in_unsafe_block {
         format!("(unsafe {{ {} }})", call_str)

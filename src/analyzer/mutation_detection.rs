@@ -510,7 +510,16 @@ impl<'ast> Analyzer<'ast> {
                                                 return matches!(mode, OwnershipMode::MutBorrowed);
                                             }
                                         }
-                                        return false;
+                                        // Stale metadata may have has_self_receiver=false for
+                                        // methods that do take self. Fall through to heuristics
+                                        // instead of returning false.
+                                        if !sig.has_self_receiver && sig.param_ownership.is_empty() {
+                                            if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                                return true;
+                                            }
+                                        } else {
+                                            return false;
+                                        }
                                     }
                                 }
                             }
@@ -533,7 +542,13 @@ impl<'ast> Analyzer<'ast> {
                                         return matches!(mode, OwnershipMode::MutBorrowed);
                                     }
                                 }
-                                return false;
+                                if !sig.has_self_receiver && sig.param_ownership.is_empty() {
+                                    if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                        return true;
+                                    }
+                                } else {
+                                    return false;
+                                }
                             }
                         }
                     }

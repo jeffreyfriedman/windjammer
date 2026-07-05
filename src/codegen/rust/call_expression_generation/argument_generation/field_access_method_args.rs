@@ -199,8 +199,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 ),
             );
 
+            let callee_formal_is_copy = sig
+                .formal_param_type(sig_param_idx)
+                .is_some_and(|t| gen.is_type_copy(t));
+
             match ownership {
-                    OwnershipMode::Borrowed if !has_method_collision => {
+                    OwnershipMode::Borrowed if !has_method_collision && !callee_formal_is_copy => {
                         let is_string_literal = matches!(
                             arg_to_generate,
                             Expression::Literal {
@@ -262,7 +266,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             string_literal_converted_here,
                         );
                     }
-                    OwnershipMode::MutBorrowed if !has_method_collision => {
+                    OwnershipMode::MutBorrowed if !has_method_collision && !callee_formal_is_copy => {
                         crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
                             arg_to_generate,
                             &mut arg_str,

@@ -465,8 +465,11 @@ pub(crate) fn best_method_signature_for_receiver(
     arg_count: usize,
 ) -> Option<(String, FunctionSignature)> {
     let base = receiver_type.split('<').next().unwrap_or(receiver_type);
+    let leaf = base.rsplit("::").next().unwrap_or(base);
     let exact = format!("{base}::{method}");
+    let leaf_exact = format!("{leaf}::{method}");
     let suffix = format!("::{base}::{method}");
+    let leaf_suffix = format!("::{leaf}::{method}");
     let mut best: Option<(String, FunctionSignature, bool)> = None;
 
     let mut consider = |key: &str, sig: &FunctionSignature| {
@@ -520,8 +523,15 @@ pub(crate) fn best_method_signature_for_receiver(
     if let Some(sig) = registry.get_signature(&exact) {
         consider(&exact, sig);
     }
+    if leaf != base {
+        if let Some(sig) = registry.get_signature(&leaf_exact) {
+            consider(&leaf_exact, sig);
+        }
+    }
     for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.as_str() == exact || key.ends_with(&suffix) {
+        if key.as_str() == exact || key.ends_with(&suffix)
+            || key.as_str() == leaf_exact || key.ends_with(&leaf_suffix)
+        {
             consider(key, sig);
         }
     }

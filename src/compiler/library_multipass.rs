@@ -1201,6 +1201,11 @@ pub(crate) fn build_library_multipass(
                 );
             }
         }
+        crate_metadata.copy_structs = global_copy_structs
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        crate_metadata.copy_structs.sort();
         super::write_crate_metadata_json(output, &crate_metadata)?;
     }
 
