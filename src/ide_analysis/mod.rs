@@ -198,6 +198,10 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
         });
     }
 
+    // Unified numeric resolution
+    let _numeric_result =
+        crate::ir::numeric_bridge::unify_numeric_inference(&mut float_inference, &mut int_inference);
+
     let mut inferred_types = int_inference.export_var_types();
     for item in &program.items {
         if let Item::Function { decl, .. } = item {

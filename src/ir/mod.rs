@@ -19,6 +19,7 @@ pub mod constraints;
 pub mod effects;
 pub mod execution;
 pub mod node;
+pub mod numeric_bridge;
 pub mod numeric_solver;
 pub mod numeric_types;
 pub mod pipeline;

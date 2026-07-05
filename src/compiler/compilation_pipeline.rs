@@ -212,6 +212,11 @@ pub fn build_project_ext(
         int_inference.infer_program(&program);
         super::bail_on_inference_errors(&int_inference.errors, "Int", Some(file))?;
 
+        // Unified numeric resolution: feeds legacy results through NumericSolver
+        // for cross-type constraint propagation (e.g., HashMap<u32, String> generics)
+        let _numeric_result =
+            crate::ir::numeric_bridge::unify_numeric_inference(&mut float_inference, &mut int_inference);
+
         let cross_crate_field_types =
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
 

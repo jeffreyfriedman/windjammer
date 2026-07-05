@@ -186,6 +186,12 @@ impl CodegenBackend for RustBackend {
             }
         }
 
+        // Unified numeric resolution
+        let _numeric_result = crate::ir::numeric_bridge::unify_numeric_inference(
+            &mut float_inference,
+            &mut int_inference,
+        );
+
         let mut generator = crate::codegen::CodeGenerator::new(signatures, compilation_target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         if inference_ok {
