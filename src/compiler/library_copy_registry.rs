@@ -19,14 +19,24 @@ fn is_type_copy_quick_for_library(
 /// Returns (copy_structs, all_local_struct_names, explicit_non_copy_structs).
 pub(crate) fn collect_global_copy_structs_for_library(
     sources: &[(PathBuf, String)],
-) -> (HashSet<String>, HashSet<String>, HashSet<String>, HashSet<String>) {
+) -> (
+    HashSet<String>,
+    HashSet<String>,
+    HashSet<String>,
+    HashSet<String>,
+) {
     collect_global_copy_structs_for_library_with_programs(sources, None)
 }
 
 pub(crate) fn collect_global_copy_structs_for_library_with_programs(
     sources: &[(PathBuf, String)],
     parsed_programs: Option<&[crate::parser::Program<'static>]>,
-) -> (HashSet<String>, HashSet<String>, HashSet<String>, HashSet<String>) {
+) -> (
+    HashSet<String>,
+    HashSet<String>,
+    HashSet<String>,
+    HashSet<String>,
+) {
     use crate::parser::ast::EnumVariantData;
 
     struct StructInfo {
@@ -169,7 +179,12 @@ pub(crate) fn collect_global_copy_structs_for_library_with_programs(
     }
 
     global_copy_structs.extend(copy_enums.iter().cloned());
-    (global_copy_structs, struct_names, explicit_non_copy, explicit_copy_structs)
+    (
+        global_copy_structs,
+        struct_names,
+        explicit_non_copy,
+        explicit_copy_structs,
+    )
 }
 
 /// Enums that must not be treated as Copy (data-carrying variants with non-Copy fields).

@@ -207,8 +207,7 @@ mod tests {
         let program = parser.parse().expect("parse");
         let leaked_program: &'static _ = Box::leak(Box::new(program));
         let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, registry, _) =
-            analyzer.analyze_program(leaked_program).expect("analyze");
+        let (analyzed, registry, _) = analyzer.analyze_program(leaked_program).expect("analyze");
         validate_shadow(&analyzed, &registry)
     }
 

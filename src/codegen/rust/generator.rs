@@ -10,7 +10,9 @@ use std::cell::Cell;
 pub use crate::codegen::rust::method_signature::MethodSignature;
 
 /// Convert an IR `OwnedType` to the legacy `OwnershipMode` used by codegen.
-pub(crate) fn owned_type_to_ownership_mode(owned: &crate::ir::safety_type::OwnedType) -> OwnershipMode {
+pub(crate) fn owned_type_to_ownership_mode(
+    owned: &crate::ir::safety_type::OwnedType,
+) -> OwnershipMode {
     match owned {
         crate::ir::safety_type::OwnedType::Owned => OwnershipMode::Owned,
         crate::ir::safety_type::OwnedType::Ref(_) => OwnershipMode::Borrowed,
@@ -31,12 +33,12 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_web_imports: bool,
     pub(crate) needs_js_imports: bool,
     pub(crate) needs_serde_imports: bool,   // For JSON support
-    pub(crate) serde_available: bool,      // Project-level: serde dependency exists (auto-derive Serialize)
-    pub(crate) needs_write_import: bool,    // For string capacity optimization (write! macro)
+    pub(crate) serde_available: bool, // Project-level: serde dependency exists (auto-derive Serialize)
+    pub(crate) needs_write_import: bool, // For string capacity optimization (write! macro)
     pub(crate) needs_smallvec_import: bool, // For Phase 8 SmallVec optimization
-    pub(crate) needs_cow_import: bool,      // For Phase 9 Cow optimization
-    pub(crate) needs_hashmap_import: bool,  // Auto-detect HashMap usage
-    pub(crate) needs_hashset_import: bool,  // Auto-detect HashSet usage
+    pub(crate) needs_cow_import: bool, // For Phase 9 Cow optimization
+    pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
+    pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -260,7 +262,8 @@ pub struct CodeGenerator<'ast> {
     /// Struct-like enum variants: same key as `enum_variant_types`, preserves field names for
     /// `infer_match_bound_types` when matching on `&vec[i]` (Rust binds `&T` per field).
     pub(crate) enum_variant_struct_fields: std::collections::HashMap<String, Vec<(String, Type)>>,
-    pub(crate) numeric_inference: Option<std::sync::Arc<crate::ir::numeric_bridge::UnifiedNumericInference>>,
+    pub(crate) numeric_inference:
+        Option<std::sync::Arc<crate::ir::numeric_bridge::UnifiedNumericInference>>,
     /// Full-crate converged registry for multipass library codegen (avoids cloning into every file).
     pub(crate) global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
     /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
@@ -604,7 +607,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-
     pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.non_copy_types_registry = registry;
     }
@@ -768,22 +770,15 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Backwards-compatible: wrap a FloatInference into UnifiedNumericInference.
-    pub fn set_float_inference(
-        &mut self,
-        float_inf: crate::type_inference::FloatInference,
-    ) {
+    pub fn set_float_inference(&mut self, float_inf: crate::type_inference::FloatInference) {
         let unified =
             crate::ir::numeric_bridge::UnifiedNumericInference::from_float_only(float_inf);
         self.numeric_inference = Some(std::sync::Arc::new(unified));
     }
 
     /// Backwards-compatible: wrap an IntInference into UnifiedNumericInference.
-    pub fn set_int_inference(
-        &mut self,
-        int_inf: crate::type_inference::IntInference,
-    ) {
-        let unified =
-            crate::ir::numeric_bridge::UnifiedNumericInference::from_int_only(int_inf);
+    pub fn set_int_inference(&mut self, int_inf: crate::type_inference::IntInference) {
+        let unified = crate::ir::numeric_bridge::UnifiedNumericInference::from_int_only(int_inf);
         self.numeric_inference = Some(std::sync::Arc::new(unified));
     }
 

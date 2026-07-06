@@ -142,12 +142,9 @@ pub fn build_project_ext(
 
                     if analyzer.is_copy_struct(struct_name) {
                         let is_local_copy = decl.fields.is_empty()
-                            || decl
-                                .fields
-                                .iter()
-                                .all(|f| {
-                                    is_type_copy_for_single_file_build(&f.field_type, &analyzer)
-                                });
+                            || decl.fields.iter().all(|f| {
+                                is_type_copy_for_single_file_build(&f.field_type, &analyzer)
+                            });
 
                         if !is_local_copy {
                             analyzer.unregister_copy_struct(struct_name);

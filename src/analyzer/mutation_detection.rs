@@ -513,8 +513,11 @@ impl<'ast> Analyzer<'ast> {
                                         // Stale metadata may have has_self_receiver=false for
                                         // methods that do take self. Fall through to heuristics
                                         // instead of returning false.
-                                        if !sig.has_self_receiver && sig.param_ownership.is_empty() {
-                                            if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                        if !sig.has_self_receiver && sig.param_ownership.is_empty()
+                                        {
+                                            if super::stdlib_method_traits::method_mutates_receiver(
+                                                method,
+                                            ) {
                                                 return true;
                                             }
                                         } else {
@@ -543,7 +546,8 @@ impl<'ast> Analyzer<'ast> {
                                     }
                                 }
                                 if !sig.has_self_receiver && sig.param_ownership.is_empty() {
-                                    if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                    if super::stdlib_method_traits::method_mutates_receiver(method)
+                                    {
                                         return true;
                                     }
                                 } else {

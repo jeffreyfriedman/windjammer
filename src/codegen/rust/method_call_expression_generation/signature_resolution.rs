@@ -130,8 +130,8 @@ impl<'ast> CodeGenerator<'ast> {
             .cloned();
         match (local_sig, global_sig) {
             (Some(l), Some(g)) => {
-                use crate::codegen::rust::call_signature_resolution::ResolvedSignature;
                 use crate::codegen::rust::call_signature_resolution::ResolutionMethod;
+                use crate::codegen::rust::call_signature_resolution::ResolvedSignature;
                 let lr = ResolvedSignature {
                     qualified_key: l.name.clone(),
                     has_collision: false,
@@ -145,7 +145,8 @@ impl<'ast> CodeGenerator<'ast> {
                     sig: g,
                 };
                 crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
-                    Some(lr), Some(gr),
+                    Some(lr),
+                    Some(gr),
                 )
                 .map(|r| finalize_call_site_signature(r.sig))
             }

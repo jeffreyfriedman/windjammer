@@ -284,7 +284,10 @@ pub(crate) fn build_library_multipass(
 
     let dependency_graph =
         super::incremental::DependencyGraph::build(&sources, &parsed_programs, &src_base);
-    profile_phase("Incremental setup (deps + dep graph)", incremental_setup_start);
+    profile_phase(
+        "Incremental setup (deps + dep graph)",
+        incremental_setup_start,
+    );
 
     // INCREMENTAL: Whole-crate fast path — if no .wj file has changed and dep
     // metadata is also unchanged, skip the entire transpilation pipeline.
@@ -340,11 +343,15 @@ pub(crate) fn build_library_multipass(
     }
 
     let copy_registry_start = Instant::now();
-    let (mut global_copy_structs, local_struct_names, explicit_non_copy_structs, global_explicit_copy_structs) =
-        super::library_copy_registry::collect_global_copy_structs_for_library_with_programs(
-            &sources,
-            Some(&parsed_programs),
-        );
+    let (
+        mut global_copy_structs,
+        local_struct_names,
+        explicit_non_copy_structs,
+        global_explicit_copy_structs,
+    ) = super::library_copy_registry::collect_global_copy_structs_for_library_with_programs(
+        &sources,
+        Some(&parsed_programs),
+    );
     let global_non_copy_enums =
         super::library_copy_registry::collect_non_copy_enums_for_library_with_programs(
             &sources,
@@ -544,11 +551,9 @@ pub(crate) fn build_library_multipass(
                 // file_registry contains ALL entries (global + file-specific).
                 // If an entry is identical to the frozen snapshot, it's a passthrough —
                 // merging it would overwrite convergence results from earlier files.
-                let is_passthrough = global_arc
-                    .get_signature(name)
-                    .map_or(false, |arc_sig| {
-                        !SignatureRegistry::ownership_changed(arc_sig, sig)
-                    });
+                let is_passthrough = global_arc.get_signature(name).map_or(false, |arc_sig| {
+                    !SignatureRegistry::ownership_changed(arc_sig, sig)
+                });
                 if is_passthrough {
                     continue;
                 }
@@ -660,7 +665,10 @@ pub(crate) fn build_library_multipass(
             &src_base,
             Some(&parsed_programs),
         )?;
-    profile_phase("Dependency resolution (type modules + extern qualifiers)", dep_resolution_start);
+    profile_phase(
+        "Dependency resolution (type modules + extern qualifiers)",
+        dep_resolution_start,
+    );
 
     // Step 4B-pre: Build GLOBAL analyzed_trait_methods across ALL files.
     // Each file's Analyzer is fresh, so cross-file trait info (e.g. RenderPort defined
@@ -965,8 +973,7 @@ pub(crate) fn build_library_multipass(
         for item in &program.items {
             if let Item::Use { path, .. } = item {
                 let path_str = path.join("::");
-                if path_str.contains("json")
-                    && (path_str.starts_with("std::") || path_str == "std")
+                if path_str.contains("json") && (path_str.starts_with("std::") || path_str == "std")
                 {
                     return true;
                 }
@@ -997,8 +1004,8 @@ pub(crate) fn build_library_multipass(
                 return false;
             }
             if !dirty_set.contains(i) && analysis.output_file.exists() {
-                let source =
-                    std::fs::read_to_string(&sources[*i].0).unwrap_or_else(|_| sources[*i].1.clone());
+                let source = std::fs::read_to_string(&sources[*i].0)
+                    .unwrap_or_else(|_| sources[*i].1.clone());
                 if super::cache_management::is_library_codegen_cache_valid_with_dep_epoch(
                     &source,
                     &sources[*i].0,
@@ -1058,8 +1065,9 @@ pub(crate) fn build_library_multipass(
                 let analysis = step4b_analyses[*i]
                     .as_ref()
                     .expect("analysis must exist after phase 4B-a");
-                let program: &crate::parser::Program<'static> =
-                    stripped_programs[*i].as_ref().unwrap_or(&parsed_programs[*i]);
+                let program: &crate::parser::Program<'static> = stripped_programs[*i]
+                    .as_ref()
+                    .unwrap_or(&parsed_programs[*i]);
 
                 let mut full_registry = analysis.registry.clone();
                 {
@@ -1088,10 +1096,10 @@ pub(crate) fn build_library_multipass(
                 codegen.set_source_file(file);
                 codegen.set_library_source_root(src_base.clone());
                 codegen.set_type_defining_modules((*type_defining_modules_arc).clone());
-                codegen
-                    .set_extern_submodule_qualifiers((*extern_submodule_qualifiers_arc).clone());
+                codegen.set_extern_submodule_qualifiers((*extern_submodule_qualifiers_arc).clone());
                 codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
-                codegen.set_shared_numeric_inference(std::sync::Arc::clone(&global_numeric_inference));
+                codegen
+                    .set_shared_numeric_inference(std::sync::Arc::clone(&global_numeric_inference));
                 codegen.set_serde_available(project_has_serde);
 
                 super::apply_inferred_bounds_to_codegen(&mut codegen, program);
@@ -1177,10 +1185,7 @@ pub(crate) fn build_library_multipass(
                 );
             }
         }
-        crate_metadata.copy_structs = global_copy_structs
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        crate_metadata.copy_structs = global_copy_structs.iter().cloned().collect::<Vec<_>>();
         crate_metadata.copy_structs.sort();
         super::write_crate_metadata_json(output, &crate_metadata)?;
     }
@@ -1221,7 +1226,10 @@ pub(crate) fn build_library_multipass(
 
     // Record the compiler version now that all codegen has completed successfully.
     let _ = super::cache_management::write_compiler_stamp(output);
-    profile_phase("Post-codegen (metadata + mod.rs + stale check)", post_codegen_start);
+    profile_phase(
+        "Post-codegen (metadata + mod.rs + stale check)",
+        post_codegen_start,
+    );
 
     if !deferred_lint_errors.is_empty() {
         return Err(anyhow::anyhow!(
