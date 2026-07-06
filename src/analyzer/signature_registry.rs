@@ -690,8 +690,7 @@ impl SignatureRegistry {
                     {
                         let ex_stub =
                             Self::is_likely_declaration_stub_with_nontrivial_params(existing);
-                        let sig_stub =
-                            Self::is_likely_declaration_stub_with_nontrivial_params(sig);
+                        let sig_stub = Self::is_likely_declaration_stub_with_nontrivial_params(sig);
                         if !ex_stub && !sig_stub {
                             self.ownership_collision_keys.insert(name.clone());
                         }
@@ -714,11 +713,8 @@ impl SignatureRegistry {
                 //
                 // Guard: if sig introduces borrows where existing has Owned, sig is a
                 // body-analysis refinement — always insert it (don't skip).
-                let sig_refines_with_borrows = sig
-                    .param_ownership
-                    .iter()
-                    .enumerate()
-                    .any(|(idx, o)| {
+                let sig_refines_with_borrows =
+                    sig.param_ownership.iter().enumerate().any(|(idx, o)| {
                         if sig.has_self_receiver && idx == 0 {
                             return false;
                         }

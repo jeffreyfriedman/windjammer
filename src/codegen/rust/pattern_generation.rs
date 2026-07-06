@@ -295,11 +295,7 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             }
-            Expression::MethodCall {
-                method,
-                object,
-                ..
-            } => {
+            Expression::MethodCall { method, object, .. } => {
                 // .get() on HashMap/BTreeMap always returns Option<&V> in Rust.
                 // Check object type via both type inference and struct field lookup.
                 if method == "get" {
@@ -349,7 +345,9 @@ impl<'ast> CodeGenerator<'ast> {
                         return true;
                     }
                     if let Expression::FieldAccess {
-                        field, object: fa_obj, ..
+                        field,
+                        object: fa_obj,
+                        ..
                     } = function
                     {
                         if field == "get" {
@@ -388,10 +386,7 @@ impl<'ast> CodeGenerator<'ast> {
                 matches!(name.as_str(), "HashMap" | "BTreeMap" | "IndexMap")
             }
             Type::Parameterized(name, _) => {
-                matches!(
-                    name.as_str(),
-                    "HashMap" | "BTreeMap" | "Map" | "IndexMap"
-                )
+                matches!(name.as_str(), "HashMap" | "BTreeMap" | "Map" | "IndexMap")
             }
             _ => false,
         }

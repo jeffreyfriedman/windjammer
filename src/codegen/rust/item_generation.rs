@@ -975,7 +975,10 @@ impl<'ast> CodeGenerator<'ast> {
             for _ in 0..max_iters {
                 let mut new_upgrades = Vec::new();
                 for func in &impl_block.functions {
-                    if self.current_impl_consuming_self_methods.contains(&func.name) {
+                    if self
+                        .current_impl_consuming_self_methods
+                        .contains(&func.name)
+                    {
                         continue;
                     }
                     let qualified = format!("{}::{}", struct_name, func.name);

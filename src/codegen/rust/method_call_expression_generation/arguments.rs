@@ -38,17 +38,18 @@ impl<'ast> CodeGenerator<'ast> {
         // receivers, arguments should use the same float type as the receiver.
         let prev_float_target = self.assignment_float_target_type.clone();
         let receiver_type_inferred = self.infer_expression_type(object);
-        let receiver_is_string_collection = Self::is_string_element_collection(receiver_type_inferred.as_ref())
-            || match object {
-                Expression::Identifier { name, .. } => {
-                    Self::is_string_element_collection(self.local_var_types.get(name.as_str()))
+        let receiver_is_string_collection =
+            Self::is_string_element_collection(receiver_type_inferred.as_ref())
+                || match object {
+                    Expression::Identifier { name, .. } => {
+                        Self::is_string_element_collection(self.local_var_types.get(name.as_str()))
+                    }
+                    _ => false,
                 }
-                _ => false,
-            }
-            || Self::is_string_collection_from_return_type(
-                receiver_type_inferred.as_ref(),
-                self.current_function_return_type.as_ref(),
-            );
+                || Self::is_string_collection_from_return_type(
+                    receiver_type_inferred.as_ref(),
+                    self.current_function_return_type.as_ref(),
+                );
         let is_float_method = crate::type_classification::is_float_receiver_method(method);
         if is_float_method {
             if let Some(ref rft) = receiver_type_inferred {

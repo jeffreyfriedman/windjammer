@@ -188,7 +188,10 @@ mod tests {
             name: String,
             age: i64,
         }
-        let user = User { name: "Bob".to_string(), age: 25 };
+        let user = User {
+            name: "Bob".to_string(),
+            age: 25,
+        };
         let json = to_string(user).expect("serialize");
         assert!(json.contains("\"name\":\"Bob\""));
         assert!(json.contains("\"age\":25"));
@@ -201,7 +204,10 @@ mod tests {
             host: String,
             port: i64,
         }
-        let cfg = Config { host: "localhost".to_string(), port: 8080 };
+        let cfg = Config {
+            host: "localhost".to_string(),
+            port: 8080,
+        };
         let json = to_string_pretty(cfg).expect("serialize pretty");
         assert!(json.contains('\n'));
         assert!(json.contains("\"host\": \"localhost\""));
@@ -210,7 +216,10 @@ mod tests {
     #[test]
     fn test_serialize_deserialize_roundtrip() {
         #[derive(Debug, Serialize, Deserialize, PartialEq)]
-        struct Point { x: i64, y: i64 }
+        struct Point {
+            x: i64,
+            y: i64,
+        }
         let original = Point { x: 42, y: 99 };
         let json = to_string(&original).expect("serialize");
         let restored: Point = parse_string(&json).expect("deserialize");

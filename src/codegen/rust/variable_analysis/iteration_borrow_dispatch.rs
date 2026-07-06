@@ -161,11 +161,7 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    fn collect_methods_called_on(
-        stmt: &Statement,
-        var_name: &str,
-        methods: &mut Vec<String>,
-    ) {
+    fn collect_methods_called_on(stmt: &Statement, var_name: &str, methods: &mut Vec<String>) {
         match stmt {
             Statement::Expression { expr, .. } => {
                 Self::collect_methods_from_expr(expr, var_name, methods);
@@ -201,11 +197,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn collect_methods_from_expr(
-        expr: &Expression,
-        var_name: &str,
-        methods: &mut Vec<String>,
-    ) {
+    fn collect_methods_from_expr(expr: &Expression, var_name: &str, methods: &mut Vec<String>) {
         match expr {
             Expression::MethodCall {
                 object,

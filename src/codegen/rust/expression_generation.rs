@@ -829,11 +829,8 @@ impl<'ast> CodeGenerator<'ast> {
                             format!("{}_{}", s, suffix)
                         };
                     }
-
-                    return self.generate_literal_context_sensitive(lit);
                 }
 
-                // Priority 2: Fallback to old context-sensitive approach
                 self.generate_literal_context_sensitive(lit)
             }
             _ => crate::codegen::rust::literals::generate_literal(lit),

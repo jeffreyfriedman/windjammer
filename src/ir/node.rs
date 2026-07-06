@@ -104,9 +104,7 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
             mutable: *mutable,
             inner: Box::new(parser_type_to_base_type(pointee)),
         },
-        Type::Tuple(elems) => {
-            BaseType::Tuple(elems.iter().map(parser_type_to_base_type).collect())
-        }
+        Type::Tuple(elems) => BaseType::Tuple(elems.iter().map(parser_type_to_base_type).collect()),
         Type::Infer => BaseType::Inferred,
         Type::FunctionPointer {
             params,

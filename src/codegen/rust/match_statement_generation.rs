@@ -349,8 +349,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     body_str = format!("{}.clone()", body_str);
                                 }
                             }
-                        } else if let Some(rewritten) =
-                            self.rewrite_some_wrapper_for_ref_match_binding(
+                        } else if let Some(rewritten) = self
+                            .rewrite_some_wrapper_for_ref_match_binding(
                                 main_arm.body,
                                 &match_bound_type_entries,
                                 &added_borrowed,

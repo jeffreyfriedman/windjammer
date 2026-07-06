@@ -38,7 +38,12 @@ pub fn compute_reanalysis_set(
 
         // Use the library-aware cache check that handles mod.wj → mod.rs merging.
         if crate::compiler::cache_management::is_library_codegen_cache_valid_with_dep_epoch(
-            source, file, &output_file, src_base, output, dep_epoch,
+            source,
+            file,
+            &output_file,
+            src_base,
+            output,
+            dep_epoch,
         ) {
             // clean — skip reanalysis for this file
         } else {
