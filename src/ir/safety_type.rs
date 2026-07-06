@@ -125,8 +125,24 @@ pub enum BaseType {
     HashMap(Box<BaseType>, Box<BaseType>),
     /// Tuple of types.
     Tuple(Vec<BaseType>),
+    /// Fixed-size array: [T; N]
+    Array(Box<BaseType>, usize),
     /// Function type: (params) -> return
     Fn(Vec<BaseType>, Box<BaseType>),
+    /// Function pointer type: fn(params) -> return
+    FunctionPointer {
+        params: Vec<BaseType>,
+        return_type: Box<BaseType>,
+    },
+    /// Trait object: dyn Trait
+    TraitObject(String),
+    /// impl Trait (opaque return type / existential)
+    ImplTrait(String),
+    /// Raw pointer (*const T or *mut T, for FFI)
+    RawPointer {
+        mutable: bool,
+        inner: Box<BaseType>,
+    },
     /// SIMD vector: Simd<T, N> (future: WJ-LANG-02)
     Simd(Box<BaseType>, u32),
     /// Inferred — not yet determined by the solver.
@@ -232,33 +248,9 @@ impl fmt::Display for Effect {
     }
 }
 
-/// Taint status of a value (WJ-SEC-02).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TaintStatus {
-    /// Value is known to be safe.
-    Clean,
-    /// Value came from an untrusted source.
-    Tainted(TaintSource),
-    /// Value passed through a declared sanitizer.
-    Sanitized,
-}
-
-/// Where tainted data originated.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TaintSource {
-    pub kind: TaintSourceKind,
-    pub location: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TaintSourceKind {
-    HttpRequest,
-    UserInput,
-    DatabaseRow,
-    FileContents,
-    EnvironmentVariable,
-    Custom(String),
-}
+// TaintStatus, TaintSource, and TaintSourceKind are canonically defined in
+// crate::ir::taint and re-exported here for SafetyType consumers.
+pub use crate::ir::taint::{TaintSource, TaintSourceKind, TaintStatus};
 
 /// Whether an expression can be evaluated at compile time (WJ-LANG-02).
 #[derive(Debug, Clone, PartialEq, Eq)]

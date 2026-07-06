@@ -34,6 +34,8 @@ pub fn run(cli: Cli) -> Result<()> {
             no_lint,
             no_generate_cargo_toml,
             metadata,
+            json: _json,
+            ir_shadow_validate: _ir_shadow_validate,
         } => {
             // TODO: Pass defer_drop config to compiler
             let _ = (defer_drop, defer_drop_threshold);
@@ -103,7 +105,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check => {
+        Commands::Check { path: _path, json: _json } => {
             windjammer::cli::check::execute()?;
         }
         Commands::Add {

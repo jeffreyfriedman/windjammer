@@ -4,8 +4,9 @@
 //! a typed bridge for codegen to query optimization hints from the IR.
 
 use crate::analyzer::{
-    AnalyzedFunction, CloneOptimization, ConstStaticOptimization, CowOptimization,
-    DeferDropOptimization, SmallVecOptimization, StringOptimization, StructMappingOptimization,
+    AnalyzedFunction, AssignmentOptimization, CacheLocalityAnalysis, CloneOptimization,
+    ConstStaticOptimization, CowOptimization, DeferDropOptimization, SmallVecOptimization,
+    StringOptimization, StructMappingOptimization,
 };
 use crate::auto_clone::AutoCloneAnalysis;
 
@@ -18,6 +19,8 @@ pub struct OptimizationHints {
     pub struct_mappings: Vec<StructMappingOptimization>,
     /// Phase 4: String capacity/concatenation optimizations.
     pub string_opts: Vec<StringOptimization>,
+    /// Phase 5: Compound assignment opportunities (x = x + 1 → x += 1).
+    pub assignment_opts: Vec<AssignmentOptimization>,
     /// Phase 6: Deferred drop for large allocations.
     pub defer_drops: Vec<DeferDropOptimization>,
     /// Phase 7: Promote runtime statics to compile-time consts.
@@ -28,6 +31,8 @@ pub struct OptimizationHints {
     pub cow: Vec<CowOptimization>,
     /// Auto-clone insertion points.
     pub auto_clone: AutoCloneAnalysis,
+    /// Cache locality: AoSoA / SoA candidates for ECS-style iteration.
+    pub cache_locality: CacheLocalityAnalysis,
 }
 
 impl OptimizationHints {
@@ -36,11 +41,13 @@ impl OptimizationHints {
             clone_eliminations: af.clone_optimizations.clone(),
             struct_mappings: af.struct_mapping_optimizations.clone(),
             string_opts: af.string_optimizations.clone(),
+            assignment_opts: af.assignment_optimizations.clone(),
             defer_drops: af.defer_drop_optimizations.clone(),
             const_statics: af.const_static_optimizations.clone(),
             smallvec: af.smallvec_optimizations.clone(),
             cow: af.cow_optimizations.clone(),
             auto_clone: af.auto_clone_analysis.clone(),
+            cache_locality: af.cache_locality.clone(),
         }
     }
 
@@ -49,11 +56,13 @@ impl OptimizationHints {
             clone_eliminations: Vec::new(),
             struct_mappings: Vec::new(),
             string_opts: Vec::new(),
+            assignment_opts: Vec::new(),
             defer_drops: Vec::new(),
             const_statics: Vec::new(),
             smallvec: Vec::new(),
             cow: Vec::new(),
             auto_clone: AutoCloneAnalysis::default(),
+            cache_locality: CacheLocalityAnalysis::default(),
         }
     }
 }

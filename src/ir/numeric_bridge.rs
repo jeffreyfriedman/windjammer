@@ -61,6 +61,26 @@ impl UnifiedNumericInference {
         }
     }
 
+    /// Construct from an already-solved FloatInference (test compatibility).
+    pub fn from_float_only(float_inf: FloatInference) -> Self {
+        Self {
+            float_collector: float_inf,
+            int_collector: IntInference::new(),
+            errors: Vec::new(),
+            solved: true,
+        }
+    }
+
+    /// Construct from an already-solved IntInference (test compatibility).
+    pub fn from_int_only(int_inf: IntInference) -> Self {
+        Self {
+            float_collector: FloatInference::new(),
+            int_collector: int_inf,
+            errors: Vec::new(),
+            solved: true,
+        }
+    }
+
     // --- Configuration setters (delegated to both collectors) ---
 
     pub fn set_current_file(&mut self, file: &str) -> usize {

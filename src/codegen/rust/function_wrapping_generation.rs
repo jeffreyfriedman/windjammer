@@ -28,6 +28,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) -> String {
         let func = &analyzed.decl;
+        self.select_ir_function_for(&func.name);
         self.prepare_codegen_environment_for_regular_function(analyzed);
         let mut output = String::new();
 
@@ -88,8 +89,8 @@ impl<'ast> CodeGenerator<'ast> {
         // PHASE 1: Suppress Clippy warnings for &String parameters
         // We use &String (not &str) for correctness with Vec<String>, but Clippy warns
         // Phase 2 will optimize to &str when safe
-        let has_borrowed_string_param = analyzed
-            .inferred_ownership
+        let has_borrowed_string_param = self
+            .get_all_param_ownership(analyzed)
             .iter()
             .any(|(_, ownership)| matches!(ownership, OwnershipMode::Borrowed))
             && func.parameters.iter().enumerate().any(|(idx, param)| {
@@ -401,10 +402,10 @@ impl<'ast> CodeGenerator<'ast> {
             // Preserve @ensures access for parameters moved in the function body.
             for param in &func.parameters {
                 if params_in_ensures.contains(&param.name) {
-                    let ownership = analyzed
-                        .inferred_ownership
-                        .get(&param.name)
-                        .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
+                    let ownership_val = self
+                        .get_param_ownership(&param.name, analyzed)
+                        .unwrap_or(crate::analyzer::OwnershipMode::Owned);
+                    let ownership = &ownership_val;
 
                     output.push_str(&self.indent());
                     match ownership {
@@ -499,10 +500,10 @@ impl<'ast> CodeGenerator<'ast> {
                     // Replace parameter names with cloned versions
                     // Replace "name" but not ".name" (field access)
                     for param in &func.parameters {
-                        let ownership = analyzed
-                            .inferred_ownership
-                            .get(&param.name)
-                            .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
+                        let ownership_val = self
+                            .get_param_ownership(&param.name, analyzed)
+                            .unwrap_or(crate::analyzer::OwnershipMode::Owned);
+                        let ownership = &ownership_val;
 
                         if matches!(
                             ownership,
