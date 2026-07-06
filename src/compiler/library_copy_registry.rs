@@ -17,17 +17,6 @@ fn is_type_copy_quick_for_library(
 
 /// Discover Copy structs/enums across all library sources (including nested `mod` items).
 /// Returns (copy_structs, all_local_struct_names, explicit_non_copy_structs).
-pub(crate) fn collect_global_copy_structs_for_library(
-    sources: &[(PathBuf, String)],
-) -> (
-    HashSet<String>,
-    HashSet<String>,
-    HashSet<String>,
-    HashSet<String>,
-) {
-    collect_global_copy_structs_for_library_with_programs(sources, None)
-}
-
 pub(crate) fn collect_global_copy_structs_for_library_with_programs(
     sources: &[(PathBuf, String)],
     parsed_programs: Option<&[crate::parser::Program<'static>]>,
@@ -188,10 +177,6 @@ pub(crate) fn collect_global_copy_structs_for_library_with_programs(
 }
 
 /// Enums that must not be treated as Copy (data-carrying variants with non-Copy fields).
-pub(crate) fn collect_non_copy_enums_for_library(sources: &[(PathBuf, String)]) -> HashSet<String> {
-    collect_non_copy_enums_for_library_with_programs(sources, None)
-}
-
 pub(crate) fn collect_non_copy_enums_for_library_with_programs(
     sources: &[(PathBuf, String)],
     parsed_programs: Option<&[crate::parser::Program<'static>]>,
