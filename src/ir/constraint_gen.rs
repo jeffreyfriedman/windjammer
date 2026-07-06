@@ -186,9 +186,7 @@ fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, bas
 }
 
 /// Generate constraints for a batch of analyzed functions.
-pub fn generate_module_constraints(
-    analyzed: &[AnalyzedFunction<'_>],
-) -> Vec<FunctionConstraints> {
+pub fn generate_module_constraints(analyzed: &[AnalyzedFunction<'_>]) -> Vec<FunctionConstraints> {
     analyzed.iter().map(generate_constraints).collect()
 }
 
@@ -217,9 +215,8 @@ mod tests {
         assert_eq!(fc.function_name, "empty");
         assert!(fc.var_map.params.is_empty());
         // Return var should have TypeIs(Unit) and OwnershipIs(Owned)
-        let has_unit = count_constraints(&fc, |c| {
-            matches!(c, Constraint::TypeIs(_, BaseType::Unit))
-        });
+        let has_unit =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Unit)));
         assert!(has_unit >= 1, "should have TypeIs(Unit) for return");
     }
 
@@ -237,12 +234,8 @@ mod tests {
 
         assert_eq!(fc.var_map.params.len(), 2);
 
-        let has_i32 = count_constraints(&fc, |c| {
-            matches!(c, Constraint::TypeIs(_, BaseType::I32))
-        });
-        let has_f64 = count_constraints(&fc, |c| {
-            matches!(c, Constraint::TypeIs(_, BaseType::F64))
-        });
+        let has_i32 = count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::I32)));
+        let has_f64 = count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::F64)));
         assert!(has_i32 >= 1, "should have TypeIs(I32) for x and return");
         assert!(has_f64 >= 1, "should have TypeIs(F64) for y");
 

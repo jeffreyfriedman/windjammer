@@ -121,29 +121,19 @@ impl UnifiedNumericInference {
         self.int_collector.set_current_file_module_path(path);
     }
 
-    pub fn set_struct_defining_module_paths(
-        &mut self,
-        paths: HashMap<String, Vec<Vec<String>>>,
-    ) {
+    pub fn set_struct_defining_module_paths(&mut self, paths: HashMap<String, Vec<Vec<String>>>) {
         self.float_collector
             .set_struct_defining_module_paths(paths.clone());
-        self.int_collector
-            .set_struct_defining_module_paths(paths);
+        self.int_collector.set_struct_defining_module_paths(paths);
     }
 
-    pub fn set_module_re_exports(
-        &mut self,
-        re_exports: HashMap<String, HashMap<String, String>>,
-    ) {
+    pub fn set_module_re_exports(&mut self, re_exports: HashMap<String, HashMap<String, String>>) {
         self.float_collector
             .set_module_re_exports(re_exports.clone());
         self.int_collector.set_module_re_exports(re_exports);
     }
 
-    pub fn set_external_crate_metadata_paths(
-        &mut self,
-        paths: &HashMap<String, PathBuf>,
-    ) {
+    pub fn set_external_crate_metadata_paths(&mut self, paths: &HashMap<String, PathBuf>) {
         self.float_collector
             .set_external_crate_metadata_paths(paths);
     }
@@ -200,8 +190,7 @@ impl UnifiedNumericInference {
     pub fn merge_parallel_state(&mut self, other: Self) {
         self.float_collector
             .merge_parallel_state(other.float_collector);
-        self.int_collector
-            .merge_parallel_state(other.int_collector);
+        self.int_collector.merge_parallel_state(other.int_collector);
     }
 
     // --- Codegen-facing lookup ---
@@ -238,8 +227,11 @@ mod tests {
         let source = "pub fn add(a: f32, b: f32) -> f32 {\n    a + b\n}\n";
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser =
-            crate::parser::Parser::new_with_source(tokens, "test.wj".to_string(), source.to_string());
+        let mut parser = crate::parser::Parser::new_with_source(
+            tokens,
+            "test.wj".to_string(),
+            source.to_string(),
+        );
         let program = parser.parse().expect("parse");
 
         let mut unified = UnifiedNumericInference::new();

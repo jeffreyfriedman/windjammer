@@ -3,8 +3,8 @@
 //! Helper functions for string type analysis and codegen decisions.
 //! These are pure functions with no state dependencies.
 
-use crate::parser::{Expression, Literal, Statement, Type};
 use crate::analyzer::OwnershipMode;
+use crate::parser::{Expression, Literal, Statement, Type};
 
 /// Untyped `let`/`let mut` with string literal or string-producing `match` RHS needs `: String`
 /// so `"x".into()` resolves (Rust cannot infer from `&str`-accepting call sites alone).
@@ -697,7 +697,7 @@ mod tests {
         let sig = FunctionSignature {
             name: "push_str".into(),
             param_types: vec![
-                Type::Custom("String".into()), // self (index 0)
+                Type::Custom("String".into()),                         // self (index 0)
                 Type::Reference(Box::new(Type::Custom("str".into()))), // &str param (index 1)
             ],
             formal_param_types: vec![Type::Custom("String".into()), Type::String],

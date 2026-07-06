@@ -105,7 +105,10 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check { path: _path, json: _json } => {
+        Commands::Check {
+            path: _path,
+            json: _json,
+        } => {
             windjammer::cli::check::execute()?;
         }
         Commands::Add {

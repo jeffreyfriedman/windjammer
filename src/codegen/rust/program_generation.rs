@@ -149,7 +149,8 @@ impl<'ast> CodeGenerator<'ast> {
                             } else {
                                 s.fields.iter().map(|f| &f.field_type).collect()
                             };
-                            let all_copy = all_types.iter().all(|t| self.is_copy_type_with_registry(t));
+                            let all_copy =
+                                all_types.iter().all(|t| self.is_copy_type_with_registry(t));
                             if all_copy {
                                 if self.copy_types_registry.insert(s.name.clone()) {
                                     changed = true;
@@ -267,7 +268,10 @@ impl<'ast> CodeGenerator<'ast> {
         // When serde is available (project-level flag from use std::json),
         // ensure needs_serde_imports is set so auto-derived Serialize gets the import.
         if self.serde_available && !self.needs_serde_imports {
-            let has_any_struct = program.items.iter().any(|item| matches!(item, Item::Struct { .. }));
+            let has_any_struct = program
+                .items
+                .iter()
+                .any(|item| matches!(item, Item::Struct { .. }));
             if has_any_struct {
                 self.needs_serde_imports = true;
             }

@@ -282,17 +282,17 @@ const FORBIDDEN_DERIVE_TRAITS: &[(&str, &str)] = &[
     ("Deserialize", "Deserialize is auto-derived project-wide when using std::json — remove @derive(Deserialize)"),
 ];
 
-fn check_struct_decorators(
-    struct_name: &str,
-    decorators: &[Decorator<'_>],
-) -> Result<(), String> {
+fn check_struct_decorators(struct_name: &str, decorators: &[Decorator<'_>]) -> Result<(), String> {
     for decorator in decorators {
         if decorator.name != "derive" && decorator.name != "auto" {
             continue;
         }
         let deco_name = &decorator.name;
         for (_, expr) in &decorator.arguments {
-            if let Expression::Identifier { name: trait_name, .. } = expr {
+            if let Expression::Identifier {
+                name: trait_name, ..
+            } = expr
+            {
                 for (forbidden, reason) in FORBIDDEN_DERIVE_TRAITS {
                     if trait_name == forbidden {
                         return Err(format!(

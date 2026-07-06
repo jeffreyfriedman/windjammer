@@ -14,13 +14,11 @@
 //! let ir_module = pipeline.lower_to_ir(&analyzed_functions, &registry);
 //! ```
 
-use super::{
-    constraint_gen, EffectSolver, ExecutionValidator, IrFunction, Solver, TaintSolver,
-};
 use super::constraints::Constraint;
 use super::effects::{self, EffectConstraint};
 use super::safety_type::{BaseType, EffectSet, OwnedType};
 use super::taint;
+use super::{constraint_gen, EffectSolver, ExecutionValidator, IrFunction, Solver, TaintSolver};
 use std::collections::HashMap;
 
 /// Configuration for the IR compilation pipeline.
@@ -468,7 +466,12 @@ pub fn ir_pipeline_available() -> bool {
 mod tests {
     use super::*;
 
-    fn analyze_source(source: &str) -> (Vec<crate::analyzer::AnalyzedFunction<'static>>, crate::analyzer::SignatureRegistry) {
+    fn analyze_source(
+        source: &str,
+    ) -> (
+        Vec<crate::analyzer::AnalyzedFunction<'static>>,
+        crate::analyzer::SignatureRegistry,
+    ) {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
         let mut parser = crate::parser::Parser::new(tokens);
@@ -490,7 +493,10 @@ mod tests {
         assert!(module.execution_errors.is_empty());
         assert!(module.execution_warnings.is_empty());
         // Stdlib effect declarations should be loaded
-        assert!(!module.effect_sets.is_empty(), "stdlib effects should be populated");
+        assert!(
+            !module.effect_sets.is_empty(),
+            "stdlib effects should be populated"
+        );
     }
 
     #[test]
@@ -518,10 +524,16 @@ mod tests {
         let mut pipeline = IrPipeline::new();
         let module = pipeline.lower_to_ir(&analyzed, &registry);
 
-        let has_solver_summary = module.diagnostics.iter().any(|d| d.message.contains("Solver:"));
+        let has_solver_summary = module
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("Solver:"));
         assert!(has_solver_summary, "should have solver summary diagnostic");
 
-        let has_ir_summary = module.diagnostics.iter().any(|d| d.message.contains("IR summary:"));
+        let has_ir_summary = module
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("IR summary:"));
         assert!(has_ir_summary, "should have IR summary diagnostic");
     }
 

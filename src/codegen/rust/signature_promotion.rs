@@ -401,10 +401,7 @@ pub(crate) fn global_has_borrowed_text_over_local_owned_stub(
 /// `b` has `Reference(T)` params with `Borrowed`/`MutBorrowed` ownership where `a` has
 /// bare `T` with `Owned`. Indicates `b` was refined by body analysis and should be preferred.
 /// Ignores the self param (idx 0 when `has_self_receiver`).
-fn converged_has_reference_params_over_bare(
-    a: &FunctionSignature,
-    b: &FunctionSignature,
-) -> bool {
+fn converged_has_reference_params_over_bare(a: &FunctionSignature, b: &FunctionSignature) -> bool {
     let min_len = a.param_ownership.len().min(b.param_ownership.len());
     for idx in 0..min_len {
         if a.has_self_receiver && idx == 0 {
@@ -529,8 +526,10 @@ pub(crate) fn best_method_signature_for_receiver(
         }
     }
     for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.as_str() == exact || key.ends_with(&suffix)
-            || key.as_str() == leaf_exact || key.ends_with(&leaf_suffix)
+        if key.as_str() == exact
+            || key.ends_with(&suffix)
+            || key.as_str() == leaf_exact
+            || key.ends_with(&leaf_suffix)
         {
             consider(key, sig);
         }
