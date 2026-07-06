@@ -1,128 +1,205 @@
-//! Bridge between legacy FloatInference/IntInference and the unified NumericSolver.
+//! Unified Numeric Inference — the single entry point for all numeric type inference.
 //!
-//! Extracts solved results from the legacy engines, feeds them as seed constraints
-//! into the NumericSolver for unified cross-type resolution, then backports the
-//! unified results into the legacy maps so CodeGenerator reads them transparently.
+//! Wraps FloatInference and IntInference collectors as private implementation details
+//! behind a clean public API. Both collectors walk the AST independently, then solve
+//! their constraints independently (float and int are separate type domains).
 //!
-//! This enables the NumericSolver to catch cross-type conflicts and propagate
-//! generic container type parameters that the sequential passes miss.
+//! Architecture:
+//!   AST → FloatCollector.collect() → float constraints → float solve → F32/F64
+//!   AST → IntCollector.collect()   → int constraints   → int solve   → I32/U64/etc.
+//!
+//! The unified engine:
+//! - Provides a single `infer_program` entry point
+//! - Supports parallel per-file collection + merge for library builds
+//! - Exposes `get_float_type` / `get_int_type` for codegen consumption
+//! - Hides the dual-collector implementation from all consumers
 
-use crate::ir::numeric_solver::{NumericSolver, NumericSolverResult};
-use crate::ir::numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
-use crate::type_inference::float_inference::{ExprId, FloatInference, FloatType};
+use crate::parser::ast::core::Expression;
+use crate::parser::ast::types::Type;
+use crate::parser::Program;
+use crate::type_inference::float_inference::{FloatInference, FloatType};
 use crate::type_inference::int_inference::{IntInference, IntType};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
-/// Convert a legacy `ExprId` to a `UnifiedExprId`.
-fn to_unified(id: &ExprId) -> UnifiedExprId {
-    UnifiedExprId::new(id.seq_id, id.file_id, id.line, id.col)
-}
-
-/// Extract constraints from a solved FloatInference engine and feed to NumericSolver.
-fn extract_float_constraints(float_inf: &FloatInference, solver: &mut NumericSolver) {
-    for (expr_id, float_type) in &float_inf.inferred_types {
-        let nt = NumericType::from(*float_type);
-        if !nt.is_unknown() {
-            solver.add_constraint(NumericConstraint::MustBe {
-                expr_id: to_unified(expr_id),
-                numeric_type: nt,
-                reason: "float inference seed".to_string(),
-            });
-        }
-    }
-}
-
-/// Extract constraints from a solved IntInference engine and feed to NumericSolver.
-fn extract_int_constraints(int_inf: &IntInference, solver: &mut NumericSolver) {
-    for (expr_id, int_type) in &int_inf.inferred_types {
-        let nt = NumericType::from(*int_type);
-        if !nt.is_unknown() {
-            solver.add_constraint(NumericConstraint::MustBe {
-                expr_id: to_unified(expr_id),
-                numeric_type: nt,
-                reason: "int inference seed".to_string(),
-            });
-        }
-    }
-}
-
-/// Backport unified results into the legacy FloatInference maps.
-fn backport_float_results(float_inf: &mut FloatInference, result: &NumericSolverResult) {
-    for (uid, numeric_type) in &result.resolved {
-        if let Some(ft) = numeric_type.to_float_type() {
-            if ft == FloatType::Unknown {
-                continue;
-            }
-            let legacy_id = ExprId {
-                seq_id: uid.seq_id,
-                file_id: uid.file_id,
-                line: uid.line,
-                col: uid.col,
-            };
-            let current = float_inf.inferred_types.get(&legacy_id).copied();
-            match current {
-                None | Some(FloatType::Unknown) => {
-                    float_inf.inferred_types.insert(legacy_id, ft);
-                }
-                Some(existing) if existing != ft => {
-                    // Unified solver resolved a conflict — prefer its answer
-                    float_inf.inferred_types.insert(legacy_id, ft);
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-/// Backport unified results into the legacy IntInference maps.
-fn backport_int_results(int_inf: &mut IntInference, result: &NumericSolverResult) {
-    for (uid, numeric_type) in &result.resolved {
-        if let Some(it) = numeric_type.to_int_type() {
-            if it == IntType::Unknown {
-                continue;
-            }
-            let legacy_id = ExprId {
-                seq_id: uid.seq_id,
-                file_id: uid.file_id,
-                line: uid.line,
-                col: uid.col,
-            };
-            let current = int_inf.inferred_types.get(&legacy_id).copied();
-            match current {
-                None | Some(IntType::Unknown) => {
-                    int_inf.inferred_types.insert(legacy_id, it);
-                }
-                Some(existing) if existing != it => {
-                    int_inf.inferred_types.insert(legacy_id, it);
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-/// Run the unified NumericSolver on already-solved legacy inference results.
+/// Unified numeric inference engine.
 ///
-/// This is a post-processing step: the legacy engines collect constraints from the
-/// AST and solve independently; then we feed their results into the NumericSolver
-/// for unified cross-type resolution.
-///
-/// Returns the raw solver result for diagnostics. The legacy maps are updated
-/// in-place so codegen reads the improved types transparently.
-pub fn unify_numeric_inference(
-    float_inf: &mut FloatInference,
-    int_inf: &mut IntInference,
-) -> NumericSolverResult {
-    let mut solver = NumericSolver::new();
+/// This is the sole public interface for numeric type inference in the compiler.
+/// All pipeline code should create, configure, and consume this type rather than
+/// using FloatInference or IntInference directly.
+pub struct UnifiedNumericInference {
+    float_collector: FloatInference,
+    int_collector: IntInference,
+    pub errors: Vec<String>,
+    solved: bool,
+}
 
-    extract_float_constraints(float_inf, &mut solver);
-    extract_int_constraints(int_inf, &mut solver);
+impl Clone for UnifiedNumericInference {
+    fn clone(&self) -> Self {
+        Self {
+            float_collector: self.float_collector.clone(),
+            int_collector: self.int_collector.clone(),
+            errors: self.errors.clone(),
+            solved: self.solved,
+        }
+    }
+}
 
-    let result = solver.solve();
+impl Default for UnifiedNumericInference {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    backport_float_results(float_inf, &result);
-    backport_int_results(int_inf, &result);
+impl UnifiedNumericInference {
+    pub fn new() -> Self {
+        Self {
+            float_collector: FloatInference::new(),
+            int_collector: IntInference::new(),
+            errors: Vec::new(),
+            solved: false,
+        }
+    }
 
-    result
+    // --- Configuration setters (delegated to both collectors) ---
+
+    pub fn set_current_file(&mut self, file: &str) -> usize {
+        let fid = self.float_collector.set_current_file(file.to_string());
+        self.int_collector.set_current_file(file.to_string());
+        fid
+    }
+
+    pub fn set_debug_source(&mut self, source: &str) {
+        self.float_collector.set_debug_source(source);
+    }
+
+    pub fn set_source_root(&mut self, root: &std::path::Path) {
+        self.float_collector.set_source_root(root);
+    }
+
+    pub fn set_global_function_signatures(
+        &mut self,
+        sigs: &HashMap<String, (Vec<Type>, Option<Type>)>,
+    ) {
+        self.float_collector
+            .set_global_function_signatures(sigs.clone());
+        self.int_collector
+            .set_global_function_signatures(sigs.clone());
+    }
+
+    pub fn set_global_struct_field_types(
+        &mut self,
+        fields: &HashMap<String, HashMap<String, Type>>,
+    ) {
+        self.float_collector.set_global_struct_field_types(fields);
+        self.int_collector.set_global_struct_field_types(fields);
+    }
+
+    pub fn set_current_file_module_path(&mut self, path: Vec<String>) {
+        self.float_collector
+            .set_current_file_module_path(path.clone());
+        self.int_collector.set_current_file_module_path(path);
+    }
+
+    pub fn set_struct_defining_module_paths(
+        &mut self,
+        paths: HashMap<String, Vec<Vec<String>>>,
+    ) {
+        self.float_collector
+            .set_struct_defining_module_paths(paths.clone());
+        self.int_collector
+            .set_struct_defining_module_paths(paths);
+    }
+
+    pub fn set_module_re_exports(
+        &mut self,
+        re_exports: HashMap<String, HashMap<String, String>>,
+    ) {
+        self.float_collector
+            .set_module_re_exports(re_exports.clone());
+        self.int_collector.set_module_re_exports(re_exports);
+    }
+
+    pub fn set_external_crate_metadata_paths(
+        &mut self,
+        paths: &HashMap<String, PathBuf>,
+    ) {
+        self.float_collector
+            .set_external_crate_metadata_paths(paths);
+    }
+
+    pub fn reset_imported_type_registry(&mut self) {
+        self.float_collector.reset_imported_type_registry();
+        self.int_collector.reset_imported_type_registry();
+    }
+
+    // --- Core inference pipeline ---
+
+    /// Register types, signatures, and imports from the program.
+    pub fn prepare_program<'ast>(&mut self, program: &Program<'ast>) {
+        self.float_collector.prepare_program(program);
+        self.int_collector.prepare_program(program);
+    }
+
+    /// Walk the AST and collect constraints (both float and int).
+    pub fn collect_program_constraints<'ast>(&mut self, program: &Program<'ast>) {
+        self.float_collector.collect_program_constraints(program);
+        self.int_collector.collect_program_constraints(program);
+    }
+
+    /// Solve: run each domain's solver independently.
+    ///
+    /// Float and int constraints are solved separately because the same
+    /// expression can legitimately be typed in both domains (e.g. `count: i32`
+    /// is I32 in the int domain and may appear in a float context like
+    /// `speed + count as f32`). Merging them into one solver causes false
+    /// conflicts.
+    pub fn finish_solve(&mut self) {
+        self.float_collector.finish_solve();
+        self.int_collector.finish_solve();
+
+        for err in &self.float_collector.errors {
+            self.errors.push(err.clone());
+        }
+        for err in &self.int_collector.errors {
+            self.errors.push(err.clone());
+        }
+
+        self.solved = true;
+    }
+
+    /// Single-file convenience: prepare + collect + solve.
+    pub fn infer_program<'ast>(&mut self, program: &Program<'ast>) {
+        self.reset_imported_type_registry();
+        self.prepare_program(program);
+        self.collect_program_constraints(program);
+        self.finish_solve();
+    }
+
+    /// Merge parallel collection results (for library multipass).
+    pub fn merge_parallel_state(&mut self, other: Self) {
+        self.float_collector
+            .merge_parallel_state(other.float_collector);
+        self.int_collector
+            .merge_parallel_state(other.int_collector);
+    }
+
+    // --- Codegen-facing lookup ---
+
+    /// Look up the inferred float type for an expression.
+    pub fn get_float_type(&self, expr: &Expression) -> FloatType {
+        self.float_collector.get_float_type(expr)
+    }
+
+    /// Look up the inferred integer type for an expression.
+    pub fn get_int_type(&self, expr: &Expression) -> IntType {
+        self.int_collector.get_int_type(expr)
+    }
+
+    /// Export inferred variable types for IDE/MCP consumers.
+    pub fn export_var_types(&self) -> HashMap<String, String> {
+        self.int_collector.export_var_types()
+    }
 }
 
 #[cfg(test)]
@@ -130,84 +207,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_round_trip_preserves_types() {
-        let mut float_inf = FloatInference::new();
-        let f32_id = ExprId {
-            seq_id: 1,
-            file_id: 0,
-            line: 10,
-            col: 5,
-        };
-        float_inf.inferred_types.insert(f32_id, FloatType::F32);
-
-        let mut int_inf = IntInference::new();
-        let i64_id = ExprId {
-            seq_id: 2,
-            file_id: 0,
-            line: 20,
-            col: 3,
-        };
-        int_inf.inferred_types.insert(i64_id, IntType::I64);
-
-        let result = unify_numeric_inference(&mut float_inf, &mut int_inf);
-
-        assert!(result.errors.is_empty(), "Should have no errors");
-        assert_eq!(float_inf.inferred_types[&f32_id], FloatType::F32);
-        assert_eq!(int_inf.inferred_types[&i64_id], IntType::I64);
+    fn test_unified_inference_basic() {
+        let unified = UnifiedNumericInference::new();
+        assert!(unified.errors.is_empty());
+        assert!(!unified.solved);
     }
 
     #[test]
-    fn test_unknown_types_not_overwritten() {
-        let mut float_inf = FloatInference::new();
-        let unk_id = ExprId {
-            seq_id: 3,
-            file_id: 0,
-            line: 30,
-            col: 1,
-        };
-        float_inf
-            .inferred_types
-            .insert(unk_id, FloatType::Unknown);
+    fn test_infer_program_single_file() {
+        let source = "pub fn add(a: f32, b: f32) -> f32 {\n    a + b\n}\n";
+        let mut lexer = crate::lexer::Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser =
+            crate::parser::Parser::new_with_source(tokens, "test.wj".to_string(), source.to_string());
+        let program = parser.parse().expect("parse");
 
-        let mut int_inf = IntInference::new();
+        let mut unified = UnifiedNumericInference::new();
+        unified.infer_program(&program);
 
-        let result = unify_numeric_inference(&mut float_inf, &mut int_inf);
-
-        assert!(result.errors.is_empty());
-        assert_eq!(
-            float_inf.inferred_types.get(&unk_id),
-            Some(&FloatType::Unknown),
-            "Unknown should not be promoted"
+        assert!(
+            unified.errors.is_empty(),
+            "no errors for valid program: {:?}",
+            unified.errors
         );
-    }
-
-    #[test]
-    fn test_unified_resolution_enriches_legacy() {
-        let mut float_inf = FloatInference::new();
-        let mut int_inf = IntInference::new();
-
-        // Simulate: expression 1 is known i64, expression 2 is unknown
-        // The NumericSolver won't propagate between them without MustMatch,
-        // but if we add a MustMatch we can verify the enrichment path.
-        let id1 = ExprId {
-            seq_id: 10,
-            file_id: 0,
-            line: 1,
-            col: 1,
-        };
-        let id2 = ExprId {
-            seq_id: 11,
-            file_id: 0,
-            line: 2,
-            col: 1,
-        };
-        int_inf.inferred_types.insert(id1, IntType::U32);
-
-        let result = unify_numeric_inference(&mut float_inf, &mut int_inf);
-
-        assert!(result.errors.is_empty());
-        assert_eq!(int_inf.inferred_types[&id1], IntType::U32);
-        // id2 was never constrained, so it stays absent
-        assert!(int_inf.inferred_types.get(&id2).is_none());
     }
 }

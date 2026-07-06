@@ -160,7 +160,7 @@ pub struct CodeGenerator<'ast> {
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     pub(crate) generating_assignment_target: bool,
     /// While generating an assignment RHS, use this LHS type for float literal suffixes when
-    /// FloatInference returns Unknown (multipass ExprId mismatch, etc.).
+    /// numeric inference returns Unknown (multipass ExprId mismatch, etc.).
     pub(crate) assignment_float_target_type: Option<Type>,
     /// When a let-binding has an explicit type annotation, this provides the target type
     /// for `.collect()` turbofish generation (e.g., `let x: Vec<char> = ...collect()`).
@@ -249,12 +249,7 @@ pub struct CodeGenerator<'ast> {
     /// Struct-like enum variants: same key as `enum_variant_types`, preserves field names for
     /// `infer_match_bound_types` when matching on `&vec[i]` (Rust binds `&T` per field).
     pub(crate) enum_variant_struct_fields: std::collections::HashMap<String, Vec<(String, Type)>>,
-    // EXPRESSION-LEVEL FLOAT TYPE INFERENCE: Results from constraint-based type inference
-    // Maps expression locations to inferred float types (f32 vs f64)
-    // Enables accurate float literal suffix generation without mixing errors
-    pub(crate) float_inference: Option<std::sync::Arc<crate::type_inference::FloatInference>>,
-    // Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
-    pub(crate) int_inference: Option<std::sync::Arc<crate::type_inference::IntInference>>,
+    pub(crate) numeric_inference: Option<std::sync::Arc<crate::ir::numeric_bridge::UnifiedNumericInference>>,
     /// Full-crate converged registry for multipass library codegen (avoids cloning into every file).
     pub(crate) global_signature_registry: Option<std::sync::Arc<SignatureRegistry>>,
     /// Library `.wj` root (multipass) for resolving submodule paths in auto-imports.
@@ -441,8 +436,7 @@ impl<'ast> CodeGenerator<'ast> {
             in_unsafe_block: false,
             current_struct_literal_name: None,
             current_struct_field_name: None,
-            float_inference: None,
-            int_inference: None,
+            numeric_inference: None,
             method_param_ownership: std::collections::HashMap::new(),
             method_signatures_by_type: std::collections::HashMap::new(),
             stdlib_method_signatures:
@@ -699,30 +693,20 @@ impl<'ast> CodeGenerator<'ast> {
         self.inferred_bounds = bounds;
     }
 
-    /// Set expression-level float type inference results
-    /// Enables accurate f32/f64 suffix generation based on constraint solving
-    pub fn set_float_inference(&mut self, inference: crate::type_inference::FloatInference) {
-        self.float_inference = Some(std::sync::Arc::new(inference));
-    }
-
-    /// Share one global float inference across many library codegen passes (avoids cloning 668-file state).
-    pub fn set_shared_float_inference(
+    /// Set unified numeric inference for expression-level float/int type resolution.
+    pub fn set_numeric_inference(
         &mut self,
-        inference: std::sync::Arc<crate::type_inference::FloatInference>,
+        inference: crate::ir::numeric_bridge::UnifiedNumericInference,
     ) {
-        self.float_inference = Some(inference);
+        self.numeric_inference = Some(std::sync::Arc::new(inference));
     }
 
-    /// Enables accurate integer literal suffix generation (i32, i64, u32, etc.)
-    pub fn set_int_inference(&mut self, inference: crate::type_inference::IntInference) {
-        self.int_inference = Some(std::sync::Arc::new(inference));
-    }
-
-    pub fn set_shared_int_inference(
+    /// Share one global unified numeric inference across library codegen passes.
+    pub fn set_shared_numeric_inference(
         &mut self,
-        inference: std::sync::Arc<crate::type_inference::IntInference>,
+        inference: std::sync::Arc<crate::ir::numeric_bridge::UnifiedNumericInference>,
     ) {
-        self.int_inference = Some(inference);
+        self.numeric_inference = Some(inference);
     }
 
     /// Attach the converged crate-wide registry for lookup fallback (library multipass codegen).

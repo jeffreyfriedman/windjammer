@@ -3,7 +3,7 @@
 use crate::analyzer::{Analyzer, OwnershipMode, SignatureRegistry};
 use crate::linter;
 use crate::parser::ast::core::Item;
-use crate::type_inference::{FloatInference, IntInference};
+// Legacy float/int inference replaced by UnifiedNumericInference
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -178,31 +178,17 @@ pub fn analyze_source(source: &str, options: IdeAnalysisOptions) -> IdeAnalysisR
         }
     }
 
-    let mut float_inference = FloatInference::new();
-    float_inference.infer_program(&program);
-    for err in &float_inference.errors {
+    let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+    numeric_inference.infer_program(&program);
+    for err in &numeric_inference.errors {
         diagnostics.push(IdeDiagnostic {
-            message: format!("Float inference: {}", err),
+            message: format!("Numeric inference: {}", err),
             severity: DiagnosticSeverity::Error,
             line: None,
         });
     }
 
-    let mut int_inference = IntInference::new();
-    int_inference.infer_program(&program);
-    for err in &int_inference.errors {
-        diagnostics.push(IdeDiagnostic {
-            message: format!("Int inference: {}", err),
-            severity: DiagnosticSeverity::Error,
-            line: None,
-        });
-    }
-
-    // Unified numeric resolution
-    let _numeric_result =
-        crate::ir::numeric_bridge::unify_numeric_inference(&mut float_inference, &mut int_inference);
-
-    let mut inferred_types = int_inference.export_var_types();
+    let mut inferred_types = numeric_inference.export_var_types();
     for item in &program.items {
         if let Item::Function { decl, .. } = item {
             if let Some(ret) = &decl.return_type {

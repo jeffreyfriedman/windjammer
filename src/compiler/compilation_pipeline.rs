@@ -8,7 +8,7 @@ use crate::metadata::{
 };
 use crate::parser::ast::core::Item;
 use crate::parser::ast::types::Type;
-use crate::type_inference::{FloatInference, IntInference};
+// Legacy float/int inference replaced by UnifiedNumericInference
 use crate::CompilationTarget;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
@@ -201,21 +201,12 @@ pub fn build_project_ext(
         analyzer
             .register_trait_methods_in_registry(&analyzer.analyzed_trait_methods, &mut registry);
 
-        let mut float_inference = FloatInference::new();
+        let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
         if !external_paths.is_empty() {
-            float_inference.set_external_crate_metadata_paths(&external_paths);
+            numeric_inference.set_external_crate_metadata_paths(&external_paths);
         }
-        float_inference.infer_program(&program);
-        super::bail_on_inference_errors(&float_inference.errors, "Float", Some(file))?;
-
-        let mut int_inference = IntInference::new();
-        int_inference.infer_program(&program);
-        super::bail_on_inference_errors(&int_inference.errors, "Int", Some(file))?;
-
-        // Unified numeric resolution: feeds legacy results through NumericSolver
-        // for cross-type constraint propagation (e.g., HashMap<u32, String> generics)
-        let _numeric_result =
-            crate::ir::numeric_bridge::unify_numeric_inference(&mut float_inference, &mut int_inference);
+        numeric_inference.infer_program(&program);
+        super::bail_on_inference_errors(&numeric_inference.errors, "Numeric", Some(file))?;
 
         let cross_crate_field_types =
             crate::metadata::load_merged_external_struct_fields(&external_paths, None);
@@ -229,8 +220,7 @@ pub fn build_project_ext(
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
         codegen.set_copy_types_registry(copy_registry);
         codegen.set_explicit_copy_types_registry(explicit_copy);
-        codegen.set_float_inference(float_inference);
-        codegen.set_int_inference(int_inference);
+        codegen.set_numeric_inference(numeric_inference);
         super::apply_inferred_bounds_to_codegen(&mut codegen, &program);
         if !cross_crate_field_types.is_empty() {
             codegen.set_global_struct_field_types(cross_crate_field_types);

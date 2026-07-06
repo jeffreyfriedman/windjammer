@@ -172,31 +172,19 @@ impl CodegenBackend for RustBackend {
             }
         }
 
-        let mut float_inference = crate::type_inference::FloatInference::new();
-        float_inference.infer_program(program);
-        let mut int_inference = crate::type_inference::IntInference::new();
-        int_inference.infer_program(program);
-        let inference_ok = float_inference.errors.is_empty() && int_inference.errors.is_empty();
+        let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+        numeric_inference.infer_program(program);
+        let inference_ok = numeric_inference.errors.is_empty();
         if !inference_ok {
-            for e in &float_inference.errors {
-                eprintln!("Float inference error (RustBackend): {}", e);
-            }
-            for e in &int_inference.errors {
-                eprintln!("Int inference error (RustBackend): {}", e);
+            for e in &numeric_inference.errors {
+                eprintln!("Numeric inference error (RustBackend): {}", e);
             }
         }
-
-        // Unified numeric resolution
-        let _numeric_result = crate::ir::numeric_bridge::unify_numeric_inference(
-            &mut float_inference,
-            &mut int_inference,
-        );
 
         let mut generator = crate::codegen::CodeGenerator::new(signatures, compilation_target);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         if inference_ok {
-            generator.set_float_inference(float_inference);
-            generator.set_int_inference(int_inference);
+            generator.set_numeric_inference(numeric_inference);
         }
 
         // Pass analyzed functions so codegen has ownership info

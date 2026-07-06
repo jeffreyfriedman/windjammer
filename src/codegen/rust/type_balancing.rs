@@ -35,22 +35,24 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         );
-        if let Some(fi) = &self.float_inference {
-            match fi.get_float_type(expr) {
+        {
+            let ft = if let Some(ni) = &self.numeric_inference {
+                ni.get_float_type(expr)
+            } else {
+                if is_float_literal {
+                    return None;
+                }
+                FloatType::Unknown
+            };
+            match ft {
                 FloatType::F32 => return Some(FloatType::F32),
                 FloatType::F64 => return Some(FloatType::F64),
                 FloatType::Unknown => {
-                    // `infer_expression_type` maps float literals to `Type::Float`, which we lower to
-                    // Rust `f64` in signatures — but literal *codegen* often emits `_f32`. Treating
-                    // that as F64 produced (F32, F64) and promoted the *left* f32 operand to f64
-                    // (dogfooding: `x.sin() * 57.29_f32` → `sin() as f64 * …`), causing E0308/E0277.
                     if is_float_literal {
                         return None;
                     }
                 }
             }
-        } else if is_float_literal {
-            return None;
         }
         if let Expression::Cast { type_, .. } = expr {
             if let Some(ft) = float_type_utilities::float_type_from_wj_ty(type_) {

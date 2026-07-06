@@ -280,15 +280,15 @@ impl<'ast> CodeGenerator<'ast> {
             if !skip_int_promotion_usize_arith_untyped_lit
                 && !skip_int_promotion_both_inferred_usize
             {
-                if let Some(inference) = &self.int_inference {
+                if self.numeric_inference.is_some() {
                     if is_comparison || is_arithmetic {
                         use crate::type_inference::int_implicit_casts::{
                             get_cast_suffix, is_safe_implicit_cast, promote_types,
                         };
                         use crate::type_inference::IntType;
 
-                        let left_ty = self.int_type_for_mixed_int_codegen(left, inference);
-                        let right_ty = self.int_type_for_mixed_int_codegen(right, inference);
+                        let left_ty = self.int_type_for_mixed_int_codegen(left);
+                        let right_ty = self.int_type_for_mixed_int_codegen(right);
                         if left_ty != IntType::Unknown
                             && right_ty != IntType::Unknown
                             && left_ty != right_ty

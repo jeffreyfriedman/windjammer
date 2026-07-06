@@ -5,7 +5,7 @@ use crate::codegen::rust::CodeGenerator;
 use crate::metadata::{metadata_function_sig_from_analyzer, CrateMetadata};
 use crate::parser::ast::core::Item;
 use crate::parser::Parser;
-use crate::type_inference::{FloatInference, IntInference};
+// Legacy float/int inference replaced by UnifiedNumericInference
 use crate::CompilationTarget;
 use anyhow::Result;
 use rayon::prelude::*;
@@ -629,56 +629,23 @@ pub(crate) fn build_library_multipass(
         }
     }
 
-    // Step 4A: Global float + int inference (parallel per-file collection; passes run concurrently)
+    // Step 4A: Unified numeric inference (parallel per-file constraint collection + single solve)
     let step4a_start = Instant::now();
-    let module_re_exports_for_int = module_re_exports.clone();
-    let (global_float_inference, global_int_inference) = std::thread::scope(|scope| {
-        let float_handle = scope.spawn(|| {
-            run_parallel_float_inference(
-                &sources,
-                &parsed_programs,
-                &src_base,
-                external_paths,
-                &global_float_signatures,
-                &global_struct_fields,
-                &struct_defining_module_paths,
-                module_re_exports,
-            )
-        });
-        let int_handle = scope.spawn(|| {
-            run_parallel_int_inference(
-                &sources,
-                &parsed_programs,
-                &src_base,
-                &global_float_signatures,
-                &global_struct_fields,
-                &struct_defining_module_paths,
-                module_re_exports_for_int,
-            )
-        });
-        (
-            float_handle.join().expect("float inference thread"),
-            int_handle.join().expect("int inference thread"),
-        )
-    });
-
-    super::bail_on_inference_errors(&global_float_inference.errors, "Float", None)?;
-    super::bail_on_inference_errors(&global_int_inference.errors, "Int", None)?;
-    profile_phase("Step 4A: Float/Int inference", step4a_start);
+    let global_numeric_inference = run_parallel_numeric_inference(
+        &sources,
+        &parsed_programs,
+        &src_base,
+        external_paths,
+        &global_float_signatures,
+        &global_struct_fields,
+        &struct_defining_module_paths,
+        module_re_exports,
+    );
+    super::bail_on_inference_errors(&global_numeric_inference.errors, "Numeric", None)?;
+    profile_phase("Step 4A: Unified numeric inference", step4a_start);
     profile_phase("Re-exports + Step 4A total", reexports_start);
 
-    // Unified numeric resolution: cross-type constraint propagation
-    let unified_start = Instant::now();
-    let mut global_float_inference = global_float_inference;
-    let mut global_int_inference = global_int_inference;
-    let _numeric_result = crate::ir::numeric_bridge::unify_numeric_inference(
-        &mut global_float_inference,
-        &mut global_int_inference,
-    );
-    profile_phase("Step 4A+: Unified numeric solver", unified_start);
-
-    let global_float_inference = std::sync::Arc::new(global_float_inference);
-    let global_int_inference = std::sync::Arc::new(global_int_inference);
+    let global_numeric_inference = std::sync::Arc::new(global_numeric_inference);
 
     let dep_resolution_start = Instant::now();
     let type_defining_modules =
@@ -1124,8 +1091,7 @@ pub(crate) fn build_library_multipass(
                 codegen
                     .set_extern_submodule_qualifiers((*extern_submodule_qualifiers_arc).clone());
                 codegen.set_analyzed_trait_methods(analysis.merged_trait_methods.clone());
-                codegen.set_shared_float_inference(std::sync::Arc::clone(&global_float_inference));
-                codegen.set_shared_int_inference(std::sync::Arc::clone(&global_int_inference));
+                codegen.set_shared_numeric_inference(std::sync::Arc::clone(&global_numeric_inference));
                 codegen.set_serde_available(project_has_serde);
 
                 super::apply_inferred_bounds_to_codegen(&mut codegen, program);
@@ -1359,7 +1325,7 @@ fn analyze_file_for_step4b(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_parallel_float_inference(
+fn run_parallel_numeric_inference(
     sources: &[(PathBuf, String)],
     parsed_programs: &[crate::parser::Program<'static>],
     src_base: &Path,
@@ -1371,12 +1337,14 @@ fn run_parallel_float_inference(
     global_struct_fields: &HashMap<String, HashMap<String, crate::parser::Type>>,
     struct_defining_module_paths: &HashMap<String, Vec<Vec<String>>>,
     module_re_exports: HashMap<String, HashMap<String, String>>,
-) -> FloatInference {
-    let mut global = FloatInference::new();
+) -> crate::ir::numeric_bridge::UnifiedNumericInference {
+    use crate::ir::numeric_bridge::UnifiedNumericInference;
+
+    let mut global = UnifiedNumericInference::new();
     if !external_paths.is_empty() {
         global.set_external_crate_metadata_paths(external_paths);
     }
-    global.set_global_function_signatures(global_float_signatures.clone());
+    global.set_global_function_signatures(global_float_signatures);
     global.set_global_struct_field_types(global_struct_fields);
     global.set_struct_defining_module_paths(struct_defining_module_paths.clone());
     global.set_module_re_exports(module_re_exports);
@@ -1390,55 +1358,7 @@ fn run_parallel_float_inference(
     }
 
     let base = global.clone();
-    let partials: Vec<FloatInference> = sources
-        .par_iter()
-        .enumerate()
-        .map(|(i, (file, _source))| {
-            let mut local = base.clone();
-            let file_module =
-                crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
-                    .unwrap_or_default();
-            local.set_current_file_module_path(file_module);
-            local.collect_program_constraints(&parsed_programs[i]);
-            local
-        })
-        .collect();
-
-    for partial in partials {
-        global.merge_parallel_state(partial);
-    }
-    global.finish_solve();
-    global
-}
-
-fn run_parallel_int_inference(
-    sources: &[(PathBuf, String)],
-    parsed_programs: &[crate::parser::Program<'static>],
-    src_base: &Path,
-    global_float_signatures: &HashMap<
-        String,
-        (Vec<crate::parser::Type>, Option<crate::parser::Type>),
-    >,
-    global_struct_fields: &HashMap<String, HashMap<String, crate::parser::Type>>,
-    struct_defining_module_paths: &HashMap<String, Vec<Vec<String>>>,
-    module_re_exports: HashMap<String, HashMap<String, String>>,
-) -> IntInference {
-    let mut global = IntInference::new();
-    global.set_global_function_signatures(global_float_signatures.clone());
-    global.set_global_struct_field_types(global_struct_fields);
-    global.set_struct_defining_module_paths(struct_defining_module_paths.clone());
-    global.set_module_re_exports(module_re_exports);
-    global.reset_imported_type_registry();
-
-    for (i, (file, _source)) in sources.iter().enumerate() {
-        let file_module = crate::analyzer::type_collector::wj_file_to_module_path(src_base, file)
-            .unwrap_or_default();
-        global.set_current_file_module_path(file_module);
-        global.prepare_program(&parsed_programs[i]);
-    }
-
-    let base = global.clone();
-    let partials: Vec<IntInference> = sources
+    let partials: Vec<UnifiedNumericInference> = sources
         .par_iter()
         .enumerate()
         .map(|(i, (file, _source))| {
