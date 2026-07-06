@@ -16,6 +16,8 @@ pub struct SolverResult {
     pub types: Vec<Option<BaseType>>,
     /// Resolved ownership modes for each constraint variable.
     pub ownership: Vec<Option<OwnedType>>,
+    /// Which variables need clone insertion.
+    pub clones: CloneRequirements,
     /// Diagnostics produced during solving.
     pub diagnostics: Vec<SolverDiagnostic>,
 }
@@ -34,6 +36,27 @@ pub enum DiagnosticKind {
     OwnershipConflict,
     EffectViolation,
     TaintViolation,
+}
+
+/// Tracks which variables need clone insertion.
+#[derive(Debug, Default)]
+pub struct CloneRequirements {
+    needs_clone: Vec<bool>,
+}
+
+impl CloneRequirements {
+    fn new(size: u32) -> Self {
+        Self {
+            needs_clone: vec![false; size as usize],
+        }
+    }
+
+    pub fn needs_clone(&self, var: ConstraintVar) -> bool {
+        self.needs_clone
+            .get(var.0 as usize)
+            .copied()
+            .unwrap_or(false)
+    }
 }
 
 /// Union-find data structure for type unification.
@@ -80,6 +103,7 @@ pub struct Solver {
     uf: UnionFind,
     types: Vec<Option<BaseType>>,
     ownership: Vec<Option<OwnedType>>,
+    clones: CloneRequirements,
     diagnostics: Vec<SolverDiagnostic>,
 }
 
@@ -91,6 +115,7 @@ impl Solver {
             uf: UnionFind::new(n),
             types: vec![None; n as usize],
             ownership: vec![None; n as usize],
+            clones: CloneRequirements::new(n),
             diagnostics: Vec::new(),
         }
     }
@@ -103,6 +128,7 @@ impl Solver {
         SolverResult {
             types: self.types,
             ownership: self.ownership,
+            clones: self.clones,
             diagnostics: self.diagnostics,
         }
     }
@@ -113,7 +139,6 @@ impl Solver {
                 let ra = self.uf.find(a.0);
                 let rb = self.uf.find(b.0);
                 if ra != rb {
-                    // Merge type info before union
                     let type_a = self.types[ra as usize].clone();
                     let type_b = self.types[rb as usize].clone();
                     self.uf.union(ra, rb);
@@ -153,6 +178,45 @@ impl Solver {
                 }
             }
 
+            Constraint::IsNumeric(var) => {
+                let root = self.uf.find(var.0);
+                if let Some(ref ty) = self.types[root as usize] {
+                    if !is_numeric_type(ty) {
+                        self.diagnostics.push(SolverDiagnostic {
+                            kind: DiagnosticKind::TypeError,
+                            message: format!("expected numeric type, found {:?}", ty),
+                            vars: vec![*var],
+                        });
+                    }
+                }
+            }
+
+            Constraint::IsInteger(var) => {
+                let root = self.uf.find(var.0);
+                if let Some(ref ty) = self.types[root as usize] {
+                    if !is_integer_type(ty) {
+                        self.diagnostics.push(SolverDiagnostic {
+                            kind: DiagnosticKind::TypeError,
+                            message: format!("expected integer type, found {:?}", ty),
+                            vars: vec![*var],
+                        });
+                    }
+                }
+            }
+
+            Constraint::IsFloat(var) => {
+                let root = self.uf.find(var.0);
+                if let Some(ref ty) = self.types[root as usize] {
+                    if !is_float_type(ty) {
+                        self.diagnostics.push(SolverDiagnostic {
+                            kind: DiagnosticKind::TypeError,
+                            message: format!("expected float type, found {:?}", ty),
+                            vars: vec![*var],
+                        });
+                    }
+                }
+            }
+
             Constraint::OwnershipIs(var, ownership) => {
                 let root = self.uf.find(var.0);
                 match &self.ownership[root as usize] {
@@ -172,21 +236,61 @@ impl Solver {
                 }
             }
 
-            // Phase 2+ constraints — currently no-ops
-            Constraint::IsNumeric(_)
-            | Constraint::IsInteger(_)
-            | Constraint::IsFloat(_)
-            | Constraint::SharesRegion(_, _)
-            | Constraint::NeedsClone(_)
-            | Constraint::HasEffects(_, _)
+            Constraint::SharesRegion(a, b) => {
+                let ra = self.uf.find(a.0);
+                let rb = self.uf.find(b.0);
+                let oa = self.ownership[ra as usize].clone();
+                let ob = self.ownership[rb as usize].clone();
+                if let (Some(OwnedType::MutRef(_)), Some(OwnedType::MutRef(_))) = (&oa, &ob) {
+                    self.diagnostics.push(SolverDiagnostic {
+                        kind: DiagnosticKind::OwnershipConflict,
+                        message: "two mutable borrows share a region".to_string(),
+                        vars: vec![*a, *b],
+                    });
+                }
+            }
+
+            Constraint::NeedsClone(var) => {
+                let root = self.uf.find(var.0);
+                if (root as usize) < self.clones.needs_clone.len() {
+                    self.clones.needs_clone[root as usize] = true;
+                }
+            }
+
+            // Effect and taint constraints delegated to specialized solvers
+            Constraint::HasEffects(_, _)
             | Constraint::EffectsUnion(_, _)
             | Constraint::TaintIs(_, _)
             | Constraint::TaintPropagates(_, _)
             | Constraint::Sanitizes(_) => {
-                // Will be implemented in subsequent phases
+                // Handled by EffectSolver/TaintSolver in WP6
             }
         }
     }
+}
+
+fn is_numeric_type(ty: &BaseType) -> bool {
+    is_integer_type(ty) || is_float_type(ty)
+}
+
+fn is_integer_type(ty: &BaseType) -> bool {
+    matches!(
+        ty,
+        BaseType::I8
+            | BaseType::I16
+            | BaseType::I32
+            | BaseType::I64
+            | BaseType::I128
+            | BaseType::U8
+            | BaseType::U16
+            | BaseType::U32
+            | BaseType::U64
+            | BaseType::U128
+    )
+}
+
+fn is_float_type(ty: &BaseType) -> bool {
+    matches!(ty, BaseType::F32 | BaseType::F64)
 }
 
 #[cfg(test)]

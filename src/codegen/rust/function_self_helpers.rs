@@ -367,7 +367,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(reg_own) = registry_ownership {
                             reg_own
                         } else if let Some(body_ownership) =
-                            analyzed.inferred_ownership.get("self").copied()
+                            self.get_param_ownership("self", analyzed)
                         {
                             body_ownership
                         } else {
@@ -381,7 +381,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
             }
         }
-        analyzed.inferred_ownership.get("self").copied()
+        self.get_param_ownership("self", analyzed)
     }
 
     /// Look up a trait method's self-ownership in the signature registry.
@@ -452,7 +452,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Check if there's a self parameter (explicit or inferred)
         let has_self = func.parameters.iter().any(|p| p.name == "self")
-            || analyzed.inferred_ownership.contains_key("self");
+            || self.has_param_ownership("self", analyzed);
 
         if has_self {
             // &self/&mut self methods: Rust elision rule 2 handles this
@@ -491,7 +491,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Check analyzer-inferred ownership
-                if let Some(ownership) = analyzed.inferred_ownership.get(&param.name) {
+                if let Some(ownership) = self.get_param_ownership(&param.name, analyzed) {
                     matches!(
                         ownership,
                         crate::analyzer::OwnershipMode::Borrowed

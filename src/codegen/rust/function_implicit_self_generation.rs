@@ -20,7 +20,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // THE WINDJAMMER WAY: Auto-Self Inference
         // Check if analyzer inferred a self parameter (even if not in AST)
-        let has_inferred_self = analyzed.inferred_ownership.contains_key("self");
+        let has_inferred_self = self.has_param_ownership("self", analyzed);
 
         // Check if this is a constructor (associated function returning the struct type)
         // A constructor returns the struct being implemented, e.g., fn new() -> Tilemap

@@ -40,9 +40,11 @@ pub enum TaintConstraint {
     RequiresClean { var: TaintVar, sink: String },
 }
 
-/// Source of tainted data.
+/// Source of tainted data (canonical definition for the IR).
+/// Used by both `SafetyType.taint` and `TaintSolver`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TaintSourceKind {
+    HttpRequest,
     HttpRequestBody,
     HttpRequestQuery,
     HttpRequestHeader,
@@ -53,19 +55,27 @@ pub enum TaintSourceKind {
     Custom(String),
 }
 
-/// Taint status of a variable.
+/// Where tainted data originated, with location info.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaintSource {
+    pub kind: TaintSourceKind,
+    pub location: String,
+}
+
+/// Taint status of a value (canonical definition for the IR).
+/// Used by both `SafetyType.taint` and `TaintSolver`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaintStatus {
     /// Definitely clean (never touched tainted data).
     Clean,
     /// Tainted — came from an untrusted source.
-    Tainted(TaintSourceKind),
+    Tainted(TaintSource),
     /// Was tainted but passed through a sanitizer.
     Sanitized {
         original_source: TaintSourceKind,
         sanitizer: String,
     },
-    /// Unknown — not yet determined.
+    /// Unknown — not yet determined by the solver.
     Unknown,
 }
 
@@ -100,7 +110,13 @@ impl TaintSolver {
         // Phase 1: Mark all sources as tainted.
         for constraint in &self.constraints {
             if let TaintConstraint::IsSource { var, source_kind } = constraint {
-                status.insert(var.clone(), TaintStatus::Tainted(source_kind.clone()));
+                status.insert(
+                    var.clone(),
+                    TaintStatus::Tainted(TaintSource {
+                        kind: source_kind.clone(),
+                        location: String::new(),
+                    }),
+                );
             }
         }
 
@@ -120,7 +136,7 @@ impl TaintSolver {
                         let to_status = status.get(to).cloned().unwrap_or(TaintStatus::Unknown);
 
                         if let (
-                            TaintStatus::Tainted(src),
+                            TaintStatus::Tainted(ref src),
                             TaintStatus::Unknown | TaintStatus::Clean,
                         ) = (&from_status, &to_status)
                         {
@@ -137,9 +153,9 @@ impl TaintSolver {
                         let input_status =
                             status.get(input).cloned().unwrap_or(TaintStatus::Unknown);
 
-                        if let TaintStatus::Tainted(src) = &input_status {
+                        if let TaintStatus::Tainted(ref src) = &input_status {
                             let sanitized = TaintStatus::Sanitized {
-                                original_source: src.clone(),
+                                original_source: src.kind.clone(),
                                 sanitizer: sanitizer.clone(),
                             };
                             let current =
@@ -166,10 +182,10 @@ impl TaintSolver {
                             kind: TaintErrorKind::TaintedSink,
                             var: var.clone(),
                             sink: sink.clone(),
-                            source: Some(source.clone()),
+                            source: Some(source.kind.clone()),
                             message: format!(
                                 "tainted data from {:?} reaches sink '{}' without sanitization",
-                                source, sink
+                                source.kind, sink
                             ),
                         });
                     }
@@ -259,10 +275,10 @@ mod tests {
         });
 
         let result = solver.solve();
-        assert_eq!(
+        assert!(matches!(
             result.status.get(&TaintVar::new("query_param")),
-            Some(&TaintStatus::Tainted(TaintSourceKind::HttpRequestBody))
-        );
+            Some(TaintStatus::Tainted(src)) if src.kind == TaintSourceKind::HttpRequestBody
+        ));
     }
 
     #[test]

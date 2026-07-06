@@ -122,6 +122,15 @@ pub enum Commands {
         /// External crate metadata for cross-crate type inference (NAME=PATH, repeatable)
         #[arg(long, value_name = "NAME=PATH")]
         metadata: Vec<String>,
+
+        /// Output diagnostics as machine-readable JSON (for agent/IDE consumption)
+        #[arg(long)]
+        json: bool,
+
+        /// Run IR shadow validation (compare solver results against legacy analyzer).
+        /// Discrepancies are reported as errors instead of warnings (CI gate).
+        #[arg(long)]
+        ir_shadow_validate: bool,
     },
 
     /// Compile and run a Windjammer file
@@ -197,7 +206,15 @@ pub enum Commands {
     },
 
     /// Type check without building
-    Check,
+    Check {
+        /// Path to .wj file or directory (default: current directory)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Output diagnostics as machine-readable JSON (for agent/IDE consumption)
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Add a dependency to wj.toml
     Add {
