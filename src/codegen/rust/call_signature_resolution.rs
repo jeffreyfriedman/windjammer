@@ -1481,7 +1481,6 @@ impl BuildFingerprint {
         use crate::codegen::rust::CodeGenerator;
         use crate::lexer::Lexer;
         use crate::parser::Parser;
-        use crate::type_inference::{FloatInference, IntInference};
         use crate::CompilationTarget;
 
         let source = r#"
@@ -1526,14 +1525,11 @@ impl BuildFingerprint {
             .analyze_program_with_global_signatures(&program, &global_signatures)
             .expect("pass2");
 
-        let mut float_inference = FloatInference::new();
-        float_inference.infer_program(&program);
-        let mut int_inference = IntInference::new();
-        int_inference.infer_program(&program);
+        let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+        numeric_inference.infer_program(&program);
 
         let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
-        codegen.set_float_inference(float_inference);
-        codegen.set_int_inference(int_inference);
+        codegen.set_numeric_inference(numeric_inference);
         crate::compiler::apply_inferred_bounds_to_codegen(&mut codegen, &program);
 
         let rs = codegen.generate_program(&program, &analyzed);

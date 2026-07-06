@@ -84,7 +84,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => self.qualify_external_path_identifier(name),
             Expression::Unary { op, operand, .. } => {
                 use crate::parser::Literal;
-                // IntInference attaches constraints to the Unary for `-n` struct fields (score: -10).
+                // Numeric inference attaches constraints to the Unary for `-n` struct fields (score: -10).
                 // Inner Literal would otherwise miss lookup and default to i32.
                 if matches!(op, UnaryOp::Neg) {
                     if let Expression::Literal {
@@ -726,9 +726,7 @@ impl<'ast> CodeGenerator<'ast> {
         lit: &Literal,
         expr: &Expression<'ast>,
     ) -> String {
-        // WINDJAMMER PHILOSOPHY: Expression-level type inference for literals
-        // Int: Check IntInference first (i32, i64, u32, etc.)
-        // Float: Check FloatInference (f32, f64)
+        // Expression-level type inference for numeric literals via UnifiedNumericInference.
         match lit {
             Literal::String(_) => {
                 let base = crate::codegen::rust::literals::generate_literal(lit);
@@ -742,13 +740,15 @@ impl<'ast> CodeGenerator<'ast> {
                 format!("{}_{}", i, suffix)
             }
             Literal::Int(i) => {
-                if let Some(inference) = &self.int_inference {
-                    use crate::type_inference::IntType;
-                    let inferred = inference.get_int_type(expr);
-                    if inferred != IntType::Unknown {
-                        let suffix = inferred.rust_suffix();
-                        return format!("{}_{}", i, suffix);
-                    }
+                use crate::type_inference::IntType;
+                let inferred = if let Some(ni) = &self.numeric_inference {
+                    ni.get_int_type(expr)
+                } else {
+                    IntType::Unknown
+                };
+                if inferred != IntType::Unknown {
+                    let suffix = inferred.rust_suffix();
+                    return format!("{}_{}", i, suffix);
                 }
                 crate::codegen::rust::literals::generate_literal(lit)
             }
@@ -778,9 +778,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Priority 1: Use inference engine results (most accurate)
-                if let Some(inference) = &self.float_inference {
+                {
                     use crate::type_inference::FloatType;
-                    let inferred = inference.get_float_type(expr);
+                    let inferred = if let Some(ni) = &self.numeric_inference {
+                        ni.get_float_type(expr)
+                    } else {
+                        FloatType::Unknown
+                    };
 
                     let suffix: Option<&str> = match inferred {
                         FloatType::F32 => Some("f32"),
