@@ -7,13 +7,6 @@ use std::path::{Path, PathBuf};
 
 /// Map `(parent_module, symbol)` → child module for symbols defined under `parent/child/*.wj`.
 /// Fixes `parent::symbol` call sites when Rust places the item in `parent::child`.
-pub(crate) fn build_extern_submodule_qualifier_map(
-    sources: &[(PathBuf, String)],
-    base: &Path,
-) -> Result<HashMap<(String, String), String>> {
-    build_extern_submodule_qualifier_map_with_programs(sources, base, None)
-}
-
 pub(crate) fn build_extern_submodule_qualifier_map_with_programs(
     sources: &[(PathBuf, String)],
     base: &Path,
@@ -111,13 +104,6 @@ pub(crate) fn build_extern_submodule_qualifier_map_with_programs(
 }
 
 /// Map struct/enum/trait/type-alias names to Rust module paths (from library root) for auto-import resolution.
-pub(crate) fn build_type_defining_modules_for_library(
-    sources: &[(PathBuf, String)],
-    base: &Path,
-) -> Result<HashMap<String, Vec<Vec<String>>>> {
-    build_type_defining_modules_for_library_with_programs(sources, base, None)
-}
-
 pub(crate) fn build_type_defining_modules_for_library_with_programs(
     sources: &[(PathBuf, String)],
     base: &Path,
