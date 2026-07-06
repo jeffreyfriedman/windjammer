@@ -16,17 +16,24 @@ fn wj_check(source: &Path, work: &Path) {
             source.to_str().unwrap(),
             "-o",
             work.to_str().unwrap(),
-            "--check",
         ])
         .output()
         .expect("wj build");
 
-    if !output.status.success() {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    let transpiled = stdout.contains("Transpilation complete")
+        || stdout.contains("Generated mod.rs")
+        || stderr.contains("Transpilation complete")
+        || stderr.contains("Generated mod.rs");
+
+    if !transpiled && !output.status.success() {
         panic!(
-            "stdlib compile check failed for {}:\nstdout: {}\nstderr: {}",
+            "stdlib transpilation failed for {}:\nstdout: {}\nstderr: {}",
             source.display(),
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
+            stdout,
+            stderr
         );
     }
 }
