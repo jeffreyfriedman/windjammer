@@ -1,5 +1,5 @@
-# Rust artifacts
-/target
+# Rust artifacts (all target/ dirs, not just root)
+**/target/
 **/*.rs.bk
 *.pdb
 
@@ -15,8 +15,8 @@
 # Integration test scratch output (regenerated at test runtime)
 tests/generated/
 
-# Windjammer artifacts
-/build
+# Windjammer artifacts (all build/ dirs, not just root)
+**/build/
 /test_output_*
 .wj-cache/
 .wj-compiler-stamp
