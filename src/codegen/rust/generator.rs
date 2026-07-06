@@ -9,6 +9,17 @@ use std::cell::Cell;
 
 pub use crate::codegen::rust::method_signature::MethodSignature;
 
+/// Convert an IR `OwnedType` to the legacy `OwnershipMode` used by codegen.
+pub(crate) fn owned_type_to_ownership_mode(owned: &crate::ir::safety_type::OwnedType) -> OwnershipMode {
+    match owned {
+        crate::ir::safety_type::OwnedType::Owned => OwnershipMode::Owned,
+        crate::ir::safety_type::OwnedType::Ref(_) => OwnershipMode::Borrowed,
+        crate::ir::safety_type::OwnedType::MutRef(_) => OwnershipMode::MutBorrowed,
+        crate::ir::safety_type::OwnedType::Copy => OwnershipMode::Owned,
+        crate::ir::safety_type::OwnedType::Inferred => OwnershipMode::Owned,
+    }
+}
+
 pub struct CodeGenerator<'ast> {
     pub(crate) indent_level: usize,
     pub(crate) signature_registry: SignatureRegistry,
@@ -284,6 +295,50 @@ pub struct CodeGenerator<'ast> {
     /// before writing metadata so cross-file builds see correct ownership.
     /// Key: qualified method name (e.g., "UnifiedRenderer::render_mesh").
     pub(crate) self_receiver_upgrades: std::collections::HashMap<String, OwnershipMode>,
+    /// IR cutover configuration: which categories read from IR SafetyType instead of AnalyzedFunction.
+    /// When all flags are true, the IR pipeline is the sole source of truth.
+    pub(crate) ir_cutover: IrCutoverConfig,
+    /// Per-function IR data, populated when the IR pipeline runs alongside legacy codegen.
+    /// When set and a cutover flag is enabled, the corresponding codegen reads from here.
+    pub(crate) current_ir_function: Option<crate::ir::IrFunction>,
+    /// Full IR module (all functions), set when cutover is active. Functions are looked up
+    /// by name when codegen begins processing each AnalyzedFunction.
+    pub(crate) ir_module_functions: Vec<crate::ir::IrFunction>,
+}
+
+/// Configuration for incremental IR cutover.
+/// Each flag controls whether a specific category of codegen decisions reads from
+/// the IR `SafetyType` (true) or the legacy `AnalyzedFunction` fields (false).
+#[derive(Debug, Clone, Default)]
+pub struct IrCutoverConfig {
+    /// Read parameter ownership from `IrFunction.param_types[name].ownership`
+    pub ownership: bool,
+    /// Read clone requirements from `IrFunction.optimizations.clone_annotations`
+    pub clones: bool,
+    /// Read parameter types from `IrFunction.param_types[name].base`
+    pub param_types: bool,
+    /// Read str_ref optimization from `IrFunction.str_ref_params`
+    pub str_ref: bool,
+}
+
+impl IrCutoverConfig {
+    pub fn all_enabled(&self) -> bool {
+        self.ownership && self.clones && self.param_types && self.str_ref
+    }
+
+    pub fn all_disabled(&self) -> bool {
+        !self.ownership && !self.clones && !self.param_types && !self.str_ref
+    }
+
+    /// Load from environment variables (for gradual rollout).
+    pub fn from_env() -> Self {
+        Self {
+            ownership: std::env::var("WJ_IR_CUTOVER_OWNERSHIP").is_ok_and(|v| v == "1"),
+            clones: std::env::var("WJ_IR_CUTOVER_CLONES").is_ok_and(|v| v == "1"),
+            param_types: std::env::var("WJ_IR_CUTOVER_PARAM_TYPES").is_ok_and(|v| v == "1"),
+            str_ref: std::env::var("WJ_IR_CUTOVER_STR_REF").is_ok_and(|v| v == "1"),
+        }
+    }
 }
 
 // RECURSION GUARD MACRO: Check depth before entering recursive functions
@@ -454,6 +509,9 @@ impl<'ast> CodeGenerator<'ast> {
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
             self_receiver_upgrades: std::collections::HashMap::new(),
+            ir_cutover: IrCutoverConfig::from_env(),
+            current_ir_function: None,
+            ir_module_functions: Vec::new(),
         }
     }
 
@@ -707,6 +765,112 @@ impl<'ast> CodeGenerator<'ast> {
         inference: std::sync::Arc<crate::ir::numeric_bridge::UnifiedNumericInference>,
     ) {
         self.numeric_inference = Some(inference);
+    }
+
+    /// Backwards-compatible: wrap a FloatInference into UnifiedNumericInference.
+    pub fn set_float_inference(
+        &mut self,
+        float_inf: crate::type_inference::FloatInference,
+    ) {
+        let unified =
+            crate::ir::numeric_bridge::UnifiedNumericInference::from_float_only(float_inf);
+        self.numeric_inference = Some(std::sync::Arc::new(unified));
+    }
+
+    /// Backwards-compatible: wrap an IntInference into UnifiedNumericInference.
+    pub fn set_int_inference(
+        &mut self,
+        int_inf: crate::type_inference::IntInference,
+    ) {
+        let unified =
+            crate::ir::numeric_bridge::UnifiedNumericInference::from_int_only(int_inf);
+        self.numeric_inference = Some(std::sync::Arc::new(unified));
+    }
+
+    /// Set the IR function data for the current function being generated.
+    /// When IR cutover flags are enabled, codegen reads from this instead of AnalyzedFunction.
+    pub fn set_current_ir_function(&mut self, ir_fn: Option<crate::ir::IrFunction>) {
+        self.current_ir_function = ir_fn;
+    }
+
+    /// Set IR cutover configuration explicitly (for testing).
+    pub fn set_ir_cutover_config(&mut self, config: IrCutoverConfig) {
+        self.ir_cutover = config;
+    }
+
+    /// Store an IR module for cutover. The codegen will look up the right IrFunction
+    /// by name when processing each AnalyzedFunction.
+    pub fn set_ir_module(&mut self, module: crate::ir::pipeline::IrModule) {
+        self.ir_module_functions = module.functions;
+    }
+
+    /// Select the IrFunction matching the current function being generated.
+    /// Called at the start of each function's codegen.
+    pub(crate) fn select_ir_function_for(&mut self, func_name: &str) {
+        if self.ir_module_functions.is_empty() {
+            self.current_ir_function = None;
+            return;
+        }
+        self.current_ir_function = self
+            .ir_module_functions
+            .iter()
+            .find(|f| f.name == func_name)
+            .cloned();
+    }
+
+    /// Get parameter ownership, preferring IR data when cutover is enabled.
+    /// Falls back to `AnalyzedFunction.inferred_ownership` when IR data is unavailable
+    /// or the ownership cutover flag is off.
+    pub(crate) fn get_param_ownership<'a>(
+        &self,
+        param_name: &str,
+        analyzed: &'a AnalyzedFunction<'_>,
+    ) -> Option<OwnershipMode> {
+        if self.ir_cutover.ownership {
+            if let Some(ir_fn) = &self.current_ir_function {
+                if let Some(safety_ty) = ir_fn.param_types.get(param_name) {
+                    return Some(owned_type_to_ownership_mode(&safety_ty.ownership));
+                }
+            }
+        }
+        analyzed.inferred_ownership.get(param_name).copied()
+    }
+
+    /// Check if a parameter name has ownership info (in IR or analyzer).
+    pub(crate) fn has_param_ownership(
+        &self,
+        param_name: &str,
+        analyzed: &AnalyzedFunction<'_>,
+    ) -> bool {
+        if self.ir_cutover.ownership {
+            if let Some(ir_fn) = &self.current_ir_function {
+                if ir_fn.param_types.contains_key(param_name) {
+                    return true;
+                }
+            }
+        }
+        analyzed.inferred_ownership.contains_key(param_name)
+    }
+
+    /// Get all param ownership entries, preferring IR when cutover is enabled.
+    pub(crate) fn get_all_param_ownership(
+        &self,
+        analyzed: &AnalyzedFunction<'_>,
+    ) -> Vec<(String, OwnershipMode)> {
+        if self.ir_cutover.ownership {
+            if let Some(ir_fn) = &self.current_ir_function {
+                return ir_fn
+                    .param_types
+                    .iter()
+                    .map(|(name, st)| (name.clone(), owned_type_to_ownership_mode(&st.ownership)))
+                    .collect();
+            }
+        }
+        analyzed
+            .inferred_ownership
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
     }
 
     /// Attach the converged crate-wide registry for lookup fallback (library multipass codegen).
@@ -1528,4 +1692,66 @@ pub(crate) struct ArgGenScope {
     in_call_argument_generation: bool,
     coerce_string_literals_to_owned: bool,
     in_match_arm_needing_string: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::safety_type::{OwnedType, Region};
+
+    #[test]
+    fn test_owned_type_to_ownership_mode_mapping() {
+        assert_eq!(
+            owned_type_to_ownership_mode(&OwnedType::Owned),
+            OwnershipMode::Owned
+        );
+        assert_eq!(
+            owned_type_to_ownership_mode(&OwnedType::Ref(Region::fresh(0))),
+            OwnershipMode::Borrowed
+        );
+        assert_eq!(
+            owned_type_to_ownership_mode(&OwnedType::MutRef(Region::fresh(1))),
+            OwnershipMode::MutBorrowed
+        );
+        assert_eq!(
+            owned_type_to_ownership_mode(&OwnedType::Copy),
+            OwnershipMode::Owned
+        );
+        assert_eq!(
+            owned_type_to_ownership_mode(&OwnedType::Inferred),
+            OwnershipMode::Owned
+        );
+    }
+
+    #[test]
+    fn test_ir_cutover_config_default_all_off() {
+        let config = IrCutoverConfig::default();
+        assert!(!config.ownership);
+        assert!(!config.clones);
+        assert!(!config.param_types);
+        assert!(!config.str_ref);
+        assert!(!config.all_enabled());
+    }
+
+    #[test]
+    fn test_ir_cutover_config_all_enabled() {
+        let config = IrCutoverConfig {
+            ownership: true,
+            clones: true,
+            param_types: true,
+            str_ref: true,
+        };
+        assert!(config.all_enabled());
+    }
+
+    #[test]
+    fn test_ir_cutover_config_partial_not_all() {
+        let config = IrCutoverConfig {
+            ownership: true,
+            clones: false,
+            param_types: true,
+            str_ref: true,
+        };
+        assert!(!config.all_enabled());
+    }
 }

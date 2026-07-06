@@ -15,6 +15,7 @@
 //! and codegen migrates to reading from IR instead of `AnalyzedFunction`.
 
 pub mod annotations;
+pub mod constraint_gen;
 pub mod constraints;
 pub mod effects;
 pub mod execution;
@@ -24,21 +25,23 @@ pub mod numeric_solver;
 pub mod numeric_types;
 pub mod pipeline;
 pub mod safety_type;
+pub mod shadow;
 pub mod solver;
 pub mod taint;
 pub mod target_encodings;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
+pub use constraint_gen::{generate_constraints, generate_module_constraints, FunctionConstraints};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
 pub use execution::{ExecutionConstraint, ExecutionValidator};
-pub use node::{IrFunction, IrNode, IrNodeKind};
+pub use node::{parser_type_to_base_type, IrFunction, IrNode, IrNodeKind};
 pub use numeric_solver::NumericSolver;
 pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
-pub use pipeline::{IrModule, IrPipeline, IrPipelineConfig};
+pub use pipeline::{FileIrModule, IrModule, IrModuleSet, IrPipeline, IrPipelineConfig};
 pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,
-    TaintStatus,
+    TaintSourceKind, TaintStatus,
 };
-pub use solver::Solver;
+pub use solver::{CloneRequirements, Solver, SolverResult};
 pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};

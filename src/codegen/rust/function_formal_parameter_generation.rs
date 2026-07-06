@@ -108,7 +108,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_borrowed_params.remove("self");
                     self.record_self_receiver_upgrade(
                         &func.name,
-                        analyzed.inferred_ownership.get("self").copied(),
+                        self.get_param_ownership("self", analyzed),
                         "&mut self",
                     );
                     return "&mut self".to_string();
@@ -200,7 +200,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Skip in trait impls: trait signature must match exactly.
                         if !self.in_trait_impl {
                             if let Some(OwnershipMode::MutBorrowed) =
-                                analyzed.inferred_ownership.get(&param.name).copied()
+                                self.get_param_ownership(&param.name, analyzed)
                             {
                                 self.inferred_mut_borrowed_params
                                     .insert(param.name.clone());
@@ -375,10 +375,8 @@ impl<'ast> CodeGenerator<'ast> {
                             let registry_ownership = self
                                 .get_signature_with_global(&func.name)
                                 .and_then(|sig| sig.param_ownership.get(param_idx).copied());
-                            let mut ownership_mode = analyzed
-                                .inferred_ownership
-                                .get(&param.name)
-                                .copied()
+                            let mut ownership_mode = self
+                                .get_param_ownership(&param.name, analyzed)
                                 .or(registry_ownership)
                                 .unwrap_or(OwnershipMode::Owned);
 

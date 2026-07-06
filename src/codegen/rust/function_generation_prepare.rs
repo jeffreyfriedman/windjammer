@@ -94,25 +94,35 @@ impl<'ast> CodeGenerator<'ast> {
         // These need `&` auto-inserted to prevent consuming the collection.
         self.precompute_for_loop_borrows(&func.body);
 
-        // Track parameters inferred as borrowed/mut-borrowed for codegen decisions
+        // Track parameters inferred as borrowed/mut-borrowed for codegen decisions.
+        // Uses IR-backed helpers when cutover is enabled, falling back to AnalyzedFunction.
         self.inferred_borrowed_params.clear();
         self.inferred_mut_borrowed_params.clear();
         self.str_ref_optimized_params.clear();
-        for (param_name, ownership) in &analyzed.inferred_ownership {
+        for (param_name, ownership) in self.get_all_param_ownership(analyzed) {
             match ownership {
                 crate::analyzer::OwnershipMode::Borrowed => {
-                    self.inferred_borrowed_params.insert(param_name.clone());
+                    self.inferred_borrowed_params.insert(param_name);
                 }
                 crate::analyzer::OwnershipMode::MutBorrowed => {
-                    self.inferred_mut_borrowed_params.insert(param_name.clone());
+                    self.inferred_mut_borrowed_params.insert(param_name);
                 }
                 _ => {}
             }
         }
 
-        // Track Phase 2 string-optimized parameters (string type params that become &str)
-        for param_name in &analyzed.str_ref_optimizable_params {
-            self.str_ref_optimized_params.insert(param_name.clone());
+        // Track Phase 2 string-optimized parameters (string type params that become &str).
+        // Uses IR-backed str_ref check when cutover is enabled.
+        if self.ir_cutover.str_ref && self.current_ir_function.is_some() {
+            if let Some(ir_fn) = &self.current_ir_function {
+                for param_name in &ir_fn.str_ref_params {
+                    self.str_ref_optimized_params.insert(param_name.clone());
+                }
+            }
+        } else {
+            for param_name in &analyzed.str_ref_optimizable_params {
+                self.str_ref_optimized_params.insert(param_name.clone());
+            }
         }
 
         // Any parameter the analyzer lowered to `Reference(str)` generates as `&str` in Rust.
@@ -140,11 +150,10 @@ impl<'ast> CodeGenerator<'ast> {
         // METHOD PARAM OWNERSHIP: Register this method's parameter ownership modes
         // for use at call sites (auto-borrow arguments).
         {
-            let ownership_vec: Vec<(String, crate::analyzer::OwnershipMode)> = analyzed
-                .inferred_ownership
-                .iter()
+            let ownership_vec: Vec<(String, crate::analyzer::OwnershipMode)> = self
+                .get_all_param_ownership(analyzed)
+                .into_iter()
                 .filter(|(name, _)| name.as_str() != "self")
-                .map(|(name, mode)| (name.clone(), *mode))
                 .collect();
             if !ownership_vec.is_empty() {
                 self.method_param_ownership
@@ -243,9 +252,8 @@ impl<'ast> CodeGenerator<'ast> {
                         if param.name == "self" {
                             return false;
                         }
-                        let body_borrow = analyzed
-                            .inferred_ownership
-                            .get(&param.name)
+                        let body_borrow = self
+                            .get_param_ownership(&param.name, analyzed)
                             .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
                         body_borrow
                             && crate::codegen::rust::signature_promotion::param_type_is_owned_non_text(
@@ -280,16 +288,10 @@ impl<'ast> CodeGenerator<'ast> {
                     .unwrap_or_else(|| param.type_.clone());
 
                 let mut ownership = if has_self_receiver {
-                    analyzed
-                        .inferred_ownership
-                        .get(&param.name)
-                        .copied()
+                    self.get_param_ownership(&param.name, analyzed)
                         .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 } else {
-                    analyzed
-                        .inferred_ownership
-                        .get(&param.name)
-                        .copied()
+                    self.get_param_ownership(&param.name, analyzed)
                         .or_else(|| {
                             registry_sig.and_then(|sig| sig.param_ownership.get(idx).copied())
                         })

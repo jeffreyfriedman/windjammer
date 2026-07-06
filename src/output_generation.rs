@@ -175,6 +175,14 @@ pub(crate) fn generate_main_rust_code<'ast>(
     generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
     generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
 
+    // IR cutover: when any cutover flag is enabled, run the IR pipeline and
+    // attach the IrModule so codegen can read from SafetyType.
+    if !generator.ir_cutover.all_disabled() {
+        let mut ir_pipeline = crate::ir::IrPipeline::new();
+        let ir_module = ir_pipeline.lower_to_ir(analyzed, signatures);
+        generator.set_ir_module(ir_module);
+    }
+
     generator.set_source_file(input_path);
     let output_file_path =
         project_paths::get_relative_output_path(source_root, input_path, output_dir)?;

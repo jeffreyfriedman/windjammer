@@ -31,6 +31,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut output = String::new();
 
         self.push_auto_test_attribute_if_needed(func, &mut output);
+        self.select_ir_function_for(&func.name);
         self.prepare_codegen_environment_for_regular_function(analyzed);
 
         let needs_lifetime =
