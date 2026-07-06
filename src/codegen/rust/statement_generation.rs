@@ -92,9 +92,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // 2. Use float inference engine (distinguishes f32 vs f64 precisely)
-        if let Some(fi) = &self.float_inference {
+        {
             use crate::type_inference::FloatType;
-            match fi.get_float_type(target) {
+            let ft = if let Some(ni) = &self.numeric_inference {
+                ni.get_float_type(target)
+            } else {
+                FloatType::Unknown
+            };
+            match ft {
                 FloatType::F32 => return Some("f32"),
                 FloatType::F64 => return Some("f64"),
                 FloatType::Unknown => {}

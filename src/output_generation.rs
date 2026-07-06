@@ -12,7 +12,7 @@ use crate::inference::InferredBounds;
 use crate::metadata::{metadata_function_sig_from_analyzer, ModuleMetadata};
 use crate::parser;
 use crate::project_paths;
-use crate::type_inference;
+// type_inference replaced by ir::numeric_bridge::UnifiedNumericInference
 use crate::CompilationTarget;
 
 /// `EarlySuccess` = Go / WASM component paths already wrote outputs.
@@ -85,23 +85,23 @@ pub(crate) fn generate_main_rust_code<'ast>(
             return Ok(MainCodegenOutcome::EarlySuccess);
         }
 
-        let mut float_inference = type_inference::FloatInference::new();
-        float_inference.set_source_root(source_root);
-        float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
-        float_inference.set_debug_source(source);
-        float_inference.infer_program(program);
+        let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+        numeric_inference.set_source_root(source_root);
+        numeric_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+        numeric_inference.set_debug_source(source);
+        numeric_inference.infer_program(program);
 
-        if !float_inference.errors.is_empty() {
+        if !numeric_inference.errors.is_empty() {
             eprintln!(
-                "🚨 Float type inference errors in {}:",
+                "🚨 Numeric type inference errors in {}:",
                 input_path.display()
             );
-            for error in &float_inference.errors {
+            for error in &numeric_inference.errors {
                 eprintln!("  {}", error);
             }
             return Err(anyhow::anyhow!(
                 "Type inference failed with {} error(s)",
-                float_inference.errors.len()
+                numeric_inference.errors.len()
             ));
         }
 
@@ -113,7 +113,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         } else {
             codegen::CodeGenerator::new(generator_signatures, target)
         };
-        generator.set_float_inference(float_inference);
+        generator.set_numeric_inference(numeric_inference);
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
@@ -142,43 +142,25 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
 
     // Rust target (and any non-Wasm non-Go path)
-    let mut float_inference = type_inference::FloatInference::new();
-    float_inference.set_source_root(source_root);
-    float_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
-    float_inference.set_debug_source(source);
-    float_inference.infer_program(program);
+    let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+    numeric_inference.set_source_root(source_root);
+    numeric_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
+    numeric_inference.set_debug_source(source);
+    numeric_inference.infer_program(program);
 
-    if !float_inference.errors.is_empty() {
+    if !numeric_inference.errors.is_empty() {
         eprintln!(
-            "🚨 Float type inference errors in {}:",
+            "🚨 Numeric type inference errors in {}:",
             input_path.display()
         );
-        for error in &float_inference.errors {
+        for error in &numeric_inference.errors {
             eprintln!("  {}", error);
         }
         return Err(anyhow::anyhow!(
-            "Type inference failed with {} error(s)",
-            float_inference.errors.len()
+            "Numeric type inference failed with {} error(s)",
+            numeric_inference.errors.len()
         ));
     }
-
-    let mut int_inference = type_inference::IntInference::new();
-    int_inference.set_global_struct_field_types(&module_compiler.global_struct_field_types);
-    int_inference.infer_program(program);
-    if !int_inference.errors.is_empty() {
-        eprintln!("🚨 Int type inference errors in {}:", input_path.display());
-        for error in &int_inference.errors {
-            eprintln!("  {}", error);
-        }
-        return Err(anyhow::anyhow!(
-            "Int type inference failed with {} error(s)",
-            int_inference.errors.len()
-        ));
-    }
-
-    // Unified numeric resolution: cross-type constraint propagation
-    let _numeric_result =
-        crate::ir::numeric_bridge::unify_numeric_inference(&mut float_inference, &mut int_inference);
 
     let mut generator_signatures = module_compiler.global_signatures.clone();
     generator_signatures.merge(signatures);
@@ -187,8 +169,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
     } else {
         codegen::CodeGenerator::new(generator_signatures, target)
     };
-    generator.set_float_inference(float_inference);
-    generator.set_int_inference(int_inference);
+    generator.set_numeric_inference(numeric_inference);
     generator.set_inferred_bounds(inferred_bounds_map);
     generator.set_analyzed_trait_methods(analyzed_trait_methods);
     generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
