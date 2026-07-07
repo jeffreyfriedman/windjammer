@@ -88,7 +88,16 @@ impl<'ast> Analyzer<'ast> {
                 );
 
                 if is_arithmetic {
-                    if self.expr_is_identifier(left, name) || self.expr_is_identifier(right, name) {
+                    // String concatenation: any operand position consumes a `string` param.
+                    if matches!(op, BinaryOp::Add) {
+                        if self.expr_is_identifier(left, name)
+                            || self.expr_is_identifier(right, name)
+                        {
+                            return true;
+                        }
+                    } else if self.expr_is_identifier(left, name)
+                        || self.expr_is_identifier(right, name)
+                    {
                         return true;
                     }
                 }

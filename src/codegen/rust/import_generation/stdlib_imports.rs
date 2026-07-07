@@ -64,7 +64,7 @@ impl CodeGenerator<'_> {
             return Some("use windjammer_runtime::env;\n".to_string());
         }
 
-        // Platform APIs with no Rust std equivalent - skip
+        // Platform APIs with no Rust std equivalent - skip (http maps to windjammer_runtime below)
         if module_base == "dialog"
             || module_base.starts_with("dialog::")
             || module_base == "encoding"
@@ -73,8 +73,6 @@ impl CodeGenerator<'_> {
             || module_base.starts_with("compute::")
             || module_base == "net"
             || module_base.starts_with("net::")
-            || module_base == "http"
-            || module_base.starts_with("http::")
             || module_base == "storage"
             || module_base.starts_with("storage::")
         {
@@ -82,11 +80,12 @@ impl CodeGenerator<'_> {
         }
 
         // Map to windjammer_runtime (all stdlib modules are now implemented!)
-        let rust_import = match module_name {
+        let rust_import = match module_base {
             // Core modules
             "http" => "windjammer_runtime::http",
             "mime" => "windjammer_runtime::mime",
             "json" => "windjammer_runtime::json",
+            "jwt" => "windjammer_runtime::jwt",
             "io" => "windjammer_runtime::io",
             "subprocess" => "windjammer_runtime::subprocess",
 
@@ -138,7 +137,9 @@ impl CodeGenerator<'_> {
 
             return Some(result);
         }
-        // Import the module itself (not glob) to keep module-qualified paths
-        Some(format!("use {};\n", rust_import))
+        // Preserve `::*` glob suffix from the Windjammer import
+        let glob_suffix = module_name.strip_prefix(module_base).unwrap_or("");
+        // Import the module (glob or qualified) to match the Windjammer `use` form
+        Some(format!("use {}{};\n", rust_import, glob_suffix))
     }
 }

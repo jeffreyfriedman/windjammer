@@ -13,7 +13,36 @@
 // Integration test for static method inference bug
 // Verifies that constructors like new(), from_*(), zero() don't get &self
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn find_generated_rs(dir: &Path, filename: &str) -> Result<String, std::io::Error> {
+    let flat = dir.join(filename);
+    if flat.exists() {
+        return std::fs::read_to_string(&flat);
+    }
+    fn walk(dir: &Path, target: &str) -> Option<PathBuf> {
+        for entry in std::fs::read_dir(dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.is_file() && path.file_name().map_or(false, |n| n == target) {
+                return Some(path);
+            }
+            if path.is_dir() {
+                if let Some(found) = walk(&path, target) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+    match walk(dir, filename) {
+        Some(p) => std::fs::read_to_string(&p),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{} not found under {}", filename, dir.display()),
+        )),
+    }
+}
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -31,23 +60,8 @@ fn test_static_method_inference() {
     )
     .expect("Failed to run windjammer compiler");
 
-    // Read the generated Rust code
-    // The file location depends on whether path stripping succeeded:
-    // - Success: <output_dir>/static_method_inference_test.rs
-    // - Failure: <output_dir>/wj/windjammer/tests/static_method_inference_test.rs
-    let generated_code =
-        std::fs::read_to_string(out_tmp.path().join("static_method_inference_test.rs"))
-            .or_else(|_| {
-                std::fs::read_to_string(
-                    out_tmp
-                        .path()
-                        .join("wj")
-                        .join("windjammer")
-                        .join("tests")
-                        .join("static_method_inference_test.rs"),
-                )
-            })
-            .expect("Failed to read generated code (tried both possible paths)");
+    let generated_code = find_generated_rs(out_tmp.path(), "static_method_inference_test.rs")
+        .expect("Failed to find generated static_method_inference_test.rs");
 
     // Verify static methods do NOT have &self
     assert!(

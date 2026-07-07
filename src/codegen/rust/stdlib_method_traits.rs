@@ -98,6 +98,22 @@ fn return_type_is(sig: &FunctionSignature, pred: impl Fn(&Type) -> bool) -> bool
 // ── Map type constants ───────────────────────────────────────────────────
 
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
+const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
+
+pub fn is_set_type_name(name: &str) -> bool {
+    SET_TYPES.contains(&name.split('<').next().unwrap_or(name))
+}
+
+pub fn is_set_type(ty: &crate::parser::Type) -> bool {
+    match ty {
+        crate::parser::Type::Parameterized(base, _) if is_set_type_name(base) => true,
+        crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner) => {
+            is_set_type(inner)
+        }
+        crate::parser::Type::Custom(name) => is_set_type_name(name),
+        _ => false,
+    }
+}
 
 fn is_map_receiver(receiver_type: Option<&str>) -> bool {
     receiver_type.is_some_and(|ty| {
@@ -431,6 +447,34 @@ pub fn is_map_key_method(method: &str) -> bool {
     )
 }
 
+/// HashSet/BTreeSet lookup — first arg is always borrowed.
+pub fn is_set_lookup_method(method: &str) -> bool {
+    matches!(method, "contains" | "remove")
+}
+
+/// Whether a resolved type name or [`Type`] is a map collection receiver.
+pub fn is_map_type_name(name: &str) -> bool {
+    matches!(
+        name.split('<').next().unwrap_or(name),
+        "HashMap" | "BTreeMap" | "Map" | "IndexMap"
+    )
+}
+
+pub fn is_map_type(ty: &crate::parser::Type) -> bool {
+    match ty {
+        crate::parser::Type::Parameterized(base, _)
+            if base == "HashMap" || base == "BTreeMap" || base == "Map" =>
+        {
+            true
+        }
+        crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner) => {
+            is_map_type(inner)
+        }
+        crate::parser::Type::Custom(name) => is_map_type_name(name),
+        _ => false,
+    }
+}
+
 pub fn is_index_taking_method(method: &str) -> bool {
     matches!(
         method,
@@ -465,6 +509,7 @@ pub fn is_runtime_std_module(name: &str) -> bool {
         name,
         "strings"
             | "json"
+            | "jwt"
             | "time"
             | "math"
             | "random"
@@ -488,8 +533,36 @@ pub fn is_runtime_std_module(name: &str) -> bool {
 pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
     matches!(
         module,
-        "strings" | "json" | "regex" | "csv" | "mime" | "http" | "env"
+        "strings" | "json" | "jwt" | "regex" | "csv" | "mime" | "http" | "env" | "db"
     )
+}
+
+/// Stdlib struct types that lower to a `windjammer_runtime` module (receiver type → module).
+pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
+    match type_name {
+        "Connection" | "Row" | "DatabaseType" => Some("db"),
+        _ => None,
+    }
+}
+
+/// Whether a method call receiver uses an AsRef<str> runtime std module.
+pub fn receiver_uses_asref_str_runtime_module(
+    runtime_module: Option<&str>,
+    receiver_type: Option<&str>,
+    is_imported_runtime_std_module: impl Fn(&str) -> bool,
+) -> bool {
+    if runtime_module.is_some_and(runtime_std_module_uses_asref_str) {
+        return true;
+    }
+    if let Some(tn) = receiver_type {
+        if let Some(m) = runtime_std_module_for_type(tn) {
+            return runtime_std_module_uses_asref_str(m);
+        }
+        if is_imported_runtime_std_module(tn) {
+            return runtime_std_module_uses_asref_str(tn);
+        }
+    }
+    false
 }
 
 /// Check if a runtime std module function parameter should be auto-borrowed.

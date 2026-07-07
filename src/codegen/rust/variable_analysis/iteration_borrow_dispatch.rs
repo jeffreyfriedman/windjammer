@@ -9,11 +9,20 @@ impl<'ast> CodeGenerator<'ast> {
     /// Only borrow if the base object is borrowed (not owned)
     pub(crate) fn should_borrow_for_iteration(&self, iterable: &Expression) -> bool {
         match iterable {
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                ..
+            } => false,
+            // Subscript/field iteration must borrow to avoid partial moves (E0507).
+            // Example: `for dep in pass_defs[i].dependencies` inside an outer loop.
+            Expression::Index { .. } => true,
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
-                        return self.inferred_borrowed_params.contains("self")
-                            || self.inferred_mut_borrowed_params.contains("self");
+                        if self.inferred_mut_borrowed_params.contains("self") {
+                            return false;
+                        }
+                        return self.inferred_borrowed_params.contains("self");
                     }
                     return self.inferred_borrowed_params.contains(name)
                         || self.inferred_mut_borrowed_params.contains(name)
@@ -21,6 +30,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Expression::FieldAccess { .. } = &**object {
                     return self.should_borrow_for_iteration(object);
+                }
+                if matches!(&**object, Expression::Index { .. }) {
+                    return true;
                 }
                 false
             }
@@ -123,14 +135,133 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
         loop_var: &str,
     ) -> bool {
-        let Some(iter_t) = self.infer_expression_type(iterable) else {
-            return false;
-        };
-        let Some(elem) = Self::extract_iterator_element_type(&iter_t) else {
-            return false;
-        };
-        body.iter()
-            .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, &elem))
+        if let Some(iter_t) = self.infer_expression_type(iterable) {
+            if let Some(elem) = Self::extract_iterator_element_type(&iter_t) {
+                if body
+                    .iter()
+                    .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, &elem))
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Fallback: when element type inference fails, check if the loop body
+        // calls any method on the loop variable whose signature (from any type)
+        // has &mut self. This handles cases where metadata isn't available.
+        let mut methods_on_var = Vec::new();
+        for stmt in body {
+            Self::collect_methods_called_on(stmt, loop_var, &mut methods_on_var);
+        }
+        for method_name in &methods_on_var {
+            if self.any_signature_has_mut_self_for_method(method_name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn collect_methods_called_on(stmt: &Statement, var_name: &str, methods: &mut Vec<String>) {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                Self::collect_methods_from_expr(expr, var_name, methods);
+            }
+            Statement::Let { value, .. } => {
+                Self::collect_methods_from_expr(value, var_name, methods);
+            }
+            Statement::Assignment { value, .. } => {
+                Self::collect_methods_from_expr(value, var_name, methods);
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                for s in then_block {
+                    Self::collect_methods_called_on(s, var_name, methods);
+                }
+                if let Some(b) = else_block {
+                    for s in b {
+                        Self::collect_methods_called_on(s, var_name, methods);
+                    }
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => {
+                for s in body {
+                    Self::collect_methods_called_on(s, var_name, methods);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_methods_from_expr(expr: &Expression, var_name: &str, methods: &mut Vec<String>) {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if matches!(&**object, Expression::Identifier { name, .. } if name == var_name) {
+                    methods.push(method.clone());
+                }
+                Self::collect_methods_from_expr(object, var_name, methods);
+                for (_, arg) in arguments {
+                    Self::collect_methods_from_expr(arg, var_name, methods);
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::collect_methods_from_expr(left, var_name, methods);
+                Self::collect_methods_from_expr(right, var_name, methods);
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::collect_methods_from_expr(function, var_name, methods);
+                for (_, arg) in arguments {
+                    Self::collect_methods_from_expr(arg, var_name, methods);
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    Self::collect_methods_called_on(s, var_name, methods);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn any_signature_has_mut_self_for_method(&self, method_name: &str) -> bool {
+        let suffix = format!("::{}", method_name);
+        for (name, sig) in self.signature_registry.all_signatures() {
+            if name.ends_with(&suffix) && sig.has_self_receiver {
+                if sig
+                    .param_ownership
+                    .first()
+                    .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
+                {
+                    return true;
+                }
+            }
+        }
+        // Also check analyzed trait methods
+        for (_trait_name, methods) in &self.analyzed_trait_methods {
+            if let Some(af) = methods.get(method_name) {
+                if af
+                    .inferred_ownership
+                    .get("self")
+                    .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
+                {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn peel_dispatch_element_type(ty: &Type) -> &Type {

@@ -96,7 +96,6 @@ pub fn main() {}
 #[cfg_attr(tarpaulin, ignore)]
 fn test_custom_copy_type_from_registry() {
     let src = r#"
-@derive(Copy, Clone)
 pub struct Entity {
     pub id: i32
 }
@@ -184,7 +183,6 @@ pub fn main() {}
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_copy_receiver() {
     let src = r#"
-@derive(Copy, Clone)
 pub struct Id {
     pub val: i32
 }

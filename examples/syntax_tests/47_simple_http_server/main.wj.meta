@@ -1,0 +1,42 @@
+{
+  "module_path": "main",
+  "functions": {
+    "handle": {
+      "params": [
+        "Reference(Custom(\"ServerRequest\"))"
+      ],
+      "formal_params": [
+        "Custom(\"ServerRequest\")"
+      ],
+      "return_type": "Custom(\"ServerResponse\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "copy_structs": [],
+  "non_copy_structs": [],
+  "version": "0.48.0",
+  "analysis_fingerprint": {
+    "content_hash": 1382272277194348905,
+    "compiler_version": "0.48.0:e33d04a19f94d54f",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 7377510902152144175
+  }
+}

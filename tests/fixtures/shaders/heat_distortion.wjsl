@@ -1,0 +1,114 @@
+// Heat distortion compute shader (WJSL)
+//
+// Applies screen-space heat shimmer near fire sources and hot surfaces.
+// Reads the rendered scene, distorts UV coordinates with animated sinusoidal
+// noise based on world-space proximity to heat sources, and writes the
+// distorted result. Workgroup: 8x8 threads.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+
+struct HeatParams {
+    heat_sources: array<HeatSource, 8>,
+    source_count: u32,
+    time: f32,
+    distortion_scale: f32,
+    wave_speed: f32,
+    wave_frequency: f32,
+    falloff_power: f32,
+    max_offset_pixels: f32,
+    _pad_tail: f32,
+}
+
+@group(0) @binding(0) uniform heat_params: HeatParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read color_input: array<vec4<f32> >;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32> >;
+@group(0) @binding(4) storage read gbuffer: array<GBufferPixel>;
+
+// Project world position to screen-space pixel coordinates
+fn world_to_screen(world_pos: vec3<f32>) -> vec2<f32> {
+    let clip = camera.proj_matrix * (camera.view_matrix * vec4(world_pos, 1.0));
+    let ndc = clip.xy / clip.w;
+    return vec2(
+        (ndc.x * 0.5 + 0.5) * camera.screen_size.x,
+        (0.5 - ndc.y * 0.5) * camera.screen_size.y
+    );
+}
+
+// Compute aggregate heat intensity at a screen pixel from all sources
+fn heat_at_pixel(world_pos: vec3<f32>, pixel: vec2<f32>) -> f32 {
+    let mut total_heat = 0.0;
+    let count = min(heat_params.source_count, 8u);
+
+    for (var i = 0u; i < count; i = i + 1u) {
+        let src = heat_params.heat_sources[i];
+        let dist_3d = length(world_pos - src.position);
+        let height_above = world_pos.y - src.position.y;
+
+        if (height_above < -0.5 || height_above > src.rise_height || dist_3d > src.radius * 2.0) {
+            continue;
+        }
+
+        let rise_factor = clamp(height_above / max(src.rise_height, 0.01), 0.0, 1.0);
+        let rise_mask = smoothstep(0.0, 0.2, rise_factor) * (1.0 - smoothstep(0.7, 1.0, rise_factor));
+        let radial_atten = 1.0 - pow(clamp(dist_3d / src.radius, 0.0, 1.0), heat_params.falloff_power);
+
+        total_heat = total_heat + src.intensity * radial_atten * rise_mask;
+    }
+
+    return clamp(total_heat, 0.0, 1.0);
+}
+
+// Animated distortion offset using layered sine waves
+fn distortion_offset(pixel: vec2<f32>, heat: f32) -> vec2<f32> {
+    let t = heat_params.time;
+    let freq = heat_params.wave_frequency;
+    let speed = heat_params.wave_speed;
+
+    let wave_x = sin(pixel.y * freq * 0.017 + t * speed * 3.7) * 0.6
+               + sin(pixel.y * freq * 0.031 + t * speed * 5.3) * 0.4;
+    let wave_y = sin(pixel.x * freq * 0.023 + t * speed * 4.1) * 0.5
+               + sin(pixel.x * freq * 0.041 + t * speed * 6.7) * 0.3
+               - 0.3;
+
+    let scale = heat * heat_params.distortion_scale * heat_params.max_offset_pixels;
+    return vec2(wave_x, wave_y) * scale;
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = u32(camera.screen_size.x);
+    let height = u32(camera.screen_size.y);
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
+
+    let pixel_idx = id.y * width + id.x;
+    let pixel = vec2<f32>(f32(id.x), f32(id.y));
+
+    if (pixel_idx >= arrayLength(&gbuffer)) {
+        color_output[pixel_idx] = color_input[pixel_idx];
+        return;
+    }
+
+    let world_pos = gbuffer[pixel_idx].position.xyz;
+    let heat = heat_at_pixel(world_pos, pixel);
+
+    if (heat < 0.001) {
+        color_output[pixel_idx] = color_input[pixel_idx];
+        return;
+    }
+
+    let offset = distortion_offset(pixel, heat);
+    let sample_pos = pixel + offset;
+    let sx = clamp(u32(sample_pos.x), 0u, width - 1u);
+    let sy = clamp(u32(sample_pos.y), 0u, height - 1u);
+    let sample_idx = sy * width + sx;
+
+    let distorted = color_input[sample_idx];
+    let original = color_input[pixel_idx];
+    let result = mix(original, distorted, heat);
+    color_output[pixel_idx] = result;
+}

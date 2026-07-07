@@ -2,87 +2,87 @@
   "modules": [
     {
       "module": "random",
-      "path": "/home/user/src/wj/windjammer/std/random.wj"
+      "path": "std/random.wj"
     },
     {
       "module": "test_simple",
-      "path": "/home/user/src/wj/windjammer/std/test_simple.wj"
+      "path": "std/test_simple.wj"
     },
     {
       "module": "subprocess",
-      "path": "/home/user/src/wj/windjammer/std/subprocess.wj"
+      "path": "std/subprocess.wj"
     },
     {
       "module": "log",
-      "path": "/home/user/src/wj/windjammer/std/log.wj"
+      "path": "std/log.wj"
     },
     {
       "module": "mime",
-      "path": "/home/user/src/wj/windjammer/std/mime.wj"
+      "path": "std/mime.wj"
     },
     {
       "module": "db",
-      "path": "/home/user/src/wj/windjammer/std/db.wj"
+      "path": "std/db.wj"
     },
     {
       "module": "time",
-      "path": "/home/user/src/wj/windjammer/std/time.wj"
+      "path": "std/time.wj"
     },
     {
       "module": "basic_test",
-      "path": "/home/user/src/wj/windjammer/std/basic_test.wj"
+      "path": "std/basic_test.wj"
     },
     {
       "module": "regex",
-      "path": "/home/user/src/wj/windjammer/std/regex.wj"
+      "path": "std/regex.wj"
     },
     {
       "module": "strings",
-      "path": "/home/user/src/wj/windjammer/std/strings.wj"
+      "path": "std/strings.wj"
     },
     {
       "module": "json",
-      "path": "/home/user/src/wj/windjammer/std/json.wj"
+      "path": "std/json.wj"
     },
     {
       "module": "testing",
-      "path": "/home/user/src/wj/windjammer/std/testing.wj"
+      "path": "std/testing.wj"
     },
     {
       "module": "async",
-      "path": "/home/user/src/wj/windjammer/std/async.wj"
+      "path": "std/async.wj"
     },
     {
       "module": "math",
-      "path": "/home/user/src/wj/windjammer/std/math.wj"
+      "path": "std/math.wj"
     },
     {
       "module": "process",
-      "path": "/home/user/src/wj/windjammer/std/process.wj"
+      "path": "std/process.wj"
     },
     {
       "module": "http",
-      "path": "/home/user/src/wj/windjammer/std/http.wj"
+      "path": "std/http.wj"
     },
     {
       "module": "csv",
-      "path": "/home/user/src/wj/windjammer/std/csv.wj"
+      "path": "std/csv.wj"
     },
     {
       "module": "fs",
-      "path": "/home/user/src/wj/windjammer/std/fs.wj"
+      "path": "std/fs.wj"
     },
     {
       "module": "collections",
-      "path": "/home/user/src/wj/windjammer/std/collections.wj"
+      "path": "std/collections.wj"
     },
     {
       "module": "cli",
-      "path": "/home/user/src/wj/windjammer/std/cli.wj"
+      "path": "std/cli.wj"
     },
     {
       "module": "crypto",
-      "path": "/home/user/src/wj/windjammer/std/crypto.wj"
+      "path": "std/crypto.wj"
     }
   ],
   "readme": "std/README.md"

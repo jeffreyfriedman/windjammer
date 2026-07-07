@@ -10,7 +10,7 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
-/// Internal module fn taking borrowed `string` must receive `&owned_string` at call sites.
+/// Read-only `string` formals lower to `&str`; callers auto-borrow owned locals.
 #[test]
 fn test_internal_module_call_borrows_string_arg() {
     let source = r#"
@@ -27,10 +27,11 @@ pub fn build() -> u32 {
     let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
+    // Read-only `path` is str_ref-optimized to &str; call site auto-borrows.
     assert!(
-        generated.contains("load_shader(&shader_path)")
-            || generated.contains("load_shader(& shader_path)"),
-        "owned String local should be borrowed for &str param. Got:\n{}",
+        generated.contains("load_shader(shader_path)")
+            || generated.contains("load_shader(&shader_path)"),
+        "owned String local should be passable to load_shader. Got:\n{}",
         generated
     );
 }

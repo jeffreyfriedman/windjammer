@@ -283,6 +283,21 @@ impl FloatInference {
         self.finish_solve();
     }
 
+    /// Access raw constraints before/after solving (for unified NumericSolver integration).
+    pub fn raw_constraints(&self) -> &[Constraint] {
+        &self.constraints
+    }
+
+    /// Access the expr_id_cache for constraint conversion (ExprId → location mapping).
+    pub fn expr_id_cache(&self) -> &HashMap<(usize, usize, usize), ExprId> {
+        &self.expr_id_cache
+    }
+
+    /// Current file ID for location-based lookups.
+    pub fn current_file_id(&self) -> usize {
+        self.current_file_id
+    }
+
     fn lookup_struct_fields(&self, type_name: &str) -> Option<&HashMap<String, Type>> {
         struct_field_registry::lookup_struct_field_map(
             &self.struct_field_types,

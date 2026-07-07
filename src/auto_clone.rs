@@ -121,11 +121,12 @@ impl AutoCloneAnalysis {
 
         match stmt {
             Statement::Let { pattern, value, .. } => {
-                // Field reads in let bindings move non-Copy sub-values (partial move).
-                let value_kind = if matches!(value, Expression::FieldAccess { .. }) {
-                    UsageKind::Move
-                } else {
-                    UsageKind::Read
+                // `let copy = param` moves the param; field reads partial-move too.
+                let value_kind = match value {
+                    Expression::FieldAccess { .. } | Expression::Identifier { .. } => {
+                        UsageKind::Move
+                    }
+                    _ => UsageKind::Read,
                 };
                 Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map);
 
@@ -154,7 +155,16 @@ impl AutoCloneAnalysis {
                 Self::collect_usages_from_expression(expr, idx, UsageKind::Move, in_loop, map);
             }
             Statement::Expression { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
+                // A bare FieldAccess or Identifier in expression-statement position is a
+                // value expression (e.g. last expression in an if/else branch). This moves
+                // the value, so mark it Move so auto-clone detects loop-captured fields.
+                let kind = match expr {
+                    Expression::FieldAccess { .. } | Expression::Identifier { .. } => {
+                        UsageKind::Move
+                    }
+                    _ => UsageKind::Read,
+                };
+                Self::collect_usages_from_expression(expr, idx, kind, in_loop, map);
             }
             Statement::If {
                 condition,
@@ -181,12 +191,13 @@ impl AutoCloneAnalysis {
                 }
             }
             Statement::For {
-                pattern: _,
+                pattern,
                 iterable,
                 body,
                 ..
             } => {
                 Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map);
+                Self::register_pattern_definitions(pattern, idx, true, map);
                 for stmt in body.iter() {
                     Self::collect_usages_from_statement(stmt, counter, true, map);
                 }
@@ -352,7 +363,13 @@ impl AutoCloneAnalysis {
             }
             Expression::Tuple { elements, .. } => {
                 for elem in elements {
-                    Self::collect_usages_from_expression(elem, idx, UsageKind::Read, in_loop, map);
+                    let elem_kind = match elem {
+                        Expression::Identifier { .. } | Expression::FieldAccess { .. } => {
+                            UsageKind::Move
+                        }
+                        _ => UsageKind::Read,
+                    };
+                    Self::collect_usages_from_expression(elem, idx, elem_kind, in_loop, map);
                 }
             }
             Expression::Array { elements, .. } => {
@@ -412,13 +429,37 @@ impl AutoCloneAnalysis {
         }
     }
 
+    /// Register pattern bindings as definitions (for for-loop variables, match bindings, etc.)
+    fn register_pattern_definitions(
+        pattern: &crate::parser::Pattern,
+        statement_idx: usize,
+        in_loop: bool,
+        map: &mut HashMap<String, Vec<Usage>>,
+    ) {
+        match pattern {
+            crate::parser::Pattern::Identifier(name) => {
+                map.entry(name.clone()).or_default().push(Usage {
+                    statement_idx,
+                    kind: UsageKind::Definition,
+                    is_move: false,
+                    in_loop,
+                });
+            }
+            crate::parser::Pattern::Tuple(patterns) => {
+                for p in patterns {
+                    Self::register_pattern_definitions(p, statement_idx, in_loop, map);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Analyze usages of a single variable to determine where clones are needed
     fn analyze_variable_usages(&mut self, var_name: &str, usages: &[Usage]) {
         // Find the definition
-        let definition_idx = usages
-            .iter()
-            .find(|u| u.kind == UsageKind::Definition)
-            .map(|u| u.statement_idx);
+        let definition = usages.iter().find(|u| u.kind == UsageKind::Definition);
+        let definition_idx = definition.map(|u| u.statement_idx);
+        let definition_is_loop_scoped = definition.is_some_and(|u| u.in_loop);
 
         // Field accesses (e.g., "config.paths"), method calls (e.g., "source.get_items()"),
         // and index expressions (e.g., "items[0]") don't have definitions.
@@ -442,11 +483,20 @@ impl AutoCloneAnalysis {
                 let has_later_use = total_uses
                     .iter()
                     .any(|u| u.statement_idx > move_usage.statement_idx);
+                let same_stmt_read_after_move = total_uses.iter().any(|u| {
+                    u.statement_idx == move_usage.statement_idx
+                        && u.kind == UsageKind::Read
+                        && move_usage.kind == UsageKind::Move
+                });
                 let same_stmt_moves = moves
                     .iter()
                     .filter(|m| m.statement_idx == move_usage.statement_idx)
                     .count();
-                if has_later_use || same_stmt_moves > 1 || move_usage.in_loop {
+                if has_later_use
+                    || same_stmt_read_after_move
+                    || same_stmt_moves > 1
+                    || move_usage.in_loop
+                {
                     self.clone_sites.insert(
                         (var_name.to_string(), move_usage.statement_idx),
                         CloneReason::MovedButUsedLater,
@@ -481,14 +531,28 @@ impl AutoCloneAnalysis {
                 .iter()
                 .any(|u| u.statement_idx > move_usage.statement_idx);
 
+            // Same statement: `visit_cycle(doc, doc.root_id, ...)` moves `doc` then reads
+            // `doc.root_id` — clone the move site so the field access still compiles.
+            let same_stmt_read_after_move = total_uses.iter().any(|u| {
+                u.statement_idx == move_usage.statement_idx
+                    && u.kind == UsageKind::Read
+                    && move_usage.kind == UsageKind::Move
+            });
+
             let same_stmt_moves = moves
                 .iter()
                 .filter(|m| m.statement_idx == move_usage.statement_idx)
                 .count();
 
-            // Moves inside loops always need clone -- the loop body executes
-            // multiple times, consuming the value on each iteration.
-            let needs_clone = has_later_use || same_stmt_moves > 1 || move_usage.in_loop;
+            // Moves inside loops need clone when the variable is captured from
+            // an outer scope (each iteration re-uses the same binding). But
+            // loop-scoped variables (for-loop pattern vars, let bindings inside
+            // the body) get fresh bindings each iteration — no clone needed.
+            let loop_capture_needs_clone = move_usage.in_loop && !definition_is_loop_scoped;
+            let needs_clone = has_later_use
+                || same_stmt_read_after_move
+                || same_stmt_moves > 1
+                || loop_capture_needs_clone;
 
             if needs_clone {
                 self.clone_sites.insert(
@@ -553,6 +617,15 @@ impl AutoCloneAnalysis {
             return None;
         }
         self.clone_sites.get(&(var_name.to_string(), statement_idx))
+    }
+
+    /// True when analysis recorded any clone site for this binding (used when nested
+    /// statement indices in codegen don't match flat auto_clone indices).
+    pub fn needs_clone_anywhere(&self, var_name: &str) -> bool {
+        if self.string_literal_vars.contains(var_name) {
+            return false;
+        }
+        self.clone_sites.keys().any(|(n, _)| n == var_name)
     }
 
     /// Find variables that are bound to string literals
@@ -727,6 +800,81 @@ mod tests {
     }
 
     #[test]
+    fn test_param_let_alias_then_reuse_needs_clone_at_alias() {
+        let func = FunctionDecl {
+            name: "send".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "message".to_string(),
+                pattern: None,
+                type_: Type::Custom("Message".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("msg_copy".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Identifier {
+                        name: "message".to_string(),
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "msg_copy".to_string(),
+                            location: None,
+                        }),
+                        method: "use_it".to_string(),
+                        arguments: vec![],
+                        type_args: None,
+                        location: None,
+                    }),
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "push".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "message".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("message", 0).is_some(),
+            "let msg_copy = message moves param; push(message) later needs clone at let"
+        );
+    }
+
+    #[test]
     fn test_no_clone_needed_single_use() {
         // let x = vec![1, 2, 3]
         // takes_ownership(x)  // <- No clone needed, x not used again
@@ -781,5 +929,146 @@ mod tests {
 
         // Should NOT detect any clones needed
         assert!(analysis.needs_clone("x", 1).is_none());
+    }
+
+    #[test]
+    fn test_self_field_in_if_expr_inside_while_loop_needs_clone() {
+        // Reproduces rating.wj bug:
+        //   while i <= self.max {
+        //       let star_color = if filled { self.color } else { "#e2e8f0" }
+        //       html.push_str(star_color)
+        //       i += 1
+        //   }
+        // self.color is a String field used in a while loop if-expression.
+        // It must be cloned because the loop executes multiple times.
+
+        let func = FunctionDecl {
+            name: "render".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "self".to_string(),
+                pattern: None,
+                type_: Type::Custom("Rating".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: Some(Type::String),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: Some("Rating".to_string()),
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                // let mut i = 1
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("i".to_string()),
+                    mutable: true,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Literal {
+                        value: Literal::Int(1),
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                // while i <= self.max {
+                test_alloc_stmt(Statement::While {
+                    condition: test_alloc_expr(Expression::Binary {
+                        left: test_alloc_expr(Expression::Identifier {
+                            name: "i".to_string(),
+                            location: None,
+                        }),
+                        op: BinaryOp::Le,
+                        right: test_alloc_expr(Expression::FieldAccess {
+                            object: test_alloc_expr(Expression::Identifier {
+                                name: "self".to_string(),
+                                location: None,
+                            }),
+                            field: "max".to_string(),
+                            location: None,
+                        }),
+                        location: None,
+                    }),
+                    body: vec![
+                        // let star_color = if filled { self.color } else { "#e2e8f0" }
+                        test_alloc_stmt(Statement::Let {
+                            pattern: Pattern::Identifier("star_color".to_string()),
+                            mutable: false,
+                            type_: None,
+                            value: test_alloc_expr(Expression::Block {
+                                is_unsafe: false,
+                                statements: vec![test_alloc_stmt(Statement::If {
+                                    condition: test_alloc_expr(Expression::Identifier {
+                                        name: "filled".to_string(),
+                                        location: None,
+                                    }),
+                                    then_block: vec![test_alloc_stmt(Statement::Expression {
+                                        expr: test_alloc_expr(Expression::FieldAccess {
+                                            object: test_alloc_expr(Expression::Identifier {
+                                                name: "self".to_string(),
+                                                location: None,
+                                            }),
+                                            field: "color".to_string(),
+                                            location: None,
+                                        }),
+                                        location: None,
+                                    })],
+                                    else_block: Some(vec![test_alloc_stmt(
+                                        Statement::Expression {
+                                            expr: test_alloc_expr(Expression::Literal {
+                                                value: Literal::String("#e2e8f0".to_string()),
+                                                location: None,
+                                            }),
+                                            location: None,
+                                        },
+                                    )]),
+                                    location: None,
+                                })],
+                                location: None,
+                            }),
+                            else_block: None,
+                            location: None,
+                        }),
+                        // i += 1
+                        test_alloc_stmt(Statement::Assignment {
+                            target: test_alloc_expr(Expression::Identifier {
+                                name: "i".to_string(),
+                                location: None,
+                            }),
+                            value: test_alloc_expr(Expression::Binary {
+                                left: test_alloc_expr(Expression::Identifier {
+                                    name: "i".to_string(),
+                                    location: None,
+                                }),
+                                op: BinaryOp::Add,
+                                right: test_alloc_expr(Expression::Literal {
+                                    value: Literal::Int(1),
+                                    location: None,
+                                }),
+                                location: None,
+                            }),
+                            compound_op: None,
+                            location: None,
+                        }),
+                    ],
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+
+        // self.color is used inside a while loop but defined outside (it's a field
+        // of self). The loop executes multiple times, so each iteration would try
+        // to move self.color. Auto-clone must detect this.
+        assert!(
+            analysis.needs_clone_anywhere("self.color"),
+            "self.color in while loop if-expression must be flagged for clone"
+        );
     }
 }

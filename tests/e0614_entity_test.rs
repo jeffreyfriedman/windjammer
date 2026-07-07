@@ -29,7 +29,6 @@ fn test_entity_tuple_pattern_no_deref() {
     // for (entity, mesh, transform) in entities { render_mesh(entity, ...) }
     // entity is Entity (Copy) - must NOT generate *(entity)
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct Entity {
     pub index: i64,
     pub generation: i64,
@@ -63,7 +62,6 @@ pub fn main() {}
 fn test_entity_simple_loop_no_deref() {
     // for entity in entities { process(entity) } where Entity is Copy
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct Entity {
     pub index: i64,
 }
@@ -94,7 +92,6 @@ fn test_entity_explicit_deref_stripped_when_copy() {
     // result.push(*entity) where entity from for entity in vec, Entity is Copy
     // Compiler should emit result.push(entity) - * causes E0614 on owned Copy
     let source = r#"
-@derive(Copy, Clone, Debug, PartialEq)
 pub struct Entity {
     pub index: i64,
 }

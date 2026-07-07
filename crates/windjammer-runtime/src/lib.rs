@@ -12,9 +12,9 @@ pub mod platform;
 
 // Core modules (fully implemented)
 pub mod fs;
-#[cfg(feature = "server")]
 pub mod http;
 pub mod json;
+pub mod jwt;
 pub mod mime;
 
 // Profiling (Tracy zones; optional `tracy` feature)
@@ -28,6 +28,7 @@ pub mod collections;
 pub mod contracts;
 pub mod crypto;
 pub mod csv_mod;
+#[cfg(feature = "db")]
 pub mod db;
 pub mod doc_test;
 pub mod encoding;
@@ -58,8 +59,7 @@ pub mod time;
 pub mod timeout;
 
 // Re-export commonly used types
-#[cfg(feature = "server")]
-pub use http::{Request, Response, Router, ServerResponse};
+pub use http::{Request, Response, Router, Server, ServerRequest, ServerResponse};
 
 // Prelude for common imports
 pub mod prelude {

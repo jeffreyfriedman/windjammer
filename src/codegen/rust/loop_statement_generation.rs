@@ -15,6 +15,8 @@ impl<'ast> CodeGenerator<'ast> {
         self.indent_level += 1;
         let saved_idx = self.current_statement_idx;
         let saved_local_idx = self.current_block_local_idx;
+        let old_void_block = self.in_void_block;
+        self.in_void_block = true;
         for (i, stmt) in body.iter().enumerate() {
             self.current_statement_idx = self.auto_clone_counter;
             self.current_block_local_idx = i;
@@ -23,6 +25,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
+        self.in_void_block = old_void_block;
         self.indent_level -= 1;
 
         output.push_str(&self.indent());
@@ -48,6 +51,8 @@ impl<'ast> CodeGenerator<'ast> {
         let saved_body = self.current_function_body.clone();
         let saved_idx = self.current_statement_idx;
         let saved_local_idx = self.current_block_local_idx;
+        let old_void_block = self.in_void_block;
+        self.in_void_block = true;
         self.current_function_body = body.to_vec();
         for (i, stmt) in body.iter().enumerate() {
             self.current_statement_idx = self.auto_clone_counter;
@@ -58,6 +63,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_body = saved_body;
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
+        self.in_void_block = old_void_block;
         self.indent_level -= 1;
 
         output.push_str(&self.indent());
