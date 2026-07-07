@@ -48,6 +48,8 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             true,  // enable_lint
             false, // no_generate_cargo_toml
             &[],   // metadata
+            false, // json_output
+            false, // ir_shadow_validate
         )?;
 
         // Run with Node.js

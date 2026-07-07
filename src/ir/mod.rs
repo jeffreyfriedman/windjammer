@@ -15,6 +15,9 @@
 //! and codegen migrates to reading from IR instead of `AnalyzedFunction`.
 
 pub mod annotations;
+pub mod capability_lock;
+pub mod capability_profiles;
+pub mod cost_model;
 pub mod constraint_gen;
 pub mod constraints;
 pub mod effects;
@@ -23,6 +26,7 @@ pub mod node;
 pub mod numeric_bridge;
 pub mod numeric_solver;
 pub mod numeric_types;
+pub mod optimizations;
 pub mod pipeline;
 pub mod safety_type;
 pub mod shadow;
@@ -31,6 +35,11 @@ pub mod taint;
 pub mod target_encodings;
 
 pub use annotations::{CloneAnnotation, OptimizationHints};
+pub use capability_profiles::{
+    all_profiles, build_tool, database, file_processor, http_client, parser, profile_by_name,
+    CapabilityProfile, TrustLevel,
+};
+pub use cost_model::{CompilationCostTracker, CompilationPhase};
 pub use constraint_gen::{generate_constraints, generate_module_constraints, FunctionConstraints};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
@@ -38,6 +47,10 @@ pub use execution::{ExecutionConstraint, ExecutionValidator};
 pub use node::{parser_type_to_base_type, IrFunction, IrNode, IrNodeKind};
 pub use numeric_solver::NumericSolver;
 pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
+pub use optimizations::{
+    AoSoAPass, CostDelta, CowPass, DeferDropPass, IrOptimizationPass, OptimizationPipeline,
+    OptimizationResult, PipelineResult, SmallVecPass,
+};
 pub use pipeline::{FileIrModule, IrModule, IrModuleSet, IrPipeline, IrPipelineConfig};
 pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,

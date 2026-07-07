@@ -6,7 +6,8 @@ use serde_json::{json, Value};
 use super::registry::ToolStability;
 use super::{
     analyze_ssr_routing, analyze_types, explain_error, generate_code, generate_component,
-    generate_game_entity, get_definition, get_language_info, parse_code, refactor_extract_function,
+    generate_game_entity, get_definition, get_language_info, parse_code, patch_change_type,
+    patch_insert_statement, query_diagnostics, query_effects, refactor_extract_function,
     refactor_inline_variable, refactor_rename_symbol, search_workspace,
 };
 
@@ -98,6 +99,30 @@ pub fn all_tool_specs() -> &'static [ToolSpec] {
             category: "knowledge",
             stability: ToolStability::Stable,
         },
+        ToolSpec {
+            name: "query_diagnostics",
+            description: "Query structured compiler diagnostics for a scope (file, function, workspace)",
+            category: "analyze",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "query_effects",
+            description: "Query the resolved effect set and propagation chain for a function",
+            category: "analyze",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "insert_statement",
+            description: "Insert a Windjammer statement at a given location with optional validation",
+            category: "patch",
+            stability: ToolStability::Beta,
+        },
+        ToolSpec {
+            name: "change_type",
+            description: "Change a type annotation at a given location in a source file",
+            category: "patch",
+            stability: ToolStability::Beta,
+        },
     ]
 }
 
@@ -116,6 +141,10 @@ pub fn input_schema_for(name: &str) -> Option<Value> {
         "generate_game_entity" => schema_for!(generate_game_entity::GenerateGameEntityArgs),
         "analyze_ssr_routing" => schema_for!(analyze_ssr_routing::AnalyzeSsrRoutingArgs),
         "get_language_info" => schema_for!(get_language_info::GetLanguageInfoRequest),
+        "query_diagnostics" => schema_for!(query_diagnostics::QueryDiagnosticsRequest),
+        "query_effects" => schema_for!(query_effects::QueryEffectsRequest),
+        "insert_statement" => schema_for!(patch_insert_statement::InsertStatementRequest),
+        "change_type" => schema_for!(patch_change_type::ChangeTypeRequest),
         _ => return None,
     };
     Some(serde_json::to_value(schema.schema).unwrap_or(json!({"type": "object"})))

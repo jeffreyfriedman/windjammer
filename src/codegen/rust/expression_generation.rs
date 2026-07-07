@@ -676,6 +676,8 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MapLiteral { pairs, .. } => self.generate_map_literal(pairs),
             Expression::TryOp { expr: inner, .. } => self.generate_try_op(inner),
             Expression::Await { expr: inner, .. } => self.generate_await(inner),
+            Expression::AsyncCall { expr: inner, .. } => self.generate_async_call(inner),
+            Expression::SpawnCall { expr: inner, .. } => self.generate_spawn_call(inner),
             Expression::ChannelSend { channel, value, .. } => {
                 self.generate_channel_send(channel, value)
             }

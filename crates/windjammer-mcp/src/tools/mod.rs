@@ -13,6 +13,10 @@ pub mod parse_code;
 pub mod registry;
 pub mod search_workspace;
 
+pub mod patch_change_type;
+pub mod patch_insert_statement;
+pub mod query_diagnostics;
+pub mod query_effects;
 pub mod refactor_extract_function;
 pub mod refactor_inline_variable;
 pub mod refactor_rename_symbol;
@@ -126,6 +130,18 @@ impl ToolRegistry {
             }),
             "get_language_info" => {
                 Box::new(move |d, args| Box::pin(get_language_info::handle(d, args)))
+            }
+            "query_diagnostics" => {
+                Box::new(move |d, args| Box::pin(query_diagnostics::handle(d, args)))
+            }
+            "query_effects" => {
+                Box::new(move |d, args| Box::pin(query_effects::handle(d, args)))
+            }
+            "insert_statement" => {
+                Box::new(move |d, args| Box::pin(patch_insert_statement::handle(d, args)))
+            }
+            "change_type" => {
+                Box::new(move |d, args| Box::pin(patch_change_type::handle(d, args)))
             }
             _ => Box::new(move |_d, _args| {
                 let tool_name = unknown_name.clone();

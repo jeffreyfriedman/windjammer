@@ -112,6 +112,60 @@ jobs:
           fi
           echo "✅ All crate versions aligned"
   
+  crate-size-check:
+    name: Crate Size Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check crate package sizes
+        run: |
+          MAX_SIZE_KB=10240  # 10 MB crates.io limit
+
+          echo "📦 Checking crate package sizes (limit: ${MAX_SIZE_KB} KB / 10 MB)..."
+          OVERSIZED=0
+
+          for crate_toml in Cargo.toml crates/*/Cargo.toml; do
+            CRATE_DIR=$(dirname "$crate_toml")
+            CRATE_NAME=$(grep '^name = ' "$crate_toml" | head -1 | sed 's/.*name = "\(.*\)"/\1/')
+
+            if [ -z "$CRATE_NAME" ]; then
+              continue
+            fi
+
+            # Count files and estimate size
+            FILE_COUNT=$(cargo package --list --allow-dirty --manifest-path "$crate_toml" 2>/dev/null | wc -l)
+            TOTAL_SIZE=$(cargo package --list --allow-dirty --manifest-path "$crate_toml" 2>/dev/null | \
+              xargs -I{} sh -c "test -f \"$CRATE_DIR/{}\" && stat --printf='%s\n' \"$CRATE_DIR/{}\" 2>/dev/null || echo 0" | \
+              awk '{sum+=$1} END {print int(sum/1024)}')
+
+            if [ "$TOTAL_SIZE" -gt "$MAX_SIZE_KB" ]; then
+              echo "❌ $CRATE_NAME: ${TOTAL_SIZE} KB ($FILE_COUNT files) — EXCEEDS LIMIT"
+              OVERSIZED=$((OVERSIZED + 1))
+
+              echo "  Largest directories:"
+              cargo package --list --allow-dirty --manifest-path "$crate_toml" 2>/dev/null | \
+                sed 's|/[^/]*$||' | sort | uniq -c | sort -rn | head -5 | \
+                while read count dir; do
+                  echo "    $count files in $dir/"
+                done
+            else
+              echo "✅ $CRATE_NAME: ${TOTAL_SIZE} KB ($FILE_COUNT files)"
+            fi
+          done
+
+          if [ $OVERSIZED -gt 0 ]; then
+            echo ""
+            echo "❌ $OVERSIZED crate(s) exceed the 10 MB crates.io limit!"
+            echo "   Fix: add entries to 'include' (whitelist) or 'exclude' in Cargo.toml"
+            exit 1
+          fi
+          echo "✅ All crates within size limits"
+
   lockfile-check:
     name: Cargo.lock Validation
     runs-on: ubuntu-latest

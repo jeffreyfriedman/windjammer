@@ -542,7 +542,8 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         let param_is_owned = effective_ownership.is_none()
                             || matches!(effective_ownership, Some(OwnershipMode::Owned));
-                        let needs_owned = (receiver_is_string_collection && param_is_owned) || crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
+                        let method_takes_str_separator = method == "join";
+                        let needs_owned = (receiver_is_string_collection && param_is_owned && !method_takes_str_separator) || crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             effective_sig.as_ref(),
                             i,
                             Some(method),
@@ -684,9 +685,10 @@ impl<'ast> CodeGenerator<'ast> {
                         });
                     // Stdlib generic collection fallback: when no typed signature exists but
                     // the receiver is a Vec<String>/Vec<string>, string constants need .to_string()
+                    let method_takes_str_not_string = method == "join";
                     let needs_owned_string = wants_string
                         || (sig_says_owned_string && is_string_const)
-                        || (receiver_is_string_collection && is_string_const);
+                        || (receiver_is_string_collection && is_string_const && !method_takes_str_not_string);
                     if needs_owned_string && is_string_const && !arg_str.ends_with(".to_string()")
                     {
                         arg_str = format!("{}.to_string()", arg_str);

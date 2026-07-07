@@ -203,11 +203,10 @@ mod tests {
     fn analyze_and_validate(source: &str) -> ShadowValidationResult {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = crate::parser::Parser::new(tokens);
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
         let program = parser.parse().expect("parse");
-        let leaked_program: &'static _ = Box::leak(Box::new(program));
         let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, registry, _) = analyzer.analyze_program(leaked_program).expect("analyze");
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         validate_shadow(&analyzed, &registry)
     }
 

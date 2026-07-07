@@ -128,7 +128,7 @@ let x: int = "42"  // String, not int
 // Correct:
 let x: int = "42".parse()  // Convert to int"#.to_string()),
             rust_codes: vec!["E0308".to_string()],
-            maturity: GuaranteeMaturity::Heuristic,
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0004: Immutable variable
@@ -223,7 +223,7 @@ let data = vec![1, 2, 3]
 process(data.clone())  // Explicit clone
 println!("{}", data.len())"#.to_string()),
             rust_codes: vec!["E0382".to_string()],
-            maturity: GuaranteeMaturity::Heuristic,
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0008: Borrow error
@@ -251,7 +251,7 @@ let y = &x
 // Use y first, then borrow mutably
 let z = &mut x"#.to_string()),
             rust_codes: vec!["E0502".to_string(), "E0503".to_string()],
-            maturity: GuaranteeMaturity::Heuristic,
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0009: Missing field
