@@ -1,0 +1,47 @@
+// Decima-style 2-frame edge anti-aliasing resolve (FXAA + edge resample helper pass).
+
+use "wjsl_std/gbuffer.wjsl"
+
+@group(0) @binding(0) storage read input_color: array<vec4<f32>>;
+@group(0) @binding(1) storage read_write output_color: array<vec4<f32>>;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(3) uniform screen_size: vec2<u32>;
+@group(0) @binding(4) uniform frame_parity: u32;
+
+fn luminance(c: vec3<f32>) -> f32 {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+fn sample_at(x: i32, y: i32, w: u32, h: u32) -> vec3<f32> {
+    let cx = clamp(x, 0, i32(w) - 1);
+    let cy = clamp(y, 0, i32(h) - 1);
+    return input_color[u32(cy) * w + u32(cx)].rgb;
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let idx = id.y * width + id.x;
+    let ix = i32(id.x);
+    let iy = i32(id.y);
+
+    var offset_x = 0;
+    var offset_y = 0;
+    if (frame_parity == 0u) {
+        offset_x = 1;
+    } else {
+        offset_y = 1;
+    }
+
+    let c = sample_at(ix, iy, width, height);
+    let edge = sample_at(ix + offset_x, iy + offset_y, width, height);
+    let lum_diff = abs(luminance(c) - luminance(edge));
+    if (lum_diff > 0.08) {
+        output_color[idx] = vec4(mix(c, edge, 0.5), 1.0);
+    } else {
+        output_color[idx] = vec4(c, 1.0);
+    }
+}

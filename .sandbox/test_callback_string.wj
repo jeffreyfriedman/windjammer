@@ -1,9 +1,0 @@
-fn call_with_ref(callback: fn(&String) -> int, value: String) -> int {
-    callback(&value)
-}
-
-fn main() {
-    let result = call_with_ref(|s| s.len(), "Hello")
-    println!("Length: {}", result)
-}
-

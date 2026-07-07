@@ -15,28 +15,22 @@
 //! Validates that game shaders written in WJSL can be correctly transpiled
 //! to WGSL by the transpile_wjsl() pipeline.
 
-use std::path::Path;
 use windjammer::wjsl::transpile_wjsl;
 
-fn game_shaders_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/src/shaders")
-}
+#[path = "common/wjsl_shader_fixtures.rs"]
+mod wjsl_shader_fixtures;
 
-fn game_shaders_available() -> bool {
-    game_shaders_dir().exists()
+fn shader_fixtures_dir() -> std::path::PathBuf {
+    wjsl_shader_fixtures::shader_fixtures_dir()
 }
 
 fn transpile_shader(filename: &str) -> String {
-    let shader_dir = game_shaders_dir();
-    let source = std::fs::read_to_string(shader_dir.join(filename))
-        .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir)
+    wjsl_shader_fixtures::transpile_fixture_shader(filename)
         .unwrap_or_else(|e| panic!("{} should transpile: {}", filename, e))
 }
 
 fn read_shader_source(filename: &str) -> String {
-    let shader_dir = game_shaders_dir();
+    let shader_dir = shader_fixtures_dir();
     let source = std::fs::read_to_string(shader_dir.join(filename))
         .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
     windjammer::wjsl::resolve_includes(&source, &shader_dir, &mut Vec::new())
@@ -147,51 +141,24 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
 #[test]
 fn test_wjsl_voxel_composite_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
     let wgsl = transpile_shader("voxel_composite.wjsl");
     assert!(!wgsl.is_empty(), "Generated WGSL should not be empty");
 }
 
 #[test]
 fn test_wjsl_voxel_lighting_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
     let wgsl = transpile_shader("voxel_lighting.wjsl");
     assert!(!wgsl.is_empty());
 }
 
 #[test]
 fn test_wjsl_voxel_denoise_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let source = std::fs::read_to_string(
-        "../windjammer-game/windjammer-game-core/shaders/voxel_denoise.wjsl",
-    );
-    if let Ok(source) = source {
-        match transpile_wjsl(&source) {
-            Ok(wgsl) => {
-                assert!(!wgsl.is_empty());
-            }
-            Err(e) => {
-                panic!("voxel_denoise.wjsl failed to transpile: {}", e);
-            }
-        }
-    }
+    let wgsl = transpile_shader("voxel_denoise.wjsl");
+    assert!(!wgsl.is_empty());
 }
 
 #[test]
 fn test_wjsl_voxel_raymarch_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
     let wgsl = transpile_shader("voxel_raymarch.wjsl");
     assert!(!wgsl.is_empty());
 }
@@ -320,10 +287,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
 #[test]
 fn test_wjsl_full_lighting_shader() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
     let wgsl = transpile_shader("voxel_lighting.wjsl");
     assert!(
         wgsl.contains("fn main"),
@@ -333,10 +296,6 @@ fn test_wjsl_full_lighting_shader() {
 
 #[test]
 fn test_wjsl_gbuffer_struct_consistency() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
     let raymarch = read_shader_source("voxel_raymarch.wjsl");
     let lighting = read_shader_source("voxel_lighting.wjsl");
     let denoise = read_shader_source("voxel_denoise.wjsl");
@@ -378,13 +337,9 @@ fn test_wjsl_gbuffer_struct_consistency() {
 /// TDD: Every top-level game shader in src/shaders/ must transpile (roadmap: 27+ passes).
 #[test]
 fn test_all_top_level_game_shaders_transpile() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let dir = game_shaders_dir();
+    let dir = shader_fixtures_dir();
     let mut count = 0usize;
-    for entry in std::fs::read_dir(&dir).expect("read src/shaders") {
+    for entry in std::fs::read_dir(&dir).expect("read shader fixtures") {
         let entry = entry.expect("dir entry");
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("wjsl") {

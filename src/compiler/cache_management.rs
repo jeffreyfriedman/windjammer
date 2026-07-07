@@ -68,8 +68,16 @@ fn is_mod_wj_source(source_path: &Path) -> bool {
     source_path.file_name().and_then(|n| n.to_str()) == Some("mod.wj")
 }
 
+fn is_lib_wj_source(source_path: &Path) -> bool {
+    source_path.file_name().and_then(|n| n.to_str()) == Some("lib.wj")
+}
+
 fn is_mod_items_output(output_path: &Path) -> bool {
     output_path.file_name().and_then(|n| n.to_str()) == Some("_mod_items.rs")
+}
+
+fn is_lib_items_output(output_path: &Path) -> bool {
+    output_path.file_name().and_then(|n| n.to_str()) == Some("_lib_items.rs")
 }
 
 /// Path to the module-system `mod.rs` that absorbs merged `mod.wj` output.
@@ -96,6 +104,52 @@ fn merged_mod_rs_for_mod_wj(
     Some(mod_rs)
 }
 
+/// Crate-root `lib.wj` merges into `lib.rs` after module generation.
+fn merged_lib_rs_for_lib_wj(output_dir: &Path) -> Option<PathBuf> {
+    let lib_rs = output_dir.join("lib.rs");
+    if lib_rs.exists() {
+        Some(lib_rs)
+    } else {
+        None
+    }
+}
+
+fn library_merged_output_valid(
+    source: &str,
+    source_path: &Path,
+    output_path: &Path,
+    src_base: &Path,
+    output_dir: &Path,
+    dep_roots: &[PathBuf],
+    dep_epoch: Option<u64>,
+) -> bool {
+    let fingerprint_ok = if let Some(epoch) = dep_epoch {
+        crate::compiler::incremental::fingerprint_matches_cached_with_dep_epoch(
+            source,
+            source_path,
+            epoch,
+        )
+    } else {
+        crate::compiler::incremental::fingerprint_matches_cached(source, source_path, dep_roots)
+    };
+    if !fingerprint_ok {
+        return false;
+    }
+    if is_mod_wj_source(source_path) && is_mod_items_output(output_path) && !output_path.exists() {
+        if let Some(mod_rs) = merged_mod_rs_for_mod_wj(source_path, src_base, output_dir) {
+            return mod_rs.exists() && is_output_fresh(source_path, &mod_rs);
+        }
+        return false;
+    }
+    if is_lib_wj_source(source_path) && is_lib_items_output(output_path) && !output_path.exists() {
+        if let Some(lib_rs) = merged_lib_rs_for_lib_wj(output_dir) {
+            return lib_rs.exists() && is_output_fresh(source_path, &lib_rs);
+        }
+        return false;
+    }
+    false
+}
+
 /// Library `mod.wj` codegen writes `_mod_items.rs`, then `generate_mod_file` merges it
 /// into `mod.rs` and deletes `_mod_items.rs`. Stale detection must accept that path.
 pub fn is_library_codegen_cache_valid(
@@ -106,15 +160,19 @@ pub fn is_library_codegen_cache_valid(
     output_dir: &Path,
     dep_roots: &[PathBuf],
 ) -> bool {
-    if is_mod_wj_source(source_path) && is_mod_items_output(output_path) && !output_path.exists() {
-        if !crate::compiler::incremental::fingerprint_matches_cached(source, source_path, dep_roots)
-        {
-            return false;
-        }
-        if let Some(mod_rs) = merged_mod_rs_for_mod_wj(source_path, src_base, output_dir) {
-            return mod_rs.exists() && is_output_fresh(source_path, &mod_rs);
-        }
-        return false;
+    if (is_mod_wj_source(source_path) && is_mod_items_output(output_path)
+        || is_lib_wj_source(source_path) && is_lib_items_output(output_path))
+        && !output_path.exists()
+    {
+        return library_merged_output_valid(
+            source,
+            source_path,
+            output_path,
+            src_base,
+            output_dir,
+            dep_roots,
+            None,
+        );
     }
     is_codegen_cache_valid(source, source_path, output_path, dep_roots)
 }
@@ -127,18 +185,19 @@ pub fn is_library_codegen_cache_valid_with_dep_epoch(
     output_dir: &Path,
     dep_epoch: u64,
 ) -> bool {
-    if is_mod_wj_source(source_path) && is_mod_items_output(output_path) && !output_path.exists() {
-        if !crate::compiler::incremental::fingerprint_matches_cached_with_dep_epoch(
+    if (is_mod_wj_source(source_path) && is_mod_items_output(output_path)
+        || is_lib_wj_source(source_path) && is_lib_items_output(output_path))
+        && !output_path.exists()
+    {
+        return library_merged_output_valid(
             source,
             source_path,
-            dep_epoch,
-        ) {
-            return false;
-        }
-        if let Some(mod_rs) = merged_mod_rs_for_mod_wj(source_path, src_base, output_dir) {
-            return mod_rs.exists() && is_output_fresh(source_path, &mod_rs);
-        }
-        return false;
+            output_path,
+            src_base,
+            output_dir,
+            &[],
+            Some(dep_epoch),
+        );
     }
     crate::compiler::incremental::is_codegen_cache_valid_with_dep_epoch(
         source,
@@ -158,6 +217,18 @@ pub fn compute_dirty_files(
     output: &Path,
     dep_roots: &[PathBuf],
 ) -> (Vec<usize>, usize) {
+    let dep_epoch = crate::compiler::incremental::dep_metadata_epoch(dep_roots);
+    compute_dirty_files_with_dep_epoch(wj_files, src_base, output, dep_roots, dep_epoch)
+}
+
+/// Like [`compute_dirty_files`] but pins dep-metadata epoch for the whole build.
+pub fn compute_dirty_files_with_dep_epoch(
+    wj_files: &[(PathBuf, String)],
+    src_base: &Path,
+    output: &Path,
+    _dep_roots: &[PathBuf],
+    dep_epoch: u64,
+) -> (Vec<usize>, usize) {
     let compiler_changed = !is_compiler_stamp_fresh(output);
     if compiler_changed {
         return ((0..wj_files.len()).collect(), 0);
@@ -176,7 +247,16 @@ pub fn compute_dirty_files(
                 }
             };
 
-        if is_library_codegen_cache_valid(source, file, &output_file, src_base, output, dep_roots) {
+        // Match post-build stale detection: re-read from disk and use dep epoch snapshot.
+        let source = std::fs::read_to_string(file).unwrap_or_else(|_| source.clone());
+        if is_library_codegen_cache_valid_with_dep_epoch(
+            &source,
+            file,
+            &output_file,
+            src_base,
+            output,
+            dep_epoch,
+        ) {
             skipped += 1;
         } else {
             dirty_indices.push(i);
@@ -206,6 +286,23 @@ pub fn is_compiler_stamp_fresh(output: &Path) -> bool {
 /// Write (or refresh) the compiler stamp in the output directory.
 pub fn write_compiler_stamp(output: &Path) -> std::io::Result<()> {
     crate::compiler::incremental::write_compiler_stamp(output)
+}
+
+/// When the compiler binary changed since the last build, drop stale analysis meta so
+/// fingerprint checks cannot falsely treat old generated Rust as fresh.
+pub fn invalidate_meta_cache_on_compiler_change(src_base: &Path, output: &Path) -> bool {
+    if crate::compiler::incremental::is_compiler_stamp_fresh(output) {
+        return false;
+    }
+    let cache_root = crate::metadata::meta_cache_root(src_base);
+    if cache_root.exists() {
+        let _ = std::fs::remove_dir_all(&cache_root);
+        eprintln!(
+            "⟳ Compiler changed — cleared analysis cache at {}",
+            cache_root.display()
+        );
+    }
+    true
 }
 
 /// Check if ALL source files are fresh (whole-crate fast path).

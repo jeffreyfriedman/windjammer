@@ -100,7 +100,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.indent_level += 1;
         output.push_str(&self.generate_block(then_body));
         self.indent_level -= 1;
-        self.in_void_block = old_in_void_block;
 
         output.push_str(&self.indent());
         output.push('}');
@@ -116,6 +115,8 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&self.indent());
             output.push('}');
         }
+
+        self.in_void_block = old_in_void_block;
 
         self.coerce_string_literals_to_owned = old_coerce_lit;
 

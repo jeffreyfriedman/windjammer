@@ -209,12 +209,16 @@ impl IntInference {
                 // e.g., tilemap.set_tile() → infer receiver type "Tilemap" → lookup "Tilemap::set_tile"
                 // TDD FIX: Extract generic type parameters for HashMap<K,V> specialization
                 let receiver_type = self.infer_type_from_expression(object);
+                let receiver_is_map = receiver_type
+                    .as_ref()
+                    .is_some_and(|ty| self.extract_map_key_type(ty).is_some());
                 if std::env::var("WJ_DEBUG_INT_INFERENCE").is_ok() {
                     eprintln!("[INT_INFERENCE DEBUG] Method call: {}, Receiver type: {:?}", method, receiver_type);
                 }
                 let (qualified_sig, receiver_generics) =
                     receiver_type
-                        .map(|ty| match &ty {
+                        .as_ref()
+                        .map(|ty| match ty {
                             // TDD FIX: Handle Parameterized types (e.g., HashMap<u32, Keyframe>)
                             Type::Parameterized(base, type_params) => {
                                 let qualified = format!("{}::{}", base, method);
@@ -282,9 +286,9 @@ impl IntInference {
                 let is_vec_index_method = method == "remove"
                     || method == "swap"
                     || method == "swap_remove"
-                    || method == "insert"
                     || method == "drain"
-                    || method == "split_off";
+                    || method == "split_off"
+                    || (method == "insert" && !receiver_is_map);
                 let receiver_is_vec = match self.infer_type_from_expression(object) {
                         Some(Type::Vec(_)) => true,
                         Some(Type::Custom(name)) if name.starts_with("Vec<") => true,
@@ -311,8 +315,8 @@ impl IntInference {
                 // Fallback: search for any method with matching name
                 // BUT skip if this is a Vec usize method to avoid HashMap::remove() conflicts
                 let method_sig = method_sig.or_else(|| {
-                    if skip_fallback {
-                        return None; // Don't search - we'll add usize constraint instead
+                    if skip_fallback || receiver_is_map {
+                        return None; // Map methods use receiver key type, not ambiguous fallback
                     }
                     self.function_signatures
                         .iter()
@@ -365,10 +369,12 @@ impl IntInference {
 
                 // TDD FIX: HashMap<K,V>::insert and Vec<T>::push - propagate generic types from receiver
                 // Handles: mgr.name_to_id.insert("test", 42) where name_to_id: HashMap<string, int>
-                if let Some(receiver_type) = self.infer_type_from_expression(object) {
-                    // HashMap<K,V>.insert(K, V) - constrain BOTH key and value arguments
-                    if method == "insert" {
-                        // Constrain KEY (first argument) to K
+                if let Some(receiver_type) = receiver_type {
+                    let map_key_methods = matches!(
+                        method.as_str(),
+                        "insert" | "get" | "get_mut" | "contains_key" | "remove"
+                    );
+                    if map_key_methods {
                         if let Some(key_type) = self.extract_map_key_type(&receiver_type) {
                             if let Some(int_ty) = self.extract_int_type(&key_type) {
                                 if let Some((_label, key_arg)) = arguments.first() {
@@ -376,12 +382,14 @@ impl IntInference {
                                     self.constraints.push(IntConstraint::MustBe(
                                         key_id,
                                         int_ty,
-                                        "HashMap/BTreeMap.insert key type".to_string(),
+                                        format!("HashMap/BTreeMap.{} key type", method),
                                     ));
                                 }
                             }
                         }
-                        // Constrain VALUE (second argument) to V
+                    }
+                    // HashMap<K,V>.insert(K, V) - constrain VALUE (second argument) to V
+                    if method == "insert" {
                         if let Some(value_type) = self.extract_map_value_type(&receiver_type) {
                             if let Some(int_ty) = self.extract_int_type(&value_type) {
                                 if let Some((_label, value_arg)) = arguments.get(1) {

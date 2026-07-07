@@ -1,0 +1,56 @@
+// Bloom Gaussian Blur Compute Shader (WJSL)
+//
+// Two-pass separable Gaussian blur (horizontal or vertical).
+// Direct buffer reads for correctness with 8x8 workgroups.
+// Kernel radius: 7 pixels (15-tap Gaussian).
+// Direction controlled by BloomBlurParams (direction_x > 0.5 = horizontal).
+
+struct BloomBlurParams {
+    direction_x: f32,
+    direction_y: f32,
+    _pad1: f32,
+    _pad2: f32,
+}
+
+@group(0) @binding(0) uniform params: BloomBlurParams;
+@group(0) @binding(1) storage read blur_input: array<vec4<f32> >;
+@group(0) @binding(2) storage read_write blur_output: array<vec4<f32> >;
+@group(0) @binding(3) uniform screen_size: vec2<u32 >;
+
+const RADIUS: i32 = 7i;
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let is_horizontal = params.direction_x > 0.5;
+    let sigma = 3.5;
+    let sigma2 = 2.0 * sigma * sigma;
+    let mut result = vec3(0.0);
+    let mut weight_sum = 0.0;
+
+    for (var offset: i32 = -RADIUS; offset <= RADIUS; offset++) {
+        let mut gx: i32;
+        let mut gy: i32;
+        if (is_horizontal) {
+            gx = clamp(i32(id.x) + offset, 0i, i32(width) - 1i);
+            gy = i32(id.y);
+        } else {
+            gx = i32(id.x);
+            gy = clamp(i32(id.y) + offset, 0i, i32(height) - 1i);
+        }
+        let pidx = u32(gy) * width + u32(gx);
+        let w = exp(-f32(offset * offset) / sigma2);
+        result += blur_input[pidx].rgb * w;
+        weight_sum += w;
+    }
+
+    if (weight_sum > 0.0) {
+        result = result / weight_sum;
+    }
+
+    let pixel_idx = id.y * width + id.x;
+    blur_output[pixel_idx] = vec4(result, 1.0);
+}

@@ -1,0 +1,50 @@
+// Precomputed atmospheric scattering + skylight sampling (Decima-style LUT path).
+// Complements analytic height fog pass.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/volumetric.wjsl"
+
+@group(0) @binding(0) uniform atmosphere: AtmosphereParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32>>;
+
+fn skylight_for_ray(ray_dir: vec3<f32>) -> vec3<f32> {
+    let up = max(ray_dir.y, 0.0);
+    let horizon = 1.0 - abs(ray_dir.y);
+    let top = atmosphere.sky_top_color;
+    let hor = atmosphere.sky_horizon_color;
+    let sky = mix(hor, top, up);
+    let sun_dot = max(dot(ray_dir, normalize(atmosphere.sun_direction)), 0.0);
+    let sun_disc = pow(sun_dot, 512.0 / max(atmosphere.sun_size, 0.001));
+    return sky + atmosphere.sun_color * sun_disc * atmosphere.sun_intensity;
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = u32(camera.screen_size.x);
+    let height = u32(camera.screen_size.y);
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    let gbuf = gbuffer[pixel_idx];
+    let scene = color_output[pixel_idx];
+    let mat = gbuf.normal.w;
+    let depth = gbuf.depth;
+    let no_geometry = (mat == 0.0) || (depth >= camera.far_plane) || (scene.a == 0.0);
+
+    if (!no_geometry) {
+        let aerial = 1.0 - exp(-depth * atmosphere.fog_density * 0.5);
+        let sky_tint = skylight_for_ray(normalize(vec3(0.0, 0.3, 1.0)));
+        let tinted = mix(scene.rgb, sky_tint, aerial * 0.35);
+        color_output[pixel_idx] = vec4(tinted, 1.0);
+        return;
+    }
+
+    let pixel = vec2<f32>(f32(id.x), f32(id.y));
+    let ray_dir = generate_ray(pixel + vec2(0.5, 0.5), camera);
+    let sky = skylight_for_ray(normalize(ray_dir));
+    color_output[pixel_idx] = vec4(sky, 1.0);
+}

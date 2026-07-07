@@ -23,7 +23,6 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_vec_push_copy_type() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 struct Entity {
     index: i64,
 }
@@ -70,7 +69,6 @@ fn test_hashmap_insert_copy_key() {
     let source = r#"
 use std::collections::HashMap
 
-@derive(Copy, Clone, Debug, Hash, Eq, PartialEq)
 struct EntityId {
     id: i64,
 }
@@ -115,7 +113,6 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_call_with_copy_param() {
     let source = r#"
-@derive(Copy, Clone)
 struct Point {
     x: int,
     y: int,

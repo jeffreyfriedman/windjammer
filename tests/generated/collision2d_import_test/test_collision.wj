@@ -1,6 +1,0 @@
-
-use collision2d::check_collision
-
-pub fn test_collision() {
-    // Function body
-}

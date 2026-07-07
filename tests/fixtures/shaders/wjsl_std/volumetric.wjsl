@@ -1,0 +1,85 @@
+// Shared volumetric rendering helpers (DRY: clouds, fog, smoke).
+// Henyey-Greenstein phase, Beer-Lambert transmittance, height fog density, LUT sampling.
+
+const VOL_PI: f32 = 3.14159265;
+
+/// Henyey-Greenstein phase function for anisotropic scattering.
+fn vol_hg_phase(cos_theta: f32, g: f32) -> f32 {
+    let g2 = g * g;
+    let denom = 1.0 + g2 - 2.0 * g * cos_theta;
+    return (1.0 - g2) / (4.0 * VOL_PI * pow(max(denom, 1e-6), 1.5));
+}
+
+/// Beer-Lambert transmittance over a segment with constant extinction.
+fn vol_beer_lambert(extinction: f32, segment_length: f32) -> f32 {
+    return exp(-extinction * segment_length);
+}
+
+/// Integrate transmittance along a ray with per-step density samples.
+fn vol_march_transmittance_steps(
+    origin: vec3<f32>,
+    dir: vec3<f32>,
+    t_min: f32,
+    t_max: f32,
+    steps: u32,
+    absorption_scale: f32,
+    density_scale: f32
+) -> f32 {
+    if (t_max <= t_min) {
+        return 1.0;
+    }
+    let step_len = (t_max - t_min) / f32(steps);
+    var transmittance = 1.0;
+    var t = t_min + step_len * 0.5;
+    for (var i = 0u; i < steps; i++) {
+        let pos = origin + dir * t;
+        let density = density_scale;
+        transmittance = transmittance * vol_beer_lambert(density * absorption_scale, step_len);
+        if (transmittance < 0.001) {
+            break;
+        }
+        t = t + step_len;
+    }
+    return transmittance;
+}
+
+/// Exponential height fog density (scale height in world units).
+fn vol_height_fog_density(world_y: f32, base_height: f32, scale_height: f32, density: f32) -> f32 {
+    let h = max(world_y - base_height, 0.0);
+    return density * exp(-h / max(scale_height, 0.001));
+}
+
+/// Sample a 2D LUT (sun zenith x view zenith) with bilinear filtering.
+fn vol_sample_lut2d(lut: array<f32>, width: u32, height: u32, u: f32, v: f32) -> vec3<f32> {
+    let w = max(width, 1u);
+    let h = max(height, 1u);
+    let fu = clamp(u, 0.0, 1.0) * f32(w - 1u);
+    let fv = clamp(v, 0.0, 1.0) * f32(h - 1u);
+    let x0 = u32(floor(fu));
+    let y0 = u32(floor(fv));
+    let x1 = min(x0 + 1u, w - 1u);
+    let y1 = min(y0 + 1u, h - 1u);
+    let tx = fu - f32(x0);
+    let ty = fv - f32(y0);
+    let idx00 = (y0 * w + x0) * 3u;
+    let idx10 = (y0 * w + x1) * 3u;
+    let idx01 = (y1 * w + x0) * 3u;
+    let idx11 = (y1 * w + x1) * 3u;
+    let c00 = vec3(lut[idx00], lut[idx00 + 1u], lut[idx00 + 2u]);
+    let c10 = vec3(lut[idx10], lut[idx10 + 1u], lut[idx10 + 2u]);
+    let c01 = vec3(lut[idx01], lut[idx01 + 1u], lut[idx01 + 2u]);
+    let c11 = vec3(lut[idx11], lut[idx11 + 1u], lut[idx11 + 2u]);
+    let c0 = mix(c00, c10, tx);
+    let c1 = mix(c01, c11, tx);
+    return mix(c0, c1, ty);
+}
+
+/// Analytic height fog blend (Decima-style): L = L_bg * alpha + L_sun + L_amb
+fn vol_height_fog_blend(
+    background: vec3<f32>,
+    sun_scatter: vec3<f32>,
+    ambient: vec3<f32>,
+    alpha: f32
+) -> vec3<f32> {
+    return background * alpha + sun_scatter + ambient;
+}

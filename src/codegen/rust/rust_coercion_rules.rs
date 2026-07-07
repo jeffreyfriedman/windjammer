@@ -97,9 +97,7 @@ impl Coercion {
                 }
             }
             Coercion::Borrow => {
-                if !expr_str.starts_with('&') {
-                    *expr_str = format!("&{}", expr_str);
-                }
+                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(expr_str);
             }
             Coercion::BorrowMut => {
                 if !expr_str.starts_with("&mut ") {

@@ -1,4 +1,9 @@
-//! Rejects Rust-leakage patterns (e.g. `.as_str()`) before analysis runs.
+//! Rejects Rust-leakage patterns before analysis runs.
+//!
+//! Forbidden patterns include:
+//! - `.as_str()` calls (compiler handles String → &str automatically)
+//! - `@derive(Copy)`, `@derive(Clone)`, etc. for standard traits
+//!   (compiler auto-infers derivable traits from struct field types)
 
 use crate::parser::ast::core::Expression;
 use crate::parser::*;
@@ -7,6 +12,7 @@ use crate::parser::*;
 pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
     program: &Program<'ast>,
 ) -> Result<(), String> {
+    check_forbidden_decorators(program)?;
     fn check_expr(expr: &Expression) -> Result<(), String> {
         match expr {
             Expression::MethodCall {
@@ -30,7 +36,6 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                          don't have .as_str())."
                         .to_string());
                 }
-
                 check_expr(object)?;
                 for (_label, arg) in arguments {
                     check_expr(arg)?;
@@ -250,5 +255,61 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
         }
     }
 
+    Ok(())
+}
+
+fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), String> {
+    for item in &program.items {
+        match item {
+            Item::Struct { decl, .. } => {
+                check_struct_decorators(&decl.name, &decl.decorators)?;
+            }
+            Item::Mod { items, .. } => {
+                let mod_program = Program {
+                    items: items.clone(),
+                };
+                check_forbidden_decorators(&mod_program)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+const FORBIDDEN_DERIVE_TRAITS: &[(&str, &str)] = &[
+    ("Copy", "Copy is auto-inferred from field types — explicit @derive(Copy) is Rust leakage"),
+    ("Serialize", "Serialize is auto-derived project-wide when using std::json — remove @derive(Serialize)"),
+    ("Deserialize", "Deserialize is auto-derived project-wide when using std::json — remove @derive(Deserialize)"),
+];
+
+fn check_struct_decorators(struct_name: &str, decorators: &[Decorator<'_>]) -> Result<(), String> {
+    for decorator in decorators {
+        if decorator.name != "derive" && decorator.name != "auto" {
+            continue;
+        }
+        let deco_name = &decorator.name;
+        for (_, expr) in &decorator.arguments {
+            if let Expression::Identifier {
+                name: trait_name, ..
+            } = expr
+            {
+                for (forbidden, reason) in FORBIDDEN_DERIVE_TRAITS {
+                    if trait_name == forbidden {
+                        return Err(format!(
+                            "error: `@{deco_name}({forbidden})` on struct `{struct_name}` is a forbidden pattern\n\
+                             \n\
+                             {reason}\n\
+                             \n\
+                             The Windjammer compiler auto-derives traits based on struct field types.\n\
+                             Just define the struct without @{deco_name} — the compiler handles the rest.\n\
+                             \n\
+                             ❌ @{deco_name}({forbidden})\n\
+                             ✅ (remove the decorator entirely)",
+                        ));
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }

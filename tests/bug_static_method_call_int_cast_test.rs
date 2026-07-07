@@ -192,6 +192,7 @@ fn create(pos: Vec3) -> Emitter {
                 Type::Custom("f32".to_string()),
                 Type::Custom("f32".to_string()),
             ],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
             return_type: Some(Type::Custom("Emitter".to_string())),
             return_ownership: OwnershipMode::Owned,
@@ -278,6 +279,7 @@ fn test_signature_registry_collision_detection() {
         FunctionSignature {
             name: "new".to_string(),
             param_types: vec![Type::Custom("f32".to_string())],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("Foo".to_string())),
             return_ownership: OwnershipMode::Owned,
@@ -297,6 +299,7 @@ fn test_signature_registry_collision_detection() {
         FunctionSignature {
             name: "new".to_string(),
             param_types: vec![Type::Custom("f32".to_string())],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("Foo".to_string())),
             return_ownership: OwnershipMode::Owned,
@@ -316,6 +319,7 @@ fn test_signature_registry_collision_detection() {
         FunctionSignature {
             name: "new".to_string(),
             param_types: vec![Type::Custom("i32".to_string())],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("Foo".to_string())),
             return_ownership: OwnershipMode::Owned,
@@ -339,6 +343,7 @@ fn test_collision_survives_merge() {
         FunctionSignature {
             name: "new".to_string(),
             param_types: vec![Type::Custom("f32".to_string())],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             return_ownership: OwnershipMode::Owned,
@@ -353,6 +358,7 @@ fn test_collision_survives_merge() {
         FunctionSignature {
             name: "new".to_string(),
             param_types: vec![Type::Custom("i32".to_string())],
+            formal_param_types: vec![],
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             return_ownership: OwnershipMode::Owned,

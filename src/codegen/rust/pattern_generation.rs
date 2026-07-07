@@ -164,16 +164,43 @@ impl<'ast> CodeGenerator<'ast> {
         pattern: &Pattern<'s>,
         body_stmts: &[&Statement<'s>],
         scrutinee_is_ref: bool,
+        body_expr: Option<&Expression<'s>>,
+        scrutinee: Option<&Expression<'s>>,
     ) -> Pattern<'s> {
         use crate::parser::EnumPatternBinding;
+        let binding_type_for = |name: &str| -> Option<Type> {
+            scrutinee.and_then(|scr| {
+                self.infer_match_bound_types_owned(scr, pattern)
+                    .into_iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, t)| t)
+                    .or_else(|| {
+                        self.infer_match_bound_types(scr, pattern)
+                            .into_iter()
+                            .find(|(n, _)| n == name)
+                            .map(|(_, t)| t)
+                    })
+            })
+        };
+        let binding_needs_mut = |name: &str| -> bool {
+            let field_mut = body_stmts
+                .iter()
+                .any(|stmt| self.statement_mutates_variable_field(stmt, name));
+            if field_mut {
+                return true;
+            }
+            if let (Some(body), Some(ty)) = (body_expr, binding_type_for(name)) {
+                if self.binding_receives_mutating_call_with_sig_check(body, name, &ty) {
+                    return true;
+                }
+            }
+            body_stmts
+                .iter()
+                .any(|stmt| self.statement_nonreadonly_method_call_on_var(stmt, name))
+        };
         match pattern {
             Pattern::Identifier(name) => {
-                let is_mutated = body_stmts.iter().any(|stmt| {
-                    self.statement_mutates_variable_field(stmt, name)
-                        || (scrutinee_is_ref
-                            && self.statement_nonreadonly_method_call_on_var(stmt, name))
-                });
-                if is_mutated {
+                if binding_needs_mut(name) {
                     if scrutinee_is_ref {
                         Pattern::RefMut(name.clone())
                     } else {
@@ -186,12 +213,7 @@ impl<'ast> CodeGenerator<'ast> {
             Pattern::EnumVariant(variant, binding) => {
                 let new_binding = match binding {
                     EnumPatternBinding::Single(name) => {
-                        let is_mutated = body_stmts.iter().any(|stmt| {
-                            self.statement_mutates_variable_field(stmt, name)
-                                || (scrutinee_is_ref
-                                    && self.statement_nonreadonly_method_call_on_var(stmt, name))
-                        });
-                        if is_mutated {
+                        if binding_needs_mut(name) {
                             if scrutinee_is_ref {
                                 EnumPatternBinding::Tuple(vec![Pattern::RefMut(name.clone())])
                             } else {
@@ -205,7 +227,13 @@ impl<'ast> CodeGenerator<'ast> {
                         let new_patterns: Vec<Pattern<'s>> = patterns
                             .iter()
                             .map(|p| {
-                                self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref)
+                                self.upgrade_pattern_mut_bindings(
+                                    p,
+                                    body_stmts,
+                                    scrutinee_is_ref,
+                                    body_expr,
+                                    scrutinee,
+                                )
                             })
                             .collect();
                         EnumPatternBinding::Tuple(new_patterns)
@@ -217,7 +245,15 @@ impl<'ast> CodeGenerator<'ast> {
             Pattern::Tuple(patterns) => {
                 let new_patterns: Vec<Pattern<'s>> = patterns
                     .iter()
-                    .map(|p| self.upgrade_pattern_mut_bindings(p, body_stmts, scrutinee_is_ref))
+                    .map(|p| {
+                        self.upgrade_pattern_mut_bindings(
+                            p,
+                            body_stmts,
+                            scrutinee_is_ref,
+                            body_expr,
+                            scrutinee,
+                        )
+                    })
                     .collect();
                 Pattern::Tuple(new_patterns)
             }
@@ -259,19 +295,45 @@ impl<'ast> CodeGenerator<'ast> {
                     false
                 }
             }
-            Expression::MethodCall { method, .. } => {
+            Expression::MethodCall { method, object, .. } => {
+                // .get() on HashMap/BTreeMap always returns Option<&V> in Rust.
+                // Check object type via both type inference and struct field lookup.
+                if method == "get" {
+                    if let Some(obj_ty) = self.infer_expression_type(object) {
+                        if Self::is_hashmap_like_type(&obj_ty) {
+                            return true;
+                        }
+                    }
+                    // Fallback: check struct field types when object is self.field
+                    if let Expression::FieldAccess {
+                        object: fa_obj,
+                        field: fa_field,
+                        ..
+                    } = object
+                    {
+                        if let Expression::Identifier { name, .. } = fa_obj {
+                            if name == "self" {
+                                if let Some(ft) = self.get_struct_field_type(fa_field) {
+                                    if Self::is_hashmap_like_type(&ft) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if let Some(ty) = self.infer_expression_type(expr) {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
                         return true;
                     }
-                    // HashMap.get()/BTreeMap.get() returns Option<&V>.
-                    // Custom methods like Map::get -> Option<i32> return owned values.
                     if method == "get" {
-                        if let Type::Option(inner) = ty {
-                            return matches!(
+                        if let Type::Option(inner) = &ty {
+                            if matches!(
                                 inner.as_ref(),
                                 Type::Reference(_) | Type::MutableReference(_)
-                            );
+                            ) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -282,18 +344,49 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
                         return true;
                     }
-                    if let Expression::FieldAccess { field, .. } = function {
+                    if let Expression::FieldAccess {
+                        field,
+                        object: fa_obj,
+                        ..
+                    } = function
+                    {
                         if field == "get" {
-                            if let Type::Option(inner) = ty {
-                                return matches!(
+                            if let Type::Option(inner) = &ty {
+                                if matches!(
                                     inner.as_ref(),
                                     Type::Reference(_) | Type::MutableReference(_)
-                                );
+                                ) {
+                                    return true;
+                                }
+                            }
+                            if let Some(obj_ty) = self.infer_expression_type(fa_obj) {
+                                if Self::is_hashmap_like_type(&obj_ty) {
+                                    return true;
+                                }
                             }
                         }
                     }
                 }
                 false
+            }
+            _ => false,
+        }
+    }
+
+    fn get_struct_field_type(&self, field_name: &str) -> Option<Type> {
+        let struct_name = self.current_struct_name.as_ref()?;
+        let field_types = self.struct_field_types.get(struct_name)?;
+        field_types.get(field_name).cloned()
+    }
+
+    fn is_hashmap_like_type(ty: &Type) -> bool {
+        match ty {
+            Type::Custom(name) => {
+                // Bare "Map" without type params could be a user struct, not a HashMap alias
+                matches!(name.as_str(), "HashMap" | "BTreeMap" | "IndexMap")
+            }
+            Type::Parameterized(name, _) => {
+                matches!(name.as_str(), "HashMap" | "BTreeMap" | "Map" | "IndexMap")
             }
             _ => false,
         }

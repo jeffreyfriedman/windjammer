@@ -267,6 +267,8 @@ pub struct Analyzer<'ast> {
     // Track struct definitions with @derive(Copy) to determine if they're Copy
     /// Arc-wrapped to avoid O(n) cloning when shared across 649+ library files.
     copy_structs: Arc<HashSet<String>>,
+    /// Types explicitly annotated with `@derive(Copy)` (not auto-inferred).
+    explicit_copy_structs: Arc<HashSet<String>>,
     // Track trait definitions for impl block analysis
     trait_definitions: HashMap<String, TraitDecl<'ast>>,
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
@@ -289,6 +291,9 @@ pub struct Analyzer<'ast> {
     /// string, cache locality, etc.) during multipass convergence.
     /// Only ownership inference runs. Final pass sets this to false.
     pub convergence_only: bool,
+    /// When true, global ownership already converged (library Step 3) — skip
+    /// per-file multi-pass ownership loop in analyze_program_with_global_arc.
+    pub ownership_preconverged: bool,
 }
 
 impl<'ast> Analyzer<'ast> {
@@ -301,6 +306,7 @@ impl<'ast> Analyzer<'ast> {
             variables: HashMap::new(),
             copy_enums: HashSet::new(),
             copy_structs,
+            explicit_copy_structs: Arc::new(HashSet::new()),
             trait_definitions: HashMap::new(),
             analyzed_trait_methods: HashMap::new(),
             mutated_variables: HashSet::new(),
@@ -309,6 +315,7 @@ impl<'ast> Analyzer<'ast> {
             global_struct_field_types: Arc::new(HashMap::new()),
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
+            ownership_preconverged: false,
         }
     }
 

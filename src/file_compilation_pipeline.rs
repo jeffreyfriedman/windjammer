@@ -423,6 +423,23 @@ fn compile_file_impl(
         .analyze_program_with_global_signatures(&program, &module_compiler.global_signatures)
         .map_err(|e| anyhow::anyhow!("Analysis error: {}", e))?;
 
+    // Safety-Typed IR Pipeline: When enabled, run the new IR pipeline in parallel
+    // with legacy codegen. In bridge mode, it validates but doesn't replace output.
+    #[cfg(feature = "safety_typed_ir")]
+    {
+        use crate::ir::pipeline::DiagnosticSeverity;
+        let mut ir_pipeline = crate::ir::IrPipeline::new();
+        let ir_module = ir_pipeline.lower_to_ir(&analyzed, &signatures);
+        if let Some(_ir_output) = ir_pipeline.try_codegen_from_ir(&ir_module) {
+            eprintln!("[IR] Safety-Typed IR pipeline produced output (not yet active)");
+        }
+        for diag in &ir_module.diagnostics {
+            if matches!(diag.severity, DiagnosticSeverity::Error) {
+                eprintln!("[IR ERROR] {}", diag.message);
+            }
+        }
+    }
+
     // THE WINDJAMMER WAY: Run linter after analysis
     // Single-file `wj build` uses store_program=true; lints must still run so stderr warnings work.
     let mut linter = linter::Linter::new();

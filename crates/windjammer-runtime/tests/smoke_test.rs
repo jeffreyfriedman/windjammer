@@ -25,7 +25,7 @@ fn test_all_modules_exist_and_work() {
     let _set: std::collections::HashSet<String> = collections::new_set();
 
     // std::crypto
-    let hash = crypto::sha256(b"test");
+    let hash = crypto::sha256_bytes(b"test");
     assert!(!hash.is_empty());
 
     // std::csv

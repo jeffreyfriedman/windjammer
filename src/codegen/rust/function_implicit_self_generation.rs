@@ -20,7 +20,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // THE WINDJAMMER WAY: Auto-Self Inference
         // Check if analyzer inferred a self parameter (even if not in AST)
-        let has_inferred_self = analyzed.inferred_ownership.contains_key("self");
+        let has_inferred_self = self.has_param_ownership("self", analyzed);
 
         // Check if this is a constructor (associated function returning the struct type)
         // A constructor returns the struct being implemented, e.g., fn new() -> Tilemap
@@ -72,7 +72,11 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
             if let Some(ownership) = ownership {
-                let body_modifies = self.function_modifies_self_or_derived(&analyzed.decl);
+                let body_modifies = if self.in_trait_impl {
+                    self.function_modifies_self(&analyzed.decl)
+                } else {
+                    self.function_modifies_self_or_derived(&analyzed.decl)
+                };
                 let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
                 let self_param = match ownership {
                     OwnershipMode::Borrowed if !self.in_trait_impl && consumes_self => {
@@ -83,7 +87,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     OwnershipMode::Borrowed => {
-                        if body_modifies {
+                        if !self.in_trait_impl && body_modifies {
                             "&mut self"
                         } else if !self.in_trait_impl && self.current_struct_is_copy() {
                             "self"

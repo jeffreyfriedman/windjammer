@@ -52,6 +52,25 @@ impl<'ast> CodeGenerator<'ast> {
         scrutinee: &Expression,
         pattern: &Pattern,
     ) -> Vec<(String, Type)> {
+        let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
+        self.infer_match_bound_types_with_ref_mode(scrutinee, pattern, yields_refs)
+    }
+
+    /// After owned borrow-break (`let __v = expr.clone(); match __v`), bindings are owned `T`.
+    pub(in crate::codegen::rust) fn infer_match_bound_types_owned(
+        &self,
+        scrutinee: &Expression,
+        pattern: &Pattern,
+    ) -> Vec<(String, Type)> {
+        self.infer_match_bound_types_with_ref_mode(scrutinee, pattern, false)
+    }
+
+    fn infer_match_bound_types_with_ref_mode(
+        &self,
+        scrutinee: &Expression,
+        pattern: &Pattern,
+        yields_refs: bool,
+    ) -> Vec<(String, Type)> {
         let scrutinee_type = match self.infer_expression_type(scrutinee) {
             Some(t) => t,
             None => return Vec::new(),
@@ -69,7 +88,12 @@ impl<'ast> CodeGenerator<'ast> {
                 if variant == "Some" || variant.ends_with("::Some") =>
             {
                 if let Type::Option(inner_t) = &inner_type {
-                    out.push((var_name.clone(), inner_t.as_ref().clone()));
+                    let ty = inner_t.as_ref().clone();
+                    if yields_refs {
+                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
+                    } else {
+                        out.push((var_name.clone(), ty));
+                    }
                 }
             }
             Pattern::EnumVariant(variant_name, EnumPatternBinding::Struct(fields, _)) => {
@@ -79,7 +103,6 @@ impl<'ast> CodeGenerator<'ast> {
                 let Some(named) = self.enum_variant_struct_fields.get(&key) else {
                     return out;
                 };
-                let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
                 let map: HashMap<String, Type> = named.iter().cloned().collect();
                 for (fname, pat) in fields.iter() {
                     if let Pattern::Identifier(binding_name) = pat {
@@ -106,7 +129,6 @@ impl<'ast> CodeGenerator<'ast> {
                     return out;
                 };
                 if types.len() == 1 {
-                    let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
                     let ty = &types[0];
                     if yields_refs {
                         out.push((var_name.clone(), Type::Reference(Box::new(ty.clone()))));
@@ -125,8 +147,6 @@ impl<'ast> CodeGenerator<'ast> {
                     return out;
                 };
 
-                let yields_refs = self.match_scrutinee_yields_ref_enum_bindings(scrutinee);
-
                 for (pat, ty) in pats.iter().zip(types.iter()) {
                     if let Pattern::Identifier(name) = pat {
                         if yields_refs {
@@ -143,5 +163,31 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         out
+    }
+
+    /// After `.copied()` on `Option<&T>` (Copy `T`), match bindings are owned `T`.
+    pub(in crate::codegen::rust) fn infer_match_bound_types_from_copied_option(
+        &self,
+        scrutinee: &Expression,
+        pattern: &Pattern,
+    ) -> Vec<(String, Type)> {
+        let Some(ty) = self.infer_expression_type(scrutinee) else {
+            return Vec::new();
+        };
+        let Type::Option(inner) = ty else {
+            return self.infer_match_bound_types(scrutinee, pattern);
+        };
+        let owned_inner = match inner.as_ref() {
+            Type::Reference(r) | Type::MutableReference(r) => r.as_ref().clone(),
+            other => other.clone(),
+        };
+        match pattern {
+            Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name))
+                if variant == "Some" || variant.ends_with("::Some") =>
+            {
+                vec![(var_name.clone(), owned_inner)]
+            }
+            _ => self.infer_match_bound_types_owned(scrutinee, pattern),
+        }
     }
 }

@@ -122,7 +122,7 @@ pub fn half(x: i32) -> f32 {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("(2) as f32") || output.contains("2) as f32"),
+        output.contains("(2) as f32") || output.contains("2) as f32") || output.contains("2 as f32"),
         "Cast f32 / 2 should cast 2. Got:\n{}",
         output
     );

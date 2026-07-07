@@ -217,6 +217,12 @@ fn resolve_wj_output_path_ext(
             return Ok(items_path);
         }
     }
+    if library
+        && wj_file.file_name().and_then(|n| n.to_str()) == Some("lib.wj")
+        && path.file_name().and_then(|s| s.to_str()) == Some("lib.rs")
+    {
+        return Ok(path.with_file_name("_lib_items.rs"));
+    }
     Ok(path)
 }
 

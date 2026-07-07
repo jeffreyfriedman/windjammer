@@ -186,6 +186,17 @@ impl IntInference {
                     None
                 }
             }
+            Type::Custom(name) if name.contains('<') => {
+                let base = name.split('<').next().unwrap_or(name);
+                if matches!(base, "HashMap" | "BTreeMap" | "Map") {
+                    if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
+                        let inner = &name[start + 1..end];
+                        let key = inner.split(',').next()?.trim();
+                        return Some(self.parse_type_from_string(key));
+                    }
+                }
+                None
+            }
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 self.extract_map_key_type(inner)
             }
@@ -203,6 +214,17 @@ impl IntInference {
                 } else {
                     None
                 }
+            }
+            Type::Custom(name) if name.contains('<') => {
+                let base = name.split('<').next().unwrap_or(name);
+                if matches!(base, "HashMap" | "BTreeMap" | "Map") {
+                    if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
+                        let inner = &name[start + 1..end];
+                        let value = inner.split(',').nth(1)?.trim();
+                        return Some(self.parse_type_from_string(value));
+                    }
+                }
+                None
             }
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 self.extract_map_value_type(inner)

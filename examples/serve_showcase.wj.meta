@@ -1,0 +1,58 @@
+{
+  "module_path": "serve_showcase",
+  "functions": {
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "get_content_type": {
+      "params": [
+        "Reference(Custom(\"str\"))"
+      ],
+      "formal_params": [
+        "Reference(Custom(\"str\"))"
+      ],
+      "return_type": "String",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "has_self_receiver": false,
+      "is_extern": false
+    },
+    "handle_request": {
+      "params": [
+        "Reference(Custom(\"ServerRequest\"))"
+      ],
+      "formal_params": [
+        "Custom(\"ServerRequest\")"
+      ],
+      "return_type": "Custom(\"ServerResponse\")",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "has_self_receiver": false,
+      "is_extern": false
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "copy_structs": [],
+  "non_copy_structs": [],
+  "version": "0.48.0",
+  "analysis_fingerprint": {
+    "content_hash": 15851926138594754907,
+    "compiler_version": "0.48.0:2f1c9e2265392e04",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 15313630843877503615
+  }
+}

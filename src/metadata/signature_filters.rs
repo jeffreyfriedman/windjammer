@@ -21,11 +21,31 @@ pub fn signature_targets_local_struct(name: &str, local_struct_names: &HashSet<S
 }
 
 /// Remove dependency signatures for types the current crate defines locally.
+///
+/// Module-qualified keys (`quick_start::voxel_scene::VoxelScene::new`) are retained:
+/// alphabetical codegen order can visit call sites before the defining module, and
+/// those paths disambiguate homonyms like bare `VoxelScene::new`.
 pub fn drop_dependency_signatures_for_local_types<T>(
     signatures: &mut std::collections::HashMap<String, T>,
     local_struct_names: &HashSet<String>,
 ) {
-    signatures.retain(|name, _| !signature_targets_local_struct(name, local_struct_names));
+    signatures.retain(|name, _| {
+        if !signature_targets_local_struct(name, local_struct_names) {
+            return true;
+        }
+        is_module_qualified_method_key(name)
+    });
+}
+
+/// True for registry keys with at least one module segment before `Type::method`.
+fn is_module_qualified_method_key(name: &str) -> bool {
+    let Some((parent, method)) = name.rsplit_once("::") else {
+        return false;
+    };
+    if method.contains("::") {
+        return false;
+    }
+    parent.contains("::")
 }
 
 #[cfg(test)]
@@ -47,5 +67,23 @@ mod tests {
             "dialogue_tree::DialogueTree::get_node",
             &locals
         ));
+    }
+
+    #[test]
+    fn drop_keeps_module_qualified_local_type_metadata() {
+        let locals: HashSet<String> = ["VoxelScene".to_string()].into_iter().collect();
+        let mut sigs = std::collections::HashMap::from([
+            ("VoxelScene::new".to_string(), "bare_homonym"),
+            (
+                "quick_start::voxel_scene::VoxelScene::new".to_string(),
+                "module_qualified",
+            ),
+        ]);
+        drop_dependency_signatures_for_local_types(&mut sigs, &locals);
+        assert!(!sigs.contains_key("VoxelScene::new"));
+        assert_eq!(
+            sigs.get("quick_start::voxel_scene::VoxelScene::new"),
+            Some(&"module_qualified")
+        );
     }
 }

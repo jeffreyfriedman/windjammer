@@ -36,9 +36,6 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md) - Testing approach (TDD + Dogfooding)
 - [`TOOLING_VISION.md`](TOOLING_VISION.md) - Tooling ecosystem
 
-**Windjammer Game Framework (vision & positioning)**  
-Companion repo **`windjammer-game`**: [`../windjammer-game/VISION.md`](../windjammer-game/VISION.md), [`../windjammer-game/COMPETITIVE_POSITIONING.md`](../windjammer-game/COMPETITIVE_POSITIONING.md).
-
 **Project Management:**
 - [`PUBLISHING.md`](PUBLISHING.md) - Publishing and release process
 - [`VERSIONING_POLICY.md`](VERSIONING_POLICY.md) - Versioning strategy
@@ -68,9 +65,6 @@ Step-by-step tutorials for learning Windjammer.
 
 #### [`implementation/`](implementation/)
 Implementation-specific technical documents.
-
-#### [`archive/sessions/`](archive/sessions/)
-Historical session logs, status reports, and development history (organized by date).
 
 ## Quick Navigation
 
@@ -107,8 +101,7 @@ See [`.cursor/rules/`](../.cursor/rules/) for detailed development rules.
 - Update this README if adding major new categories
 
 **Archiving old docs:**
-- Session logs, status reports → `archive/sessions/YYYY-MM/`
-- Obsolete implementation details → `archive/sessions/`
+- Session logs and obsolete status reports are not kept in the repo (recover from git history if needed)
 - Keep only current, relevant documentation in root
 
 **Last cleaned:** 2026-03-21

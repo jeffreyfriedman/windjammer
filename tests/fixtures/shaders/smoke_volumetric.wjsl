@@ -1,0 +1,153 @@
+// Volumetric smoke compute shader (WJSL)
+//
+// Raymarches through a procedural 3D density field to render realistic volumetric
+// smoke plumes. Uses multi-octave value noise for density, Henyey-Greenstein phase
+// function for light scattering, and Beer-Lambert absorption.
+// Composites over existing scene color. Workgroup: 8x8 threads.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/noise.wjsl"
+
+@group(0) @binding(0) uniform smoke_params: SmokeParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32> >;
+
+// Smoke density at world position: plume shape modulated by noise
+fn smoke_density(world_pos: vec3<f32>) -> f32 {
+    let rel = world_pos - smoke_params.source_position;
+    let height = rel.y;
+    if (height < 0.0 || height > smoke_params.max_height) {
+        return 0.0;
+    }
+
+    let height_norm = height / smoke_params.max_height;
+    let cone_radius = smoke_params.plume_radius + height_norm * smoke_params.spread_rate;
+    let horiz_dist = length(vec2(rel.x, rel.z));
+    if (horiz_dist > cone_radius * 1.5) {
+        return 0.0;
+    }
+
+    let radial_falloff = 1.0 - smoothstep(cone_radius * 0.4, cone_radius, horiz_dist);
+    let vertical_profile = smoothstep(0.0, 0.15, height_norm)
+                         * (1.0 - smoothstep(0.7, 1.0, height_norm));
+
+    let wind_offset = vec3(
+        smoke_params.wind_dir.x * smoke_params.wind_strength * height_norm,
+        0.0,
+        smoke_params.wind_dir.y * smoke_params.wind_strength * height_norm
+    );
+    let noise_pos = (world_pos + wind_offset) * smoke_params.noise_scale
+                  + vec3(0.0, -smoke_params.time * smoke_params.rise_speed, 0.0);
+    let n = fbm(noise_pos, 4);
+    let turbulence = clamp(n * 2.0 - 0.3, 0.0, 1.0);
+
+    return radial_falloff * vertical_profile * turbulence * smoke_params.density_scale;
+}
+
+// Henyey-Greenstein phase function for anisotropic scattering
+fn hg_phase(cos_theta: f32, g: f32) -> f32 {
+    let g2 = g * g;
+    let denom = 1.0 + g2 - 2.0 * g * cos_theta;
+    return (1.0 - g2) / (4.0 * 3.14159265 * pow(denom, 1.5));
+}
+
+// Light marching: estimate how much light reaches a point inside the smoke
+fn light_transmittance(pos: vec3<f32>) -> f32 {
+    let sun_dir = normalize(smoke_params.light_dir);
+    let light_step = 0.5;
+    let mut transmittance = 1.0;
+    let mut light_pos = pos;
+    for (var i = 0; i < 6; i = i + 1) {
+        light_pos = light_pos + sun_dir * light_step;
+        let d = smoke_density(light_pos);
+        transmittance = transmittance * exp(-d * smoke_params.absorption * light_step);
+        if (transmittance < 0.01) {
+            break;
+        }
+    }
+    return transmittance;
+}
+
+// Intersect ray with smoke bounding volume (vertical cylinder around source)
+fn intersect_smoke_volume(ray_origin: vec3<f32>, ray_dir: vec3<f32>) -> vec2<f32> {
+    let src = smoke_params.source_position;
+    let max_radius = smoke_params.plume_radius + smoke_params.spread_rate + 2.0;
+
+    let t_y_min = (src.y - ray_origin.y) / max(ray_dir.y, 1e-6);
+    let t_y_max = (src.y + smoke_params.max_height - ray_origin.y) / max(ray_dir.y, 1e-6);
+    let t_near = max(min(t_y_min, t_y_max), 0.0);
+    let t_far = max(t_y_min, t_y_max);
+    if (t_near > t_far || t_far < 0.0) {
+        return vec2(-1.0, -1.0);
+    }
+
+    return vec2(max(t_near, 0.0), t_far);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = u32(camera.screen_size.x);
+    let height = u32(camera.screen_size.y);
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
+
+    let pixel_idx = id.y * width + id.x;
+    let gb_len = arrayLength(&gbuffer);
+    if (pixel_idx >= gb_len) {
+        return;
+    }
+
+    let scene_depth = gbuffer[pixel_idx].depth;
+    let pixel = vec2<f32>(f32(id.x) + 0.5, f32(id.y) + 0.5);
+    let ray_dir = generate_ray(pixel, camera);
+    let ray_origin = camera.position;
+
+    let bounds = intersect_smoke_volume(ray_origin, ray_dir);
+    if (bounds.x < 0.0) {
+        return;
+    }
+
+    let t_start = bounds.x;
+    let t_end = min(bounds.y, scene_depth);
+    if (t_start >= t_end) {
+        return;
+    }
+
+    let steps = u32(smoke_params.step_count);
+    let step_size = (t_end - t_start) / f32(steps);
+    let sun_dir = normalize(smoke_params.light_dir);
+    let cos_angle = dot(ray_dir, sun_dir);
+    let phase = hg_phase(cos_angle, smoke_params.phase_g);
+
+    let mut transmittance = 1.0;
+    let mut in_scatter = vec3(0.0, 0.0, 0.0);
+
+    for (var i = 0u; i < steps; i = i + 1u) {
+        let t = t_start + (f32(i) + 0.5) * step_size;
+        let sample_pos = ray_origin + ray_dir * t;
+        let d = smoke_density(sample_pos);
+        if (d < 0.001) {
+            continue;
+        }
+
+        let sample_transmittance = exp(-d * smoke_params.absorption * step_size);
+        let lt = light_transmittance(sample_pos);
+        let scatter_contribution = smoke_params.smoke_color
+            * smoke_params.light_color
+            * lt * phase * smoke_params.scatter_strength * d;
+        in_scatter = in_scatter + scatter_contribution * transmittance * step_size;
+        transmittance = transmittance * sample_transmittance;
+
+        if (transmittance < 0.01) {
+            break;
+        }
+    }
+
+    let scene = color_output[pixel_idx];
+    let composited = scene.xyz * transmittance + in_scatter;
+    color_output[pixel_idx] = vec4(composited, 1.0);
+}

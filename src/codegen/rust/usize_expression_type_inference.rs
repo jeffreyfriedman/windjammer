@@ -209,9 +209,9 @@ impl<'ast> CodeGenerator<'ast> {
                 return true;
             }
         }
-        if let Some(inference) = &self.int_inference {
+        if self.numeric_inference.is_some() {
             use crate::type_inference::IntType;
-            let it = self.int_type_for_mixed_int_codegen(expr, inference);
+            let it = self.int_type_for_mixed_int_codegen(expr);
             if it == IntType::Usize {
                 return false;
             }

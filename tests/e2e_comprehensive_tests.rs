@@ -113,7 +113,6 @@ impl Stack {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_e2e_point_operations() {
     let code = r#"
-@derive(Clone, Debug, Copy)
 pub struct Point {
     x: f32,
     y: f32,
