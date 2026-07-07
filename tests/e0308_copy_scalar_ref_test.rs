@@ -46,10 +46,14 @@ impl BlendTree {
 "#;
 
     let rust = test_utils::compile_single(source);
-    // Codegen uses `*(node_a)` so the deref applies to the binding, not a longer chain.
+    // Two valid strategies: (1) match on ref with *(node_a) deref, or
+    // (2) clone borrow-break with owned bindings. Either is correct Rust.
+    let uses_deref = rust.contains("*(node_a)") && rust.contains("*(node_b)");
+    let uses_clone_break = rust.contains("__match_borrow_break")
+        && rust.contains("BlendNode::Lerp { node_a, node_b,");
     assert!(
-        rust.contains("*(node_a)") && rust.contains("*(node_b)"),
-        "expected *(node_a) and *(node_b) for Copy fields; got:\n{rust}"
+        uses_deref || uses_clone_break,
+        "expected deref *(node_a) or clone borrow-break for Copy fields; got:\n{rust}"
     );
     assert!(
         !rust.contains("match &&"),

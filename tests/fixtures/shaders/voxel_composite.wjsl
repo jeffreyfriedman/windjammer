@@ -1,0 +1,158 @@
+// Voxel Composite + Tonemap Compute Shader (WJSL)
+//
+// Final pass: exposure, ACES tonemapping, color grading (lift/gamma/gain),
+// gamma correction, chromatic aberration, film grain, radial vignette,
+// edge enhancement, and subtle color processing.
+// Workgroup: 8x8 threads (64 total)
+
+struct CompositeParams {
+    exposure: f32,
+    gamma: f32,
+    bloom_threshold: f32,
+    vignette_strength: f32,
+    film_grain_intensity: f32,
+    chromatic_aberration: f32,
+    color_grade_lift: f32,
+    color_grade_gamma: f32,
+    color_grade_gain: f32,
+    frame_count: u32,
+    _pad0: f32,
+    _pad1: f32,
+}
+
+@group(0) @binding(0) uniform params: CompositeParams;
+@group(0) @binding(1) storage read hdr_input: array<vec4<f32> >;
+@group(0) @binding(2) storage read_write ldr_output: array<vec4<f32> >;
+@group(0) @binding(3) uniform screen_size: vec2<u32 >;
+
+fn aces_tonemap(x: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3(0.0), vec3(1.0));
+}
+
+fn hash12(p: vec2<f32>) -> f32 {
+    var p3 = fract(vec3(p.x, p.y, p.x) * 0.1031);
+    p3 += dot(p3, vec3(p3.y + 33.33, p3.z + 33.33, p3.x + 33.33));
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+fn apply_color_grading(color: vec3<f32>) -> vec3<f32> {
+    let lift = params.color_grade_lift;
+    let gamma_grade = params.color_grade_gamma;
+    let gain = params.color_grade_gain;
+
+    var graded = color * gain + lift;
+    graded = max(graded, vec3(0.0));
+
+    if gamma_grade > 0.01 {
+        let inv_gamma = 1.0 / gamma_grade;
+        graded = pow(graded, vec3(inv_gamma));
+    }
+
+    return graded;
+}
+
+fn sample_hdr_at_offset(base_idx: u32, offset_x: i32, offset_y: i32, width: u32, height: u32) -> vec3<f32> {
+    let base_x = i32(base_idx % width);
+    let base_y = i32(base_idx / width);
+    let sx = clamp(base_x + offset_x, 0, i32(width) - 1);
+    let sy = clamp(base_y + offset_y, 0, i32(height) - 1);
+    return hdr_input[u32(sy) * width + u32(sx)].rgb;
+}
+
+fn luminance(c: vec3<f32>) -> f32 {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+fn detect_edge(pixel_idx: u32, width: u32, height: u32) -> f32 {
+    let px = i32(pixel_idx % width);
+    let py = i32(pixel_idx / width);
+    if (px < 1 || py < 1 || px >= i32(width) - 1 || py >= i32(height) - 1) { return 0.0; }
+
+    let c = luminance(hdr_input[pixel_idx].rgb);
+    let l = luminance(hdr_input[u32(py) * width + u32(px - 1)].rgb);
+    let r = luminance(hdr_input[u32(py) * width + u32(px + 1)].rgb);
+    let t = luminance(hdr_input[u32(py - 1) * width + u32(px)].rgb);
+    let b = luminance(hdr_input[u32(py + 1) * width + u32(px)].rgb);
+
+    let tl = luminance(hdr_input[u32(py - 1) * width + u32(px - 1)].rgb);
+    let tr = luminance(hdr_input[u32(py - 1) * width + u32(px + 1)].rgb);
+    let bl = luminance(hdr_input[u32(py + 1) * width + u32(px - 1)].rgb);
+    let br = luminance(hdr_input[u32(py + 1) * width + u32(px + 1)].rgb);
+
+    // Full Sobel operator for better edge quality
+    let gx = -tl - 2.0*l - bl + tr + 2.0*r + br;
+    let gy = -tl - 2.0*t - tr + bl + 2.0*b + br;
+    let edge = sqrt(gx * gx + gy * gy);
+
+    return smoothstep(0.02, 0.12, edge);
+}
+
+fn vibrance_adjust(color: vec3<f32>, amount: f32) -> vec3<f32> {
+    let lum = luminance(color);
+    let sat = max(max(color.r, color.g), color.b) - min(min(color.r, color.g), color.b);
+    let factor = 1.0 + amount * (1.0 - sat);
+    return mix(vec3(lum), color, factor);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = screen_size.x;
+    let height = screen_size.y;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    var hdr = hdr_input[pixel_idx].rgb;
+
+    // Chromatic aberration
+    if params.chromatic_aberration > 0.001 {
+        let uv = vec2(f32(id.x) / f32(width), f32(id.y) / f32(height));
+        let center_offset = uv - vec2(0.5);
+        let dist = length(center_offset);
+        let ca_offset = center_offset * dist * params.chromatic_aberration;
+        let offset_pixels = ca_offset * vec2(f32(width), f32(height));
+        let r_sample = sample_hdr_at_offset(pixel_idx, i32(round(offset_pixels.x)), i32(round(offset_pixels.y)), width, height);
+        let b_sample = sample_hdr_at_offset(pixel_idx, i32(round(-offset_pixels.x)), i32(round(-offset_pixels.y)), width, height);
+        hdr = vec3(r_sample.r, hdr.g, b_sample.b);
+    }
+
+    let exposed = hdr * params.exposure;
+    let tonemapped = aces_tonemap(exposed);
+
+    var graded = tonemapped;
+    if params.color_grade_gain != 1.0 || params.color_grade_lift != 0.0 || params.color_grade_gamma != 1.0 {
+        graded = apply_color_grading(tonemapped);
+    }
+
+    // Vibrance boost to maintain saturation after tonemapping
+    graded = vibrance_adjust(graded, 0.08);
+
+    let gamma_inv = 1.0 / params.gamma;
+    let corrected = pow(max(graded, vec3(0.0)), vec3(gamma_inv));
+
+    // Vignette with smooth falloff
+    let uv = vec2(f32(id.x) / f32(width), f32(id.y) / f32(height));
+    let center_dist = length(uv - vec2(0.5));
+    let vignette = 1.0 - smoothstep(0.3, 1.0, center_dist) * params.vignette_strength;
+
+    // Edge highlighting: stronger darkening at material boundaries for visual definition
+    let edge = detect_edge(pixel_idx, width, height);
+    let edge_darken = 1.0 - edge * 0.08;
+
+    var final_color = corrected * vignette * edge_darken;
+
+    // Film grain
+    if params.film_grain_intensity > 0.001 {
+        let grain_uv = vec2(f32(id.x) + f32(params.frame_count) * 5.3, f32(id.y) + f32(params.frame_count) * 7.1);
+        let noise = hash12(grain_uv) - 0.5;
+        let lum = dot(final_color, vec3(0.2126, 0.7152, 0.0722));
+        let grain_strength = params.film_grain_intensity * (1.0 - lum * 0.5);
+        final_color = final_color + vec3(noise * grain_strength);
+    }
+
+    ldr_output[pixel_idx] = vec4(clamp(final_color, vec3(0.0), vec3(1.0)), 1.0);
+}

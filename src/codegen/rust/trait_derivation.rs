@@ -32,6 +32,8 @@ impl CodeGenerator<'_> {
             "Ord",
             "Hash",
             "Default",
+            "Serialize",
+            "Deserialize",
         ];
         let mut names: HashSet<String> = explicit.iter().cloned().collect();
         names.extend(inferred);
@@ -106,6 +108,13 @@ impl CodeGenerator<'_> {
         };
         if default_ok {
             traits.push("Default".to_string());
+        }
+
+        // Auto-derive Serialize/Deserialize when serde is available (project uses std::json
+        // or is compiled as part of a multi-file project with windjammer-runtime).
+        if !has_trait_object_field && (self.serde_available || self.needs_serde_imports) {
+            traits.push("Serialize".to_string());
+            traits.push("Deserialize".to_string());
         }
 
         traits

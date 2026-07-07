@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 // Import compiler internals (ModuleCompiler is defined in this file)
-use crate::{analyzer, codegen, type_inference};
+use crate::{analyzer, codegen};
 use crate::{lexer, parser, parser_impl, CompilationTarget};
 pub struct ModuleCompiler {
     pub compiled_modules: HashMap<String, String>, // module path -> generated Rust code
@@ -283,24 +283,22 @@ impl ModuleCompiler {
             &program,
         )?;
 
-        // WINDJAMMER PHILOSOPHY: Expression-level float type inference
-        // Run constraint-based type inference BEFORE codegen to prevent f32/f64 mixing
-        let mut float_inference = type_inference::FloatInference::new();
-        float_inference.set_global_struct_field_types(&self.global_struct_field_types);
-        float_inference.set_debug_source(&source);
-        float_inference.infer_program(&program);
+        let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+        numeric_inference.set_global_struct_field_types(&self.global_struct_field_types);
+        numeric_inference.set_debug_source(&source);
+        numeric_inference.infer_program(&program);
 
-        if !float_inference.errors.is_empty() {
+        if !numeric_inference.errors.is_empty() {
             eprintln!(
-                "🚨 Float type inference errors in module {} (file {:?}):",
+                "🚨 Numeric type inference errors in module {} (file {:?}):",
                 module_path, file_path
             );
-            for error in &float_inference.errors {
+            for error in &numeric_inference.errors {
                 eprintln!("  {}", error);
             }
             return Err(anyhow::anyhow!(
-                "Type inference failed with {} error(s)",
-                float_inference.errors.len()
+                "Numeric type inference failed with {} error(s)",
+                numeric_inference.errors.len()
             ));
         }
 
@@ -313,7 +311,7 @@ impl ModuleCompiler {
         per_file_registry.merge(&signatures);
 
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
-        generator.set_float_inference(float_inference);
+        generator.set_numeric_inference(numeric_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());

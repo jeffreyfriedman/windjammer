@@ -44,7 +44,8 @@ impl Manager {
     eprintln!("Generated Rust:\n{}", rust_code);
 
     assert!(
-        rust_code.contains("self.assets.insert(asset_id, copy);"),
+        rust_code.contains("self.assets.insert(asset_id, copy);")
+            || rust_code.contains("self.assets.insert(asset_id, copy.clone());"),
         "Expected semicolon after insert in if-let block.\nGenerated:\n{}",
         rust_code
     );

@@ -28,6 +28,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) -> String {
         let func = &analyzed.decl;
+        self.select_ir_function_for(&func.name);
         self.prepare_codegen_environment_for_regular_function(analyzed);
         let mut output = String::new();
 
@@ -88,8 +89,8 @@ impl<'ast> CodeGenerator<'ast> {
         // PHASE 1: Suppress Clippy warnings for &String parameters
         // We use &String (not &str) for correctness with Vec<String>, but Clippy warns
         // Phase 2 will optimize to &str when safe
-        let has_borrowed_string_param = analyzed
-            .inferred_ownership
+        let has_borrowed_string_param = self
+            .get_all_param_ownership(analyzed)
             .iter()
             .any(|(_, ownership)| matches!(ownership, OwnershipMode::Borrowed))
             && func.parameters.iter().enumerate().any(|(idx, param)| {
@@ -140,48 +141,18 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|d| d.name == "test" && !d.arguments.is_empty());
 
         if !has_property_test && !has_setup_teardown {
-            // Generate normal parameters
-            let params: Vec<String> = func
-                .parameters
-                .iter()
-                .enumerate()
-                .map(|(idx, param)| {
-                    let param_type = analyzed
-                        .inferred_param_types
-                        .get(idx)
-                        .unwrap_or(&param.type_);
-                    let ownership = analyzed
-                        .inferred_ownership
-                        .get(&param.name)
-                        .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
-                    let rust_type = self.type_to_rust(param_type);
-
-                    match ownership {
-                        crate::analyzer::OwnershipMode::Borrowed => {
-                            if matches!(
-                                param_type,
-                                Type::Reference(inner)
-                                    if matches!(&**inner, Type::Custom(s) if s == "str")
-                            ) || analyzed.str_ref_optimizable_params.contains(&param.name)
-                            {
-                                format!("{}: &str", param.name)
-                            } else {
-                                format!("{}: &{}", param.name, rust_type)
-                            }
-                        }
-                        crate::analyzer::OwnershipMode::MutBorrowed => {
-                            if crate::analyzer::Analyzer::is_generic_type_param(param_type) {
-                                format!("mut {}: {}", param.name, rust_type)
-                            } else {
-                                format!("{}: &mut {}", param.name, rust_type)
-                            }
-                        }
-                        crate::analyzer::OwnershipMode::Owned => {
-                            format!("mut {}: {}", param.name, rust_type)
-                        }
-                    }
-                })
-                .collect();
+            // Reuse the same self-aware parameter lowering as regular functions.
+            // @profile / @timeout / @bench must not emit `mut self: Self` for impl methods.
+            let mut params = Vec::new();
+            self.extend_implicit_self_parameters(analyzed, func, &mut params);
+            let unused_params = self.compute_unused_formal_parameter_names(func);
+            self.refresh_unused_let_bindings_for_function_body(&func.body);
+            params.extend(self.collect_additional_formal_parameter_strings(
+                analyzed,
+                func,
+                false,
+                &unused_params,
+            ));
             output.push_str(&params.join(", "));
         }
 
@@ -431,10 +402,10 @@ impl<'ast> CodeGenerator<'ast> {
             // Preserve @ensures access for parameters moved in the function body.
             for param in &func.parameters {
                 if params_in_ensures.contains(&param.name) {
-                    let ownership = analyzed
-                        .inferred_ownership
-                        .get(&param.name)
-                        .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
+                    let ownership_val = self
+                        .get_param_ownership(&param.name, analyzed)
+                        .unwrap_or(crate::analyzer::OwnershipMode::Owned);
+                    let ownership = &ownership_val;
 
                     output.push_str(&self.indent());
                     match ownership {
@@ -529,10 +500,10 @@ impl<'ast> CodeGenerator<'ast> {
                     // Replace parameter names with cloned versions
                     // Replace "name" but not ".name" (field access)
                     for param in &func.parameters {
-                        let ownership = analyzed
-                            .inferred_ownership
-                            .get(&param.name)
-                            .unwrap_or(&crate::analyzer::OwnershipMode::Owned);
+                        let ownership_val = self
+                            .get_param_ownership(&param.name, analyzed)
+                            .unwrap_or(crate::analyzer::OwnershipMode::Owned);
+                        let ownership = &ownership_val;
 
                         if matches!(
                             ownership,

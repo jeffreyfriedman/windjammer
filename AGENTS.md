@@ -4,6 +4,17 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## Architecture
+
+The compiler now includes a **Safety-Typed IR** layer (`src/ir/`) providing:
+- Unified constraint solver (ownership, types, effects, taint)
+- Effect system with manifest enforcement (WJ-SEC-01)
+- Taint tracking with flow propagation (WJ-SEC-02)
+- Caller-controlled execution modes (WJ-CONC-01)
+- Multi-target safety encodings (Rust, Go, JS, TS, WASM)
+
+The IR is additive infrastructure — the existing compilation pipeline (parser → analyzer → codegen) remains unchanged. Individual passes will be incrementally migrated to use the IR's constraint solver.
+
 ## Quick Reference
 
 ```bash

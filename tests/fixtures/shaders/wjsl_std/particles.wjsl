@@ -1,0 +1,37 @@
+// WJSL Standard Library: Particle Types
+//
+// Shared particle struct and emitter uniforms for simulation and rendering passes.
+
+const TYPE_FIRE: u32 = 0u;
+const TYPE_SMOKE: u32 = 1u;
+const TYPE_SPARK: u32 = 2u;
+const TYPE_DEBRIS: u32 = 3u;
+const TYPE_BLOOD: u32 = 4u;
+const TYPE_WATER: u32 = 5u;
+
+struct Particle {
+    position: vec3<f32>,
+    velocity: vec3<f32>,
+    color: vec4<f32>,
+    life: f32,
+    max_life: f32,
+    size: f32,
+    type_id: u32,
+}
+
+struct ParticleParams {
+    delta_time: f32,
+    gravity: f32,
+    wind_x: f32,
+    wind_y: f32,
+    wind_z: f32,
+    turbulence: f32,
+    particle_count: u32,
+    time: f32,
+    spawn_type_id: u32,
+}
+
+struct ParticleEmitterUniforms {
+    position: vec3<f32>,
+    radius: f32,
+}

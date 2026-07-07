@@ -1,7 +1,0 @@
-
-use entity::Entity
-use components::Transform
-
-pub struct World {
-    pub entities: Vec<Entity>,
-}

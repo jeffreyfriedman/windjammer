@@ -85,8 +85,8 @@ impl Quest {
         generated.contains("Quest::new(id, title, description)")
             || generated.contains("Quest::new(id.clone(), title, description)")
             || generated.contains("Quest::new(id, title.clone(), description")
-            // The compiler might add .clone() for moved values, which is acceptable
-            || generated.contains("Quest::new(id, title.to_string(), description.to_string()"),
+            || generated.contains("Quest::new(id, title.to_string(), description.to_string()")
+            || generated.contains("Quest::new(id.to_string(), title.to_string(), description.to_string()"),
         "Expected Quest::new with owned String args (no &). Got:\n{}",
         generated
     );

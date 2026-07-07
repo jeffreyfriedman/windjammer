@@ -280,15 +280,15 @@ impl<'ast> CodeGenerator<'ast> {
             if !skip_int_promotion_usize_arith_untyped_lit
                 && !skip_int_promotion_both_inferred_usize
             {
-                if let Some(inference) = &self.int_inference {
+                if self.numeric_inference.is_some() {
                     if is_comparison || is_arithmetic {
                         use crate::type_inference::int_implicit_casts::{
                             get_cast_suffix, is_safe_implicit_cast, promote_types,
                         };
                         use crate::type_inference::IntType;
 
-                        let left_ty = self.int_type_for_mixed_int_codegen(left, inference);
-                        let right_ty = self.int_type_for_mixed_int_codegen(right, inference);
+                        let left_ty = self.int_type_for_mixed_int_codegen(left);
+                        let right_ty = self.int_type_for_mixed_int_codegen(right);
                         if left_ty != IntType::Unknown
                             && right_ty != IntType::Unknown
                             && left_ty != right_ty
@@ -583,6 +583,8 @@ impl<'ast> CodeGenerator<'ast> {
         // This handles match arm bindings (owned Copy types like i32) in >=, <=, >, < too
         if is_comparison {
             self.balance_eq_operands_for_rust(left, right, &mut left_str, &mut right_str);
+            left_str = self.peel_copy_ref_match_binding_for_value(left, &left_str);
+            right_str = self.peel_copy_ref_match_binding_for_value(right, &right_str);
         }
 
         // Auto-deref borrowed bool operands in logical ops (&&, ||).

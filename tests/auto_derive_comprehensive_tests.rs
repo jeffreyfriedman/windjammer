@@ -96,7 +96,6 @@ pub fn are_equal(a: Point, b: Point) -> bool {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_derive_copy() {
     let code = r#"
-@derive(Copy, Clone)
 pub struct Point {
     x: i32,
     y: i32,

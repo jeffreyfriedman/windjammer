@@ -29,7 +29,6 @@ mod test_utils;
 #[test]
 fn test_camera_data_no_deref() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct CameraData {
     pub id: u32,
 }
@@ -107,7 +106,6 @@ pub fn main() {}
 #[test]
 fn test_investigation_state_no_deref() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct InvestigationState {
     pub complete: bool,
 }
@@ -154,7 +152,6 @@ pub fn main() {}
 #[test]
 fn test_search_state_no_deref() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct SearchState {
     pub complete: bool,
 }
@@ -201,7 +198,6 @@ pub fn main() {}
 #[test]
 fn test_entity_all_patterns() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct Entity {
     pub id: u32,
 }

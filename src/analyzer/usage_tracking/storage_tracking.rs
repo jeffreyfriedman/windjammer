@@ -86,9 +86,10 @@ impl<'ast> Analyzer<'ast> {
                     // or wrapped in Some/Enum constructors/tuples.
                     //
                     // Direct: obj.field = param
+                    // Nested: obj.sub.field = param (e.g. self.data.value = value)
                     // Wrapped: obj.field = Some(param)
                     // Enum: obj.field = Enum::Variant(param)
-                    if matches!(&**object, Expression::Identifier { .. }) {
+                    if Self::is_rooted_field_access(object) {
                         if self.expression_stores_identifier(name, value) {
                             return true;
                         }
@@ -331,136 +332,13 @@ impl<'ast> Analyzer<'ast> {
             .is_some_and(Self::is_windjammer_text_param_type)
     }
 
-    /// True when the parameter is stored only via struct literals into `string` fields
-    /// (e.g. `User { name }`), where codegen emits `.to_string()` at the assignment site.
-    /// Field assignment (`self.name = name`) and collection push are excluded — those use owned `String`.
-    pub(crate) fn is_stored_via_text_struct_fields_only(
-        &self,
-        param_name: &str,
-        body: &[&Statement],
-    ) -> bool {
-        if !self.stores_in_text_struct_literals(param_name, body) {
-            return false;
-        }
-        !self.has_non_text_struct_field_storage(param_name, body)
-    }
-
-    /// True when the parameter appears in a struct literal field that stores into a `string` field.
-    fn stores_in_text_struct_literals(&self, param_name: &str, statements: &[&Statement]) -> bool {
-        for stmt in statements {
-            if self.stmt_stores_in_text_struct_literals(param_name, stmt) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn stmt_stores_in_text_struct_literals(&self, param_name: &str, stmt: &Statement) -> bool {
-        match stmt {
-            Statement::Let {
-                value: Expression::StructLiteral { name, fields, .. },
-                ..
-            }
-            | Statement::Return {
-                value: Some(Expression::StructLiteral { name, fields, .. }),
-                ..
-            }
-            | Statement::Expression {
-                expr: Expression::StructLiteral { name, fields, .. },
-                ..
-            } => fields.iter().any(|(field_name, fv)| {
-                self.expression_stores_identifier(param_name, fv)
-                    && self.struct_field_is_text_type(name, field_name)
-            }),
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.stores_in_text_struct_literals(param_name, then_block)
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|b| self.stores_in_text_struct_literals(param_name, b))
-            }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
-                self.stores_in_text_struct_literals(param_name, body)
-            }
-            _ => false,
-        }
-    }
-
-    fn has_non_text_struct_field_storage(
-        &self,
-        param_name: &str,
-        statements: &[&Statement],
-    ) -> bool {
-        for stmt in statements {
-            if self.stmt_has_non_text_struct_field_storage(param_name, stmt) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn stmt_has_non_text_struct_field_storage(&self, param_name: &str, stmt: &Statement) -> bool {
-        match stmt {
-            Statement::Return {
-                value: Some(expr), ..
-            }
-            | Statement::Expression { expr, .. }
-            | Statement::Let { value: expr, .. } => {
-                self.expr_has_non_text_struct_field_storage(param_name, expr)
-            }
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.has_non_text_struct_field_storage(param_name, then_block)
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|b| self.has_non_text_struct_field_storage(param_name, b))
-            }
-            Statement::While { body, .. } | Statement::For { body, .. } => {
-                self.has_non_text_struct_field_storage(param_name, body)
-            }
-            _ => self.stmt_has_enum_variant_consuming(param_name, stmt),
-        }
-    }
-
-    fn expr_has_non_text_struct_field_storage(&self, param_name: &str, expr: &Expression) -> bool {
+    /// True when expr is rooted at an identifier through FieldAccess chains.
+    /// Matches `obj`, `obj.field`, `obj.sub.field`, etc.
+    fn is_rooted_field_access(expr: &Expression) -> bool {
         match expr {
-            Expression::StructLiteral { name, fields, .. } => {
-                fields.iter().any(|(field_name, fv)| {
-                    if !self.expression_stores_identifier(param_name, fv) {
-                        return false;
-                    }
-                    // Shorthand `User { name }` — param moves into field; codegen coerces &str → String.
-                    if self.expr_is_param_or_ref_to_param(param_name, fv) {
-                        return false;
-                    }
-                    !self.struct_field_is_text_type(name, field_name)
-                })
-            }
-            Expression::MethodCall {
-                method, arguments, ..
-            } => {
-                if super::super::stdlib_method_traits::is_storage_method(method) {
-                    return arguments
-                        .iter()
-                        .any(|(_, arg)| self.expression_stores_identifier(param_name, arg));
-                }
-                arguments
-                    .iter()
-                    .any(|(_, arg)| self.expr_has_non_text_struct_field_storage(param_name, arg))
-            }
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, arg)| self.expr_has_non_text_struct_field_storage(param_name, arg)),
-            Expression::Block { statements, .. } => {
-                self.has_non_text_struct_field_storage(param_name, statements)
-            }
-            _ => self.expression_stores_identifier(param_name, expr),
+            Expression::Identifier { .. } => true,
+            Expression::FieldAccess { object, .. } => Self::is_rooted_field_access(object),
+            _ => false,
         }
     }
 }

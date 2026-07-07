@@ -37,6 +37,7 @@ pub mod error_tui; // Interactive TUI for error navigation
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
+pub mod ir;
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)
 pub mod metadata; // Cross-module type inference metadata

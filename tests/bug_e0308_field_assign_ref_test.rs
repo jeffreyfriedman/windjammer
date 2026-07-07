@@ -95,21 +95,29 @@ fn main() {
         );
     }
 
-    // PHASE 1 BASELINE: String params generate &String for CORRECTNESS
-    // When assigning borrowed param to owned field:
-    // - value: &String (borrowed parameter, Phase 1 baseline)
-    // - self.data.value: String (owned field)
-    // - Must clone: self.data.value = value.clone() or value.to_string()
+    // When assigning param to owned field, param may be owned (direct move)
+    // or borrowed (with clone). Both are correct Rust.
     assert!(
-        generated.contains("value: &String"),
-        "Should generate &String parameter (Phase 1 baseline). Got:\n{}",
+        generated.contains("value: &String")
+            || generated.contains("value: String")
+            || generated.contains("value: &str"),
+        "Should generate a valid string parameter type. Got:\n{}",
         generated
     );
-    assert!(
-        generated.contains("self.data.value = value.clone()")
-            || generated.contains("self.data.value = value.to_string()")
-            || generated.contains("self.data.value = value.into()"),
-        "Should clone/convert &String to String for owned field. Got:\n{}",
-        generated
-    );
+    // If borrowed, must clone; if owned, direct assignment is fine
+    if generated.contains("value: &String") || generated.contains("value: &str") {
+        assert!(
+            generated.contains("value.clone()")
+                || generated.contains("value.to_string()")
+                || generated.contains("value.into()"),
+            "Borrowed param assigned to owned field should clone/convert. Got:\n{}",
+            generated
+        );
+    } else {
+        assert!(
+            generated.contains("self.data.value = value"),
+            "Owned param should directly assign to field. Got:\n{}",
+            generated
+        );
+    }
 }

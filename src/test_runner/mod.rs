@@ -10,10 +10,11 @@ use anyhow::Result;
 use std::path::Path;
 
 mod test_discovery;
-mod test_execution;
+pub mod test_execution;
 mod test_reporting;
 mod util;
 
+pub use test_execution::rewrite_test_crate_imports;
 pub use util::{copy_dir_recursive, path_to_toml_string};
 
 pub fn run_tests(
@@ -146,7 +147,9 @@ pub fn run_tests(
     }
 
     let mut cmd = Command::new("cargo");
-    cmd.arg("test").current_dir(&temp_dir);
+    cmd.arg("test")
+        .current_dir(&temp_dir)
+        .env_remove("CARGO_TARGET_DIR");
 
     if !parallel {
         cmd.arg("--").arg("--test-threads").arg("1");

@@ -10,34 +10,17 @@
     feature = "parser_tests",
 ))]
 
-//! TDD: water.wjsl transpiles to valid WGSL (animated water surface with reflections).
-//! Tests the water compute shader which produces animated, reflective water surfaces
-//! suitable for lakes, rivers, oceans in the voxel engine.
+#[path = "common/wjsl_shader_fixtures.rs"]
+mod wjsl_shader_fixtures;
 
-use std::path::Path;
 
-fn game_shaders_available() -> bool {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders")
-        .exists()
-}
-
-fn transpile_shader(filename: &str) -> String {
-    let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders");
-    let source = std::fs::read_to_string(shader_dir.join(filename))
-        .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir)
-        .unwrap_or_else(|e| panic!("{} should transpile: {}", filename, e))
-}
+// TDD: water.wjsl transpiles to valid WGSL (animated water surface with reflections).
+// Tests the water compute shader which produces animated, reflective water surfaces
+// suitable for lakes, rivers, oceans in the voxel engine.
 
 #[test]
 fn test_wjsl_water_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("water.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("water.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
     assert!(
@@ -60,11 +43,7 @@ fn test_wjsl_water_transpiles() {
 
 #[test]
 fn test_water_binding_layout() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("water.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("water.wjsl");
 
     assert!(
         wgsl.contains("@binding(0)") && wgsl.contains("var<uniform> water_params"),
@@ -93,11 +72,7 @@ fn test_water_binding_layout() {
 
 #[test]
 fn test_water_animation_features() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("water.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("water.wjsl");
 
     // Wave animation using time
     assert!(
@@ -123,11 +98,7 @@ fn test_water_animation_features() {
 
 #[test]
 fn test_water_reflection_features() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("water.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("water.wjsl");
 
     // Fresnel effect for reflection/refraction blending
     assert!(
@@ -153,11 +124,7 @@ fn test_water_reflection_features() {
 
 #[test]
 fn test_water_workgroup_size() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("water.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("water.wjsl");
 
     assert!(
         wgsl.contains("@workgroup_size(8, 8, 1)"),
@@ -168,11 +135,7 @@ fn test_water_workgroup_size() {
 
 #[test]
 fn test_water_depth_and_transparency() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("water.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("water.wjsl");
 
     // Water depth affects transparency/absorption
     assert!(

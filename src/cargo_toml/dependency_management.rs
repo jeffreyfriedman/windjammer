@@ -21,6 +21,20 @@ pub(crate) fn sanitize_path_for_toml(path: &Path) -> String {
 
 /// Find windjammer-runtime path for Cargo.toml dependency
 pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
+    if let Ok(path) = std::env::var("WINDJAMMER_RUNTIME_PATH") {
+        let p = PathBuf::from(path);
+        if p.join("Cargo.toml").exists() {
+            return p;
+        }
+    }
+
+    // Baked in when the wj binary was built — works for cargo install and dev builds
+    let compiler_runtime =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
+    if compiler_runtime.join("Cargo.toml").exists() {
+        return compiler_runtime;
+    }
+
     let mut current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let original_cwd = current.clone();
 
@@ -40,9 +54,15 @@ pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
         return current.join("windjammer/crates/windjammer-runtime");
     }
 
-    // Search upward (up to 5 levels)
-    for _ in 0..5 {
+    // Search upward (up to 8 levels — covers src/wj/windjammer from unrelated projects)
+    for _ in 0..8 {
         if let Some(parent) = current.parent() {
+            if parent
+                .join("wj/windjammer/crates/windjammer-runtime/Cargo.toml")
+                .exists()
+            {
+                return parent.join("wj/windjammer/crates/windjammer-runtime");
+            }
             if parent
                 .join("windjammer/crates/windjammer-runtime/Cargo.toml")
                 .exists()
@@ -58,29 +78,43 @@ pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
         }
     }
 
-    // Try the compiler's own location (the wj binary is in windjammer/target/release/)
+    // Try the compiler executable location (wj in target/release/ or ~/.cargo/bin/)
     if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let mut search = exe_dir.to_path_buf();
-            for _ in 0..5 {
-                if search.join("crates/windjammer-runtime/Cargo.toml").exists() {
-                    return search.join("crates/windjammer-runtime");
-                }
-                if let Some(p) = search.parent() {
-                    search = p.to_path_buf();
-                } else {
-                    break;
-                }
+        let mut search = exe_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
+        for _ in 0..6 {
+            if search.join("crates/windjammer-runtime/Cargo.toml").exists() {
+                return search.join("crates/windjammer-runtime");
+            }
+            if search
+                .join("windjammer/crates/windjammer-runtime/Cargo.toml")
+                .exists()
+            {
+                return search.join("windjammer/crates/windjammer-runtime");
+            }
+            if !search.pop() {
+                break;
             }
         }
     }
 
-    // Fallback: relative paths
-    let sibling = original_cwd.join("../windjammer/crates/windjammer-runtime");
-    if sibling.join("Cargo.toml").exists() {
-        return sibling;
+    // Fallback: relative paths from original cwd
+    for rel in [
+        "../windjammer/crates/windjammer-runtime",
+        "../../wj/windjammer/crates/windjammer-runtime",
+        "../../../wj/windjammer/crates/windjammer-runtime",
+    ] {
+        let candidate = original_cwd.join(rel);
+        if candidate.join("Cargo.toml").exists() {
+            return candidate;
+        }
     }
-    PathBuf::from("./crates/windjammer-runtime")
+
+    panic!(
+        "windjammer-runtime not found. Set WINDJAMMER_RUNTIME_PATH or install wj from the Windjammer source tree."
+    )
 }
 
 /// Convert a `DependencySpec` into a Cargo.toml dependency line.
@@ -378,4 +412,53 @@ pub(crate) fn read_package_name(cargo_toml_path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn find_runtime_uses_compiler_manifest_when_cwd_unrelated() {
+        let compiler_runtime =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
+        assert!(
+            compiler_runtime.join("Cargo.toml").exists(),
+            "test requires windjammer-runtime crate in tree"
+        );
+
+        let temp = tempfile::TempDir::new().expect("tempdir");
+        let prev = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(temp.path()).expect("chdir");
+        let found = find_windjammer_runtime_path();
+        std::env::set_current_dir(&prev).expect("restore cwd");
+
+        let found_canon = found.canonicalize().unwrap_or(found);
+        let expected_canon = compiler_runtime.canonicalize().unwrap();
+        assert_eq!(found_canon, expected_canon);
+    }
+
+    #[test]
+    fn find_runtime_respects_windjammer_runtime_path_env() {
+        let compiler_runtime =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
+        let temp = tempfile::TempDir::new().expect("tempdir");
+        let fake = temp.path().join("runtime");
+        fs::create_dir_all(&fake).expect("mkdir");
+        fs::write(
+            fake.join("Cargo.toml"),
+            "[package]\nname = \"windjammer-runtime\"\n",
+        )
+        .expect("write");
+
+        std::env::set_var("WINDJAMMER_RUNTIME_PATH", fake.to_str().unwrap());
+        let found = find_windjammer_runtime_path();
+        std::env::remove_var("WINDJAMMER_RUNTIME_PATH");
+
+        assert_eq!(found, fake);
+
+        // Restore default path discovery for other tests
+        let _ = compiler_runtime;
+    }
 }

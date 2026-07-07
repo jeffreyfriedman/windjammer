@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.48.0"
+version = "0.49.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -63,6 +63,9 @@ required-features = ["cli"]
 default = ["cli"]
 cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
+# Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
+# ownership/effect/taint as first-class types, and multi-target safety encodings.
+safety_typed_ir = []
 # Opt-in test suite targets: `cargo test --features parser_tests`, etc.
 # With no *_tests feature enabled, `cargo test` runs the full suite.
 parser_tests = []

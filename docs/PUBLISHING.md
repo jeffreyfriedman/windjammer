@@ -64,7 +64,7 @@ default-run = "windjammer"  # Use windjammer as default for tests
 
 **Check:**
 ```bash
-cd /Users/jeffreyfriedman/src/windjammer
+cd .
 cargo package --list
 ```
 
@@ -374,7 +374,7 @@ Before running `cargo publish`:
 
 2. **Verify package:**
    ```bash
-   cd /Users/jeffreyfriedman/src/windjammer
+   cd .
    cargo package --list
    ```
 

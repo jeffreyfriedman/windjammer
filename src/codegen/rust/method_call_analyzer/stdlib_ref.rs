@@ -75,46 +75,20 @@ impl MethodCallAnalyzer {
                 return true;
             }
 
-            if super::super::stdlib_method_traits::is_map_key_method(method)
-                && Self::is_copy_type_with_locals(
-                    arg,
-                    usize_variables,
-                    current_function_params,
-                    local_var_types,
-                )
-            {
-                let arg_name = if let Expression::Identifier { name, .. } = arg {
-                    Some(name.as_str())
-                } else {
-                    None
-                };
-
-                let looks_like_hashmap_key = arg_name.is_some_and(|name| {
-                    name == "id"
-                        || name == "key"
-                        || name == "entity"
-                        || name.ends_with("_id")
-                        || name.ends_with("_key")
-                });
-
-                if looks_like_hashmap_key {
-                    if let Some(name) = arg_name {
-                        let is_already_map_key_ref = current_function_params.iter().any(|p| {
-                            p.name == name
-                                && crate::codegen::rust::types::param_generates_as_rust_ref(
-                                    &p.type_,
-                                    &p.name,
-                                    inferred_borrowed_params,
-                                )
-                        });
-                        if is_already_map_key_ref {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-
+            // Receiver type unknown — `remove` has incompatible semantics across types
+            // (Vec::remove takes owned usize, HashMap::remove takes &K). Don't assume
+            // collection key borrow; let the method signature system handle it.
+            if method == "remove" {
                 return false;
+            }
+
+            if Self::is_copy_type_with_locals(
+                arg,
+                usize_variables,
+                current_function_params,
+                local_var_types,
+            ) {
+                return true;
             }
 
             if super::super::stdlib_method_traits::is_map_key_method(method) {

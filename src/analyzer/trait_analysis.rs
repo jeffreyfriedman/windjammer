@@ -86,6 +86,11 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Plain `string` in a trait item (not `&string`) → owned `String` in generated Rust.
+    pub(super) fn trait_param_is_owned_string(ty: &Type) -> bool {
+        matches!(ty, Type::String) || matches!(ty, Type::Custom(name) if name == "string")
+    }
+
     /// THE WINDJAMMER WAY: Infer trait method signatures from ALL implementations
     /// If any impl needs &mut self, the trait gets &mut self
     /// The compiler does the work, not the user!
@@ -299,6 +304,24 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
+        // E0053: Plain `string` in a trait item is owned `String` in generated Rust.
+        // `analyze_function` may have marked the param `&str`-optimizable from body inference;
+        // trait signatures and matching impls must keep the AST `string` contract.
+        for (i, param) in func.parameters.iter().enumerate() {
+            if param.name == "self" {
+                continue;
+            }
+            if Self::trait_param_is_owned_string(&param.type_) {
+                analyzed
+                    .inferred_ownership
+                    .insert(param.name.clone(), OwnershipMode::Owned);
+                analyzed.str_ref_optimizable_params.remove(&param.name);
+                if i < analyzed.inferred_param_types.len() {
+                    analyzed.inferred_param_types[i] = param.type_.clone();
+                }
+            }
+        }
+
         // E0053 FIX: Instance methods without `self` in the signature still need a receiver
         // entry so impl matching and codegen can attach &self or &mut self.
         //
@@ -332,15 +355,18 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Merge receiver ownership from impls: strongest wins.
-    /// `Owned` (consuming) > `MutBorrowed` (&mut self) > `Borrowed` (&self).
+    /// `MutBorrowed` beats `Borrowed`; `Owned` only when **both** sides need consumption.
+    /// A single impl that consumes `self` for a void trait method (e.g. calling an owned helper)
+    /// must not force the trait to `self` — cap at `&mut self` unless the trait returns `Self`.
     pub(crate) fn merge_borrow_trait_receivers(
         a: OwnershipMode,
         b: OwnershipMode,
     ) -> OwnershipMode {
         use OwnershipMode::*;
         match (a, b) {
-            (Owned, _) | (_, Owned) => Owned,
+            (Owned, Owned) => Owned,
             (MutBorrowed, _) | (_, MutBorrowed) => MutBorrowed,
+            (Owned, Borrowed) | (Borrowed, Owned) => MutBorrowed,
             _ => Borrowed,
         }
     }

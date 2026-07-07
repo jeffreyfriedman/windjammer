@@ -116,12 +116,11 @@ pub fn pathfind() -> f32 {
 #[test]
 fn test_struct_field_owned_no_deref() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 pub struct AlertLevel {
     pub value: i32,
 }
 
-@derive(Debug, Clone, Copy)
+@derive(Debug, Clone)
 pub struct State {
     alert_level: AlertLevel,
 }

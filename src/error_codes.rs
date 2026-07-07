@@ -5,6 +5,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// How confident the compiler is in a diagnostic.
+/// Agent-native tooling uses this to decide whether to trust, investigate, or ignore.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum GuaranteeMaturity {
+    /// Proven correct by the constraint solver — no false positives.
+    Proven,
+    /// High-confidence heuristic — rare false positives.
+    HighConfidence,
+    /// Heuristic with known edge cases — may require human review.
+    Heuristic,
+    /// Best-effort hint — informational, may be wrong.
+    Hint,
+}
+
 /// Windjammer error code
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WjErrorCode {
@@ -22,6 +36,8 @@ pub struct WjErrorCode {
     pub example: Option<String>,
     /// Related Rust error codes
     pub rust_codes: Vec<String>,
+    /// How confident the compiler is in this diagnostic.
+    pub maturity: GuaranteeMaturity,
 }
 
 /// Error code registry
@@ -64,6 +80,7 @@ println!("{}", total)  // 'total' not declared
 let total = 100
 println!("{}", total)"#.to_string()),
             rust_codes: vec!["E0425".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0002: Function not found
@@ -87,6 +104,7 @@ proces_data(items)  // Typo: 'proces' instead of 'process'
 // Correct:
 process_data(items)"#.to_string()),
             rust_codes: vec!["E0425".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0003: Type mismatch
@@ -110,6 +128,7 @@ let x: int = "42"  // String, not int
 // Correct:
 let x: int = "42".parse()  // Convert to int"#.to_string()),
             rust_codes: vec!["E0308".to_string()],
+            maturity: GuaranteeMaturity::Heuristic,
         });
 
         // WJ0004: Immutable variable
@@ -133,6 +152,7 @@ x = 20  // Error: x is immutable
 let mut x = 10
 x = 20  // Works!"#.to_string()),
             rust_codes: vec!["E0384".to_string(), "E0596".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0005: Type not found
@@ -156,6 +176,7 @@ let map: HashMapp<string, int> = ...  // Typo
 // Correct:
 let map: HashMap<string, int> = ..."#.to_string()),
             rust_codes: vec!["E0412".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0006: Module not found
@@ -179,6 +200,7 @@ use std::colections::HashMap  // Typo
 // Correct:
 use std::collections::HashMap"#.to_string()),
             rust_codes: vec!["E0433".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0007: Ownership error
@@ -201,6 +223,7 @@ let data = vec![1, 2, 3]
 process(data.clone())  // Explicit clone
 println!("{}", data.len())"#.to_string()),
             rust_codes: vec!["E0382".to_string()],
+            maturity: GuaranteeMaturity::Heuristic,
         });
 
         // WJ0008: Borrow error
@@ -228,6 +251,7 @@ let y = &x
 // Use y first, then borrow mutably
 let z = &mut x"#.to_string()),
             rust_codes: vec!["E0502".to_string(), "E0503".to_string()],
+            maturity: GuaranteeMaturity::Heuristic,
         });
 
         // WJ0009: Missing field
@@ -259,6 +283,7 @@ let user = User {
                 .to_string(),
             ),
             rust_codes: vec!["E0063".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
 
         // WJ0010: Pattern match not exhaustive
@@ -286,6 +311,7 @@ match value {
     None => println!("No value")
 }"#.to_string()),
             rust_codes: vec!["E0004".to_string()],
+            maturity: GuaranteeMaturity::Proven,
         });
     }
 

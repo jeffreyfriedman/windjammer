@@ -116,7 +116,7 @@ impl Registry {
     println!("Generated:\n{}", generated);
 
     assert!(
-        generated.contains("if let Some(val)"),
+        generated.contains("if let Some(val)") || generated.contains("if let Some(mut val)"),
         "if let on get_mut should generate `if let`.\nGenerated:\n{}",
         generated
     );

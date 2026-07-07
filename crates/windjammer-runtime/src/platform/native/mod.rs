@@ -8,7 +8,6 @@ pub mod dialog;
 pub mod encoding;
 pub mod env;
 pub mod fs;
-pub mod http;
 pub mod net;
 pub mod process;
 pub mod storage;

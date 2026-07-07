@@ -1,0 +1,36 @@
+// Analytic height fog (Decima SIGGRAPH 2017 blend model).
+// L = L_bg * alpha + L_sun + L_amb using shared volumetric helpers.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/volumetric.wjsl"
+
+@group(0) @binding(0) uniform fog: HeightFogParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32>>;
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = fog.width;
+    let height = fog.height;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    let scene = color_output[pixel_idx];
+    let gbuf = gbuffer[pixel_idx];
+    let depth = gbuf.depth;
+    let mat = gbuf.normal.w;
+    if ((mat == 0.0) || (depth >= camera.far_plane)) {
+        return;
+    }
+
+    let world_y = camera.position.y - depth * 0.1;
+    let density = vol_height_fog_density(world_y, fog.base_height, fog.scale_height, fog.density);
+    let alpha = exp(-density * depth * 0.01);
+    let sun_scatter = fog.fog_color * fog.sun_scatter_strength * (1.0 - alpha);
+    let ambient = fog.fog_color * fog.ambient_strength;
+    let result = vol_height_fog_blend(scene.rgb, sun_scatter, ambient, alpha);
+    color_output[pixel_idx] = vec4(result, 1.0);
+}

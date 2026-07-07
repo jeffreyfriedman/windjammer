@@ -10,34 +10,17 @@
     feature = "parser_tests",
 ))]
 
-//! TDD: heat_distortion.wjsl transpiles to valid WGSL (screen-space heat shimmer).
-//! Tests the heat distortion compute shader which produces realistic heat haze
-//! near fire sources, explosions, and hot surfaces.
+#[path = "common/wjsl_shader_fixtures.rs"]
+mod wjsl_shader_fixtures;
 
-use std::path::Path;
 
-fn game_shaders_available() -> bool {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders")
-        .exists()
-}
-
-fn transpile_shader(filename: &str) -> String {
-    let shader_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/windjammer-game-core/shaders");
-    let source = std::fs::read_to_string(shader_dir.join(filename))
-        .unwrap_or_else(|e| panic!("Failed to read {}: {}", filename, e));
-    windjammer::wjsl::transpile_wjsl_with_includes(&source, &shader_dir)
-        .unwrap_or_else(|e| panic!("{} should transpile: {}", filename, e))
-}
+// TDD: heat_distortion.wjsl transpiles to valid WGSL (screen-space heat shimmer).
+// Tests the heat distortion compute shader which produces realistic heat haze
+// near fire sources, explosions, and hot surfaces.
 
 #[test]
 fn test_wjsl_heat_distortion_transpiles() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("heat_distortion.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("heat_distortion.wjsl");
 
     assert!(!wgsl.is_empty(), "transpiled WGSL must not be empty");
     assert!(
@@ -56,11 +39,7 @@ fn test_wjsl_heat_distortion_transpiles() {
 
 #[test]
 fn test_heat_distortion_binding_layout() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("heat_distortion.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("heat_distortion.wjsl");
 
     assert!(
         wgsl.contains("@binding(0)") && wgsl.contains("var<uniform> heat_params"),
@@ -89,11 +68,7 @@ fn test_heat_distortion_binding_layout() {
 
 #[test]
 fn test_heat_distortion_uv_offset() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("heat_distortion.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("heat_distortion.wjsl");
 
     assert!(
         wgsl.contains("offset") || wgsl.contains("distort"),
@@ -116,11 +91,7 @@ fn test_heat_distortion_uv_offset() {
 
 #[test]
 fn test_heat_distortion_heat_source() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("heat_distortion.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("heat_distortion.wjsl");
 
     assert!(
         wgsl.contains("heat_source") || wgsl.contains("source_pos"),
@@ -143,11 +114,7 @@ fn test_heat_distortion_heat_source() {
 
 #[test]
 fn test_heat_distortion_workgroup_size() {
-    if !game_shaders_available() {
-        eprintln!("SKIP: windjammer-game shaders not available");
-        return;
-    }
-    let wgsl = transpile_shader("heat_distortion.wjsl");
+    let wgsl = wjsl_shader_fixtures::transpile_fixture_shader_or_panic("heat_distortion.wjsl");
 
     assert!(
         wgsl.contains("@workgroup_size(8, 8, 1)"),

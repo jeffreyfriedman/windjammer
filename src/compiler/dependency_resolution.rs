@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 
 /// Map `(parent_module, symbol)` → child module for symbols defined under `parent/child/*.wj`.
 /// Fixes `parent::symbol` call sites when Rust places the item in `parent::child`.
-pub(crate) fn build_extern_submodule_qualifier_map(
+pub(crate) fn build_extern_submodule_qualifier_map_with_programs(
     sources: &[(PathBuf, String)],
     base: &Path,
+    parsed_programs: Option<&[crate::parser::Program<'static>]>,
 ) -> Result<HashMap<(String, String), String>> {
     let mut map: HashMap<(String, String), String> = HashMap::new();
     let mut conflicts: HashSet<(String, String)> = HashSet::new();
@@ -72,18 +73,27 @@ pub(crate) fn build_extern_submodule_qualifier_map(
         }
     }
 
-    for (file, source) in sources {
-        let (_parser, program) = super::parse_wj_source(file, source)?;
+    for (i, (file, source)) in sources.iter().enumerate() {
         let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
         else {
             continue;
         };
-        merge_extern_submodule_symbols_from_items(
-            &program.items,
-            &module_path,
-            &mut map,
-            &mut conflicts,
-        );
+        if let Some(programs) = parsed_programs {
+            merge_extern_submodule_symbols_from_items(
+                &programs[i].items,
+                &module_path,
+                &mut map,
+                &mut conflicts,
+            );
+        } else {
+            let (_parser, program) = super::parse_wj_source(file, source)?;
+            merge_extern_submodule_symbols_from_items(
+                &program.items,
+                &module_path,
+                &mut map,
+                &mut conflicts,
+            );
+        }
     }
 
     for k in conflicts {
@@ -94,18 +104,33 @@ pub(crate) fn build_extern_submodule_qualifier_map(
 }
 
 /// Map struct/enum/trait/type-alias names to Rust module paths (from library root) for auto-import resolution.
-pub(crate) fn build_type_defining_modules_for_library(
+pub(crate) fn build_type_defining_modules_for_library_with_programs(
     sources: &[(PathBuf, String)],
     base: &Path,
+    parsed_programs: Option<&[crate::parser::Program<'static>]>,
 ) -> Result<HashMap<String, Vec<Vec<String>>>> {
     let mut map: HashMap<String, Vec<Vec<String>>> = HashMap::new();
-    for (file, source) in sources {
-        let (_parser, program) = super::parse_wj_source(file, source)?;
+    for (i, (file, source)) in sources.iter().enumerate() {
+        let program = if let Some(programs) = parsed_programs {
+            &programs[i]
+        } else {
+            // Fallback: no AST cache available, re-parse
+            let (_parser, p) = super::parse_wj_source(file, source)?;
+            let Some(module_path) =
+                crate::analyzer::type_collector::wj_file_to_module_path(base, file)
+            else {
+                continue;
+            };
+            for name in crate::analyzer::type_collector::collect_local_type_names(&p) {
+                map.entry(name).or_default().push(module_path.clone());
+            }
+            continue;
+        };
         let Some(module_path) = crate::analyzer::type_collector::wj_file_to_module_path(base, file)
         else {
             continue;
         };
-        for name in crate::analyzer::type_collector::collect_local_type_names(&program) {
+        for name in crate::analyzer::type_collector::collect_local_type_names(program) {
             map.entry(name).or_default().push(module_path.clone());
         }
     }
@@ -141,37 +166,60 @@ pub(crate) fn find_dependency_metadata_roots(
 
     let canonical =
         std::fs::canonicalize(file_parent).unwrap_or_else(|_| file_parent.to_path_buf());
+
+    // Find the nearest project root so we don't walk past it into unrelated projects.
+    let project_root = crate::metadata::find_project_root(&canonical);
+
+    // No manifest (Cargo.toml / wj.toml) found — this is a temp dir or standalone file.
+    // Skip the sibling walk entirely to prevent metadata pollution from unrelated projects.
+    let Some(root) = project_root else {
+        return roots;
+    };
+
     let mut current = canonical.as_path();
+
     for _ in 0..6 {
         let Some(parent) = current.parent() else {
             break;
         };
-        if let Ok(entries) = std::fs::read_dir(parent) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if !p.is_dir() {
-                    continue;
-                }
-                if canonical.starts_with(&p) {
-                    continue;
-                }
-                let src_dir = p.join("src");
-                if src_dir.is_dir() {
-                    roots.push(src_dir);
-                }
-                if let Ok(sub_entries) = std::fs::read_dir(&p) {
-                    for sub_entry in sub_entries.flatten() {
-                        let sub = sub_entry.path();
-                        if sub.is_dir() {
-                            let sub_src = sub.join("src");
-                            if sub_src.is_dir() {
-                                roots.push(sub_src);
+
+        // Never walk above the project root. Workspace sibling crates (e.g. `engine/src`
+        // when building `game-core/src/...`) carry stale `metadata.json` / `.wj.meta`
+        // entries that overwrite converged local ownership and break call-site auto-borrow.
+        if parent == root || !root.starts_with(parent) {
+            break;
+        }
+
+        // Peer `src/` trees within the same crate only (e.g. cross-module `.wj.meta`).
+        if current.starts_with(&root) && current != root {
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if !p.is_dir() {
+                        continue;
+                    }
+                    if canonical.starts_with(&p) {
+                        continue;
+                    }
+                    let src_dir = p.join("src");
+                    if src_dir.is_dir() {
+                        roots.push(src_dir);
+                    }
+                    if let Ok(sub_entries) = std::fs::read_dir(&p) {
+                        for sub_entry in sub_entries.flatten() {
+                            let sub = sub_entry.path();
+                            if sub.is_dir() {
+                                let sub_src = sub.join("src");
+                                if sub_src.is_dir() {
+                                    roots.push(sub_src);
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
         current = parent;
     }
 
@@ -206,6 +254,13 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
+            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if matches!(
+                dir_name,
+                "build" | "gen" | "target" | ".git" | "node_modules"
+            ) {
+                continue;
+            }
             find_wj_files_recursive(&path, files)?;
         }
     }

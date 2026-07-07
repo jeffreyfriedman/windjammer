@@ -11,12 +11,19 @@ pub struct SourceFingerprint {
     pub content_hash: u64,
     pub compiler_version: String,
     pub dep_metadata_epoch: u64,
+    /// Hash of generated `.rs` content at emit time; catches stale outputs when
+    /// source fingerprint matches but on-disk Rust diverges.
+    pub output_hash: u64,
 }
 
 pub fn hash_source(source: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
     source.hash(&mut hasher);
     hasher.finish()
+}
+
+pub fn hash_output(output: &str) -> u64 {
+    hash_source(output)
 }
 
 /// Unique identity for this compiler build (version + binary hash).
@@ -34,8 +41,12 @@ pub fn compiler_build_identity() -> String {
         if let Ok(mut file) = std::fs::File::open(&exe) {
             use std::io::Read;
             let mut buf = [0u8; 65536];
-            if let Ok(n) = file.read(&mut buf) {
-                buf[..n].hash(&mut hasher);
+            loop {
+                match file.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => buf[..n].hash(&mut hasher),
+                    Err(_) => break,
+                }
             }
         }
     }
@@ -91,6 +102,21 @@ pub fn compute_fingerprint(source: &str, dep_roots: &[std::path::PathBuf]) -> So
         content_hash: hash_source(source),
         compiler_version: compiler_build_identity(),
         dep_metadata_epoch: dep_metadata_epoch(dep_roots),
+        output_hash: 0,
+    }
+}
+
+/// Like [`compute_fingerprint`] but records the generated Rust hash for stale-output detection.
+pub fn compute_fingerprint_with_output(
+    source: &str,
+    dep_roots: &[std::path::PathBuf],
+    output: &str,
+) -> SourceFingerprint {
+    SourceFingerprint {
+        content_hash: hash_source(source),
+        compiler_version: compiler_build_identity(),
+        dep_metadata_epoch: dep_metadata_epoch(dep_roots),
+        output_hash: hash_output(output),
     }
 }
 
@@ -101,6 +127,20 @@ pub fn compute_fingerprint_with_dep_epoch(source: &str, dep_epoch: u64) -> Sourc
         content_hash: hash_source(source),
         compiler_version: compiler_build_identity(),
         dep_metadata_epoch: dep_epoch,
+        output_hash: 0,
+    }
+}
+
+pub fn compute_fingerprint_with_dep_epoch_and_output(
+    source: &str,
+    dep_epoch: u64,
+    output: &str,
+) -> SourceFingerprint {
+    SourceFingerprint {
+        content_hash: hash_source(source),
+        compiler_version: compiler_build_identity(),
+        dep_metadata_epoch: dep_epoch,
+        output_hash: hash_output(output),
     }
 }
 
@@ -138,6 +178,23 @@ fn fingerprint_matches(source_path: &Path, current: &SourceFingerprint) -> bool 
     })
 }
 
+fn output_hash_matches(output_path: &Path, cached_output_hash: u64) -> bool {
+    if cached_output_hash == 0 {
+        return true;
+    }
+    let Ok(content) = std::fs::read_to_string(output_path) else {
+        return false;
+    };
+    hash_output(&content) == cached_output_hash
+}
+
+fn cached_output_hash(source_path: &Path) -> Option<u64> {
+    let meta_path = crate::metadata::meta_cache_path(source_path);
+    let content = std::fs::read_to_string(&meta_path).ok()?;
+    let meta = serde_json::from_str::<crate::metadata::ModuleMetadata>(&content).ok()?;
+    meta.analysis_fingerprint.map(|fp| fp.output_hash)
+}
+
 fn is_output_mtime_fresh(source: &Path, output: &Path) -> bool {
     let source_mtime = match std::fs::metadata(source).and_then(|m| m.modified()) {
         Ok(t) => t,
@@ -160,10 +217,13 @@ pub fn is_codegen_cache_valid(
     if !output_path.exists() {
         return false;
     }
-    if !is_output_mtime_fresh(source_path, output_path) {
+    if !fingerprint_matches_cached(source, source_path, dep_roots) {
         return false;
     }
-    fingerprint_matches_cached(source, source_path, dep_roots)
+    match cached_output_hash(source_path) {
+        Some(h) if h != 0 => output_hash_matches(output_path, h),
+        _ => is_output_mtime_fresh(source_path, output_path),
+    }
 }
 
 /// Like [`is_codegen_cache_valid`] but uses a dep-metadata epoch snapshot from build start.
@@ -176,10 +236,13 @@ pub fn is_codegen_cache_valid_with_dep_epoch(
     if !output_path.exists() {
         return false;
     }
-    if !is_output_mtime_fresh(source_path, output_path) {
+    if !fingerprint_matches_cached_with_dep_epoch(source, source_path, dep_epoch) {
         return false;
     }
-    fingerprint_matches_cached_with_dep_epoch(source, source_path, dep_epoch)
+    match cached_output_hash(source_path) {
+        Some(h) if h != 0 => output_hash_matches(output_path, h),
+        _ => is_output_mtime_fresh(source_path, output_path),
+    }
 }
 
 impl From<SourceFingerprint> for crate::metadata::AnalysisFingerprint {
@@ -188,6 +251,7 @@ impl From<SourceFingerprint> for crate::metadata::AnalysisFingerprint {
             content_hash: fp.content_hash,
             compiler_version: fp.compiler_version,
             dep_metadata_epoch: fp.dep_metadata_epoch,
+            output_hash: fp.output_hash,
         }
     }
 }

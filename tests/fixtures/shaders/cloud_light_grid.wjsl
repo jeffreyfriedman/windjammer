@@ -1,0 +1,26 @@
+// CloudLightGrid pre-pass — fills light energy grid for Nubis³ voxel clouds (Phase 3).
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/volumetric.wjsl"
+
+@group(0) @binding(0) uniform cloud_params: CloudParams;
+@group(0) @binding(1) storage read_write light_grid: array<f32>;
+
+const GRID_W: u32 = 256u;
+const GRID_D: u32 = 32u;
+
+fn grid_index(x: u32, y: u32, z: u32) -> u32 {
+    return z * GRID_W * GRID_W + y * GRID_W + x;
+}
+
+@compute @workgroup_size(8, 8, 4)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= GRID_W || id.y >= GRID_W || id.z >= GRID_D) {
+        return;
+    }
+    let idx = grid_index(id.x, id.y, id.z);
+    let world_y = f32(id.y) * 40.0 + cloud_params.shell_bottom;
+    let density = cloud_params.density * exp(-abs(world_y - 2000.0) * 0.0005);
+    let sun = max(dot(normalize(vec3(1.0, 0.4, 0.2)), vec3(0.0, 1.0, 0.0)), 0.0);
+    light_grid[idx] = density * sun * cloud_params.silver_intensity;
+}

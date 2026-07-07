@@ -38,8 +38,8 @@ pub fn build_project_ext(
     library: bool,
     external_metadata: &[(&str, &Path)],
 ) -> Result<()> {
-    // When we have metadata or library, use the compiler's simpler build (handles cross-crate)
-    if !external_metadata.is_empty() || (library && path.is_file()) {
+    // Library builds and cross-crate metadata require the multipass compiler pipeline.
+    if !external_metadata.is_empty() || library {
         return crate::compiler::build_project_ext(
             path,
             output,
@@ -544,6 +544,13 @@ fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("wj") {
             files.push(path);
         } else if path.is_dir() {
+            let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if matches!(
+                dir_name,
+                "build" | "gen" | "target" | ".git" | "node_modules"
+            ) {
+                continue;
+            }
             find_wj_files_recursive(&path, files)?;
         }
     }

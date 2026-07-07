@@ -1,0 +1,39 @@
+use std::collections::HashMap
+
+/// Minimal A* loop excerpt: local HashMap tuple keys must auto-borrow at .get().
+pub fn score_lookup(
+    start_x: i32,
+    start_y: i32,
+    goal_x: i32,
+    goal_y: i32,
+) -> f32 {
+    let mut g_score: HashMap<(i32, i32), f32> = HashMap::new()
+    let mut came_from: HashMap<(i32, i32), (i32, i32)> = HashMap::new()
+    g_score.insert((start_x, start_y), 0.0)
+
+    let current_x = start_x
+    let current_y = start_y
+    let current_g = match g_score.get((current_x, current_y)) {
+        Some(v) => v,
+        None => 999999.0,
+    }
+
+    let mut node = (current_x, current_y)
+    match came_from.get(node) {
+        Some(parent) => {
+            let _ = parent
+        }
+        None => {},
+    }
+
+    let nx = current_x + 1
+    let ny = current_y
+    let neighbor_g = match g_score.get((nx, ny)) {
+        Some(v) => v,
+        None => 999999.0,
+    }
+
+    let _ = goal_x
+    let _ = goal_y
+    current_g + neighbor_g
+}

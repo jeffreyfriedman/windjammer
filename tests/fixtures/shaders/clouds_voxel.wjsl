@@ -1,0 +1,77 @@
+// Nubis³ voxel cloud volume — light energy grid pre-pass + SDF-accelerated march.
+// Phase 3 backend; extends shared volumetric module.
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+use "wjsl_std/noise.wjsl"
+use "wjsl_std/volumetric.wjsl"
+
+@group(0) @binding(0) uniform cloud_params: CloudParams;
+@group(0) @binding(1) uniform camera: CameraUniforms;
+@group(0) @binding(2) storage read gbuffer: array<GBufferPixel>;
+@group(0) @binding(3) storage read_write color_output: array<vec4<f32>>;
+@group(0) @binding(4) storage read light_grid: array<f32>;
+
+const GRID_W: u32 = 256u;
+const GRID_D: u32 = 32u;
+
+fn grid_index(x: u32, y: u32, z: u32) -> u32 {
+    return z * GRID_W * GRID_W + y * GRID_W + x;
+}
+
+fn sample_light_grid(world_pos: vec3<f32>) -> f32 {
+    let rel = world_pos - camera.position;
+    let gx = u32(clamp((rel.x * 0.01 + 0.5) * f32(GRID_W), 0.0, f32(GRID_W - 1u)));
+    let gy = u32(clamp((rel.y * 0.01 + 0.5) * f32(GRID_W), 0.0, f32(GRID_W - 1u)));
+    let gz = u32(clamp((rel.z * 0.01 + 0.5) * f32(GRID_D), 0.0, f32(GRID_D - 1u)));
+    return light_grid[grid_index(gx, gy, gz)];
+}
+
+/// Sphere SDF for empty-space skipping (Nubis³ acceleration).
+fn sphere_sdf(p: vec3<f32>, center: vec3<f32>, radius: f32) -> f32 {
+    return length(p - center) - radius;
+}
+
+fn voxel_cloud_density(world_pos: vec3<f32>) -> f32 {
+    let n = fbm(world_pos * 0.0005 + vec3(0.0, cloud_params.time * 0.02, 0.0), 4);
+    let uprez = fbm(world_pos * 0.002, 2) * cloud_params.near_march_scale;
+    return max(n, uprez * 0.5) * cloud_params.density;
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = cloud_params.width;
+    let height = cloud_params.height;
+    if (id.x >= width || id.y >= height) { return; }
+
+    let pixel_idx = id.y * width + id.x;
+    let scene = color_output[pixel_idx];
+    let pixel = vec2<f32>(f32(id.x), f32(id.y));
+    let ray_dir = generate_ray(pixel + vec2(0.5, 0.5), camera);
+    let ray_origin = camera.position;
+
+    let steps = 16u;
+    var transmittance = 1.0;
+    var scattered = vec3(0.0);
+    let step_len = 80.0;
+    let cloud_center = camera.position + ray_dir * 400.0;
+
+    for (var i = 0u; i < steps; i++) {
+        let t = f32(i) * step_len + 50.0;
+        let pos = ray_origin + ray_dir * t;
+        if (sphere_sdf(pos, cloud_center, 600.0) > 120.0) {
+            continue;
+        }
+        let density = voxel_cloud_density(pos);
+        if (density > 0.001) {
+            let light_t = sample_light_grid(pos);
+            let phase = vol_hg_phase(dot(ray_dir, normalize(vec3(0.0, 1.0, 0.0))), cloud_params.phase_g);
+            scattered = scattered + transmittance * vec3(light_t) * phase * density * step_len;
+            transmittance = transmittance * vol_beer_lambert(density * cloud_params.absorption, step_len);
+        }
+        if (transmittance < 0.01) { break; }
+    }
+
+    color_output[pixel_idx] = vec4(scene.rgb * transmittance + scattered, 1.0);
+}

@@ -1,8 +1,0 @@
-fn main() {
-    let x = 5
-    let y = "hello"
-    
-    // Intentional error: type mismatch
-    let z = x + y
-}
-

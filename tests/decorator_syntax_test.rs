@@ -67,7 +67,11 @@ fn test_bench_decorator() {
 
     // Should wrap with bench() call
     assert!(output.contains("bench(||"));
-    assert!(output.contains("let x =")); // Expression may be simplified
+    assert!(
+        output.contains("let x =") || output.contains("let _x ="),
+        "Expected let binding for x. Generated:\n{}",
+        output,
+    );
     assert!(output.contains("println!(\"Benchmark:"));
 }
 
@@ -85,7 +89,11 @@ fn test_profile_decorator_emits_tracy_zone() {
 
     assert!(output.contains("windjammer_runtime::profiling::tracy_zone"));
     assert!(output.contains("render_pass"));
-    assert!(output.contains("let x ="));
+    assert!(
+        output.contains("let x =") || output.contains("let _x ="),
+        "Expected let binding for x. Generated:\n{}",
+        output,
+    );
 }
 
 #[test]

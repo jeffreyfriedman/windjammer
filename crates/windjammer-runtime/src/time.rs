@@ -37,6 +37,11 @@ pub fn timestamp() -> i64 {
     Utc::now().timestamp()
 }
 
+/// Windjammer `std::time::now_unix()` alias.
+pub fn now_unix() -> i64 {
+    timestamp()
+}
+
 /// Get current timestamp (milliseconds since epoch)
 pub fn now_millis() -> i64 {
     Utc::now().timestamp_millis()

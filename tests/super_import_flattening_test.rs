@@ -28,7 +28,6 @@ fn test_super_super_import_flattens_to_super() {
 // Simulating: src/rendering/camera3d.wj importing from src/math/vec3.wj
 use super::super::math::vec3::Vec3
 
-@derive(Copy, Clone, Debug)
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,
@@ -82,7 +81,6 @@ fn test_single_super_import_preserved() {
     let source = r#"
 use super::vec3::Vec3
 
-@derive(Copy, Clone, Debug)
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,
@@ -134,7 +132,6 @@ fn test_deeply_nested_super_import_flattens() {
 // Simulating deeply nested: use super::super::super::core::types::MyType
 use super::super::super::core::types::MyType
 
-@derive(Copy, Clone, Debug)
 pub struct MyType {
     pub value: i32,
 }

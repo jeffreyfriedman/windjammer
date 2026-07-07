@@ -12,6 +12,7 @@ pub use crate::rust_integration_tests::{
 };
 pub use file_operations::strip_main_functions;
 pub(crate) use module_generation::generate_mod_file_with_layout;
+pub(crate) use module_generation::mod_file_layout_for_build;
 pub use module_generation::{
     cleanup_stale_module_files, cleanup_stale_module_files_recursive, generate_mod_file,
 };

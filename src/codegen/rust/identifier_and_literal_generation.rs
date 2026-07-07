@@ -109,14 +109,23 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if self.in_owned_value_context
+            && !self.in_call_argument_generation
             && !self.generating_assignment_target
             && !self.in_field_access_object
         {
+            if let Expression::Identifier { name, .. } = expr_to_generate {
+                if let Some(ty) = self.local_var_types.get(name) {
+                    if !matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                        return base_name;
+                    }
+                }
+            }
             if let Some(ty) = self.infer_expression_type(expr_to_generate) {
                 if let Type::Reference(inner) | Type::MutableReference(inner) = &ty {
                     if self.is_type_copy(inner) {
                         return format!("*{}", base_name);
                     }
+                    return format!("{}.clone()", base_name);
                 }
             }
         }

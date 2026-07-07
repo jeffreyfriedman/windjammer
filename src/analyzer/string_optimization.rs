@@ -77,24 +77,6 @@ impl<'ast> Analyzer<'ast> {
             } else {
                 // No decorator - use automatic analysis
 
-                // If the function returns String and this param is returned directly,
-                // it needs to be owned String (not &str)
-                let returns_string = func
-                    .return_type
-                    .as_ref()
-                    .map(|rt| {
-                        matches!(rt, Type::String)
-                            || matches!(rt, Type::Custom(ref n) if n == "string")
-                    })
-                    .unwrap_or(false);
-
-                let param_is_returned =
-                    returns_string && self.param_is_returned_directly(&param.name, &func.body);
-
-                if param_is_returned {
-                    continue;
-                }
-
                 let needs_string_ref =
                     self.param_needs_string_ref(&param.name, &func.body, registry);
 
@@ -105,32 +87,6 @@ impl<'ast> Analyzer<'ast> {
         }
 
         optimizable
-    }
-
-    /// Check if a string parameter is returned directly (explicit return or implicit last expr)
-    pub(crate) fn param_is_returned_directly(&self, param_name: &str, body: &[&Statement]) -> bool {
-        for stmt in body {
-            match stmt {
-                Statement::Return {
-                    value: Some(expr), ..
-                } => {
-                    if let Expression::Identifier { name, .. } = &**expr {
-                        if name == param_name {
-                            return true;
-                        }
-                    }
-                }
-                Statement::Expression { expr, .. } => {
-                    if let Expression::Identifier { name, .. } = &**expr {
-                        if name == param_name {
-                            return true;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        false
     }
 
     /// Check if a parameter needs &String (passed to method that requires it)
@@ -547,6 +503,58 @@ impl<'ast> Analyzer<'ast> {
                         return true;
                     }
                     // Recursively check each element
+                    if self.expr_uses_param_in_string_ref_context(param_name, element, registry) {
+                        return true;
+                    }
+                }
+                false
+            }
+            // Macros that consume their arguments (vec![], assert_eq![], etc.)
+            // need owned values. Formatting macros (format!, println!, etc.)
+            // only borrow, so &str is fine for those.
+            Expression::MacroInvocation { name, args, .. } => {
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
+                );
+                if borrows_only {
+                    for arg in args {
+                        if self.expr_uses_param_in_string_ref_context(param_name, arg, registry) {
+                            return true;
+                        }
+                    }
+                    false
+                } else {
+                    for arg in args {
+                        if self.expr_is_param_or_ref_to_param(param_name, arg) {
+                            return true;
+                        }
+                        if self.expr_uses_param_in_string_ref_context(param_name, arg, registry) {
+                            return true;
+                        }
+                    }
+                    false
+                }
+            }
+            // Array literals [param, ...] also consume elements as owned values
+            Expression::Array { elements, .. } => {
+                for element in elements {
+                    if self.expr_is_param_or_ref_to_param(param_name, element) {
+                        return true;
+                    }
                     if self.expr_uses_param_in_string_ref_context(param_name, element, registry) {
                         return true;
                     }

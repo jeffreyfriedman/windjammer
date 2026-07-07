@@ -34,7 +34,6 @@ mod test_utils;
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_param_not_inferred_as_mut_ref() {
     let source = r#"
-@derive(Copy, Clone, Debug)
 struct Entity {
     index: i64,
 }
@@ -84,7 +83,6 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_with_clone() {
     let source = r#"
-@derive(Copy, Clone, Hash, Eq, PartialEq)
 struct EntityId {
     id: i64,
 }
@@ -132,7 +130,6 @@ fn main() {
 #[cfg_attr(tarpaulin, ignore)]
 fn test_copy_type_passed_to_multiple_methods() {
     let source = r#"
-@derive(Copy, Clone)
 struct Point {
     x: int,
     y: int,

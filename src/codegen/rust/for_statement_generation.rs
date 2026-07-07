@@ -48,8 +48,25 @@ impl<'ast> CodeGenerator<'ast> {
             })
         };
 
-        let needs_borrow = self.should_borrow_for_iteration(iterable)
+        let is_self_field_on_mut_self = self.inferred_mut_borrowed_params.contains("self")
+            && matches!(
+                iterable,
+                Expression::FieldAccess { object, .. }
+                    if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            );
+
+        let mut needs_borrow = self.should_borrow_for_iteration(iterable)
             || self.self_field_iterable_needs_borrow(iterable, body);
+        if is_self_field_on_mut_self {
+            if needs_mut {
+                // `for mut x in self.field` on &mut self: borrow mutably, never move the field.
+                needs_borrow = true;
+            } else if Self::variable_used_in_statements(body, "self") {
+                // Body also uses `self` — clone for by-value iteration (E0505).
+            } else {
+                needs_borrow = true;
+            }
+        }
         let needs_mut_borrow = needs_mut && needs_borrow;
 
         let iterable_already_mut_ref = matches!(
@@ -74,7 +91,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&display_pattern);
         output.push_str(" in ");
 
-        let is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
+        let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
 
         if needs_mut_borrow {
             output.push_str("&mut ");
@@ -106,8 +123,24 @@ impl<'ast> CodeGenerator<'ast> {
         // is unnecessary and fails when T doesn't implement Clone.
         let prev_field_access = self.in_field_access_object;
         self.in_field_access_object = true;
-        output.push_str(&self.generate_expression(iterable_to_generate));
+        let mut iter_expr = self.generate_expression(iterable_to_generate);
         self.in_field_access_object = prev_field_access;
+
+        // `for pass in self.field` on `&mut self` when the body calls `self.update_*()`:
+        // cannot use `&self.field` (borrow conflict) or bare `self.field` (partial move).
+        // Clone the collection for by-value iteration instead.
+        let needs_owned_self_field_clone = self.inferred_mut_borrowed_params.contains("self")
+            && self.codegen_expression_traces_to_self(iterable)
+            && Self::variable_used_in_statements(body, "self")
+            && !needs_borrow
+            && !needs_mut_borrow
+            && !iter_expr.ends_with(".clone()");
+        if needs_owned_self_field_clone {
+            iter_expr = format!("{}.clone()", iter_expr);
+            // Owned collection snapshot — iterate by value, not `&self.field`.
+            is_borrowed_iterator = false;
+        }
+        output.push_str(&iter_expr);
         output.push_str(" {\n");
 
         self.indent_level += 1;

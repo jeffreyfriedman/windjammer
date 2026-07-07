@@ -337,12 +337,23 @@ impl InferenceEngine {
                         self.infer_operator_trait(left, right, "Div", bounds);
                     }
                     BinaryOp::Eq | BinaryOp::Ne => {
-                        self.infer_trait_for_expression(left, "PartialEq", bounds);
-                        self.infer_trait_for_expression(right, "PartialEq", bounds);
+                        if let Some(tp) = self.extract_type_param(left) {
+                            bounds.add_constraint(tp, "PartialEq".to_string());
+                        }
+                        if let Some(tp) = self.extract_type_param(right) {
+                            bounds.add_constraint(tp, "PartialEq".to_string());
+                        }
                     }
                     BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
-                        self.infer_trait_for_expression(left, "PartialOrd", bounds);
-                        self.infer_trait_for_expression(right, "PartialOrd", bounds);
+                        // Only constrain generic type parameters when they appear in the
+                        // comparison. Built-in loops like `idx < lines.len()` must not
+                        // add PartialOrd to unrelated generics (e.g. trait reader params).
+                        if let Some(tp) = self.extract_type_param(left) {
+                            bounds.add_constraint(tp, "PartialOrd".to_string());
+                        }
+                        if let Some(tp) = self.extract_type_param(right) {
+                            bounds.add_constraint(tp, "PartialOrd".to_string());
+                        }
                     }
                     _ => {
                         // Other binary ops don't require traits (logical ops, etc.)
@@ -496,13 +507,9 @@ impl InferenceEngine {
         // Try to extract type parameter from expression
         if let Some(type_param) = self.extract_type_param(expr) {
             bounds.add_constraint(type_param, trait_name.to_string());
-        } else {
-            // Fallback: if we can't determine which variable, apply to ALL type parameters
-            // This is conservative: better to over-constrain than under-constrain
-            for type_param in &self.type_params {
-                bounds.add_constraint(type_param.clone(), trait_name.to_string());
-            }
         }
+        // Do not fall back to all type parameters — that spuriously bounds generics
+        // when comparisons/method calls involve concrete types (see while idx < vec.len()).
     }
 
     /// Extract type parameter name from an expression
