@@ -35,8 +35,15 @@ impl<'ast> CodeGenerator<'ast> {
         self.local_variable_scopes
             .push(std::collections::HashSet::new());
 
-        // AUTO-CLONE: Load auto-clone analysis for this function
-        self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
+        // AUTO-CLONE: Load auto-clone analysis for this function.
+        // When IR cutover is active for clones, read from IrFunction's optimization hints.
+        if self.ir_cutover.clones && self.current_ir_function.is_some() {
+            if let Some(ir_fn) = &self.current_ir_function {
+                self.auto_clone_analysis = Some(ir_fn.optimizations.auto_clone.clone());
+            }
+        } else {
+            self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
+        }
         self.auto_clone_counter = 0;
 
         // PHASE 2 OPTIMIZATION: Load clone optimizations for this function

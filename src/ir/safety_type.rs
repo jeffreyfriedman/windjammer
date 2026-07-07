@@ -88,7 +88,10 @@ impl SafetyType {
     }
 
     pub fn is_const(&self) -> bool {
-        matches!(self.const_eval, ConstEval::Const | ConstEval::Comptime)
+        matches!(
+            self.const_eval,
+            ConstEval::Const | ConstEval::Comptime { .. }
+        )
     }
 }
 
@@ -143,8 +146,11 @@ pub enum BaseType {
         mutable: bool,
         inner: Box<BaseType>,
     },
-    /// SIMD vector: Simd<T, N> (future: WJ-LANG-02)
-    Simd(Box<BaseType>, u32),
+    /// SIMD vector: Simd<T, N> (WJ-LANG-02)
+    Simd {
+        element: Box<BaseType>,
+        lanes: u32,
+    },
     /// Inferred — not yet determined by the solver.
     Inferred,
 }
@@ -215,6 +221,10 @@ impl EffectSet {
     pub fn iter(&self) -> impl Iterator<Item = &Effect> {
         self.0.iter()
     }
+
+    pub fn from_iter(effects: impl IntoIterator<Item = Effect>) -> Self {
+        Self(effects.into_iter().collect())
+    }
 }
 
 /// Individual effect capabilities (WJ-SEC-01).
@@ -257,8 +267,11 @@ pub use crate::ir::taint::{TaintSource, TaintSourceKind, TaintStatus};
 pub enum ConstEval {
     /// Must be evaluated at runtime.
     Runtime,
-    /// Can be evaluated at compile time (comptime blocks).
-    Comptime,
+    /// Evaluated at compile time via a `comptime { }` block.
+    Comptime {
+        /// Source expression or block identifier for future const evaluation.
+        expr: String,
+    },
     /// Must be evaluated at compile time (const declarations).
     Const,
 }

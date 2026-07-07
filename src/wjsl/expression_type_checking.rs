@@ -315,7 +315,25 @@ impl<'a> BodyParser<'a> {
                 let mut ty = self
                     .symbols
                     .get(&name)
-                    .ok_or_else(|| anyhow!("Unknown identifier '{}'", name))?
+                    .ok_or_else(|| {
+                        let available: Vec<&String> = self.symbols.keys().collect();
+                        let hint = if available.is_empty() {
+                            "Check bindings, parameters, and let bindings.".to_string()
+                        } else {
+                            let joined: Vec<&str> =
+                                available.iter().take(8).map(|s| s.as_str()).collect();
+                            format!(
+                                "Available in scope: {}. {}",
+                                joined.join(", "),
+                                crate::wjsl::diagnostics::suggest_unknown_identifier(
+                                    &name,
+                                    &joined.join(" ")
+                                )
+                                .unwrap_or_default()
+                            )
+                        };
+                        self.error_at(format!("Unknown identifier '{}'. {}", name, hint))
+                    })?
                     .clone();
                 // Postfix: [index] and .member can chain (e.g. arr[i], arr[i].x, m[0][3])
                 loop {

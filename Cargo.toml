@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.49.0"
+version = "0.50.0"
 edition = "2021"
 authors = ["Jeffrey Friedman <20387583+jeffreyfriedman@users.noreply.github.com>", "Windjammer Contributors"]
 license = "MIT OR Apache-2.0"
@@ -30,15 +30,17 @@ readme = "README.md"
 rust-version.workspace = true
 autobins = false
 autotests = false
-exclude = [
-    "test_output_*",
-    "examples/*/build_output",
-    "examples/*/pkg",
-    "examples/*/target",
-    "examples/taskflow/rust",
-    "examples/taskflow/windjammer",
-    ".github",
-    "docs/*.md"
+include = [
+    "src/**/*",
+    "std/**/*",
+    "stdlib_meta/**/*",
+    "agent_index/**/*",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
 ]
 
 [lib]

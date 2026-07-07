@@ -47,37 +47,38 @@ type ProgramAnalysisResult<'ast> = (
     HashMap<String, HashMap<String, AnalyzedFunction<'ast>>>,
 );
 
+/// Analyzed function: bridges the AST with solver-derived metadata.
+///
+/// **Deprecation notice (v0.50.0):** The following fields are now superseded by the
+/// IR pipeline's `SafetyType` and `IrFunction`:
+/// - `inferred_ownership` → `IrFunction.param_types[name].ownership`
+/// - `auto_clone_analysis` → `IrFunction.optimizations.auto_clone`
+/// - `str_ref_optimizable_params` → `IrFunction.str_ref_params`
+/// - `inferred_param_types` → `IrFunction.param_types[name].base`
+///
+/// These fields are retained for backward compatibility with non-Rust backends
+/// (Go, JS, interpreter) and will be removed once all backends use the IR.
 #[derive(Debug, Clone)]
 pub struct AnalyzedFunction<'ast> {
     pub decl: FunctionDecl<'ast>,
+    /// Legacy: parameter ownership. Superseded by IR solver when `IrCutoverConfig.ownership` is true.
     pub inferred_ownership: HashMap<String, OwnershipMode>,
-    // STRING INFERENCE: Track inferred types for string parameters (&str vs String)
+    /// Legacy: inferred parameter types. Superseded by IR solver when `IrCutoverConfig.param_types` is true.
     pub inferred_param_types: Vec<Type>,
-    // AUTO-MUT: Track which local variables are mutated (for automatic mut inference)
     pub mutated_variables: HashSet<String>,
-    // LINTER: Track which parameters are mutated (for owned-but-not-returned lint)
     pub mutated_parameters: HashSet<String>,
-    // AUTO-CLONE: Track where clones should be automatically inserted
+    /// Legacy: auto-clone analysis. Superseded by IR solver when `IrCutoverConfig.clones` is true.
     pub auto_clone_analysis: AutoCloneAnalysis,
-    // PHASE 2 OPTIMIZATION: Track unnecessary clones that can be eliminated
     pub clone_optimizations: Vec<CloneOptimization>,
-    // PHASE 3 OPTIMIZATION: Track struct mapping opportunities
     pub struct_mapping_optimizations: Vec<StructMappingOptimization>,
-    // PHASE 4 OPTIMIZATION: Track string operations for optimization
     pub string_optimizations: Vec<StringOptimization>,
-    // PHASE 5 OPTIMIZATION: Track assignment operations that can use compound operators
     pub assignment_optimizations: Vec<AssignmentOptimization>,
-    // PHASE 6 OPTIMIZATION: Track heavy drops that can be deferred to background thread
     pub defer_drop_optimizations: Vec<DeferDropOptimization>,
-    // PHASE 7 OPTIMIZATION: Track static values that can be const
     pub const_static_optimizations: Vec<ConstStaticOptimization>,
-    // PHASE 8 OPTIMIZATION: Track Vec usage that can use SmallVec
     pub smallvec_optimizations: Vec<SmallVecOptimization>,
-    // PHASE 9 OPTIMIZATION: Track string/data that can use Cow
     pub cow_optimizations: Vec<CowOptimization>,
-    /// Cache locality: AoSoA / SoA loop candidates (ECS-style Vec<Struct> iteration).
     pub cache_locality: CacheLocalityAnalysis,
-    // STRING PARAMETER OPTIMIZATION (Phase 2): Track which string params can use &str
+    /// Legacy: str_ref optimization params. Superseded by IR solver when `IrCutoverConfig.str_ref` is true.
     pub str_ref_optimizable_params: HashSet<String>,
 }
 

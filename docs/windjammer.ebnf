@@ -1,0 +1,213 @@
+(* Windjammer Formal Grammar — v0.50.0 *)
+(* This EBNF grammar is a normative reference for constrained-decoding harnesses *)
+(* and code-generation agents. It covers the full surface syntax. *)
+
+program         = { item } ;
+
+item            = use_decl
+                | struct_decl
+                | enum_decl
+                | trait_decl
+                | impl_block
+                | function_decl
+                | const_decl
+                | type_alias
+                | decorator item ;
+
+(* ── Declarations ── *)
+
+use_decl        = "use" use_path [ "::" "{" ident_list "}" ] ;
+use_path        = ident { "::" ident } ;
+
+struct_decl     = [ visibility ] "struct" IDENT [ generic_params ]
+                  "{" { field_decl [ "," ] } "}" ;
+field_decl      = [ visibility ] IDENT ":" type_expr [ "=" expression ] ;
+
+enum_decl       = [ visibility ] "enum" IDENT [ generic_params ]
+                  "{" { variant_decl [ "," ] } "}" ;
+variant_decl    = IDENT [ "(" type_list ")" | "{" field_list "}" ] ;
+
+trait_decl      = [ visibility ] "trait" IDENT [ generic_params ]
+                  [ ":" type_list ] "{" { trait_item } "}" ;
+trait_item      = function_sig | type_alias ;
+
+impl_block      = "impl" [ generic_params ] type_expr
+                  [ "for" type_expr ] "{" { function_decl } "}" ;
+
+function_decl   = [ visibility ] [ "async" ] "fn" IDENT
+                  [ generic_params ] "(" param_list ")"
+                  [ "->" type_expr ] block ;
+function_sig    = [ visibility ] [ "async" ] "fn" IDENT
+                  [ generic_params ] "(" param_list ")"
+                  [ "->" type_expr ] ;
+
+const_decl      = "const" IDENT [ ":" type_expr ] "=" expression ;
+type_alias      = "type" IDENT [ generic_params ] "=" type_expr ;
+
+decorator       = "@" IDENT [ "(" arg_list ")" ] ;
+
+(* ── Parameters ── *)
+
+param_list      = [ param { "," param } [ "," ] ] ;
+param           = [ "mut" ] IDENT ":" type_expr [ "=" expression ] ;
+
+(* ── Types ── *)
+
+type_expr       = base_type
+                | generic_type
+                | array_type
+                | tuple_type
+                | fn_type
+                | optional_type ;
+
+base_type       = IDENT ;
+generic_type    = IDENT "<" type_list ">" ;
+array_type      = "[" type_expr "]" ;
+tuple_type      = "(" type_list ")" ;
+fn_type         = "fn" "(" type_list ")" "->" type_expr ;
+optional_type   = "Option" "<" type_expr ">" ;
+
+type_list       = type_expr { "," type_expr } ;
+generic_params  = "<" generic_param { "," generic_param } ">" ;
+generic_param   = IDENT [ ":" type_expr { "+" type_expr } ] ;
+
+(* ── Statements ── *)
+
+statement       = let_stmt
+                | assignment_stmt
+                | return_stmt
+                | expression_stmt
+                | if_stmt
+                | match_stmt
+                | for_stmt
+                | while_stmt
+                | loop_stmt
+                | break_stmt
+                | continue_stmt ;
+
+let_stmt        = "let" [ "mut" ] IDENT [ ":" type_expr ] "=" expression ;
+assignment_stmt = lvalue assign_op expression ;
+assign_op       = "=" | "+=" | "-=" | "*=" | "/=" | "%="
+                | "<<=" | ">>=" | "&=" | "|=" | "^=" ;
+return_stmt     = "return" [ expression ] ;
+expression_stmt = expression ;
+
+if_stmt         = "if" expression block { "else" "if" expression block } [ "else" block ] ;
+if_let_stmt     = "if" "let" pattern "=" expression block [ "else" block ] ;
+
+match_stmt      = "match" expression "{" { match_arm } "}" ;
+match_arm       = pattern [ "if" expression ] "=>" ( expression | block ) [ "," ] ;
+
+for_stmt        = "for" pattern "in" expression block ;
+while_stmt      = "while" expression block ;
+loop_stmt       = "loop" block ;
+break_stmt      = "break" [ expression ] ;
+continue_stmt   = "continue" ;
+
+block           = "{" { statement } [ expression ] "}" ;
+
+(* ── Patterns ── *)
+
+pattern         = "_"
+                | IDENT
+                | literal
+                | tuple_pattern
+                | struct_pattern
+                | enum_pattern
+                | range_pattern
+                | or_pattern ;
+
+tuple_pattern   = "(" pattern { "," pattern } ")" ;
+struct_pattern  = IDENT "{" { field_pattern [ "," ] } [ ".." ] "}" ;
+field_pattern   = IDENT [ ":" pattern ] ;
+enum_pattern    = path "::" IDENT [ "(" pattern_list ")" ] ;
+range_pattern   = literal ".." literal | literal "..=" literal ;
+or_pattern      = pattern "|" pattern ;
+pattern_list    = pattern { "," pattern } ;
+
+(* ── Expressions ── *)
+
+expression      = assignment_expr ;
+
+assignment_expr = or_expr [ assign_op or_expr ] ;
+or_expr         = and_expr { "||" and_expr } ;
+and_expr        = comparison { "&&" comparison } ;
+comparison      = bitor { cmp_op bitor } ;
+cmp_op          = "==" | "!=" | "<" | ">" | "<=" | ">=" ;
+bitor           = bitxor { "|" bitxor } ;
+bitxor          = bitand { "^" bitand } ;
+bitand          = shift { "&" shift } ;
+shift           = additive { ( "<<" | ">>" ) additive } ;
+additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
+multiplicative  = unary { ( "*" | "/" | "%" ) unary } ;
+unary           = ( "-" | "!" | "~" ) unary | postfix ;
+postfix         = primary { postfix_op } ;
+
+postfix_op      = "." IDENT                     (* field access *)
+                | "." IDENT "(" arg_list ")"    (* method call *)
+                | "(" arg_list ")"              (* function call *)
+                | "[" expression "]"            (* index *)
+                | "?" ;                         (* try operator *)
+
+primary         = literal
+                | IDENT
+                | "self"
+                | path "::" IDENT
+                | "(" expression ")"
+                | array_literal
+                | struct_literal
+                | closure
+                | if_expr
+                | match_expr
+                | block
+                | async_expr
+                | spawn_expr ;
+
+async_expr      = "async" expression ;
+spawn_expr      = "spawn" expression ;
+
+if_expr         = "if" expression block [ "else" block ] ;
+match_expr      = "match" expression "{" { match_arm } "}" ;
+
+closure         = "|" param_list "|" ( expression | block ) ;
+
+array_literal   = "[" [ expression { "," expression } [ "," ] ] "]" ;
+struct_literal  = IDENT "{" { field_init [ "," ] } "}" ;
+field_init      = IDENT [ ":" expression ] ;
+
+literal         = INT_LIT | FLOAT_LIT | STRING_LIT | CHAR_LIT
+                | "true" | "false" | "None" ;
+
+(* ── Argument lists ── *)
+
+arg_list        = [ arg { "," arg } [ "," ] ] ;
+arg             = [ IDENT ":" ] expression ;
+
+(* ── Paths / Identifiers ── *)
+
+path            = IDENT { "::" IDENT } ;
+ident_list      = IDENT { "," IDENT } ;
+visibility      = "pub" [ "(" "crate" ")" ] ;
+
+(* ── Lexical tokens (informative) ── *)
+
+IDENT           = LETTER { LETTER | DIGIT | "_" } ;
+INT_LIT         = DIGIT { DIGIT | "_" } [ int_suffix ] ;
+int_suffix      = "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" ;
+FLOAT_LIT       = DIGIT { DIGIT } "." DIGIT { DIGIT } [ float_suffix ] ;
+float_suffix    = "f32" | "f64" ;
+STRING_LIT      = '"' { CHAR - '"' | escape } '"' ;
+CHAR_LIT        = "'" ( CHAR - "'" | escape ) "'" ;
+escape          = "\\" ( "n" | "r" | "t" | "\\" | "'" | '"' | "0" | "x" HEX HEX ) ;
+LETTER          = "a"…"z" | "A"…"Z" | "_" ;
+DIGIT           = "0"…"9" ;
+HEX             = DIGIT | "a"…"f" | "A"…"F" ;
+
+(* ── Comments ── *)
+
+line_comment    = "//" { CHAR } NEWLINE ;
+block_comment   = "/*" { CHAR | block_comment } "*/" ;
+
+(* ── Whitespace ── *)
+
+WHITESPACE      = " " | "\t" | "\r" | "\n" ;

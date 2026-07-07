@@ -155,9 +155,12 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
             true,
         ),
     );
+    map.insert("Map".to_string(), hashmap_methods.clone());
+    map.insert("OrderedMap".to_string(), hashmap_methods.clone());
+    map.insert("SlotMap".to_string(), hashmap_methods.clone());
+    map.insert("ConcurrentMap".to_string(), hashmap_methods.clone());
     map.insert("HashMap".to_string(), hashmap_methods);
 
-    // TODO: Add more stdlib types (BTreeMap, HashSet, VecDeque, etc.)
 
     map
 }

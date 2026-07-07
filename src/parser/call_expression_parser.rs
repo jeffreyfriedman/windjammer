@@ -25,6 +25,7 @@ impl Parser {
                         // Allow keywords and numeric indices as field names (e.g., std.thread, tuple.0)
                         let field_opt = match self.current_token() {
                             Token::Ident(f) => Some(f.clone()),
+                            Token::String => Some("string".to_string()),
                             Token::Thread => Some("thread".to_string()),
                             Token::Async => Some("async".to_string()),
                             Token::IntLiteral(n) | Token::IntLiteralSuffixed(n, _) => {

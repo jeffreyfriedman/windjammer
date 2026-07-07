@@ -118,7 +118,9 @@ pub fn expression_produces_string(expr: &Expression) -> bool {
             }
         }
         // Method calls like .to_string()
-        Expression::MethodCall { method, .. } => method == "to_string" || method == "to_owned",
+        Expression::MethodCall { method, .. } => {
+            method == "to_string" || method == "string" || method == "to_owned"
+        }
         // Blocks - check last statement for String-producing expression
         Expression::Block { statements, .. } => {
             if let Some(last) = statements.last() {

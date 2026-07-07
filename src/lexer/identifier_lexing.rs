@@ -19,6 +19,17 @@ impl Lexer {
     pub(in crate::lexer) fn read_identifier(&mut self) -> Token {
         let ident = self.read_identifier_string();
 
+        // Raw identifier: r#keyword escapes a keyword for use as an identifier
+        if ident == "r" && self.current_char == Some('#') {
+            if let Some(next) = self.input.get(self.position + 1) {
+                if next.is_alphabetic() || *next == '_' {
+                    self.advance(); // consume '#'
+                    let raw_name = self.read_identifier_string();
+                    return Token::Ident(format!("r#{}", raw_name));
+                }
+            }
+        }
+
         // Check for keywords
         match ident.as_str() {
             "fn" => Token::Fn,

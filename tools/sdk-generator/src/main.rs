@@ -1,3 +1,5 @@
+mod idl;
+
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use std::fs;

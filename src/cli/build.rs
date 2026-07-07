@@ -35,8 +35,18 @@ pub fn execute(
     enable_lint: bool,
     no_generate_cargo_toml: bool,
     metadata: &[String],
+    json_output: bool,
+    ir_shadow_validate: bool,
 ) -> Result<()> {
+    let _ = ir_shadow_validate;
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
+
+    if json_output {
+        return build_with_json_output(
+            path, output_dir, target_str, check, library, module_file, enable_lint,
+            no_generate_cargo_toml, metadata,
+        );
+    }
 
     println!(
         "{} Windjammer project from {:?} (target: {})",
@@ -199,6 +209,65 @@ pub fn execute(
         );
         println!("Run cargo build manually:");
         println!("  cd {:?} && cargo build", output_dir);
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_with_json_output(
+    path: &Path,
+    output_dir: &Path,
+    target_str: &str,
+    _check: bool,
+    library: bool,
+    _module_file: bool,
+    enable_lint: bool,
+    no_generate_cargo_toml: bool,
+    metadata: &[String],
+) -> Result<()> {
+    use crate::cli::json_diagnostics::{JsonCompilationOutput, Severity, JsonDiagnostic};
+
+    let external_metadata: Vec<(&str, &Path)> = metadata
+        .iter()
+        .filter_map(|s| {
+            let (name, path_str) = s.split_once('=')?;
+            Some((name, Path::new(path_str)))
+        })
+        .collect();
+
+    let target = match target_str.to_lowercase().as_str() {
+        "rust" => crate::CompilationTarget::Rust,
+        _ => {
+            let mut output = JsonCompilationOutput::new_failure();
+            output.add_error(format!("JSON output mode only supports Rust target, got: {}", target_str));
+            output.emit_to_stdout();
+            return Ok(());
+        }
+    };
+
+    crate::cargo_toml::set_skip_cargo_toml_generation(no_generate_cargo_toml);
+
+    match crate::build_project_ext(path, output_dir, target, enable_lint, library, &external_metadata) {
+        Ok(()) => {
+            let mut output = JsonCompilationOutput::new_success();
+            if library {
+                output.add_warning("Library mode: main() functions stripped".to_string());
+            }
+            output.emit_to_stdout();
+        }
+        Err(e) => {
+            let mut output = JsonCompilationOutput::new_failure();
+            output.diagnostics.push(JsonDiagnostic {
+                code: None,
+                severity: Severity::Error,
+                message: format!("{}", e),
+                span: None,
+                maturity: None,
+                repair_hint: None,
+            });
+            output.emit_to_stdout();
+        }
     }
 
     Ok(())

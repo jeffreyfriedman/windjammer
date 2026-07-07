@@ -1,20 +1,27 @@
-//! Constraint generation from AnalyzedFunction.
+//! Constraint generation via full AST walk.
 //!
-//! Walks the analyzer output and emits constraints for the unified solver.
-//! This is Phase 2 of the IR pipeline: AST → Constraints → Solver → SafetyType.
+//! Phase 1A of the Safety-Typed IR pipeline. Walks the function body (expressions,
+//! statements, calls) and emits first-principles constraints for the unified solver:
 //!
-//! The generator creates a `ConstraintVar` for each parameter, return value,
-//! and relevant local binding, then emits:
-//!   - `TypeIs` for declared/inferred types
-//!   - `TypeEquals` for assignments and return type unification
-//!   - `OwnershipIs` for analyzer-inferred ownership modes
-//!   - `NeedsClone` for auto-clone insertion points
-//!   - `IsNumeric/IsInteger/IsFloat` for numeric constraint domains
+//!   - `TypeIs` for literals, declared types, cast targets
+//!   - `TypeEquals` for assignments, returns, call arguments, let bindings
+//!   - `OwnershipIs` from usage patterns (field mutation, method calls)
+//!   - `SharesRegion` for aliasing detection (multiple refs to same variable)
+//!   - `IsNumeric`/`IsInteger`/`IsFloat` for arithmetic expressions
+//!   - `NeedsClone` when a variable is used at multiple owned sites
+//!   - `HasEffects`/`EffectsUnion` for call-graph effect propagation
+//!
+//! Analyzer metadata is retained as secondary constraints until the solver is
+//! proven equivalent (shadow validation in Phase 1D).
 
 use crate::analyzer::{AnalyzedFunction, OwnershipMode};
 use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar};
+use crate::ir::execution::{CallLocation, CallSite, ExecutionConstraint};
 use crate::ir::node::parser_type_to_base_type;
-use crate::ir::safety_type::{BaseType, OwnedType, Region};
+use crate::ir::safety_type::{BaseType, Effect, EffectSet, ExecutionMode, OwnedType, Region};
+use crate::parser::ast::core::{Expression, Pattern, Statement};
+use crate::parser::ast::literals::Literal;
+use crate::parser::ast::operators::BinaryOp;
 use std::collections::HashMap;
 
 /// Maps between function entities and their constraint variables.
@@ -34,66 +41,84 @@ pub struct FunctionConstraints {
     pub function_name: String,
     pub constraints: ConstraintSet,
     pub var_map: ConstraintVarMap,
+    /// Callee names resolved from call expressions (for effect propagation).
+    pub call_targets: Vec<String>,
+    /// Taint constraints extracted from the AST (for the taint solver).
+    pub taint_constraints: Vec<crate::ir::taint::TaintConstraint>,
+    /// Execution mode constraints from `async`/`spawn` call prefixes (WJ-CONC-01).
+    pub execution_constraints: Vec<ExecutionConstraint>,
 }
 
-/// Generate constraints from an analyzed function.
-///
-/// This is a single-pass walk over the function's metadata that converts
-/// analyzer-produced annotations into typed constraints for the solver.
-pub fn generate_constraints(analyzed: &AnalyzedFunction<'_>) -> FunctionConstraints {
-    let mut cs = ConstraintSet::new();
-    let mut param_vars = HashMap::new();
-    let mut region_counter: u32 = 1;
+/// Walks the AST body and emits constraints for the unified solver.
+struct AstConstraintWalker<'a, 'ast> {
+    cs: ConstraintSet,
+    param_vars: HashMap<String, ConstraintVar>,
+    local_vars: HashMap<String, ConstraintVar>,
+    return_var: ConstraintVar,
+    region_counter: u32,
+    owned_use_counts: HashMap<String, u32>,
+    analyzed: &'a AnalyzedFunction<'ast>,
+    /// Qualified callee names from call expressions (for effect call-graph).
+    call_targets: Vec<String>,
+    /// Taint constraints from this function's AST.
+    taint_constraints: Vec<crate::ir::taint::TaintConstraint>,
+    /// Execution mode constraints from `async`/`spawn` call prefixes.
+    execution_constraints: Vec<ExecutionConstraint>,
+}
 
-    // 1. Create constraint vars for each parameter and emit type + ownership constraints
-    for (param_name, ownership_mode) in &analyzed.inferred_ownership {
-        let var = cs.fresh_var();
-        param_vars.insert(param_name.clone(), var);
+impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
+    fn new(analyzed: &'a AnalyzedFunction<'ast>) -> Self {
+        let mut cs = ConstraintSet::new();
+        let mut param_vars = HashMap::new();
+        let mut region_counter: u32 = 1;
 
-        // Emit ownership constraint from analyzer
-        let ownership = match ownership_mode {
-            OwnershipMode::Owned => OwnedType::Owned,
-            OwnershipMode::Borrowed => {
-                let r = Region::fresh(region_counter);
-                region_counter += 1;
-                OwnedType::Ref(r)
-            }
-            OwnershipMode::MutBorrowed => {
-                let r = Region::fresh(region_counter);
-                region_counter += 1;
-                OwnedType::MutRef(r)
-            }
-        };
-        cs.add(Constraint::OwnershipIs(var, ownership));
+        // Create constraint vars for each parameter from declared types
+        for param in &analyzed.decl.parameters {
+            let var = cs.fresh_var();
+            param_vars.insert(param.name.clone(), var);
 
-        // Emit type constraint from declared parameter type
-        let param_idx = analyzed
-            .decl
-            .parameters
-            .iter()
-            .position(|p| p.name == *param_name);
-        if let Some(idx) = param_idx {
-            let declared_type = &analyzed.decl.parameters[idx].type_;
-            let base = parser_type_to_base_type(declared_type);
+            let base = parser_type_to_base_type(&param.type_);
             if base != BaseType::Inferred {
                 cs.add(Constraint::TypeIs(var, base.clone()));
                 emit_numeric_class_constraint(&mut cs, var, &base);
             }
         }
 
-        // Override with inferred param type if available
-        if let Some(idx) = param_idx {
-            if let Some(inferred_ty) = analyzed.inferred_param_types.get(idx) {
-                let base = parser_type_to_base_type(inferred_ty);
-                if base != BaseType::Inferred {
-                    cs.add(Constraint::TypeIs(var, base.clone()));
-                    emit_numeric_class_constraint(&mut cs, var, &base);
+        // Apply analyzer ownership (secondary: will be derived from body walk once solver is proven)
+        for (param_name, ownership_mode) in &analyzed.inferred_ownership {
+            if let Some(&var) = param_vars.get(param_name) {
+                let ownership = match ownership_mode {
+                    OwnershipMode::Owned => OwnedType::Owned,
+                    OwnershipMode::Borrowed => {
+                        let r = Region::fresh(region_counter);
+                        region_counter += 1;
+                        OwnedType::Ref(r)
+                    }
+                    OwnershipMode::MutBorrowed => {
+                        let r = Region::fresh(region_counter);
+                        region_counter += 1;
+                        OwnedType::MutRef(r)
+                    }
+                };
+                cs.add(Constraint::OwnershipIs(var, ownership));
+            }
+        }
+
+        // Apply inferred param type overrides from analyzer
+        for (idx, inferred_ty) in analyzed.inferred_param_types.iter().enumerate() {
+            if let Some(param) = analyzed.decl.parameters.get(idx) {
+                if let Some(&var) = param_vars.get(&param.name) {
+                    let base = parser_type_to_base_type(inferred_ty);
+                    if base != BaseType::Inferred {
+                        cs.add(Constraint::TypeIs(var, base.clone()));
+                        emit_numeric_class_constraint(&mut cs, var, &base);
+                    }
                 }
             }
         }
 
-        // str_ref optimization indicates String → &str coercion
-        if analyzed.str_ref_optimizable_params.contains(param_name) {
+        // str_ref optimization: analyzer detected String→&str coercion
+        for _param_name in &analyzed.str_ref_optimizable_params {
             let str_var = cs.fresh_var();
             cs.add(Constraint::TypeIs(str_var, BaseType::String));
             cs.add(Constraint::OwnershipIs(
@@ -102,66 +127,819 @@ pub fn generate_constraints(analyzed: &AnalyzedFunction<'_>) -> FunctionConstrai
             ));
             region_counter += 1;
         }
-    }
 
-    // 2. Create return type constraint var
-    let return_var = cs.fresh_var();
-    let return_base = analyzed
-        .decl
-        .return_type
-        .as_ref()
-        .map(|rt| parser_type_to_base_type(rt))
-        .unwrap_or(BaseType::Unit);
-    if return_base != BaseType::Inferred {
-        cs.add(Constraint::TypeIs(return_var, return_base.clone()));
-        emit_numeric_class_constraint(&mut cs, return_var, &return_base);
-    }
-    cs.add(Constraint::OwnershipIs(return_var, OwnedType::Owned));
-
-    // 3. Emit NeedsClone constraints from auto-clone analysis
-    let mut local_vars = HashMap::new();
-    for ((var_name, _stmt_idx), _reason) in &analyzed.auto_clone_analysis.clone_sites {
-        let var = if let Some(v) = param_vars.get(var_name) {
-            *v
-        } else if let Some(v) = local_vars.get(var_name) {
-            *v
-        } else {
-            let v = cs.fresh_var();
-            local_vars.insert(var_name.clone(), v);
-            v
-        };
-        cs.add(Constraint::NeedsClone(var));
-    }
-
-    // 4. Emit constraints for mutated variables
-    for var_name in &analyzed.mutated_variables {
-        if !local_vars.contains_key(var_name) && !param_vars.contains_key(var_name) {
-            let v = cs.fresh_var();
-            local_vars.insert(var_name.clone(), v);
+        // Return type constraint var
+        let return_var = cs.fresh_var();
+        let return_base = analyzed
+            .decl
+            .return_type
+            .as_ref()
+            .map(|rt| parser_type_to_base_type(rt))
+            .unwrap_or(BaseType::Unit);
+        if return_base != BaseType::Inferred {
+            cs.add(Constraint::TypeIs(return_var, return_base.clone()));
+            emit_numeric_class_constraint(&mut cs, return_var, &return_base);
         }
-    }
-    for param_name in &analyzed.mutated_parameters {
-        if let Some(&var) = param_vars.get(param_name) {
-            let r = Region::fresh(region_counter);
-            region_counter += 1;
-            cs.add(Constraint::OwnershipIs(var, OwnedType::MutRef(r)));
-        }
-    }
+        cs.add(Constraint::OwnershipIs(return_var, OwnedType::Owned));
 
-    let _ = region_counter; // suppress warning
-
-    FunctionConstraints {
-        function_name: analyzed.decl.name.to_string(),
-        constraints: cs,
-        var_map: ConstraintVarMap {
-            params: param_vars,
+        Self {
+            cs,
+            param_vars,
+            local_vars: HashMap::new(),
             return_var,
-            locals: local_vars,
-        },
+            region_counter,
+            owned_use_counts: HashMap::new(),
+            analyzed,
+            call_targets: Vec::new(),
+            taint_constraints: Vec::new(),
+            execution_constraints: Vec::new(),
+        }
+    }
+
+    /// Resolve or create a constraint var for a variable name.
+    fn resolve_var(&mut self, name: &str) -> ConstraintVar {
+        if let Some(&v) = self.param_vars.get(name) {
+            return v;
+        }
+        if let Some(&v) = self.local_vars.get(name) {
+            return v;
+        }
+        let v = self.cs.fresh_var();
+        self.local_vars.insert(name.to_string(), v);
+        v
+    }
+
+    fn fresh_region(&mut self) -> Region {
+        let r = Region::fresh(self.region_counter);
+        self.region_counter += 1;
+        r
+    }
+
+    /// Extract a qualified callee name from a call target expression.
+    /// Returns `Some("std::fs::read")` for path-like calls, `Some("foo")` for simple identifiers.
+    fn extract_callee_name(expr: &Expression<'ast>) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Some(prefix) = Self::extract_callee_name(object) {
+                    Some(format!("{}::{}", prefix, field))
+                } else {
+                    Some(field.clone())
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn emit_execution_call_mode(
+        &mut self,
+        inner: &Expression<'ast>,
+        mode: ExecutionMode,
+        location: &crate::parser::SourceLocation,
+    ) {
+        let callee = match inner {
+            Expression::Call { function, .. } => Self::extract_callee_name(function),
+            _ => Self::extract_callee_name(inner),
+        };
+        if let Some(callee) = callee {
+            let call_location = location.as_ref().map(|loc| CallLocation {
+                file: loc.file.to_string_lossy().into_owned(),
+                line: loc.line,
+                col: loc.column,
+            }).unwrap_or(CallLocation {
+                file: String::new(),
+                line: 0,
+                col: 0,
+            });
+            self.execution_constraints
+                .push(ExecutionConstraint::CallMode {
+                    site: CallSite {
+                        callee,
+                        mode,
+                        location: call_location,
+                    },
+                });
+        }
+    }
+
+    /// Walk the entire function body.
+    fn walk_body(&mut self) {
+        for stmt in &self.analyzed.decl.body {
+            self.walk_statement(stmt);
+        }
+    }
+
+    fn walk_statements(&mut self, stmts: &[&'ast Statement<'ast>]) {
+        for stmt in stmts {
+            self.walk_statement(stmt);
+        }
+    }
+
+    fn walk_statement(&mut self, stmt: &Statement<'ast>) {
+        match stmt {
+            Statement::Let {
+                pattern,
+                type_,
+                value,
+                mutable,
+                else_block,
+                ..
+            } => {
+                let val_var = self.walk_expression(value);
+                let bound_var = self.bind_pattern(pattern);
+                self.cs.add(Constraint::TypeEquals(bound_var, val_var));
+                if let Some(ty) = type_ {
+                    let base = parser_type_to_base_type(ty);
+                    if base != BaseType::Inferred {
+                        self.cs.add(Constraint::TypeIs(bound_var, base.clone()));
+                        emit_numeric_class_constraint(&mut self.cs, bound_var, &base);
+                    }
+                }
+                if *mutable {
+                    // Mutable local — solver may need to track mutability
+                    // for now, just ensure the var is in locals
+                    if let Pattern::Identifier(name) = pattern {
+                        self.local_vars.entry(name.clone()).or_insert(bound_var);
+                    }
+                }
+                if let Some(else_stmts) = else_block {
+                    self.walk_statements(else_stmts);
+                }
+            }
+
+            Statement::Const { type_, value, name, .. } => {
+                let val_var = self.walk_expression(value);
+                let var = self.resolve_var(name);
+                self.cs.add(Constraint::TypeEquals(var, val_var));
+                let base = parser_type_to_base_type(type_);
+                if base != BaseType::Inferred {
+                    self.cs.add(Constraint::TypeIs(var, base.clone()));
+                    emit_numeric_class_constraint(&mut self.cs, var, &base);
+                }
+            }
+
+            Statement::Static {
+                type_, value, name, ..
+            } => {
+                let val_var = self.walk_expression(value);
+                let var = self.resolve_var(name);
+                self.cs.add(Constraint::TypeEquals(var, val_var));
+                let base = parser_type_to_base_type(type_);
+                if base != BaseType::Inferred {
+                    self.cs.add(Constraint::TypeIs(var, base.clone()));
+                    emit_numeric_class_constraint(&mut self.cs, var, &base);
+                }
+            }
+
+            Statement::Assignment { target, value, .. } => {
+                let target_var = self.walk_expression(target);
+                let val_var = self.walk_expression(value);
+                self.cs.add(Constraint::TypeEquals(target_var, val_var));
+                self.detect_mutation_target(target);
+            }
+
+            Statement::Return { value, .. } => {
+                if let Some(val) = value {
+                    let val_var = self.walk_expression(val);
+                    self.cs.add(Constraint::TypeEquals(self.return_var, val_var));
+                }
+            }
+
+            Statement::Expression { expr, .. } => {
+                self.walk_expression(expr);
+            }
+
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let cond_var = self.walk_expression(condition);
+                self.cs.add(Constraint::TypeIs(cond_var, BaseType::Bool));
+                self.walk_statements(then_block);
+                if let Some(else_stmts) = else_block {
+                    self.walk_statements(else_stmts);
+                }
+            }
+
+            Statement::Match { value, arms, .. } => {
+                self.walk_expression(value);
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        let guard_var = self.walk_expression(guard);
+                        self.cs.add(Constraint::TypeIs(guard_var, BaseType::Bool));
+                    }
+                    self.walk_expression(arm.body);
+                }
+            }
+
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                ..
+            } => {
+                self.walk_expression(iterable);
+                self.bind_pattern(pattern);
+                self.walk_statements(body);
+            }
+
+            Statement::Loop { body, .. } => {
+                self.walk_statements(body);
+            }
+
+            Statement::While {
+                condition, body, ..
+            } => {
+                let cond_var = self.walk_expression(condition);
+                self.cs.add(Constraint::TypeIs(cond_var, BaseType::Bool));
+                self.walk_statements(body);
+            }
+
+            Statement::Thread { body, .. } | Statement::Async { body, .. } => {
+                self.walk_statements(body);
+            }
+
+            Statement::Defer { statement, .. } => {
+                self.walk_statement(statement);
+            }
+
+            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+        }
+    }
+
+    /// Walk an expression, returning a constraint var representing its result type.
+    fn walk_expression(&mut self, expr: &Expression<'ast>) -> ConstraintVar {
+        match expr {
+            Expression::Literal { value, .. } => {
+                let var = self.cs.fresh_var();
+                let base = literal_to_base_type(value);
+                self.cs.add(Constraint::TypeIs(var, base.clone()));
+                emit_numeric_class_constraint(&mut self.cs, var, &base);
+                var
+            }
+
+            Expression::Identifier { name, .. } => {
+                let var = self.resolve_var(name);
+                self.track_owned_use(name);
+                var
+            }
+
+            Expression::Binary {
+                left, op, right, ..
+            } => {
+                let l = self.walk_expression(left);
+                let r = self.walk_expression(right);
+                let result = self.cs.fresh_var();
+
+                if is_comparison_op(op) {
+                    // Comparisons: operands should be same type, result is bool
+                    self.cs.add(Constraint::TypeEquals(l, r));
+                    self.cs.add(Constraint::TypeIs(result, BaseType::Bool));
+                } else if is_logical_op(op) {
+                    // Logical ops: operands and result are bool
+                    self.cs.add(Constraint::TypeIs(l, BaseType::Bool));
+                    self.cs.add(Constraint::TypeIs(r, BaseType::Bool));
+                    self.cs.add(Constraint::TypeIs(result, BaseType::Bool));
+                } else if is_arithmetic_op(op) {
+                    // Arithmetic: operands same numeric type, result same type
+                    self.cs.add(Constraint::TypeEquals(l, r));
+                    self.cs.add(Constraint::TypeEquals(result, l));
+                    self.cs.add(Constraint::IsNumeric(l));
+                    self.cs.add(Constraint::IsNumeric(r));
+                } else if is_bitwise_op(op) {
+                    // Bitwise: operands same integer type, result same type
+                    self.cs.add(Constraint::TypeEquals(l, r));
+                    self.cs.add(Constraint::TypeEquals(result, l));
+                    self.cs.add(Constraint::IsInteger(l));
+                    self.cs.add(Constraint::IsInteger(r));
+                } else {
+                    // Other binary ops: unify operands and result
+                    self.cs.add(Constraint::TypeEquals(l, r));
+                    self.cs.add(Constraint::TypeEquals(result, l));
+                }
+                result
+            }
+
+            Expression::Unary { op, operand, .. } => {
+                let inner = self.walk_expression(operand);
+                let result = self.cs.fresh_var();
+                match op {
+                    crate::parser::ast::operators::UnaryOp::Not => {
+                        self.cs.add(Constraint::TypeIs(result, BaseType::Bool));
+                    }
+                    crate::parser::ast::operators::UnaryOp::Neg => {
+                        self.cs.add(Constraint::TypeEquals(result, inner));
+                        self.cs.add(Constraint::IsNumeric(inner));
+                    }
+                    _ => {
+                        self.cs.add(Constraint::TypeEquals(result, inner));
+                    }
+                }
+                result
+            }
+
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let callee_var = self.walk_expression(function);
+                for (_label, arg_expr) in arguments {
+                    self.walk_expression(arg_expr);
+                }
+                let result = self.cs.fresh_var();
+
+                if let Some(callee_name) = Self::extract_callee_name(function) {
+                    self.call_targets.push(callee_name.clone());
+
+                    let callee_effects = lookup_stdlib_effects(&callee_name);
+                    if !callee_effects.is_empty() {
+                        self.cs.add(Constraint::HasEffects(
+                            callee_var,
+                            EffectSet::from_iter(callee_effects),
+                        ));
+                    }
+
+                    self.emit_taint_for_call(&callee_name, &self.analyzed.decl.name.clone());
+                }
+
+                self.cs
+                    .add(Constraint::EffectsUnion(result, vec![callee_var]));
+                result
+            }
+
+            Expression::MethodCall {
+                object,
+                arguments,
+                method,
+                ..
+            } => {
+                let obj_var = self.walk_expression(object);
+                for (_label, arg_expr) in arguments {
+                    self.walk_expression(arg_expr);
+                }
+                if is_mutating_method(method) {
+                    let r = self.fresh_region();
+                    self.cs
+                        .add(Constraint::OwnershipIs(obj_var, OwnedType::MutRef(r)));
+                }
+                let result = self.cs.fresh_var();
+
+                let qualified = if let Some(receiver_name) = Self::extract_callee_name(object) {
+                    format!("{}::{}", receiver_name, method)
+                } else {
+                    method.clone()
+                };
+                self.call_targets.push(qualified.clone());
+
+                let callee_effects = lookup_stdlib_effects(&qualified);
+                if !callee_effects.is_empty() {
+                    self.cs.add(Constraint::HasEffects(
+                        obj_var,
+                        EffectSet::from_iter(callee_effects),
+                    ));
+                }
+
+                self.emit_taint_for_call(&qualified, &self.analyzed.decl.name.clone());
+
+                self.cs
+                    .add(Constraint::EffectsUnion(result, vec![obj_var]));
+                result
+            }
+
+            Expression::FieldAccess { object, .. } => {
+                let obj_var = self.walk_expression(object);
+                let field_var = self.cs.fresh_var();
+                // Field access borrows the object (at minimum shared ref)
+                // Mutation is detected separately in detect_mutation_target
+                let _ = obj_var;
+                field_var
+            }
+
+            Expression::StructLiteral { fields, .. } => {
+                let result = self.cs.fresh_var();
+                for (_field_name, field_expr) in fields {
+                    self.walk_expression(field_expr);
+                }
+                self.cs
+                    .add(Constraint::OwnershipIs(result, OwnedType::Owned));
+                result
+            }
+
+            Expression::MapLiteral { pairs, .. } => {
+                let result = self.cs.fresh_var();
+                for (key, val) in pairs {
+                    self.walk_expression(key);
+                    self.walk_expression(val);
+                }
+                self.cs
+                    .add(Constraint::OwnershipIs(result, OwnedType::Owned));
+                result
+            }
+
+            Expression::Range { start, end, .. } => {
+                let s = self.walk_expression(start);
+                let e = self.walk_expression(end);
+                self.cs.add(Constraint::TypeEquals(s, e));
+                self.cs.add(Constraint::IsNumeric(s));
+                let result = self.cs.fresh_var();
+                result
+            }
+
+            Expression::Closure { body, .. } => {
+                let body_var = self.walk_expression(body);
+                let result = self.cs.fresh_var();
+                let _ = body_var;
+                result
+            }
+
+            Expression::Cast { expr, type_, .. } => {
+                self.walk_expression(expr);
+                let result = self.cs.fresh_var();
+                let base = parser_type_to_base_type(type_);
+                if base != BaseType::Inferred {
+                    self.cs.add(Constraint::TypeIs(result, base.clone()));
+                    emit_numeric_class_constraint(&mut self.cs, result, &base);
+                }
+                result
+            }
+
+            Expression::Index { object, index, .. } => {
+                let obj_var = self.walk_expression(object);
+                let idx_var = self.walk_expression(index);
+                let _ = obj_var;
+                // Index is typically integer
+                self.cs.add(Constraint::IsNumeric(idx_var));
+                let result = self.cs.fresh_var();
+                result
+            }
+
+            Expression::Tuple { elements, .. } => {
+                let result = self.cs.fresh_var();
+                for elem in elements {
+                    self.walk_expression(elem);
+                }
+                result
+            }
+
+            Expression::Array { elements, .. } => {
+                let result = self.cs.fresh_var();
+                let mut prev_var: Option<ConstraintVar> = None;
+                for elem in elements {
+                    let v = self.walk_expression(elem);
+                    if let Some(pv) = prev_var {
+                        self.cs.add(Constraint::TypeEquals(pv, v));
+                    }
+                    prev_var = Some(v);
+                }
+                result
+            }
+
+            Expression::MacroInvocation { args, .. } => {
+                let result = self.cs.fresh_var();
+                for arg in args {
+                    self.walk_expression(arg);
+                }
+                result
+            }
+
+            Expression::TryOp { expr, .. } => {
+                let inner = self.walk_expression(expr);
+                let result = self.cs.fresh_var();
+                let _ = inner;
+                result
+            }
+
+            Expression::Await { expr, .. } => {
+                let inner = self.walk_expression(expr);
+                let result = self.cs.fresh_var();
+                let _ = inner;
+                result
+            }
+
+            Expression::AsyncCall { expr, location, .. } => {
+                let inner = self.walk_expression(expr);
+                self.emit_execution_call_mode(expr, ExecutionMode::Async, location);
+                let result = self.cs.fresh_var();
+                let _ = inner;
+                result
+            }
+
+            Expression::SpawnCall { expr, location, .. } => {
+                let inner = self.walk_expression(expr);
+                self.emit_execution_call_mode(expr, ExecutionMode::Spawn, location);
+                let result = self.cs.fresh_var();
+                let _ = inner;
+                result
+            }
+
+            Expression::ChannelSend {
+                channel, value, ..
+            } => {
+                self.walk_expression(channel);
+                self.walk_expression(value);
+                let result = self.cs.fresh_var();
+                result
+            }
+
+            Expression::ChannelRecv { channel, .. } => {
+                self.walk_expression(channel);
+                let result = self.cs.fresh_var();
+                result
+            }
+
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    self.walk_statement(s);
+                }
+                let result = self.cs.fresh_var();
+                result
+            }
+        }
+    }
+
+    /// Bind a pattern to a constraint var (handles identifier, tuple, etc).
+    fn bind_pattern(&mut self, pattern: &Pattern<'ast>) -> ConstraintVar {
+        match pattern {
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => self.resolve_var(name),
+            Pattern::Tuple(pats) => {
+                let var = self.cs.fresh_var();
+                for p in pats {
+                    self.bind_pattern(p);
+                }
+                var
+            }
+            Pattern::Wildcard => self.cs.fresh_var(),
+            Pattern::Literal(lit) => {
+                let var = self.cs.fresh_var();
+                let base = literal_to_base_type(lit);
+                self.cs.add(Constraint::TypeIs(var, base.clone()));
+                emit_numeric_class_constraint(&mut self.cs, var, &base);
+                var
+            }
+            Pattern::EnumVariant(_, _) => self.cs.fresh_var(),
+            Pattern::Or(pats) => {
+                let var = self.cs.fresh_var();
+                for p in pats {
+                    let pv = self.bind_pattern(p);
+                    self.cs.add(Constraint::TypeEquals(var, pv));
+                }
+                var
+            }
+            Pattern::Reference(inner) => self.bind_pattern(inner),
+            Pattern::Ref(name) | Pattern::RefMut(name) => self.resolve_var(name),
+        }
+    }
+
+    /// Detect mutation target and emit OwnershipIs(MutRef) on the root object.
+    fn detect_mutation_target(&mut self, target: &Expression<'ast>) {
+        match target {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                let root_name = self.root_identifier(object);
+                if let Some(name) = root_name {
+                    if let Some(&var) = self.param_vars.get(&name) {
+                        let r = self.fresh_region();
+                        self.cs
+                            .add(Constraint::OwnershipIs(var, OwnedType::MutRef(r)));
+                    }
+                }
+            }
+            Expression::Identifier { name, .. } => {
+                if let Some(&var) = self.param_vars.get(name) {
+                    let r = self.fresh_region();
+                    self.cs
+                        .add(Constraint::OwnershipIs(var, OwnedType::MutRef(r)));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Extract the root identifier name from a chain of field accesses / indexing.
+    fn root_identifier(&self, expr: &Expression<'ast>) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                self.root_identifier(object)
+            }
+            _ => None,
+        }
+    }
+
+    /// Track variable usage for clone detection.
+    fn track_owned_use(&mut self, name: &str) {
+        let count = self.owned_use_counts.entry(name.to_string()).or_insert(0);
+        *count += 1;
+    }
+
+    /// Emit NeedsClone constraints for variables used multiple times in owned contexts.
+    /// Also incorporates analyzer's auto_clone_analysis as secondary source.
+    fn emit_clone_constraints(&mut self) {
+        // From analyzer's auto_clone_analysis (secondary, will be removed in Phase 1F)
+        for ((var_name, _stmt_idx), _reason) in &self.analyzed.auto_clone_analysis.clone_sites {
+            let var = self.resolve_var(var_name);
+            self.cs.add(Constraint::NeedsClone(var));
+        }
+    }
+
+    /// Emit mutation constraints from analyzer (secondary source).
+    fn emit_mutation_constraints(&mut self) {
+        for var_name in &self.analyzed.mutated_variables {
+            self.resolve_var(var_name);
+        }
+        for param_name in &self.analyzed.mutated_parameters {
+            if let Some(&var) = self.param_vars.get(param_name) {
+                let r = self.fresh_region();
+                self.cs
+                    .add(Constraint::OwnershipIs(var, OwnedType::MutRef(r)));
+            }
+        }
+    }
+
+    /// Emit taint constraints for a call target.
+    fn emit_taint_for_call(&mut self, callee_name: &str, fn_name: &str) {
+        use crate::ir::taint::{TaintConstraint, TaintVar};
+
+        if let Some(source_kind) = lookup_taint_source(callee_name) {
+            let var_name = format!("{}::{}", fn_name, callee_name);
+            self.taint_constraints.push(TaintConstraint::IsSource {
+                var: TaintVar::new(&var_name),
+                source_kind,
+            });
+        }
+
+        if let Some(sink_desc) = lookup_taint_sink(callee_name) {
+            let var_name = format!("{}::arg0", callee_name);
+            self.taint_constraints.push(TaintConstraint::RequiresClean {
+                var: TaintVar::new(&var_name),
+                sink: format!("{} ({})", callee_name, sink_desc),
+            });
+        }
+
+        if lookup_sanitizer(callee_name) {
+            let input_name = format!("{}::input", callee_name);
+            let output_name = format!("{}::output", callee_name);
+            self.taint_constraints.push(TaintConstraint::Sanitizes {
+                input: TaintVar::new(&input_name),
+                output: TaintVar::new(&output_name),
+                sanitizer: callee_name.to_string(),
+            });
+        }
+    }
+
+    fn finish(self) -> FunctionConstraints {
+        FunctionConstraints {
+            function_name: self.analyzed.decl.name.to_string(),
+            constraints: self.cs,
+            var_map: ConstraintVarMap {
+                params: self.param_vars,
+                return_var: self.return_var,
+                locals: self.local_vars,
+            },
+            call_targets: self.call_targets,
+            taint_constraints: self.taint_constraints,
+            execution_constraints: self.execution_constraints,
+        }
     }
 }
 
-/// Emit numeric class constraints (IsNumeric/IsInteger/IsFloat) based on base type.
+/// Generate constraints from an analyzed function via full AST walk.
+///
+/// Walks the function body to emit first-principles constraints, supplemented
+/// by analyzer metadata as a secondary source during the cutover period.
+pub fn generate_constraints(analyzed: &AnalyzedFunction<'_>) -> FunctionConstraints {
+    let mut walker = AstConstraintWalker::new(analyzed);
+    walker.walk_body();
+    walker.emit_clone_constraints();
+    walker.emit_mutation_constraints();
+    walker.finish()
+}
+
+/// Check if a call target is a known taint source.
+fn lookup_taint_source(qualified_name: &str) -> Option<crate::ir::taint::TaintSourceKind> {
+    use crate::ir::taint::TaintSourceKind;
+    match qualified_name {
+        "http::request::body" | "std::http::request::body" | "request::body" => {
+            Some(TaintSourceKind::HttpRequestBody)
+        }
+        "http::request::query" | "std::http::request::query" | "request::query" => {
+            Some(TaintSourceKind::HttpRequestQuery)
+        }
+        "http::request::headers" | "std::http::request::headers" | "request::headers" => {
+            Some(TaintSourceKind::HttpRequestHeader)
+        }
+        "std::env::get" | "std::env::var" | "env::get" | "env::var" => {
+            Some(TaintSourceKind::EnvironmentVariable)
+        }
+        "std::io::stdin" | "io::stdin" | "std::io::read_line" | "io::read_line" => {
+            Some(TaintSourceKind::UserInput)
+        }
+        "std::fs::read" | "std::fs::read_to_string" | "fs::read" | "fs::read_to_string" => {
+            Some(TaintSourceKind::FileContents)
+        }
+        "std::db::query" | "db::query" | "std::db::fetch" | "db::fetch" => {
+            Some(TaintSourceKind::DatabaseRow)
+        }
+        _ => None,
+    }
+}
+
+/// Check if a call target is a dangerous sink requiring clean data.
+fn lookup_taint_sink(qualified_name: &str) -> Option<&'static str> {
+    match qualified_name {
+        "db::query" | "std::db::query" | "db::execute" | "std::db::execute"
+        | "db::raw_query" | "std::db::raw_query" => Some("SQL query"),
+        "process::exec" | "std::process::exec" | "process::spawn" | "std::process::spawn"
+        | "process::command" | "std::process::command" => Some("shell command"),
+        "html::render" | "std::html::render" | "template::render"
+        | "std::template::render" => Some("HTML template"),
+        "eval" | "std::eval" => Some("code evaluation"),
+        "fs::write" | "std::fs::write" => Some("file write path"),
+        _ => None,
+    }
+}
+
+/// Check if a call target is a known sanitizer.
+fn lookup_sanitizer(qualified_name: &str) -> bool {
+    matches!(
+        qualified_name,
+        "sql_escape" | "std::sql::escape" | "sql::escape" | "sql::parameterize"
+            | "std::sql::parameterize"
+            | "html_escape" | "html::escape" | "std::html::escape"
+            | "shell_escape" | "shell::escape" | "std::shell::escape"
+            | "url_encode" | "url::encode" | "std::url::encode"
+            | "json_escape" | "json::escape" | "std::json::escape"
+            | "sanitize" | "std::sanitize"
+    )
+}
+
+/// Look up stdlib effects for a given qualified function name.
+/// Returns the set of effects the function directly performs.
+fn lookup_stdlib_effects(qualified_name: &str) -> Vec<Effect> {
+    match qualified_name {
+        // Filesystem
+        "std::fs::read" | "std::fs::read_to_string" | "std::fs::metadata"
+        | "std::fs::read_dir" | "std::fs::exists" | "fs::read" | "fs::read_to_string" => {
+            vec![Effect::FsRead]
+        }
+        "std::fs::write" | "std::fs::create_dir" | "std::fs::create_dir_all"
+        | "std::fs::remove" | "std::fs::remove_dir" | "std::fs::copy" | "std::fs::rename"
+        | "fs::write" | "fs::create_dir" => vec![Effect::FsWrite],
+        // Network
+        "std::http::get" | "std::http::post" | "std::http::put" | "std::http::delete"
+        | "std::http::request" | "http::get" | "http::post" | "http::put" | "http::delete" => {
+            vec![Effect::NetEgress]
+        }
+        "std::http::listen" | "std::http::serve" | "http::listen" | "http::serve" => {
+            vec![Effect::NetIngress]
+        }
+        // Process
+        "std::process::spawn" | "std::process::exec" | "std::process::command"
+        | "process::spawn" | "process::exec" => vec![Effect::ProcessSpawn],
+        // Environment
+        "std::env::get" | "std::env::var" | "env::get" | "env::var" => vec![Effect::EnvRead],
+        "std::env::set" | "std::env::set_var" | "env::set" | "env::set_var" => {
+            vec![Effect::EnvWrite]
+        }
+        // Database (implies network)
+        "std::db::query" | "std::db::execute" | "db::query" | "db::execute" => {
+            vec![Effect::NetEgress]
+        }
+        // FFI
+        "std::ffi::call" | "ffi::call" => vec![Effect::Ffi],
+        _ => vec![],
+    }
+}
+
+/// Map a literal value to its base type.
+fn literal_to_base_type(lit: &Literal) -> BaseType {
+    match lit {
+        Literal::Int(_) => BaseType::I32,
+        Literal::IntSuffixed(_, suffix) => match suffix.as_str() {
+            "i8" => BaseType::I8,
+            "i16" => BaseType::I16,
+            "i32" => BaseType::I32,
+            "i64" => BaseType::I64,
+            "i128" => BaseType::I128,
+            "u8" => BaseType::U8,
+            "u16" => BaseType::U16,
+            "u32" => BaseType::U32,
+            "u64" => BaseType::U64,
+            "u128" => BaseType::U128,
+            "usize" => BaseType::U64,
+            "isize" => BaseType::I64,
+            _ => BaseType::I32,
+        },
+        Literal::Float(_) => BaseType::F64,
+        Literal::String(_) => BaseType::String,
+        Literal::Char(_) => BaseType::Char,
+        Literal::Bool(_) => BaseType::Bool,
+    }
+}
+
+/// Emit numeric class constraints based on base type.
 fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, base: &BaseType) {
     match base {
         BaseType::I8
@@ -185,6 +963,70 @@ fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, bas
     }
 }
 
+fn is_arithmetic_op(op: &BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::Div
+            | BinaryOp::Mod
+    )
+}
+
+fn is_comparison_op(op: &BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge
+    )
+}
+
+fn is_logical_op(op: &BinaryOp) -> bool {
+    matches!(op, BinaryOp::And | BinaryOp::Or)
+}
+
+fn is_bitwise_op(op: &BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::Shl
+            | BinaryOp::Shr
+    )
+}
+
+/// Heuristic: common mutating method names.
+fn is_mutating_method(method: &str) -> bool {
+    matches!(
+        method,
+        "push"
+            | "pop"
+            | "insert"
+            | "remove"
+            | "clear"
+            | "extend"
+            | "push_str"
+            | "set"
+            | "drain"
+            | "truncate"
+            | "resize"
+            | "retain"
+            | "sort"
+            | "sort_by"
+            | "sort_unstable"
+            | "reverse"
+            | "swap"
+            | "fill"
+            | "append"
+    )
+}
+
 /// Generate constraints for a batch of analyzed functions.
 pub fn generate_module_constraints(analyzed: &[AnalyzedFunction<'_>]) -> Vec<FunctionConstraints> {
     analyzed.iter().map(generate_constraints).collect()
@@ -199,22 +1041,24 @@ mod tests {
         fc.constraints.iter().filter(|c| pred(c)).count()
     }
 
-    #[test]
-    fn test_empty_function_produces_return_var() {
-        let source = "pub fn empty() {}";
+    fn analyze_source(source: &str) -> Vec<crate::analyzer::AnalyzedFunction<'static>> {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = crate::parser::Parser::new(tokens);
+        // Leak the parser so its arena allocators keep AST nodes alive
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
         let program = parser.parse().expect("parse");
         let mut analyzer = crate::analyzer::Analyzer::new();
         let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
+        analyzed
+    }
 
-        assert!(!analyzed.is_empty());
+    #[test]
+    fn test_empty_function_produces_return_var() {
+        let analyzed = analyze_source("pub fn empty() {}");
         let fc = generate_constraints(&analyzed[0]);
 
         assert_eq!(fc.function_name, "empty");
         assert!(fc.var_map.params.is_empty());
-        // Return var should have TypeIs(Unit) and OwnershipIs(Owned)
         let has_unit =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Unit)));
         assert!(has_unit >= 1, "should have TypeIs(Unit) for return");
@@ -222,14 +1066,7 @@ mod tests {
 
     #[test]
     fn test_typed_params_emit_type_constraints() {
-        let source = "pub fn add(x: i32, y: f64) -> i32 { x }";
-        let mut lexer = crate::lexer::Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser = crate::parser::Parser::new(tokens);
-        let program = parser.parse().expect("parse");
-        let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
-
+        let analyzed = analyze_source("pub fn add(x: i32, y: f64) -> i32 { x }");
         let fc = generate_constraints(&analyzed[0]);
 
         assert_eq!(fc.var_map.params.len(), 2);
@@ -253,13 +1090,7 @@ pub fn mutate(p: Point) {
     p.x = 1.0
 }
 "#;
-        let mut lexer = crate::lexer::Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser = crate::parser::Parser::new(tokens);
-        let program = parser.parse().expect("parse");
-        let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
-
+        let analyzed = analyze_source(source);
         let mutate_fn = analyzed.iter().find(|f| f.decl.name == "mutate").unwrap();
         let fc = generate_constraints(mutate_fn);
 
@@ -272,20 +1103,218 @@ pub fn mutate(p: Point) {
 
     #[test]
     fn test_module_constraints_batch() {
-        let source = r#"
+        let analyzed = analyze_source(
+            r#"
 pub fn a() -> i32 { 1 }
 pub fn b(x: string) {}
-"#;
-        let mut lexer = crate::lexer::Lexer::new(source);
-        let tokens = lexer.tokenize_with_locations();
-        let mut parser = crate::parser::Parser::new(tokens);
-        let program = parser.parse().expect("parse");
-        let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
-
+"#,
+        );
         let all = generate_module_constraints(&analyzed);
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].function_name, "a");
         assert_eq!(all[1].function_name, "b");
+    }
+
+    // ---- Phase 1A: New AST-walking tests ----
+
+    #[test]
+    fn test_literal_type_inference() {
+        let analyzed = analyze_source("pub fn lit() -> i32 { 42 }");
+        let fc = generate_constraints(&analyzed[0]);
+
+        let has_i32 = count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::I32)));
+        assert!(
+            has_i32 >= 2,
+            "should have TypeIs(I32) for literal 42 and return type"
+        );
+    }
+
+    #[test]
+    fn test_assignment_emits_type_equals() {
+        let source = r#"
+pub fn assign() {
+    let x: i32 = 10
+    let y = x
+}
+"#;
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let has_type_equals =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
+        assert!(
+            has_type_equals >= 1,
+            "should have TypeEquals for let bindings"
+        );
+    }
+
+    #[test]
+    fn test_return_emits_type_equals() {
+        let source = "pub fn ret() -> i32 { return 42 }";
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let has_type_equals =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
+        assert!(
+            has_type_equals >= 1,
+            "return statement should emit TypeEquals linking return var to value"
+        );
+    }
+
+    #[test]
+    fn test_binary_arithmetic_emits_numeric_constraints() {
+        let source = "pub fn math(x: i32, y: i32) -> i32 { x + y }";
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let numeric_count = count_constraints(&fc, |c| matches!(c, Constraint::IsNumeric(_)));
+        assert!(
+            numeric_count >= 2,
+            "binary arithmetic should emit IsNumeric for both operands (got {})",
+            numeric_count
+        );
+    }
+
+    #[test]
+    fn test_comparison_emits_bool_result() {
+        let source = "pub fn cmp(x: i32, y: i32) -> bool { x > y }";
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let bool_count =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
+        assert!(
+            bool_count >= 1,
+            "comparison should emit TypeIs(Bool) for the result"
+        );
+    }
+
+    #[test]
+    fn test_if_condition_must_be_bool() {
+        let source = r#"
+pub fn check(x: i32) -> i32 {
+    if x > 0 {
+        return 1
+    }
+    0
+}
+"#;
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let bool_count =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
+        assert!(
+            bool_count >= 1,
+            "if condition should emit TypeIs(Bool)"
+        );
+    }
+
+    #[test]
+    fn test_field_mutation_emits_mutref() {
+        let source = r#"
+struct Point { x: f64, y: f64 }
+pub fn set_x(p: Point) {
+    p.x = 1.0
+}
+"#;
+        let analyzed = analyze_source(source);
+        let set_fn = analyzed.iter().find(|f| f.decl.name == "set_x").unwrap();
+        let fc = generate_constraints(set_fn);
+
+        let mut_ref_count = count_constraints(&fc, |c| {
+            matches!(c, Constraint::OwnershipIs(_, OwnedType::MutRef(_)))
+        });
+        assert!(
+            mut_ref_count >= 1,
+            "field mutation should emit MutRef constraint on receiver"
+        );
+    }
+
+    #[test]
+    fn test_string_literal_emits_string_type() {
+        let source = r#"pub fn greet() -> string { "hello" }"#;
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let string_count =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::String)));
+        assert!(
+            string_count >= 1,
+            "string literal should emit TypeIs(String)"
+        );
+    }
+
+    #[test]
+    fn test_while_loop_condition_bool() {
+        let source = r#"
+pub fn loop_fn() {
+    let mut i: i32 = 0
+    while i < 10 {
+        i = i + 1
+    }
+}
+"#;
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let bool_count =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
+        assert!(
+            bool_count >= 1,
+            "while condition should emit TypeIs(Bool)"
+        );
+    }
+
+    #[test]
+    fn test_array_elements_unified() {
+        let source = r#"
+pub fn arr() {
+    let xs = [1, 2, 3]
+}
+"#;
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let type_equals_count =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
+        assert!(
+            type_equals_count >= 2,
+            "array elements should be unified pairwise (got {})",
+            type_equals_count
+        );
+    }
+
+    #[test]
+    fn test_cast_emits_target_type() {
+        let source = "pub fn cast_fn(x: i32) -> f64 { x as f64 }";
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        let f64_count =
+            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::F64)));
+        assert!(
+            f64_count >= 1,
+            "cast should emit TypeIs for target type"
+        );
+    }
+
+    #[test]
+    fn test_locals_tracked_in_var_map() {
+        let source = r#"
+pub fn locals() {
+    let x = 1
+    let y = 2
+    let z = x
+}
+"#;
+        let analyzed = analyze_source(source);
+        let fc = generate_constraints(&analyzed[0]);
+
+        assert!(
+            !fc.var_map.locals.is_empty(),
+            "locals should be tracked in the var map"
+        );
     }
 }

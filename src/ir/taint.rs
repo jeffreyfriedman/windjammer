@@ -257,6 +257,29 @@ pub fn stdlib_sanitizers() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Standard library dangerous sink declarations.
+/// These sinks require clean (non-tainted) data.
+pub fn stdlib_sinks() -> Vec<TaintConstraint> {
+    vec![
+        TaintConstraint::RequiresClean {
+            var: TaintVar::new("std::db::query::arg0"),
+            sink: "SQL query (std::db::query)".into(),
+        },
+        TaintConstraint::RequiresClean {
+            var: TaintVar::new("std::db::execute::arg0"),
+            sink: "SQL execute (std::db::execute)".into(),
+        },
+        TaintConstraint::RequiresClean {
+            var: TaintVar::new("std::process::exec::arg0"),
+            sink: "shell command (std::process::exec)".into(),
+        },
+        TaintConstraint::RequiresClean {
+            var: TaintVar::new("std::html::render::arg0"),
+            sink: "HTML template (std::html::render)".into(),
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -189,7 +189,10 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MacroInvocation { args, .. } => args
                 .iter()
                 .any(|a| Self::variable_used_in_expression(a, var_name)),
-            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+            Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. }
+            | Expression::AsyncCall { expr, .. }
+            | Expression::SpawnCall { expr, .. } => {
                 Self::variable_used_in_expression(expr, var_name)
             }
             Expression::ChannelSend { channel, value, .. } => {

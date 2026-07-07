@@ -31,6 +31,7 @@ pub fn execute(
             path: path.map(String::from),
             git: None,
             branch: None,
+            registry: None,
         }
     } else if path.is_some() {
         DependencySpec::Detailed {
@@ -39,6 +40,7 @@ pub fn execute(
             path: path.map(String::from),
             git: None,
             branch: None,
+            registry: None,
         }
     } else {
         match version {

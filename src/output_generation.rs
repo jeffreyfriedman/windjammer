@@ -1,6 +1,7 @@
 //! Code generation and emitted Rust file writing for single-file compilation.
 
 use anyhow::Result;
+use colored::Colorize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -180,6 +181,30 @@ pub(crate) fn generate_main_rust_code<'ast>(
     if !generator.ir_cutover.all_disabled() {
         let mut ir_pipeline = crate::ir::IrPipeline::new();
         let ir_module = ir_pipeline.lower_to_ir(analyzed, signatures);
+
+        // WJ-SEC-01: Check effect capabilities against wj.toml manifest (if present).
+        if let Some(config_path) = find_wj_config(input_path) {
+            if let Ok(config) = crate::config::WjConfig::load_from_file(&config_path) {
+                if let Some(ref caps) = config.app_capabilities {
+                    let allowed = caps.to_effect_set();
+                    let violations = ir_module.check_capabilities(&allowed);
+                    for v in &violations {
+                        eprintln!(
+                            "{}: {}",
+                            "error".red().bold(),
+                            v.message,
+                        );
+                    }
+                    if !violations.is_empty() {
+                        return Err(anyhow::anyhow!(
+                            "Build failed: {} capability violation(s)",
+                            violations.len()
+                        ));
+                    }
+                }
+            }
+        }
+
         generator.set_ir_module(ir_module);
     }
 
@@ -365,4 +390,16 @@ pub(crate) fn write_single_file_outputs<'ast>(
         module_compiler.imported_stdlib_modules.clone(),
         module_compiler.external_crates.clone(),
     ))
+}
+
+/// Search upward from the source file to find a `wj.toml` configuration file.
+fn find_wj_config(source_path: &Path) -> Option<std::path::PathBuf> {
+    let mut dir = source_path.parent()?;
+    loop {
+        let candidate = dir.join("wj.toml");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        dir = dir.parent()?;
+    }
 }
