@@ -34,8 +34,8 @@ pub fn run(cli: Cli) -> Result<()> {
             no_lint,
             no_generate_cargo_toml,
             metadata,
-            json: _json,
-            ir_shadow_validate: _ir_shadow_validate,
+            json,
+            ir_shadow_validate,
         } => {
             // TODO: Pass defer_drop config to compiler
             let _ = (defer_drop, defer_drop_threshold);
@@ -64,6 +64,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 !no_lint,
                 no_generate_cargo_toml,
                 &metadata,
+                json,
+                ir_shadow_validate,
             )?;
         }
         Commands::Run {
@@ -289,6 +291,8 @@ fn cmd_errors_tui(file: &std::path::Path, output: &std::path::Path) -> Result<()
         true,
         false,
         &[],
+        false,
+        false,
     )
     .ok();
 

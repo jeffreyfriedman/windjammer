@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.50.0] - 2026-07-07
+
+### Added
+- **Full Solver Cutover**: Unified constraint solver replaces all legacy sequential passes
+  - AST-walking constraint generation (`constraint_gen.rs`) now traverses full expression/statement bodies
+  - Numeric solver integration with real region unification
+  - All cutover flags (`ownership`, `clones`, `param_types`, `str_ref`) defaulted to `true`
+  - Shadow validation available via `--ir-shadow-validate` flag
+- **WJ-SEC-01 Effect Capabilities**: Compile-time effect tracking with `wj.toml` manifest enforcement
+  - Call-graph effect propagation via `EffectSolver` with fixpoint iteration
+  - `[app_capabilities]` section in `wj.toml` for allow/deny effect lists
+  - Stdlib annotations for `fs::*`, `net::*`, `process::*`, `env::*` functions
+- **WJ-SEC-02 Taint Tracking**: Source-to-sink flow analysis with sanitization
+  - `TaintSolver` with `IsSource`, `FlowsTo`, `RequiresClean`, `Sanitizes` constraints
+  - Compile-time errors for unsanitized data reaching dangerous sinks
+  - Stdlib taint sources (`env::var`, `stdin::read_line`) and sinks (`sql::query`, `html::render`)
+- **WJ-SEC-03 Capability Lock File**: `.wj-capabilities.lock` for detecting effect escalations
+  - Per-function effect snapshots with schema versioning
+  - Escalation detection and approval workflow
+- **WJ-SEC-04 Capability Profiles**: Preset profiles for common package categories
+  - Built-in profiles: `parser`, `http_client`, `database`, `file_processor`, `build_tool`
+- **WJ-CONC-01 Caller-Controlled Async**: `async expr` and `spawn expr` syntax
+  - `AsyncCall` and `SpawnCall` AST variants with `ExecutionConstraint` emission
+  - Backend codegen for Rust (`tokio::spawn`), Go (goroutines), JS (`Promise`)
+- **WJ-TOOL-01 Agent-Native Interface**: Structured compiler output for AI agents
+  - `--json` flag on `wj build` for structured JSON diagnostics with repair hints
+  - 4 new MCP tools: `query_diagnostics`, `query_effects`, `insert_statement`, `change_type`
+  - EBNF formal grammar artifact (`docs/windjammer.ebnf`)
+  - Maturity tags flipped from `Heuristic` to `Proven` for solver-validated errors
+- **WJ-PERF-01 Economic Efficiency**: Cost tracking and optimization pass framework
+  - `CompilationCostTracker` for per-phase timing and memory tracking
+  - IR-to-IR optimization pass infrastructure (DeferDrop, SmallVec, Cow, AoSoA stubs)
+- **WJ-PKG-01 Package Management Foundation**: `src/package/` module
+  - `PackageManifest` parsing from `wj.toml` dependencies section
+  - PubGrub-style dependency resolver stub
+  - Registry client interface
+- **WJ-LANG-02 Comptime/SIMD Foundations**: IR type extensions
+  - `ConstEval::Comptime` for future compile-time evaluation blocks
+  - `BaseType::Simd { element, lanes }` for SIMD vector types
+- **WJ-LANG-03 Map Types**: `Map`, `OrderedMap`, `SlotMap`, `ConcurrentMap` in `std/map.wj`
+- **WJ-LANG-04 Universal String Conversion**: `.string()` method lowers to backend-specific conversion
+- **WJ-SYN-01 Pipe Operator**: `x |> f(a, b)` desugars to `f(x, a, b)` at parse time
+- **WJ-IMPL-02 FFI Generation**: IDL representation and C header generation from module metadata
+- **WJ-LANG-01 WJSL Improvements**: Shader-specific diagnostics with fuzzy identifier suggestions
+
+### Changed
+- `call_signature_resolution.rs` reduced from 2370 to ~1445 lines
+- Legacy `AnalyzedFunction` annotation fields deprecated
+- Error codes W0003, W0006, W0007 upgraded from `Heuristic` to `Proven` maturity
+- Crate packaging switched to `include` whitelist (from `exclude` blacklist) to prevent oversized publishes
+
+### Tests
+- **4391 tests passing, 0 failures** (up from 4337)
+
+---
+
 ## [0.49.0] - 2026-06-30
 
 ### Added

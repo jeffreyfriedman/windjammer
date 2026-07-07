@@ -1,0 +1,163 @@
+// std/map — Backend-agnostic map types (WJ-LANG-03)
+//
+// Windjammer-facing API; Rust backend lowers to std::collections (HashMap, BTreeMap).
+// Import: use std::map::Map
+
+use std::collections::HashMap as RustHashMap
+use std::collections::BTreeMap as RustBTreeMap
+
+// Map<K, V> — general-purpose hash map (Rust: HashMap)
+pub struct Map<K, V> {
+    inner: RustHashMap<K, V>,
+}
+
+impl<K, V> Map<K, V> {
+    pub fn new() -> Map<K, V> {
+        Map { inner: RustHashMap::new() }
+    }
+
+    pub fn insert(self, key: K, value: V) -> Option<V> {
+        self.inner.insert(key, value)
+    }
+
+    pub fn get(self, key: K) -> Option<V> {
+        self.inner.get(key)
+    }
+
+    pub fn remove(self, key: K) -> Option<V> {
+        self.inner.remove(key)
+    }
+
+    pub fn contains_key(self, key: K) -> bool {
+        self.inner.contains_key(key)
+    }
+
+    pub fn len(self) -> int {
+        self.inner.len() as i64
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn clear(self) {
+        self.inner.clear()
+    }
+}
+
+// OrderedMap<K, V> — insertion-ordered map (Rust: BTreeMap)
+pub struct OrderedMap<K, V> {
+    inner: RustBTreeMap<K, V>,
+}
+
+impl<K, V> OrderedMap<K, V> {
+    pub fn new() -> OrderedMap<K, V> {
+        OrderedMap { inner: RustBTreeMap::new() }
+    }
+
+    pub fn insert(self, key: K, value: V) -> Option<V> {
+        self.inner.insert(key, value)
+    }
+
+    pub fn get(self, key: K) -> Option<V> {
+        self.inner.get(key)
+    }
+
+    pub fn remove(self, key: K) -> Option<V> {
+        self.inner.remove(key)
+    }
+
+    pub fn contains_key(self, key: K) -> bool {
+        self.inner.contains_key(key)
+    }
+
+    pub fn len(self) -> int {
+        self.inner.len() as i64
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn clear(self) {
+        self.inner.clear()
+    }
+}
+
+// SlotMap<K, V> — generational index map (Rust: HashMap stub until slotmap backend)
+pub struct SlotMap<K, V> {
+    inner: RustHashMap<K, V>,
+}
+
+impl<K, V> SlotMap<K, V> {
+    pub fn new() -> SlotMap<K, V> {
+        SlotMap { inner: RustHashMap::new() }
+    }
+
+    pub fn insert(self, key: K, value: V) -> Option<V> {
+        self.inner.insert(key, value)
+    }
+
+    pub fn get(self, key: K) -> Option<V> {
+        self.inner.get(key)
+    }
+
+    pub fn remove(self, key: K) -> Option<V> {
+        self.inner.remove(key)
+    }
+
+    pub fn contains_key(self, key: K) -> bool {
+        self.inner.contains_key(key)
+    }
+
+    pub fn len(self) -> int {
+        self.inner.len() as i64
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn clear(self) {
+        self.inner.clear()
+    }
+}
+
+// ConcurrentMap<K, V> — thread-safe map (Rust: HashMap stub until dashmap/papaya backend)
+pub struct ConcurrentMap<K, V> {
+    inner: RustHashMap<K, V>,
+}
+
+impl<K, V> ConcurrentMap<K, V> {
+    pub fn new() -> ConcurrentMap<K, V> {
+        ConcurrentMap { inner: RustHashMap::new() }
+    }
+
+    pub fn insert(self, key: K, value: V) -> Option<V> {
+        self.inner.insert(key, value)
+    }
+
+    pub fn get(self, key: K) -> Option<V> {
+        self.inner.get(key)
+    }
+
+    pub fn remove(self, key: K) -> Option<V> {
+        self.inner.remove(key)
+    }
+
+    pub fn contains_key(self, key: K) -> bool {
+        self.inner.contains_key(key)
+    }
+
+    pub fn len(self) -> int {
+        self.inner.len() as i64
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn clear(self) {
+        self.inner.clear()
+    }
+}

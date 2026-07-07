@@ -89,7 +89,8 @@ pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
     ) || matches!(
         arg_expr,
         Expression::MethodCall { method, object, .. }
-        if method.as_str() == "to_string" && matches!(
+        if method.as_str() == "to_string" || method.as_str() == "string"
+            && matches!(
             &**object,
             Expression::Literal { value: Literal::String(_), .. }
         )

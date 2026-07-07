@@ -28,7 +28,11 @@ fn type_to_rust_mapped_owned_str_slot(type_: &Type, map_custom: &dyn Fn(&str) ->
 /// Whether generic args to this container should use [`type_to_rust_mapped_owned_str_slot`] for
 /// `str` (e.g. `HashMap<str, str>` → `HashMap<String, String>`).
 fn parameterized_base_uses_owned_str_slots(base: &str) -> bool {
-    matches!(base, "HashMap" | "BTreeMap" | "BTreeSet" | "HashSet")
+    matches!(
+        base,
+        "HashMap" | "BTreeMap" | "BTreeSet" | "HashSet" | "Map" | "OrderedMap" | "SlotMap"
+            | "ConcurrentMap"
+    )
 }
 
 /// Convert a Windjammer type to its Rust equivalent
@@ -130,6 +134,20 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
                 }
             // Windjammer stdlib Map<K,V> -> std::collections::HashMap<K,V>
             } else if base == "Map" && args.len() == 2 {
+                let rust_args: Vec<String> = args
+                    .iter()
+                    .map(|a| type_to_rust_mapped_owned_str_slot(a, map_custom))
+                    .collect();
+                format!("HashMap<{}>", rust_args.join(", "))
+            // OrderedMap<K,V> -> BTreeMap (insertion-ordered sorted map)
+            } else if base == "OrderedMap" && args.len() == 2 {
+                let rust_args: Vec<String> = args
+                    .iter()
+                    .map(|a| type_to_rust_mapped_owned_str_slot(a, map_custom))
+                    .collect();
+                format!("BTreeMap<{}>", rust_args.join(", "))
+            // SlotMap / ConcurrentMap -> HashMap stubs until dedicated backends
+            } else if (base == "SlotMap" || base == "ConcurrentMap") && args.len() == 2 {
                 let rust_args: Vec<String> = args
                     .iter()
                     .map(|a| type_to_rust_mapped_owned_str_slot(a, map_custom))

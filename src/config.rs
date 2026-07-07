@@ -18,6 +18,8 @@ pub enum DependencySpec {
         path: Option<String>,
         git: Option<String>,
         branch: Option<String>,
+        /// Windjammer registry host (defaults to wj-registry.io).
+        registry: Option<String>,
     },
 }
 
@@ -42,6 +44,11 @@ pub struct WjConfig {
     /// Backend configuration for WASM proxy (optional)
     #[serde(default)]
     pub backend: Option<BackendConfig>,
+
+    /// Application capability declarations for the effect system (WJ-SEC-01).
+    /// Declares which side-effects this application is allowed to perform.
+    #[serde(default)]
+    pub app_capabilities: Option<AppCapabilities>,
 }
 
 /// Project metadata (for windjammer.toml)
@@ -83,6 +90,63 @@ pub struct BackendConfig {
     pub api_key: Option<String>,
 }
 
+/// Application capability declarations (WJ-SEC-01).
+///
+/// Declares which side-effects this application is allowed to perform.
+/// The compiler verifies at build time that all code paths stay within
+/// these declared capabilities.
+///
+/// Example `wj.toml`:
+/// ```toml
+/// [app_capabilities]
+/// allow = ["fs_read", "fs_write", "net_egress"]
+/// deny = ["process_spawn"]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AppCapabilities {
+    /// Effects this application is allowed to perform.
+    #[serde(default)]
+    pub allow: Vec<String>,
+    /// Effects explicitly denied (takes precedence over allow).
+    #[serde(default)]
+    pub deny: Vec<String>,
+}
+
+impl AppCapabilities {
+    /// Convert the declared capability strings to an `EffectSet`.
+    pub fn to_effect_set(&self) -> crate::ir::safety_type::EffectSet {
+        use crate::ir::safety_type::EffectSet;
+        let mut set = EffectSet::pure();
+        for cap in &self.allow {
+            if let Some(effect) = parse_effect_name(cap) {
+                set.insert(effect);
+            }
+        }
+        set
+    }
+
+    /// Return the set of explicitly denied effects.
+    pub fn denied_effects(&self) -> Vec<crate::ir::safety_type::Effect> {
+        self.deny.iter().filter_map(|s| parse_effect_name(s)).collect()
+    }
+}
+
+/// Parse a capability name string into an `Effect`.
+fn parse_effect_name(name: &str) -> Option<crate::ir::safety_type::Effect> {
+    use crate::ir::safety_type::Effect;
+    match name {
+        "fs_read" | "filesystem_read" => Some(Effect::FsRead),
+        "fs_write" | "filesystem_write" => Some(Effect::FsWrite),
+        "net_egress" | "network_egress" | "network" => Some(Effect::NetEgress),
+        "net_ingress" | "network_ingress" => Some(Effect::NetIngress),
+        "process_spawn" | "process" => Some(Effect::ProcessSpawn),
+        "env_read" | "environment_read" => Some(Effect::EnvRead),
+        "env_write" | "environment_write" => Some(Effect::EnvWrite),
+        "ffi" => Some(Effect::Ffi),
+        other => Some(Effect::Custom(other.to_string())),
+    }
+}
+
 impl WjConfig {
     /// Load configuration from a file
     pub fn load_from_file(path: &Path) -> Result<Self, String> {
@@ -108,6 +172,11 @@ impl WjConfig {
     /// Remove a dependency
     pub fn remove_dependency(&mut self, name: &str) -> bool {
         self.dependencies.remove(name).is_some()
+    }
+
+    /// Convert this config into a package manifest for dependency resolution.
+    pub fn to_package_manifest(&self) -> crate::package::PackageManifest {
+        crate::package::PackageManifest::from_config(self)
     }
 
     /// Convert to Cargo.toml format
@@ -147,6 +216,7 @@ impl WjConfig {
                         path,
                         git,
                         branch,
+                        registry: _,
                     } => {
                         output.push_str(&format!("{} = {{ ", name));
                         let mut parts = Vec::new();
@@ -189,6 +259,7 @@ impl WjConfig {
                         path,
                         git,
                         branch,
+                        registry: _,
                     } => {
                         output.push_str(&format!("{} = {{ ", name));
                         let mut parts = Vec::new();

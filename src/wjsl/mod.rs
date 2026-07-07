@@ -9,6 +9,7 @@
 
 mod ast;
 mod codegen;
+mod diagnostics;
 mod expression_type_checking;
 mod lexer;
 pub mod parser;
@@ -26,9 +27,15 @@ pub use type_checker::type_check_wjsl;
 
 /// Transpile WJSL source to WGSL
 pub fn transpile_wjsl(source: &str) -> Result<String, anyhow::Error> {
-    let ast = parse_wjsl(source)?;
-    type_checker::check(&ast, source)?;
-    let wgsl = codegen::WjslCodegen::new(ast).generate()?;
+    transpile_wjsl_inner(source)
+}
+
+fn transpile_wjsl_inner(source: &str) -> Result<String, anyhow::Error> {
+    let ast = parse_wjsl(source).map_err(|e| diagnostics::enrich_shader_error(e, source))?;
+    type_checker::check(&ast, source).map_err(|e| diagnostics::enrich_shader_error(e, source))?;
+    let wgsl = codegen::WjslCodegen::new(ast)
+        .generate()
+        .map_err(|e| diagnostics::enrich_shader_error(e, source))?;
     Ok(wgsl)
 }
 
@@ -37,7 +44,8 @@ pub fn transpile_wjsl_with_includes(
     source: &str,
     base_dir: &Path,
 ) -> Result<String, anyhow::Error> {
-    let resolved = resolve_includes(source, base_dir, &mut Vec::new())?;
+    let resolved = resolve_includes(source, base_dir, &mut Vec::new())
+        .map_err(|e| diagnostics::enrich_shader_error(e, source))?;
     transpile_wjsl(&resolved)
 }
 

@@ -803,6 +803,9 @@ pub(crate) fn build_library_multipass(
 
         // Skip full analysis for files that are NOT dirty and NOT in the reanalysis set.
         // Their registry is already merged from Step 3, and codegen will be skipped too.
+        // However, their .wj.meta converged signatures must be loaded into
+        // local_converged_sigs so the promotion step can install correct ownership
+        // (e.g. Borrowed for &str params) into final_global_registry.
         if !dirty_set.contains(i) && !reanalysis_set.contains(i) {
             let file_stem = file
                 .file_stem()
@@ -816,6 +819,55 @@ pub(crate) fn build_library_multipass(
             let output_file =
                 crate::project_paths::resolve_wj_output_path_library(&src_base, file, output)
                     .unwrap_or_else(|_| output.join(file_stem.clone()).with_extension("rs"));
+
+            // Load converged signatures from this file's .wj.meta and install them
+            // directly into final_global_registry. These signatures are the converged
+            // output from the previous build, so they're authoritative and don't need
+            // the prefer_converged_over_stub promotion check.
+            let meta_path = crate::metadata::meta_cache_path(file);
+            if meta_path.exists() {
+                let mut meta_registry = SignatureRegistry::empty();
+                let mut meta_copy = Vec::new();
+                let mut meta_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+                crate::metadata::merge_wj_meta_signatures_from_dir_inner_pub(
+                    &meta_path,
+                    &mut meta_registry,
+                    &mut meta_copy,
+                    &mut meta_fields,
+                );
+                let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+                for (name, sig) in &meta_registry.signatures {
+                    if sig.param_ownership.is_empty() {
+                        continue;
+                    }
+                    let is_local = crate::metadata::signature_targets_local_struct(
+                        name,
+                        &local_struct_names,
+                    ) || (!name.contains("::")
+                        && crate_metadata.functions.contains_key(name));
+                    if !is_local {
+                        continue;
+                    }
+                    // Install under all key variants: short, file-stem-qualified,
+                    // and module-path-qualified.
+                    let mut keys = vec![name.clone()];
+                    if !file_stem.is_empty()
+                        && !name.starts_with(&format!("{}::", file_stem))
+                    {
+                        keys.push(format!("{}::{}", file_stem, name));
+                    }
+                    if !module_path.is_empty()
+                        && !name.starts_with(&format!("{}::", module_path))
+                    {
+                        keys.push(format!("{}::{}", module_path, name));
+                    }
+                    for key in keys {
+                        reg.signatures.insert(key.clone(), sig.clone());
+                    }
+                    local_converged_sigs.insert(name.clone(), sig.clone());
+                }
+            }
+
             step4b_analyses[*i] = Some(Step4bFileAnalysis {
                 registry: SignatureRegistry::empty(),
                 analyzed_functions: Vec::new(),

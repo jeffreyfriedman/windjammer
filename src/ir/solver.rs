@@ -1,13 +1,17 @@
 //! Unified constraint solver using union-find.
 //!
-//! Phase 1: Stub implementation — the solver accepts constraints but does not
-//! yet replace the sequential inference passes.
-//!
-//! Phase 2: Full union-find unification over TypeVar and OwnershipVar,
+//! Phase 2: Full union-find unification over TypeVar, OwnershipVar, and Region,
 //! replacing the sequential float → integer → ownership passes.
+//!
+//! Key improvements in Phase 1B:
+//!   - IsNumeric/IsInteger/IsFloat **infer** (not just validate) numeric class
+//!   - SharesRegion performs real region unification via a region union-find
+//!   - NumericSolver results can be imported via `import_numeric_results`
 
 use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar};
 use crate::ir::safety_type::{BaseType, OwnedType};
+#[cfg(test)]
+use crate::ir::safety_type::Region;
 
 /// The result of solving a constraint set.
 #[derive(Debug)]
@@ -59,6 +63,17 @@ impl CloneRequirements {
     }
 }
 
+/// Numeric class constraint for deferred inference.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum NumericClass {
+    /// Must be some numeric type (int or float).
+    Numeric,
+    /// Must be an integer type.
+    Integer,
+    /// Must be a float type.
+    Float,
+}
+
 /// Union-find data structure for type unification.
 struct UnionFind {
     parent: Vec<u32>,
@@ -98,6 +113,60 @@ impl UnionFind {
     }
 }
 
+/// Region union-find for aliasing analysis.
+struct RegionUnionFind {
+    parent: Vec<u32>,
+    rank: Vec<u32>,
+    next_id: u32,
+}
+
+impl RegionUnionFind {
+    fn new() -> Self {
+        Self {
+            parent: Vec::new(),
+            rank: Vec::new(),
+            next_id: 0,
+        }
+    }
+
+    fn get_or_create(&mut self, region_id: u32) -> u32 {
+        while self.parent.len() <= region_id as usize {
+            let id = self.next_id;
+            self.parent.push(id);
+            self.rank.push(0);
+            self.next_id += 1;
+        }
+        region_id
+    }
+
+    fn find(&mut self, x: u32) -> u32 {
+        if x as usize >= self.parent.len() {
+            return x;
+        }
+        if self.parent[x as usize] != x {
+            self.parent[x as usize] = self.find(self.parent[x as usize]);
+        }
+        self.parent[x as usize]
+    }
+
+    fn union(&mut self, x: u32, y: u32) {
+        let rx = self.find(x);
+        let ry = self.find(y);
+        if rx == ry {
+            return;
+        }
+        self.get_or_create(rx.max(ry));
+        if self.rank[rx as usize] < self.rank[ry as usize] {
+            self.parent[rx as usize] = ry;
+        } else if self.rank[rx as usize] > self.rank[ry as usize] {
+            self.parent[ry as usize] = rx;
+        } else {
+            self.parent[ry as usize] = rx;
+            self.rank[rx as usize] += 1;
+        }
+    }
+}
+
 /// The constraint solver.
 pub struct Solver {
     uf: UnionFind,
@@ -105,6 +174,10 @@ pub struct Solver {
     ownership: Vec<Option<OwnedType>>,
     clones: CloneRequirements,
     diagnostics: Vec<SolverDiagnostic>,
+    /// Deferred numeric class constraints — resolved after all other constraints.
+    numeric_classes: Vec<(ConstraintVar, NumericClass)>,
+    /// Region union-find for aliasing analysis.
+    region_uf: RegionUnionFind,
 }
 
 impl Solver {
@@ -117,14 +190,23 @@ impl Solver {
             ownership: vec![None; n as usize],
             clones: CloneRequirements::new(n),
             diagnostics: Vec::new(),
+            numeric_classes: Vec::new(),
+            region_uf: RegionUnionFind::new(),
         }
     }
 
     /// Solve all constraints and return the result.
     pub fn solve(mut self, constraints: &ConstraintSet) -> SolverResult {
+        // Pass 1: Process all constraints
         for constraint in constraints.iter() {
             self.process_constraint(constraint);
         }
+
+        // Pass 2: Resolve deferred numeric class constraints.
+        // For vars that have no type yet but are constrained to be numeric,
+        // infer a default type.
+        self.resolve_numeric_classes();
+
         SolverResult {
             types: self.types,
             ownership: self.ownership,
@@ -188,6 +270,8 @@ impl Solver {
                             vars: vec![*var],
                         });
                     }
+                } else {
+                    self.numeric_classes.push((*var, NumericClass::Numeric));
                 }
             }
 
@@ -201,6 +285,8 @@ impl Solver {
                             vars: vec![*var],
                         });
                     }
+                } else {
+                    self.numeric_classes.push((*var, NumericClass::Integer));
                 }
             }
 
@@ -214,6 +300,8 @@ impl Solver {
                             vars: vec![*var],
                         });
                     }
+                } else {
+                    self.numeric_classes.push((*var, NumericClass::Float));
                 }
             }
 
@@ -221,14 +309,25 @@ impl Solver {
                 let root = self.uf.find(var.0);
                 match &self.ownership[root as usize] {
                     Some(existing) if existing != ownership => {
-                        self.diagnostics.push(SolverDiagnostic {
-                            kind: DiagnosticKind::OwnershipConflict,
-                            message: format!(
-                                "ownership conflict: {:?} vs {:?}",
-                                ownership, existing
-                            ),
-                            vars: vec![*var],
-                        });
+                        // MutRef wins over Ref (field mutation detected later)
+                        match (existing, ownership) {
+                            (OwnedType::Ref(_), OwnedType::MutRef(r)) => {
+                                self.ownership[root as usize] = Some(OwnedType::MutRef(r.clone()));
+                            }
+                            (OwnedType::MutRef(_), OwnedType::Ref(_)) => {
+                                // Already MutRef, keep it
+                            }
+                            _ => {
+                                self.diagnostics.push(SolverDiagnostic {
+                                    kind: DiagnosticKind::OwnershipConflict,
+                                    message: format!(
+                                        "ownership conflict: {:?} vs {:?}",
+                                        ownership, existing
+                                    ),
+                                    vars: vec![*var],
+                                });
+                            }
+                        }
                     }
                     _ => {
                         self.ownership[root as usize] = Some(ownership.clone());
@@ -241,12 +340,29 @@ impl Solver {
                 let rb = self.uf.find(b.0);
                 let oa = self.ownership[ra as usize].clone();
                 let ob = self.ownership[rb as usize].clone();
-                if let (Some(OwnedType::MutRef(_)), Some(OwnedType::MutRef(_))) = (&oa, &ob) {
-                    self.diagnostics.push(SolverDiagnostic {
-                        kind: DiagnosticKind::OwnershipConflict,
-                        message: "two mutable borrows share a region".to_string(),
-                        vars: vec![*a, *b],
-                    });
+
+                // Unify regions if both have region-based ownership
+                match (&oa, &ob) {
+                    (Some(OwnedType::Ref(r1)), Some(OwnedType::Ref(r2)))
+                    | (Some(OwnedType::Ref(r1)), Some(OwnedType::MutRef(r2)))
+                    | (Some(OwnedType::MutRef(r1)), Some(OwnedType::Ref(r2))) => {
+                        let rid1 = self.region_uf.get_or_create(r1.0);
+                        let rid2 = self.region_uf.get_or_create(r2.0);
+                        self.region_uf.union(rid1, rid2);
+                    }
+                    (Some(OwnedType::MutRef(r1)), Some(OwnedType::MutRef(r2))) => {
+                        let rid1 = self.region_uf.get_or_create(r1.0);
+                        let rid2 = self.region_uf.get_or_create(r2.0);
+                        // Unify regions
+                        self.region_uf.union(rid1, rid2);
+                        // Two mutable borrows to the same region = error
+                        self.diagnostics.push(SolverDiagnostic {
+                            kind: DiagnosticKind::OwnershipConflict,
+                            message: "two mutable borrows share a region".to_string(),
+                            vars: vec![*a, *b],
+                        });
+                    }
+                    _ => {}
                 }
             }
 
@@ -263,9 +379,88 @@ impl Solver {
             | Constraint::TaintIs(_, _)
             | Constraint::TaintPropagates(_, _)
             | Constraint::Sanitizes(_) => {
-                // Handled by EffectSolver/TaintSolver in WP6
+                // Handled by EffectSolver/TaintSolver in pipeline
             }
         }
+    }
+
+    /// Resolve deferred numeric class constraints by inferring defaults
+    /// for variables that have no explicit type yet.
+    fn resolve_numeric_classes(&mut self) {
+        // Collect the strongest numeric class per root variable
+        let mut root_classes: std::collections::HashMap<u32, NumericClass> =
+            std::collections::HashMap::new();
+
+        for &(var, class) in &self.numeric_classes {
+            let root = self.uf.find(var.0);
+            // If the var already has a resolved type, skip
+            if self.types[root as usize].is_some() {
+                continue;
+            }
+            let entry = root_classes.entry(root).or_insert(class);
+            // More specific class wins: Integer/Float beats Numeric
+            match (*entry, class) {
+                (NumericClass::Numeric, NumericClass::Integer) => *entry = NumericClass::Integer,
+                (NumericClass::Numeric, NumericClass::Float) => *entry = NumericClass::Float,
+                (NumericClass::Integer, NumericClass::Float)
+                | (NumericClass::Float, NumericClass::Integer) => {
+                    // Conflicting: both Integer and Float on same var
+                    // This is rare but possible (e.g., generic numeric code)
+                    // Default to the first encountered
+                }
+                _ => {}
+            }
+        }
+
+        for (root, class) in root_classes {
+            if self.types[root as usize].is_none() {
+                let default = match class {
+                    NumericClass::Integer => BaseType::I32,
+                    NumericClass::Float => BaseType::F64,
+                    NumericClass::Numeric => BaseType::I32,
+                };
+                self.types[root as usize] = Some(default);
+            }
+        }
+    }
+
+    /// Import results from the NumericSolver, mapping ConstraintVars to BaseTypes.
+    ///
+    /// This bridges the specialized numeric inference engine into the unified solver.
+    /// Call after `solve()` on the numeric solver, before `solve()` on this solver.
+    pub fn import_numeric_type(
+        &mut self,
+        var: ConstraintVar,
+        numeric_type: &crate::ir::numeric_types::NumericType,
+    ) {
+        if let Some(base) = numeric_type_to_base(numeric_type) {
+            let root = self.uf.find(var.0);
+            if self.types[root as usize].is_none() {
+                self.types[root as usize] = Some(base);
+            }
+        }
+    }
+}
+
+/// Convert a NumericType to a BaseType.
+fn numeric_type_to_base(nt: &crate::ir::numeric_types::NumericType) -> Option<BaseType> {
+    use crate::ir::numeric_types::NumericType;
+    match nt {
+        NumericType::I8 => Some(BaseType::I8),
+        NumericType::I16 => Some(BaseType::I16),
+        NumericType::I32 => Some(BaseType::I32),
+        NumericType::I64 => Some(BaseType::I64),
+        NumericType::I128 => Some(BaseType::I128),
+        NumericType::U8 => Some(BaseType::U8),
+        NumericType::U16 => Some(BaseType::U16),
+        NumericType::U32 => Some(BaseType::U32),
+        NumericType::U64 => Some(BaseType::U64),
+        NumericType::U128 => Some(BaseType::U128),
+        NumericType::Usize => Some(BaseType::U64),
+        NumericType::Isize => Some(BaseType::I64),
+        NumericType::F32 => Some(BaseType::F32),
+        NumericType::F64 => Some(BaseType::F64),
+        NumericType::Unknown => None,
     }
 }
 
@@ -312,12 +507,6 @@ mod tests {
         let result = solver.solve(&cs);
 
         assert!(result.diagnostics.is_empty());
-        // Both should resolve to I32
-        let _root_a = {
-            let mut uf = UnionFind::new(cs.num_vars());
-            uf.find(a.0)
-        };
-        // After solving, `b` should have inherited I32 from `a`
         assert_eq!(result.types[0], Some(BaseType::I32));
     }
 
@@ -343,7 +532,7 @@ mod tests {
 
         cs.add(Constraint::OwnershipIs(
             a,
-            OwnedType::Ref(crate::ir::safety_type::Region::fresh(1)),
+            OwnedType::Ref(Region::fresh(1)),
         ));
 
         let solver = Solver::new(&cs);
@@ -352,7 +541,7 @@ mod tests {
         assert!(result.diagnostics.is_empty());
         assert_eq!(
             result.ownership[0],
-            Some(OwnedType::Ref(crate::ir::safety_type::Region::fresh(1)))
+            Some(OwnedType::Ref(Region::fresh(1)))
         );
     }
 
@@ -365,5 +554,193 @@ mod tests {
         assert!(result.diagnostics.is_empty());
         assert!(result.types.is_empty());
         assert!(result.ownership.is_empty());
+    }
+
+    // --- Phase 1B: Numeric inference tests ---
+
+    #[test]
+    fn test_is_integer_infers_default_type() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        // Only say it must be integer, no explicit type
+        cs.add(Constraint::IsInteger(a));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.types[0],
+            Some(BaseType::I32),
+            "IsInteger should infer I32 by default"
+        );
+    }
+
+    #[test]
+    fn test_is_float_infers_default_type() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        cs.add(Constraint::IsFloat(a));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.types[0],
+            Some(BaseType::F64),
+            "IsFloat should infer F64 by default"
+        );
+    }
+
+    #[test]
+    fn test_is_numeric_infers_i32_default() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        cs.add(Constraint::IsNumeric(a));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.types[0],
+            Some(BaseType::I32),
+            "IsNumeric should default to I32"
+        );
+    }
+
+    #[test]
+    fn test_is_integer_respects_explicit_type() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        cs.add(Constraint::TypeIs(a, BaseType::U64));
+        cs.add(Constraint::IsInteger(a));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.types[0],
+            Some(BaseType::U64),
+            "explicit U64 should be kept, not overridden to I32"
+        );
+    }
+
+    #[test]
+    fn test_is_numeric_with_specific_constraint_wins() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        cs.add(Constraint::IsNumeric(a));
+        cs.add(Constraint::IsFloat(a));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.types[0],
+            Some(BaseType::F64),
+            "IsFloat is more specific than IsNumeric, should infer F64"
+        );
+    }
+
+    // --- Phase 1B: Region unification tests ---
+
+    #[test]
+    fn test_shares_region_unifies_refs() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+        let b = cs.fresh_var();
+
+        cs.add(Constraint::OwnershipIs(a, OwnedType::Ref(Region::fresh(1))));
+        cs.add(Constraint::OwnershipIs(b, OwnedType::Ref(Region::fresh(2))));
+        cs.add(Constraint::SharesRegion(a, b));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        // Shared refs to the same region: no error
+        assert!(
+            result.diagnostics.is_empty(),
+            "two shared refs to same region should not conflict"
+        );
+    }
+
+    #[test]
+    fn test_shares_region_mut_refs_conflict() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+        let b = cs.fresh_var();
+
+        cs.add(Constraint::OwnershipIs(
+            a,
+            OwnedType::MutRef(Region::fresh(1)),
+        ));
+        cs.add(Constraint::OwnershipIs(
+            b,
+            OwnedType::MutRef(Region::fresh(2)),
+        ));
+        cs.add(Constraint::SharesRegion(a, b));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|d| d.kind == DiagnosticKind::OwnershipConflict),
+            "two mutable refs to same region should conflict"
+        );
+    }
+
+    #[test]
+    fn test_ownership_ref_then_mutref_upgrades() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        cs.add(Constraint::OwnershipIs(a, OwnedType::Ref(Region::fresh(1))));
+        cs.add(Constraint::OwnershipIs(
+            a,
+            OwnedType::MutRef(Region::fresh(2)),
+        ));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        // MutRef should win over Ref (mutation detected after initial read-only inference)
+        assert!(
+            result.diagnostics.is_empty(),
+            "Ref → MutRef upgrade should not produce a conflict"
+        );
+        assert!(
+            matches!(result.ownership[0], Some(OwnedType::MutRef(_))),
+            "should be upgraded to MutRef"
+        );
+    }
+
+    // --- Phase 1B: Numeric bridge integration test ---
+
+    #[test]
+    fn test_import_numeric_type() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+        let b = cs.fresh_var();
+
+        cs.add(Constraint::TypeEquals(a, b));
+
+        let mut solver = Solver::new(&cs);
+        solver.import_numeric_type(a, &crate::ir::numeric_types::NumericType::U32);
+        let result = solver.solve(&cs);
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(result.types[0], Some(BaseType::U32));
     }
 }

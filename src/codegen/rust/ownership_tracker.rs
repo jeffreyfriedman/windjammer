@@ -124,7 +124,9 @@ impl OwnershipTracker {
             }
             Expression::Unary { op, operand, .. } => self.get_unary_ownership(*op, operand),
             Expression::Cast { expr, .. } => self.get_expression_ownership(expr),
-            Expression::TryOp { expr, .. } => self.get_expression_ownership(expr),
+            Expression::TryOp { expr, .. }
+            | Expression::AsyncCall { expr, .. }
+            | Expression::SpawnCall { expr, .. } => self.get_expression_ownership(expr),
             Expression::Block { statements, .. } => {
                 if let Some(crate::parser::Statement::Expression { expr, .. }) = statements.last() {
                     return self.get_expression_ownership(expr);

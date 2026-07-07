@@ -14,6 +14,25 @@ impl<'ast> CodeGenerator<'ast> {
         format!("{}.await", self.generate_expression(expr))
     }
 
+    /// Generate caller-controlled async call: `async fetch_user(1)` → `async move { fetch_user(1) }`
+    pub(in crate::codegen::rust) fn generate_async_call(
+        &mut self,
+        expr: &Expression<'ast>,
+    ) -> String {
+        format!("async move {{ {} }}", self.generate_expression(expr))
+    }
+
+    /// Generate caller-controlled spawn call: `spawn fetch_user(1)` → `tokio::spawn(async move { ... })`
+    pub(in crate::codegen::rust) fn generate_spawn_call(
+        &mut self,
+        expr: &Expression<'ast>,
+    ) -> String {
+        format!(
+            "tokio::spawn(async move {{ {} }})",
+            self.generate_expression(expr)
+        )
+    }
+
     /// Generate code for channel send expression (channel.send(value))
     pub(in crate::codegen::rust) fn generate_channel_send(
         &mut self,

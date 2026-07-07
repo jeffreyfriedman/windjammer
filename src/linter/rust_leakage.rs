@@ -338,6 +338,9 @@ impl<'ast> RustLeakageLinter<'ast> {
             }
             Expression::TryOp { expr, .. } => self.check_expression(expr, file),
             Expression::Await { expr, .. } => self.check_expression(expr, file),
+            Expression::AsyncCall { expr, .. } | Expression::SpawnCall { expr, .. } => {
+                self.check_expression(expr, file)
+            }
             Expression::ChannelSend { channel, value, .. } => {
                 self.check_expression(channel, file);
                 self.check_expression(value, file);

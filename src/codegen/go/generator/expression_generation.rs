@@ -177,7 +177,7 @@ impl GoGenerator {
                     "contains" if args.len() == 1 => {
                         "/* contains */ false /* TODO */".to_string()
                     }
-                    "to_string" => format!("fmt.Sprintf(\"%v\", {})", obj_str),
+                    "to_string" | "string" => format!("fmt.Sprintf(\"%v\", {})", obj_str),
                     _ => {
                         let method_name = capitalize_first(method);
                         format!("{}.{}({})", obj_str, method_name, args.join(", "))

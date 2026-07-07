@@ -100,7 +100,7 @@ impl JavaScriptGenerator {
                     "len" => format!("{}.length", obj), // .len() → .length (property, not method)
                     "is_empty" => format!("{}.length === 0", obj),
                     "contains" if args.len() == 1 => format!("{}.includes({})", obj, args[0]),
-                    "to_string" => format!("String({})", obj),
+                    "to_string" | "string" => format!("String({})", obj),
                     _ => format!("{}.{}({})", obj, method, args.join(", ")),
                 }
             }
@@ -243,6 +243,10 @@ impl JavaScriptGenerator {
 
             Expression::TryOp { expr, .. } => {
                 // Simplify: just return the expression (proper error handling needs runtime support)
+                self.generate_expression(expr)
+            }
+
+            Expression::AsyncCall { expr, .. } | Expression::SpawnCall { expr, .. } => {
                 self.generate_expression(expr)
             }
 

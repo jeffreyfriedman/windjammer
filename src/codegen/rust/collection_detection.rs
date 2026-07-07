@@ -267,7 +267,10 @@ impl CodeGenerator<'_> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| Self::stmt_references_collection(s, type_name)),
-            Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+            Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. }
+            | Expression::AsyncCall { expr, .. }
+            | Expression::SpawnCall { expr, .. } => {
                 Self::expr_references_collection(expr, type_name)
             }
             Expression::ChannelSend { channel, value, .. } => {

@@ -166,7 +166,10 @@ fn accumulate_identifier_usages(
             accumulate_identifier_usages(end, counts);
         }
         Expression::Cast { expr, .. } => accumulate_identifier_usages(expr, counts),
-        Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
+        Expression::TryOp { expr, .. }
+        | Expression::Await { expr, .. }
+        | Expression::AsyncCall { expr, .. }
+        | Expression::SpawnCall { expr, .. } => {
             accumulate_identifier_usages(expr, counts);
         }
         Expression::ChannelSend { channel, value, .. } => {

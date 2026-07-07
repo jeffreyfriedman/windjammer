@@ -286,6 +286,7 @@ fn detect_and_compile_library(
                                     path,
                                     git,
                                     branch,
+                                    registry: _,
                                 } => {
                                     deps_section.push_str(&format!("{} = {{ ", dep_name));
                                     if let Some(v) = version {
