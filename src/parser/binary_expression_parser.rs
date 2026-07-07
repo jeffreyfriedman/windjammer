@@ -12,19 +12,33 @@ impl Parser {
         let mut left = self.parse_primary_expression()?;
 
         loop {
-            // Check for pipe operator: value |> func
+            // Check for pipe operator: value |> func  or  value |> f(a, b) -> f(value, a, b)
             if self.current_token() == &Token::PipeOp {
                 self.advance();
 
-                // Parse the right side (function to call)
+                // Parse the right side (function or call expression)
                 let func = self.parse_primary_expression()?;
 
-                // Transform: left |> func becomes func(left)
-                left = self.alloc_expr(Expression::Call {
-                    function: func,
-                    arguments: vec![(None, left)], // No label for piped argument
-                    location: self.current_location(),
-                });
+                left = match func {
+                    Expression::Call {
+                        function,
+                        arguments,
+                        location,
+                    } => {
+                        let mut new_args = arguments.clone();
+                        new_args.insert(0, (None, left));
+                        self.alloc_expr(Expression::Call {
+                            function,
+                            arguments: new_args,
+                            location: location.clone(),
+                        })
+                    }
+                    _ => self.alloc_expr(Expression::Call {
+                        function: func,
+                        arguments: vec![(None, left)],
+                        location: self.current_location(),
+                    }),
+                };
                 continue;
             }
 

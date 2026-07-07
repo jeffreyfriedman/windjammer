@@ -359,6 +359,16 @@ pub enum Expression<'ast> {
         expr: &'ast Expression<'ast>, // The .await
         location: SourceLocation,
     },
+    /// Caller-controlled async: `async fetch_user(1)` returns `Future<T>`
+    AsyncCall {
+        expr: &'ast Expression<'ast>,
+        location: SourceLocation,
+    },
+    /// Caller-controlled spawn: `spawn fetch_user(1)` returns `JoinHandle<T>`
+    SpawnCall {
+        expr: &'ast Expression<'ast>,
+        location: SourceLocation,
+    },
     ChannelSend {
         channel: &'ast Expression<'ast>,
         value: &'ast Expression<'ast>,
@@ -397,6 +407,8 @@ impl<'ast> Expression<'ast> {
             Expression::MacroInvocation { location, .. } => location.clone(),
             Expression::TryOp { location, .. } => location.clone(),
             Expression::Await { location, .. } => location.clone(),
+            Expression::AsyncCall { location, .. } => location.clone(),
+            Expression::SpawnCall { location, .. } => location.clone(),
             Expression::ChannelSend { location, .. } => location.clone(),
             Expression::ChannelRecv { location, .. } => location.clone(),
             Expression::Block { location, .. } => location.clone(),

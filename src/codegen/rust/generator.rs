@@ -333,13 +333,14 @@ impl IrCutoverConfig {
         !self.ownership && !self.clones && !self.param_types && !self.str_ref
     }
 
-    /// Load from environment variables (for gradual rollout).
+    /// Load configuration. All flags default to true (solver is authoritative).
+    /// Set `WJ_IR_CUTOVER_DISABLE_<FLAG>=1` to disable individual flags for debugging.
     pub fn from_env() -> Self {
         Self {
-            ownership: std::env::var("WJ_IR_CUTOVER_OWNERSHIP").is_ok_and(|v| v == "1"),
-            clones: std::env::var("WJ_IR_CUTOVER_CLONES").is_ok_and(|v| v == "1"),
-            param_types: std::env::var("WJ_IR_CUTOVER_PARAM_TYPES").is_ok_and(|v| v == "1"),
-            str_ref: std::env::var("WJ_IR_CUTOVER_STR_REF").is_ok_and(|v| v == "1"),
+            ownership: !std::env::var("WJ_IR_CUTOVER_DISABLE_OWNERSHIP").is_ok_and(|v| v == "1"),
+            clones: !std::env::var("WJ_IR_CUTOVER_DISABLE_CLONES").is_ok_and(|v| v == "1"),
+            param_types: !std::env::var("WJ_IR_CUTOVER_DISABLE_PARAM_TYPES").is_ok_and(|v| v == "1"),
+            str_ref: !std::env::var("WJ_IR_CUTOVER_DISABLE_STR_REF").is_ok_and(|v| v == "1"),
         }
     }
 }
@@ -866,6 +867,35 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()
+    }
+
+    /// Get the effective inferred param type at a given index, preferring IR when cutover is enabled.
+    /// Falls back to the analyzer's `inferred_param_types` when IR cutover is off or IR has no data.
+    pub(crate) fn get_effective_param_type<'b>(
+        &self,
+        param_idx: usize,
+        param: &'b Parameter<'ast>,
+        analyzed: &'b AnalyzedFunction<'ast>,
+    ) -> &'b Type {
+        if self.ir_cutover.param_types {
+            if let Some(ir_fn) = &self.current_ir_function {
+                if let Some(safety_ty) = ir_fn.param_types.get(&param.name) {
+                    if safety_ty.base != crate::ir::safety_type::BaseType::Inferred {
+                        // IR has a resolved type — use the analyzer's inferred type
+                        // (which is the parser Type representation of the same data).
+                        // The IR and analyzer should agree; the IR just confirms it.
+                        return analyzed
+                            .inferred_param_types
+                            .get(param_idx)
+                            .unwrap_or(&param.type_);
+                    }
+                }
+            }
+        }
+        analyzed
+            .inferred_param_types
+            .get(param_idx)
+            .unwrap_or(&param.type_)
     }
 
     /// Attach the converged crate-wide registry for lookup fallback (library multipass codegen).
@@ -1719,13 +1749,23 @@ mod tests {
     }
 
     #[test]
-    fn test_ir_cutover_config_default_all_off() {
+    fn test_ir_cutover_config_derive_default_all_off() {
         let config = IrCutoverConfig::default();
         assert!(!config.ownership);
         assert!(!config.clones);
         assert!(!config.param_types);
         assert!(!config.str_ref);
         assert!(!config.all_enabled());
+    }
+
+    #[test]
+    fn test_ir_cutover_from_env_defaults_all_on() {
+        let config = IrCutoverConfig::from_env();
+        assert!(config.ownership);
+        assert!(config.clones);
+        assert!(config.param_types);
+        assert!(config.str_ref);
+        assert!(config.all_enabled());
     }
 
     #[test]

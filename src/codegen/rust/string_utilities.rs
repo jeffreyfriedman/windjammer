@@ -411,7 +411,8 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     let is_explicit_to_string_conversion = matches!(
         arg,
         Expression::MethodCall { object, method, .. }
-            if method == "to_string" && !matches!(&**object,
+            if method == "to_string" || method == "string"
+                && !matches!(&**object,
                 Expression::Literal { value: crate::parser::Literal::String(_), .. }
             )
     );

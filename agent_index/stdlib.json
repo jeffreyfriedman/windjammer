@@ -73,6 +73,10 @@
       "path": "std/fs.wj"
     },
     {
+      "module": "map",
+      "path": "std/map.wj"
+    },
+    {
       "module": "collections",
       "path": "std/collections.wj"
     },

@@ -129,6 +129,7 @@ pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::Dependenc
             path,
             git,
             branch,
+            registry: _,
         } => {
             let mut parts = Vec::new();
             if let Some(v) = version {

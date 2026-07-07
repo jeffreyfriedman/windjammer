@@ -73,6 +73,34 @@ pub struct IrModule {
     pub execution_warnings: Vec<String>,
 }
 
+impl IrModule {
+    /// Check resolved effects against declared capabilities from `wj.toml`.
+    ///
+    /// Returns a list of capability violation diagnostics. Each violation
+    /// identifies the function and the undeclared effect.
+    pub fn check_capabilities(
+        &self,
+        allowed: &EffectSet,
+    ) -> Vec<IrDiagnostic> {
+        let mut violations = Vec::new();
+        for (fn_name, fn_effects) in &self.effect_sets {
+            for effect in fn_effects.iter() {
+                if !allowed.contains(effect) {
+                    violations.push(IrDiagnostic {
+                        severity: DiagnosticSeverity::Error,
+                        message: format!(
+                            "Effect violation: function `{}` requires `{}` which is not declared in [app_capabilities]",
+                            fn_name, effect,
+                        ),
+                        span: None,
+                    });
+                }
+            }
+        }
+        violations
+    }
+}
+
 /// Diagnostic emitted during IR lowering or solving.
 #[derive(Debug)]
 pub struct IrDiagnostic {
@@ -128,41 +156,39 @@ impl IrPipeline {
         let mut total_constraints = 0usize;
         let mut total_solver_diags = 0usize;
         let mut effect_constraints_forwarded = Vec::new();
-        let taint_constraints_forwarded: Vec<taint::TaintConstraint> = Vec::new();
+        let mut taint_constraints_forwarded: Vec<taint::TaintConstraint> = Vec::new();
+        let mut execution_constraints_forwarded: Vec<super::execution::ExecutionConstraint> =
+            Vec::new();
 
         for (i, af) in analyzed.iter().enumerate() {
             let fc = constraint_gen::generate_constraints(af);
             total_constraints += fc.constraints.len();
 
-            // Collect effect/taint constraints before solving (forward to domain solvers)
+            // Forward effect constraints to the domain solver.
+            // HasEffects: direct effects from stdlib calls within this function.
             for c in fc.constraints.iter() {
-                match c {
-                    Constraint::HasEffects(_, ref eff_set) => {
-                        for eff in eff_set.iter() {
-                            effect_constraints_forwarded.push(EffectConstraint::Performs {
-                                function: fc.function_name.clone(),
-                                effect: eff.clone(),
-                            });
-                        }
+                if let Constraint::HasEffects(_, ref eff_set) = c {
+                    for eff in eff_set.iter() {
+                        effect_constraints_forwarded.push(EffectConstraint::Performs {
+                            function: fc.function_name.clone(),
+                            effect: eff.clone(),
+                        });
                     }
-                    Constraint::EffectsUnion(_, ref deps) => {
-                        for dep_var in deps {
-                            // Map callee var back to function name via var_map
-                            for (name, &var) in &fc.var_map.params {
-                                if var == *dep_var {
-                                    effect_constraints_forwarded.push(
-                                        EffectConstraint::CallsInto {
-                                            caller: fc.function_name.clone(),
-                                            callee: name.clone(),
-                                        },
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
                 }
             }
+            // CallsInto: build call-graph edges from resolved callee names.
+            for callee in &fc.call_targets {
+                effect_constraints_forwarded.push(EffectConstraint::CallsInto {
+                    caller: fc.function_name.clone(),
+                    callee: callee.clone(),
+                });
+            }
+
+            // Forward taint constraints from the AST walk.
+            taint_constraints_forwarded.extend(fc.taint_constraints.iter().cloned());
+
+            // Forward execution constraints from async/spawn call sites.
+            execution_constraints_forwarded.extend(fc.execution_constraints.into_iter());
 
             let solver = Solver::new(&fc.constraints);
             let result = solver.solve(&fc.constraints);
@@ -238,10 +264,13 @@ impl IrPipeline {
             None
         };
 
-        // Stage 4: TaintSolver — load stdlib sources + forwarded constraints
+        // Stage 4: TaintSolver — load stdlib sources + sinks + forwarded constraints
         let taint_result = if self.config.enable_taint_tracking {
             let mut taint_solver = TaintSolver::new();
             for c in taint::stdlib_taint_sources() {
+                taint_solver.add_constraint(c);
+            }
+            for c in taint::stdlib_sinks() {
                 taint_solver.add_constraint(c);
             }
             for c in taint_constraints_forwarded {
@@ -269,7 +298,10 @@ impl IrPipeline {
             if let Some(ref eff_result) = effect_result {
                 exec_validator.set_function_effects(eff_result.resolved.clone());
             }
-            // No execution constraints collected yet (WJ-CONC-01 will parse `async`/`spawn` keywords)
+            // Feed execution constraints from async/spawn call sites (WJ-CONC-01).
+            for c in execution_constraints_forwarded {
+                exec_validator.add_constraint(c);
+            }
             let result = exec_validator.validate();
             if !result.errors.is_empty() {
                 for err in &result.errors {
@@ -474,11 +506,12 @@ mod tests {
     ) {
         let mut lexer = crate::lexer::Lexer::new(source);
         let tokens = lexer.tokenize_with_locations();
-        let mut parser = crate::parser::Parser::new(tokens);
+        // Leak the parser so its arena allocators keep AST nodes alive
+        // (required because constraint_gen now walks the AST body)
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
         let program = parser.parse().expect("parse");
-        let leaked_program: &'static _ = Box::leak(Box::new(program));
         let mut analyzer = crate::analyzer::Analyzer::new();
-        let (analyzed, registry, _) = analyzer.analyze_program(leaked_program).expect("analyze");
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         (analyzed, registry)
     }
 
@@ -549,5 +582,57 @@ pub fn display(name: string) {}
 
         assert_eq!(module.functions.len(), 2);
         assert!(module.taint_errors.is_empty());
+    }
+
+    #[test]
+    fn test_check_capabilities_passes_when_allowed() {
+        use crate::ir::safety_type::{Effect, EffectSet};
+
+        let mut effect_sets = HashMap::new();
+        let mut fs_effects = EffectSet::pure();
+        fs_effects.insert(Effect::FsRead);
+        effect_sets.insert("read_config".to_string(), fs_effects);
+
+        let module = IrModule {
+            functions: vec![],
+            diagnostics: vec![],
+            effect_sets,
+            taint_errors: vec![],
+            execution_errors: vec![],
+            execution_warnings: vec![],
+        };
+
+        let mut allowed = EffectSet::pure();
+        allowed.insert(Effect::FsRead);
+        allowed.insert(Effect::FsWrite);
+
+        let violations = module.check_capabilities(&allowed);
+        assert!(violations.is_empty(), "should pass with sufficient capabilities");
+    }
+
+    #[test]
+    fn test_check_capabilities_fails_when_undeclared() {
+        use crate::ir::safety_type::{Effect, EffectSet};
+
+        let mut effect_sets = HashMap::new();
+        let mut fn_effects = EffectSet::pure();
+        fn_effects.insert(Effect::NetEgress);
+        effect_sets.insert("fetch_data".to_string(), fn_effects);
+
+        let module = IrModule {
+            functions: vec![],
+            diagnostics: vec![],
+            effect_sets,
+            taint_errors: vec![],
+            execution_errors: vec![],
+            execution_warnings: vec![],
+        };
+
+        let allowed = EffectSet::single(Effect::FsRead);
+
+        let violations = module.check_capabilities(&allowed);
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].message.contains("fetch_data"));
+        assert!(violations[0].message.contains("net_egress"));
     }
 }

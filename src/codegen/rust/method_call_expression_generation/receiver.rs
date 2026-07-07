@@ -26,7 +26,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Suppress .into() coercion on receiver of .to_string() / .to_owned() / .clone()
         // since those methods already produce an owned value.
         let prev_coerce = self.coerce_string_literals_to_owned;
-        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter") || method == "to_string"
+        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter")
+            || method == "to_string"
+            || method == "string"
         {
             self.coerce_string_literals_to_owned = false;
         }

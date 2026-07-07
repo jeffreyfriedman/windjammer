@@ -119,6 +119,9 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
             Expression::Await { expr, .. } => {
                 check_expr(expr)?;
             }
+            Expression::AsyncCall { expr, .. } | Expression::SpawnCall { expr, .. } => {
+                check_expr(expr)?;
+            }
             Expression::ChannelSend { channel, value, .. } => {
                 check_expr(channel)?;
                 check_expr(value)?;
