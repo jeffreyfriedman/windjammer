@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.49.0] - 2026-06-30
+
+### Added
+- **Safety-Typed IR**: New intermediate representation (`src/ir/`) with first-class ownership, effects, taint, and execution mode types
+  - Unified constraint solver using union-find algorithm (replaces sequential int/float inference passes)
+  - Effect system (WJ-SEC-01): call-graph effect propagation with manifest enforcement
+  - Taint tracking (WJ-SEC-02): source→sink flow analysis with sanitization support
+  - Caller-controlled execution modes (WJ-CONC-01): Sync/Async/Spawn without function coloring
+  - Multi-target safety encodings: Rust native, Go sync.Mutex, TypeScript branded types, JS Object.freeze
+  - `IrFunction::from_analyzed` bridges analyzer output into IR pipeline
+  - 49 unit tests covering all IR subsystems
+
+### Fixed
+- **Cross-crate constructor string coercion**: `Player::new("Hero")` now correctly generates `.to_string()` for cross-crate calls where no signature is available
+- **Callback auto-borrow bridge**: Functions passed as callbacks with auto-borrowed parameters get closure wrappers to match callee expectations (fixes E0631 for HTTP server callbacks)
+- **Ownership inference**: 12 distinct bug fixes reducing test failures from 140 to 0:
+  - Closure auto-borrow + pattern-binding mutation detection
+  - False-positive collision suppression for str_ref params
+  - String `&str`/`&String` formal param generation + nested field storage detection
+  - Signature promotion for multipass library builds
+
+### Improved
+- **Auto-derive inference**: Removed ~93 redundant `@derive(Copy/Clone/Debug/PartialEq)` annotations from game projects; compiler infers all derivable traits automatically from field types
+
+### Tests
+- **4337 tests passing, 0 failures** (up from 4189 passing with 140 failures)
+- Full project transpilation verified for all downstream consumers
+
+---
+
 ## [0.48.0] - 2026-06-14
 
 ### Changed

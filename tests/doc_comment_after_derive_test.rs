@@ -55,6 +55,7 @@ impl Prefab {
     let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
+            "--no-cargo",
             "--output",
             output_dir.to_str().unwrap(),
             "--target",
@@ -73,7 +74,6 @@ impl Prefab {
 
 #[test]
 fn test_doc_comment_before_derive_parses() {
-    // Workaround: doc comment before @derive parses correctly
     let source = r#"
 /// A reusable entity template
 @derive(Clone)
@@ -104,6 +104,7 @@ impl Prefab {
     let output = Command::new(test_utils::wj_binary())
         .args([
             "build",
+            "--no-cargo",
             "--output",
             output_dir.to_str().unwrap(),
             "--target",

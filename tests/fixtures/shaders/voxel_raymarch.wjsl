@@ -1,0 +1,372 @@
+// Voxel Ray March Compute Shader (WJSL)
+//
+// Marches rays through a Sparse Voxel Octree (64-tree) to produce a G-buffer.
+// Each invocation handles one pixel.
+// Workgroup: 8x8 threads (64 total)
+
+use "wjsl_std/gpu_types_generated.wjsl"
+use "wjsl_std/camera.wjsl"
+use "wjsl_std/raymarch.wjsl"
+use "wjsl_std/gbuffer.wjsl"
+
+@group(0) @binding(0) uniform camera: CameraUniforms;
+@group(0) @binding(1) uniform params: RayMarchParams;
+@group(0) @binding(2) storage read svo_nodes: array<u32 >;
+@group(0) @binding(3) storage read_write gbuffer: array<GBufferPixel >;
+
+fn svo_is_leaf(node: u32) -> bool {
+    return (node & 0x100u) != 0u;
+}
+
+fn svo_get_material(node: u32) -> u32 {
+    return node & 0xFFu;
+}
+
+fn svo_child_ptr(node: u32) -> u32 {
+    return node >> 9u;
+}
+
+// Get child index for a point within a 64-tree node (4x4x4 subdivision).
+// Uses divide-by-quarter to match CPU builder and lighting shader exactly,
+// avoiding FP error accumulation from reciprocal multiplication on deep trees.
+fn get_child_index_64(p: vec3<f32>, node_min: vec3<f32>, node_size: f32) -> u32 {
+    let quarter = node_size * 0.25;
+    let rel = p - node_min;
+    let xi = clamp(u32(rel.x / quarter), 0u, 3u);
+    let yi = clamp(u32(rel.y / quarter), 0u, 3u);
+    let zi = clamp(u32(rel.z / quarter), 0u, 3u);
+    return xi + yi * 4u + zi * 16u;
+}
+
+// Ray-AABB intersection
+// FIX: Safe inv_dir - avoid inf when dir component is 0 (ray parallel to slab)
+fn ray_aabb(origin: vec3<f32>, dir: vec3<f32>, box_min: vec3<f32>, box_max: vec3<f32>) -> vec2<f32> {
+    let eps = 1e-7;
+    let safe_dir = select(dir, vec3(eps, eps, eps), abs(dir) < vec3(eps, eps, eps));
+    let inv_dir = 1.0 / safe_dir;
+    let t1 = (box_min - origin) * inv_dir;
+    let t2 = (box_max - origin) * inv_dir;
+    let tmin = min(t1, t2);
+    let tmax = max(t1, t2);
+    let t_near = max(max(tmin.x, tmin.y), tmin.z);
+    let t_far = min(min(tmax.x, tmax.y), tmax.z);
+    return vec2(t_near, t_far);
+}
+
+// Look up a voxel's material in the 64-tree SVO
+// Positions are in world space (0..world_size), SVO was built in grid space
+// (0..world_size/voxel_size). We scale to grid space before traversal.
+fn lookup_svo(pos: vec3<f32>, world_size: f32) -> u32 {
+    if (params.node_count == 0u) { return 250u; }
+    let svo_len = arrayLength(&svo_nodes);
+    if (svo_len == 0u) { return 251u; }
+
+    let scale = 1.0 / params.voxel_size;
+    let grid_pos = pos * scale;
+    let grid_size = world_size * scale;
+
+    let mut node_idx = 0u;
+    let mut node_min = vec3(0.0);
+    let mut node_size = grid_size;
+
+    for (var depth = 0u; depth < params.svo_depth; depth++) {
+        if (node_idx >= params.node_count || node_idx >= svo_len) {
+            return 240u + depth;
+        }
+
+        let node = svo_nodes[node_idx];
+
+        if (svo_is_leaf(node)) {
+            return svo_get_material(node);
+        }
+
+        let quarter = node_size * 0.25;
+        let child_idx = get_child_index_64(grid_pos, node_min, node_size);
+        let child_base = svo_child_ptr(node);
+        
+        node_idx = child_base + child_idx;
+        let xi = child_idx & 3u;
+        let yi = (child_idx >> 2u) & 3u;
+        let zi = (child_idx >> 4u) & 3u;
+        node_min = node_min + vec3(f32(xi) * quarter, f32(yi) * quarter, f32(zi) * quarter);
+        node_size = quarter;
+    }
+
+    if (node_idx < params.node_count) {
+        return svo_get_material(svo_nodes[node_idx]);
+    }
+    return 255u;
+}
+
+// Hierarchical SVO lookup: returns material AND node size for DDA early-out.
+struct SvoHit {
+    material: u32,
+    node_size: f32,
+}
+
+fn lookup_svo_hierarchical(pos: vec3<f32>, world_size: f32) -> SvoHit {
+    return lookup_svo_hierarchical_lod(pos, world_size, params.svo_depth);
+}
+
+fn lookup_svo_hierarchical_lod(pos: vec3<f32>, world_size: f32, max_depth: u32) -> SvoHit {
+    let mut result: SvoHit;
+    result.material = 0u;
+    result.node_size = 1.0;
+
+    if (params.node_count == 0u) { return result; }
+    let svo_len = arrayLength(&svo_nodes);
+    if (svo_len == 0u) { return result; }
+
+    let scale = 1.0 / params.voxel_size;
+    let grid_pos = pos * scale;
+    let grid_size = world_size * scale;
+
+    let mut node_idx = 0u;
+    let mut node_min = vec3(0.0);
+    let mut node_size = grid_size;
+
+    for (var depth = 0u; depth < max_depth; depth++) {
+        if (node_idx >= params.node_count || node_idx >= svo_len) {
+            return result;
+        }
+
+        let node = svo_nodes[node_idx];
+
+        if (svo_is_leaf(node)) {
+            result.material = svo_get_material(node);
+            result.node_size = node_size * params.voxel_size;
+            return result;
+        }
+
+        let quarter = node_size * 0.25;
+        let child_idx = get_child_index_64(grid_pos, node_min, node_size);
+        let child_base = svo_child_ptr(node);
+        
+        node_idx = child_base + child_idx;
+        let xi = child_idx & 3u;
+        let yi = (child_idx >> 2u) & 3u;
+        let zi = (child_idx >> 4u) & 3u;
+        node_min = node_min + vec3(f32(xi) * quarter, f32(yi) * quarter, f32(zi) * quarter);
+        node_size = quarter;
+    }
+
+    if (node_idx < params.node_count) {
+        result.material = svo_get_material(svo_nodes[node_idx]);
+        result.node_size = node_size * params.voxel_size;
+    }
+    return result;
+}
+
+fn voxel_density_fast(pos: vec3<f32>, world_size: f32) -> f32 {
+    let hit = lookup_svo_hierarchical_lod(pos, world_size, max(params.svo_depth, 1u) - 1u);
+    return select(0.0, 1.0, hit.material >= 1u && hit.material < 240u);
+}
+
+fn compute_gradient_normal(hit_center: vec3<f32>, world_size: f32, face_normal: vec3<f32>) -> vec3<f32> {
+    let d = params.voxel_size * 1.5;
+    let d_px = voxel_density_fast(hit_center + vec3(d, 0.0, 0.0), world_size);
+    let d_nx = voxel_density_fast(hit_center - vec3(d, 0.0, 0.0), world_size);
+    let d_py = voxel_density_fast(hit_center + vec3(0.0, d, 0.0), world_size);
+    let d_ny = voxel_density_fast(hit_center - vec3(0.0, d, 0.0), world_size);
+    let d_pz = voxel_density_fast(hit_center + vec3(0.0, 0.0, d), world_size);
+    let d_nz = voxel_density_fast(hit_center - vec3(0.0, 0.0, d), world_size);
+    let grad = vec3(d_nx - d_px, d_ny - d_py, d_nz - d_pz);
+    let len = length(grad);
+    if (len > 0.001) {
+        return normalize(grad);
+    }
+    return face_normal;
+}
+
+// 3D DDA voxel traversal with gradient-smoothed normals and hierarchical early-out
+fn march_svo(origin: vec3<f32>, dir: vec3<f32>) -> GBufferPixel {
+    let mut result: GBufferPixel;
+    result.position = vec4(0.0, 0.0, 0.0, 0.0);
+    result.normal = vec4(0.0, 0.0, 0.0, 0.0);
+    result.depth = camera.far_plane;
+    result.geometry_source = 0.0;
+
+    let world_size = params.world_size;
+    let vs = params.voxel_size;
+    let inv_vs = 1.0 / vs;
+    let bounds = ray_aabb(origin, dir, vec3(0.0), world_size);
+    if (bounds.x > bounds.y || bounds.y < 0.0) {
+        return result;
+    }
+
+    let t_entry = max(bounds.x, 0.0) + 0.001;
+    let mut pos = origin + dir * t_entry;
+
+    pos = clamp(pos, vec3(0.001), world_size - vec3(0.001));
+
+    let lod_depth = params.svo_depth;
+    let use_gradient_normals = t_entry < 6.0;
+
+    // Snap to voxel grid: floor to nearest voxel boundary
+    let mut voxel = floor(pos * inv_vs) * vs;
+
+    let step_sign = sign(dir);
+
+    let eps = 1e-8;
+    let abs_dir = max(abs(dir), vec3(eps));
+    let t_delta = vec3(vs) / abs_dir;
+
+    let safe_inv = vec3(1.0) / select(dir, vec3(eps), abs(dir) < vec3(eps));
+    let mut t_max = vec3<f32>(
+        select((voxel.x - pos.x) * safe_inv.x,
+               (voxel.x + vs - pos.x) * safe_inv.x,
+               dir.x >= 0.0),
+        select((voxel.y - pos.y) * safe_inv.y,
+               (voxel.y + vs - pos.y) * safe_inv.y,
+               dir.y >= 0.0),
+        select((voxel.z - pos.z) * safe_inv.z,
+               (voxel.z + vs - pos.z) * safe_inv.z,
+               dir.z >= 0.0)
+    );
+
+    let mut last_axis = 0;
+
+    let max_steps = min(params.max_steps, 384u);
+    let max_ray_dist = length(world_size);
+    var accumulated_dist = t_entry;
+
+    for (var i = 0u; i < max_steps; i++) {
+        if (any(voxel < vec3(0.0)) || any(voxel >= world_size)) {
+            break;
+        }
+        if (accumulated_dist > max_ray_dist) {
+            break;
+        }
+
+        let sample = voxel + vec3(vs * 0.5);
+        // Distance-based LOD: coarser SVO for far rays (reduces step count for distant geometry)
+        let eff_lod = select(lod_depth, max(lod_depth - 1u, 1u), accumulated_dist > 50.0);
+        let hit = lookup_svo_hierarchical_lod(sample, world_size.x, eff_lod);
+
+        if (hit.material >= 1u && hit.material < 240u) {
+            result.position = vec4(sample, 0.0);
+            let t_hit = max(t_max.x, max(t_max.y, t_max.z)) - max(t_delta.x, max(t_delta.y, t_delta.z));
+            result.depth = t_entry + max(t_hit, 0.0);
+
+            let mut face_n = vec3(0.0);
+            if (last_axis == 1) { face_n = vec3(-step_sign.x, 0.0, 0.0); }
+            else if (last_axis == 2) { face_n = vec3(0.0, -step_sign.y, 0.0); }
+            else if (last_axis == 3) { face_n = vec3(0.0, 0.0, -step_sign.z); }
+            else {
+                let ad = abs(dir);
+                if (ad.x >= ad.y && ad.x >= ad.z) { face_n = vec3(-step_sign.x, 0.0, 0.0); }
+                else if (ad.y >= ad.z) { face_n = vec3(0.0, -step_sign.y, 0.0); }
+                else { face_n = vec3(0.0, 0.0, -step_sign.z); }
+            }
+
+            if (use_gradient_normals) {
+                let grad_n = compute_gradient_normal(sample, world_size.x, face_n);
+                let smooth_n = normalize(mix(face_n, grad_n, 0.25));
+                result.normal = vec4(smooth_n, f32(hit.material));
+            } else {
+                result.normal = vec4(face_n, f32(hit.material));
+            }
+
+            result.geometry_source = 0.0;
+            return result;
+        }
+
+        // Single-voxel DDA step. The hierarchical skip optimization (using hit.node_size
+        // to jump multiple voxels) is disabled because lookup_svo_hierarchical_lod
+        // returns material==0 for both empty leaves AND interior-node fallbacks (where
+        // traversal ran out of depth). Skipping by interior node_size jumps over geometry.
+        // With the fixed get_child_index_64, traversal succeeds reliably and single-step
+        // DDA at ~384 steps is fast enough for 64³ worlds.
+        let skip_size = vs;
+        if (t_max.x < t_max.y) {
+            if (t_max.x < t_max.z) {
+                voxel.x += step_sign.x * skip_size;
+                t_max.x += t_delta.x;
+                accumulated_dist += skip_size;
+                last_axis = 1;
+            } else {
+                voxel.z += step_sign.z * skip_size;
+                t_max.z += t_delta.z;
+                accumulated_dist += skip_size;
+                last_axis = 3;
+            }
+        } else {
+            if (t_max.y < t_max.z) {
+                voxel.y += step_sign.y * skip_size;
+                t_max.y += t_delta.y;
+                accumulated_dist += skip_size;
+                last_axis = 2;
+            } else {
+                voxel.z += step_sign.z * skip_size;
+                t_max.z += t_delta.z;
+                accumulated_dist += skip_size;
+                last_axis = 3;
+            }
+        }
+    }
+
+    return result;
+}
+
+// Halton sequence for sub-pixel jitter (bases 2 and 3)
+fn halton2(index: u32) -> f32 {
+    let mut f = 1.0;
+    let mut r = 0.0;
+    let mut i = index;
+    while (i > 0u) {
+        f = f * 0.5;
+        r = r + f * f32(i & 1u);
+        i = i >> 1u;
+    }
+    return r;
+}
+
+fn halton3(index: u32) -> f32 {
+    let mut f = 1.0;
+    let mut r = 0.0;
+    let mut i = index;
+    while (i > 0u) {
+        f = f / 3.0;
+        r = r + f * f32(i % 3u);
+        i = i / 3u;
+    }
+    return r;
+}
+
+fn generate_ray_from_pixel(pixel: vec2<f32>) -> vec3<f32> {
+    let ndc = vec2(
+        (2.0 * pixel.x / camera.screen_size.x - 1.0),
+        (1.0 - 2.0 * pixel.y / camera.screen_size.y)
+    );
+
+    let clip_near = vec4(ndc.x, ndc.y, -1.0, 1.0);
+    let clip_far  = vec4(ndc.x, ndc.y,  1.0, 1.0);
+
+    let world_near_h = camera.inv_view * (camera.inv_proj * clip_near);
+    let world_far_h  = camera.inv_view * (camera.inv_proj * clip_far);
+
+    let world_near = world_near_h.xyz / world_near_h.w;
+    let world_far  = world_far_h.xyz  / world_far_h.w;
+
+    return normalize(world_far - world_near);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let width = u32(camera.screen_size.x);
+    let height = u32(camera.screen_size.y);
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
+
+    let pixel_idx = id.y * width + id.x;
+    if (pixel_idx >= arrayLength(&gbuffer)) {
+        return;
+    }
+
+    let pixel = vec2<f32>(f32(id.x), f32(id.y));
+    let ray_dir = generate_ray_from_pixel(pixel + vec2(0.5, 0.5));
+    
+    let mut result = march_svo(camera.position, ray_dir);
+    gbuffer[pixel_idx] = result;
+}

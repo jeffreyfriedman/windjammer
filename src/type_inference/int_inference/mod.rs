@@ -268,6 +268,21 @@ impl IntInference {
         self.finish_solve();
     }
 
+    /// Access raw constraints before/after solving (for unified NumericSolver integration).
+    pub fn raw_constraints(&self) -> &[IntConstraint] {
+        &self.constraints
+    }
+
+    /// Access the expr_id_cache for constraint conversion (ExprId → location mapping).
+    pub fn expr_id_cache(&self) -> &HashMap<(usize, usize, usize), crate::type_inference::ExprId> {
+        &self.expr_id_cache
+    }
+
+    /// Current file ID for location-based lookups.
+    pub fn current_file_id(&self) -> usize {
+        self.current_file_id
+    }
+
     /// Export inferred variable types for IDE/MCP consumers.
     pub fn export_var_types(&self) -> std::collections::HashMap<String, String> {
         self.var_types

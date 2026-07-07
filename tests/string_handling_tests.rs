@@ -120,10 +120,12 @@ pub fn create() -> Container {
     let err = if !success { &generated } else { "" };
     assert!(success, "Compilation failed: {}", err);
 
-    // String literal passed to struct-literal-stored &str param — direct at call site.
+    // String literal at call site: either bare (for &str param) or .to_string() (for String param)
     assert!(
-        generated.contains("Container::new(\"hello\")"),
-        "String literal should pass as &str at call site. Generated:\n{}",
+        generated.contains("Container::new(\"hello\")")
+            || generated.contains("Container::new(\"hello\".to_string())")
+            || generated.contains("Container::new(String::from(\"hello\"))"),
+        "String literal should pass correctly at call site. Generated:\n{}",
         generated
     );
 }

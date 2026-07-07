@@ -1,0 +1,171 @@
+// GPU particle simulation (WJSL → WGSL)
+//
+// One thread per particle. Integrates position/velocity, lifetime, color, size;
+// recycles dead particles at the emitter with type-specific spawn parameters.
+//
+// Bindings:
+//   0: particles (read_write)
+//   1: ParticleParams (uniform)
+//   2: ParticleEmitterUniforms (uniform) — world-space spawn volume for recycle
+
+use "wjsl_std/particles.wjsl"
+
+@group(0) @binding(0) storage read_write particles: array<Particle >;
+@group(0) @binding(1) uniform params: ParticleParams;
+@group(0) @binding(2) uniform emitter: ParticleEmitterUniforms;
+
+fn hash(p: vec3<f32>) -> f32 {
+    let q = vec3(
+        fract(p.x * 0.1031 + p.y * 0.11369 + p.z * 0.13787),
+        fract(p.x * 0.197269 + p.y * 0.192817 + p.z * 0.217637),
+        fract(p.x * 0.53731 + p.y * 0.678912 + p.z * 0.789123)
+    );
+    let h = dot(q, vec3(12.9898, 78.233, 45.54321));
+    return fract(sin(h) * 43758.5453);
+}
+
+fn hash3(p: vec3<f32>) -> vec3<f32> {
+    return vec3(hash(p), hash(p + vec3(41.0, 17.0, 23.0)), hash(p + vec3(91.0, 11.0, 67.0)));
+}
+
+fn spawn_in_sphere(seed: vec3<f32>) -> vec3<f32> {
+    let h = hash3(seed);
+    let u = h.x * 2.0 - 1.0;
+    let v = h.y * 6.2831853;
+    let w = pow(h.z, 0.33333334);
+    let s = sqrt(max(1.0 - u * u, 0.0));
+    return vec3(cos(v) * s, sin(v) * s, u) * w;
+}
+
+fn recycle_particle(idx: u32, type_id: u32) -> Particle {
+    let mut p: Particle;
+    let t = params.time;
+    let base = vec3(f32(idx), t, f32(type_id));
+    let rnd = hash3(base + emitter.position);
+    let rnd2 = hash3(base * 1.713 + vec3(2.0, 3.0, 5.0));
+    let offset = spawn_in_sphere(base) * emitter.radius;
+    p.position = emitter.position + offset;
+
+    if (type_id == 0u) {
+        let dir = normalize(spawn_in_sphere(base + vec3(7.0, 0.0, 0.0)) + vec3(0.001, 0.4, 0.001));
+        let speed = 18.0 + rnd.x * 22.0;
+        p.velocity = dir * speed;
+        p.max_life = 0.12 + rnd.y * 0.18;
+        p.life = p.max_life;
+        p.size = 0.02 + rnd.z * 0.03;
+        p.color = vec4(1.0, 0.95 + rnd2.x * 0.05, 0.15 + rnd2.y * 0.2, 1.0);
+    } else if (type_id == 1u) {
+        let rise = vec3(rnd.x * 0.35 - 0.175, 0.35 + rnd.y * 0.45, rnd.z * 0.35 - 0.175);
+        p.velocity = rise + vec3(params.wind_x, params.wind_y, params.wind_z) * 0.15;
+        p.max_life = 3.5 + rnd2.x * 4.5;
+        p.life = p.max_life;
+        p.size = 0.35 + rnd2.y * 0.25;
+        let g = 0.35 + rnd2.z * 0.2;
+        p.color = vec4(g, g, g, 0.55 + rnd.x * 0.25);
+    } else if (type_id == 2u) {
+        let dir = normalize(vec3(rnd.x * 0.5 - 0.25, 0.65 + rnd.y * 0.35, rnd.z * 0.5 - 0.25));
+        let speed = 1.2 + rnd2.x * 2.8;
+        p.velocity = dir * speed;
+        p.max_life = 0.45 + rnd2.y * 0.55;
+        p.life = p.max_life;
+        p.size = 0.12 + rnd2.z * 0.18;
+        p.color = vec4(1.0, 0.45 + rnd.x * 0.35, 0.05 + rnd.y * 0.12, 0.85);
+    } else {
+        let spread = vec3(rnd.x * 2.4 - 1.2, 0.35 + rnd.y * 1.4, rnd.z * 2.4 - 1.2);
+        p.velocity = spread * (2.5 + rnd2.x * 3.0);
+        p.max_life = 1.8 + rnd2.y * 1.2;
+        p.life = p.max_life;
+        p.size = 0.04 + rnd2.z * 0.05;
+        p.color = vec4(0.55 + rnd.x * 0.15, 0.72 + rnd.y * 0.12, 0.95, 0.7);
+    }
+
+    p.type_id = type_id;
+    return p;
+}
+
+fn apply_turbulence(pos: vec3<f32>, vel: vec3<f32>, idx: u32) -> vec3<f32> {
+    if (params.turbulence <= 0.0) {
+        return vel;
+    }
+    let s = params.time * 2.7 + f32(idx) * 0.13;
+    let n = hash3(pos * 0.37 + vec3(s, s * 1.1, s * 0.73));
+    let f = (n * 2.0 - vec3(1.0, 1.0, 1.0)) * params.turbulence;
+    return vel + f * params.delta_time;
+}
+
+@compute @workgroup_size(64, 1, 1)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let idx = id.x;
+    if (idx >= params.particle_count) {
+        return;
+    }
+    if (idx >= arrayLength(&particles)) {
+        return;
+    }
+
+    let mut p = particles[idx];
+    let dt = params.delta_time;
+    let wind = vec3(params.wind_x, params.wind_y, params.wind_z);
+    let tid = p.type_id;
+
+    if (p.life <= 0.0) {
+        particles[idx] = recycle_particle(idx, u32(params.spawn_type_id));
+        return;
+    }
+
+    if (tid == TYPE_WATER && p.position.y <= 0.0) {
+        particles[idx] = recycle_particle(idx, u32(params.spawn_type_id));
+        return;
+    }
+
+    let mut vel = p.velocity;
+    if (tid == 1u) {
+        vel = vel + wind * dt * 1.25;
+        vel.y = vel.y + params.gravity * dt * 0.08;
+    } else if (tid == 0u) {
+        vel = vel + wind * dt * 0.12;
+        vel = vel + vec3(0.0, params.gravity, 0.0) * dt * 0.35;
+    } else if (tid == TYPE_FIRE) {
+        vel = vel + wind * dt * 0.35;
+        vel.y = vel.y + params.gravity * dt * 0.12;
+    } else {
+        vel = vel + wind * dt * 0.2;
+        vel = vel + vec3(0.0, params.gravity, 0.0) * dt;
+    }
+
+    vel = apply_turbulence(p.position, vel, idx);
+    p.position = p.position + vel * dt;
+    p.velocity = vel;
+    p.life = p.life - dt;
+
+    let age = 1.0 - clamp(p.life / max(p.max_life, 1e-4), 0.0, 1.0);
+    let mut a = p.color.a * clamp(p.life / max(p.max_life, 1e-4), 0.0, 1.0);
+
+    if (tid == TYPE_SPARK) {
+        let heat = clamp(1.0 - age * 1.4, 0.0, 1.0);
+        let r = 1.0;
+        let g = 0.25 + heat * 0.7;
+        let b = heat * 0.12;
+        p.color = vec4(r, g, b, a);
+    } else if (tid == 1u) {
+        p.size = p.size + dt * 0.65;
+        let gcol = mix(0.42, 0.62, age);
+        p.color = vec4(gcol, gcol, gcol, a * (0.35 + 0.65 * (1.0 - age)));
+    } else if (tid == 2u) {
+        let flicker = hash(p.position * 5.0 + vec3(params.time * 12.0, 0.0, 0.0));
+        let f = 0.88 + flicker * 0.12;
+        let cool = clamp(age * 1.15, 0.0, 1.0);
+        let r = 1.0 * f;
+        let g = mix(0.55, 0.08, cool) * f;
+        let b = mix(0.1, 0.0, cool) * f;
+        p.color = vec4(r, g, b, a * f);
+    } else {
+        p.color = vec4(p.color.rgb, a);
+    }
+
+    if (p.life <= 0.0) {
+        p = recycle_particle(idx, u32(params.spawn_type_id));
+    }
+
+    particles[idx] = p;
+}

@@ -61,20 +61,25 @@ fn test_string_literal_enum_auto_convert() {
         panic!("wj build failed:\nSTDERR:\n{}\nSTDOUT:\n{}", stderr, stdout);
     }
 
-    // Read generated Rust file
-    // Try both possible output paths
-    let generated_rs = output_dir.join("string_literal_enum_test.rs");
-    let generated_code = fs::read_to_string(&generated_rs)
-        .or_else(|_| {
-            fs::read_to_string(
-                output_dir
-                    .join("wj")
-                    .join("windjammer")
-                    .join("tests")
-                    .join("string_literal_enum_test.rs"),
-            )
-        })
-        .expect("Failed to read generated Rust file (tried both possible paths)");
+    // Read generated Rust file - search recursively for worktree compatibility
+    let generated_code = {
+        fn find_rs(dir: &std::path::Path, name: &str) -> Option<String> {
+            let flat = dir.join(name);
+            if flat.exists() { return std::fs::read_to_string(&flat).ok(); }
+            for entry in std::fs::read_dir(dir).ok()? {
+                let path = entry.ok()?.path();
+                if path.is_file() && path.file_name().map_or(false, |n| n == name) {
+                    return std::fs::read_to_string(&path).ok();
+                }
+                if path.is_dir() {
+                    if let Some(s) = find_rs(&path, name) { return Some(s); }
+                }
+            }
+            None
+        }
+        find_rs(&output_dir, "string_literal_enum_test.rs")
+            .expect("Failed to find generated string_literal_enum_test.rs")
+    };
 
     println!("Generated code:\n{}", generated_code);
 

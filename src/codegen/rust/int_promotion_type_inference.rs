@@ -34,13 +34,16 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Integer kind for binary mixed-type casts: use annotated types for params/fields when
-    /// IntInference disagrees (e.g. `a: u32` must not be treated as `i32`).
+    /// inference disagrees (e.g. `a: u32` must not be treated as `i32`).
     pub(in crate::codegen::rust) fn int_type_for_mixed_int_codegen(
         &self,
         expr: &Expression<'ast>,
-        inference: &crate::type_inference::IntInference,
     ) -> crate::type_inference::IntType {
-        let eng = inference.get_int_type(expr);
+        let eng = if let Some(ni) = &self.numeric_inference {
+            ni.get_int_type(expr)
+        } else {
+            return crate::type_inference::IntType::Unknown;
+        };
         match expr {
             Expression::Identifier { .. } => {
                 if let Some(a) = self

@@ -209,3 +209,36 @@ fn test_if_else_block_expressions_no_semicolons() {
         generated
     );
 }
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
+fn test_if_else_in_struct_literal_field_void_function() {
+    // scene_parser.wj: void fn with `DoorDef { width: if ... { parse() } else { 3 } }`
+    let code = r#"
+pub struct DoorDef {
+    pub width: i32,
+}
+
+pub fn parse_line(flag: bool) {
+    let door = DoorDef {
+        width: if flag { 5 } else { 3 },
+    }
+    let _ = door.width
+}
+"#;
+
+    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
+
+    assert!(
+        !generated.contains("5_i32;") && !generated.contains("5;"),
+        "if branch in struct field must not get semicolon in void fn. Got:\n{generated}"
+    );
+    assert!(
+        !generated.contains("3_i32;") && !generated.contains("3;"),
+        "else branch in struct field must not get semicolon in void fn. Got:\n{generated}"
+    );
+    assert!(
+        generated.contains("if flag") && generated.contains("5_i32") && generated.contains("3_i32"),
+        "struct field should contain if-else value. Got:\n{generated}"
+    );
+}

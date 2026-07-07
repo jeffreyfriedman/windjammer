@@ -13,6 +13,8 @@ pub struct MethodSignature {
     pub method_name: String,
     /// Parameter types (in order, excluding self)
     pub param_types: Vec<Type>,
+    /// AST/formal parameter types (excluding self); when empty, call-site lowering falls back to `param_types`.
+    pub formal_param_types: Vec<Type>,
     /// Parameter ownership modes (Borrowed, MutBorrowed, Owned)
     pub param_ownership: Vec<OwnershipMode>,
     /// Return type (if any)
@@ -22,6 +24,33 @@ pub struct MethodSignature {
 }
 
 impl MethodSignature {
+    /// Convert analyzed method metadata into a `FunctionSignature` for call-site lowering.
+    pub fn to_function_signature(&self) -> crate::analyzer::FunctionSignature {
+        let mut param_types = self.param_types.clone();
+        let mut formal_param_types = if self.formal_param_types.is_empty() {
+            self.param_types.clone()
+        } else {
+            self.formal_param_types.clone()
+        };
+        let mut param_ownership = self.param_ownership.clone();
+        if self.has_self_receiver {
+            let self_ty = Type::Custom(self.receiver_type.clone());
+            param_types.insert(0, self_ty.clone());
+            formal_param_types.insert(0, self_ty);
+            param_ownership.insert(0, OwnershipMode::MutBorrowed);
+        }
+        crate::analyzer::FunctionSignature {
+            name: format!("{}::{}", self.receiver_type, self.method_name),
+            param_types,
+            formal_param_types,
+            param_ownership,
+            return_type: self.return_type.clone(),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: self.has_self_receiver,
+            is_extern: false,
+        }
+    }
+
     /// Create a new method signature
     pub fn new(
         receiver_type: impl Into<String>,
@@ -35,9 +64,40 @@ impl MethodSignature {
             receiver_type: receiver_type.into(),
             method_name: method_name.into(),
             param_types,
+            formal_param_types: Vec::new(),
             param_ownership,
             return_type,
             has_self_receiver,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg;
+
+    #[test]
+    fn to_function_signature_aligns_formal_param_types_with_self_receiver() {
+        let ms = MethodSignature {
+            receiver_type: "PostgresTrialBalanceReader".into(),
+            method_name: "trial_balance_lines".into(),
+            param_types: vec![Type::Reference(Box::new(Type::Custom("str".into())))],
+            formal_param_types: vec![Type::String],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: None,
+            has_self_receiver: true,
+        };
+        let sig = ms.to_function_signature();
+        assert_eq!(
+            sig.formal_param_type(1),
+            Some(&Type::String),
+            "formal owned string must align with self slot at index 0"
+        );
+        assert_eq!(
+            effective_param_ownership_for_arg(&sig, 0),
+            OwnershipMode::Owned,
+            "owned string trait formal must not borrow at call site"
+        );
     }
 }

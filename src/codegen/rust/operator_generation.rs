@@ -39,6 +39,20 @@ impl<'ast> CodeGenerator<'ast> {
                 expr_str = format!("*{}", expr_str);
             }
         }
+        if !expr_str.starts_with('*') {
+            if let Some(Type::Reference(inner) | Type::MutableReference(inner)) =
+                self.infer_expression_type(expr)
+            {
+                if self.is_type_copy(inner.as_ref()) {
+                    let root_is_borrowed = matches!(expr, Expression::Identifier { name, .. }
+                        if self.inferred_borrowed_params.contains(name)
+                            || self.borrowed_iterator_vars.contains(name));
+                    if root_is_borrowed {
+                        expr_str = format!("*{}", expr_str);
+                    }
+                }
+            }
+        }
         let type_str = self.type_to_rust(type_);
         format!("{} as {}", expr_str, type_str)
     }

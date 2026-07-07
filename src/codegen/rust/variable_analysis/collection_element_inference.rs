@@ -23,6 +23,9 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return Some(concrete);
             }
+            // No concrete type from function context. Bare float literals default to f32
+            // (see literals.rs), so Vec element type must also be f32 for consistency.
+            return Some(Type::Custom("f32".into()));
         }
         push_type
     }
@@ -91,7 +94,7 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => {}
                 };
                 for fn_name in &names_to_try {
-                    if let Some(sig) = self.signature_registry.get_signature(fn_name) {
+                    if let Some(sig) = self.get_signature_with_global(fn_name) {
                         let param_offset = if sig.has_self_receiver { 1 } else { 0 };
                         for (i, (_label, arg)) in arguments.iter().enumerate() {
                             if matches!(arg, Expression::Identifier { name, .. } if name == var_name)
@@ -121,7 +124,7 @@ impl<'ast> CodeGenerator<'ast> {
                 object,
                 ..
             } => {
-                if let Some(sig) = self.signature_registry.get_signature(method) {
+                if let Some(sig) = self.get_signature_with_global(method) {
                     let param_offset = if sig.has_self_receiver { 1 } else { 0 };
                     for (i, (_label, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name, .. } if name == var_name) {

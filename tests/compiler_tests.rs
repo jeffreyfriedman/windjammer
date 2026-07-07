@@ -231,8 +231,10 @@ fn test_ternary_operator() {
 fn test_smart_auto_derive() {
     let generated = test_utils::compile_fixture("smart_auto_derive").expect("Compilation failed");
 
+    // No serde trigger in this fixture (no `use std::json`, no `@derive(Serialize)`),
+    // so Serialize/Deserialize are NOT auto-derived. Standard traits only.
+
     // Check Point: all fields are Copy (int, int)
-    // Should derive: Debug, Clone, Copy, PartialEq, Eq, Hash, Default
     assert!(
         generated.contains("#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]")
             && generated.contains("struct Point"),
@@ -240,8 +242,6 @@ fn test_smart_auto_derive() {
     );
 
     // Check User: name is String (not Copy), age is int (Copy)
-    // Should derive: Debug, Clone, PartialEq, Eq, Hash, Default (NO Copy)
-    // String is hashable and comparable, so we get those
     assert!(
         generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]")
             && generated.contains("struct User"),
@@ -249,22 +249,17 @@ fn test_smart_auto_derive() {
     );
 
     // Check Container: Vec<int> implements Clone, Debug, Default, PartialEq, and Eq
-    // Should derive: Debug, Clone, PartialEq, Eq, Default (NO Copy, NO Hash)
-    // Vec<T> is PartialEq and Eq if T is PartialEq/Eq, but NOT Hash (even if T: Hash)
     assert!(
         generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Default)]")
             && generated.contains("struct Container"),
         "Container with Vec should derive Debug, Clone, PartialEq, Eq, Default (no Hash, no Copy)"
     );
 
-    // Check Config: explicit @auto traits are merged with inferred standard traits
-    // (see merge_standard_derive_traits — partial lists must not drop Debug/Clone/Eq/etc.)
-    // Serde traits sort after the standard block.
+    // Check Config: bare struct with no decorator — same inference as User
     assert!(
-        generated.contains(
-            "#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize, Serialize)]"
-        ) && generated.contains("struct Config"),
-        "Config should list explicit Serde derives plus inferred standard derives"
+        generated.contains("#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]")
+            && generated.contains("struct Config"),
+        "Config should auto-derive standard traits without any decorator"
     );
 
     println!("✓ Smart @auto derive works");

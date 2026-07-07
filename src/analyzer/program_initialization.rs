@@ -128,6 +128,11 @@ impl<'ast> Analyzer<'ast> {
     pub fn get_copy_structs(&self) -> Vec<String> {
         self.copy_structs.iter().cloned().collect()
     }
+
+    /// Get struct names explicitly annotated with `@derive(Copy)`.
+    pub fn get_explicit_copy_structs(&self) -> Vec<String> {
+        self.explicit_copy_structs.iter().cloned().collect()
+    }
 }
 
 /// Build stdlib trait stubs (Add, Sub, Drop, etc.) into the given map.

@@ -99,11 +99,15 @@ pub(crate) fn compile_test_file(test_file: &Path, _output_dir: &Path) -> Result<
         anyhow::anyhow!("In file {}: {}", test_file.display(), e)
     })?;
 
-    // Find test functions
+    // Find test functions (@test decorator or test_* naming convention)
     let mut tests = Vec::new();
     for item in &program.items {
         if let crate::parser::Item::Function { decl: func, .. } = item {
-            if func.name.starts_with("test_") {
+            let has_test_decorator = func
+                .decorators
+                .iter()
+                .any(|d| d.name == "test" || d.name == "property_test" || d.name == "test_cases");
+            if func.name.starts_with("test_") || has_test_decorator {
                 tests.push(TestFunction {
                     name: func.name.clone(),
                     file: test_file.to_path_buf(),

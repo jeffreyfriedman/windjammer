@@ -146,6 +146,9 @@ impl<'ast> CodeGenerator<'ast> {
 
                     if merged.contains(&"Copy".to_string()) {
                         self.copy_types_registry.insert(s.name.clone());
+                        if user_requested_copy {
+                            self.explicit_copy_types_registry.insert(s.name.clone());
+                        }
                     }
                 }
             } else {
@@ -842,12 +845,8 @@ impl<'ast> CodeGenerator<'ast> {
             output.push_str(&impl_block.type_name);
         }
 
-        // Generic impls that clone `self.dense` / `self.dense[i]` need `T: Clone` for Rust Vec/element Clone.
-        let mut merged_where = impl_block.where_clause.clone();
-        let inferred_clone = codegen_helpers::infer_clone_where_bounds_for_impl(impl_block);
-        if !inferred_clone.is_empty() {
-            merged_where = codegen_helpers::merge_where_clauses(merged_where, inferred_clone);
-        }
+        // Generic impl header type params (for per-method where clauses).
+        let merged_where = impl_block.where_clause.clone();
         output.push_str(&codegen_helpers::format_where_clause(&merged_where));
 
         output.push_str(" {\n");
@@ -904,8 +903,127 @@ impl<'ast> CodeGenerator<'ast> {
             if has_explicit_self || has_inferred_self || accesses_fields {
                 instance_methods.insert(func.name.clone());
             }
+            if super::self_analysis::function_returns_self_field_with_name(func, &func.name) {
+                let base = impl_block
+                    .type_name
+                    .split('<')
+                    .next()
+                    .unwrap_or(&impl_block.type_name);
+                self.trivial_copy_field_accessors
+                    .insert(format!("{base}::{}", func.name));
+                self.trivial_copy_field_accessors
+                    .insert(format!("{}::{}", impl_block.type_name, func.name));
+            }
         }
         self.current_impl_instance_methods = instance_methods;
+
+        let mut consuming_methods: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for func in &impl_block.functions {
+            if super::self_analysis::function_consumes_self(func)
+                || super::self_analysis::function_return_moves_self_fields(func)
+                || super::self_analysis::function_matches_on_self(func)
+                || super::self_analysis::function_flows_self_through_local(func)
+                || super::self_analysis::function_iterates_self_field_consuming(func)
+            {
+                consuming_methods.insert(func.name.clone());
+                continue;
+            }
+            if let Some(analyzed_func) = analyzed
+                .iter()
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
+            {
+                // Only trust the analyzer's Owned inference when corroborated by
+                // source-level evidence (calling a consuming method, returning Self, etc.).
+                // Stale declaration stubs in multipass builds can produce false Owned.
+                if analyzed_func
+                    .inferred_ownership
+                    .get("self")
+                    .is_some_and(|o| *o == OwnershipMode::Owned)
+                {
+                    let has_source_evidence = self.method_returns_impl_struct(func);
+                    if has_source_evidence {
+                        consuming_methods.insert(func.name.clone());
+                        continue;
+                    }
+                }
+                let returns_self = self.method_returns_impl_struct(func);
+                let body_modifies = super::self_analysis::function_modifies_self(
+                    func,
+                    Some(&self.signature_registry),
+                    Some(&impl_block.type_name),
+                    Some(&self.struct_field_types),
+                    Some(&self.self_receiver_upgrades),
+                );
+                if returns_self && body_modifies {
+                    consuming_methods.insert(func.name.clone());
+                }
+            }
+        }
+        self.current_impl_consuming_self_methods = consuming_methods;
+
+        // Fixed-point pre-pass: record &mut self upgrades before generating methods so
+        // `self.callee()` in callers above callees in source order sees accurate mutability.
+        // Clone the upgrades map once (not per-iteration) and batch-apply new entries to
+        // avoid O(structs * methods^2) allocation cost on large projects.
+        // Skip methods already identified as consuming (owned self) — those need `mut self`,
+        // not `&mut self`.
+        {
+            let struct_name = impl_block.type_name.clone();
+            let max_iters = impl_block.functions.len().max(1);
+            let mut snapshot = self.self_receiver_upgrades.clone();
+            for _ in 0..max_iters {
+                let mut new_upgrades = Vec::new();
+                for func in &impl_block.functions {
+                    if self
+                        .current_impl_consuming_self_methods
+                        .contains(&func.name)
+                    {
+                        continue;
+                    }
+                    let qualified = format!("{}::{}", struct_name, func.name);
+                    if snapshot.contains_key(&qualified) {
+                        continue;
+                    }
+                    let body_modifies = super::self_analysis::function_modifies_self(
+                        func,
+                        Some(&self.signature_registry),
+                        Some(&struct_name),
+                        Some(&self.struct_field_types),
+                        Some(&snapshot),
+                    );
+                    if body_modifies {
+                        new_upgrades.push(qualified);
+                    }
+                }
+                if new_upgrades.is_empty() {
+                    break;
+                }
+                for key in new_upgrades {
+                    snapshot.insert(key.clone(), OwnershipMode::MutBorrowed);
+                    self.self_receiver_upgrades
+                        .insert(key, OwnershipMode::MutBorrowed);
+                }
+            }
+        }
+
+        self.current_impl_generic_type_params =
+            codegen_helpers::impl_block_type_param_names(impl_block);
+
+        // Self:: static calls to sibling methods defined later in the impl need signatures
+        // registered before any function body is emitted (forward-ref within same impl).
+        for func in &impl_block.functions {
+            if let Some(analyzed_func) = analyzed
+                .iter()
+                .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
+            {
+                self.register_impl_method_signature_from_analyzed(
+                    &impl_block.type_name,
+                    func,
+                    analyzed_func,
+                );
+            }
+        }
 
         for func in &impl_block.functions {
             if let Some(analyzed_func) = analyzed
@@ -918,6 +1036,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.current_impl_instance_methods.clear();
+        self.current_impl_consuming_self_methods.clear();
+        self.current_impl_generic_type_params.clear();
         self.in_wasm_bindgen_impl = old_in_wasm_impl;
         self.in_trait_impl = old_in_trait_impl;
         self.current_trait_impl_name = old_trait_impl_name;
