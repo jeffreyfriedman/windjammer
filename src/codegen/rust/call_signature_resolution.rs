@@ -603,6 +603,29 @@ pub(crate) fn formal_is_plain_windjammer_string(
 /// 6. Owned non-text struct formals
 /// 7. Stored param_ownership fallback
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
+    // Rule 0: formal_params trump stale converged params.
+    // When formal_param_types[i] is a non-reference type but param_types[i] is
+    // Reference(...), the formal wins — the generated Rust def takes the owned type.
+    // This prevents stale metadata from forcing incorrect borrows at call sites.
+    if let Some(formal_ty) = sig.formal_param_type(param_idx) {
+        if !matches!(formal_ty, Type::Reference(_) | Type::MutableReference(_)) {
+            if let Some(converged_ty) = sig.param_types.get(param_idx) {
+                if matches!(converged_ty, Type::Reference(_) | Type::MutableReference(_)) {
+                    // Formal says owned, converged says ref → formal wins.
+                    // Exception: text types — body-converged &str on a String formal
+                    // is a real optimization that call sites must honor.
+                    if !crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
+                        return sig
+                            .param_ownership
+                            .get(param_idx)
+                            .copied()
+                            .unwrap_or(OwnershipMode::Owned);
+                    }
+                }
+            }
+        }
+    }
+
     if static_impl_text_borrows_at_call_site(sig, param_idx) {
         return OwnershipMode::Borrowed;
     }

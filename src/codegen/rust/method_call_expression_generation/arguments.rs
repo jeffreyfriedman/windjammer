@@ -1626,6 +1626,29 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // ── TYPED LOWERING CORRECTION PASS ──
+                // Correct specific known-bad patterns from the legacy pipeline.
+                if crate::codegen::rust::typed_lowering::is_typed_lowering_enabled() {
+                    
+                    if let Some(ref sig) = sig_for_effective.cloned() {
+                        let pidx = sig.arg_param_index(i);
+                        let is_formal_copy = sig
+                            .formal_param_type(pidx)
+                            .is_some_and(|t| {
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && self.is_type_copy(t)
+                            });
+                        crate::codegen::rust::typed_lowering::correct_legacy_output(
+                            sig,
+                            i,
+                            arg_to_generate,
+                            &mut arg_str,
+                            is_formal_copy,
+                            is_collection_key_arg,
+                        );
+                    }
+                }
+
                 arg_str
             })
             .collect();

@@ -1134,6 +1134,31 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
+            // ── TYPED LOWERING CORRECTION PASS ──
+            if crate::codegen::rust::typed_lowering::is_typed_lowering_enabled() {
+                
+                if let Some(ref sig) = signature {
+                    let pidx = sig.arg_param_index(i);
+                    let is_formal_copy = sig
+                        .formal_param_type(pidx)
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && gen.is_type_copy(t)
+                        });
+                    let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(
+                        func_name.rsplit("::").next().unwrap_or(func_name),
+                    ) && i == 0;
+                    crate::codegen::rust::typed_lowering::correct_legacy_output(
+                        sig,
+                        i,
+                        arg,
+                        &mut arg_str,
+                        is_formal_copy,
+                        is_coll_key,
+                    );
+                }
+            }
+
             vec![arg_str]
         })
         .collect()
