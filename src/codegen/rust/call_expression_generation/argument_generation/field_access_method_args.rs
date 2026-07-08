@@ -703,6 +703,30 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 arg_already_rust_ref,
                 type_name.as_deref(),
             );
+            // ── TYPED LOWERING CORRECTION PASS ──
+            if crate::codegen::rust::typed_lowering::is_typed_lowering_enabled() {
+                
+                if let Some(ref sig) = fallback_sig {
+                    let pidx = sig.arg_param_index(i);
+                    let is_formal_copy = sig
+                        .formal_param_type(pidx)
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && gen.is_type_copy(t)
+                        });
+                    let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(call_method)
+                        && i == 0;
+                    crate::codegen::rust::typed_lowering::correct_legacy_output(
+                        sig,
+                        i,
+                        arg_to_generate,
+                        &mut arg_str,
+                        is_formal_copy,
+                        is_coll_key,
+                    );
+                }
+            }
+
             arg_str
         })
         .collect()

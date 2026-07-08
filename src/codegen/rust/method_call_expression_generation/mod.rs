@@ -73,6 +73,7 @@ impl<'ast> CodeGenerator<'ast> {
             method
         };
 
+        
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
         let method_signature =
             self.mc_resolve_method_call_signature(object, effective_method, arguments);
