@@ -11,6 +11,11 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         object: &Expression<'ast>,
     ) -> Option<String> {
+        if let Expression::Identifier { name, .. } = object {
+            if (name == "self" || name == "Self") && self.in_impl_block {
+                return self.current_struct_name.clone();
+            }
+        }
         if let Expression::FieldAccess {
             object: obj, field, ..
         } = object
@@ -64,11 +69,24 @@ impl<'ast> CodeGenerator<'ast> {
             };
 
             let from_method_registry = self.lookup_method_signature(tn, method).and_then(|ms| {
-                let sig = ms.to_function_signature();
+                let mut sig = ms.to_function_signature();
+                let qualified = format!("{tn}::{method}");
+                if let Some(reg) = self
+                    .signature_registry
+                    .get_signature(&qualified)
+                    .or_else(|| self.get_signature_with_global(&qualified))
+                {
+                    if reg.emitted_rust_ref_params.is_some() {
+                        sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
+                        sig.param_types = reg.param_types.clone();
+                        sig.param_ownership = reg.param_ownership.clone();
+                        sig.formal_param_types = reg.formal_param_types.clone();
+                    }
+                }
                 if validate_arg_count(&sig, arguments.len()) {
                     Some(ResolvedSignature {
                         sig,
-                        qualified_key: format!("{tn}::{method}"),
+                        qualified_key: qualified,
                         resolution_method: ResolutionMethod::MethodRegistry,
                         has_collision: false,
                     })
@@ -85,12 +103,21 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments.len(),
             );
 
-            if let Some(resolved) =
-                crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
-                    from_registry,
-                    from_method_registry,
-                )
-            {
+            // Unified registry resolution (local + global, emitted-formal refresh) wins over
+            // bare MethodSignature stubs that drop `emitted_rust_ref_params`.
+            if let Some(resolved) = from_registry {
+                let mut sig = resolved.sig;
+                if let Some(global) = self.global_signature_registry() {
+                    crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                        global,
+                        method,
+                        &mut sig,
+                    );
+                }
+                return Some(finalize_call_site_signature(sig));
+            }
+
+            if let Some(resolved) = from_method_registry {
                 let mut sig = resolved.sig;
                 if let Some(global) = self.global_signature_registry() {
                     crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
@@ -244,6 +271,12 @@ impl<'ast> CodeGenerator<'ast> {
                         .map(finalize_call_site_signature)
                 })
             })
-            .or_else(|| resolved_from_mc.clone().map(finalize_call_site_signature))
+            .or_else(|| {
+                resolved_from_mc
+                    .as_ref()
+                    .filter(|sig| is_usable(sig))
+                    .cloned()
+                    .map(finalize_call_site_signature)
+            })
     }
 }

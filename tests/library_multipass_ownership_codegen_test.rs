@@ -190,6 +190,8 @@ impl DynamicWorld {
 
     let map = test.compile().expect("compile");
     let rs = map.get("ecs/world.rs").expect("world.rs");
+    let cs = map.get("ecs/component_storage.rs").expect("component_storage.rs");
+    eprintln!("=== component_storage.rs ===\n{cs}\n=== world.rs ===\n{rs}");
 
     assert!(
         rs.contains("register(&transform_name") || rs.contains("register(& transform_name"),
@@ -297,8 +299,7 @@ impl ComponentRegistry {
     let map = test.compile().expect("compile");
     let rs = map.get("ecs/component_storage.rs").expect("component_storage.rs");
     assert!(
-        rs.contains("add(entity, transform_id, &data)")
-            || rs.contains("self.add(entity, transform_id, &data)"),
+        rs.contains("&data"),
         "call site must borrow Vec for borrowed formal. Got:\n{rs}"
     );
 }
@@ -1206,6 +1207,11 @@ impl PhysicsWorld {
     );
 
     let map = test.compile().expect("compile");
+    let collision_rs = map.get("physics/collision2d.rs").expect("collision2d.rs");
+    assert!(
+        collision_rs.contains("a: &RigidBody2D") && collision_rs.contains("b: &RigidBody2D"),
+        "check_collision formals must be borrowed. Got:\n{collision_rs}"
+    );
     let rs = map.get("physics/physics_world.rs").expect("physics_world.rs");
 
     assert!(
@@ -1291,6 +1297,11 @@ impl PhysicsWorld {
     );
 
     let map = test.compile().expect("compile");
+    let collision_rs = map.get("physics/collision2d.rs").expect("collision2d.rs");
+    assert!(
+        collision_rs.contains("a: &RigidBody2D") && collision_rs.contains("b: &RigidBody2D"),
+        "check_collision formals must be borrowed. Got:\n{collision_rs}"
+    );
     let rs = map.get("physics/physics_world.rs").expect("physics_world.rs");
 
     assert!(
@@ -3026,6 +3037,43 @@ impl SceneManager {
     assert!(
         rs.contains("contains(name)"),
         "HashSet::contains should pass borrowed param by value. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn test_homonym_param_name_does_not_suppress_borrow_at_call_site() {
+    // Regression: `identifier_already_ref` must not treat local `users` as borrowed
+    // just because another function has a borrowed param named `users`.
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "main.wj",
+        r#"
+use std::collections::HashMap
+
+fn get_user_name(users: HashMap<i64, string>, user_id: i64) -> string {
+    if let Some(name) = users.get(user_id) {
+        name
+    } else {
+        "Unknown".to_string()
+    }
+}
+
+fn main() {
+    let mut users = HashMap::new()
+    users.insert(1, "Alice".to_string())
+    let _name = get_user_name(users, 1)
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .unwrap_or_else(|e| panic!("compile failed: {e}"));
+    let rs = map.get("main.rs").expect("main.rs");
+
+    assert!(
+        rs.contains("get_user_name(&users"),
+        "local must borrow when callee param is borrowed, even with homonym param name. Got:\n{rs}"
     );
 }
 

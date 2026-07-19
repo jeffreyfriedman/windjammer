@@ -18,21 +18,55 @@ pub struct FunctionSignature {
     pub return_ownership: OwnershipMode,
     pub has_self_receiver: bool,
     pub is_extern: bool,
+    /// Codegen refresh: `true` when generated Rust emits `&T` for this param index.
+    pub emitted_rust_ref_params: Option<Vec<bool>>,
+    /// Callee params returned via field extraction only (`key.bytes`); not a full move for callers.
+    pub field_extract_params: Option<Vec<bool>>,
+    /// WJ-owned formal that only forwards the param to a borrowing callee (`has_key` → `get`).
+    pub forwarding_borrow_params: Option<Vec<bool>>,
+}
+
+impl Default for FunctionSignature {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            param_types: Vec::new(),
+            formal_param_types: Vec::new(),
+            param_ownership: Vec::new(),
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
 }
 
 impl FunctionSignature {
+    /// True when `param_types`/`param_ownership` include a leading `Self` slot for
+    /// instance methods, even if `has_self_receiver` was lost in metadata export.
+    pub fn has_self_receiver_slot(&self) -> bool {
+        if self.has_self_receiver {
+            return true;
+        }
+        self.param_types
+            .first()
+            .is_some_and(|t| matches!(t, Type::Custom(name) if name == "Self"))
+    }
+
+    fn self_receiver_slot_count(&self) -> usize {
+        usize::from(self.has_self_receiver_slot())
+    }
+
     /// Map a call-site argument index to the corresponding parameter index,
     /// accounting for implicit `self` receivers.
     ///
-    /// When `has_self_receiver` is true, `param_ownership[0]` and
-    /// `param_types[0]` correspond to `self`, so the first user-supplied
-    /// argument maps to index 1.
+    /// When a self slot is present, `param_ownership[0]` and `param_types[0]`
+    /// correspond to `self`, so the first user-supplied argument maps to index 1.
     pub fn arg_param_index(&self, arg_index: usize) -> usize {
-        if self.has_self_receiver {
-            arg_index + 1
-        } else {
-            arg_index
-        }
+        arg_index + self.self_receiver_slot_count()
     }
 
     /// Get the ownership mode for a call-site argument, accounting for `self`.
@@ -71,6 +105,10 @@ pub struct SignatureRegistry {
     /// Same param types but different ownership — used for auto-borrow safety.
     ownership_collision_keys: HashSet<String>,
     method_index: HashMap<String, Vec<String>>,
+    /// Keys registered from trait definitions (e.g. `AccountReader::list_accounts`).
+    /// Used by `apply_trait_owned_string_call_site_contracts` to avoid matching
+    /// unrelated impl methods with the same name suffix.
+    trait_method_keys: HashSet<String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
     global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
 }
@@ -89,6 +127,7 @@ impl SignatureRegistry {
                 type_collision_keys: HashSet::new(),
                 ownership_collision_keys: HashSet::new(),
                 method_index: HashMap::new(),
+                trait_method_keys: HashSet::new(),
                 global_fallback: None,
             };
 
@@ -111,6 +150,7 @@ impl SignatureRegistry {
             type_collision_keys: HashSet::new(),
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
+            trait_method_keys: HashSet::new(),
             global_fallback: None,
         }
     }
@@ -122,6 +162,7 @@ impl SignatureRegistry {
             type_collision_keys: HashSet::new(),
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
+            trait_method_keys: HashSet::new(),
             global_fallback: Some(global),
         }
     }
@@ -317,6 +358,16 @@ impl SignatureRegistry {
             .is_some_and(|g| g.has_method_name_collision_for_type(type_name, method))
     }
 
+    /// Returns true if the given key was registered from a trait definition.
+    pub fn is_trait_method_key(&self, key: &str) -> bool {
+        if self.trait_method_keys.contains(key) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.is_trait_method_key(key))
+    }
+
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
         self.signatures.iter()
     }
@@ -399,6 +450,33 @@ impl SignatureRegistry {
 
     fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
         crate::codegen::rust::call_signature_resolution::effective_user_arg_count(sig)
+    }
+
+    /// Resolve a delegation wrapper's callee when the body is a single `receiver.method(args…)` call.
+    ///
+    /// Skips the caller's own qualified name (e.g. `TxnManager::get`) and returns another
+    /// `{Type}::{method}` with matching user arg count (e.g. `MemoryEngine::get`).
+    pub fn find_delegation_callee(
+        &self,
+        caller_qualified: &str,
+        method: &str,
+        arg_count: usize,
+    ) -> Option<&FunctionSignature> {
+        if let Some(keys) = self.method_index.get(method) {
+            for key in keys {
+                if key == caller_qualified {
+                    continue;
+                }
+                if let Some(sig) = self.signatures.get(key) {
+                    if Self::sig_user_arg_count(sig) == arg_count {
+                        return Some(sig);
+                    }
+                }
+            }
+        }
+        self.global_fallback.as_ref().and_then(|g| {
+            g.find_delegation_callee(caller_qualified, method, arg_count)
+        })
     }
 
     /// Resolve `TypeName::method` for call-site borrow coercion when homonyms exist.
@@ -541,8 +619,13 @@ impl SignatureRegistry {
                             return_ownership: OwnershipMode::Owned,
                             has_self_receiver,
                             is_extern: false,
+                            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
                         };
-                        registry.add_function(format!("{}::{}", decl.name, method.name), sig);
+                        let key = format!("{}::{}", decl.name, method.name);
+                        registry.trait_method_keys.insert(key.clone());
+                        registry.add_function(key, sig);
                     }
                 }
                 Item::Mod { name, items, .. } => {
@@ -584,6 +667,9 @@ impl SignatureRegistry {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver,
             is_extern: func.is_extern,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         }
     }
 
@@ -670,6 +756,7 @@ impl SignatureRegistry {
     pub fn merge(&mut self, other: &SignatureRegistry) {
         for (name, sig) in &other.signatures {
             if let Some(existing) = self.signatures.get(name) {
+                let codegen_refreshed = sig.emitted_rust_ref_params.is_some();
                 if existing.param_types != sig.param_types {
                     let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
                     if !stub_like {
@@ -696,6 +783,7 @@ impl SignatureRegistry {
                         }
                     }
                 }
+                if !codegen_refreshed {
                 // Keep converged dependency / multi-pass ownership over per-file stubs.
                 if crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(sig)
                     && !crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(
@@ -736,6 +824,7 @@ impl SignatureRegistry {
                 {
                     continue;
                 }
+                }
             }
             if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
                 self.method_index
@@ -749,6 +838,8 @@ impl SignatureRegistry {
             .extend(other.type_collision_keys.iter().cloned());
         self.ownership_collision_keys
             .extend(other.ownership_collision_keys.iter().cloned());
+        self.trait_method_keys
+            .extend(other.trait_method_keys.iter().cloned());
     }
 
     /// Collect only signatures whose ownership differs from `base`.
@@ -806,6 +897,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         let caller_stub = FunctionSignature {
             name: "Squad::new".into(),
@@ -816,6 +910,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
 
         let mut global = SignatureRegistry::new();

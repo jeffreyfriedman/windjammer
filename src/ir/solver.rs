@@ -317,6 +317,13 @@ impl Solver {
                             (OwnedType::MutRef(_), OwnedType::Ref(_)) => {
                                 // Already MutRef, keep it
                             }
+                            (OwnedType::Ref(_), OwnedType::Owned) => {
+                                // Callee-owned forwarding wins over readonly borrow hint.
+                                self.ownership[root as usize] = Some(OwnedType::Owned);
+                            }
+                            (OwnedType::Owned, OwnedType::Ref(_)) => {
+                                // Formal stays owned; readonly use does not require &T.
+                            }
                             _ => {
                                 self.diagnostics.push(SolverDiagnostic {
                                     kind: DiagnosticKind::OwnershipConflict,

@@ -50,6 +50,9 @@ impl<'ast> CodeGenerator<'ast> {
             &unused_params,
         ));
 
+        self.refresh_method_registry_from_emitted_formals(func);
+        self.refresh_free_function_registry_from_emitted_formals(func, &params);
+
         output.push_str(&params.join(", "));
         output.push(')');
 
@@ -60,5 +63,41 @@ impl<'ast> CodeGenerator<'ast> {
         self.local_variable_scopes.pop();
 
         output
+    }
+
+    /// Populate `signature_registry` / `function_emitted_mut_arg_indices` from emitted
+    /// formals before any function bodies run (so `main` call sites see callee metadata).
+    pub(in crate::codegen::rust) fn preregister_function_formals_in_registry(
+        &mut self,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) {
+        let func = &analyzed.decl;
+        if func.decorators.iter().any(|d| d.name == "test_cases") || self.has_wrapping_decorator(func)
+        {
+            return;
+        }
+
+        self.select_ir_function_for(&func.name);
+        self.prepare_codegen_environment_for_regular_function(analyzed);
+
+        let mut signature_scratch = String::new();
+        let needs_lifetime =
+            self.append_regular_function_signature_prefix(analyzed, func, &mut signature_scratch);
+
+        let mut params = Vec::new();
+        self.extend_implicit_self_parameters(analyzed, func, &mut params);
+
+        let unused_params = self.compute_unused_formal_parameter_names(func);
+        self.refresh_unused_let_bindings_for_function_body(&func.body);
+
+        params.extend(self.collect_additional_formal_parameter_strings(
+            analyzed,
+            func,
+            needs_lifetime,
+            &unused_params,
+        ));
+
+        self.refresh_method_registry_from_emitted_formals(func);
+        self.refresh_free_function_registry_from_emitted_formals(func, &params);
     }
 }

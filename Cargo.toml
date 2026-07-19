@@ -62,7 +62,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli"]
+default = ["cli", "safety_typed_ir"]
 cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,

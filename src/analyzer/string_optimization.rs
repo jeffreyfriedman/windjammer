@@ -80,6 +80,24 @@ impl<'ast> Analyzer<'ast> {
                 let needs_string_ref =
                     self.param_needs_string_ref(&param.name, &func.body, registry);
 
+                // Module helpers: skip &str optimization when the param is returned,
+                // forwarded as owned, or is a HashMap key helper (owned String API).
+                if func.parent_type.is_none()
+                    && !needs_string_ref
+                    && self.module_param_blocks_str_ref_optimization(
+                        &param.name,
+                        &func.body,
+                        registry,
+                        func,
+                    )
+                {
+                    continue;
+                }
+
+                if self.param_only_used_as_qualified_map_get_key(&param.name, &func.body, func) {
+                    continue;
+                }
+
                 if !needs_string_ref {
                     optimizable.insert(param.name.clone());
                 }
@@ -237,7 +255,14 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
 
-                        if method == "insert" && idx == 1 {
+                        if super::stdlib_method_traits::is_storage_method(method)
+                            && registry.lookup_method(method).is_some_and(|sig| {
+                                sig.param_type_for_arg(idx).is_some_and(|t| {
+                                    self.is_windjammer_string_param_type(t)
+                                        || self.type_is_owned_string(t)
+                                })
+                            })
+                        {
                             return true;
                         }
 
@@ -598,6 +623,258 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Module-level params that must stay owned `String` (not &str) block str_ref optimization.
+    fn module_param_blocks_str_ref_optimization(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+        registry: &super::SignatureRegistry,
+        func: &FunctionDecl,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_forwards_param_as_owned_pass_through(param_name, stmt, registry) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_forwards_param_as_owned_pass_through(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_is_param_or_ref_to_param(param_name, expr),
+            Statement::Expression { expr, .. } => {
+                self.expr_forwards_param_as_owned_pass_through(param_name, expr, registry)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_forwards_param_as_owned_pass_through(param_name, value, registry)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| {
+                    self.statement_forwards_param_as_owned_pass_through(param_name, s, registry)
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        self.statement_forwards_param_as_owned_pass_through(param_name, s, registry)
+                    })
+                })
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                self.expr_forwards_param_as_owned_pass_through(param_name, arm.body, registry)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expr_forwards_param_as_owned_pass_through(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        match expr {
+            Expression::Call { function, arguments, .. } => arguments.iter().any(|(_, arg)| {
+                if !self.expr_is_param_or_ref_to_param(param_name, arg) {
+                    return false;
+                }
+                if self.call_expr_is_string_runtime(function) {
+                    return false;
+                }
+                if let Expression::Identifier { name, .. } = &**function {
+                    if matches!(name.as_str(), "println" | "print" | "eprintln" | "eprint") {
+                        return false;
+                    }
+                    if let Some(sig) = registry.get_signature(name) {
+                        return sig.param_ownership.iter().any(|o| {
+                            matches!(o, super::OwnershipMode::Owned)
+                        });
+                    }
+                }
+                false
+            }),
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_forwards_param_as_owned_pass_through(param_name, s, registry)
+            }),
+            _ => false,
+        }
+    }
+
+    /// Module-level plain `string` params stay owned when only forwarded to
+    /// non-string-runtime callees (collections, domain helpers, etc.).
+    #[allow(dead_code)]
+    fn module_param_keeps_owned_string_api(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+        _registry: &super::SignatureRegistry,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_uses_param_in_string_runtime_module(param_name, stmt) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn block_uses_param_in_string_runtime_module(
+        &self,
+        param_name: &str,
+        block: &[&Statement],
+    ) -> bool {
+        block
+            .iter()
+            .any(|s| self.statement_uses_param_in_string_runtime_module(param_name, s))
+    }
+
+    fn statement_uses_param_in_string_runtime_module(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, expr)
+            }
+            Statement::Let { value, .. } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, value)
+            }
+            Statement::Assignment { target, value, .. } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, target)
+                    || self.expr_uses_param_in_string_runtime_module(param_name, value)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, condition)
+                    || self.block_uses_param_in_string_runtime_module(param_name, then_block)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.block_uses_param_in_string_runtime_module(param_name, b)
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, condition)
+                    || self.block_uses_param_in_string_runtime_module(param_name, body)
+            }
+            Statement::For { body, .. } => {
+                self.block_uses_param_in_string_runtime_module(param_name, body)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_uses_param_in_string_runtime_module(param_name, expr),
+            Statement::Match { value, arms, .. } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, value)
+                    || arms.iter().any(|arm| {
+                        self.expr_uses_param_in_string_runtime_module(param_name, arm.body)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_uses_param_in_string_runtime_module(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+    ) -> bool {
+        match expr {
+            Expression::Call { function, arguments, .. } => {
+                let is_strings = self.call_expr_is_string_runtime(function);
+                for (_, arg) in arguments {
+                    if self.expr_is_param_or_ref_to_param(param_name, arg) && is_strings {
+                        return true;
+                    }
+                    if self.expr_uses_param_in_string_runtime_module(param_name, arg) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if self.expr_is_param_or_ref_to_param(param_name, object)
+                    && self.method_name_is_string_runtime(method)
+                {
+                    return true;
+                }
+                for (_, arg) in arguments {
+                    if self.expr_is_param_or_ref_to_param(param_name, arg)
+                        && self.method_name_is_string_runtime(method)
+                    {
+                        return true;
+                    }
+                    if self.expr_uses_param_in_string_runtime_module(param_name, arg) {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, left)
+                    || self.expr_uses_param_in_string_runtime_module(param_name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_uses_param_in_string_runtime_module(param_name, operand)
+            }
+            Expression::Block { statements, .. } => self
+                .block_uses_param_in_string_runtime_module(param_name, statements),
+            _ => false,
+        }
+    }
+
+    fn call_expr_is_string_runtime(&self, function: &Expression) -> bool {
+        match function {
+            Expression::Identifier { name, .. } => Self::qualified_name_is_string_runtime(name),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    Self::qualified_name_is_string_runtime(&format!("{name}.{field}"))
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn method_name_is_string_runtime(&self, method: &str) -> bool {
+        matches!(
+            method,
+            "starts_with"
+                | "ends_with"
+                | "contains"
+                | "substring"
+                | "len"
+                | "trim"
+                | "to_lowercase"
+                | "to_uppercase"
+                | "split"
+                | "replace"
+        )
+    }
+
+    fn qualified_name_is_string_runtime(name: &str) -> bool {
+        name.starts_with("strings::")
+            || name.starts_with("std::strings::")
+            || name.split("::").next() == Some("strings")
+    }
+
     /// Windjammer Phase-2 `&str` parameter (Reference(Custom("str"))).
     fn is_phase2_str_ref_param_type(&self, ty: &Type) -> bool {
         matches!(
@@ -652,5 +929,436 @@ impl<'ast> Analyzer<'ast> {
     /// Used to detect when parameters are passed to functions expecting owned String
     pub(crate) fn type_is_owned_string(&self, ty: &Type) -> bool {
         matches!(ty, Type::String) || matches!(ty, Type::Custom(name) if name == "string")
+    }
+
+    /// Params whose only direct use is a map/set key lookup keep owned `String` formals.
+    fn param_only_used_as_map_get_key(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+        func: &FunctionDecl,
+    ) -> bool {
+        let mut key_uses = 0usize;
+        let mut other_uses = 0usize;
+        self.collect_map_get_key_uses(body, param_name, func, &mut key_uses, &mut other_uses);
+        key_uses > 0 && other_uses == 0
+    }
+
+    /// FMP/wdb route helpers: owned `String` keys for qualified `std::collections::HashMap` lookups.
+    fn param_only_used_as_qualified_map_get_key(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+        func: &FunctionDecl,
+    ) -> bool {
+        let mut key_uses = 0usize;
+        let mut other_uses = 0usize;
+        self.collect_qualified_map_get_key_uses(body, param_name, func, &mut key_uses, &mut other_uses);
+        key_uses > 0 && other_uses == 0
+    }
+
+    fn collect_qualified_map_get_key_uses(
+        &self,
+        body: &[&Statement],
+        param_name: &str,
+        func: &FunctionDecl,
+        key_uses: &mut usize,
+        other_uses: &mut usize,
+    ) {
+        for stmt in body {
+            self.statement_collect_qualified_map_get_key_uses(
+                stmt, param_name, func, key_uses, other_uses,
+            );
+        }
+    }
+
+    fn statement_collect_qualified_map_get_key_uses(
+        &self,
+        stmt: &Statement,
+        param_name: &str,
+        func: &FunctionDecl,
+        key_uses: &mut usize,
+        other_uses: &mut usize,
+    ) {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    expr, param_name, func, key_uses, other_uses,
+                );
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    value, param_name, func, key_uses, other_uses,
+                );
+                if let Some(b) = else_block {
+                    self.collect_qualified_map_get_key_uses(b, param_name, func, key_uses, other_uses);
+                }
+            }
+            Statement::Return { value: Some(expr), .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    expr, param_name, func, key_uses, other_uses,
+                );
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    condition, param_name, func, key_uses, other_uses,
+                );
+                self.collect_qualified_map_get_key_uses(then_block, param_name, func, key_uses, other_uses);
+                if let Some(b) = else_block {
+                    self.collect_qualified_map_get_key_uses(b, param_name, func, key_uses, other_uses);
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    value, param_name, func, key_uses, other_uses,
+                );
+                for arm in arms {
+                    self.expression_collect_qualified_map_get_key_uses(
+                        &arm.body, param_name, func, key_uses, other_uses,
+                    );
+                }
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    condition, param_name, func, key_uses, other_uses,
+                );
+                self.collect_qualified_map_get_key_uses(body, param_name, func, key_uses, other_uses);
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    iterable, param_name, func, key_uses, other_uses,
+                );
+                self.collect_qualified_map_get_key_uses(body, param_name, func, key_uses, other_uses);
+            }
+            _ => {}
+        }
+    }
+
+    fn expression_collect_qualified_map_get_key_uses(
+        &self,
+        expr: &Expression,
+        param_name: &str,
+        func: &FunctionDecl,
+        key_uses: &mut usize,
+        other_uses: &mut usize,
+    ) {
+        if let Some((object, _method, arguments)) =
+            super::stdlib_method_traits::decompose_collection_key_lookup(expr)
+        {
+            let qualified_receiver = self
+                .receiver_param_type_from_expr(object, func)
+                .is_some_and(super::stdlib_method_traits::is_qualified_map_type);
+            for (i, (_, arg)) in arguments.iter().enumerate() {
+                if self.expr_is_identifier(*arg, param_name) {
+                    if i == 0 && qualified_receiver {
+                        *key_uses += 1;
+                    } else {
+                        *other_uses += 1;
+                    }
+                }
+            }
+            self.expression_collect_qualified_map_get_key_uses(
+                object, param_name, func, key_uses, other_uses,
+            );
+            for (_, arg) in arguments {
+                self.expression_collect_qualified_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+            }
+            return;
+        }
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                let qualified_receiver = self
+                    .receiver_param_type_from_expr(object, func)
+                    .is_some_and(super::stdlib_method_traits::is_qualified_map_type);
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if self.expr_is_identifier(*arg, param_name) {
+                        if super::stdlib_method_traits::is_map_key_method(method)
+                            && i == 0
+                            && qualified_receiver
+                        {
+                            *key_uses += 1;
+                        } else {
+                            *other_uses += 1;
+                        }
+                    }
+                }
+                self.expression_collect_qualified_map_get_key_uses(
+                    object, param_name, func, key_uses, other_uses,
+                );
+                for (_, arg) in arguments {
+                    self.expression_collect_qualified_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+                }
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    function, param_name, func, key_uses, other_uses,
+                );
+                for (_, arg) in arguments {
+                    self.expression_collect_qualified_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    left, param_name, func, key_uses, other_uses,
+                );
+                self.expression_collect_qualified_map_get_key_uses(
+                    right, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    operand, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    object, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_collect_qualified_map_get_key_uses(
+                    object, param_name, func, key_uses, other_uses,
+                );
+                self.expression_collect_qualified_map_get_key_uses(
+                    index, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::Block { statements, .. } => {
+                self.collect_qualified_map_get_key_uses(statements, param_name, func, key_uses, other_uses);
+            }
+            _ => {}
+        }
+    }
+
+    fn receiver_param_type_from_expr<'a>(
+        &self,
+        object: &'a Expression,
+        func: &'a FunctionDecl,
+    ) -> Option<&'a Type> {
+        if let Expression::Identifier { name, .. } = object {
+            func.parameters.iter().find(|p| p.name == *name).map(|p| &p.type_)
+        } else {
+            None
+        }
+    }
+
+    fn collect_map_get_key_uses(
+        &self,
+        body: &[&Statement],
+        param_name: &str,
+        func: &FunctionDecl,
+        key_uses: &mut usize,
+        other_uses: &mut usize,
+    ) {
+        for stmt in body {
+            self.statement_collect_map_get_key_uses(
+                stmt, param_name, func, key_uses, other_uses,
+            );
+        }
+    }
+
+    fn statement_collect_map_get_key_uses(
+        &self,
+        stmt: &Statement,
+        param_name: &str,
+        func: &FunctionDecl,
+        key_uses: &mut usize,
+        other_uses: &mut usize,
+    ) {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    expr, param_name, func, key_uses, other_uses,
+                );
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    value, param_name, func, key_uses, other_uses,
+                );
+                if let Some(b) = else_block {
+                    self.collect_map_get_key_uses(b, param_name, func, key_uses, other_uses);
+                }
+            }
+            Statement::Return { value: Some(expr), .. } => {
+                self.expression_collect_map_get_key_uses(
+                    expr, param_name, func, key_uses, other_uses,
+                );
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_collect_map_get_key_uses(
+                    condition, param_name, func, key_uses, other_uses,
+                );
+                self.collect_map_get_key_uses(then_block, param_name, func, key_uses, other_uses);
+                if let Some(b) = else_block {
+                    self.collect_map_get_key_uses(b, param_name, func, key_uses, other_uses);
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    value, param_name, func, key_uses, other_uses,
+                );
+                for arm in arms {
+                    self.expression_collect_map_get_key_uses(
+                        &arm.body, param_name, func, key_uses, other_uses,
+                    );
+                }
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    condition, param_name, func, key_uses, other_uses,
+                );
+                self.collect_map_get_key_uses(body, param_name, func, key_uses, other_uses);
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    iterable, param_name, func, key_uses, other_uses,
+                );
+                self.collect_map_get_key_uses(body, param_name, func, key_uses, other_uses);
+            }
+            _ => {}
+        }
+    }
+
+    fn expression_collect_map_get_key_uses(
+        &self,
+        expr: &Expression,
+        param_name: &str,
+        func: &FunctionDecl,
+        key_uses: &mut usize,
+        other_uses: &mut usize,
+    ) {
+        if let Some((object, _method, arguments)) =
+            super::stdlib_method_traits::decompose_collection_key_lookup(expr)
+        {
+            for (i, (_, arg)) in arguments.iter().enumerate() {
+                if self.expr_is_identifier(*arg, param_name) {
+                    let receiver = self.receiver_type_name_from_expr(object, func);
+                    if i == 0
+                        && super::stdlib_method_traits::is_map_receiver(receiver.as_deref())
+                    {
+                        *key_uses += 1;
+                    } else {
+                        *other_uses += 1;
+                    }
+                }
+            }
+            self.expression_collect_map_get_key_uses(
+                object, param_name, func, key_uses, other_uses,
+            );
+            for (_, arg) in arguments {
+                self.expression_collect_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+            }
+            return;
+        }
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if self.expr_is_identifier(*arg, param_name) {
+                        let receiver = self.receiver_type_name_from_expr(object, func);
+                        if super::stdlib_method_traits::is_map_key_method(method)
+                            && i == 0
+                            && super::stdlib_method_traits::is_map_receiver(receiver.as_deref())
+                        {
+                            *key_uses += 1;
+                        } else {
+                            *other_uses += 1;
+                        }
+                    }
+                }
+                self.expression_collect_map_get_key_uses(
+                    object, param_name, func, key_uses, other_uses,
+                );
+                for (_, arg) in arguments {
+                    self.expression_collect_map_get_key_uses(
+                        arg, param_name, func, key_uses, other_uses,
+                    );
+                }
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    function, param_name, func, key_uses, other_uses,
+                );
+                for (_, arg) in arguments {
+                    self.expression_collect_map_get_key_uses(
+                        arg, param_name, func, key_uses, other_uses,
+                    );
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    left, param_name, func, key_uses, other_uses,
+                );
+                self.expression_collect_map_get_key_uses(
+                    right, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    operand, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    object, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_collect_map_get_key_uses(
+                    object, param_name, func, key_uses, other_uses,
+                );
+                self.expression_collect_map_get_key_uses(
+                    index, param_name, func, key_uses, other_uses,
+                );
+            }
+            Expression::Block { statements, .. } => {
+                self.collect_map_get_key_uses(statements, param_name, func, key_uses, other_uses);
+            }
+            _ => {}
+        }
+    }
+
+    fn receiver_type_name_from_expr(
+        &self,
+        object: &Expression,
+        func: &FunctionDecl,
+    ) -> Option<String> {
+        if let Expression::Identifier { name, .. } = object {
+            func.parameters.iter().find(|p| p.name == *name).and_then(|p| {
+                match &p.type_ {
+                    Type::Custom(n) => Some(n.clone()),
+                    Type::Parameterized(base, _) => Some(base.clone()),
+                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                        match inner.as_ref() {
+                            Type::Custom(n) => Some(n.clone()),
+                            Type::Parameterized(base, _) => Some(base.clone()),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                }
+            })
+        } else {
+            None
+        }
     }
 }

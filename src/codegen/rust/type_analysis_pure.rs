@@ -22,31 +22,5 @@ pub fn is_copy_type(ty: &Type) -> bool {
 /// must be registered via `copy_types_registry` (populated from `@derive(Copy)`
 /// annotations or `.wj.meta` files), not hardcoded in the compiler.
 pub fn is_known_copy_type(name: &str) -> bool {
-    matches!(
-        name,
-        "Vec2"
-            | "Vec3"
-            | "Vec4"
-            | "Mat2"
-            | "Mat3"
-            | "Mat4"
-            | "Quat"
-            | "AABB"
-            | "Rect"
-            | "Point"
-            | "Color"
-            | "Colour"
-            | "Vec2i"
-            | "Vec3i"
-            | "Vec4i"
-            | "Vec2f"
-            | "Vec3f"
-            | "Vec4f"
-            | "Vec3Save"
-            | "Vec2Save"
-            | "Transform2D"
-            | "Bounds"
-            | "Size"
-            | "Extent"
-    )
+    crate::type_classification::is_known_copy_aggregate(name)
 }

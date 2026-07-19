@@ -29,6 +29,9 @@ fn test_mannequin_generate_formal_owned_call_site_owned() {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     };
 
     assert!(
@@ -55,6 +58,9 @@ fn test_vec_bare_formal_honors_converged_borrow() {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     };
 
     assert_eq!(
@@ -81,6 +87,9 @@ fn test_quest_id_converged_formal_bare_call_site_borrowed() {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: true,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     };
 
     assert!(
@@ -167,6 +176,9 @@ fn formal_param_type_falls_back_to_param_types_when_empty() {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     };
     assert_eq!(
         sig.formal_param_type(0),

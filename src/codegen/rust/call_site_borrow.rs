@@ -15,6 +15,89 @@ use crate::codegen::rust::type_analysis_pure;
 use crate::codegen::rust::types;
 use crate::parser::{Expression, Literal, Type};
 
+/// Whether codegen recorded (or unambiguously converged) a shared-ref Rust formal for `param_idx`.
+///
+/// Plain WJ `string` formals require `emitted_rust_ref_params` — stale analyzer `Reference(str)`
+/// metadata alone must not force call-site `&` (circular-dep/multipass owned formals).
+pub(crate) fn callee_emits_shared_rust_ref_param(
+    sig: &FunctionSignature,
+    param_idx: usize,
+) -> bool {
+    if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+        flags.get(param_idx).copied().unwrap_or(false)
+    }) {
+        return true;
+    }
+    // Registry/stdlib &str contracts (e.g. String::push_str) — param_types Reference(str)
+    // with Borrowed ownership beats stale WJ `string` formals.
+    if sig.param_types.get(param_idx).is_some_and(|t| {
+        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+    }) && matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+    ) {
+        return true;
+    }
+    if sig.formal_param_types.get(param_idx).is_some_and(|t| {
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            && types::is_windjammer_text_type(t)
+    }) {
+        // Plain WJ `string`: require codegen confirmation or explicit &str in param_types.
+        // Body-converged Borrowed alone must not force call-site `&` before the callee
+        // is emitted (circular-dep / forward-ref owned String formals).
+        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+            flags.get(param_idx).copied().unwrap_or(false)
+        }) {
+            return true;
+        }
+        return sig.param_types.get(param_idx).is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+        });
+    }
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) {
+        return false;
+    }
+    sig.param_types.get(param_idx).is_some_and(|t| match t {
+        Type::Reference(inner) | Type::MutableReference(inner) => {
+            !types::is_windjammer_text_type(inner.as_ref())
+        }
+        _ => false,
+    })
+}
+
+/// Whether a user free-function call must not add `&` because callee formals emit owned
+/// `String` (or registry refresh recorded owned contract) despite stale call-site borrow metadata.
+pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
+    registry: &crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+    call_sig: &FunctionSignature,
+    param_idx: usize,
+    arg_index: usize,
+) -> bool {
+    if callee_name.contains("::") {
+        return false;
+    }
+    let check = |sig: &FunctionSignature, pidx: usize| -> bool {
+        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+            || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                sig, pidx,
+            ) && !callee_emits_shared_rust_ref_param(sig, pidx))
+    };
+    if check(call_sig, param_idx) {
+        return true;
+    }
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    registry
+        .get_signature(callee_name)
+        .or_else(|| registry.get_signature(simple))
+        .is_some_and(|rs| {
+            let pidx = rs.arg_param_index(arg_index);
+            check(rs, pidx)
+        })
+}
+
 /// Lowering actions to apply to a generated argument expression string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CallSiteBorrowDecision {
@@ -47,23 +130,26 @@ pub fn is_stale_borrow_on_owned_copy_formal(sig: &FunctionSignature, arg_index: 
         .is_some_and(type_analysis_pure::is_copy_type)
 }
 
-fn is_collection_key_arg(method_name: &str, arg_index: usize, receiver_type: Option<&str>) -> bool {
-    if arg_index != 0 {
-        return false;
+fn is_collection_key_arg(
+    sig: &FunctionSignature,
+    arg_index: usize,
+    receiver_type: Option<&str>,
+) -> bool {
+    stdlib_method_traits::is_collection_key_lookup(sig, arg_index, receiver_type)
+}
+
+pub fn expression_supports_shared_borrow_at_call_site(
+    arg_expr: &Expression,
+    arg_str: &str,
+) -> bool {
+    if matches!(
+        arg_expr,
+        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+    ) {
+        return true;
     }
-    let is_key_method = stdlib_method_traits::is_map_key_method(method_name)
-        || stdlib_method_traits::is_set_lookup_method(method_name);
-    if !is_key_method {
-        return false;
-    }
-    if let Some(rt) = receiver_type {
-        let base = rt.split('<').next().unwrap_or(rt);
-        return stdlib_method_traits::is_map_type_name(base)
-            || stdlib_method_traits::is_set_type_name(base);
-    }
-    // When receiver type is unknown, don't assume collection key —
-    // the method signature's ownership mode handles borrowing correctly.
-    false
+    // Owned String producers (`i32.to_string()`, etc.) passed to `&str` formals.
+    arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()")
 }
 
 pub fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
@@ -136,49 +222,182 @@ pub fn should_borrow_at_call_site_with_copy_check(
 ) -> CallSiteBorrowDecision {
     let param_idx = sig.arg_param_index(arg_index);
     let effective = effective_ownership_for_call_arg(sig, arg_index);
-    let is_collection_key = is_collection_key_arg(method_name, arg_index, receiver_type);
+    let is_collection_key = is_collection_key_arg(sig, arg_index, receiver_type);
+
+    // Phase-3 registry wrap: `param_types` Reference/MutableReference is the emitted Rust contract.
+    if let Some(param_ty) = sig.param_types.get(param_idx) {
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+            && !is_collection_key
+            && !matches!(
+                arg_expr,
+                Expression::FieldAccess { .. } | Expression::Index { .. }
+            )
+            && !sig.param_types.get(param_idx).is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
+        {
+            return CallSiteBorrowDecision::default();
+        }
+        let registry_ref_is_emitted = matches!(param_ty, Type::MutableReference(_))
+            || callee_emits_shared_rust_ref_param(sig, param_idx);
+        if registry_ref_is_emitted {
+            if arg_str.starts_with("&") || arg_already_rust_ref {
+                return CallSiteBorrowDecision::default();
+            }
+            match param_ty {
+                Type::Reference(inner) => {
+                    if expression_is_string_literal(arg_expr)
+                        && string_utilities::param_is_rust_str_ref(param_ty)
+                    {
+                        return CallSiteBorrowDecision::default();
+                    }
+                    if expression_is_copy_literal(arg_expr) {
+                        return CallSiteBorrowDecision::default();
+                    }
+                    if expression_supports_shared_borrow_at_call_site(arg_expr, arg_str) {
+                        return CallSiteBorrowDecision {
+                            add_ref: true,
+                            ..Default::default()
+                        };
+                    }
+                }
+                Type::MutableReference(_) => {
+                    if expression_is_copy_literal(arg_expr) {
+                        return CallSiteBorrowDecision::default();
+                    }
+                    if expression_supports_shared_borrow_at_call_site(arg_expr, arg_str) {
+                        return CallSiteBorrowDecision {
+                            add_mut_ref: true,
+                            strip_clone: arg_str.ends_with(".clone()"),
+                            ..Default::default()
+                        };
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let param_expects_mut_borrowed = matches!(effective, OwnershipMode::MutBorrowed)
+        || matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::MutBorrowed)
+        );
+
+    // &mut parameters: insert `&mut` even for Copy formals (e.g. `increment(&mut counter)`).
+    if param_expects_mut_borrowed {
+        if arg_str.starts_with("&mut ") || arg_str.starts_with("&") {
+            return CallSiteBorrowDecision::default();
+        }
+        if expression_is_copy_literal(arg_expr) || arg_already_rust_ref {
+            return CallSiteBorrowDecision::default();
+        }
+        return CallSiteBorrowDecision {
+            add_mut_ref: true,
+            strip_clone: arg_str.ends_with(".clone()"),
+            ..Default::default()
+        };
+    }
 
     // Copy formal types: pass by value, don't borrow (unless collection key lookup).
     if formal_type_is_copy && !is_collection_key {
         return CallSiteBorrowDecision::default();
     }
 
-    // Plain owned `string` formals pass by value unless body analysis converged to borrow.
+    // Plain owned `string` formals pass by value unless body analysis converged to borrow,
+    // or the registry already encodes a shared-borrow Rust param (`&str`).
+    let callee_emits_rust_ref = callee_emits_shared_rust_ref_param(sig, param_idx);
     if sig.formal_param_type(param_idx).is_some_and(|t| {
         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             && types::is_windjammer_text_type(t)
     }) && effective == OwnershipMode::Owned
+        && !is_collection_key
+        && !callee_emits_rust_ref
+        && !sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(string_utilities::param_is_rust_str_ref)
+        && !matches!(arg_expr, Expression::FieldAccess { .. })
     {
         return CallSiteBorrowDecision::default();
     }
-    // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
+        // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
+    // Also must not suppress when param_types already encodes Reference(T) (registry wrap)
+    // or codegen refresh recorded an emitted `&str`/`&T` formal (`emitted_rust_ref_params`).
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Owned)
     ) && effective == OwnershipMode::Owned
         && !is_collection_key
+        && !callee_emits_rust_ref
+        && !sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(string_utilities::param_is_rust_str_ref)
+        && sig
+            .param_types
+            .get(param_idx)
+            .is_none_or(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+        && !matches!(arg_expr, Expression::FieldAccess { .. })
     {
         return CallSiteBorrowDecision::default();
     }
 
-    let param_expects_borrowed = matches!(effective, OwnershipMode::Borrowed);
-    let param_expects_mut_borrowed = matches!(effective, OwnershipMode::MutBorrowed);
+    let formal_plain_string = sig
+        .formal_param_type(param_idx)
+        .is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && types::is_windjammer_text_type(t)
+        });
+    let param_is_rust_str = sig
+        .param_types
+        .get(param_idx)
+        .is_some_and(string_utilities::param_is_rust_str_ref);
+    let param_expects_borrowed = if formal_plain_string {
+        callee_emits_rust_ref
+            || param_is_rust_str
+            || matches!(effective, OwnershipMode::Borrowed)
+            || matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed)
+            )
+            || (matches!(arg_expr, Expression::FieldAccess { .. })
+                && !expression_is_string_literal(arg_expr)
+                && (matches!(effective, OwnershipMode::Borrowed)
+                    || matches!(
+                        sig.param_ownership.get(param_idx),
+                        Some(OwnershipMode::Borrowed)
+                    )
+                    || callee_emits_rust_ref
+                    || param_is_rust_str))
+    } else {
+        matches!(effective, OwnershipMode::Borrowed)
+            || matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed)
+            )
+            || sig.param_types.get(param_idx).is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
+            || callee_emits_rust_ref
+    };
 
     let mut decision = CallSiteBorrowDecision::default();
 
-    // &mut parameters: insert `&mut` at call site (skip literals and already-ref args).
-    if param_expects_mut_borrowed {
-        if arg_str.starts_with("&mut ") || arg_str.starts_with("&") {
-            return decision;
+    let user_facing_param = |idx: usize| {
+        if sig.has_self_receiver_slot() {
+            idx > 0
+        } else {
+            true
         }
-        if expression_is_copy_literal(arg_expr) || arg_already_rust_ref {
-            return decision;
-        }
-        decision.add_mut_ref = true;
-        return decision;
-    }
+    };
+    let callee_has_ref_user_param = sig.param_types.iter().enumerate().any(|(idx, t)| {
+        user_facing_param(idx) && matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    });
 
-    if param_expects_borrowed && arg_str.ends_with(".clone()") {
+    if arg_str.ends_with(".clone()")
+        && (param_expects_borrowed || param_expects_mut_borrowed || callee_has_ref_user_param)
+    {
         decision.strip_clone = true;
     }
     if is_collection_key && arg_str.ends_with(".clone()") {
@@ -234,9 +453,11 @@ pub fn should_borrow_at_call_site_with_copy_check(
             .param_type_for_arg(arg_index)
             .is_some_and(types::is_windjammer_text_type)
         {
-            return decision;
-        }
-        if sig
+            if expression_is_string_literal(arg_expr) || arg_already_rust_ref {
+                return decision;
+            }
+            decision.add_ref = true;
+        } else if sig
             .param_type_for_arg(arg_index)
             .is_some_and(|t| !types::is_windjammer_text_type(t))
         {
@@ -249,14 +470,17 @@ pub fn should_borrow_at_call_site_with_copy_check(
 
 /// Final pass: map/set lookup keys need `&K` at the Rust call site.
 pub fn finalize_collection_key_call_site_arg(
-    method_name: &str,
+    sig: Option<&FunctionSignature>,
     arg_index: usize,
     arg_expr: &Expression,
     arg_str: &mut String,
     arg_already_rust_ref: bool,
     receiver_type: Option<&str>,
 ) {
-    if !is_collection_key_arg(method_name, arg_index, receiver_type) || arg_str.starts_with('&') {
+    let Some(sig) = sig else {
+        return;
+    };
+    if !is_collection_key_arg(sig, arg_index, receiver_type) || arg_str.starts_with('&') {
         return;
     }
     if expression_is_string_literal(arg_expr) || expression_is_copy_literal(arg_expr) {
@@ -287,7 +511,9 @@ pub fn apply_call_site_borrow(decision: &CallSiteBorrowDecision, arg_str: &mut S
     }
 
     if decision.add_mut_ref {
-        Coercion::BorrowMut.apply(arg_str);
+        if !arg_str.starts_with("&mut ") {
+            Coercion::BorrowMut.apply(arg_str);
+        }
     }
 
     if decision.add_ref && !arg_str.starts_with('&') {
@@ -317,6 +543,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: has_self,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         }
     }
 
@@ -418,9 +647,40 @@ mod tests {
     }
 
     #[test]
-    fn copy_scalar_i32_no_borrow() {
+    fn registry_str_ref_param_emits_shared_borrow() {
         let sig = sig_with_formal(
-            "Vec::push",
+            "TextBuffer::append_slice",
+            vec![
+                Type::Custom("TextBuffer".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            vec![Type::Custom("TextBuffer".into()), Type::String],
+            vec![OwnershipMode::MutBorrowed, OwnershipMode::Borrowed],
+            true,
+        );
+        let pidx = sig.arg_param_index(0);
+        assert!(
+            callee_emits_shared_rust_ref_param(&sig, pidx),
+            "Reference(str) + Borrowed ownership must emit shared borrow at call sites"
+        );
+    }
+
+    #[test]
+    fn borrowed_string_formal_emits_shared_rust_ref() {
+        let sig = sig_with_formal(
+            "accept_label",
+            vec![Type::String],
+            vec![Type::String],
+            vec![OwnershipMode::Borrowed],
+            false,
+        );
+        assert!(callee_emits_shared_rust_ref_param(&sig, 0));
+    }
+
+    #[test]
+    fn copy_scalar_owned_param_no_borrow() {
+        let sig = sig_with_formal(
+            "IntList::append",
             vec![Type::Custom("Self".into()), Type::Custom("i32".into())],
             vec![Type::Custom("Self".into()), Type::Custom("i32".into())],
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
@@ -430,14 +690,15 @@ mod tests {
             value: Literal::Int(42),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "42", "push", false, Some("Vec"));
-        assert!(!decision.add_ref, "Copy scalar literal must not add &");
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "42", "append", false, Some("IntList"));
+        assert!(!decision.add_ref, "Copy scalar literal to owned param must not add &");
     }
 
     #[test]
     fn string_literal_to_str_param_no_extra_borrow() {
         let sig = sig_with_formal(
-            "println",
+            "write_line",
             vec![Type::Reference(Box::new(Type::Custom("str".into())))],
             vec![Type::Custom("string".into())],
             vec![OwnershipMode::Borrowed],
@@ -448,7 +709,7 @@ mod tests {
             location: Default::default(),
         };
         let decision =
-            should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "println", false, None);
+            should_borrow_at_call_site(&sig, 0, &arg, "\"hello\"", "write_line", false, None);
         assert!(
             !decision.add_ref,
             "string literal to &str must not add extra &"
@@ -456,10 +717,13 @@ mod tests {
     }
 
     #[test]
-    fn copy_map_key_still_borrows() {
+    fn copy_key_reference_formal_still_borrows() {
         let sig = sig_with_formal(
-            "HashMap::get",
-            vec![Type::Custom("Self".into()), Type::Custom("u32".into())],
+            "SymbolTable::resolve",
+            vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("u32".into()))),
+            ],
             vec![Type::Custom("Self".into()), Type::Custom("u32".into())],
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             true,
@@ -468,12 +732,43 @@ mod tests {
             name: "node".into(),
             location: Default::default(),
         };
-        let decision =
-            should_borrow_at_call_site(&sig, 0, &arg, "node", "get", false, Some("HashMap"));
+        let decision = should_borrow_at_call_site(
+            &sig,
+            0,
+            &arg,
+            "node",
+            "resolve",
+            false,
+            Some("SymbolTable"),
+        );
         assert!(
             decision.add_ref,
-            "Copy map keys must still get & at call site"
+            "Copy key with Reference formal must still get & at call site"
         );
+    }
+
+    #[test]
+    fn registry_reference_param_borrows_owned_local() {
+        let map_ty = Type::Parameterized(
+            "HashMap".into(),
+            vec![Type::Custom("i64".into()), Type::String],
+        );
+        let sig = sig_with_formal(
+            "get_user_name",
+            vec![Type::Reference(Box::new(map_ty)), Type::Custom("i64".into())],
+            vec![Type::Parameterized(
+                "HashMap".into(),
+                vec![Type::Custom("i64".into()), Type::String],
+            ), Type::Custom("i64".into())],
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            false,
+        );
+        let arg = Expression::Identifier {
+            name: "users".into(),
+            location: Default::default(),
+        };
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "users", "get_user_name", false, None);
+        assert!(decision.add_ref, "Reference(HashMap) formal must borrow owned local");
     }
 
     #[test]

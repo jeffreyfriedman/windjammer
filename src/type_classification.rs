@@ -44,6 +44,22 @@ pub fn is_copy_primitive(name: &str) -> bool {
     is_numeric_type(name) || matches!(name, "bool" | "char")
 }
 
+/// Copy formals that stay pass-by-value in generated Rust signatures.
+///
+/// Scalars and references pass by value; Copy **aggregates** (structs/enums registered
+/// as Copy) borrow as `&T` when read-only so call sites avoid redundant copies.
+pub fn is_copy_pass_by_value_formal(ty: &crate::parser::ast::types::Type) -> bool {
+    use crate::parser::ast::types::Type;
+    match ty {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::Reference(_) => true,
+        Type::RawPointer { .. } | Type::FunctionPointer { .. } => true,
+        Type::Custom(name) => is_copy_primitive(name) || name == "int",
+        Type::Tuple(types) => types.iter().all(is_copy_pass_by_value_formal),
+        _ => false,
+    }
+}
+
 /// Valid numeric literal suffixes in the lexer.
 pub fn is_numeric_suffix(name: &str) -> bool {
     matches!(
@@ -60,6 +76,39 @@ pub fn is_prelude_or_primitive(name: &str) -> bool {
 // =============================================================================
 // Copy Type Classification (Structural)
 // =============================================================================
+
+/// Well-known Copy aggregate names from engine/game metadata (Vec3, AABB, etc.).
+/// Used when dependency `copy_structs` metadata has not been merged yet.
+pub fn is_known_copy_aggregate(name: &str) -> bool {
+    let base = name.rsplit("::").next().unwrap_or(name);
+    matches!(
+        base,
+        "Vec2"
+            | "Vec3"
+            | "Vec4"
+            | "Mat2"
+            | "Mat3"
+            | "Mat4"
+            | "Quat"
+            | "AABB"
+            | "Rect"
+            | "Point"
+            | "Color"
+            | "Colour"
+            | "Vec2i"
+            | "Vec3i"
+            | "Vec4i"
+            | "Vec2f"
+            | "Vec3f"
+            | "Vec4f"
+            | "Vec3Save"
+            | "Vec2Save"
+            | "Transform2D"
+            | "Bounds"
+            | "Size"
+            | "Extent"
+    )
+}
 
 /// Determine if a `Type` tree is Copy given sets of known Copy structs/enums.
 /// This is the canonical implementation used by both single-file and library

@@ -95,7 +95,9 @@ impl<'ast> CodeGenerator<'ast> {
         var_name: &str,
     ) -> bool {
         for stmt in body {
-            if self.statement_modifies_variable(stmt, var_name) {
+            if self.statement_modifies_variable(stmt, var_name)
+                || self.statement_mutates_variable_field(stmt, var_name)
+            {
                 return true;
             }
         }

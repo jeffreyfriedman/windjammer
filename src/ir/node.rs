@@ -11,6 +11,74 @@ use crate::ir::safety_type::{BaseType, OwnedType, Region, SafetyType};
 use crate::parser::ast::types::Type;
 use std::collections::{HashMap, HashSet};
 
+/// Qualified IR function name (`Type::method` for impl methods, bare name otherwise).
+pub fn ir_function_name_from_decl(name: &str, parent_type: Option<&str>) -> String {
+    if let Some(parent) = parent_type {
+        format!("{parent}::{name}")
+    } else {
+        name.to_string()
+    }
+}
+
+/// Ownership mode implied by the declared parameter type in source.
+/// The IR solver is authoritative; explicit `&T` / `&mut T` in signatures map to borrows.
+pub fn ownership_mode_from_param_type(ty: &Type) -> OwnershipMode {
+    match ty {
+        Type::Reference(_) => OwnershipMode::Borrowed,
+        Type::MutableReference(_) => OwnershipMode::MutBorrowed,
+        _ => OwnershipMode::Owned,
+    }
+}
+
+/// Whether a parameter type should seed `Owned` before body/call-site analysis.
+pub fn param_ownership_seed_is_copy(ty: &Type) -> bool {
+    match ty {
+        Type::Int
+        | Type::Int32
+        | Type::Uint
+        | Type::Float
+        | Type::Bool
+        | Type::String => true,
+        Type::Custom(name) => matches!(
+            name.as_str(),
+            "i8" | "i16"
+                | "i32"
+                | "i64"
+                | "i128"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "u128"
+                | "f32"
+                | "f64"
+                | "bool"
+                | "char"
+                | "isize"
+                | "usize"
+                | "()"
+        ),
+        _ => false,
+    }
+}
+
+/// Convert an ownership mode to IR `OwnedType`, allocating fresh regions for borrows.
+pub fn ownership_mode_to_owned_type(mode: OwnershipMode, region_counter: &mut u32) -> OwnedType {
+    match mode {
+        OwnershipMode::Owned => OwnedType::Owned,
+        OwnershipMode::Borrowed => {
+            let r = Region::fresh(*region_counter);
+            *region_counter += 1;
+            OwnedType::Ref(r)
+        }
+        OwnershipMode::MutBorrowed => {
+            let r = Region::fresh(*region_counter);
+            *region_counter += 1;
+            OwnedType::MutRef(r)
+        }
+    }
+}
+
 /// An IR-level function — carries safety types for all parameters and locals.
 #[derive(Debug, Clone)]
 pub struct IrFunction {
@@ -34,6 +102,12 @@ pub struct IrFunction {
 
     /// Optimization annotations (derived from analyzer phases 2-9).
     pub optimizations: OptimizationHints,
+
+    /// Solver-resolved safety types for local variables.
+    pub local_types: HashMap<String, SafetyType>,
+
+    /// Expression-level IR body (populated during lowering).
+    pub body: Vec<IrNode>,
 }
 
 /// Convert a parser `Type` to an IR `BaseType`.
@@ -125,11 +199,14 @@ impl IrFunction {
     /// Bridge from the existing `AnalyzedFunction` — lossless conversion.
     /// Maps all analyzer data into typed IR representation.
     pub fn from_analyzed(analyzed: &AnalyzedFunction<'_>) -> Self {
-        let name = analyzed.decl.name.to_string();
+        let name = ir_function_name_from_decl(
+            &analyzed.decl.name,
+            analyzed.decl.parent_type.as_deref(),
+        );
 
         let mut region_counter: u32 = 1;
 
-        let inferred_types_by_index: HashMap<usize, &Type> = analyzed
+        let _inferred_types_by_index: HashMap<usize, &Type> = analyzed
             .decl
             .parameters
             .iter()
@@ -150,37 +227,37 @@ impl IrFunction {
             })
             .collect();
 
-        let param_types = analyzed
-            .inferred_ownership
+        let param_types: HashMap<String, SafetyType> = analyzed
+            .decl
+            .parameters
             .iter()
-            .map(|(param_name, mode)| {
-                let ownership = match mode {
-                    OwnershipMode::Owned => OwnedType::Owned,
-                    OwnershipMode::Borrowed => {
-                        let r = Region::fresh(region_counter);
-                        region_counter += 1;
-                        OwnedType::Ref(r)
-                    }
-                    OwnershipMode::MutBorrowed => {
-                        let r = Region::fresh(region_counter);
-                        region_counter += 1;
-                        OwnedType::MutRef(r)
-                    }
+            .map(|param| {
+                let param_name = param.name.clone();
+                let mode = ownership_mode_from_param_type(&param.type_);
+                let mut ownership = if matches!(
+                    param.type_,
+                    Type::Reference(_) | Type::MutableReference(_)
+                ) || param_ownership_seed_is_copy(&param.type_)
+                {
+                    ownership_mode_to_owned_type(mode, &mut region_counter)
+                } else {
+                    OwnedType::Owned // placeholder; solver + impl convergence refine
                 };
 
-                let base = if let Some(ty) = inferred_type_overrides.get(param_name) {
+                // Mutated parameters must be MutRef even if ownership inference lagged.
+                // Returned parameters stay owned (e.g. `mut clip: T` → `clip` at end of fn).
+                if analyzed.mutated_parameters.contains(&param_name)
+                    && !analyzed.returned_parameters.contains(&param_name)
+                {
+                    let r = Region::fresh(region_counter);
+                    region_counter += 1;
+                    ownership = OwnedType::MutRef(r);
+                }
+
+                let base = if let Some(ty) = inferred_type_overrides.get(&param_name) {
                     parser_type_to_base_type(ty)
                 } else {
-                    let idx = analyzed
-                        .decl
-                        .parameters
-                        .iter()
-                        .position(|p| p.name == param_name.as_str());
-                    if let Some(ty) = idx.and_then(|i| inferred_types_by_index.get(&i)) {
-                        parser_type_to_base_type(ty)
-                    } else {
-                        BaseType::Inferred
-                    }
+                    parser_type_to_base_type(&param.type_)
                 };
 
                 let safety = SafetyType {
@@ -191,7 +268,7 @@ impl IrFunction {
                     const_eval: crate::ir::safety_type::ConstEval::Runtime,
                     exec_mode: None,
                 };
-                (param_name.clone(), safety)
+                (param_name, safety)
             })
             .collect();
 
@@ -213,6 +290,8 @@ impl IrFunction {
             mutated_params: analyzed.mutated_parameters.clone(),
             str_ref_params: analyzed.str_ref_optimizable_params.clone(),
             optimizations,
+            local_types: HashMap::new(),
+            body: Vec::new(),
         }
     }
 }

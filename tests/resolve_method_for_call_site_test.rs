@@ -23,6 +23,9 @@ fn mannequin_engine_stub() -> FunctionSignature {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     }
 }
 
@@ -36,6 +39,9 @@ fn mannequin_body_borrow() -> FunctionSignature {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     }
 }
 
@@ -49,6 +55,9 @@ fn mannequin_owned_formal() -> FunctionSignature {
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     }
 }
 

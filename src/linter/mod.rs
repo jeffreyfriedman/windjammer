@@ -334,6 +334,9 @@ mod owned_but_not_returned_tests {
                 s.insert("pool".to_string());
                 s
             },
+            returned_parameters: HashSet::new(),
+            field_extract_parameters: HashSet::new(),
+            field_mutated_parameters: HashSet::new(),
             auto_clone_analysis: AutoCloneAnalysis::default(),
             clone_optimizations: vec![],
             struct_mapping_optimizations: vec![],

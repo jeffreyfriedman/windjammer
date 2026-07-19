@@ -67,6 +67,26 @@ impl<'ast> CodeGenerator<'ast> {
                 needs_borrow = true;
             }
         }
+
+        let loop_element_type = self
+            .infer_expression_type(iterable)
+            .and_then(|t| Self::extract_iterator_element_type(&t));
+        let copy_element_by_value = loop_element_type
+            .as_ref()
+            .is_some_and(|e| self.is_type_copy(e));
+
+        // Copy elements from an owned collection: consume by value (`for byte in vec`) so
+        // `Vec::push(byte)` type-checks without `*byte` (WDB-006).
+        if copy_element_by_value {
+            if let Expression::Identifier { name, .. } = iterable {
+                if !self.for_loop_borrow_needed.contains(name)
+                    && !self.inferred_borrowed_params.contains(name)
+                {
+                    needs_borrow = false;
+                }
+            }
+        }
+
         let needs_mut_borrow = needs_mut && needs_borrow;
 
         let iterable_already_mut_ref = matches!(
@@ -92,6 +112,16 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(" in ");
 
         let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
+
+        if copy_element_by_value && is_borrowed_iterator {
+            if let Expression::Identifier { name, .. } = iterable {
+                if !self.for_loop_borrow_needed.contains(name)
+                    && !self.inferred_borrowed_params.contains(name)
+                {
+                    is_borrowed_iterator = false;
+                }
+            }
+        }
 
         if needs_mut_borrow {
             output.push_str("&mut ");

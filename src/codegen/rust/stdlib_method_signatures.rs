@@ -57,6 +57,54 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
             true,
         ),
     );
+    vec_methods.insert(
+        "get".to_string(),
+        MethodSignature::new(
+            "Vec",
+            "get",
+            vec![Type::Uint],
+            vec![OwnershipMode::Owned],
+            Some(Type::Option(Box::new(Type::Reference(Box::new(Type::Custom(
+                "T".to_string(),
+            )))))),
+            true,
+        ),
+    );
+    vec_methods.insert(
+        "get_mut".to_string(),
+        MethodSignature::new(
+            "Vec",
+            "get_mut",
+            vec![Type::Uint],
+            vec![OwnershipMode::Owned],
+            Some(Type::Option(Box::new(Type::MutableReference(Box::new(
+                Type::Custom("T".to_string()),
+            ))))),
+            true,
+        ),
+    );
+    vec_methods.insert(
+        "join".to_string(),
+        MethodSignature::new(
+            "Vec",
+            "join",
+            vec![Type::Reference(Box::new(Type::Custom("str".to_string())))],
+            vec![OwnershipMode::Borrowed],
+            Some(Type::String),
+            true,
+        ),
+    );
+    vec_methods.insert(
+        "extend_from_slice".to_string(),
+        MethodSignature::new(
+            "Vec",
+            "extend_from_slice",
+            vec![Type::Reference(Box::new(Type::Custom("T".to_string())))],
+            vec![OwnershipMode::Borrowed],
+            None,
+            true,
+        ),
+    );
     map.insert("Vec".to_string(), vec_methods);
 
     // String methods

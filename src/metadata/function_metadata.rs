@@ -155,6 +155,9 @@ pub fn try_analyzer_signature_from_metadata(
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: meta_sig.has_self_receiver,
         is_extern: meta_sig.is_extern,
+        emitted_rust_ref_params: None,
+        field_extract_params: None,
+            forwarding_borrow_params: None,
     })
 }
 

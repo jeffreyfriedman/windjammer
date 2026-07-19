@@ -29,8 +29,52 @@ impl Lexer {
                             }
                         }
 
-                        let value = i64::from_str_radix(&hex_str, 16).expect("Invalid hex literal");
-                        return Token::IntLiteral(value);
+                        // Optional type suffix after hex digits (e.g. 0xFFu64)
+                        let type_suffix = if self.current_char == Some('u')
+                            || self.current_char == Some('i')
+                        {
+                            let mut suffix = String::new();
+                            while let Some(ch) = self.current_char {
+                                if ch.is_ascii_alphanumeric() {
+                                    suffix.push(ch);
+                                    self.advance();
+                                } else {
+                                    break;
+                                }
+                            }
+                            if crate::type_classification::is_numeric_suffix(&suffix) {
+                                Some(suffix)
+                            } else {
+                                for _ in 0..suffix.len() {
+                                    self.position = self.position.saturating_sub(1);
+                                }
+                                self.current_char = if self.position < self.input.len() {
+                                    Some(self.input[self.position])
+                                } else {
+                                    None
+                                };
+                                None
+                            }
+                        } else {
+                            None
+                        };
+
+                        let parsed = u128::from_str_radix(&hex_str, 16)
+                            .expect("Invalid hex literal");
+
+                        if let Some(suffix) = type_suffix {
+                            let bits = parsed as u64;
+                            return Token::IntLiteralSuffixed(bits as i64, suffix);
+                        }
+
+                        if parsed <= i64::MAX as u128 {
+                            return Token::IntLiteral(parsed as i64);
+                        }
+                        if parsed == 1u128 << 63 {
+                            return Token::IntLiteral(i64::MIN);
+                        }
+                        let bits = parsed as u64;
+                        return Token::IntLiteralSuffixed(bits as i64, "u64".to_string());
                     }
                     'b' | 'B' => {
                         // Binary: 0b1010, 0b1111_0000

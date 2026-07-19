@@ -281,6 +281,47 @@ pub fn is_collection_key_method(method: &str) -> bool {
     is_map_key_method(method) || is_set_lookup_method(method)
 }
 
+pub(crate) fn is_qualified_map_type(ty: &Type) -> bool {
+    match ty {
+        Type::Parameterized(base, _) | Type::Custom(base) => {
+            is_map_receiver(Some(base.as_str())) && base.contains("::")
+        }
+        Type::Reference(inner) | Type::MutableReference(inner) => is_qualified_map_type(inner),
+        _ => false,
+    }
+}
+
+/// Map/set lookup syntax may parse as `MethodCall` or `Call(FieldAccess(receiver, method))`.
+pub(crate) fn decompose_collection_key_lookup<'ast>(
+    expr: &'ast crate::parser::Expression<'ast>,
+) -> Option<(
+    &'ast crate::parser::Expression<'ast>,
+    &'ast str,
+    &'ast [(Option<String>, &'ast crate::parser::Expression<'ast>)],
+)> {
+    match expr {
+        crate::parser::Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } if is_collection_key_method(method) => Some((object, method.as_str(), arguments.as_slice())),
+        crate::parser::Expression::Call {
+            function,
+            arguments,
+            ..
+        } => match &**function {
+            crate::parser::Expression::FieldAccess { object, field, .. }
+                if is_collection_key_method(field) =>
+            {
+                Some((object, field.as_str(), arguments.as_slice()))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub fn is_storage_method(method: &str) -> bool {
     STORAGE.contains(&method)
 }
@@ -357,10 +398,11 @@ fn is_closure_type(ty: &Type) -> bool {
         || matches!(ty, Type::FunctionPointer { .. })
 }
 
-fn is_map_receiver(receiver_type: Option<&str>) -> bool {
+pub(crate) fn is_map_receiver(receiver_type: Option<&str>) -> bool {
     receiver_type.is_some_and(|ty| {
         let base = ty.split('<').next().unwrap_or(ty);
-        MAP_TYPES.contains(&base)
+        let short = base.rsplit("::").next().unwrap_or(base);
+        MAP_TYPES.contains(&short)
     })
 }
 

@@ -31,5 +31,6 @@
 //! `expression_generation.rs` (single module, shared imports in `mod.rs`).
 
 mod generator;
+mod ir_lowering;
 
 pub use generator::GoBackend;

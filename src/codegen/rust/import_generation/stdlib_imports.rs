@@ -21,6 +21,14 @@ impl CodeGenerator<'_> {
         // Strip glob suffix if present for checking
         let module_base = module_name.strip_suffix("::*").unwrap_or(module_name);
 
+        // Windjammer stdlib `Map` → Rust HashMap (standalone crates have no windjammer_runtime::map).
+        if module_base == "map" || module_base.starts_with("map::") {
+            if module_name.ends_with("::Map") || module_name == "map::Map" {
+                return Some("use std::collections::HashMap as Map;\n".to_string());
+            }
+            return Some(format!("use std::collections::{};\n", module_name.replace("map::", "collections::")));
+        }
+
         // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
         // These are native Rust modules that should be used directly
         if module_base.starts_with("collections")

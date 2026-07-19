@@ -11,15 +11,19 @@
 //!   - `NeedsClone` when a variable is used at multiple owned sites
 //!   - `HasEffects`/`EffectsUnion` for call-graph effect propagation
 //!
-//! Analyzer metadata is retained as secondary constraints until the solver is
-//! proven equivalent (shadow validation in Phase 1D).
+//! Analyzer metadata is no longer seeded as ownership constraints — the solver
+//! derives ownership from declared types, body usage, and registry call-site unification.
 
-use crate::analyzer::{AnalyzedFunction, OwnershipMode};
+use crate::analyzer::{AnalyzedFunction, FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar};
 use crate::ir::execution::{CallLocation, CallSite, ExecutionConstraint};
-use crate::ir::node::parser_type_to_base_type;
+use crate::ir::node::{
+    ir_function_name_from_decl, ownership_mode_from_param_type, ownership_mode_to_owned_type,
+    param_ownership_seed_is_copy, parser_type_to_base_type,
+};
 use crate::ir::safety_type::{BaseType, Effect, EffectSet, ExecutionMode, OwnedType, Region};
 use crate::parser::ast::core::{Expression, Pattern, Statement};
+use crate::parser::ast::types::Type;
 use crate::parser::ast::literals::Literal;
 use crate::parser::ast::operators::BinaryOp;
 use std::collections::HashMap;
@@ -64,10 +68,12 @@ struct AstConstraintWalker<'a, 'ast> {
     taint_constraints: Vec<crate::ir::taint::TaintConstraint>,
     /// Execution mode constraints from `async`/`spawn` call prefixes.
     execution_constraints: Vec<ExecutionConstraint>,
+    /// Optional signature registry for call-site unification.
+    registry: Option<&'a SignatureRegistry>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
-    fn new(analyzed: &'a AnalyzedFunction<'ast>) -> Self {
+    fn new(analyzed: &'a AnalyzedFunction<'ast>, registry: Option<&'a SignatureRegistry>) -> Self {
         let mut cs = ConstraintSet::new();
         let mut param_vars = HashMap::new();
         let mut region_counter: u32 = 1;
@@ -84,8 +90,37 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
         }
 
-        // Apply analyzer ownership (secondary: will be derived from body walk once solver is proven)
+        // Ownership seeds: explicit borrows and Copy types only.
+        // Non-copy bare `T` params are resolved by body usage, call sites, and impl convergence.
+        for param in &analyzed.decl.parameters {
+            if let Some(&var) = param_vars.get(&param.name) {
+                match &param.type_ {
+                    Type::Reference(_) | Type::MutableReference(_) => {
+                        let mode = ownership_mode_from_param_type(&param.type_);
+                        let ownership = ownership_mode_to_owned_type(mode, &mut region_counter);
+                        cs.add(Constraint::OwnershipIs(var, ownership));
+                    }
+                    ty if param_ownership_seed_is_copy(ty) => {
+                        cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Returned parameters stay owned even when the body mutates them.
+        for param_name in &analyzed.returned_parameters {
+            if let Some(&var) = param_vars.get(param_name) {
+                cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
+            }
+        }
+
+        // Analyzer ownership as solver constraints (not codegen authority).
+        // Conflicts resolve in the solver: Owned/MutRef beat Ref for passthrough callees.
         for (param_name, ownership_mode) in &analyzed.inferred_ownership {
+            if analyzed.str_ref_optimizable_params.contains(param_name) {
+                continue;
+            }
             if let Some(&var) = param_vars.get(param_name) {
                 let ownership = match ownership_mode {
                     OwnershipMode::Owned => OwnedType::Owned,
@@ -104,7 +139,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
         }
 
-        // Apply inferred param type overrides from analyzer
+        // Apply inferred param type overrides from analyzer (type only, not ownership).
         for (idx, inferred_ty) in analyzed.inferred_param_types.iter().enumerate() {
             if let Some(param) = analyzed.decl.parameters.get(idx) {
                 if let Some(&var) = param_vars.get(&param.name) {
@@ -117,15 +152,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
         }
 
-        // str_ref optimization: analyzer detected String→&str coercion
-        for _param_name in &analyzed.str_ref_optimizable_params {
-            let str_var = cs.fresh_var();
-            cs.add(Constraint::TypeIs(str_var, BaseType::String));
-            cs.add(Constraint::OwnershipIs(
-                str_var,
-                OwnedType::Ref(Region::fresh(region_counter)),
-            ));
-            region_counter += 1;
+        // str_ref optimization: link to actual param var
+        for param_name in &analyzed.str_ref_optimizable_params {
+            if let Some(&var) = param_vars.get(param_name) {
+                cs.add(Constraint::TypeIs(var, BaseType::String));
+                cs.add(Constraint::OwnershipIs(
+                    var,
+                    OwnedType::Ref(Region::fresh(region_counter)),
+                ));
+                region_counter += 1;
+            }
         }
 
         // Return type constraint var
@@ -153,7 +189,68 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             call_targets: Vec::new(),
             taint_constraints: Vec::new(),
             execution_constraints: Vec::new(),
+            registry,
         }
+    }
+
+    fn ownership_mode_to_owned(&mut self, mode: OwnershipMode) -> OwnedType {
+        match mode {
+            OwnershipMode::Owned => OwnedType::Owned,
+            OwnershipMode::Borrowed => {
+                let r = self.fresh_region();
+                OwnedType::Ref(r)
+            }
+            OwnershipMode::MutBorrowed => {
+                let r = self.fresh_region();
+                OwnedType::MutRef(r)
+            }
+        }
+    }
+
+    /// Unify call-site argument vars with callee formal expectations.
+    fn emit_call_site_constraints(&mut self, sig: &FunctionSignature, arg_vars: &[ConstraintVar]) {
+        for (arg_index, &arg_var) in arg_vars.iter().enumerate() {
+            let param_idx = sig.arg_param_index(arg_index);
+            let expected_var = self.cs.fresh_var();
+
+            if let Some(ty) = sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx))
+            {
+                let base = parser_type_to_base_type(ty);
+                if base != BaseType::Inferred {
+                    self.cs.add(Constraint::TypeIs(expected_var, base));
+                }
+            }
+
+            if let Some(mode) = sig.param_ownership.get(param_idx) {
+                let own = self.ownership_mode_to_owned(*mode);
+                self.cs.add(Constraint::OwnershipIs(expected_var, own));
+            }
+
+            self.cs
+                .add(Constraint::TypeEquals(arg_var, expected_var));
+        }
+    }
+
+    fn resolve_callee_signature(
+        &self,
+        name: &str,
+        arg_count: usize,
+        has_receiver: bool,
+    ) -> Option<&FunctionSignature> {
+        let registry = self.registry?;
+        registry
+            .get_signature(name)
+            .or_else(|| registry.lookup_method(name))
+            .or_else(|| registry.find_signature_by_name_and_arg_count(name, arg_count))
+            .or_else(|| {
+                if has_receiver {
+                    registry.find_signature_ending_with(name)
+                } else {
+                    None
+                }
+            })
     }
 
     /// Resolve or create a constraint var for a variable name.
@@ -381,9 +478,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::Identifier { name, .. } => {
-                let var = self.resolve_var(name);
-                self.track_owned_use(name);
-                var
+                self.resolve_var(name)
             }
 
             Expression::Binary {
@@ -445,19 +540,27 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 arguments,
                 ..
             } => {
-                let callee_var = self.walk_expression(function);
+                let _callee_var = self.walk_expression(function);
+                let mut arg_vars = Vec::new();
                 for (_label, arg_expr) in arguments {
-                    self.walk_expression(arg_expr);
+                    arg_vars.push(self.walk_expression(arg_expr));
                 }
                 let result = self.cs.fresh_var();
 
                 if let Some(callee_name) = Self::extract_callee_name(function) {
                     self.call_targets.push(callee_name.clone());
 
+                    if let Some(sig) = self
+                        .resolve_callee_signature(&callee_name, arguments.len(), false)
+                        .cloned()
+                    {
+                        self.emit_call_site_constraints(&sig, &arg_vars);
+                    }
+
                     let callee_effects = lookup_stdlib_effects(&callee_name);
                     if !callee_effects.is_empty() {
                         self.cs.add(Constraint::HasEffects(
-                            callee_var,
+                            result,
                             EffectSet::from_iter(callee_effects),
                         ));
                     }
@@ -466,7 +569,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
 
                 self.cs
-                    .add(Constraint::EffectsUnion(result, vec![callee_var]));
+                    .add(Constraint::EffectsUnion(result, arg_vars));
                 result
             }
 
@@ -477,8 +580,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ..
             } => {
                 let obj_var = self.walk_expression(object);
+                let mut arg_vars = Vec::new();
                 for (_label, arg_expr) in arguments {
-                    self.walk_expression(arg_expr);
+                    arg_vars.push(self.walk_expression(arg_expr));
                 }
                 if is_mutating_method(method) {
                     let r = self.fresh_region();
@@ -493,6 +597,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     method.clone()
                 };
                 self.call_targets.push(qualified.clone());
+
+                if let Some(sig) = self
+                    .resolve_callee_signature(method, arguments.len(), true)
+                    .or_else(|| {
+                        self.resolve_callee_signature(&qualified, arguments.len(), true)
+                    })
+                    .cloned()
+                {
+                    self.emit_call_site_constraints(&sig, &arg_vars);
+                }
 
                 let callee_effects = lookup_stdlib_effects(&qualified);
                 if !callee_effects.is_empty() {
@@ -579,6 +693,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Expression::Tuple { elements, .. } => {
                 let result = self.cs.fresh_var();
                 for elem in elements {
+                    if let Expression::Identifier { name, .. } = elem {
+                        if let Some(&var) = self.param_vars.get(name) {
+                            self.cs
+                                .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                        }
+                    }
                     self.walk_expression(elem);
                 }
                 result
@@ -737,6 +857,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     /// Emit NeedsClone constraints for variables used multiple times in owned contexts.
     /// Also incorporates analyzer's auto_clone_analysis as secondary source.
     fn emit_clone_constraints(&mut self) {
+        for (var_name, count) in &self.owned_use_counts {
+            if *count > 1 {
+                if let Some(var) = self.param_vars.get(var_name).copied().or_else(|| {
+                    self.local_vars.get(var_name).copied()
+                }) {
+                    self.cs.add(Constraint::NeedsClone(var));
+                }
+            }
+        }
         // From analyzer's auto_clone_analysis (secondary, will be removed in Phase 1F)
         for ((var_name, _stmt_idx), _reason) in &self.analyzed.auto_clone_analysis.clone_sites {
             let var = self.resolve_var(var_name);
@@ -789,9 +918,30 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Params whose fields are returned (partial move) stay owned at the formal.
+    fn emit_return_field_consumption_constraints(&mut self) {
+        for stmt in &self.analyzed.decl.body {
+            let value = match stmt {
+                Statement::Return { value: Some(v), .. } => v,
+                _ => continue,
+            };
+            if let Expression::FieldAccess { object, .. } = value {
+                if let Some(name) = self.root_identifier(object) {
+                    if let Some(&var) = self.param_vars.get(&name) {
+                        self.cs
+                            .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                    }
+                }
+            }
+        }
+    }
+
     fn finish(self) -> FunctionConstraints {
         FunctionConstraints {
-            function_name: self.analyzed.decl.name.to_string(),
+            function_name: ir_function_name_from_decl(
+                &self.analyzed.decl.name,
+                self.analyzed.decl.parent_type.as_deref(),
+            ),
             constraints: self.cs,
             var_map: ConstraintVarMap {
                 params: self.param_vars,
@@ -806,12 +956,13 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 }
 
 /// Generate constraints from an analyzed function via full AST walk.
-///
-/// Walks the function body to emit first-principles constraints, supplemented
-/// by analyzer metadata as a secondary source during the cutover period.
-pub fn generate_constraints(analyzed: &AnalyzedFunction<'_>) -> FunctionConstraints {
-    let mut walker = AstConstraintWalker::new(analyzed);
+pub fn generate_constraints(
+    analyzed: &AnalyzedFunction<'_>,
+    registry: Option<&SignatureRegistry>,
+) -> FunctionConstraints {
+    let mut walker = AstConstraintWalker::new(analyzed, registry);
     walker.walk_body();
+    walker.emit_return_field_consumption_constraints();
     walker.emit_clone_constraints();
     walker.emit_mutation_constraints();
     walker.finish()
@@ -1028,8 +1179,14 @@ fn is_mutating_method(method: &str) -> bool {
 }
 
 /// Generate constraints for a batch of analyzed functions.
-pub fn generate_module_constraints(analyzed: &[AnalyzedFunction<'_>]) -> Vec<FunctionConstraints> {
-    analyzed.iter().map(generate_constraints).collect()
+pub fn generate_module_constraints(
+    analyzed: &[AnalyzedFunction<'_>],
+    registry: Option<&SignatureRegistry>,
+) -> Vec<FunctionConstraints> {
+    analyzed
+        .iter()
+        .map(|af| generate_constraints(af, registry))
+        .collect()
 }
 
 #[cfg(test)]
@@ -1055,7 +1212,7 @@ mod tests {
     #[test]
     fn test_empty_function_produces_return_var() {
         let analyzed = analyze_source("pub fn empty() {}");
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         assert_eq!(fc.function_name, "empty");
         assert!(fc.var_map.params.is_empty());
@@ -1067,7 +1224,7 @@ mod tests {
     #[test]
     fn test_typed_params_emit_type_constraints() {
         let analyzed = analyze_source("pub fn add(x: i32, y: f64) -> i32 { x }");
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         assert_eq!(fc.var_map.params.len(), 2);
 
@@ -1092,7 +1249,7 @@ pub fn mutate(p: Point) {
 "#;
         let analyzed = analyze_source(source);
         let mutate_fn = analyzed.iter().find(|f| f.decl.name == "mutate").unwrap();
-        let fc = generate_constraints(mutate_fn);
+        let fc = generate_constraints(mutate_fn, None);
 
         let has_ownership = count_constraints(&fc, |c| matches!(c, Constraint::OwnershipIs(..)));
         assert!(
@@ -1109,7 +1266,7 @@ pub fn a() -> i32 { 1 }
 pub fn b(x: string) {}
 "#,
         );
-        let all = generate_module_constraints(&analyzed);
+        let all = generate_module_constraints(&analyzed, None);
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].function_name, "a");
         assert_eq!(all[1].function_name, "b");
@@ -1120,7 +1277,7 @@ pub fn b(x: string) {}
     #[test]
     fn test_literal_type_inference() {
         let analyzed = analyze_source("pub fn lit() -> i32 { 42 }");
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let has_i32 = count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::I32)));
         assert!(
@@ -1138,7 +1295,7 @@ pub fn assign() {
 }
 "#;
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let has_type_equals =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
@@ -1152,7 +1309,7 @@ pub fn assign() {
     fn test_return_emits_type_equals() {
         let source = "pub fn ret() -> i32 { return 42 }";
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let has_type_equals =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
@@ -1166,7 +1323,7 @@ pub fn assign() {
     fn test_binary_arithmetic_emits_numeric_constraints() {
         let source = "pub fn math(x: i32, y: i32) -> i32 { x + y }";
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let numeric_count = count_constraints(&fc, |c| matches!(c, Constraint::IsNumeric(_)));
         assert!(
@@ -1180,7 +1337,7 @@ pub fn assign() {
     fn test_comparison_emits_bool_result() {
         let source = "pub fn cmp(x: i32, y: i32) -> bool { x > y }";
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let bool_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
@@ -1201,7 +1358,7 @@ pub fn check(x: i32) -> i32 {
 }
 "#;
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let bool_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
@@ -1221,7 +1378,7 @@ pub fn set_x(p: Point) {
 "#;
         let analyzed = analyze_source(source);
         let set_fn = analyzed.iter().find(|f| f.decl.name == "set_x").unwrap();
-        let fc = generate_constraints(set_fn);
+        let fc = generate_constraints(set_fn, None);
 
         let mut_ref_count = count_constraints(&fc, |c| {
             matches!(c, Constraint::OwnershipIs(_, OwnedType::MutRef(_)))
@@ -1236,7 +1393,7 @@ pub fn set_x(p: Point) {
     fn test_string_literal_emits_string_type() {
         let source = r#"pub fn greet() -> string { "hello" }"#;
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let string_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::String)));
@@ -1257,7 +1414,7 @@ pub fn loop_fn() {
 }
 "#;
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let bool_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
@@ -1275,7 +1432,7 @@ pub fn arr() {
 }
 "#;
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let type_equals_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
@@ -1290,7 +1447,7 @@ pub fn arr() {
     fn test_cast_emits_target_type() {
         let source = "pub fn cast_fn(x: i32) -> f64 { x as f64 }";
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         let f64_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::F64)));
@@ -1310,7 +1467,7 @@ pub fn locals() {
 }
 "#;
         let analyzed = analyze_source(source);
-        let fc = generate_constraints(&analyzed[0]);
+        let fc = generate_constraints(&analyzed[0], None);
 
         assert!(
             !fc.var_map.locals.is_empty(),

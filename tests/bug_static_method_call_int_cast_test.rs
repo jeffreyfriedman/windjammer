@@ -198,6 +198,9 @@ fn create(pos: Vec3) -> Emitter {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -285,6 +288,9 @@ fn test_signature_registry_collision_detection() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -305,6 +311,9 @@ fn test_signature_registry_collision_detection() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -325,6 +334,9 @@ fn test_signature_registry_collision_detection() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -349,6 +361,9 @@ fn test_collision_survives_merge() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -364,6 +379,9 @@ fn test_collision_survives_merge() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 

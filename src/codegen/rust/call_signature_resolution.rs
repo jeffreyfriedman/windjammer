@@ -40,6 +40,51 @@ pub enum ResolutionMethod {
     MethodRegistry,
 }
 
+/// Module-qualified user calls (`draw::draw_text`) disambiguate homonyms — keep auto-borrow.
+/// Unqualified calls still respect global ownership-collision guards.
+pub(crate) fn ownership_collision_blocks_autoborrow(callee_name: &str) -> bool {
+    if let Some((qualifier, _rest)) = callee_name.rsplit_once("::") {
+        if qualifier
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase())
+        {
+            return false;
+        }
+    }
+    true
+}
+
+/// `draw::draw_text`-style calls where the qualifier is a user module (not runtime std).
+pub(crate) fn is_lowercase_user_module_qualified_call(callee_name: &str) -> bool {
+    callee_name.rsplit_once("::").is_some_and(|(module, _)| {
+        module
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase())
+            && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
+    })
+}
+
+/// Whether auto-borrow/`&mut` insertion must be skipped for this call.
+///
+/// Simple-name ownership collisions (e.g. two modules define `draw_text` with
+/// different ownership) block auto-borrow even for module-qualified calls like
+/// `hud_render::draw_text`. Type-only method-name collisions still honor
+/// [`ownership_collision_blocks_autoborrow`] for disambiguated module paths.
+pub(crate) fn has_ownership_collision_for_call(
+    gen: &crate::codegen::rust::generator::CodeGenerator,
+    func_name: &str,
+) -> bool {
+    let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
+    if gen.has_explicit_ownership_collision_with_global(simple_name) {
+        return true;
+    }
+    (gen.has_collision_with_global(func_name)
+        || gen.has_explicit_ownership_collision_with_global(func_name))
+        && ownership_collision_blocks_autoborrow(func_name)
+}
+
 /// Resolve a call signature from the registry.
 ///
 /// Resolution precedence (each step tried only if previous returned `None`):
@@ -324,10 +369,7 @@ pub fn resolve_call_signature(
                         .find(|(_, v)| std::ptr::eq(*v, sig))
                         .map(|(k, _)| k.clone())
                         .unwrap_or_else(|| method_part.to_string());
-                    if qualified_key.contains(&module_suffix)
-                        || qualified_key == method_part
-                        || !qualified_key.contains("::")
-                    {
+                    if qualified_key.contains(&module_suffix) || qualified_key == func_name {
                         return Some(ResolvedSignature {
                             sig: sig.clone(),
                             qualified_key,
@@ -436,6 +478,10 @@ pub fn resolve_method_for_call_site(
 
 /// When an impl method body converged `string` to `&str`, restore trait declaration owned
 /// `String` call-site contracts from the global registry (port traits / E0053).
+///
+/// Only matches keys that are known trait definitions (registered via `trait_method_keys`).
+/// This prevents unrelated impl methods with the same name from incorrectly colliding
+/// (e.g. `Registry::register` must not affect `ComponentRegistry::register`).
 pub(crate) fn apply_trait_owned_string_call_site_contracts(
     global: &SignatureRegistry,
     method: &str,
@@ -452,6 +498,12 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
         if key == &sig.name || !key.ends_with(&suffix) {
             continue;
         }
+        // Only apply contracts from trait definitions, not arbitrary impl methods
+        // with the same name. This prevents `Registry::register` (a regular impl)
+        // from incorrectly upgrading `ComponentRegistry::register` to Owned.
+        if !global.is_trait_method_key(key) {
+            continue;
+        }
         if trait_sig.has_self_receiver != sig.has_self_receiver {
             continue;
         }
@@ -462,10 +514,15 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
             if !formal_is_plain_windjammer_string(trait_sig, idx) {
                 continue;
             }
-            if !matches!(
-                trait_sig.param_ownership.get(idx),
-                Some(OwnershipMode::Owned)
-            ) {
+            // For trait definitions, the formal `string` type determines the contract
+            // (Owned String). Body analysis may have overwritten param_ownership to
+            // Borrowed, but the trait declaration is the source of truth.
+            if !global.is_trait_method_key(key)
+                && !matches!(
+                    trait_sig.param_ownership.get(idx),
+                    Some(OwnershipMode::Owned)
+                )
+            {
                 continue;
             }
             let impl_converged_borrow = sig.param_types.get(idx).is_some_and(|ty| {
@@ -603,18 +660,55 @@ pub(crate) fn formal_is_plain_windjammer_string(
 /// 6. Owned non-text struct formals
 /// 7. Stored param_ownership fallback
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
-    // Rule 0: formal_params trump stale converged params.
-    // When formal_param_types[i] is a non-reference type but param_types[i] is
-    // Reference(...), the formal wins — the generated Rust def takes the owned type.
-    // This prevents stale metadata from forcing incorrect borrows at call sites.
+    if let Some(converged_ty) = sig.param_types.get(param_idx) {
+        if crate::codegen::rust::string_utilities::param_is_rust_str_ref(converged_ty) {
+            let trait_owned_string = sig.has_self_receiver
+                && param_idx > 0
+                && formal_is_plain_windjammer_string(sig, param_idx)
+                && is_type_qualified_associated_call(&sig.name)
+                && sig.formal_param_type(param_idx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                })
+                && matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Owned)
+                );
+            if !trait_owned_string {
+                return OwnershipMode::Borrowed;
+            }
+        }
+        match converged_ty {
+            Type::Reference(inner)
+                if !crate::codegen::rust::types::is_windjammer_text_type(inner) =>
+            {
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                ) {
+                    return OwnershipMode::Owned;
+                }
+                return OwnershipMode::Borrowed;
+            }
+            Type::MutableReference(inner)
+                if !crate::codegen::rust::types::is_windjammer_text_type(inner) =>
+            {
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                ) {
+                    return OwnershipMode::Owned;
+                }
+                return OwnershipMode::MutBorrowed;
+            }
+            _ => {}
+        }
+    }
+
+    // Rule 0: formal_params trump stale converged params (text types only).
+    // Non-text Reference/MutableReference convergence is authoritative above.
     if let Some(formal_ty) = sig.formal_param_type(param_idx) {
         if !matches!(formal_ty, Type::Reference(_) | Type::MutableReference(_)) {
             if let Some(converged_ty) = sig.param_types.get(param_idx) {
                 if matches!(converged_ty, Type::Reference(_) | Type::MutableReference(_)) {
-                    // Formal says owned, converged says ref → formal wins.
-                    // Exception: text types — body-converged &str on a String formal
-                    // is a real optimization that call sites must honor.
-                    if !crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
+                    if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
                         return sig
                             .param_ownership
                             .get(param_idx)
@@ -630,20 +724,17 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         return OwnershipMode::Borrowed;
     }
 
-    // Instance methods: owned String for plain `string` formals unless both param_types
-    // converged to &str AND ownership is Borrowed.
+    // Instance methods: owned String for plain `string` formals unless
+    // the formal type itself is a reference. Body-converged `&str` and stale
+    // Borrowed metadata must not downgrade call sites — generated Rust defs
+    // use owned `String` for trait port methods (E0053 / E0308).
     if sig.has_self_receiver
         && param_idx > 0
         && formal_is_plain_windjammer_string(sig, param_idx)
         && is_type_qualified_associated_call(&sig.name)
-        && !(sig
-            .param_types
-            .get(param_idx)
-            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-            && matches!(
-                sig.param_ownership.get(param_idx),
-                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-            ))
+        && sig.formal_param_type(param_idx).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        })
     {
         return OwnershipMode::Owned;
     }
@@ -680,6 +771,11 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
 
     // Plain `string` formals: honor body-inferred borrow when present.
     if formal_is_plain_windjammer_string(sig, param_idx) {
+        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+            flags.get(param_idx).copied() == Some(false)
+        }) {
+            return OwnershipMode::Owned;
+        }
         if matches!(
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -712,7 +808,16 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         }
         if let Some(own) = sig.param_ownership.get(param_idx) {
             if matches!(own, OwnershipMode::MutBorrowed) {
-                return *own;
+                // Copy primitives with body mutation use `&mut T` at formal and call site
+                // (e.g. `fn increment(x: &mut i64)` / `increment(&mut counter)`).
+                if sig
+                    .formal_param_type(param_idx)
+                    .is_some_and(crate::codegen::rust::type_analysis_pure::is_copy_type)
+                {
+                    return OwnershipMode::MutBorrowed;
+                }
+                // Non-Copy owned formals pass by value even when body analysis marks MutBorrowed.
+                return OwnershipMode::Owned;
             }
             if matches!(own, OwnershipMode::Borrowed) {
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
@@ -790,6 +895,13 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
         }
 
         if static_impl_text_borrows_at_call_site(sig, idx) {
+            continue;
+        }
+
+        // Codegen refresh recorded an emitted shared-ref formal — keep converged borrow.
+        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+            flags.get(idx).copied().unwrap_or(false)
+        }) {
             continue;
         }
 
@@ -871,8 +983,41 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
 }
 
 pub fn finalize_call_site_signature(mut sig: FunctionSignature) -> FunctionSignature {
+    if !sig.has_self_receiver && sig.has_self_receiver_slot() {
+        sig.has_self_receiver = true;
+    }
+    align_sig_with_emitted_rust_ref_params(&mut sig);
     normalize_owned_string_formal_for_call_site(&mut sig);
     sig
+}
+
+/// When codegen refresh recorded emitted Rust formals, align stale converged
+/// `Reference(T)` metadata with the actual generated definition.
+fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
+    let Some(ref flags) = sig.emitted_rust_ref_params else {
+        return;
+    };
+    for idx in 0..flags.len() {
+        if sig.has_self_receiver && idx == 0 {
+            continue;
+        }
+        if flags.get(idx).copied() != Some(false) {
+            continue;
+        }
+        let owned_formal = sig.formal_param_type(idx).map(|t| match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => *inner.clone(),
+            other => other.clone(),
+        });
+        let Some(formal) = owned_formal else {
+            continue;
+        };
+        if idx < sig.param_types.len() {
+            sig.param_types[idx] = formal.clone();
+        }
+        if idx < sig.param_ownership.len() {
+            sig.param_ownership[idx] = OwnershipMode::Owned;
+        }
+    }
 }
 
 /// `MannequinMesh::generate`, `Vec::push` — not `foo::bar` module paths.
@@ -930,6 +1075,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: has_self,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         }
     }
 
@@ -945,6 +1093,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: has_self,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         }
     }
 
@@ -1046,6 +1197,9 @@ mod tests {
                 return_ownership: OwnershipMode::Owned,
                 has_self_receiver: false,
                 is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
             },
         );
 
@@ -1061,6 +1215,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
 
         apply_trait_owned_string_call_site_contracts(&global, "new", &mut sig);
@@ -1089,6 +1246,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: true,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         normalize_owned_string_formal_for_call_site(&mut sig);
         // Body analysis converged to &str + Borrowed → normalization preserves borrow.
@@ -1114,6 +1274,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         assert_eq!(
             effective_param_ownership_for_arg(&sig, 0),
@@ -1145,6 +1308,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: true,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         assert_eq!(
             effective_param_ownership_for_arg(&sig, 0),
@@ -1286,6 +1452,9 @@ impl BuildFingerprint {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: true,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         assert_eq!(
             effective_param_ownership(&sig, 1),
@@ -1309,6 +1478,9 @@ impl BuildFingerprint {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         assert!(
             param_type_is_owned_non_text(&sig, 0),
@@ -1318,6 +1490,53 @@ impl BuildFingerprint {
             effective_param_ownership(&sig, 0),
             OwnershipMode::Borrowed,
             "stale Borrowed in param_ownership still reports Borrowed for legacy paths"
+        );
+    }
+
+    #[test]
+    fn stale_mut_borrowed_on_owned_struct_formal_passes_by_value() {
+        let sig = FunctionSignature {
+            name: "composition::handlers::create_journal_entry".to_string(),
+            param_types: vec![Type::Custom("AppDeps".to_string())],
+            formal_param_types: vec![Type::Custom("AppDeps".to_string())],
+            param_ownership: vec![OwnershipMode::MutBorrowed],
+            return_type: Some(Type::Custom("PostedJournalEntry".to_string())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert_eq!(
+            effective_param_ownership(&sig, 0),
+            OwnershipMode::Owned,
+            "owned non-ref formals pass by value even when body analysis marked MutBorrowed"
+        );
+    }
+
+    #[test]
+    fn reference_wrapped_user_type_borrows_despite_stale_owned_metadata() {
+        let sig = FunctionSignature {
+            name: "MemoryEngine::get".to_string(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("Key".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::Custom("Key".into())],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("i64".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert_eq!(
+            effective_param_ownership(&sig, 1),
+            OwnershipMode::Borrowed,
+            "body-converged Reference(Key) must borrow at call site even when param_ownership is stale Owned"
         );
     }
 
@@ -1335,6 +1554,9 @@ impl BuildFingerprint {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         assert_eq!(effective_param_ownership(&sig, 0), OwnershipMode::Borrowed,);
         assert!(
@@ -1370,6 +1592,9 @@ impl BuildFingerprint {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: true,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         };
         assert_eq!(
             effective_param_ownership(&sig, 3),

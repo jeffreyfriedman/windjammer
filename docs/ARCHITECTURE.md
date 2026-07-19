@@ -501,3 +501,21 @@ The minimal syntax with JSX escape hatch provides:
 - Powerful tools for experts
 - Familiar patterns for web developers
 - Pure Windjammer (no HTML/XML in files)
+
+---
+
+## Safety-Typed IR and Solver-Driven Codegen
+
+Windjammer is migrating from heuristic ownership codegen to a unified IR constraint solver consumed by all backends.
+
+**Full architecture:** [IR_SOLVER_CODEGEN_ARCHITECTURE.md](IR_SOLVER_CODEGEN_ARCHITECTURE.md)
+
+Key components live in `src/ir/`:
+
+- `constraint_gen` — AST walk emitting type/ownership constraints (including call-site unification)
+- `solver` — unified union-find solver producing `SafetyType` per node
+- `coercion` — target-agnostic `(actual, expected) → CoercionKind`
+- `target_encodings` — per-backend emit (Rust, Go, JS, WASM)
+- `shadow` — IR vs legacy analyzer parity validation (`wj build --ir-shadow-validate`)
+
+Codegen cutover is controlled incrementally via `IrCutoverConfig` in `src/codegen/rust/generator.rs`.

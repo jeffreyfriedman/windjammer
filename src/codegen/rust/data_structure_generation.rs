@@ -58,18 +58,22 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if !s.ends_with(".clone()")
                     && !crate::codegen::rust::literals::is_already_owned_string(&s)
-                    && !self.suppress_borrowed_clone
                 {
                     let ty = self.infer_expression_type(e);
                     let is_borrowed_binding = matches!(
                         e,
                         Expression::Identifier { name, .. }
                             if self.borrowed_iterator_vars.contains(name)
+                                || self.match_arm_bindings.contains(name)
+                                || self.identifier_already_ref(name)
+                                || self.local_var_types.get(name).is_some_and(|t| {
+                                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                })
                     );
                     let needs_clone = is_borrowed_binding
                         || ty.as_ref().is_some_and(|t| match t {
                             Type::Reference(inner) => !self.is_type_copy(inner),
-                            Type::MutableReference(_) => false,
+                            Type::MutableReference(inner) => !self.is_type_copy(inner),
                             Type::Option(inner)
                                 if matches!(inner.as_ref(), Type::MutableReference(_)) =>
                             {
@@ -80,11 +84,15 @@ impl<'ast> CodeGenerator<'ast> {
                         || matches!(e, Expression::Identifier { name, .. }
                         if self.auto_clone_analysis.as_ref().is_some_and(|a| {
                             a.needs_clone_anywhere(name)
-                        }) && !matches!(
+                        })
+                            && !self.param_used_in_prior_field_extract_call(name)
+                        && !matches!(
                             self.infer_expression_type(e),
                             Some(Type::Reference(_)) | Some(Type::MutableReference(_))
                         ));
-                    if !needs_clone {
+                    if needs_clone {
+                        s = format!("{}.clone()", s);
+                    } else if !self.suppress_borrowed_clone {
                         // Also clone non-Copy field accesses through references
                         // (e.g. from_stack.item.id where from_stack is behind &)
                         if let Expression::FieldAccess { object, .. } = e {
@@ -109,9 +117,13 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
-                    } else {
-                        s = format!("{}.clone()", s);
                     }
+                }
+                if matches!(
+                    e,
+                    Expression::Identifier { .. } | Expression::FieldAccess { .. }
+                ) {
+                    s = self.clone_non_copy_ref_binding_for_struct_field(e, &s);
                 }
                 s
             })
@@ -289,8 +301,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     | "bottom"
                                     | "min"
                                     | "max"
-                                    | "start"
-                                    | "end"
                                     | "offset"
                                     | "scale"
                                     | "speed"
@@ -372,11 +382,12 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_field_access_object
             && !self.in_borrow_context
             && !self.suppress_borrowed_clone
-            && !self.in_call_argument_generation
             && !self.in_user_written_closure
         {
             if let Expression::Identifier { name: obj_name, .. } = object {
-                if self.inferred_borrowed_params.contains(obj_name.as_str()) {
+                if self.inferred_borrowed_params.contains(obj_name.as_str())
+                    || self.emitted_rust_ref_formals.contains(obj_name)
+                {
                     let field_is_copy = if obj_name == "self" && self.in_impl_block {
                         self.current_struct_name
                             .as_ref()
@@ -386,7 +397,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         self.infer_expression_type(expr_to_generate)
                             .as_ref()
-                            .is_some_and(|t| self.is_type_copy(t))
+                            .is_some_and(|t| self.is_copy_move_out_type(t))
                     };
                     if !field_is_copy && !base_expr.ends_with(".clone()") {
                         return format!("{}.clone()", base_expr);
@@ -421,6 +432,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_field_access_object
             && !self.in_borrow_context
             && !self.in_user_written_closure
+            && !self.suppress_borrowed_clone
             && (self.in_call_argument_generation
                 || self.in_struct_literal_field
                 || self.in_owned_value_context)

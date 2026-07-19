@@ -57,15 +57,58 @@ impl ShadowValidationResult {
     }
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static SHADOW_VALIDATE_STRICT: AtomicBool = AtomicBool::new(false);
+
+/// Enable strict shadow validation (fail build on IR vs analyzer discrepancies).
+pub fn set_shadow_validate_strict(enabled: bool) {
+    SHADOW_VALIDATE_STRICT.store(enabled, Ordering::Relaxed);
+}
+
+/// Whether strict shadow validation is active.
+pub fn shadow_validate_strict() -> bool {
+    SHADOW_VALIDATE_STRICT.load(Ordering::Relaxed)
+}
+
+/// Log shadow discrepancies; return an error when strict mode is enabled.
+pub fn finish_shadow_validation(result: &ShadowValidationResult) -> Result<(), String> {
+    for d in &result.discrepancies {
+        if shadow_validate_strict() {
+            eprintln!("error: {}", d);
+        } else {
+            eprintln!("warning: {}", d);
+        }
+    }
+
+    if shadow_validate_strict() && !result.is_clean() {
+        return Err(format!(
+            "IR shadow validation failed: {} discrepancy(ies) across {} function(s)",
+            result.discrepancies.len(),
+            result.functions_checked
+        ));
+    }
+
+    Ok(())
+}
+
 /// Run shadow validation: compare IR solver results against legacy analyzer.
 pub fn validate_shadow(
     analyzed: &[AnalyzedFunction],
     registry: &SignatureRegistry,
 ) -> ShadowValidationResult {
     let mut pipeline = IrPipeline::new();
-    let module = pipeline.lower_to_ir(analyzed, registry);
+    let module = pipeline.lower_to_ir(analyzed, registry, None);
 
-    compare_ir_to_analyzer(&module, analyzed)
+    validate_shadow_module(&module, analyzed)
+}
+
+/// Compare a pre-computed IR module against legacy analyzer decisions.
+pub fn validate_shadow_module(
+    module: &IrModule,
+    analyzed: &[AnalyzedFunction],
+) -> ShadowValidationResult {
+    compare_ir_to_analyzer(module, analyzed)
 }
 
 /// Run shadow validation across multiple files in library mode.

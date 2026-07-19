@@ -65,9 +65,107 @@ impl<'ast> CodeGenerator<'ast> {
                 // source is owned `String` — do not emit `&str` from str_ref inference on the impl.
                 let is_owned_string_decl = matches!(&param.type_, Type::String)
                     || matches!(&param.type_, Type::Custom(name) if name == "string");
+
+                let converged_analyzer_borrow = matches!(
+                    analyzed.inferred_ownership.get(&param.name),
+                    Some(OwnershipMode::Borrowed)
+                );
+                if param.name != "self"
+                    && !self.in_trait_impl
+                    && !self.is_type_copy(&param.type_)
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.param_has_forward_ref_keep_owned(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+                    && !self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.current_struct_name.as_ref().is_some_and(|sn| {
+                        self.struct_is_owned_engine_key_facade(sn, param)
+                    })
+                    && !self.is_collection_key_owned_param(param, func)
+                    && (self.param_should_emit_borrowed_delegation_formal(param, func)
+                        || converged_analyzer_borrow
+                        || self.inferred_borrowed_params.contains(&param.name))
+                {
+                    let type_str =
+                        self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    return format!("{}: {}", param.name, type_str);
+                }
+
                 let formal_type: &Type = if self.in_trait_impl
                     && param.name != "self"
                     && is_owned_string_decl
+                {
+                    &param.type_
+                } else if param.name != "self"
+                    && self.is_collection_key_owned_param(param, func)
+                {
+                    &param.type_
+                } else if param.name != "self"
+                    && matches!(inferred_type, Type::Reference(_))
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && self.is_type_copy(&param.type_)
+                    && !self.inferred_borrowed_params.contains(&param.name)
+                {
+                    // Copy aggregate: spurious Reference from ref analysis — emit by-value
+                    // unless field-enum-match kept an active borrow (bug_copy_vec3).
+                    &param.type_
+                } else if param.name != "self"
+                    && matches!(inferred_type, Type::Reference(_))
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.is_type_copy(&param.type_)
+                    && self.param_passed_to_owned_self_method_arg(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    &param.type_
+                } else if param.name != "self"
+                    && matches!(inferred_type, Type::Reference(_))
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.is_type_copy(&param.type_)
+                    && (self.param_only_forwards_to_emitted_owned_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) || self.current_struct_name.as_ref().is_some_and(|sn| {
+                        self.struct_is_owned_engine_key_facade(sn, param)
+                    }))
+                {
+                    &param.type_
+                } else if param.name != "self"
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.is_type_copy(&param.type_)
+                    && (self.param_has_forward_ref_keep_owned(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) || self.current_fn_mixed_forwarder_params.contains(&param.name))
                 {
                     &param.type_
                 } else {
@@ -130,7 +228,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Handle explicit ownership hints (self, &self, &mut self)
-                let type_str = match &param.ownership {
+                let mut type_str = match &param.ownership {
                     OwnershipHint::Owned => {
                         if param.name == "self" {
                             let body_modifies = body_modifies;
@@ -150,6 +248,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     OwnershipMode::Borrowed => {
                                         if !self.in_trait_impl && body_modifies {
                                             "&mut self"
+                                        } else if !self.in_trait_impl
+                                            && self.method_returns_impl_struct(func)
+                                        {
+                                            if body_modifies {
+                                                "mut self"
+                                            } else {
+                                                self.owned_self_receiver(&analyzed.decl)
+                                            }
                                         } else {
                                             "&self"
                                         }
@@ -199,8 +305,25 @@ impl<'ast> CodeGenerator<'ast> {
                         // mutated through method call — caller wants mutation visible).
                         // Skip in trait impls: trait signature must match exactly.
                         if !self.in_trait_impl {
-                            if let Some(OwnershipMode::MutBorrowed) =
-                                self.get_param_ownership(&param.name, analyzed)
+                            if !param.is_mutable {
+                                if let Some(OwnershipMode::MutBorrowed) =
+                                    self.get_param_ownership(&param.name, analyzed)
+                                {
+                                    self.inferred_mut_borrowed_params
+                                        .insert(param.name.clone());
+                                    return format!(
+                                        "&mut {}",
+                                        self.type_to_rust(formal_type)
+                                    );
+                                }
+                            }
+                            if !analyzed.returned_parameters.contains(&param.name)
+                                && (!param.is_mutable
+                                    || analyzed
+                                        .field_mutated_parameters
+                                        .contains(&param.name))
+                                && analyzed.mutated_parameters.contains(&param.name)
+                                && !self.is_type_copy(formal_type)
                             {
                                 self.inferred_mut_borrowed_params
                                     .insert(param.name.clone());
@@ -209,6 +332,17 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.type_to_rust(formal_type)
                                 );
                             }
+                        }
+                        if param.name != "self"
+                            && self.param_should_emit_borrowed_delegation_formal(param, func)
+                            && !self.is_collection_key_owned_param(param, func)
+                        {
+                            let type_str =
+                                self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                            self.emitted_rust_ref_formals.insert(param.name.clone());
+                            self.inferred_borrowed_params.insert(param.name.clone());
+                            self.inferred_mut_borrowed_params.remove(&param.name);
+                            return format!("{}: {}", param.name, type_str);
                         }
                         // Owned parameters are always mutable in Windjammer
                         return format!("mut {}: {}", param.name, self.type_to_rust(formal_type));
@@ -242,7 +376,13 @@ impl<'ast> CodeGenerator<'ast> {
                             formal_type,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) {
-                            self.type_to_rust(formal_type)
+                            if self.is_type_copy(&param.type_)
+                                && !self.inferred_borrowed_params.contains(&param.name)
+                            {
+                                self.type_to_rust(&param.type_)
+                            } else {
+                                self.type_to_rust(formal_type)
+                            }
                         } else {
                             // TDD FIX: Copy types pass by value even with Ref hint
                             if self.is_type_copy(formal_type) {
@@ -289,6 +429,65 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Inferred => {
                         if param.name == "self" {
+                            if !self.in_trait_impl
+                                && super::self_analysis::function_calls_owned_self_method(
+                                    &analyzed.decl,
+                                    &self.signature_registry,
+                                    self.current_struct_name.as_deref(),
+                                )
+                            {
+                                let body_modifies = body_modifies;
+                                let self_str = if body_modifies
+                                    && self.method_returns_impl_struct(func)
+                                {
+                                    "mut self"
+                                } else {
+                                    "self"
+                                };
+                                self.inferred_borrowed_params.remove("self");
+                                self.inferred_mut_borrowed_params.remove("self");
+                                return self_str.to_string();
+                            }
+                            if !self.in_trait_impl
+                                && !matches!(param.ownership, OwnershipHint::Owned)
+                                && matches!(
+                                    analyzed.inferred_ownership.get("self"),
+                                    Some(OwnershipMode::Borrowed)
+                                )
+                                && !self.method_returns_impl_struct(func)
+                                && !super::self_analysis::function_calls_owned_self_method(
+                                    &analyzed.decl,
+                                    &self.signature_registry,
+                                    self.current_struct_name.as_deref(),
+                                )
+                            {
+                                self.inferred_borrowed_params.insert("self".to_string());
+                                self.inferred_mut_borrowed_params.remove("self");
+                                return "&self".to_string();
+                            }
+                            if !self.in_trait_impl
+                                && matches!(
+                                    analyzed.inferred_ownership.get("self"),
+                                    Some(OwnershipMode::Owned)
+                                )
+                                && (super::self_analysis::function_calls_owned_self_method(
+                                    &analyzed.decl,
+                                    &self.signature_registry,
+                                    self.current_struct_name.as_deref(),
+                                ) || super::self_analysis::function_consumes_self(&analyzed.decl))
+                            {
+                                let body_modifies = body_modifies;
+                                let self_str = if body_modifies
+                                    && self.method_returns_impl_struct(func)
+                                {
+                                    "mut self"
+                                } else {
+                                    self.owned_self_receiver(&analyzed.decl)
+                                };
+                                self.inferred_borrowed_params.remove("self");
+                                self.inferred_mut_borrowed_params.remove("self");
+                                return self_str.to_string();
+                            }
                             let body_modifies = body_modifies;
                             let returns_self = self.method_returns_impl_struct(&analyzed.decl);
                             let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl)
@@ -303,10 +502,12 @@ impl<'ast> CodeGenerator<'ast> {
                             {
                                 match ownership_mode {
                                     OwnershipMode::Owned => {
-                                        if body_modifies {
+                                        if self.in_trait_impl {
+                                            "self"
+                                        } else if body_modifies {
                                             "mut self"
                                         } else {
-                                            "self"
+                                            self.owned_self_receiver(&analyzed.decl)
                                         }
                                     }
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
@@ -363,15 +564,39 @@ impl<'ast> CodeGenerator<'ast> {
                             return self_str.to_string();
                         }
 
+                        // Pure delegation / call-only forwarders: emit &T even when IR/analyzer
+                        // left the converged formal as owned (wdb LsmEngine::get → MemoryEngine::get).
+                        if self.param_should_emit_borrowed_delegation_formal(param, func)
+                            && !self.is_collection_key_owned_param(param, func)
+                        {
+                            let type_str =
+                                self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                            self.emitted_rust_ref_formals.insert(param.name.clone());
+                            self.inferred_borrowed_params.insert(param.name.clone());
+                            self.inferred_mut_borrowed_params.remove(&param.name);
+                            return format!("{}: {}", param.name, type_str);
+                        }
+
                         // Check if type already has ownership baked in (like &str from string inference)
+                        let force_owned_collection_key =
+                    self.is_collection_key_owned_param(param, func);
                         if matches!(
                             formal_type,
                             Type::Reference(_) | Type::MutableReference(_)
-                        ) {
-                            // Already has & or &mut - just convert
-                            self.type_to_rust(formal_type)
+                        ) && !force_owned_collection_key
+                        {
+                            if self.is_type_copy(&param.type_)
+                                && !self.inferred_borrowed_params.contains(&param.name)
+                            {
+                                self.type_to_rust(&param.type_)
+                            } else {
+                                // Already has & or &mut - just convert
+                                self.type_to_rust(formal_type)
+                            }
+                        } else if force_owned_collection_key {
+                            self.type_to_rust(&param.type_)
                         } else {
-                            // Apply ownership mode from analyzer, falling back to converged registry.
+                            // Apply ownership from IR solver (or legacy analyzer when cutover off).
                             let registry_ownership = self
                                 .get_signature_with_global(&func.name)
                                 .and_then(|sig| sig.param_ownership.get(param_idx).copied());
@@ -379,6 +604,125 @@ impl<'ast> CodeGenerator<'ast> {
                                 .get_param_ownership(&param.name, analyzed)
                                 .or(registry_ownership)
                                 .unwrap_or(OwnershipMode::Owned);
+
+                            if !self.is_type_copy(&param.type_)
+                                && !matches!(
+                                    &param.type_,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                                && (self.param_has_forward_ref_keep_owned(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ) || self.current_fn_mixed_forwarder_params.contains(&param.name))
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
+                            if !self.ir_cutover.ownership {
+                                if self.inferred_borrowed_params.contains(&param.name) {
+                                    ownership_mode = OwnershipMode::Borrowed;
+                                } else if self.inferred_mut_borrowed_params.contains(&param.name) {
+                                    ownership_mode = OwnershipMode::MutBorrowed;
+                                }
+
+                                // Converged registry Owned wins over stale first-pass borrow hints
+                                // (e.g. imported Copy Vec3 with only field reads).
+                                if registry_ownership == Some(OwnershipMode::Owned) {
+                                    ownership_mode = OwnershipMode::Owned;
+                                }
+
+                                // Copy aggregates pass by value unless the analyzer kept an active
+                                // borrow (field-enum-match). Stale registry `Reference(T)` alone
+                                // must not emit `&Vec3` formals (bug_copy_vec3_formal_param_not_ref).
+                                if self.is_type_copy(formal_type)
+                                    && !crate::type_classification::is_copy_pass_by_value_formal(
+                                        formal_type,
+                                    )
+                                    && !self.inferred_borrowed_params.contains(&param.name)
+                                {
+                                    ownership_mode = OwnershipMode::Owned;
+                                }
+
+                                if self.is_collection_key_owned_param(param, func) {
+                                    ownership_mode = OwnershipMode::Owned;
+                                }
+
+                                if !self.is_type_copy(formal_type)
+                                    && self.param_passed_to_owned_self_method_arg(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    )
+                                {
+                                    ownership_mode = OwnershipMode::Owned;
+                                }
+
+                                // Field mutation on params requires &mut when the body mutates fields.
+                                if !self.in_trait_impl
+                                    && !analyzed.returned_parameters.contains(&param.name)
+                                    && analyzed.mutated_parameters.contains(&param.name)
+                                    && self.variable_needs_mut(&param.name)
+                                    && (!param.is_mutable
+                                        || analyzed
+                                            .field_mutated_parameters
+                                            .contains(&param.name))
+                                {
+                                    ownership_mode = OwnershipMode::MutBorrowed;
+                                }
+                            }
+
+                            // Pure delegation wrappers keep &T formals when the body only
+                            // forwards to borrowing callees (wdb LsmEngine::get), even under IR cutover.
+                            if !self.is_type_copy(&param.type_)
+                                && !matches!(
+                                    &param.type_,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                                && !self.param_has_forward_ref_keep_owned(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+                                && !self.param_passes_to_wj_owned_sibling_call(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && !self.current_struct_name.as_ref().is_some_and(|sn| {
+                                    self.struct_is_owned_engine_key_facade(sn, param)
+                                })
+                                && !self.is_collection_key_owned_param(param, func)
+                                && (self.inferred_borrowed_params.contains(&param.name)
+                                    || converged_analyzer_borrow
+                                    || self.param_passed_to_borrowing_callee(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    ))
+                            {
+                                ownership_mode = OwnershipMode::Borrowed;
+                            } else if !self.is_type_copy(&param.type_)
+                                && !matches!(
+                                    &param.type_,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                                && !self.param_has_forward_ref_keep_owned(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+                                && !self.param_passes_to_wj_owned_sibling_call(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && self.inferred_mut_borrowed_params.contains(&param.name)
+                            {
+                                ownership_mode = OwnershipMode::MutBorrowed;
+                            }
 
                             // E0053 FIX: Trait impl parameters MUST match the trait
                             // definition's parameter types exactly. Look up the trait's
@@ -420,12 +764,36 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
-                            match ownership_mode {
+                            let registry_param_ty = self
+                                .get_signature_with_global(&func.name)
+                                .and_then(|s| s.param_types.get(param_idx).cloned())
+                                .or_else(|| analyzed.inferred_param_types.get(param_idx).cloned());
+                            let copy_aggregate_ref_formal = if self.in_trait_impl {
+                                None
+                            } else {
+                                registry_param_ty.as_ref().and_then(|ty| {
+                                    if let Type::Reference(inner) = ty {
+                                        if ownership_mode == OwnershipMode::Borrowed
+                                            && self.inferred_borrowed_params.contains(&param.name)
+                                            && self.is_type_copy(formal_type)
+                                            && !crate::type_classification::is_copy_pass_by_value_formal(
+                                                formal_type,
+                                            )
+                                        {
+                                            Some(format!("&{}", self.type_to_rust(inner)))
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                })
+                            };
+
+                            copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {
                                 OwnershipMode::Owned => self.type_to_rust(formal_type),
-                                OwnershipMode::MutBorrowed
-                                    if self.is_explicitly_copy_type(formal_type) =>
-                                {
-                                    self.type_to_rust(formal_type)
+                                OwnershipMode::MutBorrowed if self.is_type_copy(formal_type) => {
+                                    format!("&mut {}", self.type_to_rust(formal_type))
                                 }
                                 OwnershipMode::MutBorrowed => {
                                     format!("&mut {}", self.type_to_rust(formal_type))
@@ -437,8 +805,31 @@ impl<'ast> CodeGenerator<'ast> {
                                     let is_string = matches!(formal_type, Type::String)
                                         || matches!(formal_type, Type::Custom(ref name) if name == "string");
                                     if is_string && !trait_impl_owned_string {
-                                        if self.str_ref_optimized_params.contains(&param.name) {
-                                            "&str".to_string()
+                                        let registry_str_ref = self
+                                            .get_signature_with_global(&func.name)
+                                            .and_then(|sig| sig.param_types.get(param_idx))
+                                            .is_some_and(|ty| {
+                                                matches!(
+                                                    ty,
+                                                    Type::Reference(inner)
+                                                        if matches!(
+                                                            &**inner,
+                                                            Type::Custom(n) if n == "str"
+                                                        )
+                                                )
+                                            });
+                                        if self.str_ref_optimized_params.contains(&param.name)
+                                            || registry_str_ref
+                                        {
+                                            if self.param_only_forwarded_to_qualified_collection_key_callee(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            ) && func.parent_type.is_none() {
+                                                self.type_to_rust(formal_type)
+                                            } else {
+                                                "&str".to_string()
+                                            }
                                         } else {
                                             "&String".to_string()
                                         }
@@ -446,14 +837,14 @@ impl<'ast> CodeGenerator<'ast> {
                                         format!("&{}", self.type_to_rust(formal_type))
                                     }
                                 }
-                            }
+                            })
                         }
                     }
                 };
 
                 // WINDJAMMER LIFETIME INFERENCE: Add 'a lifetime to reference parameters
                 // when the function needs explicit lifetime annotations.
-                let type_str = if needs_lifetime && param.name != "self" {
+                type_str = if needs_lifetime && param.name != "self" {
                     if let Some(stripped) = type_str.strip_prefix("&mut ") {
                         format!("&'a mut {}", stripped)
                     } else if let Some(stripped) = type_str.strip_prefix("&") {
@@ -465,16 +856,68 @@ impl<'ast> CodeGenerator<'ast> {
                     type_str
                 };
 
+                // Copy aggregates: strip spurious readonly `&T` from field reads; keep `&mut T`
+                // for direct mutation and passthrough to mutating callees.
+                if param.name != "self"
+                    && self.is_type_copy(&param.type_)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                    && !crate::analyzer::field_enum_borrow::param_only_used_as_field_enum_match_scrutinee(
+                        &param.name,
+                        func.body.as_slice(),
+                    )
+                    && type_str.starts_with('&')
+                    && !type_str.starts_with("&mut ")
+                {
+                    type_str = self.type_to_rust(&param.type_);
+                }
+
                 // Explicitly Copy types kept as owned (instead of &mut) still need `mut`
                 // when the analyzer inferred MutBorrowed — the body mutates the value.
-                let copy_mut_as_owned = self.is_explicitly_copy_type(formal_type)
+                let copy_mut_as_owned = self.is_type_copy(formal_type)
                     && !type_str.starts_with('&')
                     && self.inferred_mut_borrowed_params.contains(&param.name);
 
-                // Explicit Copy owned formals pass by value — clear stale borrow metadata.
-                if self.is_explicitly_copy_type(formal_type) && !type_str.starts_with('&') {
+                // Copy scalar owned formals pass by value — clear stale borrow metadata.
+                if self.is_type_copy(formal_type)
+                    && !type_str.starts_with('&')
+                    && crate::type_classification::is_copy_pass_by_value_formal(formal_type)
+                {
                     self.inferred_borrowed_params.remove(&param.name);
                     self.inferred_mut_borrowed_params.remove(&param.name);
+                }
+
+                // Keep call-site borrow tracking aligned with emitted Rust formals.
+                // `name: &String` must not get `contains(&name)` at call sites.
+                if param.name != "self" {
+                    if type_str.starts_with("&mut ") || type_str.starts_with("&'a mut ") {
+                        self.emitted_rust_ref_formals.insert(param.name.clone());
+                        self.inferred_mut_borrowed_params.insert(param.name.clone());
+                        self.inferred_borrowed_params.remove(&param.name);
+                        if param.name != "self" {
+                            let user_arg_idx = func
+                                .parameters
+                                .iter()
+                                .filter(|p| p.name != "self")
+                                .position(|p| p.name == param.name)
+                                .unwrap_or(param_idx);
+                            self.current_fn_emitted_mut_arg_indices
+                                .insert(user_arg_idx);
+                        }
+                    } else if type_str.starts_with('&') {
+                        self.emitted_rust_ref_formals.insert(param.name.clone());
+                        self.inferred_borrowed_params.insert(param.name.clone());
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                        if type_str == "&str" || type_str.starts_with("&'a str") {
+                            self.str_ref_optimized_params.insert(param.name.clone());
+                        }
+                    } else {
+                        self.emitted_rust_ref_formals.remove(&param.name);
+                        // Owned emitted formal: stale analyzer borrow metadata must not
+                        // suppress call-site `&` (wdb put_value → key_in_latest_base(&key)).
+                        self.inferred_borrowed_params.remove(&param.name);
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                        self.str_ref_optimized_params.remove(&param.name);
+                    }
                 }
 
                 // TDD FIX: Auto-infer `mut` for owned parameters

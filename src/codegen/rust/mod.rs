@@ -55,6 +55,7 @@ pub mod identifier_and_literal_generation;
 pub mod if_statement_generation;
 pub mod import_generation;
 mod int_promotion_type_inference;
+mod ir_call_site;
 pub mod item_generation;
 pub mod items;
 pub mod let_statement_generation;
@@ -98,6 +99,7 @@ pub mod variable_analysis;
 
 // Re-export the main CodeGenerator for backward compatibility
 pub use generator::CodeGenerator;
+pub use generator::IrCutoverConfig;
 
 // Re-export the backend
 pub use backend::RustBackend;

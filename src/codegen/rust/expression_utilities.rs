@@ -77,6 +77,31 @@ pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
     }
 }
 
+/// Strip leading Rust borrow prefixes without turning `&mut x` into the invalid `mut x`.
+pub fn borrow_base_expr(expr_str: &str) -> &str {
+    if let Some(rest) = expr_str.strip_prefix("&mut ") {
+        return rest;
+    }
+    if let Some(rest) = expr_str.strip_prefix('&') {
+        return rest;
+    }
+    if let Some(rest) = expr_str.strip_prefix("mut ") {
+        return rest;
+    }
+    expr_str
+}
+
+/// Strip a single shared borrow (`&T`), never mutilating `&mut T` into `mut T`.
+pub fn strip_shared_borrow_prefix(expr_str: &str) -> String {
+    if let Some(rest) = expr_str.strip_prefix("&mut ") {
+        return rest.to_string();
+    }
+    if let Some(rest) = expr_str.strip_prefix('&') {
+        return rest.to_string();
+    }
+    expr_str.to_string()
+}
+
 /// Check whether an identifier is already a `&mut` reference, either through
 /// explicit declaration (`param: &mut T`) or through ownership inference.
 pub fn is_identifier_already_mut_ref(

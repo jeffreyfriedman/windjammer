@@ -32,6 +32,7 @@ mod string_optimization;
 mod trait_analysis;
 mod type_checking;
 pub mod type_collector;
+pub(crate) mod field_enum_borrow;
 mod usage_tracking;
 
 pub use signature_registry::{FunctionSignature, SignatureRegistry};
@@ -67,6 +68,12 @@ pub struct AnalyzedFunction<'ast> {
     pub inferred_param_types: Vec<Type>,
     pub mutated_variables: HashSet<String>,
     pub mutated_parameters: HashSet<String>,
+    /// Parameters returned from the function body (implicit or explicit return).
+    pub returned_parameters: HashSet<String>,
+    /// Parameters returned only via field extraction (`key.bytes`) — not a full move at call sites.
+    pub field_extract_parameters: HashSet<String>,
+    /// Parameters mutated via direct field/identifier assignment (not method-call-only).
+    pub field_mutated_parameters: HashSet<String>,
     /// Legacy: auto-clone analysis. Superseded by IR solver when `IrCutoverConfig.clones` is true.
     pub auto_clone_analysis: AutoCloneAnalysis,
     pub clone_optimizations: Vec<CloneOptimization>,

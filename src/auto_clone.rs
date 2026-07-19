@@ -51,13 +51,21 @@ impl AutoCloneAnalysis {
 
     /// Analyze a function to determine where clones should be inserted
     pub fn analyze_function(func: &FunctionDecl) -> Self {
+        Self::analyze_function_with_registry(func, None)
+    }
+
+    /// Like [`analyze_function`], but treats args to field-extract callees as borrows not moves.
+    pub fn analyze_function_with_registry(
+        func: &FunctionDecl,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> Self {
         let mut analysis = AutoCloneAnalysis::new();
 
         // Track variables bound to string literals (don't need .clone())
         analysis.find_string_literal_vars(&func.body);
 
         // Track all variable usages
-        let mut usage_map = Self::build_usage_map(&func.body);
+        let mut usage_map = Self::build_usage_map(&func.body, registry);
 
         // Register function parameters as definitions at statement_idx 0.
         // Without this, parameters are skipped by analyze_variable_usages
@@ -97,12 +105,15 @@ impl AutoCloneAnalysis {
 
     /// Build a map of all variable usages in the function.
     /// Uses a global counter so that every statement across all scopes gets a unique index.
-    fn build_usage_map<'ast>(statements: &[&'ast Statement<'ast>]) -> HashMap<String, Vec<Usage>> {
+    fn build_usage_map<'ast>(
+        statements: &[&'ast Statement<'ast>],
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> HashMap<String, Vec<Usage>> {
         let mut map = HashMap::new();
         let mut counter: usize = 0;
 
         for stmt in statements.iter() {
-            Self::collect_usages_from_statement(stmt, &mut counter, false, &mut map);
+            Self::collect_usages_from_statement(stmt, &mut counter, false, &mut map, registry);
         }
 
         map
@@ -115,6 +126,7 @@ impl AutoCloneAnalysis {
         counter: &mut usize,
         in_loop: bool,
         map: &mut HashMap<String, Vec<Usage>>,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
     ) {
         let idx = *counter;
         *counter += 1;
@@ -128,7 +140,7 @@ impl AutoCloneAnalysis {
                     }
                     _ => UsageKind::Read,
                 };
-                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map);
+                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map, registry);
 
                 if let Pattern::Identifier(name) = pattern {
                     map.entry(name.clone()).or_default().push(Usage {
@@ -140,19 +152,19 @@ impl AutoCloneAnalysis {
                 }
             }
             Statement::Assignment { target, value, .. } => {
-                Self::collect_usages_from_expression(target, idx, UsageKind::Write, in_loop, map);
+                Self::collect_usages_from_expression(target, idx, UsageKind::Write, in_loop, map, registry);
                 // Owned identifiers move on assignment; loop bodies may assign the same
                 // param on every iteration (E0382 without `.clone()` at the use site).
                 let value_kind = match value {
                     Expression::Identifier { .. } => UsageKind::Move,
                     _ => UsageKind::Read,
                 };
-                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map);
+                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map, registry);
             }
             Statement::Return {
                 value: Some(expr), ..
             } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Move, in_loop, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Move, in_loop, map, registry);
             }
             Statement::Expression { expr, .. } => {
                 // A bare FieldAccess or Identifier in expression-statement position is a
@@ -164,7 +176,7 @@ impl AutoCloneAnalysis {
                     }
                     _ => UsageKind::Read,
                 };
-                Self::collect_usages_from_expression(expr, idx, kind, in_loop, map);
+                Self::collect_usages_from_expression(expr, idx, kind, in_loop, map, registry);
             }
             Statement::If {
                 condition,
@@ -172,22 +184,22 @@ impl AutoCloneAnalysis {
                 else_block,
                 ..
             } => {
-                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map, registry);
                 for stmt in then_block.iter() {
-                    Self::collect_usages_from_statement(stmt, counter, in_loop, map);
+                    Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                 }
                 if let Some(else_b) = else_block {
                     for stmt in else_b.iter() {
-                        Self::collect_usages_from_statement(stmt, counter, in_loop, map);
+                        Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                     }
                 }
             }
             Statement::While {
                 condition, body, ..
             } => {
-                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map, registry);
                 for stmt in body.iter() {
-                    Self::collect_usages_from_statement(stmt, counter, true, map);
+                    Self::collect_usages_from_statement(stmt, counter, true, map, registry);
                 }
             }
             Statement::For {
@@ -196,19 +208,19 @@ impl AutoCloneAnalysis {
                 body,
                 ..
             } => {
-                Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map, registry);
                 Self::register_pattern_definitions(pattern, idx, true, map);
                 for stmt in body.iter() {
-                    Self::collect_usages_from_statement(stmt, counter, true, map);
+                    Self::collect_usages_from_statement(stmt, counter, true, map, registry);
                 }
             }
             Statement::Loop { body, .. } => {
                 for stmt in body.iter() {
-                    Self::collect_usages_from_statement(stmt, counter, true, map);
+                    Self::collect_usages_from_statement(stmt, counter, true, map, registry);
                 }
             }
             Statement::Match { value, arms, .. } => {
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map, registry);
                 for arm in arms {
                     // Process arm body blocks using the parent counter (like
                     // Statement::If does for then_block/else_block) so that
@@ -216,7 +228,7 @@ impl AutoCloneAnalysis {
                     // auto_clone_counter which is global.
                     if let Expression::Block { statements, .. } = arm.body {
                         for stmt in statements {
-                            Self::collect_usages_from_statement(stmt, counter, in_loop, map);
+                            Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                         }
                     } else {
                         Self::collect_usages_from_expression(
@@ -225,6 +237,7 @@ impl AutoCloneAnalysis {
                             UsageKind::Read,
                             in_loop,
                             map,
+                            registry,
                         );
                     }
                 }
@@ -270,6 +283,40 @@ impl AutoCloneAnalysis {
         }
     }
 
+    fn callee_name_from_call_function(function: &Expression) -> Option<String> {
+        match function {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                Self::callee_name_from_call_function(object).map(|base| format!("{base}::{field}"))
+            }
+            _ => None,
+        }
+    }
+
+    fn callee_arg_field_extracts(
+        function: &Expression,
+        arg_index: usize,
+        registry: &crate::analyzer::SignatureRegistry,
+    ) -> bool {
+        let Some(callee_name) = Self::callee_name_from_call_function(function) else {
+            return false;
+        };
+        let simple = callee_name.rsplit("::").next().unwrap_or(&callee_name);
+        let Some(sig) = registry
+            .get_signature(&callee_name)
+            .or_else(|| registry.lookup_method(&callee_name))
+            .or_else(|| registry.find_signature_ending_with(simple))
+        else {
+            return false;
+        };
+        let param_idx = sig.arg_param_index(arg_index);
+        sig.field_extract_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            .unwrap_or(false)
+    }
+
     /// Collect usages from an expression
     fn collect_usages_from_expression(
         expr: &Expression,
@@ -277,6 +324,7 @@ impl AutoCloneAnalysis {
         kind: UsageKind,
         in_loop: bool,
         map: &mut HashMap<String, Vec<Usage>>,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
     ) {
         match expr {
             Expression::Identifier { name, .. } => {
@@ -296,21 +344,29 @@ impl AutoCloneAnalysis {
                         in_loop,
                     });
                 }
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::Call {
                 function,
                 arguments,
                 ..
             } => {
-                Self::collect_usages_from_expression(function, idx, UsageKind::Read, in_loop, map);
-                for (_label, arg_expr) in arguments {
+                Self::collect_usages_from_expression(function, idx, UsageKind::Read, in_loop, map, registry);
+                for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
+                    let arg_kind = if registry
+                        .is_some_and(|r| Self::callee_arg_field_extracts(function, i, r))
+                    {
+                        UsageKind::Read
+                    } else {
+                        UsageKind::Move
+                    };
                     Self::collect_usages_from_expression(
                         arg_expr,
                         idx,
-                        UsageKind::Move,
+                        arg_kind,
                         in_loop,
                         map,
+                        registry,
                     );
                 }
             }
@@ -328,7 +384,7 @@ impl AutoCloneAnalysis {
                         in_loop,
                     });
                 }
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
                 for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
                     // HashMap/BTreeMap lookups borrow keys (`&Q`); do not treat as moves.
                     let arg_kind =
@@ -339,15 +395,15 @@ impl AutoCloneAnalysis {
                         } else {
                             UsageKind::Move
                         };
-                    Self::collect_usages_from_expression(arg_expr, idx, arg_kind, in_loop, map);
+                    Self::collect_usages_from_expression(arg_expr, idx, arg_kind, in_loop, map, registry);
                 }
             }
             Expression::Binary { left, right, .. } => {
-                Self::collect_usages_from_expression(left, idx, UsageKind::Read, in_loop, map);
-                Self::collect_usages_from_expression(right, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(left, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(right, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::Unary { operand, .. } => {
-                Self::collect_usages_from_expression(operand, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(operand, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::Index { object, index, .. } => {
                 if let Some(path) = Self::extract_expression_path(expr) {
@@ -358,8 +414,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                     });
                 }
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map);
-                Self::collect_usages_from_expression(index, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(index, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::Tuple { elements, .. } => {
                 for elem in elements {
@@ -369,12 +425,12 @@ impl AutoCloneAnalysis {
                         }
                         _ => UsageKind::Read,
                     };
-                    Self::collect_usages_from_expression(elem, idx, elem_kind, in_loop, map);
+                    Self::collect_usages_from_expression(elem, idx, elem_kind, in_loop, map, registry);
                 }
             }
             Expression::Array { elements, .. } => {
                 for elem in elements {
-                    Self::collect_usages_from_expression(elem, idx, UsageKind::Move, in_loop, map);
+                    Self::collect_usages_from_expression(elem, idx, UsageKind::Move, in_loop, map, registry);
                 }
             }
             Expression::StructLiteral { fields, .. } => {
@@ -385,44 +441,45 @@ impl AutoCloneAnalysis {
                         UsageKind::Move,
                         in_loop,
                         map,
+                        registry,
                     );
                 }
             }
             Expression::Block { statements, .. } => {
                 let mut block_counter = idx + 1;
                 for stmt in statements {
-                    Self::collect_usages_from_statement(stmt, &mut block_counter, in_loop, map);
+                    Self::collect_usages_from_statement(stmt, &mut block_counter, in_loop, map, registry);
                 }
             }
             Expression::Cast { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::Range { start, end, .. } => {
-                Self::collect_usages_from_expression(start, idx, UsageKind::Read, in_loop, map);
-                Self::collect_usages_from_expression(end, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(start, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(end, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::TryOp { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::Await { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::ChannelSend { channel, value, .. } => {
-                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map);
-                Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map);
+                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map, registry);
             }
             Expression::ChannelRecv { channel, .. } => {
-                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map);
+                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map, registry);
             }
             Expression::MacroInvocation { args, .. } => {
                 for arg in args {
-                    Self::collect_usages_from_expression(arg, idx, UsageKind::Read, in_loop, map);
+                    Self::collect_usages_from_expression(arg, idx, UsageKind::Read, in_loop, map, registry);
                 }
             }
             Expression::MapLiteral { pairs, .. } => {
                 for (key, value) in pairs {
-                    Self::collect_usages_from_expression(key, idx, UsageKind::Move, in_loop, map);
-                    Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map);
+                    Self::collect_usages_from_expression(key, idx, UsageKind::Move, in_loop, map, registry);
+                    Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map, registry);
                 }
             }
             _ => {}
@@ -600,7 +657,11 @@ impl AutoCloneAnalysis {
                     u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx
                 });
 
-                if root_used_later || field_used_later {
+                // Moving a non-Copy field off `&self` is always a move-out of a shared
+                // reference (E0507) — clone even when `self` is not used again later.
+                // Example: `let lo = self.start.bytes; let hi = self.end.bytes` must
+                // clone both, not only the first field when `self` is reused.
+                if root == "self" || root_used_later || field_used_later {
                     self.clone_sites.insert(
                         (path.clone(), field_move.statement_idx),
                         CloneReason::MovedButUsedLater,

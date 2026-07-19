@@ -91,6 +91,12 @@ impl MethodCallAnalyzer {
                 return true;
             }
 
+            if receiver_type_name.is_none() {
+                // Unknown receiver — `get`/`remove` semantics differ (Vec vs HashMap).
+                // Signature registry + IR coercion decide borrow; do not guess from method name.
+                return false;
+            }
+
             if super::super::stdlib_method_traits::is_map_key_method(method) {
                 if let Expression::Cast { type_, .. } = arg {
                     if Self::is_copy_type_annotation_internal(type_) {
@@ -111,11 +117,9 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        if matches!(method, "contains" | "binary_search") {
-            return true;
-        }
-
-        if matches!(method, "contains" | "starts_with" | "ends_with") {
+        if super::super::stdlib_method_traits::is_string_pattern_method(method)
+            || crate::analyzer::stdlib_method_traits::is_slice_search_method(method)
+        {
             return true;
         }
 

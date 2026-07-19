@@ -194,9 +194,17 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.get_signature_with_global(&format!("{base}::{method}"))
                                 });
                         needs_clone = sig_opt.is_some_and(|sig| {
+                            let qualified = self
+                                .current_struct_name
+                                .as_ref()
+                                .map(|sn| format!("{sn}::{method}"))
+                                .unwrap_or_else(|| {
+                                    Self::type_to_name(&recv_ty)
+                                        .map(|tn| format!("{tn}::{method}"))
+                                        .unwrap_or_else(|| method.to_string())
+                                });
                             sig.has_self_receiver
-                                && sig.param_ownership.first()
-                                    == Some(&crate::analyzer::OwnershipMode::Owned)
+                                && self.method_requires_consuming_self_receiver(&qualified, sig)
                         });
                     }
                     if needs_clone {

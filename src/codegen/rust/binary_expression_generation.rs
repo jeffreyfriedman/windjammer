@@ -605,6 +605,35 @@ impl<'ast> CodeGenerator<'ast> {
             right_str = deref_if_borrowed_bool(right, &right_str, self);
         }
 
+        if is_arithmetic && self.in_call_argument_generation {
+            if let Some(ref aft) = self.assignment_float_target_type {
+                if crate::codegen::rust::type_classification_utilities::is_float_type(aft) {
+                    let expr_is_int = |e: &Expression, ty: Option<Type>| {
+                        ty.as_ref().is_some_and(
+                            crate::codegen::rust::type_classification_utilities::is_integer_type,
+                        ) || matches!(
+                            e,
+                            Expression::Literal {
+                                value: Literal::Int(_),
+                                ..
+                            }
+                        )
+                    };
+                    let lt = self.infer_expression_type(left);
+                    let rt = self.infer_expression_type(right);
+                    if expr_is_int(left, lt) && expr_is_int(right, rt) {
+                        let target =
+                            crate::codegen::rust::type_classification_utilities::float_target(aft);
+                        let normalized = format!("{} {} {}", left_str, op_str, right_str);
+                        let normalized = crate::codegen::rust::type_classification_utilities::strip_partial_literal_float_casts(
+                            &normalized,
+                        );
+                        return format!("({normalized}) as {target}");
+                    }
+                }
+            }
+        }
+
         format!("{} {} {}", left_str, op_str, right_str)
     }
 }
