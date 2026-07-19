@@ -260,7 +260,9 @@ impl<'ast> Analyzer<'ast> {
             let sig = match registry.lookup_method(func_name) {
                 Some(s) => s,
                 None => {
-                    if let Some(simple) = func_name.rsplit("::").next() {
+                    if let Some(s) = registry.get_signature(func_name) {
+                        s
+                    } else if let Some(simple) = func_name.rsplit("::").next() {
                         if simple != func_name {
                             match registry.get_signature(simple) {
                                 Some(s) => s,
@@ -662,6 +664,40 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_passthrough_from_expr(param_name, e, func, results);
                 }
             }
+            Expression::MacroInvocation { name, args, .. } => {
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
+                );
+                if borrows_only {
+                    for (i, arg) in args.iter().enumerate() {
+                        if self.expr_is_identifier(arg, param_name) {
+                            results.push((name.clone(), i, false, true));
+                        }
+                        self.collect_passthrough_from_expr(param_name, arg, func, results);
+                    }
+                } else {
+                    for arg in args {
+                        if self.expr_is_identifier(arg, param_name) {
+                            results.push((name.clone(), 0, false, true));
+                        }
+                        self.collect_passthrough_from_expr(param_name, arg, func, results);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -673,7 +709,13 @@ impl<'ast> Analyzer<'ast> {
     pub(crate) fn extract_function_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
-            Expression::FieldAccess { field, .. } => Some(field.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Some(prefix) = self.extract_function_name(object) {
+                    Some(format!("{}::{}", prefix, field))
+                } else {
+                    Some(field.clone())
+                }
+            }
             _ => None,
         }
     }
@@ -693,6 +735,280 @@ impl<'ast> Analyzer<'ast> {
         let mut other_uses = false;
         self.collect_non_lookup_param_uses(param_name, body, &mut other_uses);
         !other_uses
+    }
+
+    /// True when `param` is only read via field/index chains (e.g. `key.bytes == …`),
+    /// never as a bare value, method receiver, or call argument.
+    pub(crate) fn is_field_access_only_param_usage(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut any_use = false;
+        let mut bad_use = false;
+        for stmt in body {
+            self.check_field_only_param_use_stmt(param_name, stmt, false, &mut any_use, &mut bad_use);
+            if bad_use {
+                return false;
+            }
+        }
+        any_use && !bad_use
+    }
+
+    fn check_field_only_param_use_stmt(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        in_field_chain: bool,
+        any_use: &mut bool,
+        bad_use: &mut bool,
+    ) {
+        if *bad_use {
+            return;
+        }
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Let { value: expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    expr,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    condition,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                for s in then_block {
+                    self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                }
+                if let Some(else_block) = else_block {
+                    for s in else_block {
+                        self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                    }
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    value,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                for arm in arms {
+                    if let Some(guard) = arm.guard {
+                        self.check_field_only_param_use_expr(
+                            param_name,
+                            guard,
+                            in_field_chain,
+                            any_use,
+                            bad_use,
+                        );
+                    }
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        &arm.body,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    condition,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                for s in body {
+                    self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                }
+            }
+            Statement::For { iterable, body, .. } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    iterable,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                for s in body {
+                    self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn check_field_only_param_use_expr(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        in_field_chain: bool,
+        any_use: &mut bool,
+        bad_use: &mut bool,
+    ) {
+        if *bad_use {
+            return;
+        }
+        match expr {
+            Expression::Identifier { name, .. } if name == param_name => {
+                *any_use = true;
+                if !in_field_chain {
+                    *bad_use = true;
+                }
+            }
+            Expression::FieldAccess { object, .. } => {
+                if self.expr_is_identifier(object, param_name) {
+                    *any_use = true;
+                } else {
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        object,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
+            }
+            Expression::Index { object, index, .. } => {
+                let object_is_param = self.expr_is_identifier(object, param_name);
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    object,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    index,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                if object_is_param {
+                    *bad_use = true;
+                }
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                if self.expr_is_identifier(object, param_name) {
+                    *any_use = true;
+                    *bad_use = true;
+                    return;
+                }
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    object,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                for (_, arg) in arguments {
+                    if self.expr_is_identifier(arg, param_name) {
+                        *any_use = true;
+                        *bad_use = true;
+                        return;
+                    }
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        arg,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                for (_, arg) in arguments {
+                    if self.expr_is_identifier(arg, param_name) {
+                        *any_use = true;
+                        *bad_use = true;
+                        return;
+                    }
+                }
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    function,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                for (_, arg) in arguments {
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        arg,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
+            }
+            Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    operand,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+            }
+            Expression::Binary { left, right, .. } => {
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    left,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    right,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+            }
+            Expression::Block { statements, .. } => {
+                for stmt in statements {
+                    self.check_field_only_param_use_stmt(
+                        param_name,
+                        stmt,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
+            }
+            _ => {}
+        }
     }
 
     fn collect_hashmap_lookup_key_uses(
@@ -772,24 +1088,22 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl<'ast>,
         results: &mut Vec<()>,
     ) {
-        match expr {
-            Expression::MethodCall {
-                object,
-                method,
-                arguments,
-                ..
-            } if Self::is_hashmap_lookup_method(method) => {
-                if arguments
-                    .first()
-                    .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
-                {
-                    results.push(());
-                }
-                self.collect_hashmap_lookup_key_uses_expr(param_name, object, func, results);
-                for (_, arg) in arguments {
-                    self.collect_hashmap_lookup_key_uses_expr(param_name, arg, func, results);
-                }
+        if let Some((object, _method, arguments)) =
+            super::stdlib_method_traits::decompose_collection_key_lookup(expr)
+        {
+            if arguments
+                .first()
+                .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
+            {
+                results.push(());
             }
+            self.collect_hashmap_lookup_key_uses_expr(param_name, object, func, results);
+            for (_, arg) in arguments {
+                self.collect_hashmap_lookup_key_uses_expr(param_name, arg, func, results);
+            }
+            return;
+        }
+        match expr {
             Expression::MethodCall {
                 object, arguments, ..
             } => {
@@ -918,6 +1232,24 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::Identifier { name, .. } if name == param_name => {
                 *found = true;
+            }
+            _ if super::stdlib_method_traits::decompose_collection_key_lookup(expr)
+                .is_some_and(|(_, _method, args)| {
+                    args.first()
+                        .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
+                }) =>
+            {
+                if let Some((object, _method, arguments)) =
+                    super::stdlib_method_traits::decompose_collection_key_lookup(expr)
+                {
+                    self.collect_non_lookup_param_uses_expr(param_name, object, found);
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if i == 0 {
+                            continue;
+                        }
+                        self.collect_non_lookup_param_uses_expr(param_name, arg, found);
+                    }
+                }
             }
             Expression::MethodCall {
                 object,

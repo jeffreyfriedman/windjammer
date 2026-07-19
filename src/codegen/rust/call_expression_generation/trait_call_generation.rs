@@ -109,6 +109,38 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         )
     };
 
+    // Runtime std modules where WJ declares owned aggregates but Rust takes references.
+    if let Expression::Identifier { name: obj_name, .. } = call_obj {
+        for (i, arg_str) in args.iter_mut().enumerate() {
+            if arg_str.starts_with('&') {
+                continue;
+            }
+            let Some((_, arg_expr)) = arguments.get(i) else {
+                continue;
+            };
+            if !matches!(
+                arg_expr,
+                Expression::Identifier { .. } | Expression::FieldAccess { .. }
+            ) {
+                continue;
+            }
+            if matches!(
+                arg_expr,
+                Expression::Identifier { name, .. } if gen.identifier_already_ref(name)
+            ) {
+                continue;
+            }
+            if let Some(ref sig) = method_signature {
+                if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow(
+                    Some(sig),
+                    i,
+                ) {
+                    *arg_str = format!("&{arg_str}");
+                }
+            }
+        }
+    }
+
     // Borrow owned String args when the resolved signature says the callee
     // takes `string` by borrow (lowers to `&str` in Rust).
     // Skip when ownership collision detected for this method name.
@@ -128,6 +160,28 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                     !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                         && crate::codegen::rust::types::is_windjammer_text_type(t)
                 }) {
+                    let caller_passes_str_slice = arguments.get(i).is_some_and(|(_, arg_expr)| {
+                        if let Expression::Identifier { name, .. } = *arg_expr {
+                            gen.str_ref_optimized_params.contains(name.as_str())
+                                || gen.inferred_borrowed_params.contains(name)
+                                || gen.current_function_params.iter().any(|p| {
+                                    p.name == *name
+                                        && matches!(
+                                            &p.type_,
+                                            Type::Reference(inner)
+                                                if matches!(
+                                                    **inner,
+                                                    Type::Custom(ref s) if s == "str"
+                                                )
+                                        )
+                                })
+                        } else {
+                            false
+                        }
+                    });
+                    if caller_passes_str_slice && !arg_str.ends_with(".to_string()") {
+                        return format!("{}.to_string()", arg_str);
+                    }
                     return arg_str.clone();
                 }
                 let borrow = !callee_is_extern
@@ -228,8 +282,11 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                         || gen.str_ref_optimized_params.contains(name.as_str())
                         || gen.inferred_borrowed_params.contains(name)
             );
+            let coll_sig = type_name.as_deref().and_then(|tn| {
+                gen.resolve_method_function_signature(tn, call_method, arguments.len())
+            });
             crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
-                call_method,
+                coll_sig.as_ref(),
                 i,
                 arg_expr,
                 arg_str,

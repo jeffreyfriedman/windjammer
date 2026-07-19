@@ -184,13 +184,11 @@ impl<'ast> Analyzer<'ast> {
                         }
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
-                                if self.function_modifies_self_fields_recursive(
+                                return self.function_modifies_self_fields_recursive(
                                     called_func,
                                     registry,
                                     visited,
-                                ) {
-                                    return true;
-                                }
+                                );
                             }
                         }
                         if !Self::is_known_readonly_method(method) {

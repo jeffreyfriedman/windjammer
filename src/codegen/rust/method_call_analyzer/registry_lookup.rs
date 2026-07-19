@@ -30,6 +30,16 @@ pub(super) fn ref_from_signature_registries(
     let sig = methods.get(method)?;
     let param_type = sig.param_types.get(param_idx)?;
 
+    if matches!(param_type, Type::Reference(_) | Type::MutableReference(_)) {
+        // fall through to borrow handling below
+    } else if sig
+        .param_ownership
+        .get(param_idx)
+        .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Owned))
+    {
+        return Some(false);
+    }
+
     let param_is_str_ref = matches!(
         param_type,
         Type::Reference(inner) if matches!(&**inner, Type::Custom(s) if s == "str")

@@ -109,8 +109,6 @@ impl<'ast> CodeGenerator<'ast> {
             "mut self"
         } else if body_modifies {
             "&mut self"
-        } else if self.current_struct_is_copy() {
-            "self"
         } else if super::self_analysis::function_consumes_self(func) {
             "self"
         } else {

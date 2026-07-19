@@ -429,7 +429,7 @@ fn compile_file_impl(
     {
         use crate::ir::pipeline::DiagnosticSeverity;
         let mut ir_pipeline = crate::ir::IrPipeline::new();
-        let ir_module = ir_pipeline.lower_to_ir(&analyzed, &signatures);
+        let ir_module = ir_pipeline.lower_to_ir(&analyzed, &signatures, None);
         if let Some(_ir_output) = ir_pipeline.try_codegen_from_ir(&ir_module) {
             eprintln!("[IR] Safety-Typed IR pipeline produced output (not yet active)");
         }

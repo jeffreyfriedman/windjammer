@@ -355,6 +355,50 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// True when `name` is the direct assignment target (e.g. `p.x = …`, `p = …`).
+    /// Excludes method-call-only mutation such as `map.remove(key)`.
+    pub(crate) fn is_field_mutated(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Assignment { target, .. } => {
+                    if self.is_direct_mutation_target(name, target) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.is_field_mutated(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_b) = else_block {
+                        if self.is_field_mutated(name, else_b) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Loop { body, .. } | Statement::While { body, .. } => {
+                    if self.is_field_mutated(name, body) {
+                        return true;
+                    }
+                }
+                Statement::For { body, .. } => {
+                    if self.is_field_mutated(name, body) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// Check if a parameter is in the direct receiver chain of a method call.
     /// Only follows the object path: param.field.method() -> true
     /// Does NOT match arguments of nested calls: f.method(param).other() -> false
@@ -493,6 +537,9 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 if self.is_in_receiver_chain(name, object) {
+                    if super::stdlib_method_traits::method_mutates_receiver(method) {
+                        return true;
+                    }
                     // PRIORITY 1: Type-qualified registry lookup when we know the receiver type.
                     // This prevents cross-type collisions where `set_lighting` from TypeA
                     // shadows `VoxelGPURenderer::set_lighting` in the bare-name registry.
@@ -591,11 +638,31 @@ impl<'ast> Analyzer<'ast> {
                         return false;
                     }
 
-                    // Copy field receiver: `v.x.to_le_bytes()` cannot mutate binding `v`.
+                    // Copy field receiver: readonly methods on copy fields do not mutate the root binding.
                     if let Some(field_ty) =
                         self.resolve_field_chain_type_for_param(name, object, param_type_hint)
                     {
-                        if self.is_copy_type(&field_ty) {
+                        if let Some(recv_name) = type_base_for_registry_lookup(&field_ty)
+                        {
+                            if super::stdlib_method_traits::is_known_readonly_qualified(
+                                method,
+                                Some(&recv_name),
+                                registry,
+                            ) {
+                                return false;
+                            }
+                            if !super::stdlib_method_traits::method_mutates_receiver_qualified(
+                                method,
+                                Some(&recv_name),
+                                registry,
+                            ) && self.is_copy_type(&field_ty)
+                            {
+                                return false;
+                            }
+                        } else if self.is_copy_type(&field_ty) {
+                            if super::stdlib_method_traits::method_mutates_receiver(method) {
+                                return true;
+                            }
                             return false;
                         }
                     }
@@ -1116,5 +1183,21 @@ impl<'ast> Analyzer<'ast> {
             return None;
         }
         Some(first.1)
+    }
+}
+
+fn type_base_for_registry_lookup(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Custom(name) => Some(name.split('<').next().unwrap_or(name).to_string()),
+        Type::Parameterized(base, _) => Some(base.clone()),
+        Type::Reference(inner) | Type::MutableReference(inner) => {
+            type_base_for_registry_lookup(inner)
+        }
+        Type::Float => Some("f32".into()),
+        Type::Int => Some("i32".into()),
+        Type::Uint => Some("usize".into()),
+        Type::Bool => Some("bool".into()),
+        Type::String => Some("string".into()),
+        _ => None,
     }
 }

@@ -15,6 +15,9 @@ use crate::analyzer::{FunctionSignature, OwnershipMode};
 use crate::codegen::rust::call_signature_resolution::effective_param_ownership;
 use crate::codegen::rust::string_utilities;
 use crate::codegen::rust::types;
+use crate::ir::coercion::{compute_coercion, CoercionKind};
+use crate::ir::signature_bridge::safety_type_from_signature_param;
+use crate::ir::safety_type::{BaseType, Region, SafetyType};
 use crate::parser::{Expression, Literal, Type};
 
 /// What coercion to apply to a generated argument expression.
@@ -54,11 +57,8 @@ impl ArgCoercion {
                 if expr.starts_with("&mut ") {
                     return;
                 }
-                if expr.starts_with('&') {
-                    *expr = format!("&mut {}", &expr[1..]);
-                } else {
-                    *expr = format!("&mut {}", expr);
-                }
+                let base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr);
+                *expr = format!("&mut {base}");
             }
             ArgCoercion::Clone => {
                 if !expr.ends_with(".clone()") {
@@ -118,6 +118,60 @@ pub struct ArgContext<'a> {
     pub method_name: &'a str,
 }
 
+/// Whether to use the shared IR coercion engine inside `compute_arg_coercion`.
+pub fn use_ir_coercion_engine() -> bool {
+    std::env::var("WJ_IR_COERCION_ENGINE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
+fn coercion_kind_to_arg(kind: CoercionKind) -> ArgCoercion {
+    match kind {
+        CoercionKind::Identity => ArgCoercion::PassThrough,
+        CoercionKind::Borrow => ArgCoercion::Borrow,
+        CoercionKind::MutBorrow => ArgCoercion::MutBorrow,
+        CoercionKind::Clone => ArgCoercion::Clone,
+        CoercionKind::Deref => ArgCoercion::Deref,
+        CoercionKind::ToOwnedString => ArgCoercion::ToOwnedString,
+        CoercionKind::StripBorrow => ArgCoercion::StripRef,
+        CoercionKind::NumericCast(base) => {
+            let cast = match base {
+                BaseType::F32 => "f32",
+                BaseType::F64 => "f64",
+                BaseType::I32 => "i32",
+                BaseType::I64 => "i64",
+                BaseType::U32 => "u32",
+                BaseType::U64 => "u64",
+                _ => "f64",
+            };
+            ArgCoercion::CastNumeric(cast.to_string())
+        }
+    }
+}
+
+fn safety_type_from_arg_context(ctx: &ArgContext) -> SafetyType {
+    match ctx.arg_expr {
+        Expression::Literal { value, .. } => match value {
+            Literal::String(_) => SafetyType::borrowed(BaseType::String, Region::fresh(0)),
+            Literal::Int(_) | Literal::Float(_) => SafetyType::copy(BaseType::F32),
+            Literal::Bool(_) => SafetyType::copy(BaseType::Bool),
+            _ => SafetyType::owned(BaseType::Inferred),
+        },
+        Expression::Identifier { .. } => SafetyType::owned(BaseType::Inferred),
+        Expression::FieldAccess { .. } => SafetyType::borrowed(BaseType::Inferred, Region::fresh(1)),
+        _ => SafetyType::owned(BaseType::Inferred),
+    }
+}
+
+/// Compute coercion via shared `ir::coercion` engine (signature-driven).
+pub fn compute_arg_coercion_ir(ctx: &ArgContext) -> ArgCoercion {
+    let param_idx = ctx.sig.arg_param_index(ctx.arg_index);
+    let expected = safety_type_from_signature_param(ctx.sig, param_idx);
+    let actual = safety_type_from_arg_context(ctx);
+    let kind = compute_coercion(&actual, &expected);
+    coercion_kind_to_arg(kind)
+}
+
 /// Compute the single correct coercion for a call-site argument.
 ///
 /// This replaces ~38 sequential heuristic phases with one decision based on:
@@ -125,6 +179,10 @@ pub struct ArgContext<'a> {
 /// 2. What the argument expression provides
 /// 3. Copy semantics
 pub fn compute_arg_coercion(ctx: &ArgContext) -> ArgCoercion {
+    if use_ir_coercion_engine() {
+        return compute_arg_coercion_ir(ctx);
+    }
+
     let param_idx = ctx.sig.arg_param_index(ctx.arg_index);
     let effective = effective_param_ownership(ctx.sig, param_idx);
 
@@ -417,6 +475,9 @@ mod tests {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: has_self,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         }
     }
 

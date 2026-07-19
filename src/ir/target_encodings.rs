@@ -3,12 +3,28 @@
 //! Defines how the Safety-Typed IR maps to idiomatic safety constructs in
 //! each target language. The IR guarantees safety; each backend encodes it.
 //!
-//! - Rust: native ownership, lifetimes, newtype wrappers
-//! - Go: mutex wrappers for MutRef, struct wrappers for taint
-//! - JavaScript/TypeScript: Object.freeze, branded types, Proxy
-//! - WASM: linear memory, no GC
+//! ## Active targets
+//!
+//! - **Rust**: native ownership, lifetimes, newtype wrappers
+//! - **Go**: mutex wrappers for MutRef, struct wrappers for taint
+//! - **JavaScript/TypeScript**: Object.freeze, branded types, Proxy
+//! - **WASM**: linear memory, no GC
+//!
+//! ## Adding a new backend (C++, C#, Java, Python, Ruby, …)
+//!
+//! 1. Add a `Target` variant here (or a sibling `FutureTarget` until the backend lands).
+//! 2. Implement `encode_ownership`, `apply_coercion`, and `encode_taint` arms for that variant.
+//! 3. Wire the backend's `ir_lowering` module to call `resolve_call_arg_actual_type` +
+//!    `safety_type_from_signature_param` + `encode_call_argument` — **do not** duplicate
+//!    ownership heuristics in the backend.
+//! 4. Add conformance tests in `standard_equivalence_tests()` so all targets agree on
+//!    coercion semantics (borrow vs clone vs identity).
+//!
+//! Ownership decisions stay in the IR constraint solver; new backends only encode
+//! already-resolved `SafetyType` pairs.
 
-use crate::ir::safety_type::{OwnedType, Region};
+use crate::ir::coercion::{compute_coercion, CoercionKind};
+use crate::ir::safety_type::{BaseType, OwnedType, Region, SafetyType};
 use crate::ir::taint::TaintSourceKind;
 
 /// Target language identifier.
@@ -185,6 +201,132 @@ pub fn encode_ownership(ownership: &OwnedType, target: Target) -> OwnershipEncod
                 emit: "i32 /* ptr */".into(),
             },
         },
+    }
+}
+
+/// Wrap `expr` in a shared borrow, parenthesizing when needed for precedence.
+pub(crate) fn rust_shared_borrow(expr: &str) -> String {
+    if expr.starts_with('&') && !expr.starts_with("&mut ") {
+        return expr.to_string();
+    }
+    if needs_borrow_parentheses(expr) {
+        format!("&({expr})")
+    } else {
+        format!("&{expr}")
+    }
+}
+
+/// Wrap `expr` in a mutable borrow, parenthesizing when needed for precedence.
+fn rust_mut_borrow(expr: &str) -> String {
+    if expr.starts_with("&mut ") {
+        return expr.to_string();
+    }
+    let base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr);
+    if needs_borrow_parentheses(base) {
+        format!("&mut ({base})")
+    } else {
+        format!("&mut {base}")
+    }
+}
+
+fn needs_borrow_parentheses(expr: &str) -> bool {
+    expr.contains(" as ")
+        || expr.contains(" + ")
+        || expr.contains(" - ")
+        || expr.contains(" * ")
+        || expr.contains(" / ")
+        || expr.contains(" % ")
+        || expr.contains(" << ")
+        || expr.contains(" >> ")
+        || expr.contains(" && ")
+        || expr.contains(" || ")
+}
+
+/// Apply a target-agnostic coercion to a generated expression string.
+pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String {
+    match (target, kind) {
+        (_, CoercionKind::Identity) => expr.to_string(),
+        (Target::Rust, CoercionKind::Borrow) => rust_shared_borrow(expr),
+        (Target::Rust, CoercionKind::MutBorrow) => rust_mut_borrow(expr),
+        (Target::Rust, CoercionKind::Clone) => {
+            if expr.ends_with(".clone()") {
+                expr.to_string()
+            } else {
+                format!("{}.clone()", expr)
+            }
+        }
+        (Target::Rust, CoercionKind::Deref) => {
+            if expr.starts_with('*') {
+                expr.to_string()
+            } else {
+                format!("*{}", expr)
+            }
+        }
+        (Target::Rust, CoercionKind::ToOwnedString) => {
+            let core = if let Some(rest) = expr.strip_prefix("&mut ") {
+                rest
+            } else if let Some(rest) = expr.strip_prefix('&') {
+                rest
+            } else {
+                expr
+            };
+            if core.ends_with(".to_string()") || core.ends_with(".to_owned()") {
+                expr.to_string()
+            } else {
+                format!("{}.to_string()", core)
+            }
+        }
+        (Target::Rust, CoercionKind::StripBorrow) => {
+            if let Some(rest) = expr.strip_prefix("&mut ") {
+                rest.to_string()
+            } else if let Some(rest) = expr.strip_prefix('&') {
+                rest.to_string()
+            } else {
+                expr.to_string()
+            }
+        }
+        (Target::Rust, CoercionKind::NumericCast(base)) => {
+            format!("{} as {}", expr, base_type_rust_cast(base))
+        }
+        // Go/JS/WASM: pass-through for now; IR encodings expand in phase 3.
+        (_, CoercionKind::Borrow | CoercionKind::MutBorrow | CoercionKind::StripBorrow) => {
+            expr.to_string()
+        }
+        (_, CoercionKind::Clone) => expr.to_string(),
+        (_, CoercionKind::Deref) => expr.to_string(),
+        (_, CoercionKind::ToOwnedString) => expr.to_string(),
+        (_, CoercionKind::NumericCast(base)) => {
+            format!("{} /* cast {:?} */", expr, base)
+        }
+    }
+}
+
+/// Encode a call-site argument: compute coercion from SafetyTypes and apply for target.
+pub fn encode_call_argument(
+    actual: &SafetyType,
+    expected: &SafetyType,
+    target: Target,
+    expr: &str,
+) -> String {
+    let kind = compute_coercion(actual, expected);
+    apply_coercion(&kind, expr, target)
+}
+
+fn base_type_rust_cast(base: &BaseType) -> &'static str {
+    match base {
+        BaseType::F32 => "f32",
+        BaseType::F64 => "f64",
+        BaseType::I8 => "i8",
+        BaseType::I16 => "i16",
+        BaseType::I32 => "i32",
+        BaseType::I64 => "i64",
+        BaseType::I128 => "i128",
+        BaseType::U8 => "u8",
+        BaseType::U16 => "u16",
+        BaseType::U32 => "u32",
+        BaseType::U64 => "u64",
+        BaseType::U128 => "u128",
+        _ => "/* unknown cast */",
     }
 }
 
@@ -377,6 +519,14 @@ mod tests {
     fn test_equivalence_tests_exist() {
         let tests = standard_equivalence_tests();
         assert!(tests.len() >= 4);
+    }
+
+    #[test]
+    fn test_encode_call_argument_borrow_for_rust() {
+        let actual = SafetyType::owned(BaseType::String);
+        let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));
+        let encoded = encode_call_argument(&actual, &expected, Target::Rust, "key");
+        assert_eq!(encoded, "&key");
     }
 
     #[test]

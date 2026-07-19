@@ -97,6 +97,9 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         return_ownership: OwnershipMode::Owned, // Default
         has_self_receiver: false,               // Stdlib functions don't have self
         is_extern: false,                       // Stdlib functions are not extern
+        emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
     })
 }
 
@@ -113,6 +116,10 @@ fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
             // Check for &mut
             if param.contains("&mut ") {
                 OwnershipMode::MutBorrowed
+            }
+            // impl AsRef<str> (db::connect, Connection::query, etc.)
+            else if param.contains("AsRef<str>") {
+                OwnershipMode::Borrowed
             }
             // Check for &
             else if param.contains('&') && !param.contains("&mut") {
@@ -143,6 +150,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
 
@@ -158,6 +168,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
 
@@ -172,6 +185,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
 
@@ -186,6 +202,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
 
@@ -200,6 +219,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
 
@@ -216,6 +238,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
     registry.add_function(
@@ -229,6 +254,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             return_ownership: Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
         },
     );
 

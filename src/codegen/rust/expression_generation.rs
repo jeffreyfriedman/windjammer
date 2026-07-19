@@ -856,6 +856,39 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Top-level field name for `self.field` / `self.field.sub…` chains.
+    pub(in crate::codegen::rust) fn self_access_root_field<'a>(
+        expr: &'a Expression,
+    ) -> Option<&'a str> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
+                    Some(field.as_str())
+                } else {
+                    Self::self_access_root_field(object)
+                }
+            }
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                operand,
+                ..
+            } => Self::self_access_root_field(operand),
+            _ => None,
+        }
+    }
+
+    /// Rust split-borrow: `self.a.method(self.b)` on different fields needs no temp extraction.
+    pub(in crate::codegen::rust) fn disjoint_self_field_accesses(
+        &self,
+        receiver: &Expression,
+        arg: &Expression,
+    ) -> bool {
+        match (Self::self_access_root_field(receiver), Self::self_access_root_field(arg)) {
+            (Some(r), Some(a)) if r != a => true,
+            _ => false,
+        }
+    }
+
     /// Check if an expression involves borrowing `self` — including method calls on self.
     /// Broader than `codegen_expression_traces_to_self` which only checks field access chains.
     /// Used for self-borrow temporary extraction (E0499 prevention).
@@ -902,11 +935,35 @@ impl<'ast> CodeGenerator<'ast> {
                 self.field_access_root_is_behind_reference(object)
             }
             Expression::Identifier { name, .. } => {
-                self.inferred_borrowed_params.contains(name.as_str())
+                if self.emitted_rust_ref_formals.contains(name)
+                    || self.inferred_borrowed_params.contains(name.as_str())
+                    || self.inferred_mut_borrowed_params.contains(name)
                     || self.borrowed_iterator_vars.contains(name)
-                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    })
+                {
+                    return true;
+                }
+                if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                }) {
+                    return true;
+                }
+                // Read-only non-Copy formals are emitted as `&T` even when AST declares owned `T`.
+                if name != "self" {
+                    if let Some(param) = self.current_function_params.iter().find(|p| p.name == *name)
+                    {
+                        if !self.is_type_copy(&param.type_)
+                            && !self.inferred_mut_borrowed_params.contains(name)
+                            && (self.inferred_borrowed_params.contains(name.as_str())
+                                || matches!(
+                                    param.ownership,
+                                    crate::parser::OwnershipHint::Ref
+                                ))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                false
             }
             _ => false,
         }

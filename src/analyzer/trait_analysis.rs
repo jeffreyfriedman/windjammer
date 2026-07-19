@@ -190,10 +190,27 @@ impl<'ast> Analyzer<'ast> {
                     }
 
                     let mut merged_from_impls: Option<OwnershipMode> = None;
+                    let mut any_impl_mutates_self_fields = false;
 
                     for impl_block in &impl_blocks {
+                        self.current_impl_functions = Some(Self::merged_impl_methods_for_type(
+                            program,
+                            &impl_block.type_name,
+                        ));
+                        let impl_base = impl_block
+                            .type_name
+                            .split('<')
+                            .next()
+                            .unwrap_or(impl_block.type_name.as_str())
+                            .to_string();
+                        self.self_impl_context =
+                            Some(super::ImplSelfFieldContext::new(impl_base, program));
+
                         for func in &impl_block.functions {
                             if func.name == method_name {
+                                if self.trait_impl_body_mutates_self_fields(func, registry) {
+                                    any_impl_mutates_self_fields = true;
+                                }
                                 let impl_analysis = self.analyze_function_in_impl(
                                     func, impl_block, program, registry,
                                 )?;
@@ -211,10 +228,13 @@ impl<'ast> Analyzer<'ast> {
                                 }
                             }
                         }
+
+                        self.self_impl_context = None;
+                        self.current_impl_functions = None;
                     }
 
                     if let Some(merged_self) = merged_from_impls {
-                        let final_self = trait_method_analysis
+                        let mut final_self = trait_method_analysis
                             .inferred_ownership
                             .get("self")
                             .copied()
@@ -222,6 +242,11 @@ impl<'ast> Analyzer<'ast> {
                                 Self::merge_borrow_trait_receivers(existing, merged_self)
                             })
                             .unwrap_or(merged_self);
+                        if !any_impl_mutates_self_fields
+                            && matches!(final_self, OwnershipMode::MutBorrowed)
+                        {
+                            final_self = OwnershipMode::Borrowed;
+                        }
                         trait_method_analysis
                             .inferred_ownership
                             .insert("self".to_string(), final_self);
@@ -369,5 +394,17 @@ impl<'ast> Analyzer<'ast> {
             (Owned, Borrowed) | (Borrowed, Owned) => MutBorrowed,
             _ => Borrowed,
         }
+    }
+
+    /// Whether a trait impl method body directly mutates `self` fields (not callees via registry).
+    pub(super) fn trait_impl_body_mutates_self_fields(
+        &self,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        let mut visited = std::collections::HashSet::new();
+        func.body.iter().any(|stmt| {
+            self.statement_modifies_self_fields(stmt, Some(registry), &mut visited)
+        })
     }
 }

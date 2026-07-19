@@ -49,10 +49,14 @@ impl<'ast> CodeGenerator<'ast> {
         match ty {
             Type::Option(inner) => self.is_type_copy(inner),
             Type::Custom(name) => {
-                if self.non_copy_types_registry.contains(name.as_str()) {
-                    return false;
-                }
                 if self.copy_types_registry.contains(name.as_str()) {
+                    return true;
+                }
+                if name
+                    .rsplit("::")
+                    .next()
+                    .is_some_and(|base| self.copy_types_registry.contains(base))
+                {
                     return true;
                 }
                 crate::codegen::rust::type_analysis::is_known_copy_type(name.as_str())

@@ -82,6 +82,15 @@ impl<'ast> Analyzer<'ast> {
                 program,
                 registry,
             );
+        } else if let Some(self_own) = analyzed.inferred_ownership.get("self").copied() {
+            // Trait impl merge: readonly forwarding wrappers must not upgrade the trait contract.
+            if matches!(self_own, OwnershipMode::MutBorrowed)
+                && !self.trait_impl_body_mutates_self_fields(func, registry)
+            {
+                analyzed
+                    .inferred_ownership
+                    .insert("self".to_string(), OwnershipMode::Borrowed);
+            }
         }
 
         // Clear impl block after analysis
@@ -268,6 +277,25 @@ impl<'ast> Analyzer<'ast> {
                     // ownership from body usage (distance(self) → &self, not owned self).
                     if param.name == "self" && func.parent_type.is_some() {
                         self.infer_impl_self_receiver_ownership(func, registry)
+                    } else if func.parent_type.is_some()
+                        && !self.is_copy_type(&param.type_)
+                        && self.is_field_access_only_param_usage(&param.name, &func.body)
+                        && !self.is_only_hashmap_lookup_key_param(
+                            &param.name,
+                            &func.body,
+                            func,
+                        )
+                    {
+                        // Read-only field chains (e.g. key.bytes.len()) → &Key at API and registry.
+                        self.infer_parameter_ownership(
+                            &param.name,
+                            &param.type_,
+                            &func.body,
+                            &func.return_type,
+                            registry,
+                            &func.name,
+                            func,
+                        )?
                     } else {
                         OwnershipMode::Owned
                     }
@@ -342,10 +370,9 @@ impl<'ast> Analyzer<'ast> {
                         // Mutated Copy types should be &mut, not Owned
                         let is_copy = self.is_copy_type(&param.type_);
 
-                        if param.is_mutable && !is_copy {
+                        if param.is_mutable {
+                            // Explicit `mut param: T` is an owned binding; call sites add &mut when needed.
                             OwnershipMode::Owned
-                        } else if param.is_mutable && is_copy {
-                            OwnershipMode::MutBorrowed
                         } else if is_copy {
                             let mutated = self.is_mutated(
                                 &param.name,
@@ -370,7 +397,9 @@ impl<'ast> Analyzer<'ast> {
                                     param.name, func.name, mutated, passthrough_mut, param.type_
                                 );
                             }
-                            if mutated || passthrough_mut {
+                            if (mutated || passthrough_mut)
+                                && !self.is_returned(&param.name, &func.body)
+                            {
                                 OwnershipMode::MutBorrowed
                             } else {
                                 self.infer_parameter_ownership(
@@ -424,6 +453,9 @@ impl<'ast> Analyzer<'ast> {
             auto_clone_analysis,
             mutated_variables,
             mutated_parameters,
+            returned_parameters,
+            field_extract_parameters,
+            field_mutated_parameters,
             const_static_optimizations,
             smallvec_optimizations,
             cow_optimizations,
@@ -445,11 +477,27 @@ impl<'ast> Analyzer<'ast> {
                 .map(|param| {
                     if str_ref_optimizable_params.contains(&param.name) {
                         Type::Reference(Box::new(Type::Custom("str".to_string())))
+                    } else if param.decorators.iter().any(|d| d.name == "string_ref") {
+                        Type::Reference(Box::new(Type::String))
                     } else {
                         param.type_.clone()
                     }
                 })
                 .collect();
+            let mut returned_parameters = HashSet::new();
+            let mut field_extract_parameters = HashSet::new();
+            let mut field_mutated_parameters = HashSet::new();
+            for param in &func.parameters {
+                if self.is_returned(&param.name, &func.body) {
+                    returned_parameters.insert(param.name.clone());
+                }
+                if self.is_field_extract_returned(&param.name, &func.body) {
+                    field_extract_parameters.insert(param.name.clone());
+                }
+                if self.is_field_mutated(&param.name, &func.body) {
+                    field_mutated_parameters.insert(param.name.clone());
+                }
+            }
             (
                 Vec::new(),
                 Vec::new(),
@@ -459,6 +507,9 @@ impl<'ast> Analyzer<'ast> {
                 AutoCloneAnalysis::default(),
                 HashSet::new(),
                 HashSet::new(),
+                returned_parameters,
+                field_extract_parameters,
+                field_mutated_parameters,
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -472,15 +523,27 @@ impl<'ast> Analyzer<'ast> {
             let string_optimizations = self.detect_string_optimizations(func);
             let assignment_optimizations = self.detect_assignment_optimizations(func);
             let defer_drop_optimizations = self.detect_defer_drop_opportunities(func, registry);
-            let auto_clone_analysis = AutoCloneAnalysis::analyze_function(func);
+            let auto_clone_analysis = AutoCloneAnalysis::analyze_function_with_registry(func, Some(registry));
 
             self.track_mutations(&func.body, registry);
             let mutated_variables = self.mutated_variables.clone();
 
             let mut mutated_parameters = HashSet::new();
+            let mut returned_parameters = HashSet::new();
+            let mut field_extract_parameters = HashSet::new();
+            let mut field_mutated_parameters = HashSet::new();
             for param in &func.parameters {
                 if self.is_mutated(&param.name, &func.body, registry, Some(&param.type_)) {
                     mutated_parameters.insert(param.name.clone());
+                }
+                if self.is_returned(&param.name, &func.body) {
+                    returned_parameters.insert(param.name.clone());
+                }
+                if self.is_field_extract_returned(&param.name, &func.body) {
+                    field_extract_parameters.insert(param.name.clone());
+                }
+                if self.is_field_mutated(&param.name, &func.body) {
+                    field_mutated_parameters.insert(param.name.clone());
                 }
             }
 
@@ -500,6 +563,8 @@ impl<'ast> Analyzer<'ast> {
                 .map(|param| {
                     if str_ref_optimizable_params.contains(&param.name) {
                         Type::Reference(Box::new(Type::Custom("str".to_string())))
+                    } else if param.decorators.iter().any(|d| d.name == "string_ref") {
+                        Type::Reference(Box::new(Type::String))
                     } else {
                         param.type_.clone()
                     }
@@ -515,6 +580,9 @@ impl<'ast> Analyzer<'ast> {
                 auto_clone_analysis,
                 mutated_variables,
                 mutated_parameters,
+                returned_parameters,
+                field_extract_parameters,
+                field_mutated_parameters,
                 const_static_optimizations,
                 smallvec_optimizations,
                 cow_optimizations,
@@ -524,12 +592,54 @@ impl<'ast> Analyzer<'ast> {
             )
         };
 
+        Self::reconcile_inferred_ownership_with_mutations(
+            &mut inferred_ownership,
+            func,
+            &mutated_parameters,
+            &returned_parameters,
+            &field_mutated_parameters,
+        );
+
+        // Module helpers: plain `string` formals are owned `String` unless str_ref-optimized
+        // or already inferred as read-only Borrowed (&str). HashMap key-only params use
+        // owned `String` at the API boundary with borrow at `.get()` call sites.
+        if func.parent_type.is_none() {
+            for param in &func.parameters {
+                if Self::trait_param_is_owned_string(&param.type_)
+                    && !str_ref_optimizable_params.contains(&param.name)
+                {
+                    if let Some(OwnershipMode::Borrowed) = self.infer_passthrough_ownership(
+                        &param.name,
+                        &param.type_,
+                        &func.body,
+                        registry,
+                        &func.name,
+                        func,
+                    ) {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        continue;
+                    }
+                    let current = inferred_ownership
+                        .get(&param.name)
+                        .copied()
+                        .unwrap_or(OwnershipMode::Owned);
+                    if current == OwnershipMode::Borrowed {
+                        continue;
+                    }
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                }
+            }
+        }
+
         Ok(AnalyzedFunction {
             decl: func.clone(),
             inferred_ownership,
             inferred_param_types,
             mutated_variables,
             mutated_parameters,
+            returned_parameters,
+            field_extract_parameters,
+            field_mutated_parameters,
             auto_clone_analysis,
             clone_optimizations,
             struct_mapping_optimizations,
@@ -738,6 +848,39 @@ impl<'ast> Analyzer<'ast> {
 
         Ok(analyzed)
     }
+
+    /// Keep `inferred_ownership` aligned with formal codegen and registry metadata.
+    fn reconcile_inferred_ownership_with_mutations(
+        inferred_ownership: &mut HashMap<String, OwnershipMode>,
+        func: &FunctionDecl<'_>,
+        mutated_parameters: &HashSet<String>,
+        returned_parameters: &HashSet<String>,
+        field_mutated_parameters: &HashSet<String>,
+    ) {
+        for param in &func.parameters {
+            if returned_parameters.contains(&param.name) {
+                // Self receiver ownership is resolved by `infer_impl_self_receiver_ownership`;
+                // field getters (`return self.field`) must not be upgraded to owned here.
+                if param.name != "self" {
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                }
+                continue;
+            }
+            if mutated_parameters.contains(&param.name) {
+                let owned_explicit_mut = param.is_mutable
+                    && !field_mutated_parameters.contains(&param.name);
+                inferred_ownership.insert(
+                    param.name.clone(),
+                    if owned_explicit_mut {
+                        OwnershipMode::Owned
+                    } else {
+                        OwnershipMode::MutBorrowed
+                    },
+                );
+            }
+        }
+    }
+
     pub(crate) fn build_signature(
         &self,
         func: &AnalyzedFunction,
@@ -790,6 +933,23 @@ impl<'ast> Analyzer<'ast> {
                 // where `x = x + 1` generates `fn increment(x: &mut i64)` and the call site
                 // auto-inserts `&mut`. Read-only Copy params stay Owned (pass by value).
                 if self.is_copy_type(&param.type_) && inferred != OwnershipMode::MutBorrowed {
+                    if param.is_mutable {
+                        return OwnershipMode::Owned;
+                    }
+                    if func.mutated_parameters.contains(&param.name)
+                        && !self.is_returned(&param.name, &func.decl.body)
+                    {
+                        return OwnershipMode::MutBorrowed;
+                    }
+                    if inferred == OwnershipMode::Borrowed
+                        && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                        && self.param_only_used_as_field_enum_match_scrutinee(
+                            &param.name,
+                            &func.decl.body,
+                        )
+                    {
+                        return OwnershipMode::Borrowed;
+                    }
                     return OwnershipMode::Owned;
                 }
                 // THE WINDJAMMER WAY: The compiler infers ownership, not the user.
@@ -797,10 +957,6 @@ impl<'ast> Analyzer<'ast> {
                 // - Borrowed: parameter is only read (default for read-only params)
                 // - MutBorrowed: parameter is mutated
                 // - Owned: parameter is consumed (returned, stored, iterated, etc.)
-                //
-                // Users write `data: Vec<f32>` and the compiler figures out whether
-                // it should be `&Vec<f32>`, `&mut Vec<f32>`, or `Vec<f32>` in Rust.
-                // This matches call sites where `&self.data` is naturally passed.
                 inferred
             })
             .collect();
@@ -833,6 +989,27 @@ impl<'ast> Analyzer<'ast> {
             func.inferred_ownership.contains_key("self") && !explicit_self;
 
         let mut param_ownership = param_ownership;
+
+        for (idx, param) in func.decl.parameters.iter().enumerate() {
+            if func.returned_parameters.contains(&param.name) {
+                if let Some(slot) = param_ownership.get_mut(idx) {
+                    *slot = OwnershipMode::Owned;
+                }
+                continue;
+            }
+            if func.mutated_parameters.contains(&param.name) {
+                let owned_explicit_mut = param.is_mutable
+                    && !func.field_mutated_parameters.contains(&param.name);
+                if let Some(slot) = param_ownership.get_mut(idx) {
+                    *slot = if owned_explicit_mut {
+                        OwnershipMode::Owned
+                    } else {
+                        OwnershipMode::MutBorrowed
+                    };
+                }
+            }
+        }
+
         if synthetic_self_receiver {
             let self_mode = func
                 .inferred_ownership
@@ -857,7 +1034,50 @@ impl<'ast> Analyzer<'ast> {
         // Rust lowers these parameters as `&T` / `&mut T` — call-site helpers that key off
         // `param_ownership` must agree or we emit `.clone()` / `.to_string()` incorrectly.
         use crate::parser::Type as PType;
-        for (idx, ty) in param_types.iter().enumerate() {
+        for idx in 0..param_types.len() {
+            let ty = &param_types[idx];
+            let Some(formal) = func.decl.parameters.get(idx).map(|p| &p.type_) else {
+                continue;
+            };
+            // Copy scalars pass by value. Copy aggregates borrow only for field-enum-match
+            // (`&T`) or mutation/passthrough (`&mut T`). Ref analysis may attach spurious
+            // `Reference(T)` after field reads (e.g. `other.x`) — strip those to Owned.
+            if self.is_copy_type(formal) {
+                if crate::type_classification::is_copy_pass_by_value_formal(formal) {
+                    if matches!(
+                        param_types.get(idx),
+                        Some(PType::Reference(_) | PType::MutableReference(_))
+                    ) {
+                        param_types[idx] = formal.clone();
+                    }
+                    if let Some(slot) = param_ownership.get_mut(idx) {
+                        *slot = OwnershipMode::Owned;
+                    }
+                    continue;
+                }
+                if matches!(
+                    param_ownership.get(idx),
+                    Some(OwnershipMode::MutBorrowed)
+                ) {
+                    param_types[idx] = PType::MutableReference(Box::new(formal.clone()));
+                    continue;
+                }
+                if !self.param_only_used_as_field_enum_match_scrutinee(
+                    &func.decl.parameters[idx].name,
+                    &func.decl.body,
+                ) {
+                    if matches!(
+                        param_types.get(idx),
+                        Some(PType::Reference(_) | PType::MutableReference(_))
+                    ) {
+                        param_types[idx] = formal.clone();
+                    }
+                    if let Some(slot) = param_ownership.get_mut(idx) {
+                        *slot = OwnershipMode::Owned;
+                    }
+                    continue;
+                }
+            }
             let mode = match ty {
                 PType::Reference(_) => Some(OwnershipMode::Borrowed),
                 PType::MutableReference(_) => Some(OwnershipMode::MutBorrowed),
@@ -867,6 +1087,48 @@ impl<'ast> Analyzer<'ast> {
                 if let Some(slot) = param_ownership.get_mut(idx) {
                     *slot = mode;
                 }
+            }
+        }
+
+        // Emit `Reference(T)` in converged signatures when ownership is borrowed but the
+        // AST type is bare `T` — call-site IR + should_borrow key off param_types.
+        for (idx, own) in param_ownership.iter().enumerate() {
+            let Some(formal) = func.decl.parameters.get(idx).map(|p| &p.type_) else {
+                continue;
+            };
+            if Self::is_generic_type_param(formal) {
+                continue;
+            }
+            if self.is_copy_type(formal) {
+                if crate::type_classification::is_copy_pass_by_value_formal(formal) {
+                    continue;
+                }
+                match own {
+                    OwnershipMode::MutBorrowed => {}
+                    OwnershipMode::Borrowed
+                        if self.param_only_used_as_field_enum_match_scrutinee(
+                            &func.decl.parameters[idx].name,
+                            &func.decl.body,
+                        ) => {}
+                    _ => continue,
+                }
+            }
+            if Self::is_windjammer_text_param_type(formal) {
+                continue;
+            }
+            if matches!(formal, PType::Reference(_) | PType::MutableReference(_)) {
+                continue;
+            }
+            match own {
+                OwnershipMode::Borrowed if !matches!(param_types.get(idx), Some(PType::Reference(_))) => {
+                    param_types[idx] = PType::Reference(Box::new(formal.clone()));
+                }
+                OwnershipMode::MutBorrowed
+                    if !matches!(param_types.get(idx), Some(PType::MutableReference(_))) =>
+                {
+                    param_types[idx] = PType::MutableReference(Box::new(formal.clone()));
+                }
+                _ => {}
             }
         }
 
@@ -887,22 +1149,30 @@ impl<'ast> Analyzer<'ast> {
             formal_param_types.insert(0, self_ty);
         }
 
-        // Module-level plain `string` formals stay owned `String` (pit-of-success / E0053).
-        // Struct/enum impl methods keep body-inferred &str; trait items are handled in trait_analysis.
-        // Body-inferred Borrowed (read-only concat params, passthrough wrappers) is preserved.
+        // Module-level plain `string` formals stay owned `String` when not str_ref-optimized.
         if func.decl.parent_type.is_none() {
+            let str_ref_optimized = if !func.decl.is_extern {
+                self.analyze_str_ref_optimizable_params(&func.decl, registry)
+            } else {
+                std::collections::HashSet::new()
+            };
             for (idx, param) in func.decl.parameters.iter().enumerate() {
-                if Self::trait_param_is_owned_string(&param.type_) {
+                if Self::trait_param_is_owned_string(&param.type_)
+                    && !str_ref_optimized.contains(&param.name)
+                {
+                    if param_ownership.get(idx).is_some_and(|o| {
+                        matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                    }) {
+                        continue;
+                    }
                     if idx < formal_param_types.len() {
                         formal_param_types[idx] = param.type_.clone();
                     }
-                    if idx < param_ownership.len()
-                        && !matches!(
-                            param_ownership[idx],
-                            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                        )
-                    {
+                    if idx < param_ownership.len() {
                         param_ownership[idx] = OwnershipMode::Owned;
+                    }
+                    if idx < param_types.len() {
+                        param_types[idx] = param.type_.clone();
                     }
                 }
             }
@@ -938,7 +1208,36 @@ impl<'ast> Analyzer<'ast> {
         } else {
             std::collections::HashSet::new()
         };
+        // Extern FFI non-text parameters are owned at the C boundary (`Vec<u8>`, structs, etc.).
+        // Empty extern declarations have no body — inference may mark them Borrowed and wrap
+        // param_types in Reference(T), which breaks call-site move/clone (WDB-043).
+        if func.decl.is_extern {
+            for (idx, ty) in formal_param_types.iter().enumerate() {
+                if has_self_receiver && idx == 0 {
+                    continue;
+                }
+                if Self::is_windjammer_text_param_type(ty) {
+                    continue;
+                }
+                if let Some(slot) = param_ownership.get_mut(idx) {
+                    *slot = OwnershipMode::Owned;
+                }
+                if let Some(slot) = param_types.get_mut(idx) {
+                    let unwrapped = match slot.clone() {
+                        PType::Reference(inner) | PType::MutableReference(inner) => Some(*inner),
+                        _ => None,
+                    };
+                    if let Some(owned) = unwrapped {
+                        *slot = owned;
+                    }
+                }
+            }
+        }
+
         for (idx, ownership) in param_ownership.iter().enumerate() {
+            if func.decl.is_extern {
+                continue;
+            }
             if has_self_receiver && idx == 0 {
                 continue;
             }
@@ -970,7 +1269,7 @@ impl<'ast> Analyzer<'ast> {
                     };
                 }
                 OwnershipMode::MutBorrowed
-                    if !matches!(ty, PType::MutableReference(_)) && !self.is_copy_type(ty) =>
+                    if !matches!(ty, PType::MutableReference(_)) =>
                 {
                     *ty = PType::MutableReference(Box::new(ty.clone()));
                 }
@@ -981,6 +1280,14 @@ impl<'ast> Analyzer<'ast> {
         // Extract return type for smart string inference
         let return_type = func.decl.return_type.clone();
 
+        let field_extract_params = Some(
+            func.decl
+                .parameters
+                .iter()
+                .map(|p| func.field_extract_parameters.contains(&p.name))
+                .collect(),
+        );
+
         FunctionSignature {
             name: func.decl.name.clone(),
             param_types,
@@ -990,6 +1297,9 @@ impl<'ast> Analyzer<'ast> {
             return_ownership: OwnershipMode::Owned, // For now, always owned
             has_self_receiver,
             is_extern: func.decl.is_extern,
+            emitted_rust_ref_params: None,
+            field_extract_params,
+            forwarding_borrow_params: None,
         }
     }
 

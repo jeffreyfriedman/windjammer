@@ -109,16 +109,17 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        // 1. Check if parameter is mutated (uses registry for method call detection)
-        if self.is_mutated(param_name, body, registry, Some(param_type)) {
-            return Ok(OwnershipMode::MutBorrowed);
-        }
-
-        // 2. Check if parameter is returned (escapes function)
+        // 1. Returned parameters must stay owned — even when mutated in the body
+        // (e.g. `fn sort(items: Vec<T>) -> Vec<T> { items.sort(); items }`).
         if self.is_returned(param_name, body)
             && !(Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_some())
         {
             return Ok(OwnershipMode::Owned);
+        }
+
+        // 2. Check if parameter is mutated (uses registry for method call detection)
+        if self.is_mutated(param_name, body, registry, Some(param_type)) {
+            return Ok(OwnershipMode::MutBorrowed);
         }
 
         // 2.1. Returning a non-Copy self field (e.g. `fn id(self) -> String { self.id }`)
@@ -250,9 +251,7 @@ impl<'ast> Analyzer<'ast> {
             match pass_through_mode {
                 OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
                 OwnershipMode::MutBorrowed => {
-                    if self.is_copy_type(param_type) {
-                        return Ok(OwnershipMode::Owned);
-                    }
+                    // Copy types passthrough to &mut callees need &mut at the wrapper too.
                     // `mut param` used only as an argument to a &mut callee keeps an owned
                     // binding; the call site adds `&mut`. Method calls on the param (e.g.
                     // `c.increment()`) need `&mut T` in the signature itself.
@@ -320,7 +319,9 @@ impl<'ast> Analyzer<'ast> {
                 ) {
                     return Ok(OwnershipMode::Borrowed);
                 }
-                return Ok(OwnershipMode::Owned);
+                // Read-only module `string` args only forwarded to calls → borrowed API
+                // (codegen may lower to &str). Owned is for consuming callees resolved above.
+                return Ok(OwnershipMode::Borrowed);
             }
             if self.is_used_in_binary_op(param_name, body)
                 && !self.is_used_in_arithmetic_op(param_name, body)
@@ -344,6 +345,12 @@ impl<'ast> Analyzer<'ast> {
                 func,
             ) {
                 return Ok(OwnershipMode::MutBorrowed);
+            }
+            // Copy struct/enum read via `match param.field { Variant { .. } => ... }` borrows.
+            if !crate::type_classification::is_copy_pass_by_value_formal(param_type)
+                && self.param_only_used_as_field_enum_match_scrutinee(param_name, body)
+            {
+                return Ok(OwnershipMode::Borrowed);
             }
             return Ok(OwnershipMode::Owned);
         }

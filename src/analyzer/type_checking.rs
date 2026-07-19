@@ -27,7 +27,15 @@ impl<'ast> Analyzer<'ast> {
                 if self.copy_structs.contains(name) {
                     return true;
                 }
+                if name
+                    .split("::")
+                    .last()
+                    .is_some_and(|base| self.copy_structs.contains(base))
+                {
+                    return true;
+                }
                 crate::type_classification::is_copy_primitive(name)
+                    || crate::type_classification::is_known_copy_aggregate(name)
             }
             _ => false,
         }

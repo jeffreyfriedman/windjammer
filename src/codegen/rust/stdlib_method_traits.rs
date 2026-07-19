@@ -6,7 +6,7 @@
 //! small const tables live in `rust_stdlib_annotations`.
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
-use crate::parser::Type;
+use crate::parser::{Expression, Type};
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -19,13 +19,10 @@ fn lookup_sig<'a>(
 ) -> Option<&'a FunctionSignature> {
     if let Some(ty) = receiver_type {
         let base = ty.split('<').next().unwrap_or(ty);
-        let qualified = format!("{}::{}", base, method);
-        if let Some(sig) = registry.get_signature(&qualified) {
-            return Some(sig);
-        }
-        if base != ty {
-            let qualified_full = format!("{}::{}", ty, method);
-            if let Some(sig) = registry.get_signature(&qualified_full) {
+        let short = base.rsplit("::").next().unwrap_or(base);
+        for candidate in [base, short, ty] {
+            let qualified = format!("{candidate}::{method}");
+            if let Some(sig) = registry.get_signature(&qualified) {
                 return Some(sig);
             }
         }
@@ -101,7 +98,9 @@ const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
 const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
 
 pub fn is_set_type_name(name: &str) -> bool {
-    SET_TYPES.contains(&name.split('<').next().unwrap_or(name))
+    let base = name.split('<').next().unwrap_or(name);
+    let short = base.rsplit("::").next().unwrap_or(base);
+    SET_TYPES.contains(&short)
 }
 
 pub fn is_set_type(ty: &crate::parser::Type) -> bool {
@@ -116,10 +115,7 @@ pub fn is_set_type(ty: &crate::parser::Type) -> bool {
 }
 
 fn is_map_receiver(receiver_type: Option<&str>) -> bool {
-    receiver_type.is_some_and(|ty| {
-        let base = ty.split('<').next().unwrap_or(ty);
-        MAP_TYPES.contains(&base)
-    })
+    receiver_type.is_some_and(is_map_type_name)
 }
 
 // ── Primary query functions ──────────────────────────────────────────────
@@ -242,12 +238,55 @@ pub fn method_auto_borrows_arg_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
+    method_arg_needs_auto_borrow_at_index(method, receiver_type, registry, 0)
+}
+
+/// Does call argument `arg_index` (0 = first arg after receiver) need auto-borrowing?
+pub fn method_arg_needs_auto_borrow_at_index(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+    arg_index: usize,
+) -> bool {
     let sig =
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
-        first_arg_type(s).is_some_and(is_reference_type)
-            && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
+        let param_idx = s.arg_param_index(arg_index);
+        s.param_types
+            .get(param_idx)
+            .is_some_and(is_reference_type)
+            && matches!(
+                s.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed)
+            )
     })
+}
+
+/// Whether a method argument expects `&str` in Rust (from resolved signature).
+pub fn method_arg_expects_rust_str_ref_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+    arg_index: usize,
+) -> bool {
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
+    sig.and_then(|s| {
+        let idx = s.arg_param_index(arg_index);
+        s.param_types.get(idx)
+    })
+    .is_some_and(is_str_reference)
+}
+
+/// Whether a method argument expects `&str` in Rust (from a resolved signature).
+pub fn method_arg_expects_rust_str_ref_from_sig(
+    sig: &FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    let idx = sig.arg_param_index(arg_index);
+    sig.param_types
+        .get(idx)
+        .is_some_and(is_str_reference)
 }
 
 /// Is this a HashMap/BTreeMap key method whose first arg is a key reference?
@@ -416,6 +455,30 @@ pub fn method_mutates_receiver(method: &str) -> bool {
     )
 }
 
+/// String methods whose pattern/delimiter args lower to `&str` in Rust (not owned `String`).
+pub fn is_string_pattern_method(method: &str) -> bool {
+    matches!(
+        method,
+        "replace"
+            | "replacen"
+            | "split"
+            | "splitn"
+            | "rsplit"
+            | "split_whitespace"
+            | "contains"
+            | "starts_with"
+            | "ends_with"
+            | "find"
+            | "rfind"
+            | "match_indices"
+            | "strip_prefix"
+            | "strip_suffix"
+            | "trim"
+            | "trim_start"
+            | "trim_end"
+    )
+}
+
 pub fn method_returns_iterator(method: &str) -> bool {
     matches!(
         method,
@@ -454,19 +517,14 @@ pub fn is_set_lookup_method(method: &str) -> bool {
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.
 pub fn is_map_type_name(name: &str) -> bool {
-    matches!(
-        name.split('<').next().unwrap_or(name),
-        "HashMap" | "BTreeMap" | "Map" | "IndexMap"
-    )
+    let base = name.split('<').next().unwrap_or(name);
+    let short = base.rsplit("::").next().unwrap_or(base);
+    matches!(short, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
 }
 
 pub fn is_map_type(ty: &crate::parser::Type) -> bool {
     match ty {
-        crate::parser::Type::Parameterized(base, _)
-            if base == "HashMap" || base == "BTreeMap" || base == "Map" =>
-        {
-            true
-        }
+        crate::parser::Type::Parameterized(base, _) if is_map_type_name(base) => true,
         crate::parser::Type::Reference(inner) | crate::parser::Type::MutableReference(inner) => {
             is_map_type(inner)
         }
@@ -504,6 +562,27 @@ pub fn is_closure_taking_method(method: &str) -> bool {
 }
 
 /// Module names from `use std::…` that map to `windjammer_runtime::*` imports.
+/// Build `Module::method` for signature/IR lookup at module-style call sites.
+pub fn module_qualified_method_name(
+    receiver_type_name: Option<&str>,
+    object: &Expression,
+    method: &str,
+    is_imported_runtime_std_module: impl Fn(&str) -> bool,
+) -> String {
+    if let Some(tn) = receiver_type_name {
+        return format!("{tn}::{method}");
+    }
+    if let Expression::Identifier { name, .. } = object {
+        if is_imported_runtime_std_module(name)
+            || is_runtime_std_module(name)
+            || name.chars().next().is_some_and(|c| c.is_uppercase())
+        {
+            return format!("{name}::{method}");
+        }
+    }
+    method.to_string()
+}
+
 pub fn is_runtime_std_module(name: &str) -> bool {
     matches!(
         name,
@@ -565,29 +644,159 @@ pub fn receiver_uses_asref_str_runtime_module(
     false
 }
 
-/// Check if a runtime std module function parameter should be auto-borrowed.
+/// Scanned runtime Rust signature borrows this arg while the WJ formal is still owned.
 ///
-/// In `windjammer_runtime`, some modules take non-Copy struct parameters by reference
-/// (`&T`) in the Rust implementation, but WJ stdlib declarations use owned types
-/// (since WJ infers ownership). This function identifies those params so the codegen
-/// can insert `&` at call sites.
-///
-/// This is module-specific because conventions differ:
-/// - `json::get(value: &Value, ...)` — Rust takes `&Value`
-/// - `subprocess::wait(handle: SubprocessHandle)` — Rust takes owned
-pub fn runtime_std_param_needs_auto_borrow(
-    module: &str,
-    _func: &str,
-    param_type: &crate::parser::Type,
+/// Driven by `stdlib_scanner` / registry `param_ownership` (e.g. `subprocess::spawn`'s
+/// `&str`, `json::get`'s `&Value`) — never by method or module name lists.
+pub fn runtime_wj_owned_rust_borrowed_param(
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
 ) -> bool {
+    use crate::analyzer::OwnershipMode;
     use crate::parser::Type;
-    match module {
-        "json" => {
-            // All json functions take Value params by reference (&Value) in Rust,
-            // except constructors (object/array/null/boolean/number_*/json_string)
-            // which don't take Value params at all.
-            matches!(param_type, Type::Custom(name) if name == "Value")
-        }
-        _ => false,
+
+    let pidx = sig.arg_param_index(arg_index);
+    let scanned_borrow = matches!(
+        sig.param_ownership.get(pidx),
+        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+    );
+    if !scanned_borrow {
+        return false;
     }
+    sig.formal_param_type(pidx)
+        .or_else(|| sig.param_types.get(pidx))
+        .is_none_or(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+}
+
+/// Whether a runtime-std call argument needs `&` at the Rust call site (signature-driven).
+pub fn runtime_std_param_needs_auto_borrow(
+    signature: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+) -> bool {
+    signature.is_some_and(|sig| runtime_wj_owned_rust_borrowed_param(sig, arg_index))
+}
+
+/// Map/set key lookup: first arg must be borrowed when the receiver is a map/set type.
+/// Driven by signature registry ownership/types — not method name lists.
+pub fn is_collection_key_lookup(
+    sig: &FunctionSignature,
+    arg_index: usize,
+    receiver_type: Option<&str>,
+) -> bool {
+    if arg_index != 0 {
+        return false;
+    }
+    let Some(rt) = receiver_type else {
+        return false;
+    };
+    let base = rt.split('<').next().unwrap_or(rt);
+    if !is_map_type_name(base) && !is_set_type_name(base) {
+        return false;
+    }
+    callee_arg_expects_reference_param(sig, arg_index)
+}
+
+/// Extract `Vec` from `Vec::push` for call-site qualification when local type inference failed.
+pub fn receiver_type_from_qualified_sig(sig: &FunctionSignature) -> Option<&str> {
+    sig.name.rsplit_once("::").map(|(rt, _)| rt)
+}
+
+/// Whether the resolved callee expects a shared or mutable reference at `arg_index`.
+pub fn callee_arg_expects_reference_param(
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    use crate::analyzer::OwnershipMode;
+    use crate::parser::Type;
+
+    let pidx = sig.arg_param_index(arg_index);
+    if sig.param_types.get(pidx).is_some_and(|t| {
+        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    }) {
+        return true;
+    }
+    matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+            sig, arg_index,
+        ),
+        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+    ) || matches!(
+        sig.param_ownership.get(pidx),
+        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+    )
+}
+
+/// Resolve the runtime std module for call-site borrow decisions.
+pub fn resolve_runtime_std_module<'a>(
+    callee_module: &'a str,
+    receiver_type: Option<&str>,
+) -> &'a str {
+    if is_runtime_std_module(callee_module) || runtime_std_module_uses_asref_str(callee_module) {
+        return callee_module;
+    }
+    if let Some(tn) = receiver_type {
+        if let Some(m) = runtime_std_module_for_type(tn) {
+            return m;
+        }
+    }
+    callee_module
+}
+
+/// Whether a runtime-std call argument needs `&` inserted at the Rust call site.
+///
+/// Uses param types when available; falls back to scanned `param_ownership` (runtime
+/// scanner often has empty `param_types` but correct borrow hints from Rust signatures).
+pub fn runtime_std_call_arg_needs_auto_borrow(
+    module: &str,
+    method: &str,
+    signature: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    inferred_type: Option<&crate::parser::Type>,
+    arg_expr: &crate::parser::Expression,
+    receiver_type: Option<&str>,
+) -> bool {
+    use crate::analyzer::OwnershipMode;
+    use crate::parser::Expression;
+
+    if !matches!(
+        arg_expr,
+        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+    ) {
+        return false;
+    }
+
+    let module = resolve_runtime_std_module(module, receiver_type);
+    let param_idx = signature.map(|s| s.arg_param_index(arg_index));
+    let sig_type = param_idx.and_then(|idx| {
+        signature.and_then(|s| {
+            s.formal_param_type(idx)
+                .or_else(|| s.param_types.get(idx))
+        })
+    });
+
+    if signature.is_some_and(|sig| runtime_wj_owned_rust_borrowed_param(sig, arg_index)) {
+        return true;
+    }
+
+    if let Some(ty) = sig_type.or(inferred_type) {
+        if runtime_std_module_uses_asref_str(module)
+            && (crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
+                || crate::codegen::rust::types::is_windjammer_text_type(ty))
+        {
+            return true;
+        }
+    }
+
+    if let Some(ownership) = param_idx.and_then(|idx| {
+        signature.and_then(|s| s.param_ownership.get(idx).copied())
+    }) {
+        if matches!(ownership, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            && is_runtime_std_module(module)
+        {
+            return true;
+        }
+    }
+
+    runtime_std_module_uses_asref_str(module)
+        && inferred_type.is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
 }

@@ -616,8 +616,26 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Associated function: `fn create() -> Self` has no receiver — do not emit &mut self.
                 if !(self_ownership.is_none() && returns_bare_self) {
+                    let trait_only_self = analyzed
+                        .iter()
+                        .find(|f| f.decl.name == method.name)
+                        .and_then(|a| a.inferred_ownership.get("self").copied());
+                    let impl_upgraded_mut = matches!(
+                        (trait_only_self, self_ownership),
+                        (Some(OwnershipMode::Borrowed), Some(OwnershipMode::MutBorrowed))
+                    );
+                    let default_body_readonly = analyzed
+                        .iter()
+                        .find(|f| f.decl.name == method.name)
+                        .map(|a| !self.function_modifies_self(&a.decl))
+                        .unwrap_or(method.body.is_none());
                     let self_param = match self_ownership {
                         Some(OwnershipMode::Borrowed) => "&self",
+                        Some(OwnershipMode::MutBorrowed)
+                            if default_body_readonly && !impl_upgraded_mut =>
+                        {
+                            "&self"
+                        }
                         Some(OwnershipMode::MutBorrowed) | None => "&mut self",
                         Some(OwnershipMode::Owned) => "self",
                     };
@@ -1010,18 +1028,105 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_impl_generic_type_params =
             codegen_helpers::impl_block_type_param_names(impl_block);
 
-        // Self:: static calls to sibling methods defined later in the impl need signatures
-        // registered before any function body is emitted (forward-ref within same impl).
+        // Self:: static calls and sibling impl blocks need converged signatures registered
+        // before any function body is emitted (forward-ref within same struct).
+        // Two passes: callee borrow promotion (e.g. `key` → `has_key(&Key)`) may chain.
+        for _ in 0..4 {
+            for analyzed_func in analyzed {
+                let Some(parent_name) = analyzed_func.decl.parent_type.as_ref() else {
+                    continue;
+                };
+                if parent_name != &impl_block.type_name {
+                    continue;
+                }
+                if analyzed_func.decl.impl_trait != impl_block.trait_name {
+                    continue;
+                }
+                if analyzed_func.decl.is_extern {
+                    continue;
+                }
+                self.select_ir_function_for(&analyzed_func.decl.name);
+                self.register_impl_method_signature_from_analyzed(
+                    &impl_block.type_name,
+                    &analyzed_func.decl,
+                    analyzed_func,
+                );
+            }
+        }
+
+        // Full prepare+register for every sibling method before any body is emitted so
+        // forward refs (put_value → key_in_latest_base) see converged &Key signatures.
+        // Stubs/delegates that keep owned params must prepare before mixed forwarders (put_value).
+        let mut sibling_prepare: Vec<&AnalyzedFunction<'_>> = analyzed
+            .iter()
+            .filter(|af| {
+                af.decl.parent_type.as_deref() == Some(impl_block.type_name.as_str())
+                    && af.decl.impl_trait == impl_block.trait_name
+                    && !af.decl.is_extern
+            })
+            .collect();
+        sibling_prepare.sort_by_key(|af| {
+            af.decl.parameters.iter().any(|p| {
+                p.name != "self"
+                    && self.param_passed_to_borrowing_callee(
+                        af.decl.body.as_slice(),
+                        &p.name,
+                        &af.decl,
+                    )
+            }) as u8
+        });
+        for _ in 0..4 {
+            for analyzed_func in &sibling_prepare {
+                self.select_ir_function_for(&analyzed_func.decl.name);
+                self.prepare_codegen_environment_for_regular_function(analyzed_func);
+            }
+        }
+
+        // Re-register after prepare so callee-forwarded borrows (has_key → &Key) are visible
+        // to earlier impl methods (put_value → key_in_latest_base(&key)) at call-site codegen.
+        for _ in 0..4 {
+            for analyzed_func in analyzed {
+                let Some(parent_name) = analyzed_func.decl.parent_type.as_ref() else {
+                    continue;
+                };
+                if parent_name != &impl_block.type_name {
+                    continue;
+                };
+                if analyzed_func.decl.impl_trait != impl_block.trait_name {
+                    continue;
+                }
+                if analyzed_func.decl.is_extern {
+                    continue;
+                }
+                self.select_ir_function_for(&analyzed_func.decl.name);
+                self.register_impl_method_signature_from_analyzed(
+                    &impl_block.type_name,
+                    &analyzed_func.decl,
+                    analyzed_func,
+                );
+            }
+        }
+
+        self.current_ir_function = None;
+        self.inferred_borrowed_params.clear();
+        self.inferred_mut_borrowed_params.clear();
+        self.emitted_rust_ref_formals.clear();
+        self.str_ref_optimized_params.clear();
+        self.current_fn_mixed_forwarder_params.clear();
+        self.current_function_params.clear();
+        self.current_function_name = None;
+        self.current_function_body.clear();
+        self.local_var_types.clear();
+        self.local_variable_scopes.clear();
+
+        // Emit/formal-register every sibling method before any body so forward refs
+        // (set_bool → find_index) and main→callee call sites see converged signatures.
         for func in &impl_block.functions {
             if let Some(analyzed_func) = analyzed
                 .iter()
                 .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
             {
-                self.register_impl_method_signature_from_analyzed(
-                    &impl_block.type_name,
-                    func,
-                    analyzed_func,
-                );
+                self.preregister_function_formals_in_registry(analyzed_func);
             }
         }
 

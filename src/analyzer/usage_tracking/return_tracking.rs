@@ -5,6 +5,108 @@ use crate::parser::*;
 use super::Analyzer;
 
 impl<'ast> Analyzer<'ast> {
+    /// True when every return path that mentions `name` returns only a field of `name`
+    /// (e.g. `key.bytes`), not the whole binding — callers may reuse the binding afterward.
+    pub(crate) fn is_field_extract_returned(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        if !self.is_returned(name, statements) {
+            return false;
+        }
+        !self.is_whole_binding_returned(name, statements)
+    }
+
+    fn is_whole_binding_returned(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let len = statements.len();
+        for (i, stmt) in statements.iter().enumerate() {
+            let is_last = i == len - 1;
+            match stmt {
+                Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    if self.expression_returns_whole_binding(name, expr) {
+                        return true;
+                    }
+                }
+                Statement::Expression { expr, .. } if is_last => {
+                    let is_void_call = if let Expression::Call { function, .. } = expr {
+                        if let Expression::Identifier { name: fn_name, .. } = &**function {
+                            matches!(
+                                fn_name.as_str(),
+                                "println" | "print" | "eprintln" | "eprint" | "assert" | "panic"
+                            )
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if !is_void_call && self.expression_returns_whole_binding(name, expr) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.is_whole_binding_returned(name, then_block) {
+                        return true;
+                    }
+                    if let Some(else_b) = else_block {
+                        if self.is_whole_binding_returned(name, else_b) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if self.expression_returns_whole_binding(name, arm.body) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expression_returns_whole_binding(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } if id == name => true,
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if let Expression::Identifier { name: fn_name, .. } = &**function {
+                    let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
+                    let is_enum_constructor = Self::looks_like_enum_variant_constructor(fn_name);
+                    if is_known_wrapper || is_enum_constructor {
+                        for (_label, arg) in arguments {
+                            if self.expression_returns_whole_binding(name, arg) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
+            }
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|elem| self.expression_returns_whole_binding(name, elem)),
+            Expression::FieldAccess { .. } => false,
+            _ => false,
+        }
+    }
+
     pub(crate) fn is_returned(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         let len = statements.len();
         for (i, stmt) in statements.iter().enumerate() {
@@ -110,8 +212,21 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
 
-            // Returning `param.field` moves the field out of an owned parameter (consumes `param`).
+            // Returning `param.field` moves the field out of an owned parameter (consumes `param`)
+            // when the field type is non-Copy. Copy fields are read through `&param` with implicit copy.
             Expression::FieldAccess { object, .. } => {
+                if !self.expression_uses_identifier(name, object) {
+                    return false;
+                }
+                if matches!(&**object, Expression::Identifier { name: id, .. } if id == name) {
+                    if name == "self" {
+                        if let Some(chain_type) = self.resolve_self_field_chain_type(expr) {
+                            if self.is_copy_type(&chain_type) {
+                                return false;
+                            }
+                        }
+                    }
+                }
                 self.expression_uses_identifier_for_return(name, object)
             }
 

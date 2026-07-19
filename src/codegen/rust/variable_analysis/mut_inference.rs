@@ -235,7 +235,7 @@ impl<'ast> CodeGenerator<'ast> {
         if func_name.is_empty() {
             return false;
         }
-        if self.has_collision_with_global(&func_name) {
+        if self.has_explicit_ownership_collision_with_global(&func_name) {
             return false;
         }
         let Some(sig) = self.get_signature_with_global(&func_name) else {
@@ -288,7 +288,7 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let qualified_name = format!("{}::{}", receiver_type, method);
-        if self.has_collision_with_global(&qualified_name) {
+        if self.has_explicit_ownership_collision_with_global(&qualified_name) {
             return false;
         }
         let Some(sig) = self.get_signature_with_global(&qualified_name) else {

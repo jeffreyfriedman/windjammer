@@ -234,6 +234,30 @@
       "param_ownership": ["MutBorrowed", "Borrowed"],
       "has_self_receiver": true
     },
+    "Vec::join": {
+      "params": ["Reference(Custom(\"Vec\"))", "Reference(Custom(\"str\"))"],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "Vec::get": {
+      "params": ["Reference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Option(Reference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["Borrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "Vec::get_mut": {
+      "params": ["MutableReference(Custom(\"Vec\"))", "Custom(\"usize\")"],
+      "return_type": "Option(MutableReference(Custom(\"T\")))",
+      "is_associated": true,
+      "parent_type": "Vec",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
     "Vec::len": {
       "params": ["Reference(Custom(\"Vec\"))"],
       "return_type": "Custom(\"usize\")",

@@ -38,6 +38,7 @@ impl CodegenBackend for GoBackend {
     }
 
     fn generate(&self, program: &Program, _config: &CodegenConfig) -> Result<CodegenOutput> {
+        let _ir = crate::codegen::go::ir_lowering::prepare_ir_context(program);
         let mut gen = GoGenerator::new();
         let code = gen.generate_program(program);
         Ok(CodegenOutput::new(code, "go".to_string()))

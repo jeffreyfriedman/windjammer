@@ -255,6 +255,9 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
                     return_ownership: OwnershipMode::Owned,
                     has_self_receiver: sig.has_self_receiver,
                     is_extern: true,
+                    emitted_rust_ref_params: None,
+                    field_extract_params: None,
+            forwarding_borrow_params: None,
                 },
             );
         }

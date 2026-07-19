@@ -42,6 +42,15 @@ pub fn cast_int_to_float(s: &str, expr: &Expression, target: &str) -> String {
     }
 }
 
+/// Strip partial literal-only float casts inside a binary expression string.
+pub(crate) fn strip_partial_literal_float_casts(s: &str) -> String {
+    s.replace("_i32 as f32", "_i32")
+        .replace("_i64 as f64", "_i64")
+        .replace("_i32 as f64", "_i32")
+        .replace("_usize as f32", "_usize")
+        .replace("_usize as f64", "_usize")
+}
+
 /// Auto-cast an integer call argument to float when the parameter expects f32/f64.
 ///
 /// Returns `true` (and mutates `arg_str`) if a cast was applied.
@@ -59,6 +68,14 @@ pub fn maybe_cast_int_arg_to_float(
         return false;
     }
 
+    // Binary int args need a whole-expression cast; partial inner literal casts break precedence.
+    if matches!(arg_expr, Expression::Binary { .. }) {
+        let target = if param_is_f32 { "f32" } else { "f64" };
+        let normalized = strip_partial_literal_float_casts(arg_str);
+        *arg_str = format!("({}) as {}", normalized, target);
+        return true;
+    }
+
     let arg_is_int = matches!(
         arg_expr,
         Expression::Literal {
@@ -73,6 +90,12 @@ pub fn maybe_cast_int_arg_to_float(
         return false;
     }
     if arg_str.contains(" as f32") || arg_str.contains(" as f64") {
+        // Binary ops may have partial inner casts (e.g. `x + 1_i32 as f32`) — wrap whole expr.
+        if matches!(arg_expr, Expression::Binary { .. }) {
+            let target = if param_is_f32 { "f32" } else { "f64" };
+            *arg_str = format!("({}) as {}", arg_str, target);
+            return true;
+        }
         return false;
     }
 

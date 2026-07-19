@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 pub struct DependencyGraph {
     /// Reverse edges for transitive dependent lookup (importer → imported)
     reverse: HashMap<usize, HashSet<usize>>,
+    /// Forward edges: file index → indices it directly depends on (imports)
+    depends_on: HashMap<usize, HashSet<usize>>,
 }
 
 impl DependencyGraph {
@@ -52,7 +54,56 @@ impl DependencyGraph {
             }
         }
 
-        Self { reverse }
+        Self {
+            reverse,
+            depends_on: edges,
+        }
+    }
+
+    /// Topological order for codegen: dependencies before importers.
+    pub fn sort_indices_for_codegen(&self, indices: &[usize]) -> Vec<usize> {
+        let set: HashSet<usize> = indices.iter().copied().collect();
+        if set.is_empty() {
+            return Vec::new();
+        }
+        let mut in_degree: HashMap<usize, usize> = HashMap::new();
+        for &idx in &set {
+            let count = self
+                .depends_on
+                .get(&idx)
+                .map(|d| d.iter().filter(|x| set.contains(x)).count())
+                .unwrap_or(0);
+            in_degree.insert(idx, count);
+        }
+        let mut zero_deps: Vec<usize> = in_degree
+            .iter()
+            .filter(|(_, &c)| c == 0)
+            .map(|(&i, _)| i)
+            .collect();
+        zero_deps.sort_unstable();
+        let mut queue: VecDeque<usize> = zero_deps.into();
+        let mut sorted = Vec::with_capacity(indices.len());
+        while let Some(idx) = queue.pop_front() {
+            sorted.push(idx);
+            if let Some(importers) = self.reverse.get(&idx) {
+                for &imp in importers {
+                    if set.contains(&imp) {
+                        if let Some(deg) = in_degree.get_mut(&imp) {
+                            *deg = deg.saturating_sub(1);
+                            if *deg == 0 {
+                                queue.push_back(imp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for &idx in indices {
+            if !sorted.contains(&idx) {
+                sorted.push(idx);
+            }
+        }
+        sorted
     }
 
     /// All file indices that transitively depend on any of `dirty` (includes dirty themselves).
@@ -97,8 +148,16 @@ fn resolve_import(
         return None;
     }
     if import_path[0] == "crate" {
-        let resolved: Vec<String> = import_path[1..].to_vec();
-        return module_to_index.get(&resolved).copied();
+        let mut resolved: Vec<String> = import_path[1..].to_vec();
+        // `use crate::memory_engine::MemoryEngine` depends on module `memory_engine`,
+        // not a fictitious `memory_engine::MemoryEngine` module path.
+        while !resolved.is_empty() {
+            if let Some(&idx) = module_to_index.get(&resolved) {
+                return Some(idx);
+            }
+            resolved.pop();
+        }
+        return None;
     }
     if import_path[0] == "super" {
         let mut base = current_module.to_vec();

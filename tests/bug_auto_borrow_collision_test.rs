@@ -35,6 +35,9 @@ fn test_auto_borrow_skipped_on_signature_collision() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -56,6 +59,9 @@ fn test_auto_borrow_skipped_on_signature_collision() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
     global_sigs.merge(&other_sigs);
@@ -132,6 +138,9 @@ fn test_module_qualified_call_auto_borrow_skipped_on_collision() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -148,6 +157,9 @@ fn test_module_qualified_call_auto_borrow_skipped_on_collision() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
     global_sigs.merge(&other_sigs);
@@ -187,6 +199,9 @@ fn test_mut_borrow_skipped_on_collision() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -203,6 +218,9 @@ fn test_mut_borrow_skipped_on_collision() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
     global_sigs.merge(&other_sigs);
@@ -239,6 +257,9 @@ fn test_collision_detected_for_different_ownership_same_types() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -254,6 +275,9 @@ fn test_collision_detected_for_different_ownership_same_types() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
