@@ -15,6 +15,8 @@ The compiler now includes a **Safety-Typed IR** layer (`src/ir/`) providing:
 
 The IR is additive infrastructure — the existing compilation pipeline (parser → analyzer → codegen) remains unchanged. Individual passes will be incrementally migrated to use the IR's constraint solver.
 
+**Architecture reference:** [docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md](docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md) — solver-driven codegen migration plan, cutover flags, TDD protocol, and backend consumption model.
+
 ## Quick Reference
 
 ```bash

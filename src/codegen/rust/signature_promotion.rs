@@ -401,7 +401,7 @@ pub(crate) fn global_has_borrowed_text_over_local_owned_stub(
 /// `b` has `Reference(T)` params with `Borrowed`/`MutBorrowed` ownership where `a` has
 /// bare `T` with `Owned`. Indicates `b` was refined by body analysis and should be preferred.
 /// Ignores the self param (idx 0 when `has_self_receiver`).
-fn converged_has_reference_params_over_bare(a: &FunctionSignature, b: &FunctionSignature) -> bool {
+pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b: &FunctionSignature) -> bool {
     let min_len = a.param_ownership.len().min(b.param_ownership.len());
     for idx in 0..min_len {
         if a.has_self_receiver && idx == 0 {
@@ -425,17 +425,88 @@ fn converged_has_reference_params_over_bare(a: &FunctionSignature, b: &FunctionS
     false
 }
 
+/// Method registry entry was aligned with emitted Rust formals (owned `Key`, etc.)
+/// after `refresh_method_registry_from_emitted_formals` — beats stale analyzer borrow.
+pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) -> bool {
+    sig.param_ownership.iter().enumerate().any(|(idx, own)| {
+        if sig.has_self_receiver && idx == 0 {
+            return false;
+        }
+        emitted_owned_arg_contract(sig, idx)
+    })
+}
+
+/// Single argument emits as owned non-text in generated Rust (not `&T`).
+pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usize) -> bool {
+    if sig.param_types.get(param_idx).is_some_and(|t| {
+        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    }) {
+        return false;
+    }
+    if matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+            sig, param_idx,
+        ),
+        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+    ) {
+        return false;
+    }
+    if let Some(ref flags) = sig.emitted_rust_ref_params {
+        if flags.get(param_idx).copied().unwrap_or(false) {
+            return false;
+        }
+        if flags.get(param_idx).copied() == Some(false) {
+            // Codegen refresh recorded an owned Rust formal; `formal_param_types` may
+            // still be stale `Reference(T)` from body-converged analysis.
+            return !param_type_is_borrowed_text(sig, param_idx);
+        }
+    }
+    matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
+        && param_type_is_owned_non_text(sig, param_idx)
+}
+
+fn param_type_is_borrowed_text(sig: &FunctionSignature, param_idx: usize) -> bool {
+    sig.formal_param_type(param_idx)
+        .or_else(|| sig.param_types.get(param_idx))
+        .is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                || crate::codegen::rust::types::is_windjammer_text_type(t)
+        })
+}
+
+/// Global converged `Reference(T)` must not beat a concrete impl whose emitted Rust formals
+/// are owned non-text (MemoryEngine::range_scan vs stale trait/body borrow metadata).
+pub(crate) fn emitted_owned_beats_stale_global_borrow(
+    local: &FunctionSignature,
+    global: &FunctionSignature,
+) -> bool {
+    // Only codegen-refreshed signatures (with emitted_rust_ref_params) beat global
+    // converged borrow — not bare declaration stubs with param_ownership: Owned.
+    local.emitted_rust_ref_params.is_some()
+        && method_registry_reflects_emitted_owned(local)
+        && converged_has_reference_params_over_bare(local, global)
+}
+
 /// Prefer converged global signatures over per-file declaration stubs at call sites.
 pub fn pick_best_resolved_signature(
     local: Option<ResolvedSignature>,
     global: Option<ResolvedSignature>,
 ) -> Option<ResolvedSignature> {
     match (local, global) {
+        (Some(l), Some(g)) if emitted_owned_beats_stale_global_borrow(&l.sig, &g.sig) => Some(l),
+        (Some(l), Some(g)) if emitted_owned_beats_stale_global_borrow(&g.sig, &l.sig) => Some(g),
         (Some(l), Some(g))
-            if prefer_converged_over_stub(&l.sig, &g.sig)
+            if converged_has_reference_params_over_bare(&g.sig, &l.sig)
+                && method_registry_reflects_emitted_owned(&g.sig) =>
+        {
+            Some(g)
+        }
+        (Some(l), Some(g))
+            if (prefer_converged_over_stub(&l.sig, &g.sig)
                 || global_has_converged_str_refs_over_local(&l.sig, &g.sig)
                 || global_has_borrowed_text_over_local_owned_stub(&l.sig, &g.sig)
-                || converged_has_reference_params_over_bare(&l.sig, &g.sig) =>
+                || converged_has_reference_params_over_bare(&l.sig, &g.sig))
+                && !emitted_owned_beats_stale_global_borrow(&l.sig, &g.sig) =>
         {
             Some(g)
         }
@@ -443,7 +514,8 @@ pub fn pick_best_resolved_signature(
             if prefer_converged_over_stub(&g.sig, &l.sig)
                 || global_has_converged_str_refs_over_local(&g.sig, &l.sig)
                 || global_has_borrowed_text_over_local_owned_stub(&g.sig, &l.sig)
-                || converged_has_reference_params_over_bare(&g.sig, &l.sig) =>
+                || (converged_has_reference_params_over_bare(&g.sig, &l.sig)
+                    && !method_registry_reflects_emitted_owned(&g.sig)) =>
         {
             Some(l)
         }
@@ -484,12 +556,20 @@ pub(crate) fn best_method_signature_for_receiver(
         }
         let converged =
             !signature_is_declaration_stub_like(sig) && !has_stale_owned_non_copy_params(sig);
+        let sig_emitted = method_registry_reflects_emitted_owned(sig);
         let str_ref_params = sig
             .param_types
             .iter()
             .filter(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
             .count();
         let replace = best.as_ref().is_none_or(|(_, best_sig, prev_converged)| {
+            let best_emitted = method_registry_reflects_emitted_owned(best_sig);
+            if sig_emitted && !best_emitted {
+                return true;
+            }
+            if !sig_emitted && best_emitted {
+                return false;
+            }
             if converged && !prev_converged {
                 return true;
             }

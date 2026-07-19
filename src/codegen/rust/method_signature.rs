@@ -21,6 +21,8 @@ pub struct MethodSignature {
     pub return_type: Option<Type>,
     /// Whether method has a self receiver (vs. static method)
     pub has_self_receiver: bool,
+    /// WJ-owned params that only forward to borrowing callees (`has_key` → `get`).
+    pub forwarding_borrow_params: Vec<bool>,
 }
 
 impl MethodSignature {
@@ -33,11 +35,13 @@ impl MethodSignature {
             self.formal_param_types.clone()
         };
         let mut param_ownership = self.param_ownership.clone();
+        let mut forwarding_borrow_params = self.forwarding_borrow_params.clone();
         if self.has_self_receiver {
             let self_ty = Type::Custom(self.receiver_type.clone());
             param_types.insert(0, self_ty.clone());
             formal_param_types.insert(0, self_ty);
             param_ownership.insert(0, OwnershipMode::MutBorrowed);
+            forwarding_borrow_params.insert(0, false);
         }
         crate::analyzer::FunctionSignature {
             name: format!("{}::{}", self.receiver_type, self.method_name),
@@ -48,6 +52,9 @@ impl MethodSignature {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: self.has_self_receiver,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: Some(forwarding_borrow_params),
         }
     }
 
@@ -68,6 +75,7 @@ impl MethodSignature {
             param_ownership,
             return_type,
             has_self_receiver,
+            forwarding_borrow_params: Vec::new(),
         }
     }
 }
@@ -87,6 +95,7 @@ mod tests {
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             has_self_receiver: true,
+            forwarding_borrow_params: Vec::new(),
         };
         let sig = ms.to_function_signature();
         assert_eq!(

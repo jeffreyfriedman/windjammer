@@ -30,6 +30,9 @@ fn sig_with_formal(
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: has_self,
         is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+    forwarding_borrow_params: None,
     }
 }
 

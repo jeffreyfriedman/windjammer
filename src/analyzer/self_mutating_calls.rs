@@ -159,6 +159,17 @@ impl<'ast> Analyzer<'ast> {
                                 ) {
                                     return true;
                                 }
+                                if let Some(reg) = registry {
+                                    let callee_self =
+                                        self.infer_impl_self_receiver_ownership_inner(
+                                            called_func, reg, visited,
+                                        );
+                                    return matches!(
+                                        callee_self,
+                                        super::OwnershipMode::MutBorrowed
+                                    );
+                                }
+                                return false;
                             }
                         }
 

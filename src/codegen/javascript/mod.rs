@@ -10,6 +10,7 @@ pub mod code_splitter;
 pub mod differential_loading;
 mod expression_generation;
 mod generator;
+mod ir_lowering;
 pub mod minifier;
 pub mod module_federation;
 pub mod polyfills;
@@ -59,6 +60,8 @@ impl CodegenBackend for JavaScriptBackend {
         } else {
             program.clone()
         };
+
+        let _ir = ir_lowering::prepare_ir_context(&program);
 
         let mut generator = JavaScriptGenerator::new();
         let mut code = generator.generate(&program);

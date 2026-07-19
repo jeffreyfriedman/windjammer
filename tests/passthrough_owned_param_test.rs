@@ -48,6 +48,9 @@ fn test_passthrough_to_owned_callee_keeps_param_owned() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: true,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 
@@ -112,6 +115,9 @@ fn test_string_passthrough_to_borrowed_callee_stays_borrowed() {
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+        forwarding_borrow_params: None,
         },
     );
 

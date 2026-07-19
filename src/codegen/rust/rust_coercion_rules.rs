@@ -101,11 +101,8 @@ impl Coercion {
             }
             Coercion::BorrowMut => {
                 if !expr_str.starts_with("&mut ") {
-                    if expr_str.starts_with('&') {
-                        *expr_str = format!("&mut {}", &expr_str[1..]);
-                    } else {
-                        *expr_str = format!("&mut {}", expr_str);
-                    }
+                    let base = super::expression_utilities::borrow_base_expr(expr_str);
+                    *expr_str = format!("&mut {base}");
                 }
             }
         }

@@ -213,7 +213,16 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(alias_name.clone(), last_segment.clone());
                 }
             }
-            if let Item::Use { path, .. } = item {
+            if let Item::Use { path, alias, .. } = item {
+                // `use std::map::Map` → `use std::collections::HashMap as Map`; preserve alias in types.
+                if alias.is_none()
+                    && path.len() >= 3
+                    && path.first().is_some_and(|p| p == "std")
+                    && path.get(1).is_some_and(|p| p == "map")
+                    && path.last().is_some_and(|p| p == "Map")
+                {
+                    self.import_aliases.insert("Map".to_string());
+                }
                 if path.first().is_some_and(|p| p == "std") {
                     if path.len() >= 2
                         && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
@@ -595,17 +604,29 @@ impl<'ast> CodeGenerator<'ast> {
             body.push_str("}\n\n");
         }
 
-        // Generate top-level functions (skip impl methods and extern functions)
-        for analyzed_func in analyzed {
-            if !impl_methods.contains(&analyzed_func.decl.name) && !analyzed_func.decl.is_extern {
-                // Skip main() function in modules - it should only be in the entry point
-                if self.is_module && analyzed_func.decl.name == "main" {
-                    continue;
-                }
-                // Generate the function
-                body.push_str(&self.generate_function(analyzed_func));
-                body.push_str("\n\n");
+        // Generate top-level functions (skip impl methods and extern functions).
+        // Emit `main` last so sibling callees have refreshed registry metadata first.
+        let mut top_level_funcs: Vec<_> = analyzed
+            .iter()
+            .filter(|af| {
+                !impl_methods.contains(&af.decl.name)
+                    && !af.decl.is_extern
+                    && !(self.is_module && af.decl.name == "main")
+            })
+            .collect();
+        top_level_funcs.sort_by(|a, b| {
+            match (a.decl.name.as_str(), b.decl.name.as_str()) {
+                ("main", _) => std::cmp::Ordering::Greater,
+                (_, "main") => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Equal,
             }
+        });
+        for analyzed_func in &top_level_funcs {
+            self.preregister_function_formals_in_registry(analyzed_func);
+        }
+        for analyzed_func in top_level_funcs {
+            body.push_str(&self.generate_function(analyzed_func));
+            body.push_str("\n\n");
         }
 
         // Check for test decorators or test_ prefix functions (for test runtime import)

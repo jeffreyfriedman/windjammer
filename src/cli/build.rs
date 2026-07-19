@@ -38,7 +38,7 @@ pub fn execute(
     json_output: bool,
     ir_shadow_validate: bool,
 ) -> Result<()> {
-    let _ = ir_shadow_validate;
+    crate::ir::shadow::set_shadow_validate_strict(ir_shadow_validate);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
     if json_output {

@@ -433,4 +433,14 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
+
+    pub(crate) fn param_only_used_as_field_enum_match_scrutinee(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        crate::analyzer::field_enum_borrow::param_only_used_as_field_enum_match_scrutinee(
+            name, statements,
+        )
+    }
 }

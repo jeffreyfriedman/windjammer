@@ -178,9 +178,17 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
     // IR cutover: when any cutover flag is enabled, run the IR pipeline and
     // attach the IrModule so codegen can read from SafetyType.
-    if !generator.ir_cutover.all_disabled() {
+    let run_ir_pipeline = !generator.ir_cutover.all_disabled()
+        || crate::ir::shadow::shadow_validate_strict();
+    if run_ir_pipeline {
         let mut ir_pipeline = crate::ir::IrPipeline::new();
-        let ir_module = ir_pipeline.lower_to_ir(analyzed, signatures);
+        let ir_module = ir_pipeline.lower_to_ir(analyzed, signatures, None);
+
+        // Shadow validation: compare solver results against legacy analyzer.
+        let shadow_result = crate::ir::shadow::validate_shadow_module(&ir_module, analyzed);
+        if let Err(e) = crate::ir::shadow::finish_shadow_validation(&shadow_result) {
+            return Err(anyhow::anyhow!("{}", e));
+        }
 
         // WJ-SEC-01: Check effect capabilities against wj.toml manifest (if present).
         if let Some(config_path) = find_wj_config(input_path) {
