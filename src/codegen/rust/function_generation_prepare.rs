@@ -2274,6 +2274,11 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
+        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+            flags.get(pidx).copied().unwrap_or(false)
+        }) {
+            return false;
+        }
         sig.formal_param_types
             .get(pidx)
             .or_else(|| sig.formal_param_type(pidx))
