@@ -266,6 +266,8 @@ mod tests {
             mutated_params: HashSet::new(),
             str_ref_params: HashSet::new(),
             optimizations: hints,
+            local_types: HashMap::new(),
+            body: Vec::new(),
         }
     }
 

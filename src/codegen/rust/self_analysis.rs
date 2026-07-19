@@ -12,7 +12,7 @@
 // These functions are used by the ownership inference system to determine
 // whether methods need `&self`, `&mut self`, or `self` parameters.
 use crate::analyzer::{OwnershipMode, SignatureRegistry};
-use crate::parser::{Expression, FunctionDecl, Pattern, Statement};
+use crate::parser::{Expression, FunctionDecl, Pattern, Statement, Type};
 use std::collections::HashSet;
 
 /// Context needed for field/self analysis
@@ -297,10 +297,11 @@ fn expression_calls_owned_self_method(
 ) -> bool {
     match expr {
         Expression::MethodCall { object, method, .. } => {
-            if !matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
-                return false;
-            }
-            if method_takes_owned_self(method, registry, struct_name) {
+            if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
+                if method_takes_owned_self(method, registry, struct_name) {
+                    return true;
+                }
+            } else if expression_calls_owned_self_method(object, registry, struct_name) {
                 return true;
             }
             false
@@ -317,20 +318,32 @@ fn method_takes_owned_self(
     registry: &SignatureRegistry,
     struct_name: Option<&str>,
 ) -> bool {
+    fn sig_takes_by_value_self(sig: &crate::analyzer::FunctionSignature) -> bool {
+        if !sig.has_self_receiver {
+            return false;
+        }
+        if sig
+            .param_types
+            .first()
+            .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+        {
+            return false;
+        }
+        matches!(
+            sig.param_ownership.first(),
+            Some(OwnershipMode::Owned | OwnershipMode::MutBorrowed)
+        )
+    }
     if let Some(sig) = registry.get_signature(method) {
-        if sig.has_self_receiver {
-            if let Some(&ownership) = sig.param_ownership.first() {
-                return ownership == OwnershipMode::Owned;
-            }
+        if sig_takes_by_value_self(sig) {
+            return true;
         }
     }
     if let Some(sn) = struct_name {
         let key = format!("{}::{}", sn, method);
         if let Some(sig) = registry.get_signature(&key) {
-            if sig.has_self_receiver {
-                if let Some(&ownership) = sig.param_ownership.first() {
-                    return ownership == OwnershipMode::Owned;
-                }
+            if sig_takes_by_value_self(sig) {
+                return true;
             }
         }
     }
@@ -467,9 +480,12 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
                     .as_ref()
                     .is_some_and(|b| b.iter().any(|s| statement_consumes_self(s)))
         }
-        Statement::Match { arms, .. } => arms
-            .iter()
-            .any(|arm| expression_is_bare_self(arm.body) || expression_consumes_self(arm.body)),
+        Statement::Match { value, arms, .. } => {
+            expression_is_bare_self(value)
+                || arms.iter().any(|arm| {
+                    expression_is_bare_self(&arm.body) || expression_consumes_self(&arm.body)
+                })
+        }
         _ => false,
     }
 }

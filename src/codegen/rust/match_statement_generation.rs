@@ -735,6 +735,23 @@ impl<'ast> CodeGenerator<'ast> {
                                 return true;
                             }
                             if match_binds_refs {
+                                // Borrowed `match self` on non-Copy enum payloads binds owned
+                                // values (call sites add `&` via IR coercion). Only ref-bind when
+                                // inference says the payload is already a reference type.
+                                if matches!(value, Expression::Identifier { name, .. } if name == "self")
+                                    && matches!(
+                                        &arm.pattern,
+                                        Pattern::EnumVariant(_, EnumPatternBinding::Single(_))
+                                    )
+                                {
+                                    return inferred.iter().any(|(name, ty)| {
+                                        name == *var
+                                            && matches!(
+                                                ty,
+                                                Type::Reference(_) | Type::MutableReference(_)
+                                            )
+                                    });
+                                }
                                 return true;
                             }
                             inferred.iter().any(|(name, ty)| {
