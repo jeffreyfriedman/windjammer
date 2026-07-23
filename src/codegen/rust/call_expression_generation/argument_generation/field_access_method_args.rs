@@ -226,6 +226,26 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                     type_name.as_deref(),
                     Some(arguments.len()),
                 ) {
+                    let effective_sig = type_name
+                        .as_ref()
+                        .and_then(|tn| {
+                            gen.resolve_method_function_signature(
+                                tn,
+                                call_method,
+                                arguments.len(),
+                            )
+                        })
+                        .unwrap_or_else(|| sig.clone());
+                    coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+                        gen,
+                        &effective_sig,
+                        i,
+                        arg_to_generate,
+                        coerced,
+                        type_name.as_deref(),
+                        Some(call_method),
+                        Some(arguments.len()),
+                    );
                     coerced = maybe_borrow_runtime_std_json_value_arg(
                         gen,
                         &qualified_name,

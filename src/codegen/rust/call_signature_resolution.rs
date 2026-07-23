@@ -76,6 +76,11 @@ pub(crate) fn has_ownership_collision_for_call(
     gen: &crate::codegen::rust::generator::CodeGenerator,
     func_name: &str,
 ) -> bool {
+    // `WalSegment::from_bytes` / `Vec::push` — the type prefix disambiguates homonyms;
+    // do not block on simple-name method collisions (`from_bytes`, `new`, etc.).
+    if is_type_qualified_associated_call(func_name) {
+        return gen.has_explicit_ownership_collision_with_global(func_name);
+    }
     let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
     if gen.has_explicit_ownership_collision_with_global(simple_name) {
         return true;

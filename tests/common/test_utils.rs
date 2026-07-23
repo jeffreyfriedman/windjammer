@@ -187,6 +187,7 @@ pub fn compile_with_external_sigs(
         .analyze_program_with_global_signatures(&program, external_sigs)
         .unwrap();
     let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+    codegen.set_global_signature_registry(std::sync::Arc::new(external_sigs.clone()));
     codegen.generate_program(&program, &analyzed_fns)
 }
 
