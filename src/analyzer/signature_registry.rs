@@ -756,6 +756,13 @@ impl SignatureRegistry {
     pub fn merge(&mut self, other: &SignatureRegistry) {
         for (name, sig) in &other.signatures {
             if let Some(existing) = self.signatures.get(name) {
+                // Caller-file declaration stubs must not clobber defining-module
+                // codegen refresh (`emitted_rust_ref_params`, `&Vec` formals, etc.).
+                if existing.emitted_rust_ref_params.is_some()
+                    && sig.emitted_rust_ref_params.is_none()
+                {
+                    continue;
+                }
                 let codegen_refreshed = sig.emitted_rust_ref_params.is_some();
                 if existing.param_types != sig.param_types {
                     let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();

@@ -285,6 +285,18 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             let coll_sig = type_name.as_deref().and_then(|tn| {
                 gen.resolve_method_function_signature(tn, call_method, arguments.len())
             });
+            if let Some(ref sig) = coll_sig {
+                *arg_str = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+                    gen,
+                    sig,
+                    i,
+                    arg_expr,
+                    arg_str.clone(),
+                    type_name.as_deref(),
+                    Some(call_method),
+                    Some(arguments.len()),
+                );
+            }
             crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
                 coll_sig.as_ref(),
                 i,
