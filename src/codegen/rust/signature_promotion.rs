@@ -495,6 +495,15 @@ pub fn pick_best_resolved_signature(
     match (local, global) {
         (Some(l), Some(g)) if emitted_owned_beats_stale_global_borrow(&l.sig, &g.sig) => Some(l),
         (Some(l), Some(g)) if emitted_owned_beats_stale_global_borrow(&g.sig, &l.sig) => Some(g),
+        // Defining-module codegen refresh (`emitted_rust_ref_params`, e.g. struct-field-return
+        // `from_bytes(bytes: &Vec<u8>)`) beats caller-file declaration stubs.
+        (Some(l), Some(g))
+            if g.sig.emitted_rust_ref_params.is_some()
+                && l.sig.emitted_rust_ref_params.is_none()
+                && converged_has_reference_params_over_bare(&l.sig, &g.sig) =>
+        {
+            Some(g)
+        }
         (Some(l), Some(g))
             if converged_has_reference_params_over_bare(&g.sig, &l.sig)
                 && method_registry_reflects_emitted_owned(&g.sig) =>
@@ -515,7 +524,8 @@ pub fn pick_best_resolved_signature(
                 || global_has_converged_str_refs_over_local(&g.sig, &l.sig)
                 || global_has_borrowed_text_over_local_owned_stub(&g.sig, &l.sig)
                 || (converged_has_reference_params_over_bare(&g.sig, &l.sig)
-                    && !method_registry_reflects_emitted_owned(&g.sig)) =>
+                    && !method_registry_reflects_emitted_owned(&g.sig)
+                    && g.sig.emitted_rust_ref_params.is_none()) =>
         {
             Some(l)
         }

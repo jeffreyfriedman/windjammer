@@ -571,21 +571,28 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // Windjammer `string` params inferred as borrowed (`&String`/`&str`) need
-                // `.clone()` when assigned to owned String struct fields.
+                // Borrowed formals need `.clone()` when assigned to owned struct fields.
                 if let Expression::Identifier { name: id, .. } = expr {
-                    if self.inferred_borrowed_params.contains(id) {
+                    if self.inferred_borrowed_params.contains(id)
+                        || self.emitted_rust_ref_formals.contains(id)
+                    {
                         let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
                         if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
                             if let Some(field_type) = field_types.get(field_name) {
                                 let field_is_string = matches!(field_type, Type::String)
                                     || matches!(field_type, Type::Custom(ref n) if n == "string" || n == "String");
                                 if field_is_string && !expr_str.ends_with(".clone()") {
-                                    if expr_str.ends_with(".to_string()") {
-                                        // Already coerced from &str → String
-                                    } else {
+                                    if !expr_str.ends_with(".to_string()") {
                                         expr_str = format!("{}.clone()", expr_str);
                                     }
+                                }
+                                let field_is_vec = matches!(field_type, Type::Vec(_))
+                                    || matches!(
+                                        field_type,
+                                        Type::Parameterized(name, _) if name == "Vec"
+                                    );
+                                if field_is_vec && !expr_str.ends_with(".clone()") {
+                                    expr_str = format!("{}.clone()", expr_str);
                                 }
                             }
                         }

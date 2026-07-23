@@ -146,6 +146,20 @@ impl<'ast> CodeGenerator<'ast> {
                         Type::Reference(_) | Type::MutableReference(_)
                     )
                     && !self.is_type_copy(&param.type_)
+                    && self.param_only_used_in_discarding_let_binding(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    &param.type_
+                } else if param.name != "self"
+                    && matches!(inferred_type, Type::Reference(_))
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.is_type_copy(&param.type_)
                     && (self.param_only_forwards_to_emitted_owned_callees(
                         func.body.as_slice(),
                         &param.name,

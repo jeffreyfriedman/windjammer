@@ -2225,6 +2225,207 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// WJ AST formals for sibling methods (authoritative before registry convergence).
+    pub(in crate::codegen::rust) fn register_impl_ast_method_formals(
+        &mut self,
+        struct_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) {
+        let formals: Vec<Type> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .map(|p| p.type_.clone())
+            .collect();
+        self.struct_method_ast_formal_param_types
+            .entry(struct_name.to_string())
+            .or_default()
+            .insert(func.name.clone(), formals);
+    }
+
+    fn ast_sibling_method_arg_is_owned_non_copy_formal(
+        &self,
+        method: &str,
+        arg_index: usize,
+    ) -> bool {
+        let Some(struct_name) = self.current_struct_name.as_ref() else {
+            return false;
+        };
+        self.struct_method_ast_formal_param_types
+            .get(struct_name)
+            .and_then(|methods| methods.get(method))
+            .and_then(|params| params.get(arg_index))
+            .is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && !type_analysis::is_copy_type(t)
+            })
+    }
+
+    /// True when every use of `param_name` is inside `let _ = (...)` discard bindings.
+    pub(in crate::codegen::rust) fn param_only_used_in_discarding_let_binding(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_used_as_read_operand(body, param_name) {
+            return false;
+        }
+        if self.param_passed_as_call_argument(body, param_name, func) {
+            return false;
+        }
+        for stmt in body {
+            match stmt {
+                Statement::Let { pattern, value, .. } => {
+                    if !Self::is_discarding_let_pattern(pattern) {
+                        return false;
+                    }
+                    if !Self::expression_mentions_identifier(value, param_name) {
+                        return false;
+                    }
+                }
+                _ => {
+                    if Self::statement_mentions_identifier(stmt, param_name) {
+                        return false;
+                    }
+                }
+            }
+        }
+        !body.is_empty()
+    }
+
+    fn is_discarding_let_pattern(pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::Wildcard => true,
+            Pattern::Tuple(items) => items.iter().all(Self::is_discarding_let_pattern),
+            _ => false,
+        }
+    }
+
+    fn statement_mentions_identifier(stmt: &Statement, name: &str) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return { value: Some(expr), .. } => {
+                Self::expression_mentions_identifier(expr, name)
+            }
+            Statement::Return { .. } => false,
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::expression_mentions_identifier(condition, name)
+                    || then_block
+                        .iter()
+                        .any(|s| Self::statement_mentions_identifier(s, name))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| Self::statement_mentions_identifier(s, name))
+                    })
+            }
+            Statement::While { condition, body, .. } => {
+                Self::expression_mentions_identifier(condition, name)
+                    || body
+                        .iter()
+                        .any(|s| Self::statement_mentions_identifier(s, name))
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::expression_mentions_identifier(iterable, name)
+                    || body
+                        .iter()
+                        .any(|s| Self::statement_mentions_identifier(s, name))
+            }
+            Statement::Let { value, else_block, .. } => {
+                Self::expression_mentions_identifier(value, name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| Self::statement_mentions_identifier(s, name))
+                    })
+            }
+            Statement::Assignment { value, .. } => {
+                Self::expression_mentions_identifier(value, name)
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::expression_mentions_identifier(value, name)
+                    || arms.iter().any(|arm| {
+                        Self::expression_mentions_identifier(&arm.body, name)
+                    })
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| Self::statement_mentions_identifier(s, name)),
+            Statement::Defer { statement, .. } => {
+                Self::statement_mentions_identifier(statement, name)
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_mentions_identifier(expr: &Expression, name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::MethodCall { object, arguments, .. } => {
+                Self::expression_mentions_identifier(object, name)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expression_mentions_identifier(arg, name))
+            }
+            Expression::Call { function, arguments, .. } => {
+                Self::expression_mentions_identifier(function, name)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expression_mentions_identifier(arg, name))
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::expression_mentions_identifier(left, name)
+                    || Self::expression_mentions_identifier(right, name)
+            }
+            Expression::Unary { operand, .. } => {
+                Self::expression_mentions_identifier(operand, name)
+            }
+            Expression::FieldAccess { object, .. } => {
+                Self::expression_mentions_identifier(object, name)
+            }
+            Expression::Index { object, index, .. } => {
+                Self::expression_mentions_identifier(object, name)
+                    || Self::expression_mentions_identifier(index, name)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| Self::statement_mentions_identifier(s, name)),
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|elem| Self::expression_mentions_identifier(elem, name)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, value)| Self::expression_mentions_identifier(value, name)),
+            _ => false,
+        }
+    }
+
+    /// True when `param_name` is only used as `Struct { param_name: param_name }` (or shorthand).
+    pub(in crate::codegen::rust) fn param_only_used_in_same_name_struct_field_return(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        if body.len() != 1 {
+            return false;
+        }
+        let expr = match body[0] {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => expr,
+            _ => return false,
+        };
+        let Expression::StructLiteral { fields, .. } = expr else {
+            return false;
+        };
+        fields.iter().any(|(field, value)| {
+            field == param_name
+                && matches!(value, Expression::Identifier { name, .. } if name == param_name)
+        })
+    }
+
     fn method_call_sibling_ast_expects_owned_arg(
         &self,
         object: &Expression<'ast>,
@@ -2232,6 +2433,9 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        if self.ast_sibling_method_arg_is_owned_non_copy_formal(method, arg_index) {
+            return true;
+        }
         let Some(rt) = (if let Expression::Identifier { name, .. } = object {
             if name == "self" && self.in_impl_block {
                 self.current_struct_name.clone()
@@ -2621,7 +2825,20 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.current_struct_name.as_ref().is_some_and(|sn| {
                 self.struct_is_owned_engine_key_facade(sn, param)
             })
-            && self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
+            && (self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
+                || (Self::param_type_is_vec_container(&param.type_)
+                    && self.param_only_used_in_same_name_struct_field_return(
+                        func.body.as_slice(),
+                        &param.name,
+                    )))
+    }
+
+    fn param_type_is_vec_container(ty: &Type) -> bool {
+        match ty {
+            Type::Vec(_) => true,
+            Type::Parameterized(name, _) if name == "Vec" => true,
+            _ => false,
+        }
     }
 
     /// Rust type for a borrowed formal (`&str` when Phase 2 applies, else `&T`).

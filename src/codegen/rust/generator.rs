@@ -81,6 +81,9 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
     pub(crate) current_impl_methods: std::collections::HashSet<String>, // Method names in current impl block
+    /// WJ source non-`self` formal types per method, merged across impl blocks for one struct.
+    pub(crate) struct_method_ast_formal_param_types:
+        std::collections::HashMap<String, std::collections::HashMap<String, Vec<Type>>>,
     pub(crate) current_impl_instance_methods: std::collections::HashSet<String>, // Methods that take self
     /// Same-impl methods that codegen will emit with owned/`mut self` (consuming receiver).
     pub(crate) current_impl_consuming_self_methods: std::collections::HashSet<String>,
@@ -472,6 +475,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_struct_fields: std::collections::HashSet::new(),
             current_struct_name: None,
             current_impl_methods: std::collections::HashSet::new(),
+            struct_method_ast_formal_param_types: std::collections::HashMap::new(),
             current_impl_instance_methods: std::collections::HashSet::new(),
             current_impl_consuming_self_methods: std::collections::HashSet::new(),
             trivial_copy_field_accessors: std::collections::HashSet::new(),
@@ -748,6 +752,13 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     Some(finalize(l.clone()))
                 }
+                (Some(l), Some(g))
+                    if crate::codegen::rust::signature_promotion::converged_has_reference_params_over_bare(
+                        &l, &g,
+                    ) =>
+                {
+                    Some(finalize(g.clone()))
+                }
                 (Some(l), _) => Some(finalize(l.clone())),
                 (None, Some(g)) => Some(finalize(g.clone())),
                 (None, None) => None,
@@ -1016,10 +1027,26 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn get_signature_with_global(&self, name: &str) -> Option<&FunctionSignature> {
-        if let Some(sig) = self.signature_registry.get_signature(name) {
-            return Some(sig);
+        let local = self.signature_registry.get_signature(name);
+        let global = self
+            .global_signature_registry
+            .as_ref()
+            .and_then(|g| g.get_signature(name));
+        match (local, global) {
+            (Some(l), Some(g)) if g.emitted_rust_ref_params.is_some()
+                && l.emitted_rust_ref_params.is_none() =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g)) if l.emitted_rust_ref_params.is_some()
+                && g.emitted_rust_ref_params.is_none() =>
+            {
+                Some(l)
+            }
+            (Some(l), _) => Some(l),
+            (None, Some(g)) => Some(g),
+            (None, None) => None,
         }
-        self.global_signature_registry.as_ref()?.get_signature(name)
     }
 
     pub(crate) fn find_method_on_receiver_with_global(

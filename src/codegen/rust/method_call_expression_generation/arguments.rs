@@ -351,6 +351,20 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = format!("&{coerced}");
                         }
+                        let fallback_sig = sig_for_effective
+                            .cloned()
+                            .or_else(|| method_signature.clone())
+                            .unwrap_or_default();
+                        coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+                            self,
+                            &fallback_sig,
+                            i,
+                            arg_to_generate,
+                            coerced,
+                            type_name.as_deref().or(receiver_for_ir.as_deref()),
+                            Some(method),
+                            Some(arguments.len()),
+                        );
                         return coerced;
                     }
                 }
@@ -1880,6 +1894,23 @@ impl<'ast> CodeGenerator<'ast> {
                         &mut arg_str,
                         arg_already_rust_ref_for_text,
                         receiver_type_name,
+                    );
+                }
+
+                if let Some(sig_for_vec) = call_site_sig
+                    .as_ref()
+                    .or(method_signature.as_ref())
+                    .or(effective_sig.as_ref())
+                {
+                    arg_str = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+                        self,
+                        sig_for_vec,
+                        i,
+                        arg_to_generate,
+                        arg_str,
+                        type_name.as_deref().or(receiver_type_name),
+                        Some(method),
+                        Some(arguments.len()),
                     );
                 }
 

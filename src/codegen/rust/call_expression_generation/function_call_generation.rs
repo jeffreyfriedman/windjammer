@@ -209,6 +209,12 @@ fn signature_lookup_for_call<'ast>(
             }
         }
     }
+    if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(func_name)
+    {
+        if let Some((receiver, _method)) = func_name.rsplit_once("::") {
+            return (func_name.to_string(), Some(receiver.to_string()));
+        }
+    }
     (func_name.to_string(), None)
 }
 

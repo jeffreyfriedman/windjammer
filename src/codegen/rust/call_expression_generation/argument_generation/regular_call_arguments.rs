@@ -15,6 +15,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
     signature_from_simple_fallback: bool,
     is_extern_call: bool,
 ) -> Vec<String> {
+    let associated_receiver: Option<String> =
+        if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            func_name,
+        ) {
+            func_name
+                .rsplit_once("::")
+                .map(|(receiver, _)| receiver.to_string())
+        } else {
+            None
+        };
     arguments
         .iter()
         .enumerate()
@@ -199,21 +209,36 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     &arg_str,
                     signature.as_ref(),
                     has_ownership_collision,
-                    None,
-                    None,
+                    associated_receiver.as_deref(),
+                    Some(arguments.len()),
                 ) {
                     // IR coercion can miss `&` when registry metadata lags; honor resolved signature.
-                    let post_ir_borrow_sig = if func_name.starts_with("Self::") {
-                        gen.current_struct_name.as_ref().and_then(|tn| {
-                            func_name.strip_prefix("Self::").and_then(|method| {
-                                gen.lookup_method_signature(tn, method)
-                                    .map(|ms| ms.to_function_signature())
-                            })
+                    let post_ir_borrow_sig = associated_receiver
+                        .as_ref()
+                        .and_then(|rt| {
+                            func_name
+                                .rsplit_once("::")
+                                .and_then(|(_, method)| {
+                                    gen.resolve_method_function_signature(
+                                        rt,
+                                        method,
+                                        arguments.len(),
+                                    )
+                                })
                         })
-                    } else {
-                        None
-                    }
-                    .or_else(|| signature.clone());
+                        .or_else(|| {
+                            if func_name.starts_with("Self::") {
+                                gen.current_struct_name.as_ref().and_then(|tn| {
+                                    func_name.strip_prefix("Self::").and_then(|method| {
+                                        gen.lookup_method_signature(tn, method)
+                                            .map(|ms| ms.to_function_signature())
+                                    })
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .or_else(|| signature.clone());
                     if let Some(ref sig) = post_ir_borrow_sig {
                         if !has_ownership_collision {
                             let param_idx = sig.arg_param_index(i);
@@ -428,6 +453,31 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             coerced = format!("&{coerced}");
                         }
                     }
+                    if let (Some(rt), Some(method)) = (
+                        associated_receiver.as_deref(),
+                        func_name.rsplit_once("::").map(|(_, m)| m),
+                    ) {
+                        let sig_for_vec = post_ir_borrow_sig
+                            .clone()
+                            .or_else(|| {
+                                gen.resolve_method_function_signature(
+                                    rt,
+                                    method,
+                                    arguments.len(),
+                                )
+                            })
+                            .unwrap_or_default();
+                        coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+                            gen,
+                            &sig_for_vec,
+                            i,
+                            arg,
+                            coerced,
+                            Some(rt),
+                            Some(method),
+                            Some(arguments.len()),
+                        );
+                    }
                     return vec![coerced];
                 }
                 let callee_sig = signature.as_ref().or_else(|| {
@@ -463,6 +513,26 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     }
                 }
                 arg_str = gen.maybe_auto_clone_call_arg(arg, &arg_str, Some(func_name), Some(i));
+                if !arg_str.starts_with('&')
+                    && matches!(arg, Expression::Identifier { .. })
+                    && crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                        func_name,
+                    )
+                {
+                    if let (Some(rt), Some(method)) = (
+                        associated_receiver.as_deref(),
+                        func_name.rsplit_once("::").map(|(_, m)| m),
+                    ) {
+                        if gen.method_registry_arg_expects_shared_borrow(
+                            rt,
+                            method,
+                            i,
+                            arguments.len(),
+                        ) {
+                            arg_str = format!("&{arg_str}");
+                        }
+                    }
+                }
             }
 
             // Auto-convert string literals to String for functions expecting owned String
