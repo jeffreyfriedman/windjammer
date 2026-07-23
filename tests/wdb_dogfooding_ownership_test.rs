@@ -14,20 +14,19 @@
 //!
 //! Run: `cargo test --release --test all wdb_dogfooding`
 //!
-//! ## Open compiler issues — expected suite state (Jul 18 PM, wj 0.50.0)
+//! ## Open compiler issues — expected suite state (Jul 23 PM, wj 0.50.0)
 //!
-//! | ID | Primary failing test(s) | Also covered (guard, passing) |
-//! |----|-------------------------|-------------------------------|
-//! | WDB-046 | `wdb_store_has_key_forward_ref_borrows_owned_key` | **FAIL** — owned `Key` outer param becomes `&Key` after forward-ref guard |
-//! | WDB-047 | `wdb_lsm_store_apply_patch_asymmetric_coercion`, `wdb_store_has_key_forward_ref_borrows_owned_key` | **FAIL** (2 tests) |
-//! | WDB-049 | `wdb_wal_ffi_snapshot_and_path_borrow_at_call_sites` | **FAIL** — `from_bytes(&snapshot)`, `replay_to_lsn` path borrow |
-//! | WDB-019 | — | pass: `wdb_txn_seed_write_without_take_value_rebox`, `wdb_cross_crate_value_put_owned_delegation` (codegen OK; `take_value` workaround removal gated on build) |
-//! | WDB-039 | — | pass: `wdb_lsm_base_part_get_without_byte_move_shim`, `wdb_vec_index_key_compare_owned_params`, `wdb_keys_equal_key_in_store_get_path` |
-//! | WDB-042 | — | pass: `wdb_harness_loop_match_without_network_extract`, `wdb_self_field_mutating_method_no_clone`, `wdb_harness_drain_network_while_poll_no_field_clone` |
+//! | ID | Primary failing test(s) | Notes |
+//! |----|-------------------------|-------|
+//! | WDB-047 | `wdb_substrate_full_store_patch_part_enum_value_layout` | **FAIL** — real `wdb-substrate/store.wj` layout (enum `Value`, `PatchPart`) |
+//! | WDB-050 | `wdb_wal_segment_vec_literal_borrow_at_append` | **FAIL** — `append_put(vec![…])` must borrow for `&Vec<u8>` formals |
+//! | WDB-046/047 | `wdb_lsm_store_apply_patch_*`, `wdb_store_has_key_*` | pass (minimal fixture fixed) |
+//! | WDB-049 | `wdb_wal_ffi_snapshot_and_path_borrow_at_call_sites` | pass (writer/replay paths fixed) |
 //!
-//! **Expected today:** 19 pass, **3 fail** (`wdb_store_has_key_*`, `wdb_lsm_store_apply_patch_*`, `wdb_wal_ffi_*`).
+//! **Expected today:** 22 pass, **2 fail** until full substrate + wal segment literal fixes land.
 //!
-//! Closed-issue regressions (must stay passing): WDB-044 (`wdb_copy_key_bytes_*`), WDB-045 (`wdb_encode_message_*`), WDB-048 (`wdb_temp_path_*`).
+//! Closed-issue regressions (must stay passing): WDB-044, WDB-045, WDB-048.
+//! Guard tests (workaround removal pending full build): WDB-019, WDB-039, WDB-042.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -1980,3 +1979,539 @@ pub fn run() {
     );
 }
 
+// ── WDB-047 (full layout): wdb-substrate store.wj — enum Value + PatchPart + delete_key path ─
+
+#[test]
+fn wdb_substrate_full_store_patch_part_enum_value_layout() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "types/part_id.wj",
+        r#"
+pub struct PartId {
+    pub value: u128,
+}
+
+impl PartId {
+    pub fn new(value: u128) -> PartId {
+        PartId { value: value }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "types/key.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+impl Key {
+    pub fn new(bytes: Vec<u8>) -> Key {
+        Key { bytes: bytes }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "types/value.wj",
+        r#"
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+"#,
+    );
+    test.add_file(
+        "types/mod.wj",
+        "pub mod part_id\npub mod key\npub mod value\n",
+    );
+    test.add_file(
+        "substrate/hot_part.wj",
+        r#"
+use crate::types::key::Key
+use crate::types::value::Value
+
+pub struct HotPart {
+    entries: Vec<(Key, Value)>,
+}
+
+impl HotPart {
+    pub fn new() -> HotPart {
+        HotPart { entries: Vec::new() }
+    }
+
+    pub fn len(self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn put_value(self, key: Key, value: Value) {
+        self.entries.push((key, value))
+    }
+
+    pub fn delete_key(self, key: Key) {
+        let mut out = Vec::new()
+        let count = self.entries.len()
+        let mut i = 0
+        while i < count {
+            if self.entries[i].0.bytes != key.bytes {
+                out.push(self.entries[i])
+            }
+            i = i + 1
+        }
+        self.entries = out
+    }
+
+    pub fn get_value(self, key: Key) -> Option<Value> {
+        let count = self.entries.len()
+        let mut i = 0
+        while i < count {
+            if self.entries[i].0.bytes == key.bytes {
+                return Some(self.entries[i].1)
+            }
+            i = i + 1
+        }
+        None
+    }
+
+    pub fn reset(self) {
+        self.entries = Vec::new()
+    }
+}
+"#,
+    );
+    test.add_file(
+        "substrate/patch_part.wj",
+        r#"
+use crate::types::key::Key
+use crate::types::value::Value
+use crate::types::part_id::PartId
+
+pub struct PatchEntry {
+    pub row_key: Key,
+    pub value: Value,
+    pub tombstone: bool,
+}
+
+pub struct PatchPart {
+    pub base_part_id: PartId,
+    pub patches: Vec<PatchEntry>,
+}
+
+impl PatchPart {
+    pub fn new(base_part_id: PartId) -> PatchPart {
+        PatchPart {
+            base_part_id: base_part_id,
+            patches: Vec::new(),
+        }
+    }
+
+    pub fn apply_put(self, key: Key, value: Value) {
+        self.patches.push(PatchEntry {
+            row_key: key,
+            value: value,
+            tombstone: false,
+        })
+    }
+
+    pub fn apply_delete(self, key: Key) {
+        self.patches.push(PatchEntry {
+            row_key: key,
+            value: Value::Null,
+            tombstone: true,
+        })
+    }
+
+    pub fn get_value(self, key: Key) -> Option<Value> {
+        let count = self.patches.len()
+        let mut i = count
+        while i > 0 {
+            i = i - 1
+            let entry = self.patches[i]
+            if entry.row_key.bytes == key.bytes {
+                if entry.tombstone {
+                    return None
+                } else {
+                    return Some(entry.value)
+                }
+            }
+        }
+        None
+    }
+
+    pub fn has_key(self, key: Key) -> bool {
+        let count = self.patches.len()
+        let mut i = 0
+        while i < count {
+            if self.patches[i].row_key.bytes == key.bytes {
+                return true
+            }
+            i = i + 1
+        }
+        false
+    }
+}
+"#,
+    );
+    test.add_file(
+        "substrate/store.wj",
+        r#"
+use crate::types::key::Key
+use crate::types::value::Value
+use crate::types::part_id::PartId
+
+use crate::substrate::hot_part::HotPart
+use crate::substrate::patch_part::PatchPart
+
+pub struct BasePart {
+    pub part_id: PartId,
+    pub entries: Vec<(Key, Value)>,
+}
+
+impl BasePart {
+    pub fn get(self, key: Key) -> Option<Value> {
+        let count = self.entries.len()
+        let mut i = 0
+        while i < count {
+            if self.entries[i].0.bytes == key.bytes {
+                return Some(self.entries[i].1)
+            }
+            i = i + 1
+        }
+        None
+    }
+
+    pub fn has_key(self, key: Key) -> bool {
+        match self.get(key) {
+            Some(_) => true,
+            None => false,
+        }
+    }
+}
+
+pub struct LsmStore {
+    hot: HotPart,
+    base_parts: Vec<BasePart>,
+    patches: Vec<PatchPart>,
+    next_part_id: u128,
+}
+
+impl LsmStore {
+    pub fn new() -> LsmStore {
+        LsmStore {
+            hot: HotPart::new(),
+            base_parts: Vec::new(),
+            patches: Vec::new(),
+            next_part_id: 1,
+        }
+    }
+
+    pub fn put_value(self, key: Key, value: Value) {
+        if self.key_in_latest_base(key) {
+            self.apply_patch_put(key, value)
+        } else {
+            self.hot.put_value(key, value)
+        }
+    }
+
+    pub fn delete_key(self, key: Key) {
+        if self.key_in_latest_base(key) {
+            self.apply_patch_delete(key)
+        } else {
+            self.hot.delete_key(key)
+        }
+    }
+
+    pub fn get_value(self, key: Key) -> Option<Value> {
+        match self.hot.get_value(key) {
+            Some(v) => Some(v),
+            None => {
+                let patch_count = self.patches.len()
+                let mut pi = patch_count
+                while pi > 0 {
+                    pi = pi - 1
+                    match self.patches[pi].get_value(key) {
+                        Some(v) => return Some(v),
+                        None => {
+                            if self.patches[pi].has_key(key) {
+                                return None
+                            }
+                        }
+                    }
+                }
+                let base_count = self.base_parts.len()
+                let mut bi = base_count
+                while bi > 0 {
+                    bi = bi - 1
+                    match self.base_parts[bi].get(key) {
+                        Some(v) => return Some(v),
+                        None => {}
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
+impl LsmStore {
+    fn key_in_latest_base(self, key: Key) -> bool {
+        let base_count = self.base_parts.len()
+        if base_count == 0 {
+            false
+        } else {
+            let latest = self.base_parts[base_count - 1]
+            latest.has_key(key)
+        }
+    }
+
+    fn apply_patch_put(self, key: Key, value: Value) {
+        let base_count = self.base_parts.len()
+        if base_count == 0 {
+            self.hot.put_value(key, value)
+        } else {
+            let base_id = self.base_parts[base_count - 1].part_id
+            if self.patches.len() == 0 {
+                let mut patch = PatchPart::new(base_id)
+                patch.apply_put(key, value)
+                self.patches.push(patch)
+            } else {
+                let patch_idx = self.patches.len() - 1
+                let patch_base = self.patches[patch_idx].base_part_id
+                if patch_base.value == base_id.value {
+                    self.patches[patch_idx].apply_put(key, value)
+                } else {
+                    let mut patch = PatchPart::new(base_id)
+                    patch.apply_put(key, value)
+                    self.patches.push(patch)
+                }
+            }
+        }
+    }
+
+    fn apply_patch_delete(self, key: Key) {
+        let base_count = self.base_parts.len()
+        if base_count == 0 {
+            self.hot.delete_key(key)
+        } else {
+            let base_id = self.base_parts[base_count - 1].part_id
+            if self.patches.len() == 0 {
+                let mut patch = PatchPart::new(base_id)
+                patch.apply_delete(key)
+                self.patches.push(patch)
+            } else {
+                let patch_idx = self.patches.len() - 1
+                self.patches[patch_idx].apply_delete(key)
+            }
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "substrate/mod.wj",
+        "pub mod hot_part\npub mod patch_part\npub mod store\n",
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::substrate::store::LsmStore
+use crate::types::key::Key
+use crate::types::value::Value
+use crate::types::part_id::PartId
+
+pub fn run() {
+    let store = LsmStore::new()
+    store.put_value(Key { bytes: vec![1u8] }, Value::Int64(42))
+    store.delete_key(Key { bytes: vec![2u8] })
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("substrate/store.rs").expect("substrate/store.rs");
+    assert!(
+        rs.contains("pub fn put_value(") && rs.contains("key: Key") && rs.contains("value: Value"),
+        "put_value must keep owned Key and owned Value outer formals (wdb-substrate store.wj). Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("self.apply_patch_put(")
+            && (rs.contains("apply_patch_put(&key") || rs.contains("apply_patch_put(key, &value"))
+            && !rs.contains("apply_patch_put(key.clone(), value.clone())"),
+        "apply_patch_put must borrow after forward-ref guard, not clone both args. Got:\n{rs}"
+    );
+    assert!(
+        (rs.contains("self.apply_patch_delete(key)")
+            || rs.contains("self.apply_patch_delete(key.clone())"))
+            && !rs.contains("self.apply_patch_delete(&key)"),
+        "apply_patch_delete must pass owned Key, not &key. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("pub fn apply_patch_delete(") && rs.contains("key: Key"),
+        "apply_patch_delete must emit owned Key formal. Got:\n{rs}"
+    );
+}
+
+// ── WDB-050: WalSegment append_put/append_delete — vec literal borrow at call site ───────
+
+#[test]
+fn wdb_wal_segment_vec_literal_borrow_at_append() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "wal/lsn.wj",
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+"#,
+    );
+    test.add_file(
+        "wal/record.wj",
+        r#"
+use crate::wal::lsn::Lsn
+
+pub enum WalRecordKind {
+    Put,
+    Delete,
+}
+
+pub struct WalRecord {
+    pub lsn: Lsn,
+    pub kind: WalRecordKind,
+    pub key: Vec<u8>,
+    pub value: Vec<u8>,
+}
+
+pub fn encode_record(record: WalRecord) -> Vec<u8> {
+    let _ = (record.lsn.value, record.kind, record.key, record.value)
+    Vec::new()
+}
+
+pub fn decode_records(bytes: Vec<u8>) -> Vec<WalRecord> {
+    let _ = bytes.len()
+    Vec::new()
+}
+
+impl WalRecord {
+    pub fn put(lsn: Lsn, key: Vec<u8>, value: Vec<u8>) -> WalRecord {
+        WalRecord {
+            lsn: lsn,
+            kind: WalRecordKind::Put,
+            key: key,
+            value: value,
+        }
+    }
+
+    pub fn delete(lsn: Lsn, key: Vec<u8>) -> WalRecord {
+        WalRecord {
+            lsn: lsn,
+            kind: WalRecordKind::Delete,
+            key: key,
+            value: Vec::new(),
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "wal/segment.wj",
+        r#"
+use crate::wal::lsn::Lsn
+use crate::wal::record::WalRecord
+use crate::wal::record::encode_record
+use crate::wal::record::decode_records
+
+pub struct WalSegment {
+    pub bytes: Vec<u8>,
+    pub next_lsn: Lsn,
+}
+
+impl WalSegment {
+    pub fn with_header() -> WalSegment {
+        WalSegment {
+            bytes: vec![1u8],
+            next_lsn: Lsn { value: 1 },
+        }
+    }
+
+    pub fn append_put(self, key: Vec<u8>, value: Vec<u8>) -> Lsn {
+        let lsn = self.next_lsn
+        let record = WalRecord::put(lsn, key, value)
+        let payload = encode_record(record)
+        let mut i = 0
+        while i < payload.len() {
+            self.bytes.push(payload[i])
+            i = i + 1
+        }
+        self.next_lsn = Lsn { value: lsn.value + 1 }
+        lsn
+    }
+
+    pub fn append_delete(self, key: Vec<u8>) -> Lsn {
+        let lsn = self.next_lsn
+        let record = WalRecord::delete(lsn, key)
+        let payload = encode_record(record)
+        let mut i = 0
+        while i < payload.len() {
+            self.bytes.push(payload[i])
+            i = i + 1
+        }
+        self.next_lsn = Lsn { value: lsn.value + 1 }
+        lsn
+    }
+
+    pub fn replay(self) -> Vec<WalRecord> {
+        decode_records(self.bytes)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "wal/segment_test.wj",
+        r#"
+use crate::wal::segment::WalSegment
+
+pub fn test_segment_replay_returns_records_in_order() {
+    let mut seg = WalSegment::with_header()
+    seg.append_put(vec![10], vec![20])
+    seg.append_delete(vec![10])
+    let records = seg.replay()
+    let _ = records.len()
+}
+
+pub fn test_segment_pitr_replay_to_lsn() {
+    let mut seg = WalSegment::with_header()
+    seg.append_put(vec![1], vec![10])
+    let mid = seg.append_put(vec![2], vec![20])
+    seg.append_put(vec![3], vec![30])
+    let _ = mid.value
+    let _ = seg.replay()
+}
+"#,
+    );
+    test.add_file(
+        "wal/mod.wj",
+        "pub mod lsn\npub mod record\npub mod segment\npub mod segment_test\n",
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::wal::segment_test::test_segment_replay_returns_records_in_order
+
+pub fn run() {
+    test_segment_replay_returns_records_in_order()
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("wal/segment_test.rs").expect("wal/segment_test.rs");
+    assert!(
+        !rs.contains("append_put(vec![10], vec![20])")
+            && !rs.contains("append_delete(vec![10])"),
+        "vec literals must borrow at append_put/append_delete when formals codegen as &Vec. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("append_put(") && rs.contains("append_delete("),
+        "expected append calls in segment test. Got:\n{rs}"
+    );
+}

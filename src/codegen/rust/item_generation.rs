@@ -1028,6 +1028,10 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_impl_generic_type_params =
             codegen_helpers::impl_block_type_param_names(impl_block);
 
+        for func in &impl_block.functions {
+            self.register_impl_ast_method_formals(&impl_block.type_name, func);
+        }
+
         // Self:: static calls and sibling impl blocks need converged signatures registered
         // before any function body is emitted (forward-ref within same struct).
         // Two passes: callee borrow promotion (e.g. `key` → `has_key(&Key)`) may chain.

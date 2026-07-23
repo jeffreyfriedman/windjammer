@@ -67,6 +67,67 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
     })
 }
 
+fn type_is_vec_container(t: &Type) -> bool {
+    matches!(t, Type::Vec(_)) || matches!(t, Type::Parameterized(name, _) if name == "Vec")
+}
+
+fn callee_arg_expects_shared_vec_ref(sig: &FunctionSignature, arg_index: usize) -> bool {
+    let pidx = sig.arg_param_index(arg_index);
+    if callee_emits_shared_rust_ref_param(sig, pidx) {
+        return true;
+    }
+    sig.param_types.get(pidx).is_some_and(|t| {
+        matches!(t, Type::Reference(inner) if type_is_vec_container(inner))
+    })
+}
+
+/// Borrow owned local `Vec` bindings when the converged callee formal is `&Vec<T>`.
+pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
+    gen: &crate::codegen::rust::generator::CodeGenerator<'ast>,
+    sig: &FunctionSignature,
+    arg_index: usize,
+    arg_expr: &Expression<'ast>,
+    coerced: String,
+    receiver_type: Option<&str>,
+    method: Option<&str>,
+    arg_count: Option<usize>,
+) -> String {
+    if coerced.starts_with('&') {
+        return coerced;
+    }
+    let Expression::Identifier { name, .. } = arg_expr else {
+        return coerced;
+    };
+    let is_vec_local = gen.local_var_types.get(name).is_some_and(type_is_vec_container)
+        || gen
+            .infer_expression_type(arg_expr)
+            .is_some_and(|t| type_is_vec_container(&t));
+    if !is_vec_local {
+        return coerced;
+    }
+
+    let count = arg_count.unwrap_or(arg_index + 1);
+    if let (Some(rt), Some(method)) = (receiver_type, method) {
+        if let Some(resolved) = gen.resolve_method_function_signature(rt, method, count) {
+            if callee_arg_expects_shared_vec_ref(&resolved, arg_index) {
+                return format!("&{coerced}");
+            }
+        }
+        let qualified = format!("{rt}::{method}");
+        if let Some(global) = gen.get_signature_with_global(&qualified) {
+            if callee_arg_expects_shared_vec_ref(global, arg_index) {
+                return format!("&{coerced}");
+            }
+        }
+    }
+
+    if callee_arg_expects_shared_vec_ref(sig, arg_index) {
+        format!("&{coerced}")
+    } else {
+        coerced
+    }
+}
+
 /// Whether a user free-function call must not add `&` because callee formals emit owned
 /// `String` (or registry refresh recorded owned contract) despite stale call-site borrow metadata.
 pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(

@@ -10,7 +10,7 @@ use crate::ir::coercion::CoercionKind;
 use crate::ir::signature_bridge::{safety_type_from_parser_type, safety_type_from_signature_param};
 use crate::ir::safety_type::{BaseType, OwnedType, Region, SafetyType};
 use crate::ir::target_encodings::{apply_coercion, Target};
-use crate::parser::{Expression, Literal, Type};
+use crate::parser::{Expression, Literal, Statement, Type};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
@@ -810,6 +810,16 @@ impl<'ast> CodeGenerator<'ast> {
                 coerced.trim_start_matches('&')
             ));
         }
+        let callee_has_ownership_collision =
+            crate::codegen::rust::call_signature_resolution::has_ownership_collision_for_call(
+                self,
+                callee_name,
+            );
+        let collision_blocks_autoborrow = callee_has_ownership_collision
+            && crate::codegen::rust::call_signature_resolution::ownership_collision_blocks_autoborrow(
+                callee_name,
+            );
+        if !collision_blocks_autoborrow {
         crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
             Some(&sig),
             arg_index,
@@ -818,36 +828,54 @@ impl<'ast> CodeGenerator<'ast> {
             &mut coerced,
             arg_already_rust_ref,
         );
-        // Forward-ref: owned caller `String` → callee `&str` when registry encodes borrow.
+        }
+        // Forward-ref: owned caller binding → callee `&T` when registry encodes borrow.
         if let Expression::Identifier { name, .. } = arg_expr {
             let fresh_sig = callee_name
                 .rsplit_once("::")
                 .and_then(|(rt, method)| {
+                    let rt = if rt == "Self" {
+                        self.current_struct_name
+                            .clone()
+                            .unwrap_or_else(|| rt.to_string())
+                    } else {
+                        rt.to_string()
+                    };
                     self.resolve_method_function_signature(
-                        rt,
+                        rt.as_str(),
                         method,
                         user_arg_count.unwrap_or(arg_index + 1),
                     )
                 });
             let borrow_sig = fresh_sig.as_ref().unwrap_or(&sig);
             let borrow_idx = borrow_sig.arg_param_index(arg_index);
-            if !coerced.starts_with('&')
+            let body_refs: Vec<&Statement<'ast>> =
+                self.current_function_body.iter().copied().collect();
+            let binding_is_text_param = self.current_function_params.iter().any(|p| {
+                p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+            });
+            let binding_is_vec_local = self.local_var_types.get(name).is_some_and(|t| {
+                matches!(t, Type::Vec(_))
+                    || matches!(t, Type::Parameterized(name, _) if name == "Vec")
+            });
+            let binding_used_as_read_local =
+                self.param_used_as_read_operand(body_refs.as_slice(), name);
+            let callee_wants_shared = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                borrow_sig,
+                borrow_idx,
+            ) || (!crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                borrow_sig,
+                borrow_idx,
+            ) && borrow_sig.param_types.get(borrow_idx).is_some_and(|t| {
+                matches!(t, Type::Reference(_))
+                    || crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            }));
+            if !collision_blocks_autoborrow
+                && !coerced.starts_with('&')
                 && !self.emitted_rust_ref_formals.contains(name)
                 && !self.inferred_borrowed_params.contains(name)
-                && self.current_function_params.iter().any(|p| {
-                    p.name == *name
-                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                })
-                && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                    borrow_sig,
-                    borrow_idx,
-                ) || (!crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                    borrow_sig,
-                    borrow_idx,
-                ) && borrow_sig.param_types.get(borrow_idx).is_some_and(|t| {
-                    matches!(t, Type::Reference(_))
-                        || crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                })))
+                && (binding_is_text_param || binding_used_as_read_local || binding_is_vec_local)
+                && callee_wants_shared
             {
                 coerced = format!("&{coerced}");
             }
@@ -875,6 +903,12 @@ impl<'ast> CodeGenerator<'ast> {
             && !coerced.starts_with("&mut ")
         {
             coerced = coerced[1..].to_string();
+        }
+        if collision_blocks_autoborrow {
+            while coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                coerced = coerced[1..].to_string();
+            }
+            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
         }
         Some(coerced)
     }

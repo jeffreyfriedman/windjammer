@@ -627,7 +627,51 @@ impl<'ast> CodeGenerator<'ast> {
         // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods
         // DISABLED: Too aggressive - needs type checking to determine if parameter expects VNode
         // TODO: Re-enable with proper type checking when VNode type bindings are implemented
-        let processed_args = args;
+        let mut processed_args = args;
+        if let Some(ref rt) = receiver_type_name {
+            let qualified = format!("{rt}::{method}");
+            for (i, arg_str) in processed_args.iter_mut().enumerate() {
+                if arg_str.starts_with('&') {
+                    continue;
+                }
+                let Some((_, arg_expr)) = arguments.get(i) else {
+                    continue;
+                };
+                let Expression::Identifier { name, .. } = arg_expr else {
+                    continue;
+                };
+                let wants_borrow = self
+                    .get_signature_with_global(&qualified)
+                    .map(|sig| {
+                        let pidx = sig.arg_param_index(i);
+                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            sig, pidx,
+                        ) || sig.param_types.get(pidx).is_some_and(|t| {
+                            matches!(t, Type::Reference(_))
+                        })
+                    })
+                    .unwrap_or(false)
+                    || self.method_registry_arg_expects_shared_borrow(
+                        rt,
+                        method,
+                        i,
+                        arguments.len(),
+                    );
+                if !wants_borrow {
+                    continue;
+                }
+                let is_vec_local = self.local_var_types.get(name).is_some_and(|t| {
+                    matches!(t, Type::Vec(_))
+                        || matches!(t, Type::Parameterized(n, _) if n == "Vec")
+                }) || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                    matches!(t, Type::Vec(_))
+                        || matches!(t, Type::Parameterized(n, _) if n == "Vec")
+                });
+                if is_vec_local {
+                    *arg_str = format!("&{arg_str}");
+                }
+            }
+        }
 
         // WINDJAMMER STDLIB → RUST TRANSLATION
         // Some Windjammer methods don't exist in Rust and need translation.

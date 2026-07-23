@@ -193,6 +193,47 @@ fn signature_promotion_pick_best_quest_id_prefers_global() {
 }
 
 #[test]
+fn signature_promotion_pick_best_codegen_ref_vec_formal_beats_caller_stub() {
+    let vec_u8 = Type::Parameterized("Vec".into(), vec![Type::Custom("u8".into())]);
+    let caller_stub = FunctionSignature {
+        name: "WalSegment::from_bytes".into(),
+        param_types: vec![vec_u8.clone()],
+        formal_param_types: vec![vec_u8.clone()],
+        param_ownership: vec![OwnershipMode::Owned],
+        return_type: Some(Type::Custom("WalSegment".into())),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    };
+    let mut defining_refresh = caller_stub.clone();
+    defining_refresh.param_types = vec![Type::Reference(Box::new(vec_u8.clone()))];
+    defining_refresh.param_ownership = vec![OwnershipMode::Borrowed];
+    defining_refresh.emitted_rust_ref_params = Some(vec![true]);
+
+    let picked = pick_best_resolved_signature(
+        Some(ResolvedSignature {
+            sig: caller_stub,
+            qualified_key: "WalSegment::from_bytes".into(),
+            resolution_method: ResolutionMethod::ReceiverQualified,
+            has_collision: false,
+        }),
+        Some(ResolvedSignature {
+            sig: defining_refresh,
+            qualified_key: "WalSegment::from_bytes".into(),
+            resolution_method: ResolutionMethod::ReceiverQualified,
+            has_collision: false,
+        }),
+    )
+    .expect("pick");
+    assert!(matches!(picked.sig.param_types[0], Type::Reference(_)));
+    assert_eq!(picked.sig.param_ownership[0], OwnershipMode::Borrowed);
+    assert_eq!(picked.sig.emitted_rust_ref_params, Some(vec![true]));
+}
+
+#[test]
 fn signature_promotion_pick_best_mannequin_owned_formal_wins() {
     let body = mannequin_body_borrow();
     let formal = mannequin_owned_formal();

@@ -530,6 +530,9 @@ impl<'ast> CodeGenerator<'ast> {
                         .iter()
                         .map(|f| f.name.clone())
                         .collect();
+                    for func in &impl_block.functions {
+                        self.register_impl_ast_method_formals(&impl_block.type_name, func);
+                    }
                     self.in_impl_block = true;
 
                     body.push_str(&self.generate_impl(impl_block, analyzed));
