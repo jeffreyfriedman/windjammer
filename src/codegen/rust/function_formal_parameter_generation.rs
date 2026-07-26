@@ -72,6 +72,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 if param.name != "self"
                     && !self.in_trait_impl
+                    && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
                     && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
@@ -615,7 +616,9 @@ impl<'ast> CodeGenerator<'ast> {
 
                         // Pure delegation / call-only forwarders: emit &T even when IR/analyzer
                         // left the converged formal as owned (wdb LsmEngine::get → MemoryEngine::get).
-                        if self.param_should_emit_borrowed_delegation_formal(param, func)
+                        // Never demote mutated / MutBorrowed params to shared `&T`.
+                        if !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
+                            && self.param_should_emit_borrowed_delegation_formal(param, func)
                             && !self.param_moves_via_struct_literal_init(
                                 func.body.as_slice(),
                                 &param.name,
@@ -785,7 +788,14 @@ impl<'ast> CodeGenerator<'ast> {
 
                             // Pure delegation wrappers keep &T formals when the body only
                             // forwards to borrowing callees (wdb LsmEngine::get), even under IR cutover.
-                            if !self.is_type_copy(&param.type_)
+                            // Never demote mutated / MutBorrowed params: `c.increment()` (&mut self)
+                            // is a borrowing callee, but the formal must be `&mut T` (or owned mut),
+                            // not shared `&T`.
+                            if !self.param_must_not_demote_to_shared_borrow(
+                                &param.name,
+                                analyzed,
+                                Some(ownership_mode),
+                            ) && !self.is_type_copy(&param.type_)
                                 && !analyzed.field_extract_parameters.contains(&param.name)
                                 && !self.param_moves_via_struct_literal_init(
                                     func.body.as_slice(),
@@ -1102,5 +1112,28 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             })
             .collect()
+    }
+
+    /// Shared guard: never demote a param that needs mutable access to shared `&T`.
+    ///
+    /// Owned (`mut x: T`) and MutBorrowed (`x: &mut T`) both satisfy `&mut self` callees;
+    /// only shared `&T` is wrong. Driven by analyzer mutation sets + IR/analyzer ownership.
+    fn param_must_not_demote_to_shared_borrow(
+        &self,
+        param_name: &str,
+        analyzed: &AnalyzedFunction<'_>,
+        ownership_hint: Option<OwnershipMode>,
+    ) -> bool {
+        if matches!(ownership_hint, Some(OwnershipMode::MutBorrowed)) {
+            return true;
+        }
+        if matches!(
+            self.get_param_ownership(param_name, analyzed),
+            Some(OwnershipMode::MutBorrowed)
+        ) {
+            return true;
+        }
+        analyzed.mutated_parameters.contains(param_name)
+            && !analyzed.returned_parameters.contains(param_name)
     }
 }

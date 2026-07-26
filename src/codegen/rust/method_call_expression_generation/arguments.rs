@@ -1713,6 +1713,10 @@ impl<'ast> CodeGenerator<'ast> {
                             &self.current_function_params,
                             &self.inferred_mut_borrowed_params,
                         );
+                        // Owned-reuse clone must not survive a MutBorrowed formal.
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut arg_str,
+                        );
                     }
                 }
 
