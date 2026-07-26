@@ -2073,15 +2073,31 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
     ) -> bool {
         match expr {
-            Expression::Identifier { name, .. } => name == param_name,
-            Expression::MethodCall { arguments, .. } => arguments.iter().any(|(_, arg)| {
-                matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                    || self.expression_passes_param_as_call_argument(arg, param_name, func)
-            }),
-            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
-                matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                    || self.expression_passes_param_as_call_argument(arg, param_name, func)
-            }),
+            // Bare identifiers are not call arguments; Call/MethodCall arms detect
+            // params inside argument expressions. Returning true here made every
+            // comparison (`item == id`) look like a call-arg use and forced Owned
+            // formals via `param_has_forward_ref_keep_owned` (Inventory::has).
+            Expression::Identifier { .. } => false,
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                arguments.iter().any(|(_, arg)| {
+                    self.expression_uses_param_as_read_operand(arg, param_name)
+                        || self.expression_passes_param_as_call_argument(arg, param_name, func)
+                }) || self.expression_passes_param_as_call_argument(object, param_name, func)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                arguments.iter().any(|(_, arg)| {
+                    self.expression_uses_param_as_read_operand(arg, param_name)
+                        || self.expression_passes_param_as_call_argument(arg, param_name, func)
+                }) || self.expression_passes_param_as_call_argument(function, param_name, func)
+            }
             Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
                 self.expression_passes_param_as_call_argument(v, param_name, func)
             }),
