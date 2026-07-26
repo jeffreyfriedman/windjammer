@@ -221,6 +221,64 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Params moved into struct/enum/Option payloads must stay Owned at the formal.
+    fn emit_owned_for_stored_param_identifiers(&mut self, expr: &Expression<'ast>) {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                if let Some(&var) = self.param_vars.get(name) {
+                    self.cs
+                        .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                }
+            }
+            Expression::StructLiteral { fields, .. } => {
+                for (_, field_expr) in fields {
+                    self.emit_owned_for_stored_param_identifiers(field_expr);
+                }
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                for el in elements {
+                    self.emit_owned_for_stored_param_identifiers(el);
+                }
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let is_constructor = match &**function {
+                    Expression::Identifier { name, .. } => {
+                        matches!(name.as_str(), "Some" | "Ok" | "Err")
+                            || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(name)
+                    }
+                    Expression::FieldAccess { field, .. } => field
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase()),
+                    _ => false,
+                };
+                if is_constructor {
+                    for (_, arg) in arguments {
+                        self.emit_owned_for_stored_param_identifiers(arg);
+                    }
+                }
+            }
+            Expression::MethodCall {
+                method, arguments, ..
+            } => {
+                if method
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                {
+                    for (_, arg) in arguments {
+                        self.emit_owned_for_stored_param_identifiers(arg);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Unify call-site argument vars with callee formal expectations.
     fn emit_call_site_constraints(&mut self, sig: &FunctionSignature, arg_vars: &[ConstraintVar]) {
         for (arg_index, &arg_var) in arg_vars.iter().enumerate() {
@@ -581,6 +639,18 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 arguments,
                 ..
             } => {
+                // Enum / Option constructors consume owned payloads (no signature registry entry).
+                if let Some(callee_name) = Self::extract_callee_name(function) {
+                    if matches!(callee_name.as_str(), "Some" | "Ok" | "Err")
+                        || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(
+                            &callee_name,
+                        )
+                    {
+                        for (_, arg) in arguments {
+                            self.emit_owned_for_stored_param_identifiers(arg);
+                        }
+                    }
+                }
                 let _callee_var = self.walk_expression(function);
                 let mut arg_vars = Vec::new();
                 for (_label, arg_expr) in arguments {
@@ -716,12 +786,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Expression::StructLiteral { fields, .. } => {
                 let result = self.cs.fresh_var();
                 for (_field_name, field_expr) in fields {
-                    if let Expression::Identifier { name, .. } = field_expr {
-                        if let Some(&var) = self.param_vars.get(name) {
-                            self.cs
-                                .add(Constraint::OwnershipIs(var, OwnedType::Owned));
-                        }
-                    }
+                    self.emit_owned_for_stored_param_identifiers(field_expr);
                     self.walk_expression(field_expr);
                 }
                 self.cs
