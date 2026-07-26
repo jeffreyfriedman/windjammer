@@ -1888,6 +1888,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let caller_owned = self.caller_keeps_owned_outer_formal(name);
         if self.in_if_condition && caller_owned {
+            // Copy / owned-pass formals must stay by-value (`search.update(dt)` not `&dt`).
+            // Forward-ref borrowing in `if` is only for non-Copy values that would move.
+            if self.caller_param_is_copy_pass_by_value(name) || callee_wants_owned {
+                return;
+            }
             if coerced.ends_with(".clone()") {
                 let base = coerced.trim_end_matches(".clone()").trim();
                 *coerced = format!("&{base}");
@@ -1939,6 +1944,9 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if self.in_if_condition && is_forward_ref {
+            if self.caller_param_is_copy_pass_by_value(name) || callee_wants_owned {
+                return;
+            }
             if coerced.ends_with(".clone()") {
                 let base = coerced.trim_end_matches(".clone()").trim();
                 *coerced = format!("&{base}");
@@ -1990,6 +1998,15 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if self.in_if_condition {
+            // Signature-driven: never borrow Copy / owned-pass args in `if` conditions.
+            // The forward-ref heuristic exists to avoid moving non-Copy formals; Copy
+            // and callee-owned contracts must remain by-value (`update(dt)` not `&dt`).
+            if self.caller_param_is_copy_pass_by_value(name) || callee_wants_owned {
+                return;
+            }
+            if !callee_wants_shared_borrow {
+                return;
+            }
             if !coerced.starts_with('&') {
                 if coerced.ends_with(".clone()") {
                     let base = coerced.trim_end_matches(".clone()").trim();
@@ -2090,6 +2107,10 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" || self.emitted_rust_ref_formals.contains(&param.name) {
                 continue;
             }
+            // Copy / pass-by-value formals must not be rewritten to `(&param)` in conditions.
+            if crate::type_classification::is_copy_pass_by_value_formal(&param.type_) {
+                continue;
+            }
             let forward_ref = self.current_fn_forward_ref_if_params.contains(&param.name)
                 || self.current_fn_mixed_forwarder_params.contains(&param.name)
                 || self.param_used_in_any_if_condition(&body, &param.name);
@@ -2111,6 +2132,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         cond_str
+    }
+
+    /// True when the named caller formal is a Copy pass-by-value type (`f32`, `i32`, …).
+    fn caller_param_is_copy_pass_by_value(&self, name: &str) -> bool {
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+        })
     }
 
     fn expr_mentions_param_as_call_arg_in_expr(

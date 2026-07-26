@@ -230,6 +230,18 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::MutBorrowed);
         }
 
+        // 6e. Map/set collections used only as method receivers stay Owned — Rust
+        // auto-refs (`map.get(k)`, `set.contains(x)`). Must run before passthrough
+        // (&self → Borrowed) so we do not demote Owned maps to Ref (ownership lattice).
+        // Vec stays on the normal readonly→Borrowed path (`items.len()` → `&Vec`) so
+        // call sites can pass `&local` without moving (cross-crate upload_* APIs).
+        if Self::is_map_or_set_collection_param_type(param_type)
+            && self.param_has_direct_method_calls(param_name, body)
+            && !self.is_passed_by_value_as_function_call_arg(param_name, body)
+        {
+            return Ok(OwnershipMode::Owned);
+        }
+
         // 7. MULTI-PASS OWNERSHIP INFERENCE (The Proper Solution!)
         // Check if parameter is passed as an argument to another function/method.
         // Look up the callee's signature in the registry and match the ownership mode.
@@ -298,6 +310,7 @@ impl<'ast> Analyzer<'ast> {
         // - Default to **Borrowed** for read-only parameters
         // - The checks above handle all consuming cases (mutated, returned,
         //   stored, iterated, used in binary ops, pattern matched)
+        // - Map/set method-receivers stay Owned (step 6e — Rust auto-refs)
         // - If none of those apply, the parameter is truly read-only
         // - Read-only non-Copy parameters should be &T in generated Rust
         // - Copy types default to Owned (pass-by-value); see step 9 below
@@ -559,6 +572,61 @@ impl<'ast> Analyzer<'ast> {
         let mut calls = Vec::new();
         self.collect_method_calls_on_param(param_name, body, &mut calls);
         !calls.is_empty()
+    }
+
+    /// Vec/Map/Set-like stdlib collections — method receivers auto-ref in Rust.
+    fn is_map_or_set_collection_param_type(param_type: &Type) -> bool {
+        match param_type {
+            Type::Parameterized(name, _) => {
+                let base = name
+                    .split('<')
+                    .next()
+                    .unwrap_or(name.as_str())
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or(name.as_str());
+                matches!(
+                    base,
+                    "HashMap"
+                        | "BTreeMap"
+                        | "IndexMap"
+                        | "Map"
+                        | "HashSet"
+                        | "BTreeSet"
+                        | "Set"
+                )
+            }
+            _ => false,
+        }
+    }
+
+    fn is_stdlib_collection_param_type(param_type: &Type) -> bool {
+        match param_type {
+            Type::Vec(_) => true,
+            Type::Parameterized(name, _) => {
+                let base = name
+                    .split('<')
+                    .next()
+                    .unwrap_or(name.as_str())
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or(name.as_str());
+                matches!(
+                    base,
+                    "HashMap"
+                        | "BTreeMap"
+                        | "IndexMap"
+                        | "Map"
+                        | "HashSet"
+                        | "BTreeSet"
+                        | "Set"
+                        | "Vec"
+                        | "VecDeque"
+                        | "LinkedList"
+                )
+            }
+            _ => false,
+        }
     }
 
     /// TDD: Check if parameter is ONLY used as &param or &mut param (never consumed directly).
