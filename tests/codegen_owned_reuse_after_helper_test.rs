@@ -1,0 +1,56 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+))]
+
+//! FAILING REPRO (StatusChip pattern): owned string used after pass-by-value helper.
+//!
+//! Source:
+//!   let status = self.status
+//!   let v = variant_for(status)   // consumes String
+//!   Badge::new(status)            // needs status again
+//!
+//! Desired: auto-clone before the consuming call, or accept &str in helper,
+//! so generated Rust compiles without manual .clone().
+
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+#[test]
+fn owned_string_reuse_after_by_value_helper_should_clone() {
+    let source = r#"
+pub fn variant_for(status: string) -> int {
+    if status.to_lowercase() == "paid" { 1 } else { 0 }
+}
+
+pub fn chip(status: string) -> string {
+    let label = status
+    let v = variant_for(label)
+    format!("{}:{}", v, label)
+}
+
+fn main() {
+    let _ = chip("paid".to_string())
+}
+"#;
+
+    let result = test_utils::compile_single(source);
+
+    let has_clone = result.contains("label.clone()")
+        || result.contains("status.clone()")
+        || result.contains(".clone()");
+
+    // Must compile as valid Rust — either clone or helper takes &str.
+    assert!(
+        has_clone || result.contains("variant_for(&label)") || result.contains("variant_for(label.as_str())"),
+        "owned string reused after by-value helper should auto-clone or borrow. Got:\n{}",
+        result
+    );
+}
