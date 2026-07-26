@@ -1894,7 +1894,9 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.param_passed_as_call_argument(body.as_slice(), param_name, func)
             }
             Statement::For { body, iterable, .. } => {
-                self.expression_passes_param_as_call_argument(iterable, param_name, func)
+                // `for x in items` is iteration, not a call-argument use of `items`.
+                // Only nested Call/MethodCall nodes inside the iterable count.
+                self.expression_has_nested_call_passing_param(iterable, param_name, func)
                     || self.param_passed_as_call_argument(body.as_slice(), param_name, func)
             }
             Statement::Loop { body, .. }
@@ -2005,12 +2007,13 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expression_passes_param_as_call_argument(operand, param_name, func)
             }
+            // Field reads / indexing are not call-argument uses of the root binding.
             Expression::FieldAccess { object, .. } => {
-                self.expression_passes_param_as_call_argument(object, param_name, func)
+                self.expression_has_nested_call_passing_param(object, param_name, func)
             }
             Expression::Index { object, index, .. } => {
-                self.expression_passes_param_as_call_argument(object, param_name, func)
-                    || self.expression_passes_param_as_call_argument(index, param_name, func)
+                self.expression_has_nested_call_passing_param(object, param_name, func)
+                    || self.expression_has_nested_call_passing_param(index, param_name, func)
             }
             Expression::Block { statements, .. } => {
                 self.param_passed_as_call_argument(statements.as_slice(), param_name, func)

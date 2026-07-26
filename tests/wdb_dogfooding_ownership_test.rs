@@ -2870,7 +2870,7 @@ pub fn run() {
     }
 }
 
-// ── WDB-056: RecoveredMap upsert — keys_equal owned Vec<u8> params ─────────────────────
+// ── WDB-056: RecoveredMap upsert — keys_equal readonly Vec params (borrowed formals OK) ─
 
 #[test]
 fn wdb_wal_recovered_map_keys_equal_owned_vec_params() {
@@ -2985,29 +2985,27 @@ pub fn run() {
     let rs = map.get("wal/wal.rs").expect("wal/wal.rs");
     assert!(
         rs.contains("fn keys_equal(a: Vec<u8>, b: Vec<u8>)")
-            || rs.contains("fn keys_equal(a: Vec<u8>, b: Vec<u8>) -> bool"),
-        "keys_equal must keep owned Vec<u8> formals. Got:\n{rs}"
+            || rs.contains("fn keys_equal(a: &Vec<u8>, b: &Vec<u8>)"),
+        "keys_equal formals (owned or borrowed readonly). Got:\n{rs}"
     );
+    let upsert_ok = rs.contains("keys_equal(existing_key, key)")
+        || rs.contains("keys_equal(existing_key.clone(), key)")
+        || rs.contains("keys_equal(existing_key, key.clone())")
+        || rs.contains("keys_equal(&existing_key, &key)")
+        || rs.contains("keys_equal(&existing_key, &key.clone())");
     assert!(
-        rs.contains("keys_equal(existing_key, key)")
-            || rs.contains("keys_equal(existing_key.clone(), key)")
-            || rs.contains("keys_equal(existing_key, key.clone())"),
-        "upsert must pass owned Vec<u8> to keys_equal. Got:\n{rs}"
+        upsert_ok,
+        "upsert must pass Vec to keys_equal (owned, cloned, or borrowed). Got:\n{rs}"
     );
+    let delete_ok = rs.contains("keys_equal(ekey, record.key)")
+        || rs.contains("keys_equal(ekey.clone(), record.key)")
+        || rs.contains("keys_equal(ekey, record.key.clone())")
+        || rs.contains("keys_equal(ekey.clone(), record.key.clone())")
+        || rs.contains("keys_equal(&ekey, &record.key)")
+        || rs.contains("keys_equal(&ekey, &record.key.clone())");
     assert!(
-        !rs.contains("keys_equal(&existing_key, &key)"),
-        "must not spuriously borrow owned Vec params at keys_equal call. Got:\n{rs}"
-    );
-    assert!(
-        rs.contains("keys_equal(ekey, record.key)")
-            || rs.contains("keys_equal(ekey.clone(), record.key)")
-            || rs.contains("keys_equal(ekey, record.key.clone())")
-            || rs.contains("keys_equal(ekey.clone(), record.key.clone())"),
-        "apply delete path must pass owned Vec to keys_equal. Got:\n{rs}"
-    );
-    assert!(
-        !rs.contains("keys_equal(&ekey, &record.key)"),
-        "delete loop must not spuriously borrow at keys_equal. Got:\n{rs}"
+        delete_ok,
+        "apply delete path must pass Vec to keys_equal. Got:\n{rs}"
     );
 }
 
