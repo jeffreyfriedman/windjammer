@@ -48,20 +48,6 @@ impl<'ast> CodeGenerator<'ast> {
             sig
         });
         let args = if let Some(ref sig) = resolved_signature {
-            let receiver_is_map = receiver_type_name
-                .as_ref()
-                .is_some_and(|n| crate::codegen::rust::stdlib_method_traits::is_map_type_name(n))
-                || self
-                    .infer_expression_type(object)
-                    .as_ref()
-                    .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_type);
-            let receiver_is_set = receiver_type_name
-                .as_ref()
-                .is_some_and(|n| crate::codegen::rust::stdlib_method_traits::is_set_type_name(n))
-                || self
-                    .infer_expression_type(object)
-                    .as_ref()
-                    .is_some_and(crate::codegen::rust::stdlib_method_traits::is_set_type);
             args.into_iter()
                 .enumerate()
                 .map(|(i, mut arg_str)| {
@@ -129,12 +115,12 @@ impl<'ast> CodeGenerator<'ast> {
                     let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                         self.is_type_copy(t)
                     });
-                    let is_collection_key = i == 0
-                        && ((crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
-                            && receiver_is_map)
-                            || (crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(
-                                method,
-                            ) && receiver_is_set));
+                    let is_collection_key =
+                        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                            sig,
+                            i,
+                            receiver_type_name.as_deref(),
+                        );
                     let callee_arg_emits_owned = {
                         let from_sig = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             &sig, sig_param_idx,
@@ -254,7 +240,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     Some(OwnershipMode::Owned)
                                 ) =>
                         {
-                            if callee_formal_is_copy {
+                            if callee_formal_is_copy && !is_collection_key {
                                 return arg_str;
                             }
                             if !is_collection_key
@@ -272,7 +258,7 @@ impl<'ast> CodeGenerator<'ast> {
                         _ if sig.param_types.get(sig_param_idx).is_some_and(|t| {
                             matches!(t, Type::Reference(_))
                         }) && !arg_str.starts_with('&')
-                            && !callee_formal_is_copy
+                            && (!callee_formal_is_copy || is_collection_key)
                             && !callee_arg_emits_owned =>
                         {
                             apply_borrow(&mut arg_str);
@@ -444,6 +430,34 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(method),
                             Some(i),
                             Some(arguments.len()),
+                        );
+                    }
+                    // Copy map/set keys still need `&K`; already-&str / shared-ref bindings must not.
+                    // Delegate to the shared helper (same path as arguments.rs / trait calls).
+                    if let Some((_, arg_expr)) = arguments.get(i) {
+                        let arg_already_rust_ref = match arg_expr {
+                            Expression::Identifier { name, .. } => {
+                                self.identifier_already_ref(name)
+                                    || self.str_ref_optimized_params.contains(name.as_str())
+                            }
+                            Expression::Unary {
+                                op: UnaryOp::Ref, ..
+                            } => true,
+                            _ => false,
+                        };
+                        let arg_binding_already_shared_ref =
+                            matches!(arg_expr, Expression::Identifier { name, .. }
+                                if self.identifier_already_ref(name)
+                                    || self.str_ref_optimized_params.contains(name.as_str())
+                                    || self.inferred_borrowed_params.contains(name));
+                        crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+                            Some(sig),
+                            i,
+                            arg_expr,
+                            &mut arg_str,
+                            arg_already_rust_ref,
+                            receiver_type_name.as_deref(),
+                            arg_binding_already_shared_ref,
                         );
                     }
                     arg_str

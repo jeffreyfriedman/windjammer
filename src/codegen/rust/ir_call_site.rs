@@ -121,6 +121,28 @@ impl<'ast> CodeGenerator<'ast> {
             ));
         }
 
+        // Module-qualified free calls (`draw::draw_text`): without an exact-key
+        // signature for this module path, do not coerce string literals. Simple-name
+        // / local_sig homonyms (e.g. rendering_api::draw_text Owned) must not win.
+        if crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
+            callee_name,
+        ) && matches!(
+            arg_expr,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        ) {
+            let has_exact_module_sig = registry.get_signature(callee_name).is_some()
+                || self
+                    .global_signature_registry
+                    .as_ref()
+                    .is_some_and(|g| g.get_signature(callee_name).is_some());
+            if !has_exact_module_sig {
+                return Some(prepared_arg);
+            }
+        }
+
         let mut sig = if receiver_type_name.is_none() && !callee_name.contains("::") {
             registry
                 .get_signature(callee_name)
@@ -664,7 +686,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.signature_registry
                     .get_signature(callee_name)
                     .cloned()
-                    .or_else(|| self.signature_registry.get_signature(simple_callee).cloned())
+                    // Never fall back to the bare method name for `module::fn` /
+                    // `Type::method` — that matches unrelated homonyms
+                    // (e.g. rendering_api::draw_text for draw::draw_text).
             })
             .unwrap_or(sig.clone());
         let callee_pidx = callee_sig.arg_param_index(arg_index);
@@ -1612,14 +1636,8 @@ impl<'ast> CodeGenerator<'ast> {
                     return true;
                 }
             }
-            let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-            if simple != callee_name {
-                if let Some(sig) = global.get_signature(simple) {
-                    if self.ir_sig_arg_expects_shared_borrow(sig, arg_index) {
-                        return true;
-                    }
-                }
-            }
+            // Qualified callees must not fall back to bare simple-name globals
+            // (homonym ownership from a different module).
         }
         if let Some((rt, method)) = callee_name.rsplit_once("::") {
             let arg_count = user_arg_count.unwrap_or(arg_index + 1);
@@ -1649,15 +1667,10 @@ impl<'ast> CodeGenerator<'ast> {
         if registry.get_signature(callee_name).is_some_and(check) {
             return true;
         }
-        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        if simple != callee_name && registry.get_signature(simple).is_some_and(check) {
-            return true;
-        }
+        // Do not consult bare `simple` for `module::fn` / `Type::method` — that
+        // applies ownership from an unrelated homonym (qualified-call string bug).
         if let Some(global) = self.global_signature_registry.as_ref() {
             if global.get_signature(callee_name).is_some_and(check) {
-                return true;
-            }
-            if simple != callee_name && global.get_signature(simple).is_some_and(check) {
                 return true;
             }
         }
@@ -1718,14 +1731,6 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(sig) = global.get_signature(callee_name) {
                 if self.ir_sig_arg_expects_mut_borrow(sig, arg_index) {
                     return true;
-                }
-            }
-            let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-            if simple != callee_name {
-                if let Some(sig) = global.get_signature(simple) {
-                    if self.ir_sig_arg_expects_mut_borrow(sig, arg_index) {
-                        return true;
-                    }
                 }
             }
         }

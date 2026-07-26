@@ -17,7 +17,7 @@ mod test_utils;
 
 #[test]
 fn shell_nav_active_link_should_codegen() {
-    let source = r#"
+    let source = r##"
 pub struct ShellNavLink {
     label: string,
     href: string,
@@ -59,7 +59,7 @@ impl ShellNav {
 fn main() {
     println!("{}", ShellNav::new().link(ShellNavLink::new("Home".to_string(), "#/".to_string()).active(true)).render())
 }
-"#;
+"##;
 
     let result = test_utils::compile_single(source);
     let ok = result.contains("shellNav")

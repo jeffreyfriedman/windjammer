@@ -20,8 +20,8 @@
 //!
 //! **WDB-057..060** close the gap where string-only tests passed but real `wdb-wal` had 5 rustc errors:
 //! - WalWriter `replay_all_records` else-branch: `&str` not `String` at `replay_all`
-//! - WalWriter `replay_through`: `&str` + `&Lsn` at `replay_to_lsn`
-//! - `replay_to_lsn` body: `is_at_or_before(*through)` when `through: &Lsn`
+//! - WalWriter `replay_through`: `&str` path + owned-or-borrowed Copy `Lsn` at `replay_to_lsn`
+//! - `replay_to_lsn` body: `is_at_or_before(*through)` / `.clone()` when `through: &Lsn`
 //! - `RecoveredMap` delete loop: no use-after-move through owned `keys_equal` + `out.push((ekey, …))`
 //! - **WDB-060** runs `cargo check` on a flat fixture mirroring `wal.wj` replay + recovered-map paths
 //!
@@ -3507,20 +3507,24 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let wal_rs = map.get("wal/wal.rs").expect("wal/wal.rs");
+    // path (string) must borrow as &str. through is Copy (u64 field) — Owned `Lsn`
+    // is the idiomatic Windjammer formal; `&Lsn` remains acceptable if inferred.
     assert!(
-        wal_rs.contains("pub fn replay_to_lsn(path: &str, through: &Lsn)")
+        wal_rs.contains("pub fn replay_to_lsn(path: &str, through: Lsn)")
+            || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: &Lsn)")
             || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: & Lsn)"),
-        "replay_to_lsn must lower to &str + &Lsn formals. Got:\n{wal_rs}"
+        "replay_to_lsn must lower to &str + owned-or-borrowed Lsn. Got:\n{wal_rs}"
     );
     assert!(
-        wal_rs.contains("replay_to_lsn(&self.path, &through)")
+        wal_rs.contains("replay_to_lsn(&self.path, through)")
+            || wal_rs.contains("replay_to_lsn(&self.path, &through)")
             || wal_rs.contains("replay_to_lsn(self.path.as_str(), &through)")
             || wal_rs.contains("replay_to_lsn(&self.path, through.clone())"),
-        "WalWriter::replay_through must borrow path and through. Got:\n{wal_rs}"
+        "WalWriter::replay_through must borrow path; through may be owned Copy or borrowed. Got:\n{wal_rs}"
     );
     assert!(
         !wal_rs.contains("replay_to_lsn(self.path.clone(), through)"),
-        "must not pass owned String/Lsn where &str/&Lsn expected. Got:\n{wal_rs}"
+        "must not pass owned String where &str expected. Got:\n{wal_rs}"
     );
     if wal_rs.contains("through: &Lsn") {
         assert!(

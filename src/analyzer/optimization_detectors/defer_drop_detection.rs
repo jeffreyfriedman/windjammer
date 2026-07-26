@@ -39,12 +39,21 @@ impl<'ast> Analyzer<'ast> {
                 if matches!(param_size, EstimatedSize::Large | EstimatedSize::VeryLarge) {
                     if let Some(ref ret_type) = func.return_type {
                         if self.is_small_type(ret_type) && self.is_safe_to_defer(&param.type_) {
-                            optimizations.push(DeferDropOptimization {
-                                variable: param.name.clone(),
-                                estimated_size: param_size,
-                                reason: DeferDropReason::LargeOwnedParameter,
-                                location: func.body.len().saturating_sub(1),
-                            });
+                            // Only defer-drop when the param is dead at return. If the last
+                            // statement still uses it (`map.contains_key(...)`, etc.), moving
+                            // it into `spawn(|| drop(param))` is a use-after-move.
+                            let still_live_at_return = func
+                                .body
+                                .last()
+                                .is_some_and(|stmt| self.statement_uses_identifier(&param.name, stmt));
+                            if !still_live_at_return {
+                                optimizations.push(DeferDropOptimization {
+                                    variable: param.name.clone(),
+                                    estimated_size: param_size,
+                                    reason: DeferDropReason::LargeOwnedParameter,
+                                    location: func.body.len().saturating_sub(1),
+                                });
+                            }
                         }
                     }
                 }

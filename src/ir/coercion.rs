@@ -91,8 +91,13 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
                     (&actual.base, &expected.base),
                     (BaseType::Custom(_), BaseType::Custom(_))
                 ) {
-                    // Rust auto-borrows owned struct args for `&T` formals (WDB-055 engine.put).
-                    CoercionKind::Identity
+                    // Non-Copy aggregates auto-ref at Rust call sites (WDB-055 engine.put).
+                    // Copy map/set keys (tuple IDs, TimerId, …) still need explicit `&`.
+                    if is_copy_base(&actual.base) {
+                        CoercionKind::Borrow
+                    } else {
+                        CoercionKind::Identity
+                    }
                 } else {
                     CoercionKind::Borrow
                 }
@@ -219,23 +224,24 @@ fn normalize_ownership(own: &OwnedType) -> OwnedType {
 }
 
 fn is_copy_base(base: &BaseType) -> bool {
-    matches!(
-        base,
+    match base {
         BaseType::Bool
-            | BaseType::Char
-            | BaseType::I8
-            | BaseType::I16
-            | BaseType::I32
-            | BaseType::I64
-            | BaseType::I128
-            | BaseType::U8
-            | BaseType::U16
-            | BaseType::U32
-            | BaseType::U64
-            | BaseType::U128
-            | BaseType::F32
-            | BaseType::F64
-    )
+        | BaseType::Char
+        | BaseType::I8
+        | BaseType::I16
+        | BaseType::I32
+        | BaseType::I64
+        | BaseType::I128
+        | BaseType::U8
+        | BaseType::U16
+        | BaseType::U32
+        | BaseType::U64
+        | BaseType::U128
+        | BaseType::F32
+        | BaseType::F64 => true,
+        BaseType::Tuple(elems) => elems.iter().all(is_copy_base),
+        _ => false,
+    }
 }
 
 fn is_integer_base(base: &BaseType) -> bool {
@@ -367,6 +373,18 @@ mod tests {
         let actual = owned(BaseType::Custom("Vec".into()));
         let expected = mut_borrowed(BaseType::Custom("Vec".into()));
         assert_eq!(compute_coercion(&actual, &expected), CoercionKind::MutBorrow);
+    }
+
+    #[test]
+    fn borrowed_copy_tuple_to_owned_strips_or_derefs() {
+        let tuple = BaseType::Tuple(vec![BaseType::I32, BaseType::I32]);
+        let actual = borrowed(tuple.clone());
+        let expected = owned(tuple);
+        // Owned Copy formals: StripBorrow (auto-copy) is preferred over explicit Deref.
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::StripBorrow
+        );
     }
 
     #[test]

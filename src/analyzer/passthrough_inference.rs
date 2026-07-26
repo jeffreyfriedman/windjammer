@@ -445,6 +445,25 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_method_calls_from_stmt(param_name, stmt, results);
                 }
             }
+            Statement::Match { value, arms, .. } => {
+                self.collect_method_calls_from_expr(param_name, value, results);
+                for arm in arms {
+                    if let Some(guard) = &arm.guard {
+                        self.collect_method_calls_from_expr(param_name, guard, results);
+                    }
+                    self.collect_method_calls_from_expr(param_name, arm.body, results);
+                    if let Expression::Block { statements, .. } = arm.body {
+                        for stmt in statements {
+                            self.collect_method_calls_from_stmt(param_name, stmt, results);
+                        }
+                    }
+                }
+            }
+            Statement::Loop { body: loop_body, .. } => {
+                for stmt in loop_body {
+                    self.collect_method_calls_from_stmt(param_name, stmt, results);
+                }
+            }
             _ => {}
         }
     }
@@ -477,6 +496,12 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
+                // UFCS / field-call style: `query.get(k)` may parse as Call(FieldAccess(query, get), …)
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    if self.expr_is_identifier(object, param_name) {
+                        results.push(field.clone());
+                    }
+                }
                 self.collect_method_calls_from_expr(param_name, function, results);
                 for (_, arg) in arguments {
                     self.collect_method_calls_from_expr(param_name, arg, results);
@@ -499,6 +524,12 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Cast { expr, .. } => {
                 self.collect_method_calls_from_expr(param_name, expr, results);
+            }
+            // Match/if expressions lower to `Block { statements: [Statement::Match/If] }`.
+            Expression::Block { statements, .. } => {
+                for stmt in statements {
+                    self.collect_method_calls_from_stmt(param_name, stmt, results);
+                }
             }
             _ => {}
         }

@@ -527,7 +527,16 @@ impl<'ast> CodeGenerator<'ast> {
                             && !coerced.starts_with('&')
                         {
                             if let Expression::Identifier { name, .. } = arg_to_generate {
-                                if self.caller_owned_non_copy_formal(name)
+                                // Only clone when the owned formal is reused after this call.
+                                // Unconditional clone breaks consuming APIs (`Vec::push(item)`).
+                                let needs_reuse_clone = self.auto_clone_analysis.as_ref().is_some_and(
+                                    |a| {
+                                        a.needs_clone(name, self.current_statement_idx).is_some()
+                                            || a.needs_clone_anywhere(name)
+                                    },
+                                );
+                                if needs_reuse_clone
+                                    && self.caller_owned_non_copy_formal(name)
                                     && !crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
                                         object,
                                     )
@@ -639,6 +648,11 @@ impl<'ast> CodeGenerator<'ast> {
                             && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
                                 arg_to_generate,
                             )
+                            && !matches!(
+                                arg_to_generate,
+                                Expression::Identifier { name, .. }
+                                    if self.identifier_already_ref(name)
+                            )
                             && matches!(
                                 arg_to_generate,
                                 Expression::Identifier { .. } | Expression::FieldAccess { .. }
@@ -691,6 +705,11 @@ impl<'ast> CodeGenerator<'ast> {
                 if !external_module_mut_reborrow
                     && !is_collection_key_arg
                     && !is_borrowed_iter_collecting_refs
+                    && !matches!(
+                        arg_to_generate,
+                        Expression::Identifier { name, .. }
+                            if self.borrowed_iterator_vars.contains(name)
+                    )
                     && !self.in_user_written_closure
                     && !matches!(arg_to_generate, Expression::Closure { .. })
                     && !callee_wants_str_borrow
@@ -704,12 +723,24 @@ impl<'ast> CodeGenerator<'ast> {
                             })))
                 {
                     let inferred_ty = self.infer_expression_type(arg_to_generate);
+                    let local_ty = match arg_to_generate {
+                        Expression::Identifier { name, .. } => {
+                            self.local_var_types.get(name.as_str())
+                        }
+                        _ => None,
+                    };
                     let is_copy = inferred_ty
                         .as_ref()
-                        .is_some_and(|t| self.is_type_copy(t));
-                    let is_ref_to_copy = !is_copy && inferred_ty
-                        .as_ref()
-                        .is_some_and(|t| matches!(t, Type::Reference(inner) | Type::MutableReference(inner) if self.is_type_copy(inner)));
+                        .is_some_and(|t| self.is_type_copy(t))
+                        || local_ty.is_some_and(|t| self.is_type_copy(t));
+                    let is_ref_to_copy = !is_copy
+                        && (inferred_ty.as_ref().is_some_and(|t| {
+                            matches!(t, Type::Reference(inner) | Type::MutableReference(inner)
+                                if self.is_type_copy(inner))
+                        }) || local_ty.is_some_and(|t| {
+                            matches!(t, Type::Reference(inner) | Type::MutableReference(inner)
+                                if self.is_type_copy(inner))
+                        }));
                     if is_ref_to_copy
                         && !arg_str.starts_with('*')
                         && !arg_str.ends_with(".clone()")
@@ -1306,6 +1337,34 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                if is_collection_key_arg {
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
+                    // Iterator keys (`for k in map.keys()`) are already `&K` — never clone.
+                    if matches!(
+                        arg_to_generate,
+                        Expression::Identifier { name, .. }
+                            if self.borrowed_iterator_vars.contains(name)
+                    ) {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut arg_str,
+                        );
+                    }
+                }
+
+                // Owned Copy match bindings (after `.copied()`) must not get `.clone()`.
+                if let Expression::Identifier { name, .. } = arg_to_generate {
+                    if self.match_arm_bindings.contains(name.as_str())
+                        && self
+                            .local_var_types
+                            .get(name.as_str())
+                            .is_some_and(|t| self.is_type_copy(t))
+                    {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut arg_str,
+                        );
+                    }
+                }
+
                 // AUTO .clone(): Add .clone() when needed for borrowed values
                 if !self.current_func_is_pure_forwarding_delegate {
                 if let Expression::Identifier { name, .. } = arg {
@@ -1320,18 +1379,17 @@ impl<'ast> CodeGenerator<'ast> {
                                 matches!(t, Type::MutableReference(_))
                             })
                         }).unwrap_or(false);
-                    let param_is_borrowed_map_key = i == 0
-                        && crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
+                    // Signature-driven map/set key lookup (not method-name lists).
+                    let param_is_borrowed_map_key = is_collection_key_arg
                         && (method_signature
                             .as_ref()
                             .and_then(|sig| sig.param_ownership_for_arg(i))
                             .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed))
                             || self.borrowed_iterator_vars.contains(name));
-                    // Borrowed iterator vars (for x in &vec) are already references.
-                    // Cloning them produces owned values, changing the type. Skip
-                    // auto-clone when the return type indicates we're collecting refs.
-                    let is_borrowed_iter_collecting_refs =
-                        self.borrowed_iterator_vars.contains(name)
+                    // Borrowed iterator vars (for x in &vec / map.keys()) are already references.
+                    // Cloning them produces owned values, changing the type.
+                    let is_borrowed_iter_var = self.borrowed_iterator_vars.contains(name);
+                    let is_borrowed_iter_collecting_refs = is_borrowed_iter_var
                             && matches!(
                                 &self.current_function_return_type,
                                 Some(Type::Vec(inner)) if matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
@@ -1341,6 +1399,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !external_module_mut_reborrow
                             && !param_is_mut_borrowed
                             && !param_is_borrowed_map_key
+                            && !is_borrowed_iter_var
                             && !is_borrowed_iter_collecting_refs
                             && !param_expects_borrowed
                             && !is_auto_borrow_target
@@ -1385,12 +1444,21 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(|t| matches!(t, Type::Reference(inner) | Type::MutableReference(inner) if self.is_type_copy(inner)));
                     let is_already_copy = inferred_ty
                         .as_ref()
-                        .is_some_and(|t| self.is_type_copy(t));
+                        .is_some_and(|t| self.is_type_copy(t))
+                        || matches!(arg, Expression::Identifier { name, .. }
+                            if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                                self.is_type_copy(t)
+                            }));
                     let is_borrowed_var = matches!(arg, Expression::Identifier { name, .. } if self.borrowed_iterator_vars.contains(name));
                     if is_ref_to_copy && !arg_str.starts_with('*') {
                         arg_str = format!("*{arg_str}");
                     } else if is_already_copy && is_borrowed_var && !arg_str.starts_with('*') {
                         arg_str = format!("*{arg_str}");
+                    } else if is_already_copy {
+                        // Owned Copy (e.g. after Option<&T>.copied()) — pass by value, no .clone().
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut arg_str,
+                        );
                     } else if !is_already_copy {
                         arg_str = format!("{}.clone()", arg_str);
                     }

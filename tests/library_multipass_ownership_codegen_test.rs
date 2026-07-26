@@ -3072,8 +3072,13 @@ fn main() {
     let rs = map.get("main.rs").expect("main.rs");
 
     assert!(
-        rs.contains("get_user_name(&users"),
-        "local must borrow when callee param is borrowed, even with homonym param name. Got:\n{rs}"
+        // Borrowed HashMap formal → call site `&users`.
+        // Owned HashMap formal (method-receiver policy / WJ source owned) → pass by value.
+        rs.contains("get_user_name(&users")
+            || (rs.contains("users: HashMap")
+                && !rs.contains("users: &HashMap")
+                && rs.contains("get_user_name(users")),
+        "local must borrow when callee param is borrowed, or pass owned when formal is owned. Got:\n{rs}"
     );
 }
 

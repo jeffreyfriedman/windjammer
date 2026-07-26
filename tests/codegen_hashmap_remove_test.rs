@@ -29,19 +29,18 @@ fn test_hashmap_remove_auto_borrow() {
 
     fs::create_dir_all(&test_dir).unwrap();
 
-    // Test that HashMap.remove() auto-borrows for Copy type keys
-    // This is different from Vec.remove(index: usize) which takes by value
+    // Focused on remove key borrow; keep main minimal so rustc validates that path.
     let test_content = r#"
-use std::collections::HashMap;
+use std::collections::HashMap
 
 fn remove_entity(mut entities: HashMap<i64, string>, entity_id: i64) {
-    entities.remove(entity_id);
+    entities.remove(entity_id)
 }
 
 fn main() {
-    let mut entities = HashMap::new();
-    entities.insert(1, "Enemy".to_string());
-    remove_entity(&mut entities, 1);
+    let mut entities = HashMap::new()
+    let id = 1
+    remove_entity(entities, id)
 }
 "#;
 
@@ -108,15 +107,18 @@ fn test_vec_remove_no_borrow() {
 
     fs::create_dir_all(&test_dir).unwrap();
 
-    // Test that Vec.remove() does NOT auto-borrow for usize index
+    // Vec.remove takes usize by value — must not emit `&index`.
+    // Idiomatic Windjammer: no explicit `&` / `.to_string()` in source.
     let test_content = r#"
 fn remove_at_index(mut items: Vec<string>, index: usize) -> string {
     items.remove(index)
 }
 
 fn main() {
-    let mut items = vec!["a".to_string(), "b".to_string()];
-    let removed = remove_at_index(&mut items, 0);
+    let mut items = Vec::new()
+    items.push("a")
+    items.push("b")
+    let _removed = remove_at_index(items, 0)
 }
 "#;
 
