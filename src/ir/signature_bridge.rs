@@ -68,6 +68,20 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         };
     }
 
+    // Plain WJ `string` formals pass owned `String` until codegen confirms `&str`.
+    if crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+        sig, param_idx,
+    ) {
+        return SafetyType {
+            base: BaseType::String,
+            ownership: OwnedType::Owned,
+            effects: EffectSet::pure(),
+            taint: TaintStatus::Clean,
+            const_eval: ConstEval::Runtime,
+            exec_mode: None,
+        };
+    }
+
     // Codegen refresh recorded owned Rust formals — beats stale body-converged Reference(T).
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         if let Some(formal) = sig.formal_param_type(param_idx) {
@@ -394,11 +408,25 @@ mod tests {
     }
 
     #[test]
-    fn module_owned_string_stays_owned() {
-        let sig = sig_with_types(vec![Type::String], vec![OwnershipMode::Owned]);
+    fn stale_converged_str_ref_on_plain_string_formal_stays_owned() {
+        let sig = FunctionSignature {
+            name: "bar".into(),
+            formal_param_types: vec![Type::String],
+            param_types: vec![Type::Reference(Box::new(Type::Custom("str".into())))],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Custom("bool".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
         let expected = safety_type_from_signature_param(&sig, 0);
-        assert!(matches!(expected.ownership, OwnedType::Owned));
-        assert!(matches!(expected.base, BaseType::String));
+        assert!(
+            matches!(expected.ownership, OwnedType::Owned),
+            "plain string formal must stay owned at call site until &str is emitted"
+        );
     }
 
     #[test]

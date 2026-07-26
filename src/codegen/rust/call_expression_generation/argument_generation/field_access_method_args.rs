@@ -564,6 +564,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 &mut arg_str,
                 arg_already_rust_ref,
                 type_name.as_deref(),
+                false,
             );
 
             arg_str = maybe_borrow_runtime_std_json_value_arg(
@@ -846,6 +847,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 &mut arg_str,
                 arg_already_rust_ref,
                 type_name.as_deref(),
+                false,
             );
             if !gen.ir_cutover.call_sites
                 && crate::codegen::rust::typed_lowering::is_typed_lowering_enabled()

@@ -138,6 +138,12 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
+        // 2.4. `if callee(param) { use(param) } else { use(param) }` needs an owned binding:
+        // the condition may borrow, but both branches move/consume the value.
+        if self.is_used_in_if_with_condition_and_branches(param_name, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
         // THE WINDJAMMER WAY: Removed aggressive string optimization
         // When a user writes `text: string`, they mean `String` (owned), period.
         // Do NOT auto-convert to `&str` just because it's "only passed to read-only functions".
@@ -155,8 +161,7 @@ impl<'ast> Analyzer<'ast> {
         // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // 3. Check if parameter is stored in a struct or collection
-        let stored = self.is_stored(param_name, body);
-        if stored {
+        if self.is_stored_requiring_owned(param_name, param_type, body) {
             return Ok(OwnershipMode::Owned);
         }
 

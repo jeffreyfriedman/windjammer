@@ -33,6 +33,51 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
+    /// `if f(param) { ... param ... } else { ... param ... }` — owned outer param.
+    pub(crate) fn is_used_in_if_with_condition_and_branches(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        statements
+            .iter()
+            .any(|stmt| self.stmt_has_if_with_condition_and_branches(name, stmt))
+    }
+
+    fn stmt_has_if_with_condition_and_branches(&self, name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::If {
+                condition,
+                then_block,
+                else_block: Some(else_block),
+                ..
+            } => {
+                self.expr_mentions_identifier(name, condition)
+                    && self.stmts_mention_identifier(name, then_block)
+                    && self.stmts_mention_identifier(name, else_block)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => self.stmts_have_if_with_condition_and_branches(name, then_block)
+                || else_block
+                    .as_ref()
+                    .is_some_and(|block| self.stmts_have_if_with_condition_and_branches(name, block)),
+            _ => false,
+        }
+    }
+
+    fn stmts_have_if_with_condition_and_branches(
+        &self,
+        name: &str,
+        stmts: &[&'ast Statement<'ast>],
+    ) -> bool {
+        stmts
+            .iter()
+            .any(|stmt| self.stmt_has_if_with_condition_and_branches(name, stmt))
+    }
+
     pub(crate) fn stmt_has_if_else_with_param(&self, name: &str, stmt: &Statement) -> bool {
         match stmt {
             Statement::Let { value, .. } => {
@@ -141,6 +186,16 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Unary { operand, .. } => self.expr_mentions_identifier(name, operand),
             Expression::TryOp { expr, .. } => self.expr_mentions_identifier(name, expr),
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                self.expr_mentions_identifier(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_mentions_identifier(name, arg))
+            }
             _ => false,
         }
     }

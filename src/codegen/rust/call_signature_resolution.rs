@@ -55,6 +55,35 @@ pub(crate) fn ownership_collision_blocks_autoborrow(callee_name: &str) -> bool {
     true
 }
 
+/// Whether registry metadata reports an ownership collision that should suppress
+/// auto-borrow/`&` insertion for this call (uses `global_fallback` when layered).
+pub(crate) fn registry_homonym_blocks_autoborrow(
+    registry: &crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+) -> bool {
+    if !ownership_collision_blocks_autoborrow(callee_name) {
+        return false;
+    }
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    if callee_name.contains("::") {
+        registry.has_explicit_ownership_collision(callee_name)
+            || registry.has_collision(callee_name)
+    } else {
+        registry.has_explicit_ownership_collision(simple) || registry.has_collision(simple)
+    }
+}
+
+/// Strip auto-borrow/coercion artifacts when homonym ownership collision forbids them.
+pub(crate) fn strip_collision_blocked_call_site_coercions(coerced: &mut String) {
+    while coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+        *coerced = coerced[1..].to_string();
+    }
+    crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
+    if coerced.ends_with(".to_string()") {
+        *coerced = coerced[..coerced.len() - 11].to_string();
+    }
+}
+
 /// `draw::draw_text`-style calls where the qualifier is a user module (not runtime std).
 pub(crate) fn is_lowercase_user_module_qualified_call(callee_name: &str) -> bool {
     callee_name.rsplit_once("::").is_some_and(|(module, _)| {
@@ -456,6 +485,8 @@ pub fn resolve_method_for_call_site(
 
     let local_resolved = to_resolved(local);
     let global_resolved = global.and_then(to_resolved);
+    let local_resolved_for_refresh = local_resolved.clone();
+    let global_resolved_for_refresh = global_resolved.clone();
 
     let (local_filtered, global_filtered) = match (&local_resolved, &global_resolved) {
         (Some(l), Some(g)) => {
@@ -472,7 +503,26 @@ pub fn resolve_method_for_call_site(
         _ => (local_resolved, global_resolved),
     };
 
+    let codegen_refresh_source = global_filtered
+        .clone()
+        .or_else(|| global_resolved_for_refresh.clone())
+        .filter(|r| r.sig.emitted_rust_ref_params.is_some())
+        .or_else(|| {
+            local_filtered
+                .clone()
+                .or_else(|| local_resolved_for_refresh.clone())
+                .filter(|r| r.sig.emitted_rust_ref_params.is_some())
+        });
+
     pick_best_resolved_signature(local_filtered, global_filtered).map(|mut resolved| {
+        if resolved.sig.emitted_rust_ref_params.is_none() {
+            if let Some(alt) = &codegen_refresh_source {
+                crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                    &mut resolved.sig,
+                    &alt.sig,
+                );
+            }
+        }
         if let Some(g) = global {
             apply_trait_owned_string_call_site_contracts(g, method, &mut resolved.sig);
         }
@@ -665,6 +715,12 @@ pub(crate) fn formal_is_plain_windjammer_string(
 /// 6. Owned non-text struct formals
 /// 7. Stored param_ownership fallback
 pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> OwnershipMode {
+    if crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+        sig, param_idx,
+    ) {
+        return OwnershipMode::Owned;
+    }
+
     if let Some(converged_ty) = sig.param_types.get(param_idx) {
         if crate::codegen::rust::string_utilities::param_is_rust_str_ref(converged_ty) {
             let trait_owned_string = sig.has_self_receiver
@@ -714,6 +770,11 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             if let Some(converged_ty) = sig.param_types.get(param_idx) {
                 if matches!(converged_ty, Type::Reference(_) | Type::MutableReference(_)) {
                     if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
+                        if crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                            sig, param_idx,
+                        ) {
+                            return OwnershipMode::Owned;
+                        }
                         return sig
                             .param_ownership
                             .get(param_idx)
@@ -749,6 +810,9 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         .param_types
         .get(param_idx)
         .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+        && !crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+            sig, param_idx,
+        )
     {
         return OwnershipMode::Borrowed;
     }
@@ -759,10 +823,17 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
         );
         if ownership_borrowed {
-            if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
+            if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
+                && !crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                    sig, param_idx,
+                )
+            {
                 return OwnershipMode::Borrowed;
             }
             if matches!(ty, Type::Reference(inner) if crate::codegen::rust::types::is_windjammer_text_type(inner))
+                && !crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                    sig, param_idx,
+                )
             {
                 return OwnershipMode::Borrowed;
             }
@@ -774,11 +845,19 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         }
     }
 
-    // Plain `string` formals: honor body-inferred borrow when present.
+    // Plain `string` formals: honor body-inferred borrow only after codegen confirms `&str`.
     if formal_is_plain_windjammer_string(sig, param_idx) {
         if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
             flags.get(param_idx).copied() == Some(false)
         }) {
+            return OwnershipMode::Owned;
+        }
+        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            sig, param_idx,
+        ) {
+            return OwnershipMode::Borrowed;
+        }
+        if sig.emitted_rust_ref_params.is_none() {
             return OwnershipMode::Owned;
         }
         if matches!(

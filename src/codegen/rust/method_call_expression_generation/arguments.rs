@@ -284,6 +284,15 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_float_target_type = prev_arg_float_target;
                 arg_str = self
                     .peel_copy_ref_match_binding_for_value(arg_to_generate, &arg_str);
+                if let Some(name) =
+                    crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(arg)
+                {
+                    if self.emitted_rust_ref_formals.contains(&name) {
+                        crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
+                            arg, &mut arg_str,
+                        );
+                    }
+                }
 
                 for p in &closure_borrowed_params {
                     self.borrowed_iterator_vars.remove(p);
@@ -343,13 +352,55 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver_for_ir.as_deref(),
                         Some(arguments.len()),
                     ) {
-                        if is_collection_key_arg
-                            && !coerced.starts_with('&')
-                            && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(
+                        if is_collection_key_arg {
+                            if let Some(name) =
+                                crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
+                                    arg,
+                                )
+                                .or_else(|| {
+                                    crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
+                                        arg_to_generate,
+                                    )
+                                })
+                            {
+                                if self.emitted_rust_ref_formals.contains(&name)
+                                    || self.identifier_already_ref(&name)
+                                {
+                                    crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
+                                        arg,
+                                        &mut coerced,
+                                    );
+                                } else if self.current_function_params.iter().any(|p| p.name == name)
+                                {
+                                    crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
+                                        arg,
+                                        &mut coerced,
+                                    );
+                                }
+                            }
+                            let binding_already_ref = crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
                                 arg_to_generate,
                             )
-                        {
-                            coerced = format!("&{coerced}");
+                            .or_else(|| {
+                                crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
+                                    arg,
+                                )
+                            })
+                            .is_some_and(|name| {
+                                self.emitted_rust_ref_formals.contains(&name)
+                                    || self.identifier_already_ref(&name)
+                            });
+                            if !coerced.starts_with('&')
+                                && !binding_already_ref
+                                && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(
+                                    arg_to_generate,
+                                )
+                                && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
+                                    arg_to_generate,
+                                )
+                            {
+                                coerced = format!("&{coerced}");
+                            }
                         }
                         let fallback_sig = sig_for_effective
                             .cloned()
@@ -1884,6 +1935,12 @@ impl<'ast> CodeGenerator<'ast> {
                 );
 
                 if is_collection_key_arg {
+                    let arg_binding_already_shared_ref =
+                        crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(arg)
+                            .is_some_and(|name| {
+                                self.emitted_rust_ref_formals.contains(&name)
+                                    || self.identifier_already_ref(&name)
+                            });
                     crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
                         call_site_sig
                             .as_ref()
@@ -1894,6 +1951,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &mut arg_str,
                         arg_already_rust_ref_for_text,
                         receiver_type_name,
+                        arg_binding_already_shared_ref,
                     );
                 }
 
