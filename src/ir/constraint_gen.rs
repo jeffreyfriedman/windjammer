@@ -302,6 +302,33 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Resolve the Windjammer type name of a method receiver for `Type::method` lookup.
+    fn receiver_type_name_for_method(&self, object: &Expression<'ast>) -> Option<String> {
+        match object {
+            Expression::Identifier { name, .. } => self
+                .analyzed
+                .decl
+                .parameters
+                .iter()
+                .find(|p| p.name == *name)
+                .and_then(|p| Self::type_name_for_method_lookup(&p.type_)),
+            Expression::FieldAccess { object, .. } => self.receiver_type_name_for_method(object),
+            _ => None,
+        }
+    }
+
+    fn type_name_for_method_lookup(ty: &Type) -> Option<String> {
+        match ty {
+            Type::Custom(name) => Some(name.clone()),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::type_name_for_method_lookup(inner)
+            }
+            Type::Vec(_) => Some("Vec".to_string()),
+            Type::String => Some("String".to_string()),
+            _ => None,
+        }
+    }
+
     fn emit_execution_call_mode(
         &mut self,
         inner: &Expression<'ast>,
@@ -598,28 +625,43 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 for (_label, arg_expr) in arguments {
                     arg_vars.push(self.walk_expression(arg_expr));
                 }
-                if is_mutating_method(method) {
+
+                // Signature-driven receiver ownership: `Type::method` self mode wins.
+                // Fallback to the stdlib mutating-name set only when no signature exists.
+                let receiver_type = self.receiver_type_name_for_method(object);
+                let qualified = match &receiver_type {
+                    Some(ty) => format!("{}::{}", ty, method),
+                    None => {
+                        if let Some(receiver_name) = Self::extract_callee_name(object) {
+                            format!("{}::{}", receiver_name, method)
+                        } else {
+                            method.clone()
+                        }
+                    }
+                };
+                self.call_targets.push(qualified.clone());
+
+                let sig = self
+                    .resolve_callee_signature(&qualified, arguments.len(), true)
+                    .or_else(|| self.resolve_callee_signature(method, arguments.len(), true))
+                    .cloned();
+
+                let mut_self = sig.as_ref().is_some_and(|s| {
+                    s.has_self_receiver
+                        && s.param_ownership
+                            .first()
+                            .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
+                });
+                if mut_self || (sig.is_none() && is_mutating_method(method)) {
                     let r = self.fresh_region();
                     self.cs
                         .add(Constraint::OwnershipIs(obj_var, OwnedType::MutRef(r)));
                 }
+
                 let result = self.cs.fresh_var();
 
-                let qualified = if let Some(receiver_name) = Self::extract_callee_name(object) {
-                    format!("{}::{}", receiver_name, method)
-                } else {
-                    method.clone()
-                };
-                self.call_targets.push(qualified.clone());
-
-                if let Some(sig) = self
-                    .resolve_callee_signature(method, arguments.len(), true)
-                    .or_else(|| {
-                        self.resolve_callee_signature(&qualified, arguments.len(), true)
-                    })
-                    .cloned()
-                {
-                    self.emit_call_site_constraints(&sig, &arg_vars);
+                if let Some(sig) = sig.as_ref() {
+                    self.emit_call_site_constraints(sig, &arg_vars);
                 }
 
                 let callee_effects = lookup_stdlib_effects(&qualified);
@@ -1431,6 +1473,39 @@ pub fn set_x(p: Point) {
         assert!(
             mut_ref_count >= 1,
             "field mutation should emit MutRef constraint on receiver"
+        );
+    }
+
+    #[test]
+    fn test_mut_self_method_on_param_emits_mutref() {
+        let source = r#"
+pub struct Counter {
+    value: i32,
+}
+impl Counter {
+    pub fn increment(self) {
+        self.value = self.value + 1
+    }
+}
+pub fn bump(mut c: Counter) {
+    c.increment()
+}
+"#;
+        let mut lexer = crate::lexer::Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = crate::analyzer::Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let bump = analyzed.iter().find(|f| f.decl.name == "bump").unwrap();
+        let fc = generate_constraints(bump, Some(&registry));
+
+        let mut_ref_count = count_constraints(&fc, |c| {
+            matches!(c, Constraint::OwnershipIs(_, OwnedType::MutRef(_)))
+        });
+        assert!(
+            mut_ref_count >= 1,
+            "c.increment() (&mut self) must emit MutRef on param c via Counter::increment signature"
         );
     }
 

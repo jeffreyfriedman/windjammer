@@ -309,7 +309,10 @@ impl Solver {
                 let root = self.uf.find(var.0);
                 match &self.ownership[root as usize] {
                     Some(existing) if existing != ownership => {
-                        // MutRef wins over Ref (field mutation detected later)
+                        // Formal lattice: Owned > MutRef > Ref.
+                        // Owned wins over MutRef so returned/moved params stay by-value
+                        // even when the body also mutates (constraint_gen seeds both).
+                        // MutRef wins over Ref (mutation / `&mut self` method).
                         match (existing, ownership) {
                             (OwnedType::Ref(_), OwnedType::MutRef(r)) => {
                                 self.ownership[root as usize] = Some(OwnedType::MutRef(r.clone()));
@@ -317,12 +320,14 @@ impl Solver {
                             (OwnedType::MutRef(_), OwnedType::Ref(_)) => {
                                 // Already MutRef, keep it
                             }
-                            (OwnedType::Ref(_), OwnedType::Owned) => {
-                                // Callee-owned forwarding wins over readonly borrow hint.
+                            (OwnedType::MutRef(_), OwnedType::Owned)
+                            | (OwnedType::Ref(_), OwnedType::Owned) => {
+                                // Move/return requirement beats borrow.
                                 self.ownership[root as usize] = Some(OwnedType::Owned);
                             }
-                            (OwnedType::Owned, OwnedType::Ref(_)) => {
-                                // Formal stays owned; readonly use does not require &T.
+                            (OwnedType::Owned, OwnedType::MutRef(_))
+                            | (OwnedType::Owned, OwnedType::Ref(_)) => {
+                                // Formal stays owned; mutation/read does not demote to &mut/&T.
                             }
                             _ => {
                                 self.diagnostics.push(SolverDiagnostic {
@@ -705,6 +710,59 @@ mod tests {
                 .iter()
                 .any(|d| d.kind == DiagnosticKind::OwnershipConflict),
             "two mutable refs to same region should conflict"
+        );
+    }
+
+    #[test]
+    fn test_ownership_owned_beats_mutref_for_returned_params() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        // Body mutates (MutRef) then returns the param (Owned) — formal stays Owned.
+        cs.add(Constraint::OwnershipIs(
+            a,
+            OwnedType::MutRef(Region::fresh(1)),
+        ));
+        cs.add(Constraint::OwnershipIs(a, OwnedType::Owned));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(
+            result.diagnostics.is_empty(),
+            "MutRef then Owned should not conflict: {:?}",
+            result.diagnostics
+        );
+        assert!(
+            matches!(result.ownership[0], Some(OwnedType::Owned)),
+            "returned/moved Owned must beat MutRef, got {:?}",
+            result.ownership[0]
+        );
+    }
+
+    #[test]
+    fn test_ownership_owned_seed_not_demoted_by_mutref() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+
+        cs.add(Constraint::OwnershipIs(a, OwnedType::Owned));
+        cs.add(Constraint::OwnershipIs(
+            a,
+            OwnedType::MutRef(Region::fresh(1)),
+        ));
+
+        let solver = Solver::new(&cs);
+        let result = solver.solve(&cs);
+
+        assert!(
+            result.diagnostics.is_empty(),
+            "Owned then MutRef should not conflict: {:?}",
+            result.diagnostics
+        );
+        assert!(
+            matches!(result.ownership[0], Some(OwnedType::Owned)),
+            "Owned formal must not demote to MutRef, got {:?}",
+            result.ownership[0]
         );
     }
 

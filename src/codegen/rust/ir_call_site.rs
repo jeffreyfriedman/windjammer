@@ -430,10 +430,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // `.clone()` already produces an owned value — never prefix `&`, unless this
-        // argument's callee contract is a shared borrow (then borrow the clone or binding).
+        // `.clone()` already produces an owned value — never prefix shared `&`.
+        // MutBorrow keeps going: clone is stripped just below before apply_coercion.
         if prepared_arg.ends_with(".clone()")
-            && matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
+            && matches!(kind, CoercionKind::Borrow)
             && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
         {
             kind = CoercionKind::Identity;
@@ -961,12 +961,17 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
         // Shared-ref formals borrow — cloning is unnecessary.
-        if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+        // Mut-ref formals must keep `&mut binding` — never append `.clone()`.
+        if arg_str.starts_with('&') {
             return arg_str.to_string();
         }
-        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
-            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-        {
+        if matches!(
+            sig.param_ownership.get(param_idx),
+            Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                | Some(crate::analyzer::OwnershipMode::Borrowed)
+        ) || sig.param_types.get(param_idx).is_some_and(|t| {
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        }) {
             return arg_str.to_string();
         }
         let Some(ref analysis) = self.auto_clone_analysis else {
