@@ -209,6 +209,10 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
     if expr.starts_with('&') && !expr.starts_with("&mut ") {
         return expr.to_string();
     }
+    // Rust string literals are already `&str`; `&"…"` is `&&str`.
+    if crate::codegen::rust::expression_utilities::is_rust_string_literal_text(expr) {
+        return expr.to_string();
+    }
     if needs_borrow_parentheses(expr) {
         format!("&({expr})")
     } else {
@@ -527,6 +531,17 @@ mod tests {
         let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));
         let encoded = encode_call_argument(&actual, &expected, Target::Rust, "key");
         assert_eq!(encoded, "&key");
+    }
+
+    #[test]
+    fn test_rust_shared_borrow_skips_string_literals() {
+        assert_eq!(rust_shared_borrow(r#""</div>""#), r#""</div>""#);
+        assert_eq!(rust_shared_borrow("key"), "&key");
+        // Owned String → &str still borrows non-literals.
+        let actual = SafetyType::owned(BaseType::String);
+        let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));
+        let encoded = encode_call_argument(&actual, &expected, Target::Rust, r#""</div>""#);
+        assert_eq!(encoded, r#""</div>""#);
     }
 
     #[test]
