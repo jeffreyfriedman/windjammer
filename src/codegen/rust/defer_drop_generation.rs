@@ -50,6 +50,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Insert defer drop statements before the final return/expression
         for opt in optimizations {
+            // Defensive: never move a binding that still appears in the return line.
+            if lines[last_line_idx].contains(&opt.variable) {
+                continue;
+            }
             // Generate the defer drop code
             new_body.push_str(&self.indent());
             new_body.push_str(&format!(

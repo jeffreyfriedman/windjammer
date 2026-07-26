@@ -545,7 +545,9 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
             && !converged_to_ref;
         let is_vec = matches!(bare, Type::Vec(_))
             || matches!(bare, Type::Parameterized(name, _) if name == "Vec");
-        if is_non_copy_non_text || is_vec {
+        // Vec defaults to owned emission (WDB-056), but body-converged `&Vec` / Borrowed
+        // must not claim an owned contract — call sites need `&arg` (cross-crate upload_*).
+        if is_non_copy_non_text || (is_vec && !converged_to_ref) {
             return true;
         }
     }

@@ -14,7 +14,6 @@
 mod test_utils;
 
 use windjammer::analyzer::Analyzer;
-use windjammer::analyzer::OwnershipMode;
 use windjammer::lexer::Lexer;
 use windjammer::parser::Parser;
 

@@ -46,11 +46,13 @@ pub(crate) fn plain_string_formal_passes_owned_at_call_site(
     }) {
         return false;
     }
-    // Free-function plain `string`: never treat as owned-pass stub here — readonly
-    // APIs borrow as `&str` via [`signature_bridge`] (WDB-049). Avoid calling
-    // [`emitted_owned_arg_contract`] (cycles with [`effective_param_ownership`]).
+    // Free-function plain `string`: Owned analyzer contract → pass by value.
+    // (Readonly `&str` emission is gated on `emitted_rust_ref_params` / Borrowed ownership.)
     if !sig.has_self_receiver {
-        return false;
+        return matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Owned) | None
+        ) && !callee_emits_shared_rust_ref_param(sig, param_idx);
     }
     true
 }

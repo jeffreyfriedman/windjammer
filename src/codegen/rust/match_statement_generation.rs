@@ -127,8 +127,18 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     self.generate_expression(value)
                 };
+                // `Option<&T>` with `T: Copy` (e.g. HashMap::get) → `.copied()` so bindings are owned `T`.
+                let use_copied_option = self.match_scrutinee_option_yields_copy(value);
+                let value_str = if use_copied_option && !value_str.ends_with(".copied()") {
+                    format!("{value_str}.copied()")
+                } else {
+                    value_str
+                };
                 // E0507 fix: if let Some(x) / EnumVar(x) = borrowed.field must use & / &mut
-                let scrutinee_ref_prefix = if matches!(
+                // Skip ref-prefix when `.copied()` already owns the payload.
+                let scrutinee_ref_prefix = if use_copied_option {
+                    ""
+                } else if matches!(
                     &arms[0].pattern,
                     Pattern::EnumVariant(_, binding)
                         if !matches!(binding, crate::parser::EnumPatternBinding::None)
@@ -195,12 +205,14 @@ impl<'ast> CodeGenerator<'ast> {
                     self.match_arm_bindings.insert(var.clone());
                 }
 
-                let added_borrowed: Vec<String> =
-                    if match_binds_refs_early_check || !scrutinee_ref_prefix.is_empty() {
-                        bound_vars.iter().cloned().collect()
-                    } else {
-                        Vec::new()
-                    };
+                // `.copied()` yields owned Copy payloads — do not treat bindings as `&T`.
+                let added_borrowed: Vec<String> = if use_copied_option {
+                    Vec::new()
+                } else if match_binds_refs_early_check || !scrutinee_ref_prefix.is_empty() {
+                    bound_vars.iter().cloned().collect()
+                } else {
+                    Vec::new()
+                };
                 for var in &added_borrowed {
                     self.borrowed_iterator_vars.insert(var.clone());
                 }
@@ -209,8 +221,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                 self.local_variable_scopes.push(bound_vars);
 
-                let mut match_bound_type_entries: Vec<(String, Type)> =
-                    self.infer_match_bound_types(value, &main_arm.pattern);
+                let mut match_bound_type_entries: Vec<(String, Type)> = if use_copied_option {
+                    self.infer_match_bound_types_from_copied_option(value, &main_arm.pattern)
+                } else {
+                    self.infer_match_bound_types(value, &main_arm.pattern)
+                };
                 // The codegen prepends & or &mut to the scrutinee, but
                 // `infer_match_bound_types` only sees the AST expression
                 // (without the ref prefix).  Wrap the inferred binding types

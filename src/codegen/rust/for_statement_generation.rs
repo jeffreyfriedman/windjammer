@@ -77,11 +77,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Copy elements from an owned collection: consume by value (`for byte in vec`) so
         // `Vec::push(byte)` type-checks without `*byte` (WDB-006).
+        let direct_id_iterable = matches!(iterable, Expression::Identifier { .. });
         if copy_element_by_value {
             if let Expression::Identifier { name, .. } = iterable {
-                if !self.for_loop_borrow_needed.contains(name)
-                    && !self.inferred_borrowed_params.contains(name)
-                {
+                if !self.for_loop_borrow_needed.contains(name) {
                     needs_borrow = false;
                 }
             }
@@ -113,11 +112,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
 
-        if copy_element_by_value && is_borrowed_iterator {
+        if copy_element_by_value && is_borrowed_iterator && direct_id_iterable {
             if let Expression::Identifier { name, .. } = iterable {
-                if !self.for_loop_borrow_needed.contains(name)
-                    && !self.inferred_borrowed_params.contains(name)
-                {
+                if !self.for_loop_borrow_needed.contains(name) {
                     is_borrowed_iterator = false;
                 }
             }

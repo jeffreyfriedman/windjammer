@@ -55,11 +55,12 @@ fn render() -> string {
     let (success, generated) = compile_and_get_generated(code);
     println!("Generated:\n{}", generated);
     assert!(success, "Compilation should succeed");
-    // content should be String, not &str
-    let has_conversion = generated.contains(".to_string()");
+    // content should be owned String (literal → String), not &str
+    let has_conversion =
+        generated.contains(".to_string()") || generated.contains("String::from(");
     assert!(
         has_conversion,
-        "String literal var should convert. Generated:\n{}",
+        "String literal var should convert to owned String. Generated:\n{}",
         generated
     );
 }

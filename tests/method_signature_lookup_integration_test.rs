@@ -81,10 +81,13 @@ pub fn main() {
     );
 
     let rust_code = result.unwrap();
-    // Should have &item (Vec::contains wants &T)
+    // Signature says `&T`. Either borrow an owned formal (`contains(&item)`) or pass an
+    // already-ref formal (`item: &String` → `contains(item)`).
+    let has_borrow = rust_code.contains("&item") || rust_code.contains(".contains(&");
+    let already_ref_formal = rust_code.contains("item: &") && rust_code.contains(".contains(item)");
     assert!(
-        rust_code.contains("&item") || rust_code.contains(".contains(&"),
-        "Vec::contains should add & for borrowed parameter:\n{}",
+        has_borrow || already_ref_formal,
+        "Vec::contains should borrow via &item or already-ref formal:\n{}",
         rust_code
     );
 }

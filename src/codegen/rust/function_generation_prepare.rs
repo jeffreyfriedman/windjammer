@@ -730,6 +730,7 @@ impl<'ast> CodeGenerator<'ast> {
                     &param.name,
                     func,
                 )
+                || self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
                 || self
                     .current_struct_name
                     .as_ref()
@@ -770,6 +771,18 @@ impl<'ast> CodeGenerator<'ast> {
                 self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
+            // Returned/moved params must stay Owned (solver lattice + API intent).
+            if analyzed.returned_parameters.contains(&param.name) {
+                self.inferred_borrowed_params.remove(&param.name);
+                continue;
+            }
+            // Trust analyzer/IR Owned — do not demote to shared `&T` in codegen.
+            if matches!(
+                analyzed.inferred_ownership.get(&param.name),
+                Some(crate::analyzer::OwnershipMode::Owned)
+            ) {
+                continue;
+            }
             if (self.current_fn_mixed_forwarder_params.contains(&param.name)
                 || self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
                 || self.param_passes_to_wj_owned_sibling_call(
@@ -791,6 +804,9 @@ impl<'ast> CodeGenerator<'ast> {
             if self.param_has_owning_method_use(func.body.as_slice(), &param.name, func) {
                 continue;
             }
+            if self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name) {
+                continue;
+            }
             if self.param_only_used_in_discarding_let_binding(
                 func.body.as_slice(),
                 &param.name,
@@ -809,6 +825,10 @@ impl<'ast> CodeGenerator<'ast> {
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // Registry-aware Copy aggregates (Vec3, …) must stay owned formals.
+        if self.is_type_copy(&param.type_) {
+            return false;
+        }
         self.count_non_self_params(func) >= 2
             && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
             && self.param_passed_to_non_self_receiver_method_arg(
@@ -1381,6 +1401,58 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when `param_name` is the iterable in `for _ in param` (consumes the collection).
+    pub(in crate::codegen::rust) fn param_consumed_as_for_loop_iterable(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        for stmt in body {
+            match stmt {
+                Statement::For { iterable, body, .. } => {
+                    if let Expression::Identifier { name, .. } = iterable {
+                        if name == param_name {
+                            return true;
+                        }
+                    }
+                    if self.param_consumed_as_for_loop_iterable(body.as_slice(), param_name) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.param_consumed_as_for_loop_iterable(then_block.as_slice(), param_name) {
+                        return true;
+                    }
+                    if let Some(e) = else_block {
+                        if self.param_consumed_as_for_loop_iterable(e.as_slice(), param_name) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    if self.param_consumed_as_for_loop_iterable(body.as_slice(), param_name) {
+                        return true;
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            if self.param_consumed_as_for_loop_iterable(statements, param_name) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// True when `param_name` appears in a read context (comparison, field access chain, etc.).
     pub(in crate::codegen::rust) fn param_used_as_read_operand(
         &self,
@@ -1432,7 +1504,13 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.param_used_as_read_operand(body.as_slice(), param_name)
             }
             Statement::For { body, iterable, .. } => {
-                self.expression_uses_param_as_read_operand(iterable, param_name)
+                // `for x in items` consumes `items` — not a readonly operand (WDB-006).
+                let iterable_consumes = matches!(
+                    iterable,
+                    Expression::Identifier { name, .. } if name == param_name
+                );
+                (!iterable_consumes
+                    && self.expression_uses_param_as_read_operand(iterable, param_name))
                     || self.param_used_as_read_operand(body.as_slice(), param_name)
             }
             Statement::Loop { body, .. }
@@ -3051,6 +3129,342 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// True when `param_name` is passed to a method whose receiver is `self` or `self.field`.
+    pub(in crate::codegen::rust) fn param_passed_to_self_or_field_receiver_method_arg(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_passes_to_self_or_field_receiver_method_arg(stmt, param_name, func) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// True when `param_name` is passed to a method whose receiver is another formal
+    /// parameter (`items.push(item)` — `items` is a sibling param).
+    pub(in crate::codegen::rust) fn param_passed_to_other_param_receiver_method_arg(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_passes_to_other_param_receiver_method_arg(stmt, param_name, func) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_passes_to_other_param_receiver_method_arg(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(expr, param_name, func)
+            }
+            Statement::Return { .. } => false,
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    condition, param_name, func,
+                ) || self.param_passed_to_other_param_receiver_method_arg(
+                    then_block.as_slice(),
+                    param_name,
+                    func,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.param_passed_to_other_param_receiver_method_arg(
+                        b.as_slice(),
+                        param_name,
+                        func,
+                    )
+                })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    condition, param_name, func,
+                ) || self.param_passed_to_other_param_receiver_method_arg(
+                    body.as_slice(),
+                    param_name,
+                    func,
+                )
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    iterable, param_name, func,
+                ) || self.param_passed_to_other_param_receiver_method_arg(
+                    body.as_slice(),
+                    param_name,
+                    func,
+                )
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    value, param_name, func,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.param_passed_to_other_param_receiver_method_arg(
+                        b.as_slice(),
+                        param_name,
+                        func,
+                    )
+                })
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => self
+                .param_passed_to_other_param_receiver_method_arg(
+                    body.as_slice(),
+                    param_name,
+                    func,
+                ),
+            Statement::Match { value, arms, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    value, param_name, func,
+                ) || arms.iter().any(|arm| {
+                    self.expression_passes_to_other_param_receiver_method_arg(
+                        &arm.body, param_name, func,
+                    )
+                })
+            }
+            Statement::Assignment { value, .. } => self
+                .expression_passes_to_other_param_receiver_method_arg(value, param_name, func),
+            Statement::Defer { statement, .. } => self
+                .statement_passes_to_other_param_receiver_method_arg(
+                    statement, param_name, func,
+                ),
+            _ => false,
+        }
+    }
+
+    fn expression_passes_to_other_param_receiver_method_arg(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                if let Expression::Identifier { name: recv, .. } = &**object {
+                    if recv != param_name
+                        && func.parameters.iter().any(|p| p.name == *recv)
+                        && arguments.iter().any(|(_, arg)| {
+                            matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        })
+                    {
+                        return true;
+                    }
+                }
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    object, param_name, func,
+                ) || arguments.iter().any(|(_, arg)| {
+                    self.expression_passes_to_other_param_receiver_method_arg(
+                        arg, param_name, func,
+                    )
+                })
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    function, param_name, func,
+                ) || arguments.iter().any(|(_, arg)| {
+                    self.expression_passes_to_other_param_receiver_method_arg(
+                        arg, param_name, func,
+                    )
+                })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(left, param_name, func)
+                    || self.expression_passes_to_other_param_receiver_method_arg(
+                        right, param_name, func,
+                    )
+            }
+            Expression::Unary { operand, .. } => self
+                .expression_passes_to_other_param_receiver_method_arg(operand, param_name, func),
+            Expression::FieldAccess { object, .. } => self
+                .expression_passes_to_other_param_receiver_method_arg(object, param_name, func),
+            Expression::Index { object, index, .. } => {
+                self.expression_passes_to_other_param_receiver_method_arg(
+                    object, param_name, func,
+                ) || self.expression_passes_to_other_param_receiver_method_arg(
+                    index, param_name, func,
+                )
+            }
+            Expression::Block { statements, .. } => self
+                .param_passed_to_other_param_receiver_method_arg(
+                    statements.as_slice(),
+                    param_name,
+                    func,
+                ),
+            _ => false,
+        }
+    }
+
+    fn statement_passes_to_self_or_field_receiver_method_arg(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(expr, param_name, func)
+            }
+            Statement::Return { .. } => false,
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    condition, param_name, func,
+                ) || self.param_passed_to_self_or_field_receiver_method_arg(
+                    then_block.as_slice(),
+                    param_name,
+                    func,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.param_passed_to_self_or_field_receiver_method_arg(
+                        b.as_slice(),
+                        param_name,
+                        func,
+                    )
+                })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    condition, param_name, func,
+                ) || self.param_passed_to_self_or_field_receiver_method_arg(
+                    body.as_slice(),
+                    param_name,
+                    func,
+                )
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    iterable, param_name, func,
+                ) || self.param_passed_to_self_or_field_receiver_method_arg(
+                    body.as_slice(),
+                    param_name,
+                    func,
+                )
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    value, param_name, func,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.param_passed_to_self_or_field_receiver_method_arg(
+                        b.as_slice(),
+                        param_name,
+                        func,
+                    )
+                })
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => self
+                .param_passed_to_self_or_field_receiver_method_arg(
+                    body.as_slice(),
+                    param_name,
+                    func,
+                ),
+            Statement::Match { value, arms, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    value, param_name, func,
+                ) || arms.iter().any(|arm| {
+                    self.expression_passes_to_self_or_field_receiver_method_arg(
+                        &arm.body, param_name, func,
+                    )
+                })
+            }
+            Statement::Assignment { value, .. } => self
+                .expression_passes_to_self_or_field_receiver_method_arg(value, param_name, func),
+            Statement::Defer { statement, .. } => self
+                .statement_passes_to_self_or_field_receiver_method_arg(
+                    statement, param_name, func,
+                ),
+            _ => false,
+        }
+    }
+
+    fn expression_passes_to_self_or_field_receiver_method_arg(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                if crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(object)
+                {
+                    for (_, arg) in arguments {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    object, param_name, func,
+                ) || arguments.iter().any(|(_, arg)| {
+                    self.expression_passes_to_self_or_field_receiver_method_arg(
+                        arg, param_name, func,
+                    )
+                })
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    function, param_name, func,
+                ) || arguments.iter().any(|(_, arg)| {
+                    self.expression_passes_to_self_or_field_receiver_method_arg(
+                        arg, param_name, func,
+                    )
+                })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(left, param_name, func)
+                    || self.expression_passes_to_self_or_field_receiver_method_arg(
+                        right, param_name, func,
+                    )
+            }
+            Expression::Unary { operand, .. } => self
+                .expression_passes_to_self_or_field_receiver_method_arg(operand, param_name, func),
+            Expression::FieldAccess { object, .. } => self
+                .expression_passes_to_self_or_field_receiver_method_arg(object, param_name, func),
+            Expression::Index { object, index, .. } => {
+                self.expression_passes_to_self_or_field_receiver_method_arg(
+                    object, param_name, func,
+                ) || self.expression_passes_to_self_or_field_receiver_method_arg(
+                    index, param_name, func,
+                )
+            }
+            Expression::Block { statements, .. } => self
+                .param_passed_to_self_or_field_receiver_method_arg(
+                    statements.as_slice(),
+                    param_name,
+                    func,
+                ),
+            _ => false,
+        }
+    }
+
     fn statement_passes_to_non_self_receiver_method_arg(
         &self,
         stmt: &'ast Statement<'ast>,
@@ -3543,14 +3957,24 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when a non-`self` param should emit `&T`/`&str` because the body only forwards to borrowing callees.
+    ///
+    /// Also true for single-arg helpers that only forward to an **owned** method on a non-`self`
+    /// receiver (`latest.has_key(key)`): emit `&Key` and clone at the owned call site so outer
+    /// forward-ref callers can borrow (`key_in_latest_base(&key)`). Self-sibling owned wrappers
+    /// (`has_key` → `self.get`) stay owned via `param_passes_to_wj_owned_sibling_call`.
     pub(in crate::codegen::rust) fn param_should_emit_borrowed_delegation_formal(
         &self,
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
         let non_self_facade = self.param_is_non_self_forward_facade_borrow_candidate(param, func);
+        let only_as_call_arg =
+            self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func);
+        let to_owned_sibling =
+            self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func);
         param.name != "self"
-            && !type_analysis::is_copy_type(&param.type_)
+            // Registry-aware Copy (Vec3, etc.) — not the primitive-only `type_analysis` helper.
+            && !self.is_type_copy(&param.type_)
             && !matches!(
                 &param.type_,
                 Type::Reference(_) | Type::MutableReference(_)
@@ -3563,26 +3987,43 @@ impl<'ast> CodeGenerator<'ast> {
             )
             && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
             && (!self.current_fn_mixed_forwarder_params.contains(&param.name) || non_self_facade)
-            && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
+            && !to_owned_sibling
             && !self.current_struct_name.as_ref().is_some_and(|sn| {
                 self.struct_is_owned_engine_key_facade(sn, param)
             })
-            && !(self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
-                && self.count_non_self_params(func) == 1)
             && {
                 let to_owned_method = self.param_passed_to_owned_non_copy_method_arg(
                     func.body.as_slice(),
                     &param.name,
                     func,
                 );
-                let single_stmt_multi_param_forward = self.param_only_used_as_call_argument(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                ) && self.count_non_self_params(func) >= 2
+                let single_stmt_multi_param_forward = only_as_call_arg
+                    && self.count_non_self_params(func) >= 2
                     && func.body.len() == 1
                     && !self.func_is_pure_forwarding_delegate(func)
                     && !self.param_passed_from_multiple_statements(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    );
+                // Exclusive non-self owned forward to a local receiver
+                // (`latest.has_key(key)` for non-text Key): emit `&T` + clone so
+                // outer forward-ref callers can borrow. Text params (`string`) and
+                // forwards onto sibling params (`items.push(item)`) keep owned.
+                let non_self_owned_forward = only_as_call_arg
+                    && to_owned_method
+                    && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && self.param_passed_to_non_self_receiver_method_arg(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_passed_to_self_or_field_receiver_method_arg(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_passed_to_other_param_receiver_method_arg(
                         func.body.as_slice(),
                         &param.name,
                         func,
@@ -3592,6 +4033,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // like `put_value` keep ungated facade borrowing.
                 (non_self_facade && !(single_stmt_multi_param_forward && to_owned_method))
                     || (single_stmt_multi_param_forward && !to_owned_method)
+                    || non_self_owned_forward
                     || self.param_passed_to_borrowing_callee(
                         func.body.as_slice(),
                         &param.name,
