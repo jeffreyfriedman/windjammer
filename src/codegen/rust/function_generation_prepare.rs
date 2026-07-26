@@ -548,7 +548,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
 
         self.promote_callee_forwarded_borrows(func);
-        self.promote_readonly_operand_borrows(func);
+        self.promote_readonly_operand_borrows(func, analyzed);
         self.strip_borrow_inference_for_owning_param_uses(func);
         if self.in_impl_block {
             if self.current_struct_name.is_some() {
@@ -744,7 +744,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// Promote non-Copy params used only as read operands (e.g. `value.data.len()`) to borrowed
     /// formals so preregister converges `&Value` before sibling callers emit (`put_value` →
     /// `apply_patch_put(key, &value)`).
-    fn promote_readonly_operand_borrows(&mut self, func: &FunctionDecl<'ast>) {
+    fn promote_readonly_operand_borrows(
+        &mut self,
+        func: &FunctionDecl<'ast>,
+        analyzed: &AnalyzedFunction<'_>,
+    ) {
         for param in &func.parameters {
             if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
                 continue;
@@ -758,6 +762,12 @@ impl<'ast> CodeGenerator<'ast> {
             if self.inferred_borrowed_params.contains(&param.name)
                 || self.inferred_mut_borrowed_params.contains(&param.name)
             {
+                continue;
+            }
+            // Mutated params (field writes or `&mut self` methods) must not become shared `&T`.
+            // Owned vs MutBorrowed is decided by analyzer/IR — only block the demotion here.
+            if analyzed.mutated_parameters.contains(&param.name) {
+                self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
             if (self.current_fn_mixed_forwarder_params.contains(&param.name)
