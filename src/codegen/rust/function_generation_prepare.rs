@@ -3002,7 +3002,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// True when `param_name` is only used as `Struct { param_name: param_name }` (or shorthand).
+    /// True when `param_name` is moved into a returned/expressed struct or enum payload.
+    ///
+    /// Covers bare `{ field: param }` and nested constructors such as
+    /// `Objective { kind: ObjectiveType::KillEnemies(enemy_type, count) }` so codegen
+    /// does not demote stored text params to borrowed formals (`&String` + `.clone()`).
     pub(in crate::codegen::rust) fn param_moves_via_struct_literal_init(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -3015,12 +3019,59 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => expr,
             _ => return false,
         };
-        let Expression::StructLiteral { fields, .. } = expr else {
-            return false;
-        };
-        fields.iter().any(|(_, value)| {
-            matches!(value, Expression::Identifier { name, .. } if name == param_name)
-        })
+        Self::expression_moves_param_into_owned_payload(expr, param_name)
+    }
+
+    /// Identifier moved into a struct field, tuple/array element, or enum/Option constructor.
+    fn expression_moves_param_into_owned_payload(
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, value)| Self::expression_moves_param_into_owned_payload(value, param_name)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|el| Self::expression_moves_param_into_owned_payload(el, param_name)),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let is_constructor = match &**function {
+                    Expression::Identifier { name, .. } => {
+                        matches!(name.as_str(), "Some" | "Ok" | "Err")
+                            || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(name)
+                    }
+                    Expression::FieldAccess { field, .. } => {
+                        field
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_uppercase())
+                    }
+                    _ => false,
+                };
+                is_constructor
+                    && arguments.iter().any(|(_, arg)| {
+                        Self::expression_moves_param_into_owned_payload(arg, param_name)
+                    })
+            }
+            Expression::MethodCall {
+                method, arguments, ..
+            } => {
+                // `Type::Variant(...)` often lowers as MethodCall with PascalCase method.
+                method
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                    && arguments.iter().any(|(_, arg)| {
+                        Self::expression_moves_param_into_owned_payload(arg, param_name)
+                    })
+            }
+            _ => false,
+        }
     }
 
     pub(in crate::codegen::rust) fn param_only_used_in_same_name_struct_field_return(
@@ -3988,6 +4039,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
             && (!self.current_fn_mixed_forwarder_params.contains(&param.name) || non_self_facade)
             && !to_owned_sibling
+            && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
             && !self.current_struct_name.as_ref().is_some_and(|sn| {
                 self.struct_is_owned_engine_key_facade(sn, param)
             })

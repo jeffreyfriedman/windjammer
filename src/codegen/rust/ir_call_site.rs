@@ -806,6 +806,12 @@ impl<'ast> CodeGenerator<'ast> {
         ) && !crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
             callee_module,
         )
+            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &sig, param_idx,
+            )
+            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, param_idx,
+            )
             && sig
             .param_type_for_arg(arg_index)
             .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref)
@@ -1340,6 +1346,13 @@ impl<'ast> CodeGenerator<'ast> {
             return SafetyType::owned(base);
         }
 
+        // Generated owned String (`"lit".to_string()` / `.to_owned()`) must not be
+        // classified as a borrowed string-literal — that causes a later `&` prefix
+        // (`&"lit".to_string()`) for Owned formals (Objective::kill factory).
+        if arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()") {
+            return SafetyType::owned(BaseType::String);
+        }
+
         if matches!(
             arg_expr,
             Expression::Literal {
@@ -1752,6 +1765,8 @@ fn ownership_from_rust_expr(expr: &str) -> Option<OwnedType> {
         Some(OwnedType::MutRef(Region::fresh(1)))
     } else if expr.starts_with('&') {
         Some(OwnedType::Ref(Region::fresh(0)))
+    } else if expr.ends_with(".to_string()") || expr.ends_with(".to_owned()") {
+        Some(OwnedType::Owned)
     } else {
         None
     }
