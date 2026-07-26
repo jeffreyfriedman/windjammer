@@ -16,14 +16,13 @@
 //!
 //! ## Suite state (Jul 25 PM, wj 0.50.0+)
 //!
-//! **Dogfooding:** 30 older tests pass; **WDB-057..060 must fail** until `wdb-wal` `cargo build` is green.
+//! **Dogfooding:** 34 wal tests pass; **WDB-061..065(b) fail** until substrate + sim `cargo build` green.
 //!
-//! **WDB-057..060** close the gap where string-only tests passed but real `wdb-wal` had 5 rustc errors:
-//! - WalWriter `replay_all_records` else-branch: `&str` not `String` at `replay_all`
-//! - WalWriter `replay_through`: `&str` path + owned-or-borrowed Copy `Lsn` at `replay_to_lsn`
-//! - `replay_to_lsn` body: `is_at_or_before(*through)` / `.clone()` when `through: &Lsn`
-//! - `RecoveredMap` delete loop: no use-after-move through owned `keys_equal` + `out.push((ekey, …))`
-//! - **WDB-060** runs `cargo check` on a flat fixture mirroring `wal.wj` replay + recovered-map paths
+//! **WDB-061..065** — Phase 1 blockers after wdb-wal unblocked:
+//! - `PatchPart::apply_put` / `Transaction::record_*`: owned struct fields from borrowed params
+//! - `MemoryEngine::seed_write`: `value` used after move in `value_tag` + `value_i64`
+//! - `LsmEngine::apply_writes`: cross-crate `append_put` borrow for local `Vec<u8>` vars
+//! - `SimNetwork::send`: owned `NodeId` fields in `QueuedMessage` from borrowed params
 //!
 //! Recently fixed (must stay passing): WDB-047 full store layout, WDB-050 vec literals, WDB-049 FFI/replay.
 //! Closed-issue regressions: WDB-044, WDB-045, WDB-048. Guard tests: WDB-019, WDB-039, WDB-042.
@@ -3839,4 +3838,698 @@ pub fn run() {
 "#,
     );
     test.assert_compiles_without_error();
+}
+
+// ── WDB-061: PatchPart::apply_put — owned PatchEntry fields from borrowed params ─────────
+
+#[test]
+fn wdb_patch_part_apply_put_owned_struct_fields_from_borrowed_params() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "patch_part_layout.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+
+pub struct PartId {
+    pub value: u32,
+}
+
+pub struct PatchEntry {
+    pub row_key: Key,
+    pub value: Value,
+    pub tombstone: bool,
+}
+
+pub struct PatchPart {
+    pub base_part_id: PartId,
+    pub patches: Vec<PatchEntry>,
+}
+
+impl PatchPart {
+    pub fn new(base_part_id: PartId) -> PatchPart {
+        PatchPart {
+            base_part_id: base_part_id,
+            patches: Vec::new(),
+        }
+    }
+
+    pub fn apply_put(self, key: Key, value: Value) {
+        self.patches.push(PatchEntry {
+            row_key: key,
+            value: value,
+            tombstone: false,
+        })
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::patch_part_layout::PatchPart
+use crate::patch_part_layout::Key
+use crate::patch_part_layout::Value
+use crate::patch_part_layout::PartId
+
+pub fn run() {
+    let mut part = PatchPart::new(PartId { value: 1 })
+    part.apply_put(Key { bytes: vec![1u8] }, Value::Int64(7))
+}
+"#,
+    );
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-062: Transaction record_read/write — owned entry fields from borrowed params ─────
+
+#[test]
+fn wdb_transaction_record_sets_owned_struct_fields_from_borrowed_params() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "transaction_layout.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+
+pub struct Version {
+    pub value: u64,
+}
+
+pub struct ReadEntry {
+    pub key: Key,
+    pub version_at_read: Version,
+}
+
+pub struct WriteEntry {
+    pub key: Key,
+    pub value: Option<Value>,
+}
+
+pub struct Transaction {
+    pub read_set: Vec<ReadEntry>,
+    pub write_set: Vec<WriteEntry>,
+    pub snapshot_version: Version,
+}
+
+impl Transaction {
+    pub fn begin(snapshot: Version) -> Transaction {
+        Transaction {
+            read_set: Vec::new(),
+            write_set: Vec::new(),
+            snapshot_version: snapshot,
+        }
+    }
+
+    pub fn record_read(self, key: Key, version_at_read: Version) {
+        self.read_set.push(ReadEntry {
+            key: key,
+            version_at_read: version_at_read,
+        })
+    }
+
+    pub fn record_write(self, key: Key, value: Option<Value>) {
+        self.write_set.push(WriteEntry {
+            key: key,
+            value: value,
+        })
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::transaction_layout::Transaction
+use crate::transaction_layout::Key
+use crate::transaction_layout::Value
+use crate::transaction_layout::Version
+
+pub fn run() {
+    let mut txn = Transaction::begin(Version { value: 1 })
+    txn.record_read(Key { bytes: vec![1u8] }, Version { value: 2 })
+    txn.record_write(Key { bytes: vec![2u8] }, Some(Value::Int64(9)))
+}
+"#,
+    );
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-063: MemoryEngine::seed_write — no double-move of Value across helpers ───────────
+
+#[test]
+fn wdb_memory_engine_seed_write_no_double_move_value() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "memory_engine_layout.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+
+extern fn memory_engine_create_ffi() -> u64
+extern fn memory_engine_seed_write_ffi(id: u64, key_bytes: Vec<u8>, value_tag: i32, value_i64: i64, version: u64)
+
+pub struct MemoryEngine {
+    handle: u64,
+}
+
+impl MemoryEngine {
+    pub fn new() -> MemoryEngine {
+        MemoryEngine { handle: memory_engine_create_ffi() }
+    }
+
+    pub fn seed_write(self, key: Key, value: Value, version: u64) {
+        let tag = value_tag(value)
+        let payload = value_i64(value)
+        memory_engine_seed_write_ffi(self.handle, key.bytes, tag, payload, version)
+    }
+}
+
+fn value_tag(value: Value) -> i32 {
+    match value {
+        Value::Null => 0,
+        Value::Int64(_) => 1,
+    }
+}
+
+fn value_i64(value: Value) -> i64 {
+    match value {
+        Value::Null => 0,
+        Value::Int64(v) => v,
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::memory_engine_layout::MemoryEngine
+use crate::memory_engine_layout::Key
+use crate::memory_engine_layout::Value
+
+pub fn run() {
+    let engine = MemoryEngine::new()
+    engine.seed_write(Key { bytes: vec![1u8] }, Value::Int64(42), 1)
+}
+"#,
+    );
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-064: LsmEngine apply_writes — borrow Vec locals at cross-crate append_put ────────
+
+#[test]
+fn wdb_lsm_engine_apply_writes_append_put_borrows_vec_locals() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "lsm_apply_layout.wj",
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+
+pub struct PendingWrite {
+    pub key: Key,
+    pub value: Value,
+    pub is_delete: bool,
+}
+
+pub struct WalWriter {}
+
+impl WalWriter {
+    pub fn new() -> WalWriter {
+        WalWriter {}
+    }
+
+    pub fn append_put(self, key: Vec<u8>, value: Vec<u8>) -> Lsn {
+        let _ = (key.len(), value.len())
+        Lsn { value: 1 }
+    }
+
+    pub fn append_delete(self, key: Vec<u8>) -> Lsn {
+        let _ = key.len()
+        Lsn { value: 1 }
+    }
+}
+
+pub fn encode_value(value: Value) -> Vec<u8> {
+    match value {
+        Value::Null => Vec::new(),
+        Value::Int64(v) => vec![v as u8],
+    }
+}
+
+pub struct LsmEngine {
+    writer: WalWriter,
+}
+
+impl LsmEngine {
+    pub fn new() -> LsmEngine {
+        LsmEngine { writer: WalWriter::new() }
+    }
+
+    pub fn apply_writes(self, writes: Vec<PendingWrite>) {
+        for write in writes {
+            if write.is_delete {
+                let k = write.key
+                let kb = k.bytes
+                self.writer.append_delete(kb)
+            } else {
+                let k = write.key
+                let v = write.value
+                let kb = k.bytes
+                let enc = encode_value(v)
+                self.writer.append_put(kb, enc)
+            }
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::lsm_apply_layout::LsmEngine
+use crate::lsm_apply_layout::PendingWrite
+use crate::lsm_apply_layout::Key
+use crate::lsm_apply_layout::Value
+
+pub fn run() {
+    let engine = LsmEngine::new()
+    engine.apply_writes(vec![PendingWrite {
+        key: Key { bytes: vec![1u8] },
+        value: Value::Int64(9),
+        is_delete: false,
+    }])
+}
+"#,
+    );
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-065: SimNetwork send — owned NodeId fields in QueuedMessage struct init ──────────
+
+#[test]
+fn wdb_sim_network_queued_message_owned_node_id_fields() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "sim_network_layout.wj",
+        r#"
+pub struct NodeId {
+    pub value: u32,
+}
+
+pub enum SimMessageKind {
+    UpqueryResponse,
+    LiveDelta,
+}
+
+pub struct SimMessage {
+    pub kind: SimMessageKind,
+    pub group_key: i64,
+    pub value: f64,
+    pub delta_amount: f64,
+    pub logical_tick: u64,
+}
+
+pub fn encode_message(msg: SimMessage) -> Vec<u8> {
+    let _ = msg.group_key
+    Vec::new()
+}
+
+pub struct SimDuration {
+    pub micros: i64,
+}
+
+pub struct SeededSimClock {
+    pub now_micros: i64,
+}
+
+impl SeededSimClock {
+    pub fn effective_now_micros(self) -> i64 {
+        self.now_micros
+    }
+}
+
+pub struct QueuedMessage {
+    pub from: NodeId,
+    pub to: NodeId,
+    pub payload: Vec<u8>,
+    pub deliver_at_micros: i64,
+    pub sequence: u64,
+}
+
+pub struct SimNetwork {
+    pub queue: Vec<QueuedMessage>,
+    pub next_sequence: u64,
+    pub default_latency_micros: i64,
+}
+
+impl SimNetwork {
+    pub fn new(default_latency_micros: i64) -> SimNetwork {
+        SimNetwork {
+            queue: Vec::new(),
+            next_sequence: 0,
+            default_latency_micros: default_latency_micros,
+        }
+    }
+
+    pub fn send(self, from: NodeId, to: NodeId, msg: SimMessage, clock: SeededSimClock, latency: SimDuration) {
+        let payload = encode_message(msg)
+        let seq = self.next_sequence
+        self.next_sequence = seq + 1
+        let deliver_at = clock.effective_now_micros() + latency.micros + self.default_latency_micros
+        let queued = QueuedMessage {
+            from: from,
+            to: to,
+            payload: payload,
+            deliver_at_micros: deliver_at,
+            sequence: seq,
+        }
+        self.queue.push(queued)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::sim_network_layout::SimNetwork
+use crate::sim_network_layout::SimMessage
+use crate::sim_network_layout::SimMessageKind
+use crate::sim_network_layout::SeededSimClock
+use crate::sim_network_layout::SimDuration
+use crate::sim_network_layout::NodeId
+
+pub fn run() {
+    let mut net = SimNetwork::new(1000)
+    net.send(
+        NodeId { value: 1 },
+        NodeId { value: 2 },
+        SimMessage {
+            kind: SimMessageKind::LiveDelta,
+            group_key: 1,
+            value: 1.0,
+            delta_amount: 0.5,
+            logical_tick: 1,
+        },
+        SeededSimClock { now_micros: 0 },
+        SimDuration { micros: 500 },
+    )
+}
+"#,
+    );
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-063b: memory_engine seed_write — catch double-move pattern in emitted Rust ───────
+
+#[test]
+fn wdb_memory_engine_seed_write_emitted_rust_no_double_move() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "memory_engine_layout.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+
+extern fn memory_engine_create_ffi() -> u64
+extern fn memory_engine_seed_write_ffi(id: u64, key_bytes: Vec<u8>, value_tag: i32, value_i64: i64, version: u64)
+
+pub struct MemoryEngine {
+    handle: u64,
+}
+
+impl MemoryEngine {
+    pub fn new() -> MemoryEngine {
+        MemoryEngine { handle: memory_engine_create_ffi() }
+    }
+
+    pub fn seed_write(self, key: Key, value: Value, version: u64) {
+        let tag = value_tag(value)
+        let payload = value_i64(value)
+        memory_engine_seed_write_ffi(self.handle, key.bytes, tag, payload, version)
+    }
+}
+
+fn value_tag(value: Value) -> i32 {
+    match value {
+        Value::Null => 0,
+        Value::Int64(_) => 1,
+    }
+}
+
+fn value_i64(value: Value) -> i64 {
+    match value {
+        Value::Null => 0,
+        Value::Int64(v) => v,
+    }
+}
+"#,
+    );
+    test.add_file("main.wj", "pub fn run() {}");
+    let map = test.compile().expect("compile");
+    let rs = map.get("memory_engine_layout.rs").expect("memory_engine_layout.rs");
+    if rs.contains("value_tag(value)") && rs.contains("value_i64(value") {
+        assert!(
+            rs.contains("value.clone()"),
+            "value_tag + value_i64 on same binding must clone — wdb-substrate memory_engine.rs:37-38. Got:\n{rs}"
+        );
+    }
+}
+
+// ── WDB-064b: cross-module lsm_engine → wal append_put borrow in emitted Rust ───────────
+
+#[test]
+fn wdb_lsm_engine_apply_writes_emitted_rust_borrows_append_put() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "wal/wal.wj",
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+
+pub struct WalWriter {}
+
+impl WalWriter {
+    pub fn new() -> WalWriter {
+        WalWriter {}
+    }
+
+    pub fn append_put(self, key: Vec<u8>, value: Vec<u8>) -> Lsn {
+        let _ = (key.len(), value.len())
+        Lsn { value: 1 }
+    }
+}
+"#,
+    );
+    test.add_file("wal/mod.wj", "pub mod wal\n");
+    test.add_file(
+        "types/key.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+"#,
+    );
+    test.add_file(
+        "types/value.wj",
+        r#"
+pub enum Value {
+    Null,
+    Int64(i64),
+}
+"#,
+    );
+    test.add_file("types/mod.wj", "pub mod key\npub mod value\n");
+    test.add_file(
+        "substrate/pending.wj",
+        r#"
+use crate::types::key::Key
+use crate::types::value::Value
+
+pub struct PendingWrite {
+    pub key: Key,
+    pub value: Value,
+    pub is_delete: bool,
+}
+"#,
+    );
+    test.add_file(
+        "substrate/lsm_engine.wj",
+        r#"
+use crate::types::key::Key
+use crate::types::value::Value
+use crate::substrate::pending::PendingWrite
+use crate::wal::wal::WalWriter
+
+pub fn encode_value(value: Value) -> Vec<u8> {
+    match value {
+        Value::Null => Vec::new(),
+        Value::Int64(v) => vec![v as u8],
+    }
+}
+
+pub struct LsmEngine {
+    writer: WalWriter,
+}
+
+impl LsmEngine {
+    pub fn new() -> LsmEngine {
+        LsmEngine { writer: WalWriter::new() }
+    }
+
+    pub fn apply_writes(self, writes: Vec<PendingWrite>) {
+        for write in writes {
+            let k = write.key
+            let v = write.value
+            let kb = k.bytes
+            let enc = encode_value(v)
+            self.writer.append_put(kb, enc)
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "substrate/mod.wj",
+        "pub mod pending\npub mod lsm_engine\n",
+    );
+    test.add_file("main.wj", "pub fn run() {}");
+    let map = test.compile().expect("compile");
+    let rs = map.get("substrate/lsm_engine.rs").expect("substrate/lsm_engine.rs");
+    for line in rs.lines() {
+        if line.contains("append_put(") && line.contains("kb") {
+            assert!(
+                line.contains("&kb") || line.contains("& kb"),
+                "cross-module append_put must borrow kb for &Vec formal (lsm_engine.rs:193). Line: {line}\nFull:\n{rs}"
+            );
+        }
+    }
+}
+
+// ── WDB-065b: sim network — emitted Rust must not shorthand &NodeId into owned fields ───
+
+#[test]
+fn wdb_sim_network_emitted_rust_owned_node_id_struct_fields() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "sim/network.wj",
+        r#"
+pub struct NodeId {
+    pub value: u32,
+}
+
+pub enum SimMessageKind {
+    LiveDelta,
+}
+
+pub struct SimMessage {
+    pub kind: SimMessageKind,
+    pub group_key: i64,
+}
+
+pub fn encode_message(msg: SimMessage) -> Vec<u8> {
+    let _ = msg.group_key
+    Vec::new()
+}
+
+pub struct SimDuration {
+    pub micros: i64,
+}
+
+pub struct SeededSimClock {
+    pub now_micros: i64,
+}
+
+impl SeededSimClock {
+    pub fn effective_now_micros(self) -> i64 {
+        self.now_micros
+    }
+}
+
+pub struct QueuedMessage {
+    pub from: NodeId,
+    pub to: NodeId,
+    pub payload: Vec<u8>,
+    pub deliver_at_micros: i64,
+    pub sequence: u64,
+}
+
+pub struct SimNetwork {
+    pub queue: Vec<QueuedMessage>,
+    pub next_sequence: u64,
+    pub default_latency_micros: i64,
+}
+
+impl SimNetwork {
+    pub fn new(default_latency_micros: i64) -> SimNetwork {
+        SimNetwork {
+            queue: Vec::new(),
+            next_sequence: 0,
+            default_latency_micros: default_latency_micros,
+        }
+    }
+
+    pub fn send(self, from: NodeId, to: NodeId, msg: SimMessage, clock: SeededSimClock, latency: SimDuration) {
+        let payload = encode_message(msg)
+        let seq = self.next_sequence
+        self.next_sequence = seq + 1
+        let deliver_at = clock.effective_now_micros() + latency.micros + self.default_latency_micros
+        let queued = QueuedMessage {
+            from: from,
+            to: to,
+            payload: payload,
+            deliver_at_micros: deliver_at,
+            sequence: seq,
+        }
+        self.queue.push(queued)
+    }
+}
+"#,
+    );
+    test.add_file("sim/mod.wj", "pub mod network\n");
+    test.add_file("main.wj", "pub fn run() {}");
+    let map = test.compile().expect("compile");
+    let rs = map.get("sim/network.rs").expect("sim/network.rs");
+    if rs.contains("from: &NodeId") || rs.contains("to: &NodeId") {
+        assert!(
+            !rs.contains("QueuedMessage { from, to,"),
+            "must not shorthand-init owned NodeId from &NodeId (network.rs:56). Got:\n{rs}"
+        );
+    }
 }

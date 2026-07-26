@@ -455,3 +455,70 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 }
+
+#[cfg(test)]
+mod kill_factory_storage_tests {
+    use crate::analyzer::{Analyzer, OwnershipMode};
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse_program(src: &str) -> crate::parser::Program<'static> {
+        let mut lexer = Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        parser.parse().expect("parse")
+    }
+
+    #[test]
+    fn nested_enum_variant_in_struct_literal_stores_string_param() {
+        let src = r#"
+pub enum ObjectiveType {
+    KillEnemies(string, u32),
+}
+pub struct Objective {
+    pub kind: ObjectiveType,
+}
+impl Objective {
+    pub fn kill(enemy_type: string, count: u32) -> Objective {
+        Objective { kind: ObjectiveType::KillEnemies(enemy_type, count) }
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
+        let kill = analyzed
+            .iter()
+            .find(|f| f.decl.name == "kill")
+            .expect("kill fn");
+
+        assert!(
+            analyzer.is_stored("enemy_type", kill.decl.body.as_slice()),
+            "is_stored(enemy_type) must be true for nested enum payload"
+        );
+        let mode = kill
+            .inferred_ownership
+            .get("enemy_type")
+            .copied()
+            .expect("enemy_type ownership");
+        assert_eq!(
+            mode,
+            OwnershipMode::Owned,
+            "enemy_type moved into enum payload must be Owned; got {mode:?}. ownership map: {:?}",
+            kill.inferred_ownership
+        );
+
+        let ir_ctx = crate::ir::analyze_and_lower(&program).expect("ir lower");
+        let ir_fn = ir_ctx
+            .module
+            .functions
+            .iter()
+            .find(|f| f.name.ends_with("::kill") || f.name == "kill")
+            .expect("ir kill");
+        let ir_own = ir_fn.param_types.get("enemy_type").map(|st| &st.ownership);
+        assert!(
+            matches!(ir_own, Some(crate::ir::OwnedType::Owned)),
+            "IR must keep Owned for enum payload store; got {ir_own:?}"
+        );
+    }
+}
