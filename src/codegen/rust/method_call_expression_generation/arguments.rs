@@ -2277,6 +2277,10 @@ impl<'ast> CodeGenerator<'ast> {
                             && !crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
                             && !matches!(arg_to_generate, Expression::Identifier { name, .. }
                                 if self.caller_owned_non_copy_formal(name))
+                            // String literals are already `&str` — `&"lit"` is `&&str`.
+                            && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
+                                arg_to_generate,
+                            )
                         {
                             crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
                                 &mut arg_str,

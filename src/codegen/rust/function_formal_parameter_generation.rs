@@ -72,6 +72,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 if param.name != "self"
                     && !self.in_trait_impl
+                    && !analyzed.field_extract_parameters.contains(&param.name)
                     && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
                     && !matches!(
@@ -683,6 +684,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 ownership_mode = OwnershipMode::Owned;
                             }
 
+                            // Field-extract returns (`key.bytes` / `msg.payload`) need an owned
+                            // formal so the body can move the field; call sites clone when the
+                            // binding is reused (WDB-044/045).
+                            if analyzed.field_extract_parameters.contains(&param.name)
+                                && !self.is_type_copy(&param.type_)
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
                             if self.param_used_in_if_with_condition_and_branches(
                                 func.body.as_slice(),
                                 &param.name,
@@ -776,6 +786,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // Pure delegation wrappers keep &T formals when the body only
                             // forwards to borrowing callees (wdb LsmEngine::get), even under IR cutover.
                             if !self.is_type_copy(&param.type_)
+                                && !analyzed.field_extract_parameters.contains(&param.name)
                                 && !self.param_moves_via_struct_literal_init(
                                     func.body.as_slice(),
                                     &param.name,
