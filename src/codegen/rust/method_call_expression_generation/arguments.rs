@@ -566,8 +566,14 @@ impl<'ast> CodeGenerator<'ast> {
                                         &reg_sig, pidx,
                                     ) && !matches!(arg_to_generate, Expression::Identifier { name, .. }
                                         if self.caller_owned_non_copy_formal(name))
+                                        // Literals are already `&str` — do not emit `&"…"`.
+                                        && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
+                                            arg_to_generate,
+                                        )
                                     {
-                                        coerced = format!("&{coerced}");
+                                        crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                                            &mut coerced,
+                                        );
                                     }
                                 }
                             }
