@@ -400,6 +400,15 @@ pub fn should_borrow_at_call_site_with_copy_check(
         return CallSiteBorrowDecision::default();
     }
 
+    // Already allocated an owned String from a literal — never wrap in `&`
+    // (`&"lit".to_string()`). Owned formals want the allocation bare; `&str`
+    // formals should have kept the bare literal instead.
+    if expression_is_string_literal(arg_expr)
+        && (arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()"))
+    {
+        return CallSiteBorrowDecision::default();
+    }
+
     // Phase-3 registry wrap: `param_types` Reference/MutableReference is the emitted Rust contract.
     if let Some(param_ty) = sig.param_types.get(param_idx) {
         let registry_ref_is_emitted = matches!(param_ty, Type::MutableReference(_))
