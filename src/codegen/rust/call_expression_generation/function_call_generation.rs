@@ -241,7 +241,12 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // E0282 turbofish: Vec::new() / HashSet::new() → Vec::<T>::new() / HashSet::<T>::new()
     // when the function return type provides the element type.
     // Skip when suppress_collection_turbofish is set (let binding already has type ascription).
-    if arguments.is_empty() && !gen.suppress_collection_turbofish {
+    // Skip in call-argument position: the callee's parameter type is the source of truth
+    // (WDB-060: `decode_records(Vec::new())` must not become `Vec::<WalRecord>::new()`).
+    if arguments.is_empty()
+        && !gen.suppress_collection_turbofish
+        && !gen.in_call_argument_generation
+    {
         if func_str == "Vec::new" {
             if let Some(Type::Vec(inner)) = &gen.current_function_return_type {
                 func_str = format!("Vec::<{}>::new", gen.type_to_rust(inner));
