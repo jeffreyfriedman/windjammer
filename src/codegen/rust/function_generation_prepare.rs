@@ -3556,17 +3556,134 @@ impl<'ast> CodeGenerator<'ast> {
             })
             && !(self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
                 && self.count_non_self_params(func) == 1)
-            && (non_self_facade
-                || (self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
-                    && self.count_non_self_params(func) >= 2
+            && {
+                let to_owned_method = self.param_passed_to_owned_non_copy_method_arg(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                );
+                let single_stmt_multi_param_forward = self.param_only_used_as_call_argument(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                ) && self.count_non_self_params(func) >= 2
                     && func.body.len() == 1
                     && !self.func_is_pure_forwarding_delegate(func)
                     && !self.param_passed_from_multiple_statements(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    ))
-                || self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func))
+                    );
+                // Single-stmt `merge(remote)` is both facade and multi-param forward; do not
+                // borrow when the method consumes an owned non-copy arg. Multi-stmt helpers
+                // like `put_value` keep ungated facade borrowing.
+                (non_self_facade && !(single_stmt_multi_param_forward && to_owned_method))
+                    || (single_stmt_multi_param_forward && !to_owned_method)
+                    || self.param_passed_to_borrowing_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+            }
+    }
+
+    /// True when `param_name` is passed to a method argument that emits owned non-copy
+    /// (e.g. `local.merge(remote)` with `merge(other: LwwRegister)`).
+    fn param_passed_to_owned_non_copy_method_arg(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.statement_passes_param_to_owned_non_copy_method_arg(stmt, param_name, func)
+        })
+    }
+
+    fn statement_passes_param_to_owned_non_copy_method_arg(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_passes_param_to_owned_non_copy_method_arg(expr, param_name, func)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_passes_param_to_owned_non_copy_method_arg(
+                    condition, param_name, func,
+                ) || then_block.iter().any(|s| {
+                    self.statement_passes_param_to_owned_non_copy_method_arg(s, param_name, func)
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        self.statement_passes_param_to_owned_non_copy_method_arg(
+                            s, param_name, func,
+                        )
+                    })
+                })
+            }
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::For { body, .. } => body.iter().any(|s| {
+                self.statement_passes_param_to_owned_non_copy_method_arg(s, param_name, func)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_passes_param_to_owned_non_copy_method_arg(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        && self.method_call_arg_formal_is_owned_non_copy(object, method, i, func)
+                    {
+                        return true;
+                    }
+                }
+                self.expression_passes_param_to_owned_non_copy_method_arg(
+                    object, param_name, func,
+                ) || arguments.iter().any(|(_, a)| {
+                    self.expression_passes_param_to_owned_non_copy_method_arg(a, param_name, func)
+                })
+            }
+            Expression::Call { arguments, function, .. } => {
+                arguments.iter().any(|(_, a)| {
+                    self.expression_passes_param_to_owned_non_copy_method_arg(a, param_name, func)
+                }) || self.expression_passes_param_to_owned_non_copy_method_arg(
+                    function, param_name, func,
+                )
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_param_to_owned_non_copy_method_arg(left, param_name, func)
+                    || self.expression_passes_param_to_owned_non_copy_method_arg(
+                        right, param_name, func,
+                    )
+            }
+            Expression::FieldAccess { object, .. }
+            | Expression::Unary { operand: object, .. } => self
+                .expression_passes_param_to_owned_non_copy_method_arg(object, param_name, func),
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_passes_param_to_owned_non_copy_method_arg(s, param_name, func)
+            }),
+            _ => false,
+        }
     }
 
     /// True when `param_name` is forwarded as a call argument from more than one statement.
