@@ -114,8 +114,13 @@ impl<'ast> CodeGenerator<'ast> {
                 // Strip explicit & when operand is already a reference type
                 // (e.g., user writes `&key` but key: str → &str, so &key = &&str)
                 if matches!(op, UnaryOp::Ref) {
-                    if let Expression::Identifier { name, .. } = &**operand {
-                        if self.identifier_already_ref(name) {
+                    if let Some(name) = match &**operand {
+                        Expression::Identifier { name, .. } => Some(name.as_str()),
+                        _ => None,
+                    } {
+                        if self.identifier_already_ref(name)
+                            || self.emitted_rust_ref_formals.contains(name)
+                        {
                             return self.generate_expression_immut(operand);
                         }
                     }

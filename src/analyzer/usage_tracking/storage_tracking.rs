@@ -223,6 +223,119 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
+    /// Like [`is_stored`], but `{ field: param }` struct-literal init with a bare identifier
+    /// does not force owned formals for non-Copy aggregate params — codegen clones at the site.
+    pub(crate) fn is_stored_requiring_owned(
+        &self,
+        name: &str,
+        param_type: &Type,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        if !self.is_stored(name, statements) {
+            return false;
+        }
+        if self.is_only_stored_via_bare_struct_literal_field(name, statements)
+            && !self.is_copy_type(param_type)
+            && !Self::is_windjammer_text_param_type(param_type)
+            && !Self::is_text_element_vec_param_type(param_type)
+        {
+            return false;
+        }
+        true
+    }
+
+    fn is_only_stored_via_bare_struct_literal_field(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut bare_struct_store = false;
+        for stmt in statements {
+            match stmt {
+                Statement::Return {
+                    value: Some(Expression::StructLiteral { fields, .. }),
+                    ..
+                }
+                | Statement::Expression {
+                    expr: Expression::StructLiteral { fields, .. },
+                    ..
+                }
+                | Statement::Let {
+                    value: Expression::StructLiteral { fields, .. },
+                    ..
+                } => {
+                    for (_, field_expr) in fields {
+                        if matches!(
+                            field_expr,
+                            Expression::Identifier { name: id, .. } if id == name
+                        ) {
+                            bare_struct_store = true;
+                        } else if self.expression_stores_identifier(name, field_expr) {
+                            return false;
+                        }
+                    }
+                }
+                _ => {
+                    if self.statement_stores_identifier_excluding_bare_struct_literal(name, stmt) {
+                        return false;
+                    }
+                }
+            }
+        }
+        bare_struct_store
+    }
+
+    fn statement_stores_identifier_excluding_bare_struct_literal(
+        &self,
+        name: &str,
+        stmt: &Statement<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(Expression::StructLiteral { fields, .. }),
+                ..
+            }
+            | Statement::Expression {
+                expr: Expression::StructLiteral { fields, .. },
+                ..
+            }
+            | Statement::Let {
+                value: Expression::StructLiteral { fields, .. },
+                ..
+            } => fields.iter().any(|(_, field_expr)| {
+                self.expression_stores_identifier(name, field_expr)
+                    && !matches!(
+                        field_expr,
+                        Expression::Identifier { name: id, .. } if id == name
+                    )
+            }),
+            _ => self.stmt_stores_identifier(name, stmt),
+        }
+    }
+
+    fn stmt_stores_identifier(&self, name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_stores_identifier(name, expr),
+            Statement::Expression { expr, .. } => self.expression_stores_identifier(name, expr),
+            Statement::Let { value, .. } => self.expression_stores_identifier(name, value),
+            Statement::Assignment { value, .. } => self.expression_stores_identifier(name, value),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.is_stored(name, then_block)
+                    || else_block.as_ref().is_some_and(|b| self.is_stored(name, b))
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                self.is_stored(name, body)
+            }
+            _ => self.stmt_has_enum_variant_consuming(name, stmt),
+        }
+    }
+
     /// Check if a statement contains an enum variant constructor that consumes a parameter.
     /// Recursively scans all expressions within the statement.
     pub(crate) fn stmt_has_enum_variant_consuming(

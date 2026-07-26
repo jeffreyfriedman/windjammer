@@ -707,6 +707,17 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
+    /// Map `Self::method` qualifiers to the enclosing impl struct for signature lookup.
+    pub(crate) fn signature_lookup_receiver_type(&self, qualifier: &str) -> String {
+        if qualifier == "Self" {
+            self.current_struct_name
+                .clone()
+                .unwrap_or_else(|| qualifier.to_string())
+        } else {
+            qualifier.to_string()
+        }
+    }
+
     /// Method signature for call-site lowering: local registry, then cross-module global.
     pub(crate) fn resolve_method_function_signature(
         &self,
@@ -1199,6 +1210,14 @@ impl<'ast> CodeGenerator<'ast> {
                 caller_module.as_deref(),
             )
         });
+        let codegen_refresh_source = global
+            .clone()
+            .filter(|r| r.sig.emitted_rust_ref_params.is_some())
+            .or_else(|| {
+                local
+                    .clone()
+                    .filter(|r| r.sig.emitted_rust_ref_params.is_some())
+            });
         let picked = crate::codegen::rust::call_signature_resolution::pick_best_resolved_signature(
             local, global,
         );
@@ -1227,6 +1246,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         picked.map(|mut resolved| {
+            if resolved.sig.emitted_rust_ref_params.is_none() {
+                if let Some(alt) = &codegen_refresh_source {
+                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                        &mut resolved.sig,
+                        &alt.sig,
+                    );
+                }
+            }
             resolved.sig =
                 crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(
                     resolved.sig,
@@ -1761,6 +1788,15 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
         if self.param_used_in_prior_field_extract_call(name) {
+            return arg_str.to_string();
+        }
+
+        if self.current_struct_name.as_ref().is_some_and(|sn| {
+            self.current_function_params
+                .iter()
+                .find(|p| p.name == name)
+                .is_some_and(|p| self.struct_is_owned_engine_key_facade(sn, p))
+        }) {
             return arg_str.to_string();
         }
 

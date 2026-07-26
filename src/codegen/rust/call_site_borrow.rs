@@ -15,6 +15,16 @@ use crate::codegen::rust::type_analysis_pure;
 use crate::codegen::rust::types;
 use crate::parser::{Expression, Literal, Type};
 
+/// Plain WJ `string` formals that emit owned `String` at call sites until codegen confirms `&str`.
+pub(crate) fn plain_string_formal_passes_owned_at_call_site(
+    sig: &FunctionSignature,
+    param_idx: usize,
+) -> bool {
+    crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) && !callee_emits_shared_rust_ref_param(sig, param_idx)
+}
+
 /// Whether codegen recorded (or unambiguously converged) a shared-ref Rust formal for `param_idx`.
 ///
 /// Plain WJ `string` formals require `emitted_rust_ref_params` — stale analyzer `Reference(str)`
@@ -28,8 +38,26 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
     }) {
         return true;
     }
+    // Plain WJ `string` formals only borrow after codegen records emitted_rust_ref_params
+    // (see top). Stale analyzer Reference(str) must not force call-site `&`.
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) {
+        if sig.is_extern
+            && sig.param_types.get(param_idx).is_some_and(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            })
+            && matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            )
+        {
+            return true;
+        }
+        return false;
+    }
     // Registry/stdlib &str contracts (e.g. String::push_str) — param_types Reference(str)
-    // with Borrowed ownership beats stale WJ `string` formals.
+    // with Borrowed ownership.
     if sig.param_types.get(param_idx).is_some_and(|t| {
         crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
     }) && matches!(
@@ -37,27 +65,6 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
         Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
     ) {
         return true;
-    }
-    if sig.formal_param_types.get(param_idx).is_some_and(|t| {
-        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            && types::is_windjammer_text_type(t)
-    }) {
-        // Plain WJ `string`: require codegen confirmation or explicit &str in param_types.
-        // Body-converged Borrowed alone must not force call-site `&` before the callee
-        // is emitted (circular-dep / forward-ref owned String formals).
-        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-            flags.get(param_idx).copied().unwrap_or(false)
-        }) {
-            return true;
-        }
-        return sig.param_types.get(param_idx).is_some_and(|t| {
-            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-        });
-    }
-    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-        sig, param_idx,
-    ) {
-        return false;
     }
     sig.param_types.get(param_idx).is_some_and(|t| match t {
         Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -142,9 +149,7 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
     }
     let check = |sig: &FunctionSignature, pidx: usize| -> bool {
         crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-            || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                sig, pidx,
-            ) && !callee_emits_shared_rust_ref_param(sig, pidx))
+            || plain_string_formal_passes_owned_at_call_site(sig, pidx)
     };
     if check(call_sig, param_idx) {
         return true;
@@ -242,6 +247,35 @@ pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
             Expression::Literal { value: Literal::String(_), .. }
         )
     )
+}
+
+/// Identifier (or `&ident`) at the root of a call argument expression.
+pub fn borrow_target_identifier_name(arg_expr: &Expression) -> Option<String> {
+    match arg_expr {
+        Expression::Identifier { name, .. } => Some(name.clone()),
+        Expression::Unary {
+            op: crate::parser::UnaryOp::Ref,
+            operand,
+            ..
+        } => match &**operand {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Drop a user-written `&` when the binding already emits as a shared Rust reference.
+pub fn strip_redundant_borrow_on_ref_binding(arg_expr: &Expression, arg_str: &mut String) {
+    let Some(name) = borrow_target_identifier_name(arg_expr) else {
+        return;
+    };
+    if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+        let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
+        if base == name.as_str() {
+            *arg_str = name;
+        }
+    }
 }
 
 /// Decide call-site borrow lowering from effective ownership, formal types, and the argument.
@@ -365,23 +399,16 @@ pub fn should_borrow_at_call_site_with_copy_check(
         return CallSiteBorrowDecision::default();
     }
 
-    // Plain owned `string` formals pass by value unless body analysis converged to borrow,
-    // or the registry already encodes a shared-borrow Rust param (`&str`).
-    let callee_emits_rust_ref = callee_emits_shared_rust_ref_param(sig, param_idx);
-    if sig.formal_param_type(param_idx).is_some_and(|t| {
-        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            && types::is_windjammer_text_type(t)
-    }) && effective == OwnershipMode::Owned
+    // Plain owned `string` formals pass by value until codegen confirms an emitted `&str` formal.
+    // Stale multipass `Reference(str)` / Borrowed metadata must not add `&` (circular deps).
+    if plain_string_formal_passes_owned_at_call_site(sig, param_idx)
         && !is_collection_key
-        && !callee_emits_rust_ref
-        && !sig
-            .param_types
-            .get(param_idx)
-            .is_some_and(string_utilities::param_is_rust_str_ref)
         && !matches!(arg_expr, Expression::FieldAccess { .. })
     {
         return CallSiteBorrowDecision::default();
     }
+
+    let callee_emits_rust_ref = callee_emits_shared_rust_ref_param(sig, param_idx);
         // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
     // Also must not suppress when param_types already encodes Reference(T) (registry wrap)
     // or codegen refresh recorded an emitted `&str`/`&T` formal (`emitted_rust_ref_params`).
@@ -537,11 +564,15 @@ pub fn finalize_collection_key_call_site_arg(
     arg_str: &mut String,
     arg_already_rust_ref: bool,
     receiver_type: Option<&str>,
+    arg_binding_already_shared_ref: bool,
 ) {
     let Some(sig) = sig else {
         return;
     };
-    if !is_collection_key_arg(sig, arg_index, receiver_type) || arg_str.starts_with('&') {
+    if arg_binding_already_shared_ref
+        || !is_collection_key_arg(sig, arg_index, receiver_type)
+        || arg_str.starts_with('&')
+    {
         return;
     }
     if expression_is_string_literal(arg_expr) || expression_is_copy_literal(arg_expr) {
@@ -727,15 +758,83 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_string_formal_emits_shared_rust_ref() {
+    fn borrowed_string_formal_without_codegen_confirmation_passes_owned() {
         let sig = sig_with_formal(
             "accept_label",
-            vec![Type::String],
+            vec![Type::Reference(Box::new(Type::Custom("str".into())))],
             vec![Type::String],
             vec![OwnershipMode::Borrowed],
             false,
         );
-        assert!(callee_emits_shared_rust_ref_param(&sig, 0));
+        assert!(
+            !callee_emits_shared_rust_ref_param(&sig, 0),
+            "stale borrow metadata alone must not force shared ref"
+        );
+        let arg = Expression::Identifier {
+            name: "label".into(),
+            location: Default::default(),
+        };
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "label", "accept_label", false, None);
+        assert!(
+            !decision.add_ref,
+            "plain string formal without emitted_rust_ref_params must pass owned"
+        );
+    }
+
+    #[test]
+    fn analyzer_bar_signature_skips_call_site_borrow() {
+        use crate::analyzer::Analyzer;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+
+        let source = r#"
+fn foo(x: string) -> bool {
+    if x == "stop" { true } else { bar(x) }
+}
+fn bar(y: string) -> bool {
+    if y == "stop" { false } else { foo(y) }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (_, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let bar = registry.get_signature("bar").expect("bar");
+        let arg = Expression::Identifier {
+            name: "x".into(),
+            location: Default::default(),
+        };
+        assert!(
+            plain_string_formal_passes_owned_at_call_site(bar, 0),
+            "formal={:?} param_types={:?}",
+            bar.formal_param_types,
+            bar.param_types
+        );
+        let decision = should_borrow_at_call_site(&bar, 0, &arg, "x", "bar", false, None);
+        assert!(!decision.add_ref);
+    }
+
+    #[test]
+    fn circular_dep_plain_string_no_call_site_borrow() {
+        let sig = sig_with_formal(
+            "bar",
+            vec![Type::Reference(Box::new(Type::Custom("str".into())))],
+            vec![Type::String],
+            vec![OwnershipMode::Borrowed],
+            false,
+        );
+        let arg = Expression::Identifier {
+            name: "x".into(),
+            location: Default::default(),
+        };
+        let decision = should_borrow_at_call_site(&sig, 0, &arg, "x", "bar", false, None);
+        assert!(
+            !decision.add_ref,
+            "mutual-recursion stale borrow must not emit bar(&x)"
+        );
     }
 
     #[test]
