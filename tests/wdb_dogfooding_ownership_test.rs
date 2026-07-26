@@ -3636,7 +3636,8 @@ pub fn run() {
         "keys_equal signature. Got:\n{rs}"
     );
     let borrows_at_call = rs.contains("keys_equal(&ekey, &record.key)")
-        || rs.contains("keys_equal(& ekey, &record.key)");
+        || rs.contains("keys_equal(& ekey, &record.key)")
+        || rs.contains("keys_equal(&ekey, &record.key.clone())");
     let clones_before_call = rs.contains("keys_equal(ekey.clone(), record.key.clone())")
         || rs.contains("keys_equal(ekey.clone(), record.key)")
         || rs.contains("keys_equal(ekey, record.key.clone())");
