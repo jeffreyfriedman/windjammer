@@ -886,8 +886,11 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             if mutated_parameters.contains(&param.name) {
-                let owned_explicit_mut = param.is_mutable
-                    && !field_mutated_parameters.contains(&param.name);
+                // Explicit `mut x: T` without field writes stays Owned (`mut x: T`):
+                // Owned already satisfies `&mut self` method receivers.
+                // Field mutation (or non-explicit mut) → MutBorrowed (`&mut T`).
+                let owned_explicit_mut =
+                    param.is_mutable && !field_mutated_parameters.contains(&param.name);
                 inferred_ownership.insert(
                     param.name.clone(),
                     if owned_explicit_mut {

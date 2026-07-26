@@ -316,10 +316,18 @@ impl<'ast> CodeGenerator<'ast> {
                             let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                             });
-                            if arg_str.starts_with('&') && !param_is_str_ref && !is_collection_key
+                            if arg_str.starts_with('&')
+                                && !arg_str.starts_with("&mut ")
+                                && !param_is_str_ref
+                                && !is_collection_key
                                 && !sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                                    matches!(t, Type::Reference(_))
+                                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
                                 })
+                                && !matches!(
+                                    sig.param_ownership.get(sig_param_idx),
+                                    Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                                        | Some(crate::analyzer::OwnershipMode::Borrowed)
+                                )
                                 && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                                     &sig, sig_param_idx,
                                 )
