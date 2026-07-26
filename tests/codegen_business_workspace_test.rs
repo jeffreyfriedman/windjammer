@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R1): BusinessWorkspace pane/tabs compose must codegen.
+//! FAILING REPRO (LedgerKit R1.1): BusinessWorkspace bank slot must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -24,6 +24,7 @@ pub struct BusinessWorkspace {
     register_html: string,
     write_check_html: string,
     memorized_html: string,
+    bank_html: string,
 }
 
 impl BusinessWorkspace {
@@ -34,6 +35,7 @@ impl BusinessWorkspace {
             register_html: "".to_string(),
             write_check_html: "".to_string(),
             memorized_html: "".to_string(),
+            bank_html: "".to_string(),
         }
     }
     pub fn layout(self, layout: string) -> BusinessWorkspace {
@@ -56,11 +58,11 @@ impl BusinessWorkspace {
         self.memorized_html = html
         self
     }
+    pub fn bank_html(self, html: string) -> BusinessWorkspace {
+        self.bank_html = html
+        self
+    }
     pub fn render(self) -> string {
-        if self.layout == "tabs" {
-            return "<div class=\"wj-business-workspace\" data-layout=\"tabs\" data-wj-business-workspace>".to_string()
-                + "<div class=\"wj-bw-tabs\">tabs</div></div>"
-        }
         "<div class=\"wj-business-workspace\" data-layout=\"pane\" data-wj-business-workspace>".to_string()
             + "<aside class=\"wj-bw-rail\">"
             + self.rail_html
@@ -70,6 +72,8 @@ impl BusinessWorkspace {
             + self.write_check_html
             + "</section><section class=\"wj-bw-memorized\">"
             + self.memorized_html
+            + "</section><section class=\"wj-bw-bank\">"
+            + self.bank_html
             + "</section></div>"
     }
 }
@@ -81,6 +85,7 @@ fn main() {
         .register_html("REG".to_string())
         .write_check_html("WC".to_string())
         .memorized_html("MEM".to_string())
+        .bank_html("BANK".to_string())
         .render())
 }
 "##;
@@ -92,10 +97,11 @@ fn main() {
         && result.contains("wj-bw-register")
         && result.contains("wj-bw-write")
         && result.contains("wj-bw-memorized")
+        && result.contains("wj-bw-bank")
         && !result.contains("error[E");
     assert!(
         ok,
-        "BusinessWorkspace pane compose should codegen. Got:\n{}",
+        "BusinessWorkspace pane+bank compose should codegen. Got:\n{}",
         result
     );
 }
