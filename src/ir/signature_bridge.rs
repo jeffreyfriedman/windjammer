@@ -47,6 +47,19 @@ fn is_bare_vec_type(ty: &Type) -> bool {
     matches!(ty, Type::Vec(_)) || matches!(ty, Type::Parameterized(name, _) if name == "Vec")
 }
 
+fn is_bare_map_type(ty: &Type) -> bool {
+    match ty {
+        Type::Parameterized(name, _) => {
+            let base = name.split('<').next().unwrap_or(name.as_str());
+            matches!(
+                base,
+                "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "HashSet" | "BTreeSet" | "Set"
+            )
+        }
+        _ => false,
+    }
+}
+
 fn is_wj_owned_non_text_bare_formal(ty: &Type) -> bool {
     !is_plain_windjammer_string_type(ty)
         && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
@@ -77,25 +90,34 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
 
     // WJ bare non-Copy struct formals: owned API methods pass by value (Rust auto-borrow);
     // readonly comparison helpers with converged borrow stay shared-ref at call sites.
+    //
+    // Do NOT force Owned when the formal itself is an explicit `&T` / `&mut T`
+    // (e.g. stdlib `HashMap::get(&K)`). That case is a true borrow contract, not
+    // body-converged wrapping of a bare owned formal (`MemoryEngine::put` pattern).
     if let Some(formal) = bare_wj_formal_type(sig, param_idx) {
         if is_wj_owned_non_text_bare_formal(formal) && !is_bare_vec_type(formal) {
-            let emits_ref = sig
-                .emitted_rust_ref_params
-                .as_ref()
-                .and_then(|flags| flags.get(param_idx))
-                .copied()
-                == Some(true);
-            if !emits_ref {
-                let effective_own =
-                    crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                        sig, param_idx,
-                    );
-                let readonly_compare_helper = sig.return_type.as_ref().is_some_and(|t| {
-                    matches!(t, Type::Bool)
-                        || matches!(t, Type::Custom(name) if name == "bool")
-                }) && matches!(effective_own, OwnershipMode::Borrowed);
-                if !readonly_compare_helper {
-                    return safety_type_from_parser_type(formal, Some(OwnershipMode::Owned));
+            let formal_is_explicit_ref = sig.formal_param_type(param_idx).is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            });
+            if !formal_is_explicit_ref {
+                let emits_ref = sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    == Some(true);
+                if !emits_ref {
+                    let effective_own =
+                        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                            sig, param_idx,
+                        );
+                    let readonly_compare_helper = sig.return_type.as_ref().is_some_and(|t| {
+                        matches!(t, Type::Bool)
+                            || matches!(t, Type::Custom(name) if name == "bool")
+                    }) && matches!(effective_own, OwnershipMode::Borrowed);
+                    if !readonly_compare_helper {
+                        return safety_type_from_parser_type(formal, Some(OwnershipMode::Owned));
+                    }
                 }
             }
         }
@@ -108,18 +130,37 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         }
     }
 
-    // Vec<T> formals pass by value: Vec is not Copy, so codegen keeps them owned
+    // Vec/Map formals pass by value by default: not Copy, so codegen keeps them owned
     // regardless of body-convergence (which may set param_ownership to Borrowed).
-    // Only respect an explicit `emitted_rust_ref_params == Some(true)` override.
+    // Exceptions:
+    // - `emitted_rust_ref_params == Some(true)` → shared-ref formal was actually emitted
+    // - analyzer Borrowed + `Reference(Vec)` with no owned-emission contract → trust borrow
+    //   (cross-crate readonly `upload_svo(svo: Vec)` → `&Vec` at call sites)
     if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
-        if is_bare_vec_type(bare) {
+        if is_bare_vec_type(bare) || is_bare_map_type(bare) {
             let ref_emission = sig
                 .emitted_rust_ref_params
                 .as_ref()
                 .and_then(|flags| flags.get(param_idx))
                 .copied();
-            if ref_emission != Some(true) {
+            if ref_emission == Some(true) {
+                // Fall through to Reference / Borrowed handling below.
+            } else if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                sig, param_idx,
+            ) || ref_emission == Some(false)
+            {
                 return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+            } else {
+                let analyzer_borrows = matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                ) && sig.param_types.get(param_idx).is_some_and(|t| {
+                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                });
+                if !analyzer_borrows {
+                    return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+                }
+                // Fall through — treat as shared/mut borrow at the call site.
             }
         }
     }
@@ -228,6 +269,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             if !crate::type_classification::is_copy_pass_by_value_formal(bare)
                 && !matches!(bare, Type::Vec(_))
                 && !matches!(bare, Type::Parameterized(ref name, _) if name == "Vec")
+                && !is_bare_map_type(bare)
             {
                 return safety_type_from_parser_type(
                     &Type::Reference(Box::new(bare.clone())),
@@ -681,6 +723,41 @@ mod tests {
     }
 
     #[test]
+    fn hashmap_get_explicit_ref_key_formal_stays_borrowed() {
+        // Stdlib HashMap::get(&self, key: &K) — formal is Reference(K), not a bare
+        // WJ struct with body-converged borrow. Must not force Owned (would clone keys).
+        let sig = FunctionSignature {
+            name: "HashMap::get".into(),
+            formal_param_types: vec![
+                Type::Custom("HashMap".into()),
+                Type::Reference(Box::new(Type::Custom("K".into()))),
+            ],
+            param_types: vec![
+                Type::Custom("HashMap".into()),
+                Type::Reference(Box::new(Type::Custom("K".into()))),
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Option(Box::new(Type::Reference(Box::new(
+                Type::Custom("V".into()),
+            ))))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let key_expected = safety_type_from_signature_param(&sig, 1);
+        assert!(
+            matches!(key_expected.ownership, OwnedType::Ref(_)),
+            "HashMap::get key must stay borrowed at call site, got {:?}",
+            key_expected.ownership
+        );
+        assert!(call_site_expects_shared_borrow(&sig, 1));
+        assert!(!call_site_expects_owned_pass(&sig, 1));
+    }
+
+    #[test]
     fn keys_equal_borrows_readonly_key_params() {
         let sig = FunctionSignature {
             name: "keys_equal".into(),
@@ -740,6 +817,37 @@ mod tests {
         };
         let expected = safety_type_from_signature_param(&sig, 0);
         assert!(matches!(expected.ownership, OwnedType::Owned));
+    }
+
+    #[test]
+    fn readonly_vec_formal_borrows_at_call_site_without_emitted_flags() {
+        // Cross-crate: analyzer converged `Vec` → Borrowed + Reference(Vec), but metadata
+        // may lack `emitted_rust_ref_params`. Call sites must still pass `&vec`.
+        let sig = FunctionSignature {
+            name: "VoxelGPURenderer::upload_svo".into(),
+            formal_param_types: vec![
+                Type::Custom("VoxelGPURenderer".into()),
+                Type::Vec(Box::new(Type::Custom("u32".into()))),
+            ],
+            param_types: vec![
+                Type::Custom("VoxelGPURenderer".into()),
+                Type::Reference(Box::new(Type::Vec(Box::new(Type::Custom("u32".into()))))),
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 1);
+        assert!(
+            matches!(expected.ownership, OwnedType::Ref(_)),
+            "readonly Vec formal must borrow at call site, got {:?}",
+            expected.ownership
+        );
     }
 
     #[test]

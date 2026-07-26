@@ -44,3 +44,6 @@ coverage/
 # Generated Rust files in stdlib
 std/**/*.rs
 !std/**/lib.rs
+
+# Parallel cargo target dir used by agents to avoid lock contention
+/target-verify/
