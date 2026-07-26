@@ -2199,7 +2199,12 @@ impl<'ast> CodeGenerator<'ast> {
                     );
                 }
 
-                if i == 0 && !arg_str.starts_with('&') {
+                if i == 0
+                    && !arg_str.starts_with('&')
+                    && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
+                        arg_to_generate,
+                    )
+                {
                     let sig_for_borrow = call_site_sig
                         .as_ref()
                         .or(method_signature.as_ref())
