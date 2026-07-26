@@ -478,6 +478,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             Some(arguments.len()),
                         );
                     }
+                    if let Some(ref sig) = post_ir_borrow_sig {
+                        let pidx = sig.arg_param_index(i);
+                        gen.enforce_call_site_ownership_contract(
+                            &mut coerced,
+                            arg,
+                            sig,
+                            pidx,
+                        );
+                    }
                     return vec![coerced];
                 }
                 let callee_sig = signature.as_ref().or_else(|| {

@@ -31,6 +31,17 @@ pub fn is_reference_expression(expr: &Expression) -> bool {
     )
 }
 
+/// True when a method call receiver is `self` or `self.field` / `self.field...`.
+pub fn method_receiver_is_self_or_field(object: &Expression) -> bool {
+    matches!(object, Expression::Identifier { name, .. } if name == "self")
+        || matches!(
+            object,
+            Expression::FieldAccess {
+                object: inner, ..
+            } if matches!(&**inner, Expression::Identifier { name, .. } if name == "self")
+        )
+}
+
 // =============================================================================
 // Constant Evaluation Detection
 // =============================================================================

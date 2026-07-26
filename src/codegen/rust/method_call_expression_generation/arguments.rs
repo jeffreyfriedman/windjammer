@@ -34,6 +34,7 @@ impl<'ast> CodeGenerator<'ast> {
         method_signature: &Option<crate::analyzer::FunctionSignature>,
         type_name: Option<String>,
     ) -> (Vec<String>, Option<Type>) {
+        self.refresh_pure_forwarding_delegate_flag();
         // Float method argument context: for methods like clamp/max/min on float
         // receivers, arguments should use the same float type as the receiver.
         let prev_float_target = self.assignment_float_target_type.clone();
@@ -315,6 +316,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.ir_cutover.call_sites {
                     let receiver_for_ir = receiver_type_name
                         .map(str::to_string)
+                        .or_else(|| self.mc_infer_method_receiver_type_name(object))
                         .or_else(|| {
                             sig_for_effective.as_ref().and_then(|sig| {
                                 crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
@@ -416,6 +418,228 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(method),
                             Some(arguments.len()),
                         );
+                        let fallback_pidx = fallback_sig.arg_param_index(i);
+                        let receiver_rt = receiver_for_ir
+                            .as_deref()
+                            .or(self.current_struct_name.as_deref())
+                            .or(receiver_type_name);
+                        let wants_ref = crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                            &fallback_sig,
+                            fallback_pidx,
+                        );
+                        let wants_owned = (receiver_rt.is_some_and(|rt| {
+                            self.resolve_method_function_signature(
+                                rt,
+                                method,
+                                arguments.len(),
+                            )
+                            .is_some_and(|sig| {
+                                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    &sig,
+                                    sig.arg_param_index(i),
+                                )
+                            })
+                        }) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            &fallback_sig,
+                            fallback_pidx,
+                        )) && !wants_ref;
+                        if let Expression::Identifier { name, .. } = arg_to_generate {
+                            let receiver_is_self =
+                                crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                                    object,
+                                );
+                            let caller_owned_param = self.current_function_params.iter().any(|p| {
+                                p.name == *name
+                                    && !self.emitted_rust_ref_formals.contains(name)
+                            });
+                            let is_mixed_forwarder =
+                                self.current_fn_mixed_forwarder_params.contains(name);
+                            if receiver_is_self && (caller_owned_param || is_mixed_forwarder) {
+                                let body: Vec<_> =
+                                    self.current_function_body.iter().copied().collect();
+                                let if_facade_param = self
+                                    .param_used_in_if_with_condition_and_branches(&body, name);
+                                let mixed_forward_ref = (is_mixed_forwarder || if_facade_param)
+                                    && self.in_if_condition;
+                                let actual = self.infer_call_arg_actual_safety_type(
+                                    arg_to_generate,
+                                    coerced.as_str(),
+                                );
+                                let expected =
+                                    crate::ir::signature_bridge::safety_type_from_signature_param(
+                                        &fallback_sig,
+                                        fallback_pidx,
+                                    );
+                                let kind =
+                                    crate::ir::coercion::compute_coercion(&actual, &expected);
+                                if mixed_forward_ref
+                                    || (matches!(
+                                        kind,
+                                        crate::ir::coercion::CoercionKind::Borrow
+                                            | crate::ir::coercion::CoercionKind::MutBorrow
+                                    ) && !self.caller_owned_non_copy_formal(name))
+                                {
+                                    if coerced.ends_with(".clone()") {
+                                        let base = coerced
+                                            .trim_end_matches(".clone()")
+                                            .trim();
+                                        coerced = format!("&{base}");
+                                    } else if !coerced.starts_with('&') {
+                                        coerced = format!("&{coerced}");
+                                    }
+                                } else if matches!(kind, crate::ir::coercion::CoercionKind::Identity)
+                                    && coerced.starts_with('&')
+                                    && !coerced.starts_with("&mut ")
+                                    && self.caller_owned_non_copy_formal(name)
+                                {
+                                    coerced = coerced.trim_start_matches('&').to_string();
+                                } else if wants_owned
+                                    && !mixed_forward_ref
+                                    && !self.current_fn_forward_ref_if_params.contains(name)
+                                    && coerced.starts_with('&')
+                                    && !coerced.starts_with("&mut ")
+                                {
+                                    let base = coerced.trim_start_matches('&');
+                                    coerced = if base.ends_with(".clone()") {
+                                        base.to_string()
+                                    } else {
+                                        format!("{base}.clone()")
+                                    };
+                                }
+                            }
+                            self.apply_forward_ref_and_mixed_forwarder_call_coercion(
+                                &mut coerced,
+                                arg_to_generate,
+                                Some(object),
+                                wants_ref,
+                                wants_owned,
+                            );
+                        }
+                        self.finalize_owned_outer_formal_call_arg(
+                            &mut coerced,
+                            arg_to_generate,
+                            wants_ref,
+                            wants_owned,
+                        );
+                        if wants_owned
+                            && !wants_ref
+                            && !coerced.ends_with(".clone()")
+                            && !coerced.starts_with('&')
+                        {
+                            if let Expression::Identifier { name, .. } = arg_to_generate {
+                                if self.caller_owned_non_copy_formal(name)
+                                    && !crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                                        object,
+                                    )
+                                {
+                                    coerced = format!("{coerced}.clone()");
+                                }
+                            }
+                        }
+                        if !coerced.starts_with('&') {
+                            if let Some(rt) = receiver_rt.as_deref() {
+                                if let Some(mut reg_sig) =
+                                    self.resolve_method_function_signature(
+                                        rt,
+                                        method,
+                                        arguments.len(),
+                                    )
+                                {
+                                    let qualified = format!("{rt}::{method}");
+                                    let refresh_keys = vec![qualified.clone()];
+                                    crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                                        &mut reg_sig,
+                                        &self.signature_registry,
+                                        &refresh_keys,
+                                    );
+                                    if let Some(global) = self.global_signature_registry.as_ref() {
+                                        crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                                            &mut reg_sig,
+                                            global,
+                                            &refresh_keys,
+                                        );
+                                    }
+                                    let pidx = reg_sig.arg_param_index(i);
+                                    if crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                        &reg_sig, pidx,
+                                    ) && !crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                        &reg_sig, pidx,
+                                    ) && !matches!(arg_to_generate, Expression::Identifier { name, .. }
+                                        if self.caller_owned_non_copy_formal(name))
+                                    {
+                                        coerced = format!("&{coerced}");
+                                    }
+                                }
+                            }
+                        }
+                        self.maybe_pure_forwarding_strip_call_arg(
+                            &mut coerced,
+                            arg_to_generate,
+                            receiver_rt.as_deref(),
+                            Some(method),
+                            Some(i),
+                            Some(arguments.len()),
+                        );
+                        let mut contract_sig = receiver_rt
+                            .as_deref()
+                            .and_then(|rt| {
+                                self.resolve_method_function_signature(
+                                    rt,
+                                    method,
+                                    arguments.len(),
+                                )
+                            })
+                            .unwrap_or_else(|| fallback_sig.clone());
+                        if let Some(rt) = receiver_rt.as_deref() {
+                            let qualified = format!("{rt}::{method}");
+                            let refresh_keys = vec![qualified.clone()];
+                            crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                                &mut contract_sig,
+                                &self.signature_registry,
+                                &refresh_keys,
+                            );
+                            if let Some(global) = self.global_signature_registry.as_ref() {
+                                crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                                    &mut contract_sig,
+                                    global,
+                                    &refresh_keys,
+                                );
+                            }
+                        }
+                        let pidx = contract_sig.arg_param_index(i);
+                        self.enforce_call_site_ownership_contract(
+                            &mut coerced,
+                            arg_to_generate,
+                            &contract_sig,
+                            pidx,
+                        );
+                        if (crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                &contract_sig,
+                                pidx,
+                            )
+                            || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                &contract_sig,
+                                pidx,
+                            ))
+                            && coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                        {
+                            coerced = coerced.trim_start_matches('&').to_string();
+                        } else if crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                            &contract_sig,
+                            pidx,
+                        ) && !coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                            && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
+                                arg_to_generate,
+                            )
+                            && matches!(
+                                arg_to_generate,
+                                Expression::Identifier { .. } | Expression::FieldAccess { .. }
+                            )
+                        {
+                            coerced = format!("&{coerced}");
+                        }
                         return coerced;
                     }
                 }
@@ -1077,6 +1301,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // AUTO .clone(): Add .clone() when needed for borrowed values
+                if !self.current_func_is_pure_forwarding_delegate {
                 if let Expression::Identifier { name, .. } = arg {
                     let arg_is_inferred_borrowed_param = self.inferred_borrowed_params.contains(name)
                         || self.inferred_mut_borrowed_params.contains(name);
@@ -1131,9 +1356,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                }
 
                 let clone_sig = call_site_sig.clone().or_else(|| method_signature.clone());
-                if !callee_wants_ref_param
+                if !self.current_func_is_pure_forwarding_delegate
+                    && !callee_wants_ref_param
                     && !is_borrowed_iter_collecting_refs
                     && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_clone(
                     arg,
@@ -2034,11 +2261,23 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 if !arg_str.starts_with('&') {
-                    if let Some(sig) = call_site_sig.as_ref().or(method_signature.as_ref()) {
+                    let registry_sig = type_name
+                        .as_deref()
+                        .or(receiver_type_name)
+                        .and_then(|rt| {
+                            self.resolve_method_function_signature(rt, method, arguments.len())
+                        });
+                        if let Some(sig) = registry_sig
+                        .as_ref()
+                        .or(call_site_sig.as_ref())
+                        .or(method_signature.as_ref())
+                    {
                         let pidx = sig.arg_param_index(i);
-                        if sig.param_types.get(pidx).is_some_and(|t| {
-                            matches!(t, Type::Reference(_))
-                        }) {
+                        if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
+                            && !crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+                            && !matches!(arg_to_generate, Expression::Identifier { name, .. }
+                                if self.caller_owned_non_copy_formal(name))
+                        {
                             crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
                                 &mut arg_str,
                             );
@@ -2054,6 +2293,62 @@ impl<'ast> CodeGenerator<'ast> {
                     i,
                     Some(arguments.len()),
                 );
+
+                let legacy_sig = call_site_sig
+                    .as_ref()
+                    .or(method_signature.as_ref())
+                    .or(effective_sig.as_ref());
+                let legacy_pidx = legacy_sig.map(|sig| sig.arg_param_index(i)).unwrap_or(i);
+                let receiver_rt = type_name
+                    .as_deref()
+                    .or(receiver_type_name)
+                    .or(self.current_struct_name.as_deref());
+                let wants_ref = legacy_sig.is_some_and(|sig| {
+                    crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                        sig, legacy_pidx,
+                    )
+                });
+                let wants_owned = legacy_sig.is_some_and(|sig| {
+                    crate::ir::signature_bridge::call_site_expects_owned_pass(sig, legacy_pidx)
+                });
+
+                if let Expression::Identifier { name, .. } = arg_to_generate {
+                    if self.current_fn_mixed_forwarder_params.contains(name)
+                        && crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                            object,
+                        )
+                    {
+                        let mixed_forward_ref = self.in_if_condition;
+                        if wants_ref
+                            && !arg_str.starts_with('&')
+                            && !self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_to_generate)
+                            && !wants_owned
+                        {
+                            arg_str = format!("&{arg_str}");
+                        } else if mixed_forward_ref && !arg_str.starts_with('&') {
+                            arg_str = format!("&{arg_str}");
+                        } else if wants_owned
+                            && !mixed_forward_ref
+                            && !self.current_fn_forward_ref_if_params.contains(name)
+                            && arg_str.starts_with('&')
+                            && !arg_str.starts_with("&mut ")
+                        {
+                            let base = arg_str.trim_start_matches('&');
+                            arg_str = if base.ends_with(".clone()") {
+                                base.to_string()
+                            } else {
+                                format!("{base}.clone()")
+                            };
+                        }
+                    }
+                    self.apply_forward_ref_and_mixed_forwarder_call_coercion(
+                        &mut arg_str,
+                        arg_to_generate,
+                        Some(object),
+                        wants_ref,
+                        wants_owned,
+                    );
+                }
 
                 // Final int→float cast after all arg mutations (binary inner literal casts).
                 {
@@ -2087,6 +2382,85 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+                }
+
+                let contract_sig = receiver_rt.and_then(|rt| {
+                    self.resolve_method_function_signature(rt, method, arguments.len())
+                        .or_else(|| {
+                            self.lookup_method_signature(rt, method)
+                                .map(|ms| ms.to_function_signature())
+                        })
+                });
+                if let Some(mut reg_sig) = contract_sig {
+                    if let Some(rt) = receiver_rt {
+                        let qualified = format!("{rt}::{method}");
+                        if let Some(reg) = self
+                            .signature_registry
+                            .get_signature(&qualified)
+                            .or_else(|| self.get_signature_with_global(&qualified))
+                        {
+                            crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                                &mut reg_sig, reg,
+                            );
+                        }
+                    }
+                    let pidx = reg_sig.arg_param_index(i);
+                    if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &reg_sig, pidx,
+                    ) {
+                        let expected =
+                            crate::ir::signature_bridge::safety_type_from_signature_param(
+                                &reg_sig, pidx,
+                            );
+                        if !matches!(
+                            expected.ownership,
+                            crate::ir::safety_type::OwnedType::Ref(_)
+                                | crate::ir::safety_type::OwnedType::MutRef(_)
+                        ) {
+                            self.finalize_owned_outer_formal_call_arg(
+                                &mut arg_str,
+                                arg_to_generate,
+                                wants_ref,
+                                wants_owned,
+                            );
+                        }
+                    }
+                    self.enforce_call_site_ownership_contract(
+                        &mut arg_str,
+                        arg_to_generate,
+                        &reg_sig,
+                        pidx,
+                    );
+                } else {
+                    self.finalize_owned_outer_formal_call_arg(
+                        &mut arg_str,
+                        arg_to_generate,
+                        wants_ref,
+                        wants_owned,
+                    );
+                }
+                self.maybe_pure_forwarding_strip_call_arg(
+                    &mut arg_str,
+                    arg_to_generate,
+                    receiver_rt.as_deref(),
+                    Some(method),
+                    Some(i),
+                    Some(arguments.len()),
+                );
+
+                if (self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_to_generate)
+                    || legacy_sig.is_some_and(|sig| {
+                        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            sig,
+                            legacy_pidx,
+                        ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                            sig, legacy_pidx,
+                        )
+                    }))
+                    && arg_str.starts_with('&')
+                    && !arg_str.starts_with("&mut ")
+                {
+                    arg_str = arg_str.trim_start_matches('&').to_string();
                 }
 
                 arg_str

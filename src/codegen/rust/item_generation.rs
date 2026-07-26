@@ -7,6 +7,8 @@ use crate::analyzer::*;
 use crate::parser::OwnershipHint;
 use crate::parser::*;
 
+use std::collections::HashSet;
+
 use super::codegen_helpers;
 use super::self_analysis;
 use super::CodeGenerator;
@@ -1086,8 +1088,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Re-register after prepare so callee-forwarded borrows (has_key → &Key) are visible
-        // to earlier impl methods (put_value → key_in_latest_base(&key)) at call-site codegen.
+        // Refresh registry from converged emitted formals so forward refs (put_value →
+        // apply_patch_put) see `&Key` before any body emits. register_impl_method_signature
+        // skips when emitted_rust_ref_params is already set, so use formal refresh directly.
+        for analyzed_func in &sibling_prepare {
+            self.select_ir_function_for(&analyzed_func.decl.name);
+            self.prepare_codegen_environment_for_regular_function(analyzed_func);
+            self.preregister_function_formals_in_registry(analyzed_func);
+        }
+
+        // Re-register analyzed borrow metadata for call-site ownership inference.
         for _ in 0..4 {
             for analyzed_func in analyzed {
                 let Some(parent_name) = analyzed_func.decl.parent_type.as_ref() else {
@@ -1117,9 +1127,12 @@ impl<'ast> CodeGenerator<'ast> {
         self.emitted_rust_ref_formals.clear();
         self.str_ref_optimized_params.clear();
         self.current_fn_mixed_forwarder_params.clear();
+        self.current_fn_forward_ref_if_params.clear();
+        self.current_func_is_pure_forwarding_delegate = false;
         self.current_function_params.clear();
         self.current_function_name = None;
         self.current_function_body.clear();
+        self.full_function_body_snapshot.clear();
         self.local_var_types.clear();
         self.local_variable_scopes.clear();
 
@@ -1134,7 +1147,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        for func in &impl_block.functions {
+        let emit_order = Self::impl_functions_callee_first_order(&impl_block.functions);
+        for idx in emit_order {
+            let func = &impl_block.functions[idx];
             if let Some(analyzed_func) = analyzed
                 .iter()
                 .find(|af| Self::analyzed_matches_impl_ast(af, func, &impl_block.trait_name))
@@ -1198,5 +1213,160 @@ impl<'ast> CodeGenerator<'ast> {
         output.push('}');
 
         output
+    }
+
+    /// Emit impl methods that are `self`-called from siblings before their callers so
+    /// `refresh_method_registry_from_emitted_formals` converges (`apply_patch_put` → `&Value`
+    /// before `put_value` body emits `apply_patch_put(key, &value)`).
+    fn impl_functions_callee_first_order(functions: &[FunctionDecl<'ast>]) -> Vec<usize> {
+        use std::collections::{HashSet, VecDeque};
+
+        let names: Vec<&str> = functions.iter().map(|f| f.name.as_str()).collect();
+        let name_set: HashSet<&str> = names.iter().copied().collect();
+        let n = functions.len();
+        let mut indegree = vec![0usize; n];
+        let mut edges: Vec<Vec<usize>> = vec![Vec::new(); n];
+
+        for (caller_idx, func) in functions.iter().enumerate() {
+            let mut callees = HashSet::new();
+            Self::collect_self_method_calls_in_body(&func.body, &mut callees);
+            for callee in callees {
+                if !name_set.contains(callee.as_str()) {
+                    continue;
+                }
+                let Some(callee_idx) = names.iter().position(|name| *name == callee.as_str()) else {
+                    continue;
+                };
+                if callee_idx == caller_idx {
+                    continue;
+                }
+                edges[callee_idx].push(caller_idx);
+                indegree[caller_idx] += 1;
+            }
+        }
+
+        let mut queue: VecDeque<usize> = indegree
+            .iter()
+            .enumerate()
+            .filter(|(_, deg)| **deg == 0)
+            .map(|(idx, _)| idx)
+            .collect();
+        queue.make_contiguous().sort_unstable();
+        let mut order = Vec::with_capacity(n);
+        while let Some(idx) = queue.pop_front() {
+            order.push(idx);
+            let mut next: Vec<usize> = edges[idx].drain(..).collect();
+            next.sort_unstable();
+            for caller in next {
+                indegree[caller] -= 1;
+                if indegree[caller] == 0 {
+                    queue.push_back(caller);
+                }
+            }
+        }
+        if order.len() != n {
+            (0..n).collect()
+        } else {
+            order
+        }
+    }
+
+    fn collect_self_method_calls_in_body(
+        body: &[&'ast Statement<'ast>],
+        out: &mut HashSet<String>,
+    ) {
+        for stmt in body {
+            Self::collect_self_method_calls_in_statement(stmt, out);
+        }
+    }
+
+    fn collect_self_method_calls_in_statement(stmt: &Statement<'ast>, out: &mut HashSet<String>) {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                Self::collect_self_method_calls_in_expression(expr, out);
+            }
+            Statement::Return { .. } => {}
+            Statement::Let { value, else_block, .. } => {
+                Self::collect_self_method_calls_in_expression(value, out);
+                if let Some(block) = else_block {
+                    Self::collect_self_method_calls_in_body(block.as_slice(), out);
+                }
+            }
+            Statement::Assignment { value, .. } => {
+                Self::collect_self_method_calls_in_expression(value, out);
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::collect_self_method_calls_in_expression(condition, out);
+                Self::collect_self_method_calls_in_body(then_block.as_slice(), out);
+                if let Some(block) = else_block {
+                    Self::collect_self_method_calls_in_body(block.as_slice(), out);
+                }
+            }
+            Statement::While { body, condition, .. } => {
+                Self::collect_self_method_calls_in_expression(condition, out);
+                Self::collect_self_method_calls_in_body(body.as_slice(), out);
+            }
+            Statement::For { body, iterable, .. } => {
+                Self::collect_self_method_calls_in_expression(iterable, out);
+                Self::collect_self_method_calls_in_body(body.as_slice(), out);
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                Self::collect_self_method_calls_in_body(body.as_slice(), out);
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::collect_self_method_calls_in_expression(value, out);
+                for arm in arms {
+                    Self::collect_self_method_calls_in_expression(&arm.body, out);
+                }
+            }
+            Statement::Defer { statement, .. } => {
+                Self::collect_self_method_calls_in_statement(statement, out);
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_self_method_calls_in_expression(expr: &Expression<'ast>, out: &mut HashSet<String>) {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                if crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                    object,
+                ) {
+                    out.insert(method.clone());
+                }
+                Self::collect_self_method_calls_in_expression(object, out);
+            }
+            Expression::Call { function, arguments, .. } => {
+                Self::collect_self_method_calls_in_expression(function, out);
+                for (_, arg) in arguments {
+                    Self::collect_self_method_calls_in_expression(arg, out);
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::collect_self_method_calls_in_expression(left, out);
+                Self::collect_self_method_calls_in_expression(right, out);
+            }
+            Expression::Unary { operand, .. } => {
+                Self::collect_self_method_calls_in_expression(operand, out);
+            }
+            Expression::FieldAccess { object, .. } => {
+                Self::collect_self_method_calls_in_expression(object, out);
+            }
+            Expression::Index { object, index, .. } => {
+                Self::collect_self_method_calls_in_expression(object, out);
+                Self::collect_self_method_calls_in_expression(index, out);
+            }
+            Expression::Block { statements, .. } => {
+                Self::collect_self_method_calls_in_body(statements.as_slice(), out);
+            }
+            _ => {}
+        }
     }
 }

@@ -32,7 +32,11 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut output = self.indent();
         output.push_str("if ");
+        let prev_if_cond = self.in_if_condition;
+        self.in_if_condition = true;
         let cond_str = self.generate_expression(condition);
+        self.in_if_condition = prev_if_cond;
+        let cond_str = self.coerce_forward_ref_params_in_if_condition(condition, cond_str);
         // Auto-deref borrowed bool in if-condition: `if r` where r: &bool → `if *r`
         let cond_str = if let Expression::Identifier { name, .. } = condition {
             if self.inferred_borrowed_params.contains(name.as_str())

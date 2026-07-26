@@ -72,10 +72,17 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 if param.name != "self"
                     && !self.in_trait_impl
+                    && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
                     && !matches!(
                         &param.type_,
                         Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.func_is_pure_forwarding_delegate(func)
+                    && !self.param_passed_from_multiple_statements(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
                     )
                     && !self.param_has_forward_ref_keep_owned(
                         func.body.as_slice(),
@@ -92,9 +99,22 @@ impl<'ast> CodeGenerator<'ast> {
                         self.struct_is_owned_engine_key_facade(sn, param)
                     })
                     && !self.is_collection_key_owned_param(param, func)
+                    && !self.param_only_used_in_discarding_let_binding(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     && (self.param_should_emit_borrowed_delegation_formal(param, func)
-                        || converged_analyzer_borrow
-                        || self.inferred_borrowed_params.contains(&param.name))
+                        || (converged_analyzer_borrow
+                            && (crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                || self.is_type_copy(&param.type_)))
+                        || (self.inferred_borrowed_params.contains(&param.name)
+                            && !self.param_is_single_arg_call_only_delegate(param, func)
+                            && !self.param_passed_from_multiple_statements(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            )))
                 {
                     let type_str =
                         self.borrowed_formal_rust_type_for_param(param, func, param_idx);
@@ -179,7 +199,12 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    ) || self.current_fn_mixed_forwarder_params.contains(&param.name))
+                    ) || self.current_fn_mixed_forwarder_params.contains(&param.name)
+                    || self.param_passed_from_multiple_statements(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ))
                 {
                     &param.type_
                 } else {
@@ -348,6 +373,10 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                         if param.name != "self"
+                            && !self.param_moves_via_struct_literal_init(
+                                func.body.as_slice(),
+                                &param.name,
+                            )
                             && self.param_should_emit_borrowed_delegation_formal(param, func)
                             && !self.is_collection_key_owned_param(param, func)
                         {
@@ -392,6 +421,11 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             if self.is_type_copy(&param.type_)
                                 && !self.inferred_borrowed_params.contains(&param.name)
+                                && (!self.ir_cutover.ownership
+                                    || !matches!(
+                                        self.get_param_ownership(&param.name, analyzed),
+                                        Some(OwnershipMode::Borrowed)
+                                    ))
                             {
                                 self.type_to_rust(&param.type_)
                             } else {
@@ -581,7 +615,17 @@ impl<'ast> CodeGenerator<'ast> {
                         // Pure delegation / call-only forwarders: emit &T even when IR/analyzer
                         // left the converged formal as owned (wdb LsmEngine::get → MemoryEngine::get).
                         if self.param_should_emit_borrowed_delegation_formal(param, func)
+                            && !self.param_moves_via_struct_literal_init(
+                                func.body.as_slice(),
+                                &param.name,
+                            )
                             && !self.is_collection_key_owned_param(param, func)
+                            && !self.param_passed_from_multiple_statements(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            )
+                            && !self.func_is_pure_forwarding_delegate(func)
                         {
                             let type_str =
                                 self.borrowed_formal_rust_type_for_param(param, func, param_idx);
@@ -594,13 +638,24 @@ impl<'ast> CodeGenerator<'ast> {
                         // Check if type already has ownership baked in (like &str from string inference)
                         let force_owned_collection_key =
                     self.is_collection_key_owned_param(param, func);
+                        let discard_only = self.param_only_used_in_discarding_let_binding(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        );
                         if matches!(
                             formal_type,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) && !force_owned_collection_key
+                            && !discard_only
                         {
                             if self.is_type_copy(&param.type_)
                                 && !self.inferred_borrowed_params.contains(&param.name)
+                                && (!self.ir_cutover.ownership
+                                    || !matches!(
+                                        self.get_param_ownership(&param.name, analyzed),
+                                        Some(OwnershipMode::Borrowed)
+                                    ))
                             {
                                 self.type_to_rust(&param.type_)
                             } else {
@@ -616,8 +671,29 @@ impl<'ast> CodeGenerator<'ast> {
                                 .and_then(|sig| sig.param_ownership.get(param_idx).copied());
                             let mut ownership_mode = self
                                 .get_param_ownership(&param.name, analyzed)
+                                .or_else(|| {
+                                    analyzed.inferred_ownership.get(&param.name).copied()
+                                })
                                 .or(registry_ownership)
                                 .unwrap_or(OwnershipMode::Owned);
+
+                            if self.current_struct_name.as_ref().is_some_and(|sn| {
+                                self.struct_is_owned_engine_key_facade(sn, param)
+                            }) {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
+                            if self.param_used_in_if_with_condition_and_branches(
+                                func.body.as_slice(),
+                                &param.name,
+                            ) || self.param_used_in_if_else_both_branches(
+                                func.body.as_slice(),
+                                &param.name,
+                            ) || self.body_forwards_param_in_if_condition(&param.name, func)
+                            || self.current_fn_forward_ref_if_params.contains(&param.name)
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
 
                             if !self.is_type_copy(&param.type_)
                                 && !matches!(
@@ -686,12 +762,33 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
+                            if self.param_moves_via_struct_literal_init(
+                                func.body.as_slice(),
+                                &param.name,
+                            ) {
+                                if matches!(&param.type_, Type::Vec(_)) {
+                                    ownership_mode = OwnershipMode::Borrowed;
+                                } else {
+                                    ownership_mode = OwnershipMode::Owned;
+                                }
+                            }
+
                             // Pure delegation wrappers keep &T formals when the body only
                             // forwards to borrowing callees (wdb LsmEngine::get), even under IR cutover.
                             if !self.is_type_copy(&param.type_)
+                                && !self.param_moves_via_struct_literal_init(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
                                 && !matches!(
                                     &param.type_,
                                     Type::Reference(_) | Type::MutableReference(_)
+                                )
+                                && !self.func_is_pure_forwarding_delegate(func)
+                                && !self.param_passed_from_multiple_statements(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
                                 )
                                 && !self.param_has_forward_ref_keep_owned(
                                     func.body.as_slice(),
@@ -708,8 +805,16 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.struct_is_owned_engine_key_facade(sn, param)
                                 })
                                 && !self.is_collection_key_owned_param(param, func)
+                                && !self.param_is_single_arg_call_only_delegate(param, func)
                                 && (self.inferred_borrowed_params.contains(&param.name)
-                                    || converged_analyzer_borrow
+                                    || (converged_analyzer_borrow
+                                        && (crate::codegen::rust::types::is_windjammer_text_type(
+                                            &param.type_,
+                                        )
+                                            || self.is_type_copy(&param.type_)
+                                            || self.param_should_emit_borrowed_delegation_formal(
+                                                param, func,
+                                            )))
                                     || self.param_passed_to_borrowing_callee(
                                         func.body.as_slice(),
                                         &param.name,
@@ -778,6 +883,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
+                            if ownership_mode != OwnershipMode::Owned
+                                && self.param_only_used_in_discarding_let_binding(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
                             let registry_param_ty = self
                                 .get_signature_with_global(&func.name)
                                 .and_then(|s| s.param_types.get(param_idx).cloned())
@@ -813,7 +928,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     format!("&mut {}", self.type_to_rust(formal_type))
                                 }
                                 OwnershipMode::Borrowed if self.is_type_copy(formal_type) => {
-                                    self.type_to_rust(formal_type)
+                                    if self.inferred_borrowed_params.contains(&param.name) {
+                                        format!("&{}", self.type_to_rust(formal_type))
+                                    } else {
+                                        self.type_to_rust(formal_type)
+                                    }
                                 }
                                 OwnershipMode::Borrowed => {
                                     let is_string = matches!(formal_type, Type::String)

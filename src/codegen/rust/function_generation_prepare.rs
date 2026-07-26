@@ -96,6 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Track function body for data flow analysis
         self.current_function_body = func.body.clone();
+        self.full_function_body_snapshot = func.body.clone();
 
         // FOR-LOOP AUTO-BORROW: Pre-scan function body to find local variables
         // that are iterated in for-loops and also used after the loop.
@@ -111,28 +112,81 @@ impl<'ast> CodeGenerator<'ast> {
         self.collection_key_owned_params.clear();
         self.emitted_rust_ref_formals.clear();
         self.current_fn_mixed_forwarder_params.clear();
+        self.current_fn_forward_ref_if_params.clear();
         for param in &func.parameters {
-            if param.name != "self"
-                && (self.param_passes_to_wj_owned_sibling_call(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                ) || self.param_passed_to_owned_self_method_arg(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                ))
+            if param.name == "self" {
+                continue;
+            }
+            // Single-arg pure delegates keep owned formals — not mixed forwarders.
+            if self.param_is_single_arg_call_only_delegate(param, func) {
+                continue;
+            }
+            let if_branch_facade = self.param_used_in_if_with_condition_and_branches(
+                func.body.as_slice(),
+                &param.name,
+            ) || self.param_used_in_if_else_both_branches(
+                func.body.as_slice(),
+                &param.name,
+            );
+            // Multi-arg single-call delegates borrow at formals — not mixed forwarders.
+            if !if_branch_facade
+                && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
+                && self.count_non_self_params(func) >= 2
             {
+                continue;
+            }
+            let passes_owned = self.param_passes_to_wj_owned_sibling_call(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) || self.param_passed_to_owned_self_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            );
+            let passes_borrow =
+                self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func);
+            if (passes_owned && passes_borrow) || if_branch_facade {
                 self.current_fn_mixed_forwarder_params
                     .insert(param.name.clone());
             }
+            if if_branch_facade {
+                self.current_fn_forward_ref_if_params
+                    .insert(param.name.clone());
+            } else if self.body_forwards_param_in_if_condition(&param.name, func)
+                || self.param_has_forward_ref_keep_owned(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+            {
+                self.current_fn_forward_ref_if_params
+                    .insert(param.name.clone());
+            }
         }
+        self.current_func_is_pure_forwarding_delegate =
+            self.func_is_pure_forwarding_delegate(func);
         for (param_name, ownership) in self.get_all_param_ownership(analyzed) {
             if param_name != "self" {
+                if func.parameters.iter().any(|p| {
+                    p.name == param_name
+                        && self.current_struct_name.as_ref().is_some_and(|sn| {
+                            self.struct_is_owned_engine_key_facade(sn, p)
+                        })
+                }) {
+                    continue;
+                }
                 if self.param_passed_to_owned_self_method_arg(func.body.as_slice(), &param_name, func) {
                     continue;
                 }
                 if self.param_passes_to_wj_owned_sibling_call(
+                    func.body.as_slice(),
+                    &param_name,
+                    func,
+                ) {
+                    continue;
+                }
+                if self.param_only_used_in_discarding_let_binding(
                     func.body.as_slice(),
                     &param_name,
                     func,
@@ -155,6 +209,13 @@ impl<'ast> CodeGenerator<'ast> {
             for (param_name, ownership) in &analyzed.inferred_ownership {
                 if param_name != "self" {
                     if self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), param_name, func) {
+                        continue;
+                    }
+                    if self.param_only_used_in_discarding_let_binding(
+                        func.body.as_slice(),
+                        param_name,
+                        func,
+                    ) {
                         continue;
                     }
                 }
@@ -194,8 +255,20 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 });
             if !converged_borrow {
-                self.inferred_borrowed_params.remove(&param.name);
-                self.inferred_mut_borrowed_params.remove(&param.name);
+                let analyzer_borrowed = analyzed
+                    .inferred_ownership
+                    .get(&param.name)
+                    .is_some_and(|m| {
+                        matches!(
+                            m,
+                            crate::analyzer::OwnershipMode::Borrowed
+                                | crate::analyzer::OwnershipMode::MutBorrowed
+                        )
+                    });
+                if !analyzer_borrowed {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                }
             }
         }
 
@@ -257,6 +330,13 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name == "self" {
                     continue;
                 }
+                if self.current_struct_name.as_ref().is_some_and(|sn| {
+                    self.struct_is_owned_engine_key_facade(sn, param)
+                }) {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    continue;
+                }
                 if self.current_fn_mixed_forwarder_params.contains(&param.name)
                     || self.param_has_forward_ref_keep_owned(
                         func.body.as_slice(),
@@ -268,9 +348,38 @@ impl<'ast> CodeGenerator<'ast> {
                     self.str_ref_optimized_params.remove(&param.name);
                     continue;
                 }
-                match self.get_param_ownership(&param.name, analyzed) {
+                if self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name) {
+                    if !matches!(&param.type_, Type::Vec(_)) {
+                        self.inferred_borrowed_params.remove(&param.name);
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                        continue;
+                    }
+                }
+                if self.param_only_used_in_discarding_let_binding(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                ) {
+                    continue;
+                }
+                match self
+                    .get_param_ownership(&param.name, analyzed)
+                    .or_else(|| analyzed.inferred_ownership.get(&param.name).copied())
+                {
                     Some(crate::analyzer::OwnershipMode::Borrowed) => {
-                        self.inferred_borrowed_params.insert(param.name.clone());
+                        if self.param_only_used_as_call_argument(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ) && !self.param_should_emit_borrowed_delegation_formal(param, func)
+                            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                            && !self.is_type_copy(&param.type_)
+                        {
+                            // has_key → get: body-converged borrow must not emit `&Key`
+                            // when the callee chain keeps WJ-owned formals.
+                        } else {
+                            self.inferred_borrowed_params.insert(param.name.clone());
+                        }
                     }
                     Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
                         self.inferred_mut_borrowed_params.insert(param.name.clone());
@@ -297,6 +406,13 @@ impl<'ast> CodeGenerator<'ast> {
                             func,
                         ))
                 {
+                    continue;
+                }
+                if self.param_only_used_in_discarding_let_binding(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                ) {
                     continue;
                 }
                 if let Some(Type::Reference(inner)) = analyzed.inferred_param_types.get(idx) {
@@ -432,6 +548,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
 
         self.promote_callee_forwarded_borrows(func);
+        self.promote_readonly_operand_borrows(func);
         self.strip_borrow_inference_for_owning_param_uses(func);
         if self.in_impl_block {
             if self.current_struct_name.is_some() {
@@ -599,6 +716,9 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
                 continue;
             }
+            if self.param_is_non_self_forward_facade_borrow_candidate(param, func) {
+                continue;
+            }
             if self.param_passed_to_owned_self_method_arg(func.body.as_slice(), &param.name, func)
                 || self.param_passes_to_wj_owned_sibling_call(
                     func.body.as_slice(),
@@ -619,6 +739,101 @@ impl<'ast> CodeGenerator<'ast> {
                 self.inferred_mut_borrowed_params.remove(&param.name);
             }
         }
+    }
+
+    /// Promote non-Copy params used only as read operands (e.g. `value.data.len()`) to borrowed
+    /// formals so preregister converges `&Value` before sibling callers emit (`put_value` →
+    /// `apply_patch_put(key, &value)`).
+    fn promote_readonly_operand_borrows(&mut self, func: &FunctionDecl<'ast>) {
+        for param in &func.parameters {
+            if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
+                continue;
+            }
+            if matches!(
+                &param.type_,
+                Type::Reference(_) | Type::MutableReference(_)
+            ) {
+                continue;
+            }
+            if self.inferred_borrowed_params.contains(&param.name)
+                || self.inferred_mut_borrowed_params.contains(&param.name)
+            {
+                continue;
+            }
+            if (self.current_fn_mixed_forwarder_params.contains(&param.name)
+                || self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
+                || self.param_passes_to_wj_owned_sibling_call(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+                || self.current_struct_name.as_ref().is_some_and(|sn| {
+                    self.struct_is_owned_engine_key_facade(sn, param)
+                }))
+                && !self.param_is_non_self_forward_facade_borrow_candidate(param, func)
+            {
+                continue;
+            }
+            if self.param_is_non_self_forward_facade_borrow_candidate(param, func) {
+                self.inferred_borrowed_params.insert(param.name.clone());
+                continue;
+            }
+            if self.param_has_owning_method_use(func.body.as_slice(), &param.name, func) {
+                continue;
+            }
+            if self.param_only_used_in_discarding_let_binding(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
+                continue;
+            }
+            if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name) {
+                self.inferred_borrowed_params.insert(param.name.clone());
+            }
+        }
+    }
+
+    fn param_is_non_self_forward_facade_borrow_candidate(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        self.count_non_self_params(func) >= 2
+            && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
+            && self.param_passed_to_non_self_receiver_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
+    }
+
+    /// Read-only use including `let _ = param.field` discard bindings (wdb apply_patch_put value).
+    fn param_has_readonly_expression_use(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        for stmt in body {
+            match stmt {
+                Statement::Let { value, else_block, .. } => {
+                    if self.expression_uses_param_as_read_operand(value, param_name) {
+                        return true;
+                    }
+                    if else_block.as_ref().is_some_and(|b| {
+                        self.param_has_readonly_expression_use(b.as_slice(), param_name)
+                    }) {
+                        return true;
+                    }
+                }
+                _ => {
+                    if self.statement_uses_param_as_read_operand(stmt, param_name) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// Promote owned params to borrowed when the body only forwards them to borrowing callees.
@@ -867,6 +1082,14 @@ impl<'ast> CodeGenerator<'ast> {
         let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
         let registry_sig = self.signature_registry.get_signature(&qualified);
 
+        // Preregister/formal emission already converged emitted Rust contracts — do not downgrade.
+        if registry_sig
+            .or_else(|| self.get_signature_with_global(&qualified))
+            .is_some_and(|reg| reg.emitted_rust_ref_params.is_some())
+        {
+            return;
+        }
+
         // Static methods: register analyzed signatures for call-site lookup, except when
         // body-inferred borrow would override an owned Copy formal (MannequinMesh::generate).
         if !has_self_receiver {
@@ -1058,6 +1281,7 @@ impl<'ast> CodeGenerator<'ast> {
             return_type: func.return_type.clone(),
             has_self_receiver,
             forwarding_borrow_params,
+            emitted_rust_ref_params: None,
         };
 
         self.register_method_signature(signature);
@@ -1172,10 +1396,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Statement::Return { .. } => false,
             Statement::Let { pattern, value, else_block, .. } => {
-                let discard = matches!(
-                    pattern,
-                    Pattern::Identifier(name) if name == "_"
-                );
+                let discard = Self::is_discarding_let_pattern(pattern);
                 (!discard && self.expression_uses_param_as_read_operand(value, param_name))
                     || else_block.as_ref().is_some_and(|b| {
                         self.param_used_as_read_operand(b.as_slice(), param_name)
@@ -1353,6 +1574,9 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        if self.method_call_arg_expects_borrow(object, method, i, func) {
+                            continue;
+                        }
                         if self.method_call_sibling_ast_expects_owned_arg(
                             object, method, i, func,
                         ) {
@@ -1360,9 +1584,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         if self.method_call_arg_formal_is_owned_non_copy(object, method, i, func) {
                             return true;
-                        }
-                        if self.method_call_arg_expects_borrow(object, method, i, func) {
-                            continue;
                         }
                     }
                 }
@@ -1398,6 +1619,191 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `if f(param) { ... param ... } else { ... param ... }` — owned outer formal (wdb put_value).
+    pub(in crate::codegen::rust) fn param_used_in_if_with_condition_and_branches(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_has_if_with_condition_and_branches(param_name, stmt))
+    }
+
+    /// `if cond { ... param ... } else { ... param ... }` — keep owned outer param (value in both arms).
+    pub(in crate::codegen::rust) fn param_used_in_if_else_both_branches(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_has_if_else_both_branches(param_name, stmt))
+    }
+
+    fn stmt_has_if_else_both_branches(&self, param_name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::If {
+                then_block,
+                else_block: Some(else_block),
+                ..
+            } => {
+                self.stmts_mention_param_name(param_name, then_block)
+                    && self.stmts_mention_param_name(param_name, else_block)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.stmts_have_if_else_both_branches(param_name, then_block)
+                    || else_block.as_ref().is_some_and(|block| {
+                        self.stmts_have_if_else_both_branches(param_name, block)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn stmts_have_if_else_both_branches(
+        &self,
+        param_name: &str,
+        stmts: &[&'ast Statement<'ast>],
+    ) -> bool {
+        stmts
+            .iter()
+            .any(|stmt| self.stmt_has_if_else_both_branches(param_name, stmt))
+    }
+
+    fn stmt_has_if_with_condition_and_branches(
+        &self,
+        param_name: &str,
+        stmt: &Statement<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::If {
+                condition,
+                then_block,
+                else_block: Some(else_block),
+                ..
+            } => {
+                self.expr_mentions_param_name(param_name, condition)
+                    && self.stmts_mention_param_name(param_name, then_block)
+                    && self.stmts_mention_param_name(param_name, else_block)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.stmts_have_if_with_condition_and_branches(param_name, then_block)
+                    || else_block.as_ref().is_some_and(|block| {
+                        self.stmts_have_if_with_condition_and_branches(param_name, block)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn stmts_have_if_with_condition_and_branches(
+        &self,
+        param_name: &str,
+        stmts: &[&'ast Statement<'ast>],
+    ) -> bool {
+        stmts.iter().any(|stmt| {
+            self.stmt_has_if_with_condition_and_branches(param_name, stmt)
+        })
+    }
+
+    fn stmts_mention_param_name(
+        &self,
+        param_name: &str,
+        stmts: &[&'ast Statement<'ast>],
+    ) -> bool {
+        stmts
+            .iter()
+            .any(|stmt| self.stmt_mentions_param_name(param_name, stmt))
+    }
+
+    fn stmt_mentions_param_name(&self, param_name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => self.expr_mentions_param_name(param_name, expr),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_mentions_param_name(param_name, expr),
+            Statement::Let { value, .. } => self.expr_mentions_param_name(param_name, value),
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expr_mentions_param_name(param_name, condition)
+                    || self.stmts_mention_param_name(param_name, then_block)
+                    || else_block.as_ref().is_some_and(|block| {
+                        self.stmts_mention_param_name(param_name, block)
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expr_mentions_param_name(param_name, condition)
+                    || self.stmts_mention_param_name(param_name, body)
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expr_mentions_param_name(param_name, iterable)
+                    || self.stmts_mention_param_name(param_name, body)
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => self.stmts_mention_param_name(param_name, body),
+            Statement::Match { value, arms, .. } => {
+                self.expr_mentions_param_name(param_name, value)
+                    || arms.iter().any(|arm| {
+                        self.expr_mentions_param_name(param_name, &arm.body)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_mentions_param_name(&self, param_name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::FieldAccess { object, .. } => {
+                self.expr_mentions_param_name(param_name, object)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expr_mentions_param_name(param_name, function)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_mentions_param_name(param_name, arg)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_mentions_param_name(param_name, left)
+                    || self.expr_mentions_param_name(param_name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_mentions_param_name(param_name, operand)
+            }
+            Expression::TryOp { expr, .. } => self.expr_mentions_param_name(param_name, expr),
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                self.expr_mentions_param_name(param_name, object)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_mentions_param_name(param_name, arg)
+                    })
+            }
+            Expression::Block { statements, .. } => {
+                self.stmts_mention_param_name(param_name, statements)
+            }
+            _ => false,
+        }
+    }
+
     /// True when the body forwards `param_name` to a borrowing callee and also reads
     /// the param afterward (forward-ref pattern: keep owned formal, borrow at call site).
     pub(in crate::codegen::rust) fn param_has_forward_ref_keep_owned(
@@ -1406,6 +1812,9 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        if self.param_used_in_if_with_condition_and_branches(body, param_name) {
+            return true;
+        }
         if !self.param_used_as_read_operand(body, param_name) {
             return false;
         }
@@ -1443,10 +1852,22 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         match stmt {
             Statement::Expression { expr, .. } => {
+                // Bare `path` as a statement expression is not a call argument.
+                if matches!(expr, Expression::Identifier { name, .. } if name == param_name) {
+                    return false;
+                }
                 self.expression_passes_param_as_call_argument(expr, param_name, func)
             }
-            Statement::Let { value, else_block, .. } => {
-                self.expression_passes_param_as_call_argument(value, param_name, func)
+            Statement::Let { pattern, value, else_block, .. } => {
+                // Discard bindings (`let _ = path` / `let _ = (path, x)`) mention the
+                // param without passing it to a callee — do not treat as call-arg use.
+                // Only nested Call/MethodCall nodes inside the discard value count.
+                let from_value = if Self::is_discarding_let_pattern(pattern) {
+                    self.expression_has_nested_call_passing_param(value, param_name, func)
+                } else {
+                    self.expression_passes_param_as_call_argument(value, param_name, func)
+                };
+                from_value
                     || else_block.as_ref().is_some_and(|b| {
                         self.param_passed_as_call_argument(b.as_slice(), param_name, func)
                     })
@@ -1494,6 +1915,67 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when `expr` contains a Call/MethodCall that receives `param_name` as an argument.
+    /// Unlike [`expression_passes_param_as_call_argument`], bare identifiers and tuples that
+    /// merely mention the param (e.g. discard bindings) return false.
+    fn expression_has_nested_call_passing_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                arguments.iter().any(|(_, arg)| {
+                    self.expression_passes_param_as_call_argument(arg, param_name, func)
+                }) || self.expression_has_nested_call_passing_param(function, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_has_nested_call_passing_param(arg, param_name, func)
+                    })
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                arguments.iter().any(|(_, arg)| {
+                    self.expression_passes_param_as_call_argument(arg, param_name, func)
+                }) || self.expression_has_nested_call_passing_param(object, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_has_nested_call_passing_param(arg, param_name, func)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_nested_call_passing_param(left, param_name, func)
+                    || self.expression_has_nested_call_passing_param(right, param_name, func)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_has_nested_call_passing_param(operand, param_name, func)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_has_nested_call_passing_param(object, param_name, func)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_has_nested_call_passing_param(object, param_name, func)
+                    || self.expression_has_nested_call_passing_param(index, param_name, func)
+            }
+            Expression::Tuple { elements, .. } => elements.iter().any(|e| {
+                self.expression_has_nested_call_passing_param(e, param_name, func)
+            }),
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
+                self.expression_has_nested_call_passing_param(v, param_name, func)
+            }),
+            Expression::Block { statements, .. } => {
+                self.param_passed_as_call_argument(statements.as_slice(), param_name, func)
+            }
+            _ => false,
+        }
+    }
+
     fn expression_passes_param_as_call_argument(
         &self,
         expr: &Expression<'ast>,
@@ -1501,11 +1983,20 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
     ) -> bool {
         match expr {
+            Expression::Identifier { name, .. } => name == param_name,
             Expression::MethodCall { arguments, .. } => arguments.iter().any(|(_, arg)| {
                 matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    || self.expression_passes_param_as_call_argument(arg, param_name, func)
             }),
             Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
                 matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    || self.expression_passes_param_as_call_argument(arg, param_name, func)
+            }),
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
+                self.expression_passes_param_as_call_argument(v, param_name, func)
+            }),
+            Expression::Tuple { elements, .. } => elements.iter().any(|e| {
+                self.expression_passes_param_as_call_argument(e, param_name, func)
             }),
             Expression::Binary { left, right, .. } => {
                 self.expression_passes_param_as_call_argument(left, param_name, func)
@@ -2262,26 +2753,41 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when every use of `param_name` is inside `let _ = (...)` discard bindings.
+    /// True when the parameter only appears inside a **tuple** discard binding
+    /// like `let _ = (key.bytes.len(), value)` — i.e., a multi-param "suppress
+    /// unused" pattern. Keeps source-declared ownership.
+    ///
+    /// Returns false for simple value discards like `let _ = bytes.len()` —
+    /// those represent genuine read-only uses inferred as borrows.
+    ///
+    /// Also returns false for text types (`string`/`String`/`str`) — borrowing
+    /// to `&str` is always correct and more efficient for discarded string params.
     pub(in crate::codegen::rust) fn param_only_used_in_discarding_let_binding(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        if !self.param_used_as_read_operand(body, param_name) {
+        if body.is_empty() {
             return false;
         }
-        if self.param_passed_as_call_argument(body, param_name, func) {
-            return false;
+        if let Some(param) = func.parameters.iter().find(|p| p.name == param_name) {
+            if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+                return false;
+            }
         }
+        let mut found_in_tuple_discard = false;
         for stmt in body {
             match stmt {
                 Statement::Let { pattern, value, .. } => {
-                    if !Self::is_discarding_let_pattern(pattern) {
-                        return false;
-                    }
-                    if !Self::expression_mentions_identifier(value, param_name) {
-                        return false;
+                    if Self::expression_mentions_identifier(value, param_name) {
+                        if Self::is_discarding_let_pattern(pattern)
+                            && matches!(value, Expression::Tuple { .. })
+                        {
+                            found_in_tuple_discard = true;
+                        } else {
+                            return false;
+                        }
                     }
                 }
                 _ => {
@@ -2291,12 +2797,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        !body.is_empty()
+        found_in_tuple_discard
     }
 
     fn is_discarding_let_pattern(pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Wildcard => true,
+            Pattern::Identifier(name) if name == "_" => true,
             Pattern::Tuple(items) => items.iter().all(Self::is_discarding_let_pattern),
             _ => false,
         }
@@ -2405,6 +2912,26 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when `param_name` is only used as `Struct { param_name: param_name }` (or shorthand).
+    pub(in crate::codegen::rust) fn param_moves_via_struct_literal_init(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        if body.len() != 1 {
+            return false;
+        }
+        let expr = match body[0] {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => expr,
+            _ => return false,
+        };
+        let Expression::StructLiteral { fields, .. } = expr else {
+            return false;
+        };
+        fields.iter().any(|(_, value)| {
+            matches!(value, Expression::Identifier { name, .. } if name == param_name)
+        })
+    }
+
     pub(in crate::codegen::rust) fn param_only_used_in_same_name_struct_field_return(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -2449,22 +2976,26 @@ impl<'ast> CodeGenerator<'ast> {
         }) else {
             return false;
         };
-        let Some(ms) = self.lookup_method_signature(&rt, method) else {
-            return false;
-        };
-        let mut sig = ms.to_function_signature();
         let qualified = format!("{rt}::{method}");
-        if let Some(reg) = self
+        let registry_sig = self
             .signature_registry
             .get_signature(&qualified)
-            .or_else(|| self.get_signature_with_global(&qualified))
-        {
-            if reg.emitted_rust_ref_params.is_some() {
-                sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
-                sig.formal_param_types = reg.formal_param_types.clone();
-                sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
+            .or_else(|| self.get_signature_with_global(&qualified));
+        let mut sig = if let Some(ms) = self.lookup_method_signature(&rt, method) {
+            let mut sig = ms.to_function_signature();
+            if let Some(reg) = registry_sig {
+                if reg.emitted_rust_ref_params.is_some() {
+                    sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
+                    sig.formal_param_types = reg.formal_param_types.clone();
+                    sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
+                }
             }
-        }
+            sig
+        } else if let Some(reg) = registry_sig {
+            reg.clone()
+        } else {
+            return false;
+        };
         let pidx = sig.arg_param_index(arg_index);
         // WJ source formals (`key: Key`) are authoritative for mixed-forwarder detection.
         // Converged registry `param_types` may already be `&Key` for borrow-only delegates
@@ -2490,6 +3021,170 @@ impl<'ast> CodeGenerator<'ast> {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && !type_analysis::is_copy_type(t)
             })
+    }
+
+    /// True when `param_name` is passed to a method on a receiver other than `self` / `self.field`.
+    pub(in crate::codegen::rust) fn param_passed_to_non_self_receiver_method_arg(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_passes_to_non_self_receiver_method_arg(stmt, param_name, func) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_passes_to_non_self_receiver_method_arg(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(expr, param_name, func)
+            }
+            Statement::Return { .. } => false,
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_passes_to_non_self_receiver_method_arg(condition, param_name, func)
+                    || self.param_passed_to_non_self_receiver_method_arg(
+                        then_block.as_slice(),
+                        param_name,
+                        func,
+                    )
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_to_non_self_receiver_method_arg(
+                            b.as_slice(),
+                            param_name,
+                            func,
+                        )
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(condition, param_name, func)
+                    || self.param_passed_to_non_self_receiver_method_arg(
+                        body.as_slice(),
+                        param_name,
+                        func,
+                    )
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(iterable, param_name, func)
+                    || self.param_passed_to_non_self_receiver_method_arg(
+                        body.as_slice(),
+                        param_name,
+                        func,
+                    )
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(value, param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_to_non_self_receiver_method_arg(
+                            b.as_slice(),
+                            param_name,
+                            func,
+                        )
+                    })
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => self.param_passed_to_non_self_receiver_method_arg(
+                body.as_slice(),
+                param_name,
+                func,
+            ),
+            Statement::Match { value, arms, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(value, param_name, func)
+                    || arms.iter().any(|arm| {
+                        self.expression_passes_to_non_self_receiver_method_arg(
+                            &arm.body,
+                            param_name,
+                            func,
+                        )
+                    })
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(value, param_name, func)
+            }
+            Statement::Defer { statement, .. } => {
+                self.statement_passes_to_non_self_receiver_method_arg(statement, param_name, func)
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_passes_to_non_self_receiver_method_arg(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                if !crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                    object,
+                ) {
+                    for (_, arg) in arguments {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                            return true;
+                        }
+                    }
+                }
+                self.expression_passes_to_non_self_receiver_method_arg(object, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_passes_to_non_self_receiver_method_arg(
+                            arg, param_name, func,
+                        )
+                    })
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(function, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_passes_to_non_self_receiver_method_arg(
+                            arg, param_name, func,
+                        )
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(left, param_name, func)
+                    || self.expression_passes_to_non_self_receiver_method_arg(
+                        right, param_name, func,
+                    )
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(operand, param_name, func)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(object, param_name, func)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_passes_to_non_self_receiver_method_arg(object, param_name, func)
+                    || self.expression_passes_to_non_self_receiver_method_arg(
+                        index, param_name, func,
+                    )
+            }
+            Expression::Block { statements, .. } => {
+                self.param_passed_to_non_self_receiver_method_arg(
+                    statements.as_slice(),
+                    param_name,
+                    func,
+                )
+            }
+            _ => false,
+        }
     }
 
     /// True when `param_name` is passed to `self.some_method(...)` and the callee's WJ
@@ -2762,6 +3457,14 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
+            // WJ AST owned non-copy formals are not borrowing callees for delegation
+            // decisions unless codegen already recorded an emitted `&T` formal.
+            if sig.formal_param_type(pidx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && !type_analysis::is_copy_type(t)
+            }) {
+                return false;
+            }
             if sig
                 .forwarding_borrow_params
                 .as_ref()
@@ -2774,6 +3477,7 @@ impl<'ast> CodeGenerator<'ast> {
             if self.signature_param_expects_borrow(&sig, arg_index) {
                 return true;
             }
+            return false;
         }
         self.method_has_forwarding_borrow_param(method, arg_index)
     }
@@ -2790,10 +3494,10 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// Multi-method engine facade (get/put/delete) keeps owned `Key`/`Value` formals (WDB-046).
+    /// Multi-method engine / lookup facades keep owned `Key`/`Value` formals (WDB-046).
     pub(in crate::codegen::rust) fn struct_is_owned_engine_key_facade(
         &self,
-        struct_name: &str,
+        _struct_name: &str,
         param: &crate::parser::Parameter,
     ) -> bool {
         if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
@@ -2802,9 +3506,27 @@ impl<'ast> CodeGenerator<'ast> {
         if !matches!(&param.type_, Type::Custom(name) if name == "Key" || name == "Value") {
             return false;
         }
-        ["get", "put", "delete"]
+        let methods = &self.current_impl_methods;
+        (["get", "put", "delete"]
             .iter()
-            .all(|name| self.current_impl_methods.contains(*name))
+            .all(|name| methods.contains(*name)))
+            || (["get", "has_key"].iter().all(|name| methods.contains(*name)))
+            || methods.contains("seed_write")
+    }
+
+    /// True when `param_name` appears in an `if` condition expression in `func`.
+    pub(in crate::codegen::rust) fn body_forwards_param_in_if_condition(
+        &self,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        func.body.iter().any(|stmt| {
+            matches!(
+                stmt,
+                Statement::If { condition, .. }
+                    if self.expr_mentions_param_name(param_name, condition)
+            )
+        })
     }
 
     /// True when a non-`self` param should emit `&T`/`&str` because the body only forwards to borrowing callees.
@@ -2813,24 +3535,191 @@ impl<'ast> CodeGenerator<'ast> {
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        let non_self_facade = self.param_is_non_self_forward_facade_borrow_candidate(param, func);
         param.name != "self"
             && !type_analysis::is_copy_type(&param.type_)
             && !matches!(
                 &param.type_,
                 Type::Reference(_) | Type::MutableReference(_)
             )
+            && (!self.param_passed_from_multiple_statements(func.body.as_slice(), &param.name, func)
+                || non_self_facade)
+            && !self.param_used_in_if_with_condition_and_branches(
+                func.body.as_slice(),
+                &param.name,
+            )
             && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
-            && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+            && (!self.current_fn_mixed_forwarder_params.contains(&param.name) || non_self_facade)
             && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
             && !self.current_struct_name.as_ref().is_some_and(|sn| {
                 self.struct_is_owned_engine_key_facade(sn, param)
             })
-            && (self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
-                || (Self::param_type_is_vec_container(&param.type_)
-                    && self.param_only_used_in_same_name_struct_field_return(
+            && !(self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
+                && self.count_non_self_params(func) == 1)
+            && (non_self_facade
+                || (self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
+                    && self.count_non_self_params(func) >= 2
+                    && func.body.len() == 1
+                    && !self.func_is_pure_forwarding_delegate(func)
+                    && !self.param_passed_from_multiple_statements(
                         func.body.as_slice(),
                         &param.name,
-                    )))
+                        func,
+                    ))
+                || self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func))
+    }
+
+    /// True when `param_name` is forwarded as a call argument from more than one statement.
+    pub(in crate::codegen::rust) fn param_passed_from_multiple_statements(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut sites = 0usize;
+        for stmt in body {
+            if self.statement_passes_param_as_call_argument(stmt, param_name, func) {
+                sites += 1;
+                if sites > 1 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Single-expression body that forwards all params to one callee (e.g. `self.engine.put(k, v)`).
+    pub(in crate::codegen::rust) fn func_is_pure_forwarding_delegate(&self, func: &FunctionDecl<'ast>) -> bool {
+        if func.body.len() != 1 {
+            return false;
+        }
+        let stmt = func.body[0];
+        let expr = match stmt {
+            Statement::Expression { expr, .. } => expr,
+            Statement::Return { value: Some(expr), .. } => expr,
+            _ => return false,
+        };
+        self.expression_is_pure_forwarding_delegate(expr, func)
+    }
+
+    /// Re-derive pure-forwarding from the active function body (prepare flag can stale).
+    pub(in crate::codegen::rust) fn refresh_pure_forwarding_delegate_flag(&mut self) {
+        // Nested blocks (if arms, loops) temporarily swap `current_function_body` to a
+        // single forwarding call — do not treat that as the whole function (put_value if-arm).
+        if self.current_function_body != self.full_function_body_snapshot {
+            return;
+        }
+        if self.current_function_body.len() != 1 {
+            return;
+        }
+        let stmt = self.current_function_body[0];
+        let expr = match stmt {
+            Statement::Expression { expr, .. } => expr,
+            Statement::Return { value: Some(expr), .. } => expr,
+            _ => return,
+        };
+        let pseudo = FunctionDecl {
+            name: self
+                .current_function_name
+                .clone()
+                .unwrap_or_else(|| "anon".to_string()),
+            is_pub: false,
+            is_extern: false,
+            type_params: Vec::new(),
+            where_clause: Vec::new(),
+            decorators: Vec::new(),
+            is_async: false,
+            parameters: self.current_function_params.clone(),
+            return_type: self.current_function_return_type.clone(),
+            return_decorators: Vec::new(),
+            body: self.current_function_body.clone(),
+            parent_type: self.current_struct_name.clone(),
+            impl_trait: None,
+            doc_comment: None,
+        };
+        self.current_func_is_pure_forwarding_delegate =
+            self.expression_is_pure_forwarding_delegate(expr, &pseudo);
+    }
+
+    fn expression_is_pure_forwarding_delegate(
+        &self,
+        expr: &'ast Expression<'ast>,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let arguments = match expr {
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                let receiver_is_self = matches!(object, Expression::Identifier { name, .. } if name == "self")
+                    || matches!(
+                        object,
+                        Expression::FieldAccess {
+                            object: obj,
+                            ..
+                        } if matches!(obj, Expression::Identifier { name, .. } if name == "self")
+                    );
+                if !receiver_is_self {
+                    return false;
+                }
+                arguments.as_slice()
+            }
+            Expression::Call { arguments, .. } => arguments.as_slice(),
+            _ => return false,
+        };
+        let non_self: Vec<_> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .map(|p| p.name.as_str())
+            .collect();
+        if non_self.is_empty() {
+            return !arguments.is_empty()
+                && arguments.iter().all(|(_, arg)| {
+                    matches!(
+                        arg,
+                        Expression::FieldAccess { object, .. }
+                            if crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                                object,
+                            )
+                    ) || matches!(arg, Expression::Identifier { name, .. } if name == "self")
+                });
+        }
+        let forwarded: Vec<_> = arguments
+            .iter()
+            .filter_map(|(_, arg)| match arg {
+                Expression::Identifier { name, .. } if name != "self" => Some(name.as_str()),
+                Expression::FieldAccess { object, .. }
+                    if crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                        object,
+                    ) =>
+                {
+                    None
+                }
+                _ => None,
+            })
+            .collect();
+        forwarded.len() == non_self.len()
+            && non_self.iter().all(|n| forwarded.contains(n))
+    }
+
+    fn count_non_self_params(&self, func: &FunctionDecl<'ast>) -> usize {
+        func.parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .count()
+    }
+
+    /// Single-parameter helper that only forwards its arg to callees (e.g. `apply_patch_delete`).
+    pub(in crate::codegen::rust) fn param_is_single_arg_call_only_delegate(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        param.name != "self"
+            && self.count_non_self_params(func) == 1
+            && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
     }
 
     fn param_type_is_vec_container(ty: &Type) -> bool {
@@ -3307,6 +4196,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
         updated.emitted_rust_ref_params = Some(emitted);
         self.signature_registry.add_function(qualified, updated);
+
+        let mut ms_emitted = vec![false; sig.param_types.len()];
+        let mut user_param_idx = 0;
+        for param in &func.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            if user_param_idx < ms_emitted.len() {
+                ms_emitted[user_param_idx] = self.emitted_rust_ref_formals.contains(&param.name)
+                    || self.str_ref_optimized_params.contains(&param.name);
+                ms_emitted[user_param_idx] =
+                    ms_emitted[user_param_idx] && !self.inferred_mut_borrowed_params.contains(&param.name);
+            }
+            user_param_idx += 1;
+        }
+        sig.emitted_rust_ref_params = Some(ms_emitted);
     }
 
     /// Align free-function registry entries with emitted Rust formals so cross-file call

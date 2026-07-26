@@ -81,6 +81,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_struct_fields: std::collections::HashSet<String>, // Field names in current impl block
     pub(crate) current_struct_name: Option<String>, // Name of struct in current impl block
     pub(crate) current_impl_methods: std::collections::HashSet<String>, // Method names in current impl block
+    /// Impl types whose sibling methods were preregistered across all impl blocks.
+    pub(crate) preregistered_impl_sibling_types: std::collections::HashSet<String>,
     /// WJ source non-`self` formal types per method, merged across impl blocks for one struct.
     pub(crate) struct_method_ast_formal_param_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Vec<Type>>>,
@@ -110,6 +112,9 @@ pub struct CodeGenerator<'ast> {
     >,
     // FUNCTION CONTEXT: Track current function body for data flow analysis
     pub(crate) current_function_body: Vec<&'ast Statement<'ast>>, // Body of the current function being generated
+    /// Snapshot of the outer function body at prepare time — nested blocks temporarily
+    /// replace `current_function_body`; pure-forwarding refresh must not run on those.
+    pub(crate) full_function_body_snapshot: Vec<&'ast Statement<'ast>>,
     // Workspace root for source maps
     workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
@@ -181,6 +186,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_fn_emitted_mut_arg_indices: std::collections::HashSet<usize>,
     /// Params that keep owned Rust formals but borrow at select call sites (wdb `put_value`).
     pub(crate) current_fn_mixed_forwarder_params: std::collections::HashSet<String>,
+    /// Params that borrow at self/sibling calls inside if conditions (forward-ref guard).
+    pub(crate) current_fn_forward_ref_if_params: std::collections::HashSet<String>,
+    /// True when the current function body is a single `self[.field].method(...)` forward.
+    pub(crate) current_func_is_pure_forwarding_delegate: bool,
     // USER-WRITTEN CLOSURE: When true, suppress auto-borrowing transformations (preserve user intent)
     pub(crate) in_user_written_closure: bool,
     // USER CLOSURE PARAMS: Track parameters of current user-written closure
@@ -213,6 +222,8 @@ pub struct CodeGenerator<'ast> {
     // auto-clone since we want a reference to the original, not a reference to a clone.
     // e.g., &self.items[i] → reference to element, NOT &self.items[i].clone()
     pub(crate) in_borrow_context: bool,
+    /// True while generating an `if`/`while` condition expression (not branch bodies).
+    pub(crate) in_if_condition: bool,
     // STRING COMPARISON CONTEXT: Track when generating operands of string comparisons
     // Used to skip explicit * deref of &String (which becomes &str, breaking comparisons)
     // e.g., *id == flag_id → id == flag_id (both &String)
@@ -475,6 +486,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_struct_fields: std::collections::HashSet::new(),
             current_struct_name: None,
             current_impl_methods: std::collections::HashSet::new(),
+            preregistered_impl_sibling_types: std::collections::HashSet::new(),
             struct_method_ast_formal_param_types: std::collections::HashMap::new(),
             current_impl_instance_methods: std::collections::HashSet::new(),
             current_impl_consuming_self_methods: std::collections::HashSet::new(),
@@ -488,6 +500,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_type_bounds: Vec::new(),
             current_function_return_type: None,
             current_function_body: Vec::new(),
+            full_function_body_snapshot: Vec::new(),
             workspace_root: None,
             suppress_string_conversion: Cell::new(false),
             coerce_string_literals_to_owned: false,
@@ -507,6 +520,8 @@ impl<'ast> CodeGenerator<'ast> {
             function_emitted_mut_arg_indices: std::collections::HashMap::new(),
             current_fn_emitted_mut_arg_indices: std::collections::HashSet::new(),
             current_fn_mixed_forwarder_params: std::collections::HashSet::new(),
+            current_fn_forward_ref_if_params: std::collections::HashSet::new(),
+            current_func_is_pure_forwarding_delegate: false,
             in_user_written_closure: false,
             user_closure_params: std::collections::HashSet::new(),
             generating_assignment_target: false,
@@ -518,6 +533,7 @@ impl<'ast> CodeGenerator<'ast> {
             in_field_access_object: false,
             in_call_argument_generation: false,
             in_borrow_context: false,
+            in_if_condition: false,
             in_string_comparison: false,
             partial_eq_types: std::collections::HashSet::new(),
             trait_object_types: std::collections::HashSet::new(),
@@ -978,6 +994,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         analyzed.inferred_ownership.contains_key(param_name)
+    }
+
+    pub(crate) fn infer_call_arg_actual_safety_type(
+        &self,
+        arg_expr: &Expression<'ast>,
+        coerced: &str,
+    ) -> crate::ir::safety_type::SafetyType {
+        self.infer_actual_safety_type(arg_expr, coerced)
     }
 
     /// Get all param ownership entries, preferring IR when cutover is enabled.
@@ -1783,8 +1807,420 @@ impl<'ast> CodeGenerator<'ast> {
     /// This consolidates the identical check previously duplicated in
     /// `regular_call_arguments`, `function_call_generation`, and other
     /// argument-generation paths.
+    /// Forward-ref guard: params that keep owned formals but borrow at self/sibling calls.
+    pub(crate) fn should_borrow_forward_ref_param_at_call(
+        &self,
+        param_name: &str,
+        receiver: &Expression<'ast>,
+    ) -> bool {
+        self.in_if_condition
+            && self.current_fn_forward_ref_if_params.contains(param_name)
+            && !self.emitted_rust_ref_formals.contains(param_name)
+            && crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(receiver)
+    }
+
+    pub(crate) fn should_borrow_owned_param_in_if_condition(
+        &self,
+        param_name: &str,
+        receiver: &Expression<'ast>,
+    ) -> bool {
+        self.should_borrow_forward_ref_param_at_call(param_name, receiver)
+    }
+
+    pub(crate) fn caller_keeps_owned_outer_formal(&self, param_name: &str) -> bool {
+        self.current_function_params.iter().any(|p| {
+            p.name == param_name && !self.emitted_rust_ref_formals.contains(param_name)
+        })
+    }
+
+    /// Owned non-Copy outer formals pass by move at call sites; Rust auto-borrows for `&T` callees.
+    pub(crate) fn caller_owned_non_copy_formal(&self, name: &str) -> bool {
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && !self.emitted_rust_ref_formals.contains(name)
+                && !self.is_type_copy(&p.type_)
+        })
+    }
+
+    /// Owned non-Copy outer formals pass by move at call sites; Rust auto-borrows for `&T` callees
+    /// unless the param is a forward-ref (used in `if` conditions / mixed forwarder branches).
+    pub(crate) fn callee_call_uses_rust_auto_borrow_for_owned_struct(
+        &self,
+        arg_expr: &Expression<'ast>,
+    ) -> bool {
+        match arg_expr {
+            Expression::Identifier { name, .. } => {
+                if !self.caller_owned_non_copy_formal(name) {
+                    return false;
+                }
+                let body: Vec<_> = self.current_function_body.iter().copied().collect();
+                !self.current_fn_forward_ref_if_params.contains(name)
+                    && !self.param_used_in_if_with_condition_and_branches(&body, name)
+                    && !self.param_used_in_any_if_condition(&body, name)
+            }
+            _ => false,
+        }
+    }
+
+    /// Borrow/clone coercion for forward-ref and mixed-forwarder facade params at self calls.
+    pub(crate) fn apply_forward_ref_and_mixed_forwarder_call_coercion(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+        receiver: Option<&Expression<'ast>>,
+        callee_wants_shared_borrow: bool,
+        callee_wants_owned: bool,
+    ) {
+        let Expression::Identifier { name, .. } = arg_expr else {
+            return;
+        };
+        let Some(recv) = receiver else {
+            return;
+        };
+        if !crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(recv) {
+            return;
+        }
+        if self.emitted_rust_ref_formals.contains(name) {
+            if coerced.ends_with(".clone()") {
+                *coerced = coerced.trim_end_matches(".clone()").trim().to_string();
+            }
+            return;
+        }
+        let caller_owned = self.caller_keeps_owned_outer_formal(name);
+        if self.in_if_condition && caller_owned {
+            if coerced.ends_with(".clone()") {
+                let base = coerced.trim_end_matches(".clone()").trim();
+                *coerced = format!("&{base}");
+            } else if !coerced.starts_with('&') {
+                *coerced = format!("&{coerced}");
+            }
+            return;
+        }
+        let body: Vec<_> = self.current_function_body.iter().copied().collect();
+        let is_forward_ref = self.current_fn_forward_ref_if_params.contains(name)
+            || self.param_used_in_if_with_condition_and_branches(&body, name)
+            || self.param_used_in_any_if_condition(&body, name);
+        let is_mixed = self.current_fn_mixed_forwarder_params.contains(name)
+            || is_forward_ref;
+        if !caller_owned || (!is_forward_ref && !is_mixed) {
+            if !self.in_if_condition
+                && caller_owned
+                && !is_forward_ref
+                && !self.current_fn_forward_ref_if_params.is_empty()
+                && callee_wants_owned
+                && !callee_wants_shared_borrow
+                && !coerced.starts_with('&')
+            {
+                *coerced = format!("&{coerced}");
+                return;
+            }
+            if !self.in_if_condition
+                && caller_owned
+                && callee_wants_shared_borrow
+                && !coerced.starts_with('&')
+                && !self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_expr)
+            {
+                *coerced = format!("&{coerced}");
+                return;
+            }
+            if !self.in_if_condition
+                && caller_owned
+                && callee_wants_owned
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                let base = coerced.trim_start_matches('&');
+                *coerced = if base.ends_with(".clone()") {
+                    base.to_string()
+                } else {
+                    format!("{base}.clone()")
+                };
+            }
+            return;
+        }
+        if self.in_if_condition && is_forward_ref {
+            if coerced.ends_with(".clone()") {
+                let base = coerced.trim_end_matches(".clone()").trim();
+                *coerced = format!("&{base}");
+            } else if !coerced.starts_with('&') {
+                *coerced = format!("&{coerced}");
+            }
+            return;
+        }
+        if self.in_if_condition {
+            return;
+        }
+        if callee_wants_shared_borrow {
+            if !coerced.starts_with('&')
+                && !(self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_expr)
+                    && !is_forward_ref)
+            {
+                if coerced.ends_with(".clone()") {
+                    let base = coerced.trim_end_matches(".clone()").trim();
+                    *coerced = format!("&{base}");
+                } else {
+                    *coerced = format!("&{coerced}");
+                }
+            }
+        } else if callee_wants_owned
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            let base = coerced.trim_start_matches('&');
+            *coerced = if base.ends_with(".clone()") {
+                base.to_string()
+            } else {
+                format!("{base}.clone()")
+            };
+        }
+    }
+
+    /// Final call-site pass for owned outer formals: borrow in `if` conditions, clone for owned callees elsewhere.
+    pub(crate) fn finalize_owned_outer_formal_call_arg(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+        callee_wants_shared_borrow: bool,
+        callee_wants_owned: bool,
+    ) {
+        let Expression::Identifier { name, .. } = arg_expr else {
+            return;
+        };
+        if !self.caller_keeps_owned_outer_formal(name) {
+            return;
+        }
+        if self.in_if_condition {
+            if !coerced.starts_with('&') {
+                if coerced.ends_with(".clone()") {
+                    let base = coerced.trim_end_matches(".clone()").trim();
+                    *coerced = format!("&{base}");
+                } else {
+                    *coerced = format!("&{coerced}");
+                }
+            }
+            return;
+        }
+        if callee_wants_owned
+            && !callee_wants_shared_borrow
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            let base = coerced.trim_start_matches('&');
+            *coerced = if base.ends_with(".clone()") {
+                base.to_string()
+            } else {
+                format!("{base}.clone()")
+            };
+        } else if callee_wants_owned
+            && !callee_wants_shared_borrow
+            && !coerced.ends_with(".clone()")
+            && !coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+            && (self.current_fn_forward_ref_if_params.contains(name)
+                || self.current_fn_mixed_forwarder_params.contains(name))
+        {
+            *coerced = format!("{coerced}.clone()");
+        } else if callee_wants_shared_borrow
+            && !callee_wants_owned
+            && !coerced.starts_with('&')
+            && !self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_expr)
+        {
+            *coerced = format!("&{coerced}");
+        }
+    }
+
+    /// Strip spurious borrow/clone for pure forwarding delegates at the final call arg.
+    pub(crate) fn pure_forwarding_strip_call_arg(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+    ) {
+        if !self.current_func_is_pure_forwarding_delegate {
+            return;
+        }
+        let forwarded = match arg_expr {
+            Expression::Identifier { name, .. } => self
+                .current_function_params
+                .iter()
+                .any(|p| p.name == *name && p.name != "self"),
+            Expression::FieldAccess { object, .. } => {
+                crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(object)
+            }
+            _ => false,
+        };
+        if !forwarded {
+            return;
+        }
+        if matches!(arg_expr, Expression::Identifier { .. }) {
+            if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                *coerced = coerced[1..].to_string();
+            }
+        }
+        if coerced.ends_with(".clone()") {
+            *coerced = coerced.trim_end_matches(".clone()").trim().to_string();
+        }
+    }
+
+    /// Pure-forwarding strip, but keep callee-required borrows (asymmetric facade calls).
+    pub(crate) fn maybe_pure_forwarding_strip_call_arg(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+        _receiver_type: Option<&str>,
+        _method: Option<&str>,
+        _arg_index: Option<usize>,
+        _user_arg_count: Option<usize>,
+    ) {
+        if !self.current_func_is_pure_forwarding_delegate {
+            return;
+        }
+        // Single-expression owned-formal delegates (TxnManager::seed_write) must not keep
+        // stale registry `&` from callee body analysis (MemoryEngine::seed_write key.bytes.len()).
+        self.pure_forwarding_strip_call_arg(coerced, arg_expr);
+    }
+
+    /// AST-driven fallback: borrow owned forward-ref params in `if` condition call sites.
+    pub(crate) fn coerce_forward_ref_params_in_if_condition(
+        &self,
+        condition: &Expression<'ast>,
+        mut cond_str: String,
+    ) -> String {
+        let body: Vec<_> = self.current_function_body.iter().copied().collect();
+        for param in &self.current_function_params {
+            if param.name == "self" || self.emitted_rust_ref_formals.contains(&param.name) {
+                continue;
+            }
+            let forward_ref = self.current_fn_forward_ref_if_params.contains(&param.name)
+                || self.current_fn_mixed_forwarder_params.contains(&param.name)
+                || self.param_used_in_any_if_condition(&body, &param.name);
+            if !forward_ref {
+                continue;
+            }
+            if !self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition) {
+                continue;
+            }
+            let bare = format!("({})", param.name);
+            let borrowed = format!("(&{})", param.name);
+            if cond_str.contains(&bare) && !cond_str.contains(&borrowed) {
+                cond_str = cond_str.replace(&bare, &borrowed);
+            }
+            let bare_comma = format!("({},", param.name);
+            let borrowed_comma = format!("(&{},", param.name);
+            if cond_str.contains(&bare_comma) && !cond_str.contains(&borrowed_comma) {
+                cond_str = cond_str.replace(&bare_comma, &borrowed_comma);
+            }
+        }
+        cond_str
+    }
+
+    fn expr_mentions_param_as_call_arg_in_expr(
+        &self,
+        param_name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments.iter().any(|(_, arg)| {
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        || self.expr_mentions_param_as_call_arg_in_expr(param_name, arg)
+                })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_mentions_param_as_call_arg_in_expr(param_name, left)
+                    || self.expr_mentions_param_as_call_arg_in_expr(param_name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_mentions_param_as_call_arg_in_expr(param_name, operand)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_mentions_param_as_call_arg_in_expr(param_name, object)
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn param_used_in_any_if_condition(
+        &self,
+        body: &[&'ast crate::parser::Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| match stmt {
+            crate::parser::Statement::If { condition, .. } => {
+                self.expr_mentions_param_name_in_if_scan(param_name, condition)
+            }
+            crate::parser::Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.param_used_in_any_if_condition(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|block| {
+                        self.param_used_in_any_if_condition(block.as_slice(), param_name)
+                    })
+            }
+            crate::parser::Statement::While { body, .. }
+            | crate::parser::Statement::Loop { body, .. }
+            | crate::parser::Statement::Thread { body, .. }
+            | crate::parser::Statement::Async { body, .. } => {
+                self.param_used_in_any_if_condition(body.as_slice(), param_name)
+            }
+            crate::parser::Statement::For { body, .. } => {
+                self.param_used_in_any_if_condition(body.as_slice(), param_name)
+            }
+            _ => false,
+        })
+    }
+
+    fn expr_mentions_param_name_in_if_scan(
+        &self,
+        param_name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::FieldAccess { object, .. } => {
+                self.expr_mentions_param_name_in_if_scan(param_name, object)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expr_mentions_param_name_in_if_scan(param_name, function)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_mentions_param_name_in_if_scan(param_name, arg)
+                    })
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                self.expr_mentions_param_name_in_if_scan(param_name, object)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_mentions_param_name_in_if_scan(param_name, arg)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_mentions_param_name_in_if_scan(param_name, left)
+                    || self.expr_mentions_param_name_in_if_scan(param_name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_mentions_param_name_in_if_scan(param_name, operand)
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
         if self.in_user_written_closure && self.user_closure_params.contains(name) {
+            return arg_str.to_string();
+        }
+        if self.current_func_is_pure_forwarding_delegate {
+            return arg_str.to_string();
+        }
+        if self.current_fn_mixed_forwarder_params.contains(name) && self.in_if_condition {
             return arg_str.to_string();
         }
         if self.param_used_in_prior_field_extract_call(name) {

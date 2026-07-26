@@ -296,6 +296,25 @@ impl<'ast> Analyzer<'ast> {
                             &func.name,
                             func,
                         )?
+                    } else if func.parent_type.is_none()
+                        && self.is_field_access_only_param_usage(&param.name, &func.body)
+                        && !self.is_only_hashmap_lookup_key_param(
+                            &param.name,
+                            &func.body,
+                            func,
+                        )
+                    {
+                        // Free helpers (e.g. replay_to_lsn, keys_equal) with readonly field
+                        // access emit borrowed formals; IR/analyzer stay aligned.
+                        self.infer_parameter_ownership(
+                            &param.name,
+                            &param.type_,
+                            &func.body,
+                            &func.return_type,
+                            registry,
+                            &func.name,
+                            func,
+                        )?
                     } else {
                         OwnershipMode::Owned
                     }

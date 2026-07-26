@@ -490,6 +490,15 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Preregister free-function formals BEFORE impl blocks so methods that call
+        // later free fns (e.g. WalWriter::replay_all_records → replay_all) see converged
+        // `&str` / borrowed contracts instead of stale owned stubs (WDB-057/058/060).
+        for analyzed_func in analyzed.iter().filter(|af| {
+            !impl_methods.contains(&af.decl.name) && !af.decl.is_extern
+        }) {
+            self.preregister_function_formals_in_registry(analyzed_func);
+        }
+
         // Generate structs, enums, and traits
         for item in &program.items {
             match item {
@@ -525,14 +534,23 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         self.current_struct_fields.clear();
                     }
-                    self.current_impl_methods = impl_block
-                        .functions
+                    self.current_impl_methods = analyzed
                         .iter()
-                        .map(|f| f.name.clone())
+                        .filter(|af| {
+                            af.decl.parent_type.as_deref() == Some(impl_block.type_name.as_str())
+                                && af.decl.impl_trait == impl_block.trait_name
+                                && !af.decl.is_extern
+                        })
+                        .map(|af| af.decl.name.clone())
                         .collect();
                     for func in &impl_block.functions {
                         self.register_impl_ast_method_formals(&impl_block.type_name, func);
                     }
+                    self.preregister_all_impl_siblings_for_type_if_needed(
+                        &impl_block.type_name,
+                        impl_block.trait_name.as_deref(),
+                        analyzed,
+                    );
                     self.in_impl_block = true;
 
                     body.push_str(&self.generate_impl(impl_block, analyzed));

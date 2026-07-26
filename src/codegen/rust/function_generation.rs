@@ -100,4 +100,59 @@ impl<'ast> CodeGenerator<'ast> {
         self.refresh_method_registry_from_emitted_formals(func);
         self.refresh_free_function_registry_from_emitted_formals(func, &params);
     }
+
+    /// Preregister every method on `impl_type` (all impl blocks) once so forward refs like
+    /// `put_value` → `apply_patch_put` see converged `&Key` formals before any body emits.
+    pub(in crate::codegen::rust) fn preregister_all_impl_siblings_for_type_if_needed(
+        &mut self,
+        impl_type: &str,
+        impl_trait: Option<&str>,
+        analyzed: &[AnalyzedFunction<'ast>],
+    ) {
+        if self.preregistered_impl_sibling_types.contains(impl_type) {
+            return;
+        }
+
+        for af in analyzed.iter().filter(|af| {
+            af.decl.parent_type.as_deref() == Some(impl_type)
+                && af.decl.impl_trait.as_deref() == impl_trait
+                && !af.decl.is_extern
+        }) {
+            self.register_impl_ast_method_formals(impl_type, &af.decl);
+        }
+
+        let mut siblings: Vec<&AnalyzedFunction<'_>> = analyzed
+            .iter()
+            .filter(|af| {
+                af.decl.parent_type.as_deref() == Some(impl_type)
+                    && af.decl.impl_trait.as_deref() == impl_trait
+                    && !af.decl.is_extern
+            })
+            .collect();
+        siblings.sort_by_key(|af| {
+            af.decl.parameters.iter().any(|p| {
+                p.name != "self"
+                    && self.param_passed_to_borrowing_callee(
+                        af.decl.body.as_slice(),
+                        &p.name,
+                        &af.decl,
+                    )
+            }) as u8
+        });
+
+        for _ in 0..4 {
+            for af in &siblings {
+                self.select_ir_function_for(&af.decl.name);
+                self.prepare_codegen_environment_for_regular_function(af);
+            }
+        }
+
+        for af in siblings {
+            self.select_ir_function_for(&af.decl.name);
+            self.preregister_function_formals_in_registry(af);
+        }
+
+        self.preregistered_impl_sibling_types
+            .insert(impl_type.to_string());
+    }
 }
