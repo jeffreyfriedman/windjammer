@@ -56,23 +56,29 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(arg_str.to_string());
         }
 
-        // Auto-clone before coercion: loop captures and partial moves must clone even
-        // when IR call-site cutover returns early (otherwise E0382 at runtime).
-        // Skip when the callee expects a shared or mutable borrow — borrow the binding
-        // instead of cloning.
-        let skip_auto_clone_for_borrow = self.ir_callee_arg_expects_shared_borrow(
-            registry,
-            callee_name,
-            arg_index,
-            user_arg_count,
-            local_sig,
-        ) || self.ir_callee_arg_expects_mut_borrow(
+        // Never skip auto-clone when the callee emits owned formals: analyzer/global
+        // stubs may still say Borrowed (`&Vec`) while codegen emits `Vec` (WDB-056/059).
+        let emits_owned_formal = self.ir_callee_arg_emits_owned_contract(
             registry,
             callee_name,
             arg_index,
             user_arg_count,
             local_sig,
         );
+        let skip_auto_clone_for_borrow = !emits_owned_formal
+            && (self.ir_callee_arg_expects_shared_borrow(
+                registry,
+                callee_name,
+                arg_index,
+                user_arg_count,
+                local_sig,
+            ) || self.ir_callee_arg_expects_mut_borrow(
+                registry,
+                callee_name,
+                arg_index,
+                user_arg_count,
+                local_sig,
+            ));
         let skip_auto_clone_for_field_extract = matches!(arg_expr, Expression::Identifier { .. }
             if self.callee_param_field_extracts_by_name(callee_name, arg_index));
         let collecting_ref_vec = matches!(arg_expr, Expression::Identifier { name, .. }
@@ -87,6 +93,13 @@ impl<'ast> CodeGenerator<'ast> {
                     && !collecting_ref_vec =>
             {
                 self.maybe_auto_clone(name, arg_str)
+            }
+            // Field paths (`record.key`) moved into owned formals + reused in loops
+            // need `.clone()`; identifier-only auto-clone misses them (WDB-059).
+            Expression::FieldAccess { .. } | Expression::Index { .. }
+                if !skip_auto_clone_for_borrow && !skip_auto_clone_for_field_extract =>
+            {
+                self.maybe_auto_clone_expr_path(arg_expr, arg_str)
             }
             _ => arg_str.to_string(),
         };
@@ -910,7 +923,101 @@ impl<'ast> CodeGenerator<'ast> {
             }
             crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
         }
+        // Final IR ownership contract: strip spurious `&` when callee emits owned formals
+        // (WDB-056 keys_equal(Vec<u8>, Vec<u8>)), or add borrow when expected.
+        self.enforce_call_site_ownership_contract(&mut coerced, arg_expr, &sig, param_idx);
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.caller_owned_non_copy_formal(name)
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, param_idx,
+                )
+            {
+                coerced = coerced.trim_start_matches('&').to_string();
+            }
+        }
+        // After borrow stripping / collision clone-stripping: restore `.clone()` when
+        // auto-clone analysis says this binding/path is moved and reused (WDB-059).
+        coerced = self.ensure_owned_move_clone_for_reuse(
+            arg_expr,
+            &coerced,
+            &sig,
+            param_idx,
+        );
         Some(coerced)
+    }
+
+    /// When a binding/path is moved and reused, and the final argument is passed by
+    /// value (no leading `&`), ensure `.clone()` is present (WDB-059).
+    fn ensure_owned_move_clone_for_reuse(
+        &self,
+        arg_expr: &Expression<'ast>,
+        arg_str: &str,
+        sig: &crate::analyzer::FunctionSignature,
+        param_idx: usize,
+    ) -> String {
+        if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
+            return arg_str.to_string();
+        }
+        // Shared-ref formals borrow — cloning is unnecessary.
+        if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+            return arg_str.to_string();
+        }
+        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+        {
+            return arg_str.to_string();
+        }
+        let Some(ref analysis) = self.auto_clone_analysis else {
+            return arg_str.to_string();
+        };
+        let needs = match arg_expr {
+            Expression::Identifier { name, .. } => {
+                analysis.needs_clone_anywhere(name)
+                    || analysis
+                        .needs_clone(name, self.current_statement_idx)
+                        .is_some()
+            }
+            Expression::FieldAccess { .. } | Expression::Index { .. } => {
+                Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                    analysis.needs_clone_anywhere(&path)
+                        || analysis
+                            .needs_clone(&path, self.current_statement_idx)
+                            .is_some()
+                })
+            }
+            _ => false,
+        };
+        if needs {
+            format!("{arg_str}.clone()")
+        } else {
+            arg_str.to_string()
+        }
+    }
+
+    /// Enforce the ownership contract for a single call-site argument by computing
+    /// actual vs expected safety types and applying the coercion (strip `&`, add `.clone()`, etc.).
+    /// Uses `emitted_owned_arg_contract` to handle stale analyzer metadata.
+    pub(crate) fn enforce_call_site_ownership_contract(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+        sig: &crate::analyzer::FunctionSignature,
+        param_idx: usize,
+    ) {
+        let expected = safety_type_from_signature_param(sig, param_idx);
+        let actual = self.infer_call_arg_actual_safety_type(arg_expr, coerced.as_str());
+        let force_owned = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            sig, param_idx,
+        );
+        crate::ir::coercion::enforce_ownership_contract_on_coerced_arg_with_force_owned(
+            coerced,
+            &actual,
+            &expected,
+            force_owned,
+            false,
+        );
     }
 
     pub(crate) fn apply_registry_borrow_to_call_arg(
@@ -1190,7 +1297,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Infer the safety type of a call-site argument from solver-resolved types,
     /// parameter borrow state, generated Rust text, and expression shape (fallback).
-    fn infer_actual_safety_type(
+    pub(crate) fn infer_actual_safety_type(
         &self,
         arg_expr: &Expression<'ast>,
         arg_str: &str,
@@ -1349,43 +1456,95 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: Option<&str>,
         arg_index: Option<usize>,
     ) -> String {
-        let Expression::Identifier { name, .. } = arg_expr else {
+        match arg_expr {
+            Expression::Identifier { name, .. } => {
+                if self.param_used_in_prior_field_extract_call(name) {
+                    return arg_str.to_string();
+                }
+                if let (Some(callee), Some(idx)) = (callee_name, arg_index) {
+                    if self.callee_param_field_extracts_by_name(callee, idx) {
+                        return arg_str.to_string();
+                    }
+                    if self.ir_callee_arg_expects_mut_borrow(
+                        &self.signature_registry,
+                        callee,
+                        idx,
+                        None,
+                        None,
+                    ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+                        self.ir_callee_arg_expects_mut_borrow(g, callee, idx, None, None)
+                    }) {
+                        return arg_str.to_string();
+                    }
+                }
+                self.maybe_auto_clone(name, arg_str)
+            }
+            Expression::FieldAccess { .. } | Expression::Index { .. } => {
+                if let (Some(callee), Some(idx)) = (callee_name, arg_index) {
+                    if self.callee_param_field_extracts_by_name(callee, idx) {
+                        return arg_str.to_string();
+                    }
+                    if self.ir_callee_arg_expects_mut_borrow(
+                        &self.signature_registry,
+                        callee,
+                        idx,
+                        None,
+                        None,
+                    ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+                        self.ir_callee_arg_expects_mut_borrow(g, callee, idx, None, None)
+                    }) {
+                        return arg_str.to_string();
+                    }
+                }
+                self.maybe_auto_clone_expr_path(arg_expr, arg_str)
+            }
+            _ => arg_str.to_string(),
+        }
+    }
+
+    /// Clone a field/index path when auto-clone analysis recorded a move+reuse site.
+    pub(crate) fn maybe_auto_clone_expr_path(
+        &self,
+        arg_expr: &Expression<'ast>,
+        arg_str: &str,
+    ) -> String {
+        if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
+            return arg_str.to_string();
+        }
+        let Some(path) = Self::auto_clone_expr_path(arg_expr) else {
             return arg_str.to_string();
         };
-        if self.param_used_in_prior_field_extract_call(name) {
-            return arg_str.to_string();
+        let needs = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+            a.needs_clone(&path, self.current_statement_idx).is_some()
+                || a.needs_clone_anywhere(&path)
+        });
+        if needs {
+            format!("{arg_str}.clone()")
+        } else {
+            arg_str.to_string()
         }
-        if let (Some(callee), Some(idx)) = (callee_name, arg_index) {
-            if self.callee_param_field_extracts_by_name(callee, idx) {
-                return arg_str.to_string();
+    }
+
+    fn auto_clone_expr_path(expr: &Expression<'ast>) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                Some(format!("{}.{}", Self::auto_clone_expr_path(object)?, field))
             }
-            if self.ir_callee_arg_expects_mut_borrow(
-                &self.signature_registry,
-                callee,
-                idx,
-                None,
-                None,
-            ) || self
-                .global_signature_registry
-                .as_ref()
-                .is_some_and(|g| {
-                    self.ir_callee_arg_expects_mut_borrow(g, callee, idx, None, None)
-                })
-            {
-                return arg_str.to_string();
+            Expression::Index { object, index, .. } => {
+                let base = Self::auto_clone_expr_path(object)?;
+                let index_str = match index {
+                    Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    } => n.to_string(),
+                    Expression::Identifier { name, .. } => name.clone(),
+                    _ => "*".to_string(),
+                };
+                Some(format!("{base}[{index_str}]"))
             }
+            _ => None,
         }
-        if let Some(ref analysis) = self.auto_clone_analysis {
-            if analysis
-                .needs_clone(name, self.current_statement_idx)
-                .is_some()
-                && !arg_str.ends_with(".clone()")
-                && !arg_str.starts_with('*')
-            {
-                return format!("{}.clone()", arg_str);
-            }
-        }
-        arg_str.to_string()
     }
 
     fn ir_sig_arg_expects_shared_borrow(
@@ -1422,6 +1581,16 @@ impl<'ast> CodeGenerator<'ast> {
         user_arg_count: Option<usize>,
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
+        // Prefer emitted owned contracts over stale Borrowed analyzer/global stubs.
+        if self.ir_callee_arg_emits_owned_contract(
+            registry,
+            callee_name,
+            arg_index,
+            user_arg_count,
+            local_sig,
+        ) {
+            return false;
+        }
         if let Some(sig) = local_sig {
             if self.ir_sig_arg_expects_shared_borrow(sig, arg_index) {
                 return true;
@@ -1451,6 +1620,48 @@ impl<'ast> CodeGenerator<'ast> {
             let arg_count = user_arg_count.unwrap_or(arg_index + 1);
             if self.method_registry_arg_expects_shared_borrow(rt, method, arg_index, arg_count) {
                 return true;
+            }
+        }
+        false
+    }
+
+    /// True when any resolved signature emits an owned (non-`&T`) formal for this arg.
+    fn ir_callee_arg_emits_owned_contract(
+        &self,
+        registry: &SignatureRegistry,
+        callee_name: &str,
+        arg_index: usize,
+        user_arg_count: Option<usize>,
+        local_sig: Option<&crate::analyzer::FunctionSignature>,
+    ) -> bool {
+        let check = |sig: &crate::analyzer::FunctionSignature| {
+            let pidx = sig.arg_param_index(arg_index);
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+        };
+        if local_sig.is_some_and(check) {
+            return true;
+        }
+        if registry.get_signature(callee_name).is_some_and(check) {
+            return true;
+        }
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        if simple != callee_name && registry.get_signature(simple).is_some_and(check) {
+            return true;
+        }
+        if let Some(global) = self.global_signature_registry.as_ref() {
+            if global.get_signature(callee_name).is_some_and(check) {
+                return true;
+            }
+            if simple != callee_name && global.get_signature(simple).is_some_and(check) {
+                return true;
+            }
+        }
+        if let Some((rt, method)) = callee_name.rsplit_once("::") {
+            let arg_count = user_arg_count.unwrap_or(arg_index + 1);
+            if let Some(sig) = self.resolve_method_function_signature(rt, method, arg_count) {
+                if check(&sig) {
+                    return true;
+                }
             }
         }
         false

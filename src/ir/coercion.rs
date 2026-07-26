@@ -79,7 +79,24 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
         return match actual_own {
             OwnedType::Ref(_) => CoercionKind::Identity,
             OwnedType::MutRef(_) => CoercionKind::Borrow,
-            OwnedType::Owned | OwnedType::Copy => CoercionKind::Borrow,
+            OwnedType::Copy => CoercionKind::Borrow,
+            OwnedType::Owned => {
+                if is_string_base(&expected.base)
+                    || is_string_base(&actual.base)
+                    || is_vec_base(&expected.base)
+                    || is_vec_base(&actual.base)
+                {
+                    CoercionKind::Borrow
+                } else if matches!(
+                    (&actual.base, &expected.base),
+                    (BaseType::Custom(_), BaseType::Custom(_))
+                ) {
+                    // Rust auto-borrows owned struct args for `&T` formals (WDB-055 engine.put).
+                    CoercionKind::Identity
+                } else {
+                    CoercionKind::Borrow
+                }
+            }
             OwnedType::Inferred => CoercionKind::Borrow,
         };
     }
@@ -111,6 +128,85 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
     }
 
     CoercionKind::Identity
+}
+
+/// Apply the IR ownership contract to emitted Rust call argument text.
+pub fn enforce_ownership_contract_on_coerced_arg(
+    coerced: &mut String,
+    actual: &SafetyType,
+    expected: &SafetyType,
+) {
+    enforce_ownership_contract_on_coerced_arg_with_force_owned(coerced, actual, expected, false, false);
+}
+
+pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
+    coerced: &mut String,
+    actual: &SafetyType,
+    expected: &SafetyType,
+    force_owned_contract: bool,
+    allow_rust_auto_borrow: bool,
+) {
+    if (matches!(expected.ownership, OwnedType::Owned) || force_owned_contract)
+        && coerced.starts_with('&')
+        && !coerced.starts_with("&mut ")
+    {
+        *coerced = coerced.trim_start_matches('&').to_string();
+        return;
+    }
+    if allow_rust_auto_borrow
+        && coerced.starts_with('&')
+        && !coerced.starts_with("&mut ")
+    {
+        *coerced = coerced.trim_start_matches('&').to_string();
+        return;
+    }
+    let kind = compute_coercion(actual, expected);
+    if allow_rust_auto_borrow
+        && matches!(kind, CoercionKind::Identity)
+        && matches!(expected.ownership, OwnedType::Ref(_))
+        && coerced.starts_with('&')
+        && !coerced.starts_with("&mut ")
+    {
+        *coerced = coerced.trim_start_matches('&').to_string();
+        return;
+    }
+    if matches!(expected.ownership, OwnedType::Ref(_))
+        && matches!(kind, CoercionKind::Borrow)
+        && !coerced.starts_with('&')
+        && !coerced.starts_with("&mut ")
+    {
+        *coerced = format!("&{coerced}");
+        return;
+    }
+    // Ref binding → owned formal: deref Copy (`*through`) or clone non-Copy.
+    // Text `&x` was handled above (strip). Bare `through` where through: &T needs this.
+    if matches!(
+        expected.ownership,
+        OwnedType::Owned | OwnedType::Copy
+    ) && matches!(actual.ownership, OwnedType::Ref(_))
+        && !coerced.starts_with('&')
+        && !coerced.starts_with('*')
+    {
+        match kind {
+            CoercionKind::Deref | CoercionKind::StripBorrow => {
+                // StripBorrow on bare ref bindings is a no-op; prefer deref for Copy,
+                // clone otherwise (safe for aggregates).
+                if is_copy_base(&expected.base) || is_copy_base(&actual.base) {
+                    *coerced = format!("*{coerced}");
+                } else if matches!(kind, CoercionKind::Deref) {
+                    *coerced = format!("*{coerced}");
+                } else if !coerced.ends_with(".clone()") {
+                    *coerced = format!("{coerced}.clone()");
+                }
+            }
+            CoercionKind::Clone => {
+                if !coerced.ends_with(".clone()") {
+                    *coerced = format!("{coerced}.clone()");
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn normalize_ownership(own: &OwnedType) -> OwnedType {
@@ -160,8 +256,12 @@ fn is_float_base(base: &BaseType) -> bool {
     matches!(base, BaseType::F32 | BaseType::F64)
 }
 
-fn is_string_base(base: &BaseType) -> bool {
+pub(crate) fn is_string_base(base: &BaseType) -> bool {
     matches!(base, BaseType::String)
+}
+
+pub(crate) fn is_vec_base(base: &BaseType) -> bool {
+    matches!(base, BaseType::Custom(name) if name == "Vec")
 }
 
 fn needs_string_owned_coercion(actual: &BaseType, expected: &BaseType) -> bool {
@@ -216,9 +316,23 @@ mod tests {
     }
 
     #[test]
-    fn owned_to_borrowed_needs_borrow() {
-        let actual = owned(BaseType::String);
-        let expected = borrowed(BaseType::String);
+    fn owned_custom_struct_to_ref_param_is_identity_auto_borrow() {
+        let actual = owned(BaseType::Custom("Key".into()));
+        let expected = borrowed(BaseType::Custom("Key".into()));
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
+    }
+
+    #[test]
+    fn owned_copy_struct_to_ref_param_needs_borrow() {
+        let actual = copy(BaseType::Custom("Lsn".into()));
+        let expected = borrowed(BaseType::Custom("Lsn".into()));
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Borrow);
+    }
+
+    #[test]
+    fn owned_vec_to_ref_param_needs_borrow() {
+        let actual = owned(BaseType::Custom("Vec".into()));
+        let expected = borrowed(BaseType::Custom("Vec".into()));
         assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Borrow);
     }
 

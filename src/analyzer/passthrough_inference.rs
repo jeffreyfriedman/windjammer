@@ -1000,6 +1000,17 @@ impl<'ast> Analyzer<'ast> {
                     bad_use,
                 );
             }
+            Expression::Tuple { elements, .. } => {
+                for e in elements {
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        e,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
+            }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
                     self.check_field_only_param_use_stmt(

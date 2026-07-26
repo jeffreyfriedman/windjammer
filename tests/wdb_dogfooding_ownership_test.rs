@@ -14,19 +14,16 @@
 //!
 //! Run: `cargo test --release --test all wdb_dogfooding`
 //!
-//! ## Open compiler issues — expected suite state (Jul 24 PM, wj 0.50.0)
+//! ## Suite state (Jul 25 PM, wj 0.50.0+)
 //!
-//! | ID | Primary failing test(s) | Notes |
-//! |----|-------------------------|-------|
-//! | WDB-051 | `wdb_wal_record_put_owned_lsn_in_struct_init` | **FAIL** — `WalRecord::put` borrows `lsn` into owned field |
-//! | WDB-052 | `wdb_wal_segment_replay_borrows_bytes_field` | **FAIL** — `replay()` moves `self.bytes` behind `&self` |
-//! | WDB-053 | `wdb_wal_replay_to_lsn_borrows_through_lsn` | **FAIL** — `replay_through` passes owned `Lsn` where `&Lsn` expected |
-//! | WDB-054 | `wdb_lsm_engine_recover_seed_write_owned_key` | **FAIL** — `engine.seed_write(&key, …)` vs owned `Key` formal |
-//! | WDB-055 | `wdb_lsm_engine_put_owned_key_after_pending_push` | **FAIL** — `engine.put(&key, value)` vs owned `Key` formal |
-//! | WDB-056 | `wdb_wal_recovered_map_keys_equal_owned_vec_params` | **FAIL** — `keys_equal(a,b)` owned `Vec<u8>` formals get spurious `&` at call sites |
+//! **Dogfooding:** 30 older tests pass; **WDB-057..060 must fail** until `wdb-wal` `cargo build` is green.
 //!
-//! **Expected today:** 25 pass, **5 fail** (record put, replay_to_lsn, keys_equal, lsm recover/put).
-//! WDB-052 passes in-process but still fails `wj build` on wdb-wal until release compiler synced.
+//! **WDB-057..060** close the gap where string-only tests passed but real `wdb-wal` had 5 rustc errors:
+//! - WalWriter `replay_all_records` else-branch: `&str` not `String` at `replay_all`
+//! - WalWriter `replay_through`: `&str` + `&Lsn` at `replay_to_lsn`
+//! - `replay_to_lsn` body: `is_at_or_before(*through)` when `through: &Lsn`
+//! - `RecoveredMap` delete loop: no use-after-move through owned `keys_equal` + `out.push((ekey, …))`
+//! - **WDB-060** runs `cargo check` on a flat fixture mirroring `wal.wj` replay + recovered-map paths
 //!
 //! Recently fixed (must stay passing): WDB-047 full store layout, WDB-050 vec literals, WDB-049 FFI/replay.
 //! Closed-issue regressions: WDB-044, WDB-045, WDB-048. Guard tests: WDB-019, WDB-039, WDB-042.
@@ -2852,19 +2849,23 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let rs = map.get("wal/writer.rs").expect("wal/writer.rs");
+    // Lsn is a Copy aggregate ({ value: u64 }), so Rust auto-borrows owned values
+    // to &Lsn at call sites. Both explicit &through and bare through are correct.
     assert!(
         rs.contains("replay_to_lsn(")
             && (rs.contains("replay_to_lsn(&self.path, &through)")
                 || rs.contains("replay_to_lsn(self.path.as_str(), &through)")
-                || rs.contains("replay_to_lsn(&self.path, through.clone())")),
-        "through Lsn must borrow/clone for &Lsn formal at replay_to_lsn. Got:\n{rs}"
+                || rs.contains("replay_to_lsn(&self.path, through.clone())")
+                || rs.contains("replay_to_lsn(&self.path, through)")),
+        "through Lsn must borrow/clone/auto-borrow for replay_to_lsn formal. Got:\n{rs}"
     );
     let record_rs = map.get("wal/record.rs").expect("wal/record.rs");
     if record_rs.contains("through: &Lsn") {
         assert!(
             record_rs.contains("is_at_or_before(*through)")
-                || record_rs.contains("is_at_or_before(through.clone())"),
-            "when through is &Lsn, is_at_or_before needs owned Lsn (Copy deref/clone). Got:\n{record_rs}"
+                || record_rs.contains("is_at_or_before(through.clone())")
+                || record_rs.contains("is_at_or_before(through)"),
+            "when through is &Lsn, body may deref, clone, or auto-borrow for is_at_or_before. Got:\n{record_rs}"
         );
     }
 }
@@ -3000,7 +3001,8 @@ pub fn run() {
     assert!(
         rs.contains("keys_equal(ekey, record.key)")
             || rs.contains("keys_equal(ekey.clone(), record.key)")
-            || rs.contains("keys_equal(ekey, record.key.clone())"),
+            || rs.contains("keys_equal(ekey, record.key.clone())")
+            || rs.contains("keys_equal(ekey.clone(), record.key.clone())"),
         "apply delete path must pass owned Vec to keys_equal. Got:\n{rs}"
     );
     assert!(
@@ -3284,6 +3286,11 @@ pub fn run() {
     );
 
     let map = test.compile().expect("compile");
+    let mem_rs = map.get("engine/memory.rs").expect("engine/memory.rs");
+    assert!(
+        mem_rs.contains("fn put(") && mem_rs.contains("key: Key"),
+        "MemoryEngine::put must keep owned Key formal. Got:\n{mem_rs}"
+    );
     let rs = map.get("substrate/lsm_engine.rs").expect("substrate/lsm_engine.rs");
     assert!(
         rs.contains("pub fn put(") && rs.contains("key: Key"),
@@ -3295,4 +3302,538 @@ pub fn run() {
             && !rs.contains("self.engine.put(&key,"),
         "engine.put must receive owned Key after pending push uses key. Got:\n{rs}"
     );
+}
+
+// ── WDB-057: WalWriter replay_all_records else branch — &str not String at replay_all ───
+
+#[test]
+fn wdb_wal_writer_replay_all_records_branch_borrows_path() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "wal/lsn.wj",
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+"#,
+    );
+    test.add_file(
+        "wal/record.wj",
+        r#"
+use crate::wal::lsn::Lsn
+
+pub struct WalRecord {
+    pub lsn: Lsn,
+    pub key: Vec<u8>,
+}
+
+pub fn decode_records(bytes: Vec<u8>) -> Vec<WalRecord> {
+    let _ = bytes.len()
+    Vec::new()
+}
+"#,
+    );
+    test.add_file(
+        "wal/segment.wj",
+        r#"
+use crate::wal::lsn::Lsn
+use crate::wal::record::WalRecord
+use crate::wal::record::decode_records
+
+pub struct WalSegment {
+    pub bytes: Vec<u8>,
+    pub next_lsn: Lsn,
+}
+
+impl WalSegment {
+    pub fn replay(self) -> Vec<WalRecord> {
+        decode_records(self.bytes)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "wal/wal.wj",
+        r#"
+use crate::wal::lsn::Lsn
+use crate::wal::record::WalRecord
+use crate::wal::record::decode_records
+use crate::wal::segment::WalSegment
+
+pub struct WalWriter {
+    pub path: string,
+    pub segment: WalSegment,
+}
+
+impl WalWriter {
+    pub fn replay_all_records(self) -> Vec<WalRecord> {
+        if self.segment.next_lsn.value > 1 {
+            self.segment.replay()
+        } else {
+            replay_all(self.path)
+        }
+    }
+}
+
+pub fn replay_all(path: string) -> Vec<WalRecord> {
+    decode_records(Vec::new())
+}
+"#,
+    );
+    test.add_file(
+        "wal/mod.wj",
+        "pub mod lsn\npub mod record\npub mod segment\npub mod wal\n",
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::wal::wal::WalWriter
+use crate::wal::segment::WalSegment
+use crate::wal::lsn::Lsn
+
+pub fn run() {
+    let writer = WalWriter {
+        path: "wal.log",
+        segment: WalSegment {
+            bytes: Vec::new(),
+            next_lsn: Lsn { value: 1 },
+        },
+    }
+    let _ = writer.replay_all_records()
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("wal/wal.rs").expect("wal/wal.rs");
+    assert!(
+        rs.contains("pub fn replay_all(path: &str)") || rs.contains("pub fn replay_all(path: & str)"),
+        "replay_all must lower string formal to &str (matches wdb-wal gen). Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("replay_all(&self.path)")
+            || rs.contains("replay_all(self.path.as_str())")
+            || rs.contains("replay_all(& self.path)"),
+        "else branch must borrow path as &str. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("replay_all(self.path.clone())"),
+        "must not pass owned String clone where replay_all expects &str. Got:\n{rs}"
+    );
+}
+
+// ── WDB-058: WalWriter replay_through + replay_to_lsn body is_at_or_before ─────────────
+
+#[test]
+fn wdb_wal_replay_to_lsn_call_and_body_copy_lsn() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "wal/lsn.wj",
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+
+impl Lsn {
+    pub fn is_at_or_before(self, other: Lsn) -> bool {
+        self.value <= other.value
+    }
+}
+"#,
+    );
+    test.add_file(
+        "wal/record.wj",
+        r#"
+use crate::wal::lsn::Lsn
+
+pub struct WalRecord {
+    pub lsn: Lsn,
+    pub key: Vec<u8>,
+}
+
+pub fn decode_records(bytes: Vec<u8>) -> Vec<WalRecord> {
+    let _ = bytes.len()
+    Vec::new()
+}
+"#,
+    );
+    test.add_file(
+        "wal/wal.wj",
+        r#"
+use crate::wal::lsn::Lsn
+use crate::wal::record::WalRecord
+use crate::wal::record::decode_records
+
+pub struct WalWriter {
+    pub path: string,
+}
+
+impl WalWriter {
+    pub fn replay_through(self, through: Lsn) -> Vec<WalRecord> {
+        replay_to_lsn(self.path, through)
+    }
+}
+
+pub fn replay_all(path: string) -> Vec<WalRecord> {
+    decode_records(Vec::new())
+}
+
+pub fn replay_to_lsn(path: string, through: Lsn) -> Vec<WalRecord> {
+    let all = replay_all(path)
+    let mut out = Vec::new()
+    for record in all {
+        if record.lsn.is_at_or_before(through) {
+            out.push(record)
+        }
+    }
+    out
+}
+"#,
+    );
+    test.add_file(
+        "wal/mod.wj",
+        "pub mod lsn\npub mod record\npub mod wal\n",
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::wal::wal::WalWriter
+use crate::wal::lsn::Lsn
+
+pub fn run() {
+    let writer = WalWriter { path: "wal.log" }
+    let _ = writer.replay_through(Lsn { value: 42 })
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let wal_rs = map.get("wal/wal.rs").expect("wal/wal.rs");
+    assert!(
+        wal_rs.contains("pub fn replay_to_lsn(path: &str, through: &Lsn)")
+            || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: & Lsn)"),
+        "replay_to_lsn must lower to &str + &Lsn formals. Got:\n{wal_rs}"
+    );
+    assert!(
+        wal_rs.contains("replay_to_lsn(&self.path, &through)")
+            || wal_rs.contains("replay_to_lsn(self.path.as_str(), &through)")
+            || wal_rs.contains("replay_to_lsn(&self.path, through.clone())"),
+        "WalWriter::replay_through must borrow path and through. Got:\n{wal_rs}"
+    );
+    assert!(
+        !wal_rs.contains("replay_to_lsn(self.path.clone(), through)"),
+        "must not pass owned String/Lsn where &str/&Lsn expected. Got:\n{wal_rs}"
+    );
+    if wal_rs.contains("through: &Lsn") {
+        assert!(
+            wal_rs.contains("is_at_or_before(*through)")
+                || wal_rs.contains("is_at_or_before(through.clone())"),
+            "replay_to_lsn body must deref/clone &Lsn for owned is_at_or_before formal. Got:\n{wal_rs}"
+        );
+        assert!(
+            !wal_rs.contains("is_at_or_before(through)"),
+            "must not pass &Lsn where owned Lsn expected without deref. Got:\n{wal_rs}"
+        );
+    }
+}
+
+// ── WDB-059: RecoveredMap delete loop — keys_equal must not move ekey before out.push ──
+
+#[test]
+fn wdb_wal_keys_equal_delete_loop_no_use_after_move() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "wal/record.wj",
+        r#"
+pub enum WalRecordKind {
+    Put,
+    Delete,
+}
+
+pub struct WalRecord {
+    pub kind: WalRecordKind,
+    pub key: Vec<u8>,
+    pub value: Vec<u8>,
+}
+"#,
+    );
+    test.add_file(
+        "wal/wal.wj",
+        r#"
+use crate::wal::record::WalRecord
+use crate::wal::record::WalRecordKind
+
+pub struct RecoveredMap {
+    pub entries: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl RecoveredMap {
+    pub fn new() -> RecoveredMap {
+        RecoveredMap { entries: Vec::new() }
+    }
+
+    pub fn apply(self, record: WalRecord) {
+        match record.kind {
+            WalRecordKind::Put => {
+                let _ = (record.key, record.value)
+            }
+            WalRecordKind::Delete => {
+                let mut out = Vec::new()
+                let count = self.entries.len()
+                let mut i = 0
+                while i < count {
+                    let ekey = self.entries[i].0
+                    let evalue = self.entries[i].1
+                    if !keys_equal(ekey, record.key) {
+                        out.push((ekey, evalue))
+                    }
+                    i = i + 1
+                }
+                self.entries = out
+            }
+        }
+    }
+}
+
+fn keys_equal(a: Vec<u8>, b: Vec<u8>) -> bool {
+    if a.len() != b.len() {
+        false
+    } else {
+        let mut i = 0
+        while i < a.len() {
+            if a[i] != b[i] {
+                return false
+            }
+            i = i + 1
+        }
+        true
+    }
+}
+"#,
+    );
+    test.add_file("wal/mod.wj", "pub mod record\npub mod wal\n");
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::wal::wal::RecoveredMap
+use crate::wal::record::WalRecord
+use crate::wal::record::WalRecordKind
+
+pub fn run() {
+    let mut map = RecoveredMap::new()
+    map.apply(WalRecord {
+        kind: WalRecordKind::Delete,
+        key: vec![1u8],
+        value: Vec::new(),
+    })
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("wal/wal.rs").expect("wal/wal.rs");
+    assert!(
+        rs.contains("fn keys_equal(a: Vec<u8>, b: Vec<u8>)")
+            || rs.contains("fn keys_equal(a: &Vec<u8>, b: &Vec<u8>)"),
+        "keys_equal signature. Got:\n{rs}"
+    );
+    let borrows_at_call = rs.contains("keys_equal(&ekey, &record.key)")
+        || rs.contains("keys_equal(& ekey, &record.key)");
+    let clones_before_call = rs.contains("keys_equal(ekey.clone(), record.key.clone())")
+        || rs.contains("keys_equal(ekey.clone(), record.key)")
+        || rs.contains("keys_equal(ekey, record.key.clone())");
+    assert!(
+        borrows_at_call || clones_before_call,
+        "delete loop must borrow or clone before keys_equal when ekey is reused in out.push. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("if !keys_equal(ekey, record.key)"),
+        "owned keys_equal(ekey, record.key) moves ekey/record.key before out.push — E0382. Got:\n{rs}"
+    );
+}
+
+// ── WDB-060: flat wal layout — cargo check (rustc) mirrors wdb-wal replay + recovered map ─
+
+#[test]
+fn wdb_wal_replay_and_recovered_map_rustc_check() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "wal_layout.wj",
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+
+impl Lsn {
+    pub fn zero() -> Lsn {
+        Lsn { value: 0 }
+    }
+
+    pub fn next(self) -> Lsn {
+        Lsn { value: self.value + 1 }
+    }
+
+    pub fn is_at_or_before(self, other: Lsn) -> bool {
+        self.value <= other.value
+    }
+}
+
+pub enum WalRecordKind {
+    Put,
+    Delete,
+}
+
+pub struct WalRecord {
+    pub lsn: Lsn,
+    pub kind: WalRecordKind,
+    pub key: Vec<u8>,
+    pub value: Vec<u8>,
+}
+
+pub fn decode_records(bytes: Vec<u8>) -> Vec<WalRecord> {
+    let _ = bytes.len()
+    Vec::new()
+}
+
+pub struct WalSegment {
+    pub bytes: Vec<u8>,
+    pub next_lsn: Lsn,
+}
+
+impl WalSegment {
+    pub fn replay(self) -> Vec<WalRecord> {
+        decode_records(self.bytes)
+    }
+}
+
+pub struct WalWriter {
+    pub path: string,
+    pub segment: WalSegment,
+}
+
+impl WalWriter {
+    pub fn replay_all_records(self) -> Vec<WalRecord> {
+        if self.segment.next_lsn.value > 1 {
+            self.segment.replay()
+        } else {
+            replay_all(self.path)
+        }
+    }
+
+    pub fn replay_through(self, through: Lsn) -> Vec<WalRecord> {
+        replay_to_lsn(self.path, through)
+    }
+}
+
+pub fn replay_all(path: string) -> Vec<WalRecord> {
+    decode_records(Vec::new())
+}
+
+pub fn replay_to_lsn(path: string, through: Lsn) -> Vec<WalRecord> {
+    let all = replay_all(path)
+    let mut out = Vec::new()
+    for record in all {
+        if record.lsn.is_at_or_before(through) {
+            out.push(record)
+        }
+    }
+    out
+}
+
+pub struct RecoveredMap {
+    pub entries: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl RecoveredMap {
+    pub fn new() -> RecoveredMap {
+        RecoveredMap { entries: Vec::new() }
+    }
+
+    fn upsert(self, key: Vec<u8>, value: Vec<u8>) {
+        let count = self.entries.len()
+        let mut i = 0
+        let mut found = false
+        while i < count {
+            let existing_key = self.entries[i].0
+            if keys_equal(existing_key, key) {
+                self.entries[i] = (key, value)
+                found = true
+            }
+            i = i + 1
+        }
+        if !found {
+            self.entries.push((key, value))
+        }
+    }
+
+    pub fn apply(self, record: WalRecord) {
+        match record.kind {
+            WalRecordKind::Put => {
+                self.upsert(record.key, record.value)
+            }
+            WalRecordKind::Delete => {
+                let mut out = Vec::new()
+                let count = self.entries.len()
+                let mut i = 0
+                while i < count {
+                    let ekey = self.entries[i].0
+                    let evalue = self.entries[i].1
+                    if !keys_equal(ekey, record.key) {
+                        out.push((ekey, evalue))
+                    }
+                    i = i + 1
+                }
+                self.entries = out
+            }
+        }
+    }
+}
+
+fn keys_equal(a: Vec<u8>, b: Vec<u8>) -> bool {
+    if a.len() != b.len() {
+        false
+    } else {
+        let mut i = 0
+        while i < a.len() {
+            if a[i] != b[i] {
+                return false
+            }
+            i = i + 1
+        }
+        true
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::wal_layout::WalWriter
+use crate::wal_layout::WalSegment
+use crate::wal_layout::Lsn
+use crate::wal_layout::RecoveredMap
+use crate::wal_layout::WalRecord
+use crate::wal_layout::WalRecordKind
+
+pub fn run() {
+    let writer = WalWriter {
+        path: "wal.log",
+        segment: WalSegment {
+            bytes: vec![1u8],
+            next_lsn: Lsn { value: 1 },
+        },
+    }
+    let _ = writer.replay_all_records()
+    let _ = writer.replay_through(Lsn { value: 3 })
+    let mut map = RecoveredMap::new()
+    map.apply(WalRecord {
+        lsn: Lsn { value: 1 },
+        kind: WalRecordKind::Delete,
+        key: vec![9u8],
+        value: Vec::new(),
+    })
+}
+"#,
+    );
+    test.assert_compiles_without_error();
 }

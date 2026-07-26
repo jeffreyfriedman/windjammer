@@ -40,6 +40,11 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
             && !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::is_copy_type_annotation_pub(
                 ty,
             );
+        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+            flags.get(idx).copied().is_some()
+        }) {
+            return false;
+        }
         match own {
             OwnershipMode::Borrowed => bare_non_copy,
             // MutBorrowed is a genuine inference from mutation analysis, not a stale
@@ -427,6 +432,68 @@ pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b:
 
 /// Method registry entry was aligned with emitted Rust formals (owned `Key`, etc.)
 /// after `refresh_method_registry_from_emitted_formals` — beats stale analyzer borrow.
+/// Copy codegen-time `emitted_rust_ref_params` (and aligned param metadata) from an
+/// alternate registry entry when call-site resolution picked a stale analysis stub.
+pub(crate) fn merge_codegen_refresh_metadata(
+    into: &mut FunctionSignature,
+    from: &FunctionSignature,
+) {
+    let Some(ref flags) = from.emitted_rust_ref_params else {
+        return;
+    };
+    into.emitted_rust_ref_params = Some(flags.clone());
+    for idx in 0..flags.len().min(into.param_types.len()) {
+        match flags.get(idx).copied() {
+            Some(false) => {
+                let Some(formal) = into.formal_param_type(idx) else {
+                    continue;
+                };
+                let bare = match formal {
+                    Type::Reference(inner) | Type::MutableReference(inner) => *inner.clone(),
+                    other => other.clone(),
+                };
+                if idx < into.param_types.len() {
+                    into.param_types[idx] = bare;
+                }
+                if idx < into.param_ownership.len() {
+                    into.param_ownership[idx] = crate::analyzer::OwnershipMode::Owned;
+                }
+            }
+            Some(true) => {
+                if let Some(formal) = into.formal_param_type(idx) {
+                    if !matches!(
+                        into.param_types.get(idx),
+                        Some(Type::Reference(_) | Type::MutableReference(_))
+                    ) {
+                        into.param_types[idx] = Type::Reference(Box::new(formal.clone()));
+                    }
+                }
+                if idx < into.param_ownership.len() {
+                    into.param_ownership[idx] = crate::analyzer::OwnershipMode::Borrowed;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Merge codegen refresh metadata from the registry when `into` lacks it or is stale.
+pub(crate) fn merge_registry_codegen_refresh_if_present(
+    into: &mut FunctionSignature,
+    registry: &crate::analyzer::SignatureRegistry,
+    keys: &[String],
+) {
+    for key in keys {
+        let Some(reg) = registry.get_signature(key) else {
+            continue;
+        };
+        if reg.emitted_rust_ref_params.is_some() {
+            merge_codegen_refresh_metadata(into, reg);
+            return;
+        }
+    }
+}
+
 pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) -> bool {
     sig.param_ownership.iter().enumerate().any(|(idx, own)| {
         if sig.has_self_receiver && idx == 0 {
@@ -438,19 +505,6 @@ pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) ->
 
 /// Single argument emits as owned non-text in generated Rust (not `&T`).
 pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usize) -> bool {
-    if sig.param_types.get(param_idx).is_some_and(|t| {
-        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-    }) {
-        return false;
-    }
-    if matches!(
-        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-            sig, param_idx,
-        ),
-        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-    ) {
-        return false;
-    }
     if let Some(ref flags) = sig.emitted_rust_ref_params {
         if flags.get(param_idx).copied().unwrap_or(false) {
             return false;
@@ -461,6 +515,59 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
             return !param_type_is_borrowed_text(sig, param_idx);
         }
     }
+
+    // Non-Copy non-text WJ formals emit as owned in generated Rust when the body
+    // actually consumes the param (WDB-055 `engine.put(key: Key)`, WDB-056 Vec<u8>).
+    // When body-convergence says Borrowed AND param_types confirms Reference(T),
+    // the codegen formal generation emits `&T` — respect that here.
+    if let Some(formal) = sig.formal_param_type(param_idx) {
+        let bare = match formal {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        let converged_to_ref = sig.param_types.get(param_idx).is_some_and(|t| {
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        }) && matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed)
+        );
+        let is_non_copy_non_text = !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                sig, param_idx,
+            )
+            && !crate::codegen::rust::type_analysis::is_copy_type(bare)
+            && !matches!(bare, Type::Reference(_) | Type::MutableReference(_))
+            && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(bare)
+            && !crate::codegen::rust::types::is_windjammer_text_type(bare)
+            && !matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::MutBorrowed)
+            )
+            && !converged_to_ref;
+        let is_vec = matches!(bare, Type::Vec(_))
+            || matches!(bare, Type::Parameterized(name, _) if name == "Vec");
+        if is_non_copy_non_text || is_vec {
+            return true;
+        }
+    }
+
+    if sig.param_types.get(param_idx).is_some_and(|t| {
+        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    }) && !sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+        flags.get(param_idx).copied() == Some(false)
+    }) {
+        return false;
+    }
+    if matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+            sig, param_idx,
+        ),
+        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+    ) && !sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+        flags.get(param_idx).copied() == Some(false)
+    }) {
+        return false;
+    }
+
     matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
         && param_type_is_owned_non_text(sig, param_idx)
 }
@@ -487,6 +594,15 @@ pub(crate) fn emitted_owned_beats_stale_global_borrow(
         && converged_has_reference_params_over_bare(local, global)
 }
 
+/// Codegen-refreshed `emitted_rust_ref_params` beats same-key analysis-only metadata
+/// (cross-file `ComponentRegistry::register` → `&str` call sites in a later module).
+fn codegen_refreshed_beats_analysis_only(
+    preferred: &FunctionSignature,
+    other: &FunctionSignature,
+) -> bool {
+    preferred.emitted_rust_ref_params.is_some() && other.emitted_rust_ref_params.is_none()
+}
+
 /// Prefer converged global signatures over per-file declaration stubs at call sites.
 pub fn pick_best_resolved_signature(
     local: Option<ResolvedSignature>,
@@ -495,8 +611,6 @@ pub fn pick_best_resolved_signature(
     match (local, global) {
         (Some(l), Some(g)) if emitted_owned_beats_stale_global_borrow(&l.sig, &g.sig) => Some(l),
         (Some(l), Some(g)) if emitted_owned_beats_stale_global_borrow(&g.sig, &l.sig) => Some(g),
-        // Defining-module codegen refresh (`emitted_rust_ref_params`, e.g. struct-field-return
-        // `from_bytes(bytes: &Vec<u8>)`) beats caller-file declaration stubs.
         (Some(l), Some(g))
             if g.sig.emitted_rust_ref_params.is_some()
                 && l.sig.emitted_rust_ref_params.is_none()
@@ -504,6 +618,8 @@ pub fn pick_best_resolved_signature(
         {
             Some(g)
         }
+        (Some(l), Some(g)) if codegen_refreshed_beats_analysis_only(&g.sig, &l.sig) => Some(g),
+        (Some(l), Some(g)) if codegen_refreshed_beats_analysis_only(&l.sig, &g.sig) => Some(l),
         (Some(l), Some(g))
             if converged_has_reference_params_over_bare(&g.sig, &l.sig)
                 && method_registry_reflects_emitted_owned(&g.sig) =>
@@ -567,6 +683,7 @@ pub(crate) fn best_method_signature_for_receiver(
         let converged =
             !signature_is_declaration_stub_like(sig) && !has_stale_owned_non_copy_params(sig);
         let sig_emitted = method_registry_reflects_emitted_owned(sig);
+        let sig_codegen_refreshed = sig.emitted_rust_ref_params.is_some();
         let str_ref_params = sig
             .param_types
             .iter()
@@ -574,6 +691,13 @@ pub(crate) fn best_method_signature_for_receiver(
             .count();
         let replace = best.as_ref().is_none_or(|(_, best_sig, prev_converged)| {
             let best_emitted = method_registry_reflects_emitted_owned(best_sig);
+            let best_codegen_refreshed = best_sig.emitted_rust_ref_params.is_some();
+            if sig_codegen_refreshed && !best_codegen_refreshed {
+                return true;
+            }
+            if !sig_codegen_refreshed && best_codegen_refreshed {
+                return false;
+            }
             if sig_emitted && !best_emitted {
                 return true;
             }

@@ -234,12 +234,26 @@ impl IrFunction {
             .map(|param| {
                 let param_name = param.name.clone();
                 let mode = ownership_mode_from_param_type(&param.type_);
+                let analyzer_own = analyzed.inferred_ownership.get(&param_name).copied();
                 let mut ownership = if matches!(
                     param.type_,
                     Type::Reference(_) | Type::MutableReference(_)
-                ) || param_ownership_seed_is_copy(&param.type_)
-                {
+                ) {
                     ownership_mode_to_owned_type(mode, &mut region_counter)
+                } else if param_ownership_seed_is_copy(&param.type_) {
+                    match analyzer_own {
+                        Some(crate::analyzer::OwnershipMode::Borrowed) => {
+                            let r = Region::fresh(region_counter);
+                            region_counter += 1;
+                            OwnedType::Ref(r)
+                        }
+                        Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
+                            let r = Region::fresh(region_counter);
+                            region_counter += 1;
+                            OwnedType::MutRef(r)
+                        }
+                        _ => OwnedType::Owned,
+                    }
                 } else {
                     OwnedType::Owned // placeholder; solver + impl convergence refine
                 };

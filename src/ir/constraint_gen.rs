@@ -101,7 +101,21 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         cs.add(Constraint::OwnershipIs(var, ownership));
                     }
                     ty if param_ownership_seed_is_copy(ty) => {
-                        cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                        // Copy default is owned, but readonly body analysis (field access only)
+                        // must beat the seed so APIs like `replay_to_lsn(..., through: &Lsn)` emit.
+                        let analyzer_borrowed = analyzed
+                            .inferred_ownership
+                            .get(&param.name)
+                            .is_some_and(|m| {
+                                matches!(
+                                    m,
+                                    crate::analyzer::OwnershipMode::Borrowed
+                                        | crate::analyzer::OwnershipMode::MutBorrowed
+                                )
+                            });
+                        if !analyzer_borrowed {
+                            cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                        }
                     }
                     _ => {}
                 }
@@ -624,10 +638,35 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::FieldAccess { object, .. } => {
+                if let Some(name) = self.root_identifier(object) {
+                    if let Some(&var) = self.param_vars.get(&name) {
+                        let readonly_borrow = self
+                            .analyzed
+                            .inferred_ownership
+                            .get(&name)
+                            .is_some_and(|m| {
+                                matches!(
+                                    m,
+                                    crate::analyzer::OwnershipMode::Borrowed
+                                        | crate::analyzer::OwnershipMode::MutBorrowed
+                                )
+                            });
+                        let copy_field_read = self
+                            .analyzed
+                            .decl
+                            .parameters
+                            .iter()
+                            .find(|p| p.name == name)
+                            .is_some_and(|p| param_ownership_seed_is_copy(&p.type_));
+                        if readonly_borrow || copy_field_read {
+                            let r = self.fresh_region();
+                            self.cs
+                                .add(Constraint::OwnershipIs(var, OwnedType::Ref(r)));
+                        }
+                    }
+                }
                 let obj_var = self.walk_expression(object);
                 let field_var = self.cs.fresh_var();
-                // Field access borrows the object (at minimum shared ref)
-                // Mutation is detected separately in detect_mutation_target
                 let _ = obj_var;
                 field_var
             }
@@ -635,6 +674,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Expression::StructLiteral { fields, .. } => {
                 let result = self.cs.fresh_var();
                 for (_field_name, field_expr) in fields {
+                    if let Expression::Identifier { name, .. } = field_expr {
+                        if let Some(&var) = self.param_vars.get(name) {
+                            self.cs
+                                .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                        }
+                    }
                     self.walk_expression(field_expr);
                 }
                 self.cs

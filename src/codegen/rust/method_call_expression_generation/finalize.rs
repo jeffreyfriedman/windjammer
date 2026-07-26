@@ -25,6 +25,13 @@ impl<'ast> CodeGenerator<'ast> {
             .or_else(|| self.infer_type_name(object));
         let resolved_signature = resolved_signature.map(|mut sig| {
             if let Some(rt) = receiver_type_name.as_deref() {
+                if let Some(reg) =
+                    self.resolve_method_function_signature(rt, method, arguments.len())
+                {
+                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                        &mut sig, &reg,
+                    );
+                }
                 if let Some(ms) = self.lookup_method_signature(rt, method) {
                     let reg_sig = ms.to_function_signature();
                     use crate::codegen::rust::signature_promotion::{
@@ -158,6 +165,9 @@ impl<'ast> CodeGenerator<'ast> {
                             && matches!(
                                 sig.param_ownership.get(sig_param_idx),
                                 Some(OwnershipMode::Owned)
+                            )
+                            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                &sig, sig_param_idx,
                             )
                         {
                             return;
@@ -306,8 +316,22 @@ impl<'ast> CodeGenerator<'ast> {
                             let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                             });
-                            if arg_str.starts_with('&') && !param_is_str_ref && !is_collection_key {
+                            if arg_str.starts_with('&') && !param_is_str_ref && !is_collection_key
+                                && !sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                    matches!(t, Type::Reference(_))
+                                })
+                                && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    &sig, sig_param_idx,
+                                )
+                            {
                                 arg_str.trim_start_matches('&').to_string()
+                            } else if !arg_str.starts_with('&')
+                                && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    &sig, sig_param_idx,
+                                )
+                            {
+                                apply_borrow(&mut arg_str);
+                                arg_str
                             } else {
                                 arg_str
                             }
@@ -331,6 +355,8 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Expression::Identifier { name, .. } = arg_expr {
                                 if !self.emitted_rust_ref_formals.contains(name)
                                     && !self.identifier_already_ref(name)
+                                    && !callee_arg_emits_owned
+                                    && !self.current_func_is_pure_forwarding_delegate
                                     && self.method_registry_arg_expects_shared_borrow(
                                         rt,
                                         method,
@@ -341,6 +367,33 @@ impl<'ast> CodeGenerator<'ast> {
                                     crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
                                         &mut arg_str,
                                     );
+                                } else if !self.emitted_rust_ref_formals.contains(name)
+                                    && !self.identifier_already_ref(name)
+                                    && !self.current_func_is_pure_forwarding_delegate
+                                {
+                                    if let Some(ms) = self.lookup_method_signature(rt, method) {
+                                        let mut reg_sig = ms.to_function_signature();
+                                        let qualified = format!("{rt}::{method}");
+                                        if let Some(reg) = self
+                                            .signature_registry
+                                            .get_signature(&qualified)
+                                            .or_else(|| self.get_signature_with_global(&qualified))
+                                        {
+                                            crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                                                &mut reg_sig, reg,
+                                            );
+                                        }
+                                        let pidx = reg_sig.arg_param_index(i);
+                                        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                            &reg_sig, pidx,
+                                        ) || reg_sig.param_types.get(pidx).is_some_and(|t| {
+                                            matches!(t, Type::Reference(_))
+                                        }) {
+                                            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                                                &mut arg_str,
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -361,6 +414,29 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
+                    }
+                    if let Some((_, arg_expr)) = arguments.get(i) {
+                        let callee_wants_shared =
+                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                &sig, sig_param_idx,
+                            ) || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                matches!(t, Type::Reference(_))
+                            }) || matches!(ownership, OwnershipMode::Borrowed);
+                        let callee_wants_owned = callee_arg_emits_owned;
+                        self.finalize_owned_outer_formal_call_arg(
+                            &mut arg_str,
+                            arg_expr,
+                            callee_wants_shared && !callee_wants_owned,
+                            callee_wants_owned,
+                        );
+                        self.maybe_pure_forwarding_strip_call_arg(
+                            &mut arg_str,
+                            arg_expr,
+                            receiver_type_name.as_deref(),
+                            Some(method),
+                            Some(i),
+                            Some(arguments.len()),
+                        );
                     }
                     arg_str
                 })

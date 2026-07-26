@@ -49,7 +49,7 @@ pub use cost_model::{CompilationCostTracker, CompilationPhase};
 pub use constraint_gen::{generate_constraints, generate_module_constraints, FunctionConstraints};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use context::{analyze_and_lower, IrContext};
-pub use coercion::{compute_coercion, CoercionKind};
+pub use coercion::{compute_coercion, enforce_ownership_contract_on_coerced_arg, CoercionKind};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
 pub use execution::{ExecutionConstraint, ExecutionValidator};
 pub use lower::lower_body;
