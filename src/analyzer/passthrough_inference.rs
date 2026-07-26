@@ -25,6 +25,10 @@ impl<'ast> Analyzer<'ast> {
             )
     }
 
+    pub(crate) fn is_text_element_vec_param_type(t: &Type) -> bool {
+        matches!(t, Type::Vec(inner) if Self::is_windjammer_text_param_type(inner))
+    }
+
     /// Resolve struct field map using module-qualified keys (`dialogue::tree::DialogueNodeTree`).
     pub(crate) fn lookup_struct_fields_for_type(
         &self,
