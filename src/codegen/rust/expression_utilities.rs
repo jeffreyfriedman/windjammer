@@ -65,9 +65,19 @@ fn expr_needs_borrow_parentheses(expr_str: &str) -> bool {
     .any(|op| expr_str.contains(op))
 }
 
+/// True when `expr_str` is a Rust string literal (`"…"`, `r"…"`, `r#"…"#`).
+/// Literals are already `&str`; prefixing `&` yields `&&str`.
+pub fn is_rust_string_literal_text(expr_str: &str) -> bool {
+    expr_str.starts_with('"') || expr_str.starts_with("r\"") || expr_str.starts_with("r#\"")
+}
+
 /// Prefix shared borrow on generated Rust, parenthesizing compound expressions.
 pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
     if expr_str.starts_with('&') && !expr_str.starts_with("&&") {
+        return;
+    }
+    // String literals are already `&str` — never emit `&"…"`.
+    if is_rust_string_literal_text(expr_str) {
         return;
     }
     if expr_needs_borrow_parentheses(expr_str) {
@@ -177,5 +187,14 @@ mod tests {
         let mut s = "tenant_slug".to_string();
         apply_shared_borrow_prefix(&mut s);
         assert_eq!(s, "&tenant_slug");
+    }
+
+    #[test]
+    fn shared_borrow_skips_string_literals() {
+        let mut s = r#""</div>""#.to_string();
+        apply_shared_borrow_prefix(&mut s);
+        assert_eq!(s, r#""</div>""#);
+        assert!(is_rust_string_literal_text(r#""hi""#));
+        assert!(is_rust_string_literal_text(r#"r"raw""#));
     }
 }
