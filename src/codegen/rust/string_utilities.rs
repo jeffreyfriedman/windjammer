@@ -107,6 +107,27 @@ pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
 //   field_access_method_args.rs
 // =============================================================================
 
+/// True when `arg` is `expr.to_string()` / `expr.string()` where `expr` is **not** already
+/// text — a genuine type conversion that must be preserved at the call site.
+///
+/// `"lit".to_string()` on a string literal is redundant when the callee takes `&str` and
+/// must be stripped. Due to `||` vs `&&` precedence, this must be one predicate — do not
+/// inline as `method == "to_string" || method == "string" && !literal`.
+pub fn is_genuine_non_literal_to_string_conversion(arg: &Expression) -> bool {
+    matches!(
+        arg,
+        Expression::MethodCall { object, method, .. }
+            if (method.as_str() == "to_string" || method.as_str() == "string")
+                && !matches!(
+                    &**object,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                )
+    )
+}
+
 /// Parameter type is explicitly `&str` (not `&String`).
 /// This indicates the callee wants a string slice — string literals can be passed directly.
 pub fn param_is_rust_str_ref(param_type: &Type) -> bool {
@@ -436,23 +457,7 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         return;
     }
 
-    // When the AST is a MethodCall("to_string"), the user wrote `.to_string()` for
-    // type conversion (e.g. i32→String). Stripping it would leave a non-string type
-    // where &str is expected. Only strip when the AST is an Identifier/FieldAccess
-    // (compiler-added redundant .to_string() on already-String values).
-    // Preserve .to_string() only when it's a genuine type conversion (receiver is
-    // non-string, e.g. i32.to_string()). Strip it when receiver is already a string
-    // literal ("foo".to_string()) since that's a redundant &str→String→&str round-trip.
-    let is_explicit_to_string_conversion = matches!(
-        arg,
-        Expression::MethodCall { object, method, .. }
-            if method == "to_string" || method == "string"
-                && !matches!(&**object,
-                Expression::Literal { value: crate::parser::Literal::String(_), .. }
-            )
-    );
-
-    if !is_explicit_to_string_conversion {
+    if !is_genuine_non_literal_to_string_conversion(arg) {
         if arg_str.ends_with(".to_string()") {
             *arg_str = arg_str[..arg_str.len() - 12].to_string();
         } else if arg_str.ends_with(".into()") {

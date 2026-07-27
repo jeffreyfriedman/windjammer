@@ -714,6 +714,8 @@ impl<'ast> CodeGenerator<'ast> {
                     && !matches!(arg_to_generate, Expression::Closure { .. })
                     && !callee_wants_str_borrow
                     && !callee_wants_ref_param
+                    && !sig_for_effective.as_ref().and_then(|sig| sig.param_type_for_arg(i))
+                        .is_some_and(|t| self.is_type_copy(t))
                     && effective_ownership.is_some_and(|o| matches!(o, OwnershipMode::Owned))
                     && (!arg_is_inferred_borrowed_param
                         || matches!(arg_to_generate, Expression::Identifier { name, .. }
@@ -729,10 +731,19 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         _ => None,
                     };
+                    let param_decl_ty = match arg_to_generate {
+                        Expression::Identifier { name, .. } => self
+                            .current_function_params
+                            .iter()
+                            .find(|p| p.name == *name)
+                            .map(|p| &p.type_),
+                        _ => None,
+                    };
                     let is_copy = inferred_ty
                         .as_ref()
                         .is_some_and(|t| self.is_type_copy(t))
-                        || local_ty.is_some_and(|t| self.is_type_copy(t));
+                        || local_ty.is_some_and(|t| self.is_type_copy(t))
+                        || param_decl_ty.is_some_and(|t| self.is_type_copy(t));
                     let is_ref_to_copy = !is_copy
                         && (inferred_ty.as_ref().is_some_and(|t| {
                             matches!(t, Type::Reference(inner) | Type::MutableReference(inner)
@@ -834,17 +845,9 @@ impl<'ast> CodeGenerator<'ast> {
                                         && crate::codegen::rust::types::is_windjammer_text_type(t)
                                 });
                         if param_is_str_slice_ref && !callee_wants_owned_string {
-                            // Preserve .to_string() only when it's a genuine type conversion
-                            // (receiver is non-string, e.g. i32.to_string()). Strip it when
-                            // the receiver is already a string literal ("foo".to_string()).
-                            let is_type_conversion_to_string = matches!(
+                            if !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
                                 arg_to_generate,
-                                Expression::MethodCall { object, method: m, .. }
-                                    if m == "to_string" && !matches!(&**object,
-                                        Expression::Literal { value: crate::parser::Literal::String(_), .. }
-                                    )
-                            );
-                            if !is_type_conversion_to_string && arg_str.ends_with(".to_string()") {
+                            ) && arg_str.ends_with(".to_string()") {
                                 arg_str = arg_str[..arg_str.len() - 12].to_string();
                                 to_string_stripped_for_str_param = true;
                             } else if arg_str.ends_with(".into()") {
@@ -1395,7 +1398,18 @@ impl<'ast> CodeGenerator<'ast> {
                                 Some(Type::Vec(inner)) if matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
                             );
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if !arg_is_inferred_borrowed_param
+                        let callee_param_is_copy = sig_for_effective
+                            .as_ref()
+                            .and_then(|sig| sig.param_type_for_arg(i))
+                            .is_some_and(|t| self.is_type_copy(t))
+                            || matches!(arg, Expression::Identifier { name, .. } if {
+                                self.current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *name)
+                                    .is_some_and(|p| self.is_type_copy(&p.type_))
+                            });
+                        if !callee_param_is_copy
+                            && !arg_is_inferred_borrowed_param
                             && !external_module_mut_reborrow
                             && !param_is_mut_borrowed
                             && !param_is_borrowed_map_key
@@ -1676,23 +1690,18 @@ impl<'ast> CodeGenerator<'ast> {
                 if borrow_decision.strip_clone {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     // Owned-path may have added `.to_string()` before we knew callee takes &str.
-                    // But preserve when the receiver is a non-string type (genuine conversion).
-                    let is_type_conversion_to_string = matches!(
+                    if !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
                         arg_to_generate,
-                        Expression::MethodCall { object, method: m, .. }
-                            if m == "to_string" && !matches!(&**object,
-                                Expression::Literal { value: crate::parser::Literal::String(_), .. }
-                            )
-                    );
-                    if !is_type_conversion_to_string
-                        && param_expects_borrowed && arg_str.ends_with(".to_string()")
+                    ) && param_expects_borrowed
+                        && arg_str.ends_with(".to_string()")
                         && method_signature.as_ref().and_then(|sig| {
                             sig.param_type_for_arg(i)
                         }).is_some_and(|t| {
                             crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                        }) {
-                            arg_str = arg_str[..arg_str.len() - 12].to_string();
-                        }
+                        })
+                    {
+                        arg_str = arg_str[..arg_str.len() - 12].to_string();
+                    }
                 }
 
                 if borrow_decision.add_ref

@@ -40,6 +40,12 @@ impl MethodCallAnalyzer {
             ) {
                 return false;
             }
+            if sig
+                .param_type_for_arg(param_idx)
+                .is_some_and(crate::codegen::rust::type_analysis::is_copy_type)
+            {
+                return false;
+            }
         }
 
         if matches!(arg, Expression::MethodCall { .. }) {

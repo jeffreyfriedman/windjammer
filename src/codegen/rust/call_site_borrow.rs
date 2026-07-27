@@ -130,11 +130,35 @@ pub(crate) fn expression_is_vec_macro_literal(expr: &Expression) -> bool {
     matches!(expr, Expression::MacroInvocation { name, .. } if name == "vec")
 }
 
+/// `Vec::new()` / `Vec::<T>::new()` at a call site — owned constructor, safe to prefix `&`.
+pub(crate) fn expression_is_vec_new_constructor(expr: &Expression) -> bool {
+    if expression_is_vec_macro_literal(expr) {
+        return true;
+    }
+    let Expression::Call { function, arguments, .. } = expr else {
+        return false;
+    };
+    if !arguments.is_empty() {
+        return false;
+    }
+    match &**function {
+        Expression::FieldAccess { object, field, .. } if field == "new" => {
+            matches!(&**object, Expression::Identifier { name, .. } if name == "Vec")
+        }
+        _ => false,
+    }
+}
+
+fn coerced_is_owned_vec_constructor(coerced: &str) -> bool {
+    coerced.starts_with("Vec::new()")
+        || (coerced.starts_with("Vec::<") && coerced.contains(">::new()"))
+}
+
 fn expression_is_owned_vec_at_call_site<'ast>(
     gen: &crate::codegen::rust::generator::CodeGenerator<'ast>,
     arg_expr: &Expression<'ast>,
 ) -> bool {
-    if expression_is_vec_macro_literal(arg_expr) {
+    if expression_is_vec_new_constructor(arg_expr) {
         return true;
     }
     let Expression::Identifier { name, .. } = arg_expr else {
@@ -170,7 +194,9 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
     if coerced.starts_with('&') {
         return coerced;
     }
-    if !expression_is_owned_vec_at_call_site(gen, arg_expr) {
+    if !expression_is_owned_vec_at_call_site(gen, arg_expr)
+        && !coerced_is_owned_vec_constructor(&coerced)
+    {
         return coerced;
     }
 
@@ -288,6 +314,14 @@ pub fn expression_supports_shared_borrow_at_call_site(
             | Expression::FieldAccess { .. }
             | Expression::Index { .. }
     ) {
+        return true;
+    }
+    // Constructor / factory rvalues (`QuestId::from_u32(n)`) borrow to `&T` formals.
+    if matches!(
+        arg_expr,
+        Expression::Call { .. } | Expression::MethodCall { .. }
+    ) && !expression_is_copy_literal(arg_expr)
+    {
         return true;
     }
     // Owned String producers (`i32.to_string()`, etc.) passed to `&str` formals.

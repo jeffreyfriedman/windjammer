@@ -171,6 +171,14 @@ pub fn apply_mut_borrow_coercion(
     true
 }
 
+/// Whether `arg` can receive `&mut` at a call site (identifiers and `self.field` paths).
+pub fn arg_supports_mut_borrow_coercion(arg: &Expression) -> bool {
+    matches!(
+        arg,
+        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
