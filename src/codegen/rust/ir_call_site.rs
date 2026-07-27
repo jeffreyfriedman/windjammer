@@ -688,7 +688,10 @@ impl<'ast> CodeGenerator<'ast> {
         let arg_already_rust_ref = matches!(
             arg_expr,
             Expression::Identifier { name, .. }
-                if self.identifier_already_ref(name) || self.identifier_already_mut_ref(name)
+                if self.identifier_already_ref(name)
+                    || self.identifier_already_mut_ref(name)
+                    || self.emitted_rust_ref_formals.contains(name)
+                    || self.binding_emits_as_rust_shared_ref(name)
         );
         let formal_is_copy = sig
             .formal_param_type(param_idx)
@@ -707,7 +710,10 @@ impl<'ast> CodeGenerator<'ast> {
         if matches!(
             arg_expr,
             Expression::Identifier { name, .. }
-                if self.identifier_already_ref(name) || self.identifier_already_mut_ref(name)
+                if self.identifier_already_ref(name)
+                    || self.identifier_already_mut_ref(name)
+                    || self.emitted_rust_ref_formals.contains(name)
+                    || self.binding_emits_as_rust_shared_ref(name)
         ) {
             borrow_decision.add_ref = false;
             borrow_decision.add_mut_ref = false;
@@ -781,6 +787,22 @@ impl<'ast> CodeGenerator<'ast> {
             arg_index,
             user_arg_count,
         );
+
+        // Already-emitted `&T` formals must not grow a second `&` (LsmEngine::get → engine.get).
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if (self.emitted_rust_ref_formals.contains(name)
+                || self.binding_emits_as_rust_shared_ref(name))
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && coerced != name.as_str()
+            {
+                let base =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced);
+                if base == name.as_str() || base.starts_with(name.as_str()) {
+                    coerced = base.to_string();
+                }
+            }
+        }
 
         // Storage methods (HashMap.insert, etc.) need owned String keys from literals.
         if matches!(
