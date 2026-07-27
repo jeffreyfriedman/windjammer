@@ -253,7 +253,10 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
         (Target::Rust, CoercionKind::Borrow) => rust_shared_borrow(expr),
         (Target::Rust, CoercionKind::MutBorrow) => rust_mut_borrow(expr),
         (Target::Rust, CoercionKind::Clone) => {
-            if expr.ends_with(".clone()") {
+            if expr.ends_with(".clone()")
+                || expr.ends_with(".to_string()")
+                || expr.ends_with(".to_owned()")
+            {
                 expr.to_string()
             } else {
                 format!("{}.clone()", expr)

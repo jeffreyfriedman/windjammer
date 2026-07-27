@@ -98,6 +98,10 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
 
+                if self.is_stored(&param.name, &func.body, registry) {
+                    continue;
+                }
+
                 if !needs_string_ref {
                     optimizable.insert(param.name.clone());
                 }
@@ -326,40 +330,40 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                // Type::method(...) constructor calls (parsed as Call(FieldAccess)).
+                // Type::method(...) calls (parsed as Call(FieldAccess)) — signature-driven.
                 if let Expression::FieldAccess { object, field, .. } = &**function {
-                    let is_constructor = field.starts_with("new") || field.starts_with("from_");
-                    if is_constructor {
-                        let qualified = if let Expression::Identifier { name, .. } = &**object {
-                            Some(format!("{}::{}", name, field))
-                        } else {
-                            None
-                        };
-                        for (i, arg) in arguments.iter().enumerate() {
-                            let arg_expr = &arg.1;
-                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                if let Some(ref qname) = qualified {
-                                    if let Some(sig) = registry.get_signature(qname) {
-                                        if let Some(param_type) = sig.param_type_for_arg(i) {
-                                            if self.type_is_string_ref_not_str(param_type) {
-                                                return true;
-                                            }
-                                            if self.is_windjammer_string_param_type(param_type) {
-                                                if self.callee_string_param_uses_rust_string_ref(
-                                                    sig, i, param_type, field,
-                                                ) {
-                                                    return true;
-                                                }
-                                                continue;
-                                            }
-                                            if self.type_is_owned_string(param_type) {
+                    let qualified = if let Expression::Identifier { name, .. } = &**object {
+                        Some(format!("{}::{}", name, field))
+                    } else {
+                        None
+                    };
+                    if let Some(ref qname) = qualified {
+                        if let Some(sig) = registry.get_signature(qname) {
+                            for (i, arg) in arguments.iter().enumerate() {
+                                let arg_expr = &arg.1;
+                                if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
+                                    if let Some(param_type) = sig.param_type_for_arg(i) {
+                                        if self.type_is_string_ref_not_str(param_type) {
+                                            return true;
+                                        }
+                                        if self.is_windjammer_string_param_type(param_type) {
+                                            if self.callee_string_param_uses_rust_string_ref(
+                                                sig, i, param_type, field,
+                                            ) {
                                                 return true;
                                             }
                                             continue;
                                         }
+                                        if self.type_is_owned_string(param_type) {
+                                            return true;
+                                        }
                                     }
                                 }
-                                return true;
+                                if self.expr_uses_param_in_string_ref_context(
+                                    param_name, arg_expr, registry,
+                                ) {
+                                    return true;
+                                }
                             }
                         }
                     }
@@ -376,43 +380,10 @@ impl<'ast> Analyzer<'ast> {
                                 last.starts_with(|c: char| c.is_uppercase())
                             });
 
-                    let is_constructor = fn_name.contains("::") && {
-                        let last = fn_name.rsplit("::").next().unwrap_or("");
-                        last.starts_with("new") || last.starts_with("from_")
-                    };
-
                     if is_enum_variant {
                         for arg in arguments.iter() {
                             let arg_expr = &arg.1;
                             if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                return true;
-                            }
-                        }
-                    }
-
-                    if is_constructor {
-                        for (i, arg) in arguments.iter().enumerate() {
-                            let arg_expr = &arg.1;
-                            if self.expr_is_param_or_ref_to_param(param_name, arg_expr) {
-                                if let Some(sig) = registry.get_signature(fn_name) {
-                                    if let Some(param_type) = sig.param_type_for_arg(i) {
-                                        if self.type_is_string_ref_not_str(param_type) {
-                                            return true;
-                                        }
-                                        if self.is_windjammer_string_param_type(param_type) {
-                                            if self.callee_string_param_uses_rust_string_ref(
-                                                sig, i, param_type, fn_name,
-                                            ) {
-                                                return true;
-                                            }
-                                            continue;
-                                        }
-                                        if self.type_is_owned_string(param_type) {
-                                            return true;
-                                        }
-                                        continue;
-                                    }
-                                }
                                 return true;
                             }
                         }
@@ -632,7 +603,8 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl,
     ) -> bool {
         for stmt in body {
-            if self.statement_forwards_param_as_owned_pass_through(param_name, stmt, registry) {
+            if self.statement_forwards_param_as_owned_pass_through(param_name, stmt, registry, func)
+            {
                 return true;
             }
         }
@@ -644,16 +616,17 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         stmt: &Statement,
         registry: &super::SignatureRegistry,
+        func: &FunctionDecl,
     ) -> bool {
         match stmt {
             Statement::Return {
                 value: Some(expr), ..
             } => self.expr_is_param_or_ref_to_param(param_name, expr),
             Statement::Expression { expr, .. } => {
-                self.expr_forwards_param_as_owned_pass_through(param_name, expr, registry)
+                self.expr_forwards_param_as_owned_pass_through(param_name, expr, registry, func)
             }
             Statement::Let { value, .. } => {
-                self.expr_forwards_param_as_owned_pass_through(param_name, value, registry)
+                self.expr_forwards_param_as_owned_pass_through(param_name, value, registry, func)
             }
             Statement::If {
                 then_block,
@@ -661,15 +634,21 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 then_block.iter().any(|s| {
-                    self.statement_forwards_param_as_owned_pass_through(param_name, s, registry)
+                    self.statement_forwards_param_as_owned_pass_through(
+                        param_name, s, registry, func,
+                    )
                 }) || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
-                        self.statement_forwards_param_as_owned_pass_through(param_name, s, registry)
+                        self.statement_forwards_param_as_owned_pass_through(
+                            param_name, s, registry, func,
+                        )
                     })
                 })
             }
             Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expr_forwards_param_as_owned_pass_through(param_name, arm.body, registry)
+                self.expr_forwards_param_as_owned_pass_through(
+                    param_name, arm.body, registry, func,
+                )
             }),
             _ => false,
         }
@@ -680,8 +659,36 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         expr: &Expression,
         registry: &super::SignatureRegistry,
+        func: &FunctionDecl,
     ) -> bool {
         match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if !self.expr_is_param_or_ref_to_param(param_name, arg) {
+                        continue;
+                    }
+                    let method_key =
+                        self.qualified_method_registry_key(object, method, func);
+                    let sig = registry
+                        .lookup_method(&method_key)
+                        .or_else(|| registry.get_signature(&method_key));
+                    if let Some(sig) = sig {
+                        let pidx = if sig.has_self_receiver { i + 1 } else { i };
+                        if matches!(
+                            sig.param_ownership.get(pidx),
+                            Some(super::OwnershipMode::Owned)
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
             Expression::Call { function, arguments, .. } => arguments.iter().any(|(_, arg)| {
                 if !self.expr_is_param_or_ref_to_param(param_name, arg) {
                     return false;
@@ -702,7 +709,7 @@ impl<'ast> Analyzer<'ast> {
                 false
             }),
             Expression::Block { statements, .. } => statements.iter().any(|s| {
-                self.statement_forwards_param_as_owned_pass_through(param_name, s, registry)
+                self.statement_forwards_param_as_owned_pass_through(param_name, s, registry, func)
             }),
             _ => false,
         }

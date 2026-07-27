@@ -676,6 +676,46 @@ pub fn runtime_std_param_needs_auto_borrow(
     signature.is_some_and(|sig| runtime_wj_owned_rust_borrowed_param(sig, arg_index))
 }
 
+fn runtime_std_module_arg_needs_rust_borrow(
+    callee_name: &str,
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    if !runtime_wj_owned_rust_borrowed_param(sig, arg_index) {
+        return false;
+    }
+    let module = callee_name.split("::").next().unwrap_or("");
+    is_runtime_std_module(module)
+}
+
+/// Like [`runtime_std_param_needs_auto_borrow`], but when a layered registry shadows the
+/// runtime scanner baseline with WJ-owned formals, still honor the baseline borrow contract.
+pub fn runtime_std_param_needs_auto_borrow_resolved(
+    registry: &crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+    signature: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+) -> bool {
+    if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(callee_name, sig, arg_index))
+    {
+        return true;
+    }
+    if let Some(reg_sig) = registry.get_signature(callee_name) {
+        let already_checked = signature.is_some_and(|s| std::ptr::eq(s, reg_sig));
+        if !already_checked
+            && runtime_std_module_arg_needs_rust_borrow(callee_name, reg_sig, arg_index)
+        {
+            return true;
+        }
+    }
+    if let Some(baseline) = registry.get_fallback_signature(callee_name) {
+        if runtime_std_module_arg_needs_rust_borrow(callee_name, baseline, arg_index) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Map/set key lookup: first arg must be borrowed when the receiver is a map/set type.
 /// Driven by signature registry ownership/types — not method name lists.
 pub fn is_collection_key_lookup(

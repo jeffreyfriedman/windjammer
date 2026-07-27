@@ -178,9 +178,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     // Not a constructor — look up return type from signature registry
                                     // e.g., MathHelper::fade(x) → return type is f32
                                     let qualified = format!("{}::{}", type_name, field);
-                                    self.signature_registry
-                                        .get_signature(&qualified)
+                                    self.get_signature_with_global(&qualified)
                                         .and_then(|sig| sig.return_type.clone())
+                                        .or_else(|| self.infer_expression_type(value))
                                 }
                             } else {
                                 None

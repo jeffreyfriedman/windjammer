@@ -239,6 +239,18 @@ impl SignatureRegistry {
         self.signatures.contains_key(name)
     }
 
+    /// Baseline signature from `global_fallback` when a local entry shadows it.
+    /// Used for runtime-std auto-borrow: WJ `.wj` stubs declare owned formals while
+    /// the scanned Rust runtime API takes `&T`.
+    pub fn get_fallback_signature(&self, name: &str) -> Option<&FunctionSignature> {
+        if !self.signatures.contains_key(name) {
+            return None;
+        }
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.get_signature(name))
+    }
+
     /// Check if a signature key has been registered with conflicting param types
     /// from different modules (namespace collision).
     pub fn has_collision(&self, name: &str) -> bool {
@@ -938,6 +950,135 @@ mod tests {
             stored.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             "caller owned stub must not overwrite body-converged borrows"
+        );
+    }
+
+    #[test]
+    fn test_runtime_subprocess_spawn_scanned_as_borrowed() {
+        let reg = SignatureRegistry::new();
+        let sig = reg
+            .get_signature("subprocess::spawn")
+            .expect("subprocess::spawn must be in stdlib baseline");
+        assert!(
+            sig.param_ownership.len() >= 2,
+            "expected program + args params, got {:?}",
+            sig.param_ownership
+        );
+        assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed);
+        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+            sig, 1
+        ));
+    }
+
+    #[test]
+    fn test_runtime_json_get_scanned_as_borrowed() {
+        let reg = SignatureRegistry::new();
+        let sig = reg
+            .get_signature("json::get")
+            .expect("json::get must be in stdlib baseline");
+        assert!(
+            sig.param_ownership.len() >= 1,
+            "expected value param, got {:?}",
+            sig.param_ownership
+        );
+        assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
+        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+            sig, 0
+        ));
+    }
+
+    #[test]
+    fn test_analyzed_json_get_keeps_runtime_borrow() {
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::analyzer::Analyzer;
+
+        let source = r#"
+use std::json
+
+pub fn parse_field(line: string) -> string {
+    match json::parse(line) {
+        Ok(v) => {
+            if let Some(f) = json::get(v, "field") {
+                return ""
+            }
+            return ""
+        }
+        Err(_) => return ""
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().unwrap();
+        let mut analyzer = Analyzer::new();
+        let (_, registry, _) = analyzer.analyze_program(&program).unwrap();
+        let sig = registry
+            .get_signature("json::get")
+            .expect("json::get");
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &registry,
+                "json::get",
+                Some(sig),
+                0,
+            ),
+            "value param should need runtime auto-borrow, ownership={:?}",
+            sig.param_ownership
+        );
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &registry,
+                "json::get",
+                None,
+                0,
+            ),
+            "registry-only lookup must still detect runtime borrow for json::get value",
+        );
+    }
+
+    #[test]
+    fn test_analyzed_subprocess_use_keeps_runtime_borrow_for_spawn() {
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::analyzer::Analyzer;
+
+        let source = r#"
+    use std::subprocess
+
+    fn test_echo() {
+        let args = vec!["hello".to_string()]
+        subprocess::spawn("echo", args)
+    }
+    "#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().unwrap();
+        let mut analyzer = Analyzer::new();
+        let (_, registry, _) = analyzer.analyze_program(&program).unwrap();
+        let sig = registry
+            .get_signature("subprocess::spawn")
+            .expect("subprocess::spawn");
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &registry,
+                "subprocess::spawn",
+                Some(sig),
+                1,
+            ),
+            "args param should need runtime auto-borrow, ownership={:?}",
+            sig.param_ownership
+        );
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &registry,
+                "subprocess::spawn",
+                None,
+                1,
+            ),
+            "registry-only lookup must still detect runtime borrow for spawn args",
         );
     }
 }

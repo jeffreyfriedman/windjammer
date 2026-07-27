@@ -55,11 +55,26 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
+                let payload_stored = self.param_stored_in_owned_payload(
+                    func.body.as_slice(),
+                    &param.name,
+                );
                 // SMART STRING INFERENCE: Use the inferred type from analyzer (string → &str vs String)
-                let inferred_type = analyzed
-                    .inferred_param_types
-                    .get(param_idx)
-                    .unwrap_or(&param.type_);
+                let inferred_type = if payload_stored
+                    || matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::Owned)
+                    )
+                    || self.get_param_ownership(&param.name, analyzed)
+                        == Some(OwnershipMode::Owned)
+                {
+                    &param.type_
+                } else {
+                    analyzed
+                        .inferred_param_types
+                        .get(param_idx)
+                        .unwrap_or(&param.type_)
+                };
 
                 // E0053: Trait impl formal parameters must match the trait item. Plain `string` in
                 // source is owned `String` — do not emit `&str` from str_ref inference on the impl.
@@ -70,7 +85,14 @@ impl<'ast> CodeGenerator<'ast> {
                     analyzed.inferred_ownership.get(&param.name),
                     Some(OwnershipMode::Borrowed)
                 );
+                let analyzer_or_ir_owned = payload_stored
+                    || matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::Owned)
+                    )
+                    || self.get_param_ownership(&param.name, analyzed) == Some(OwnershipMode::Owned);
                 if param.name != "self"
+                    && !analyzer_or_ir_owned
                     && !self.in_trait_impl
                     && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
@@ -650,11 +672,19 @@ impl<'ast> CodeGenerator<'ast> {
                             &param.name,
                             func,
                         );
+                        let analyzer_owned_value_param = matches!(
+                            analyzed.inferred_ownership.get(&param.name),
+                            Some(OwnershipMode::Owned)
+                        ) && !matches!(
+                            &param.type_,
+                            Type::Reference(_) | Type::MutableReference(_)
+                        );
                         if matches!(
                             formal_type,
                             Type::Reference(_) | Type::MutableReference(_)
                         ) && !force_owned_collection_key
                             && !discard_only
+                            && !analyzer_owned_value_param
                         {
                             if self.is_type_copy(&param.type_)
                                 && !self.inferred_borrowed_params.contains(&param.name)
@@ -786,20 +816,18 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
+                            if self.param_stored_in_owned_payload(
+                                func.body.as_slice(),
+                                &param.name,
+                            ) {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
                             if self.param_moves_via_struct_literal_init(
                                 func.body.as_slice(),
                                 &param.name,
                             ) {
-                                if matches!(&param.type_, Type::Vec(_))
-                                    || matches!(
-                                        &param.type_,
-                                        Type::Parameterized(name, _) if name == "Vec"
-                                    )
-                                {
-                                    ownership_mode = OwnershipMode::Borrowed;
-                                } else {
-                                    ownership_mode = OwnershipMode::Owned;
-                                }
+                                ownership_mode = OwnershipMode::Owned;
                             }
 
                             // Pure delegation wrappers keep &T formals when the body only
@@ -814,6 +842,10 @@ impl<'ast> CodeGenerator<'ast> {
                             ) && !self.is_type_copy(&param.type_)
                                 && !analyzed.field_extract_parameters.contains(&param.name)
                                 && !analyzed.returned_parameters.contains(&param.name)
+                                && !self.param_stored_in_owned_payload(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
                                 && !self.param_moves_via_struct_literal_init(
                                     func.body.as_slice(),
                                     &param.name,
@@ -973,8 +1005,34 @@ impl<'ast> CodeGenerator<'ast> {
                                 })
                             };
 
+                            // Converged analyzer ownership is authoritative unless the body stores
+                            // the param in an owned payload (enum variant, constructor, struct field).
+                            if payload_stored {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.str_ref_optimized_params.remove(&param.name);
+                            } else if let Some(analyzed_own) =
+                                analyzed.inferred_ownership.get(&param.name)
+                            {
+                                ownership_mode = *analyzed_own;
+                            } else if self.get_param_ownership(&param.name, analyzed)
+                                == Some(OwnershipMode::Owned)
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
                             copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {
-                                OwnershipMode::Owned => self.type_to_rust(formal_type),
+                                OwnershipMode::Owned => {
+                                    if crate::codegen::rust::types::is_windjammer_text_type(
+                                        &param.type_,
+                                    ) && !matches!(
+                                        &param.type_,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    ) {
+                                        self.type_to_rust(&param.type_)
+                                    } else {
+                                        self.type_to_rust(formal_type)
+                                    }
+                                }
                                 OwnershipMode::MutBorrowed if self.is_type_copy(formal_type) => {
                                     format!("&mut {}", self.type_to_rust(formal_type))
                                 }
@@ -992,6 +1050,22 @@ impl<'ast> CodeGenerator<'ast> {
                                     let is_string = matches!(formal_type, Type::String)
                                         || matches!(formal_type, Type::Custom(ref name) if name == "string");
                                     if is_string && !trait_impl_owned_string {
+                                        if self.collection_key_owned_params.contains(&param.name)
+                                            || self.is_collection_key_owned_param(param, func)
+                                            || self.param_only_forwarded_to_map_key_callee(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            )
+                                            || (func.parent_type.is_none()
+                                                && self.param_only_forwarded_to_qualified_collection_key_callee(
+                                                    func.body.as_slice(),
+                                                    &param.name,
+                                                    func,
+                                                ))
+                                        {
+                                            self.type_to_rust(formal_type)
+                                        } else {
                                         let registry_str_ref = self
                                             .get_signature_with_global(&func.name)
                                             .and_then(|sig| sig.param_types.get(param_idx))
@@ -1005,20 +1079,18 @@ impl<'ast> CodeGenerator<'ast> {
                                                         )
                                                 )
                                             });
-                                        if self.str_ref_optimized_params.contains(&param.name)
-                                            || registry_str_ref
+                                        if (self.str_ref_optimized_params.contains(&param.name)
+                                            || registry_str_ref)
+                                            && ownership_mode
+                                                != OwnershipMode::Owned
+                                            && !payload_stored
+                                            && analyzed.inferred_ownership.get(&param.name)
+                                                != Some(&OwnershipMode::Owned)
                                         {
-                                            if self.param_only_forwarded_to_qualified_collection_key_callee(
-                                                func.body.as_slice(),
-                                                &param.name,
-                                                func,
-                                            ) && func.parent_type.is_none() {
-                                                self.type_to_rust(formal_type)
-                                            } else {
-                                                "&str".to_string()
-                                            }
+                                            "&str".to_string()
                                         } else {
                                             "&String".to_string()
+                                        }
                                         }
                                     } else {
                                         format!("&{}", self.type_to_rust(formal_type))
@@ -1164,6 +1236,18 @@ impl<'ast> CodeGenerator<'ast> {
             self.get_param_ownership(param_name, analyzed),
             Some(OwnershipMode::MutBorrowed)
         ) {
+            return true;
+        }
+        if matches!(
+            self.get_param_ownership(param_name, analyzed),
+            Some(OwnershipMode::Owned)
+        ) || matches!(
+            analyzed.inferred_ownership.get(param_name),
+            Some(OwnershipMode::Owned)
+        ) {
+            return true;
+        }
+        if self.param_stored_in_owned_payload(analyzed.decl.body.as_slice(), param_name) {
             return true;
         }
         analyzed.mutated_parameters.contains(param_name)
