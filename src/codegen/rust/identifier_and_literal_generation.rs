@@ -53,6 +53,13 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_call_argument_generation
             && !self.in_field_access_object
         {
+            if self.borrowed_iterator_vars.contains(name)
+                && crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
+                    self.current_function_return_type.as_ref(),
+                )
+            {
+                return base_name;
+            }
             if let Some(ref analysis) = self.auto_clone_analysis {
                 if analysis
                     .needs_clone(name, self.current_statement_idx)

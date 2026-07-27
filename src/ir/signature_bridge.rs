@@ -111,12 +111,22 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                         crate::codegen::rust::call_signature_resolution::effective_param_ownership(
                             sig, param_idx,
                         );
-                    let readonly_compare_helper = sig.return_type.as_ref().is_some_and(|t| {
-                        matches!(t, Type::Bool)
-                            || matches!(t, Type::Custom(name) if name == "bool")
-                    }) && matches!(effective_own, OwnershipMode::Borrowed);
-                    if !readonly_compare_helper {
-                        return safety_type_from_parser_type(formal, Some(OwnershipMode::Owned));
+                    // Body-converged borrow on bare non-Copy formals (Map keys, mutating
+                    // lookups) must emit `&T` at call sites regardless of return type — not
+                    // only bool-returning readonly helpers.
+                    if matches!(
+                        effective_own,
+                        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                    ) {
+                        // Fall through to converged borrow handling below.
+                    } else {
+                        let readonly_compare_helper = sig.return_type.as_ref().is_some_and(|t| {
+                            matches!(t, Type::Bool)
+                                || matches!(t, Type::Custom(name) if name == "bool")
+                        }) && matches!(effective_own, OwnershipMode::Borrowed);
+                        if !readonly_compare_helper {
+                            return safety_type_from_parser_type(formal, Some(OwnershipMode::Owned));
+                        }
                     }
                 }
             }
@@ -604,6 +614,24 @@ pub fn sync_ir_ownership_to_registry(
             if idx >= sig.param_ownership.len() {
                 continue;
             }
+            let prior = sig.param_ownership[idx];
+            // IR formal lowering may classify bare non-Copy WJ params as Owned even when
+            // body analysis converged Borrowed (Map keys). Do not let IR sync clobber
+            // promoted/converged borrow metadata — call sites need `&` not `.clone()`.
+            if matches!(prior, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                && matches!(mode, OwnershipMode::Owned)
+                && sig.formal_param_type(idx).is_some_and(|t| {
+                    let bare = match t {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    crate::codegen::rust::call_signature_resolution::formal_type_honors_converged_borrow(
+                        bare,
+                    )
+                })
+            {
+                continue;
+            }
             sig.param_ownership[idx] = mode;
             if matches!(mode, OwnershipMode::Owned)
                 && idx < sig.param_types.len()
@@ -777,6 +805,36 @@ mod tests {
         };
         let expected = safety_type_from_signature_param(&sig, 0);
         assert!(matches!(expected.ownership, OwnedType::Ref(_)));
+    }
+
+    #[test]
+    fn quest_manager_bare_quest_id_param_types_expects_shared_borrow() {
+        let sig = FunctionSignature {
+            name: "QuestManager::is_quest_active".into(),
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Custom("QuestId".into()),
+            ],
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Custom("QuestId".into()),
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Bool),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 1);
+        assert!(
+            matches!(expected.ownership, OwnedType::Ref(_)),
+            "converged QuestId borrow must encode as Ref, got {:?}",
+            expected.ownership
+        );
+        assert!(call_site_expects_shared_borrow(&sig, 1));
     }
 
     #[test]

@@ -252,6 +252,22 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if param.name == "self"
                     && !self.in_trait_impl
+                    && super::self_analysis::function_return_moves_self_fields(&analyzed.decl)
+                    && body_modifies
+                    && self.method_returns_impl_struct(func)
+                {
+                    self.inferred_borrowed_params.remove("self");
+                    self.inferred_mut_borrowed_params.remove("self");
+                    self.record_self_receiver_upgrade(
+                        &func.name,
+                        self.get_param_ownership("self", analyzed),
+                        "mut self",
+                    );
+                    return "mut self".to_string();
+                }
+
+                if param.name == "self"
+                    && !self.in_trait_impl
                     && !super::self_analysis::function_calls_owned_self_method(
                         &analyzed.decl,
                         &self.signature_registry,
@@ -284,6 +300,14 @@ impl<'ast> CodeGenerator<'ast> {
                         if self.self_receiver_upgrades.get(&qualified)
                             == Some(&OwnershipMode::MutBorrowed)
                         {
+                            if super::self_analysis::function_return_moves_self_fields(&analyzed.decl)
+                                && body_modifies
+                                && self.method_returns_impl_struct(func)
+                            {
+                                self.inferred_borrowed_params.remove("self");
+                                self.inferred_mut_borrowed_params.remove("self");
+                                return "mut self".to_string();
+                            }
                             self.inferred_mut_borrowed_params.insert("self".to_string());
                             self.inferred_borrowed_params.remove("self");
                             return "&mut self".to_string();
@@ -1018,6 +1042,27 @@ impl<'ast> CodeGenerator<'ast> {
                                 == Some(OwnershipMode::Owned)
                             {
                                 ownership_mode = OwnershipMode::Owned;
+                            }
+
+                            // Readonly unused WJ `string` impl formals emit `&str` so forward-ref
+                            // call sites (DialogCondition → Inventory::has_item) see converged borrow.
+                            if self.current_struct_name.is_some()
+                                && unused_params.contains(&param.name)
+                                && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                && !matches!(
+                                    &param.type_,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                                && !payload_stored
+                                && !self.param_stored_in_owned_payload(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
+                            {
+                                ownership_mode = OwnershipMode::Borrowed;
+                                self.str_ref_optimized_params.insert(param.name.clone());
+                                self.inferred_borrowed_params.insert(param.name.clone());
+                                self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
                             copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {

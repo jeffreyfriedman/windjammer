@@ -198,7 +198,9 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::codegen::rust::call_signature_resolution::{
             finalize_call_site_signature, has_stale_owned_non_copy_params, validate_arg_count,
         };
-        use crate::codegen::rust::signature_promotion::prefer_converged_over_stub;
+        use crate::codegen::rust::signature_promotion::{
+            converged_has_reference_params_over_bare, prefer_converged_over_stub,
+        };
 
         let is_usable = |sig: &FunctionSignature| {
             validate_arg_count(sig, arguments.len()) && !has_stale_owned_non_copy_params(sig)
@@ -206,17 +208,79 @@ impl<'ast> CodeGenerator<'ast> {
 
         let trace = std::env::var("WJ_SIGNATURE_TRACE").is_ok();
 
-        // Always try mc_resolve to find converged signatures from the global registry.
-        // A stale declaration stub in resolved_from_mc may have String params where the
-        // actual generated function has &str (converged from body analysis).
+        let receiver_type_name = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object))
+            .or_else(|| {
+                if let Expression::Identifier { name, .. } = object {
+                    if (name == "Self" || name == "self") && self.in_impl_block {
+                        return self.current_struct_name.clone();
+                    }
+                }
+                None
+            });
+
+        // Re-resolve against the merged global registry (may differ from the first
+        // mc_resolve snapshot when per-file stubs gained Borrowed ownership but kept bare
+        // param_types during Step 4B-a).
         let mc_resolved = self
             .mc_resolve_method_call_signature(object, method, arguments)
             .filter(|s| is_usable(s));
 
+        let global_upgraded = receiver_type_name.as_ref().and_then(|tn| {
+            use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site;
+            resolve_method_for_call_site(
+                &self.signature_registry,
+                self.global_signature_registry(),
+                tn,
+                method,
+                arguments.len(),
+            )
+            .map(|r| finalize_call_site_signature(r.sig))
+            .filter(|g| is_usable(g))
+        });
+
+        let prefer_global_over =
+            |local: &FunctionSignature, better: &FunctionSignature| -> bool {
+                prefer_converged_over_stub(local, better)
+                    || converged_has_reference_params_over_bare(local, better)
+            };
+
+        if let Some(ref better) = global_upgraded {
+            if resolved_from_mc.as_ref().is_none_or(|local| {
+                !is_usable(local) || prefer_global_over(local, better)
+            }) {
+                if trace {
+                    eprintln!(
+                        "[wj-sig] call-site {method} arg#{}: global SELECTED ({:?})",
+                        arguments.len(),
+                        better.param_types
+                    );
+                }
+                return Some(better.clone());
+            }
+        }
+
         if let Some(sig) = resolved_from_mc {
             if is_usable(sig) {
+                if let Some(ref better) = global_upgraded {
+                    if prefer_converged_over_stub(sig, better)
+                        || converged_has_reference_params_over_bare(sig, better)
+                    {
+                        if trace {
+                            eprintln!(
+                                "[wj-sig] call-site {method} arg#{}: global UPGRADED ({:?})",
+                                arguments.len(),
+                                better.param_types
+                            );
+                        }
+                        return Some(better.clone());
+                    }
+                }
                 if let Some(ref mc_sig) = mc_resolved {
-                    if prefer_converged_over_stub(sig, mc_sig) {
+                    if prefer_converged_over_stub(sig, mc_sig)
+                        || converged_has_reference_params_over_bare(sig, mc_sig)
+                    {
                         if trace {
                             eprintln!(
                                 "[wj-sig] call-site {method} arg#{}: mc_resolve UPGRADED ({:?})",
@@ -238,21 +302,25 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        if let Some(ref better) = global_upgraded {
+            if mc_resolved
+                .as_ref()
+                .is_none_or(|local| prefer_global_over(local, better))
+            {
+                if trace {
+                    eprintln!(
+                        "[wj-sig] call-site {method} arg#{}: global over mc_resolved ({:?})",
+                        arguments.len(),
+                        better.param_types
+                    );
+                }
+                return Some(better.clone());
+            }
+        }
+
         if let Some(sig) = mc_resolved {
             return Some(finalize_call_site_signature(sig));
         }
-
-        let receiver_type_name = self
-            .mc_infer_method_receiver_type_name(object)
-            .or_else(|| self.infer_type_name(object))
-            .or_else(|| {
-                if let Expression::Identifier { name, .. } = object {
-                    if (name == "Self" || name == "self") && self.in_impl_block {
-                        return self.current_struct_name.clone();
-                    }
-                }
-                None
-            });
 
         receiver_type_name
             .as_ref()
