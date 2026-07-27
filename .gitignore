@@ -47,3 +47,6 @@ std/**/*.rs
 
 # Parallel cargo target dir used by agents to avoid lock contention
 /target-verify/
+
+# Local agent/debug scratch
+tmp_*
