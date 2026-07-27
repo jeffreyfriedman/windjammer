@@ -57,11 +57,11 @@ impl<'ast> Analyzer<'ast> {
                     // `extract_extension(path) -> path` called with `self.path`) stay
                     // borrowed so static call sites pass `&str` without cloning.
                     let force_owned = if string_like && func.parent_type.is_some() {
-                        self.is_stored(param_name, body)
+                        self.is_stored(param_name, body, registry)
                             || self.param_is_consumed_into_return(param_name, body)
                     } else {
                         self.is_returned(param_name, body)
-                            || self.is_stored(param_name, body)
+                            || self.is_stored(param_name, body, registry)
                             || (!string_like
                                 && self.param_is_consumed_into_return(param_name, body))
                     };
@@ -161,7 +161,7 @@ impl<'ast> Analyzer<'ast> {
         // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // 3. Check if parameter is stored in a struct or collection
-        if self.is_stored_requiring_owned(param_name, param_type, body) {
+        if self.is_stored_requiring_owned(param_name, param_type, body, registry) {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -218,9 +218,9 @@ impl<'ast> Analyzer<'ast> {
             }
             // Plain `string` may passthrough to extern on a later convergence pass — do not
             // pin Owned here or FFI wrappers never reach Borrowed (module_qualified autoborrow).
-            if !Self::is_windjammer_text_param_type(param_type) {
-                return Ok(OwnershipMode::Owned);
-            }
+            // Non-string params: do not default to Owned when passthrough is unresolved —
+            // static/type-qualified callees may borrow (FpsCamera::collides(grid)); step 3
+            // (is_stored) and step 7 still pin Owned for consuming uses.
         }
 
         // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need

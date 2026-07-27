@@ -141,7 +141,7 @@ pub fn enforce_ownership_contract_on_coerced_arg(
     actual: &SafetyType,
     expected: &SafetyType,
 ) {
-    enforce_ownership_contract_on_coerced_arg_with_force_owned(coerced, actual, expected, false, false);
+    enforce_ownership_contract_on_coerced_arg_with_force_owned(coerced, actual, expected, false, false, false);
 }
 
 pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
@@ -150,8 +150,10 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     expected: &SafetyType,
     force_owned_contract: bool,
     allow_rust_auto_borrow: bool,
+    preserve_runtime_std_borrow: bool,
 ) {
-    if (matches!(expected.ownership, OwnedType::Owned) || force_owned_contract)
+    if !preserve_runtime_std_borrow
+        && (matches!(expected.ownership, OwnedType::Owned) || force_owned_contract)
         && coerced.starts_with('&')
         && !coerced.starts_with("&mut ")
     {
@@ -207,7 +209,10 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 }
             }
             CoercionKind::Clone => {
-                if !coerced.ends_with(".clone()") {
+                if !coerced.ends_with(".clone()")
+                    && !coerced.ends_with(".to_string()")
+                    && !coerced.ends_with(".to_owned()")
+                {
                     *coerced = format!("{coerced}.clone()");
                 }
             }

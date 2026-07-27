@@ -425,17 +425,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         && !matches!(
                             arg,
                             Expression::Identifier { name, .. }
-                                if gen.identifier_already_ref(name)
+                                if gen.binding_emits_as_rust_shared_ref(name)
                         )
                     {
                         let module = func_name.split("::").next().unwrap_or("");
                         let method = func_name.rsplit("::").next().unwrap_or(func_name);
-                        if post_ir_borrow_sig.as_ref().is_some_and(|sig| {
-                            crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow(
-                                Some(sig),
-                                i,
-                            )
-                        }) {
+                        if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                            &gen.signature_registry,
+                            func_name,
+                            post_ir_borrow_sig.as_ref(),
+                            i,
+                        ) {
                             coerced = format!("&{coerced}");
                         }
                     }
@@ -505,6 +505,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             arg,
                             sig,
                             pidx,
+                            func_name,
+                            i,
                         );
                     }
                     let callee_wants_mut = gen
@@ -1555,14 +1557,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             // for non-Copy struct params (e.g. json::get(&value, ...) not json::get(value, ...)).
             // WJ stdlib declares owned params; the Rust side uses references.
             if !arg_str.starts_with('&') {
-                if signature.as_ref().is_some_and(|sig| {
-                    super::super::super::stdlib_method_traits::runtime_std_param_needs_auto_borrow(
-                        Some(sig),
-                        i,
-                    )
-                }) {
+                if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &gen.signature_registry,
+                    func_name,
+                    signature.as_ref(),
+                    i,
+                ) {
                     let already_ref = if let Expression::Identifier { name, .. } = arg {
-                        gen.identifier_already_ref(name)
+                        gen.binding_emits_as_rust_shared_ref(name)
                     } else {
                         false
                     };

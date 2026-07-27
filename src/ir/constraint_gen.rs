@@ -223,21 +223,31 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Params moved into struct/enum/Option payloads must stay Owned at the formal.
     fn emit_owned_for_stored_param_identifiers(&mut self, expr: &Expression<'ast>) {
+        self.emit_owned_for_stored_param_identifiers_inner(expr, false);
+    }
+
+    fn emit_owned_for_stored_param_identifiers_inner(
+        &mut self,
+        expr: &Expression<'ast>,
+        in_payload: bool,
+    ) {
         match expr {
             Expression::Identifier { name, .. } => {
-                if let Some(&var) = self.param_vars.get(name) {
-                    self.cs
-                        .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                if in_payload {
+                    if let Some(&var) = self.param_vars.get(name) {
+                        self.cs
+                            .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                    }
                 }
             }
             Expression::StructLiteral { fields, .. } => {
                 for (_, field_expr) in fields {
-                    self.emit_owned_for_stored_param_identifiers(field_expr);
+                    self.emit_owned_for_stored_param_identifiers_inner(field_expr, true);
                 }
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                 for el in elements {
-                    self.emit_owned_for_stored_param_identifiers(el);
+                    self.emit_owned_for_stored_param_identifiers_inner(el, true);
                 }
             }
             Expression::Call {
@@ -245,34 +255,36 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 arguments,
                 ..
             } => {
-                let is_constructor = match &**function {
-                    Expression::Identifier { name, .. } => {
-                        matches!(name.as_str(), "Some" | "Ok" | "Err")
-                            || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(name)
-                    }
-                    Expression::FieldAccess { field, .. } => field
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_uppercase()),
-                    _ => false,
-                };
-                if is_constructor {
-                    for (_, arg) in arguments {
-                        self.emit_owned_for_stored_param_identifiers(arg);
-                    }
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    let arg_in_payload = self.registry.is_some_and(|registry| {
+                        crate::analyzer::Analyzer::call_argument_stores_owned_payload(
+                            function,
+                            i,
+                            arguments.len(),
+                            registry,
+                        )
+                    });
+                    self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
             }
             Expression::MethodCall {
-                method, arguments, ..
+                method,
+                arguments,
+                object,
+                ..
             } => {
-                if method
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                {
-                    for (_, arg) in arguments {
-                        self.emit_owned_for_stored_param_identifiers(arg);
-                    }
+                let receiver_type = self.receiver_type_name_for_method(object);
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    let arg_in_payload = self.registry.is_some_and(|registry| {
+                        crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
+                            method,
+                            receiver_type.as_deref(),
+                            i,
+                            arguments.len(),
+                            registry,
+                        )
+                    });
+                    self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
             }
             _ => {}
@@ -639,17 +651,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 arguments,
                 ..
             } => {
-                // Enum / Option constructors consume owned payloads (no signature registry entry).
-                if let Some(callee_name) = Self::extract_callee_name(function) {
-                    if matches!(callee_name.as_str(), "Some" | "Ok" | "Err")
-                        || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(
-                            &callee_name,
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    let arg_in_payload = self.registry.is_some_and(|registry| {
+                        crate::analyzer::Analyzer::call_argument_stores_owned_payload(
+                            function,
+                            i,
+                            arguments.len(),
+                            registry,
                         )
-                    {
-                        for (_, arg) in arguments {
-                            self.emit_owned_for_stored_param_identifiers(arg);
-                        }
-                    }
+                    });
+                    self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
                 let _callee_var = self.walk_expression(function);
                 let mut arg_vars = Vec::new();
@@ -690,6 +701,19 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 method,
                 ..
             } => {
+                let receiver_type = self.receiver_type_name_for_method(object);
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    let arg_in_payload = self.registry.is_some_and(|registry| {
+                        crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
+                            method,
+                            receiver_type.as_deref(),
+                            i,
+                            arguments.len(),
+                            registry,
+                        )
+                    });
+                    self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
+                }
                 let obj_var = self.walk_expression(object);
                 let mut arg_vars = Vec::new();
                 for (_label, arg_expr) in arguments {
@@ -698,7 +722,6 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
                 // Signature-driven receiver ownership: `Type::method` self mode wins.
                 // Fallback to the stdlib mutating-name set only when no signature exists.
-                let receiver_type = self.receiver_type_name_for_method(object);
                 let qualified = match &receiver_type {
                     Some(ty) => format!("{}::{}", ty, method),
                     None => {

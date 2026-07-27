@@ -622,11 +622,17 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                         let pidx = contract_sig.arg_param_index(i);
+                        let qualified = receiver_rt
+                            .as_deref()
+                            .map(|rt| format!("{rt}::{method}"))
+                            .unwrap_or_else(|| method.to_string());
                         self.enforce_call_site_ownership_contract(
                             &mut coerced,
                             arg_to_generate,
                             &contract_sig,
                             pidx,
+                            &qualified,
+                            i,
                         );
                         if (crate::ir::signature_bridge::call_site_expects_owned_pass(
                                 &contract_sig,
@@ -659,6 +665,13 @@ impl<'ast> CodeGenerator<'ast> {
                             )
                         {
                             coerced = format!("&{coerced}");
+                        }
+                        if coerced.ends_with(".to_string().clone()")
+                            || coerced.ends_with(".to_owned().clone()")
+                        {
+                            crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                                &mut coerced,
+                            );
                         }
                         return coerced;
                     }
@@ -2521,11 +2534,16 @@ impl<'ast> CodeGenerator<'ast> {
                             );
                         }
                     }
+                    let qualified = receiver_rt
+                        .map(|rt| format!("{rt}::{method}"))
+                        .unwrap_or_else(|| method.to_string());
                     self.enforce_call_site_ownership_contract(
                         &mut arg_str,
                         arg_to_generate,
                         &reg_sig,
                         pidx,
+                        &qualified,
+                        i,
                     );
                 } else {
                     self.finalize_owned_outer_formal_call_arg(

@@ -276,7 +276,10 @@ impl IrPipeline {
         }
 
         apply_analyzer_readonly_string_params_to_ir(&mut functions, analyzed);
+        clear_str_ref_for_owned_or_stored_params(&mut functions, analyzed);
+        restore_owned_string_params_after_str_ref(&mut functions, analyzed);
         converge_impl_param_ownership(&mut functions, analyzed);
+        finalize_ir_param_ownership_from_analyzer(&mut functions, analyzed);
         propagate_delegation_ownership(
             &mut functions,
             analyzed,
@@ -549,6 +552,104 @@ pub fn ir_pipeline_available() -> bool {
     true
 }
 
+/// Sync IR param ownership with converged analyzer body inference.
+/// Solver/registry can lag for enum-payload stores, static-method passthrough borrows,
+/// and field assignments — analyzer ownership is authoritative for formals.
+fn finalize_ir_param_ownership_from_analyzer(
+    functions: &mut [IrFunction],
+    analyzed: &[crate::analyzer::AnalyzedFunction],
+) {
+    let mut region_counter = 10_000u32;
+    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
+        for param in &af.decl.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            let Some(mode) = af.inferred_ownership.get(&param.name) else {
+                continue;
+            };
+            let Some(st) = ir_fn.param_types.get_mut(&param.name) else {
+                continue;
+            };
+            match mode {
+                OwnershipMode::Owned => {
+                    st.ownership = OwnedType::Owned;
+                    ir_fn.str_ref_params.remove(&param.name);
+                    let is_plain_string = matches!(param.type_, Type::String)
+                        || matches!(&param.type_, Type::Custom(name) if name == "string");
+                    if is_plain_string {
+                        st.base = BaseType::String;
+                    }
+                }
+                OwnershipMode::Borrowed => {
+                    if !af.mutated_parameters.contains(&param.name) {
+                        let r = Region::fresh(region_counter);
+                        region_counter += 1;
+                        st.ownership = OwnedType::Ref(r);
+                    }
+                }
+                OwnershipMode::MutBorrowed => {
+                    let r = Region::fresh(region_counter);
+                    region_counter += 1;
+                    st.ownership = OwnedType::MutRef(r);
+                }
+            }
+        }
+    }
+}
+
+/// Re-apply analyzer/solver Owned semantics after readonly-string lowering.
+fn restore_owned_string_params_after_str_ref(
+    functions: &mut [IrFunction],
+    analyzed: &[crate::analyzer::AnalyzedFunction],
+) {
+    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
+        for (idx, param) in af.decl.parameters.iter().enumerate() {
+            if param.name == "self" {
+                continue;
+            }
+            let is_plain_string = matches!(param.type_, Type::String)
+                || matches!(&param.type_, Type::Custom(name) if name == "string");
+            if !is_plain_string {
+                continue;
+            }
+            let force_owned = af.inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned)
+                || af.returned_parameters.contains(&param.name);
+            if !force_owned {
+                continue;
+            }
+            if let Some(st) = ir_fn.param_types.get_mut(&param.name) {
+                st.ownership = OwnedType::Owned;
+                st.base = af
+                    .inferred_param_types
+                    .get(idx)
+                    .map(parser_type_to_base_type)
+                    .unwrap_or(BaseType::String);
+            }
+        }
+    }
+}
+
+/// Drop str_ref markers for params the solver/analyzer kept owned (enum payload, struct store).
+fn clear_str_ref_for_owned_or_stored_params(
+    functions: &mut [IrFunction],
+    analyzed: &[crate::analyzer::AnalyzedFunction],
+) {
+    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
+        ir_fn.str_ref_params.retain(|name| {
+            if af.inferred_ownership.get(name) == Some(&OwnershipMode::Owned) {
+                return false;
+            }
+            if let Some(st) = ir_fn.param_types.get(name) {
+                if matches!(st.ownership, OwnedType::Owned) {
+                    return false;
+                }
+            }
+            true
+        });
+    }
+}
+
 /// Align IR param types with analyzer str_ref / readonly string inference so shadow
 /// validation stays clean for `fn f(msg: string) { println("{}", msg) }`.
 fn apply_analyzer_readonly_string_params_to_ir(
@@ -578,7 +679,14 @@ fn apply_analyzer_readonly_string_params_to_ir(
             if !borrow {
                 continue;
             }
+            if af.inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned) {
+                continue;
+            }
             if let Some(st) = ir_fn.param_types.get_mut(&param.name) {
+                // Solver-owned params (enum payload, struct field store) beat &str lowering.
+                if matches!(st.ownership, OwnedType::Owned) {
+                    continue;
+                }
                 st.ownership = OwnedType::Ref(Region::fresh(0));
                 st.base = af
                     .inferred_param_types
@@ -610,7 +718,10 @@ fn converge_impl_param_ownership(
                 continue;
             }
             if let Some(st) = ir_fn.param_types.get(&param.name) {
-                if matches!(st.ownership, OwnedType::Owned) {
+                if matches!(st.ownership, OwnedType::Owned)
+                    && af.inferred_ownership.get(&param.name)
+                        == Some(&OwnershipMode::Owned)
+                {
                     impl_owned_indices
                         .entry(parent.clone())
                         .or_default()

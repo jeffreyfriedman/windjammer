@@ -1714,6 +1714,30 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// Whether an identifier already lowers as a Rust shared-reference binding (`&T`).
+    ///
+    /// Narrower than [`Self::identifier_already_ref`]: match/`let` bindings may appear in
+    /// `inferred_borrowed_params` for callee-flow analysis without being emitted as `&` in Rust.
+    pub(crate) fn binding_emits_as_rust_shared_ref(&self, name: &str) -> bool {
+        if self.emitted_rust_ref_formals.contains(name) {
+            return true;
+        }
+        if self.str_ref_optimized_params.contains(name) {
+            return self
+                .current_function_params
+                .iter()
+                .any(|p| p.name == name);
+        }
+        if self.borrowed_iterator_vars.contains(name) {
+            return true;
+        }
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    || matches!(&p.type_, Type::Reference(_)))
+        })
+    }
+
     /// Whether a named identifier already generates as `&mut T` in Rust (explicit or inferred).
     pub(crate) fn identifier_already_mut_ref(&self, name: &str) -> bool {
         if self.inferred_mut_borrowed_params.contains(name) {
@@ -2242,6 +2266,55 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Whether a binding (param, local, or implicit struct field) is Copy.
+    pub(crate) fn binding_name_is_copy(&self, name: &str) -> bool {
+        if self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == name)
+            .is_some_and(|p| self.is_type_copy(&p.type_))
+        {
+            return true;
+        }
+        if self
+            .local_var_types
+            .get(name)
+            .is_some_and(|t| self.is_type_copy(t))
+        {
+            return true;
+        }
+        if self.local_var_types.get(name).is_some_and(|t| {
+            matches!(
+                t,
+                Type::Reference(inner) | Type::MutableReference(inner)
+                    if self.is_type_copy(inner.as_ref())
+            )
+        }) {
+            return true;
+        }
+        if self.in_impl_block && self.current_struct_fields.contains(name) {
+            if let Some(struct_name) = &self.current_struct_name {
+                if let Some(fields) = self.lookup_struct_field_types(struct_name) {
+                    if let Some(field_ty) = fields.get(name) {
+                        return self.is_type_copy(field_ty);
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Whether an expression's inferred type is Copy (including through references).
+    pub(crate) fn expression_is_copy(&self, expr: &Expression<'ast>) -> bool {
+        self.infer_expression_type(expr).is_some_and(|t| {
+            let pointee = match &t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            self.is_type_copy(pointee)
+        })
+    }
+
     pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
         if self.in_user_written_closure && self.user_closure_params.contains(name) {
             return arg_str.to_string();
@@ -2270,7 +2343,10 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
 
-        if !dominated || arg_str.ends_with(".clone()") {
+        if !dominated
+            || arg_str.ends_with(".clone()")
+            || arg_str.ends_with(".to_string()")
+        {
             return arg_str.to_string();
         }
 
@@ -2288,27 +2364,7 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
 
-        let binding_is_copy = self
-            .current_function_params
-            .iter()
-            .find(|p| p.name == name)
-            .is_some_and(|p| self.is_type_copy(&p.type_))
-            || self
-                .local_var_types
-                .get(name)
-                .is_some_and(|t| self.is_type_copy(t));
-
-        if binding_is_copy {
-            return arg_str.to_string();
-        }
-
-        if self.local_var_types.get(name).is_some_and(|t| {
-            matches!(
-                t,
-                Type::Reference(inner) | Type::MutableReference(inner)
-                    if self.is_type_copy(inner.as_ref())
-            )
-        }) {
+        if self.binding_name_is_copy(name) {
             return arg_str.to_string();
         }
 

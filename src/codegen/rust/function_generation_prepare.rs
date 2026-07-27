@@ -292,6 +292,16 @@ impl<'ast> CodeGenerator<'ast> {
         if self.ir_cutover.str_ref && self.current_ir_function.is_some() {
             if let Some(ir_fn) = &self.current_ir_function {
                 for param_name in &ir_fn.str_ref_params {
+                    if self.get_param_ownership(param_name, analyzed)
+                        == Some(crate::analyzer::OwnershipMode::Owned)
+                    {
+                        continue;
+                    }
+                    if analyzed.inferred_ownership.get(param_name)
+                        == Some(&crate::analyzer::OwnershipMode::Owned)
+                    {
+                        continue;
+                    }
                     if !self.param_only_forwarded_to_qualified_collection_key_callee(
                         func.body.as_slice(),
                         param_name,
@@ -305,6 +315,16 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.str_ref_optimized_params.contains(param_name) {
                     continue;
                 }
+                if self.get_param_ownership(param_name, analyzed)
+                    == Some(crate::analyzer::OwnershipMode::Owned)
+                {
+                    continue;
+                }
+                if analyzed.inferred_ownership.get(param_name)
+                    == Some(&crate::analyzer::OwnershipMode::Owned)
+                {
+                    continue;
+                }
                 if !self.param_only_forwarded_to_qualified_collection_key_callee(
                     func.body.as_slice(),
                     param_name,
@@ -315,6 +335,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else {
             for param_name in &analyzed.str_ref_optimizable_params {
+                if analyzed.inferred_ownership.get(param_name)
+                    == Some(&crate::analyzer::OwnershipMode::Owned)
+                {
+                    continue;
+                }
                 if !self.param_only_forwarded_to_qualified_collection_key_callee(
                     func.body.as_slice(),
                     param_name,
@@ -348,12 +373,11 @@ impl<'ast> CodeGenerator<'ast> {
                     self.str_ref_optimized_params.remove(&param.name);
                     continue;
                 }
-                if self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name) {
-                    if !matches!(&param.type_, Type::Vec(_)) {
-                        self.inferred_borrowed_params.remove(&param.name);
-                        self.inferred_mut_borrowed_params.remove(&param.name);
-                        continue;
-                    }
+                if self.param_stored_in_owned_payload(func.body.as_slice(), &param.name) {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.str_ref_optimized_params.remove(&param.name);
+                    continue;
                 }
                 if self.param_only_used_in_discarding_let_binding(
                     func.body.as_slice(),
@@ -607,13 +631,7 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
-            if self.str_ref_optimized_params.contains(&param.name)
-                || self.inferred_borrowed_params.contains(&param.name)
-            {
-                return false;
-            }
-            // Text keys: owned formals for HashMap forwarding only; HashSet::contains keeps &str.
-            return self.param_only_forwarded_to_map_key_callee(
+            if self.param_only_forwarded_to_map_key_callee(
                 func.body.as_slice(),
                 &param.name,
                 func,
@@ -622,7 +640,17 @@ impl<'ast> CodeGenerator<'ast> {
                     func.body.as_slice(),
                     &param.name,
                     func,
-                ));
+                ))
+            {
+                return true;
+            }
+            if self.str_ref_optimized_params.contains(&param.name)
+                || self.inferred_borrowed_params.contains(&param.name)
+            {
+                return false;
+            }
+            // Text keys: owned formals for HashMap forwarding only; HashSet::contains keeps &str.
+            return false;
         }
         self.param_only_forwarded_to_collection_key_callee(
             func.body.as_slice(),
@@ -727,6 +755,7 @@ impl<'ast> CodeGenerator<'ast> {
                     &param.name,
                     func,
                 )
+                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                 || self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
                 || self
                     .current_struct_name
@@ -770,6 +799,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Returned/moved params must stay Owned (solver lattice + API intent).
             if analyzed.returned_parameters.contains(&param.name) {
+                self.inferred_borrowed_params.remove(&param.name);
+                continue;
+            }
+            if self.param_stored_in_owned_payload(func.body.as_slice(), &param.name) {
                 self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
@@ -1237,7 +1270,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Phase-2 str_ref emits `&str` in Rust — register Borrowed so static
                 // `Self::helper(self.field)` call sites borrow instead of cloning fields.
-                if analyzed.str_ref_optimizable_params.contains(&param.name) {
+                // Never demote solver/analyzer Owned (enum payload, struct field store).
+                if analyzed.str_ref_optimizable_params.contains(&param.name)
+                    && !matches!(ownership, crate::analyzer::OwnershipMode::Owned)
+                    && analyzed.inferred_ownership.get(&param.name)
+                        != Some(&crate::analyzer::OwnershipMode::Owned)
+                {
                     ownership = crate::analyzer::OwnershipMode::Borrowed;
                 }
 
@@ -3039,78 +3077,226 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// A bare identifier return (`fn identity(data) { data }`) is **not** a payload
     /// store — that stays owned via `returned_parameters`, not this helper.
-    pub(in crate::codegen::rust) fn param_moves_via_struct_literal_init(
+    /// True when `param_name` is moved into a struct field, enum variant, constructor,
+    /// or other owned payload anywhere in the function body.
+    pub(in crate::codegen::rust) fn param_stored_in_owned_payload(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,
     ) -> bool {
-        if body.len() != 1 {
-            return false;
-        }
-        let expr = match body[0] {
-            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => expr,
-            _ => return false,
-        };
-        match expr {
-            Expression::StructLiteral { .. }
-            | Expression::Call { .. }
-            | Expression::MethodCall { .. }
-            | Expression::Tuple { .. }
-            | Expression::Array { .. } => {
-                Self::expression_moves_param_into_owned_payload(expr, param_name)
+        body.iter().any(|stmt| {
+            self.statement_moves_param_into_owned_payload(stmt, param_name)
+        })
+    }
+
+    fn statement_moves_param_into_owned_payload(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Let { value, else_block, .. } => {
+                self.expression_moves_param_into_owned_payload(value, param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_stored_in_owned_payload(b.as_slice(), param_name)
+                    })
+            }
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_moves_param_into_owned_payload(expr, param_name),
+            Statement::Assignment { value, .. } => {
+                self.expression_moves_param_into_owned_payload(value, param_name)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.param_stored_in_owned_payload(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_stored_in_owned_payload(b.as_slice(), param_name)
+                    })
+            }
+            Statement::While { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                self.param_stored_in_owned_payload(body.as_slice(), param_name)
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                self.expression_moves_param_into_owned_payload(&arm.body, param_name)
+            }),
+            Statement::Defer { statement, .. } => {
+                self.statement_moves_param_into_owned_payload(statement, param_name)
             }
             _ => false,
         }
     }
 
-    /// Identifier moved into a struct field, tuple/array element, or enum/Option constructor.
+    /// Single-expression bodies that move a param into struct/enum/constructor payload.
+    /// Prefer [`Self::param_stored_in_owned_payload`] for multi-statement functions.
+    pub(in crate::codegen::rust) fn param_moves_via_struct_literal_init(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        self.param_stored_in_owned_payload(body, param_name)
+    }
+
+    fn call_argument_stores_owned_payload_in_registry(
+        &self,
+        function: &Expression<'ast>,
+        arg_index: usize,
+        arg_count: usize,
+        registry: &crate::analyzer::SignatureRegistry,
+    ) -> bool {
+        crate::analyzer::Analyzer::call_argument_stores_owned_payload(
+            function,
+            arg_index,
+            arg_count,
+            registry,
+        )
+    }
+
+    fn method_call_argument_stores_owned_payload_in_registry(
+        &self,
+        method: &str,
+        receiver_type: Option<&str>,
+        arg_index: usize,
+        arg_count: usize,
+        registry: &crate::analyzer::SignatureRegistry,
+    ) -> bool {
+        crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
+            method,
+            receiver_type,
+            arg_index,
+            arg_count,
+            registry,
+        )
+    }
+
+    fn call_argument_stores_owned_payload(
+        &self,
+        function: &Expression<'ast>,
+        arg_index: usize,
+        arg_count: usize,
+    ) -> bool {
+        if self.call_argument_stores_owned_payload_in_registry(
+            function,
+            arg_index,
+            arg_count,
+            &self.signature_registry,
+        ) {
+            return true;
+        }
+        self.global_signature_registry()
+            .is_some_and(|global| {
+                self.call_argument_stores_owned_payload_in_registry(
+                    function,
+                    arg_index,
+                    arg_count,
+                    global,
+                )
+            })
+    }
+
+    fn method_call_argument_stores_owned_payload(
+        &self,
+        method: &str,
+        object: &Expression<'ast>,
+        arg_index: usize,
+        arg_count: usize,
+    ) -> bool {
+        let receiver_type = Self::receiver_type_name_for_payload_storage(object);
+        if self.method_call_argument_stores_owned_payload_in_registry(
+            method,
+            receiver_type.as_deref(),
+            arg_index,
+            arg_count,
+            &self.signature_registry,
+        ) {
+            return true;
+        }
+        self.global_signature_registry()
+            .is_some_and(|global| {
+                self.method_call_argument_stores_owned_payload_in_registry(
+                    method,
+                    receiver_type.as_deref(),
+                    arg_index,
+                    arg_count,
+                    global,
+                )
+            })
+    }
+
+    fn receiver_type_name_for_payload_storage(object: &Expression<'ast>) -> Option<String> {
+        match object {
+            Expression::Identifier { name, .. }
+                if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) =>
+            {
+                Some(name.clone())
+            }
+            Expression::FieldAccess { object, .. } => {
+                Self::receiver_type_name_for_payload_storage(object)
+            }
+            _ => None,
+        }
+    }
+
+    /// Identifier moved into a struct field, tuple/array element, or enum/Option/constructor.
     fn expression_moves_param_into_owned_payload(
+        &self,
         expr: &Expression<'ast>,
         param_name: &str,
     ) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
-            Expression::StructLiteral { fields, .. } => fields
-                .iter()
-                .any(|(_, value)| Self::expression_moves_param_into_owned_payload(value, param_name)),
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, value)| {
+                self.expression_moves_param_into_owned_payload(value, param_name)
+            }),
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
-                .any(|el| Self::expression_moves_param_into_owned_payload(el, param_name)),
+                .any(|el| self.expression_moves_param_into_owned_payload(el, param_name)),
             Expression::Call {
                 function,
                 arguments,
                 ..
-            } => {
-                let is_constructor = match &**function {
-                    Expression::Identifier { name, .. } => {
-                        matches!(name.as_str(), "Some" | "Ok" | "Err")
-                            || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(name)
-                    }
-                    Expression::FieldAccess { field, .. } => {
-                        field
-                            .chars()
-                            .next()
-                            .is_some_and(|c| c.is_ascii_uppercase())
-                    }
-                    _ => false,
-                };
-                is_constructor
-                    && arguments.iter().any(|(_, arg)| {
-                        Self::expression_moves_param_into_owned_payload(arg, param_name)
-                    })
-            }
+            } => arguments.iter().enumerate().any(|(i, (_, arg))| {
+                self.call_argument_stores_owned_payload(function, i, arguments.len())
+                    && self.expression_moves_param_into_owned_payload(arg, param_name)
+            }),
             Expression::MethodCall {
-                method, arguments, ..
-            } => {
-                // `Type::Variant(...)` often lowers as MethodCall with PascalCase method.
-                method
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                    && arguments.iter().any(|(_, arg)| {
-                        Self::expression_moves_param_into_owned_payload(arg, param_name)
-                    })
+                method,
+                arguments,
+                object,
+                ..
+            } => arguments.iter().enumerate().any(|(i, (_, arg))| {
+                self.method_call_argument_stores_owned_payload(
+                    method,
+                    object,
+                    i,
+                    arguments.len(),
+                ) && self.expression_moves_param_into_owned_payload(arg, param_name)
+            }),
+            Expression::Unary { operand, .. } => {
+                self.expression_moves_param_into_owned_payload(operand, param_name)
             }
+            Expression::Binary { left, right, .. } => {
+                self.expression_moves_param_into_owned_payload(left, param_name)
+                    || self.expression_moves_param_into_owned_payload(right, param_name)
+            }
+            Expression::MacroInvocation { args, .. } => args.iter().any(|arg| {
+                self.expression_moves_param_into_owned_payload(arg, param_name)
+            }),
+            Expression::Block { statements, .. } => statements.iter().any(|s| match s {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => self.expression_moves_param_into_owned_payload(expr, param_name),
+                _ => false,
+            }),
             _ => false,
         }
     }
@@ -4080,6 +4266,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
             && (!self.current_fn_mixed_forwarder_params.contains(&param.name) || non_self_facade)
             && !to_owned_sibling
+            && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
             && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
             && !self.current_struct_name.as_ref().is_some_and(|sn| {
                 self.struct_is_owned_engine_key_facade(sn, param)

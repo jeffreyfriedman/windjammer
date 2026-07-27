@@ -1784,4 +1784,154 @@ impl BuildFingerprint {
         );
     }
 
+    #[test]
+    fn subprocess_spawn_codegen_auto_borrows_vec_args() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+    use std::subprocess
+
+    fn test_echo() {
+        let args = vec!["hello".to_string()]
+        subprocess::spawn("echo", args)
+    }
+    "#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let resolved = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+            &registry,
+            "subprocess::spawn",
+            registry.get_signature("subprocess::spawn"),
+            1,
+        );
+        assert!(resolved, "registry should require borrow for spawn args");
+        let mut generator = CodeGenerator::new_for_module(registry.clone(), CompilationTarget::Rust);
+        assert!(generator.ir_cutover.call_sites, "call_sites cutover must be on");
+        let spawn_call = program.items.iter().find_map(|item| {
+            if let crate::parser::Item::Function { decl, .. } = item {
+                decl.body.iter().find_map(|stmt| {
+                    if let crate::parser::Statement::Expression { expr, .. } = stmt {
+                        if let crate::parser::Expression::Call { arguments, .. } = expr {
+                            return arguments.get(1).map(|(_, a)| *a);
+                        }
+                    }
+                    None
+                })
+            } else {
+                None
+            }
+        }).expect("spawn call arg");
+        let finished = generator.finish_runtime_std_call_arg(
+            "subprocess::spawn",
+            1,
+            spawn_call,
+            "args".to_string(),
+            registry.get_signature("subprocess::spawn"),
+            None,
+        );
+        assert_eq!(finished, "&args", "finish_runtime_std_call_arg should borrow");
+        let ir_coerced = generator.apply_ir_call_site_coercion(
+            &registry,
+            "subprocess::spawn",
+            1,
+            spawn_call,
+            "args",
+            None,
+            false,
+            None,
+            Some(2),
+        );
+        assert_eq!(
+            ir_coerced.as_deref(),
+            Some("&args"),
+            "IR call-site coercion should auto-borrow Vec arg"
+        );
+        let output = generator.generate_program(&program, &analyzed);
+        assert!(
+            output.contains("subprocess::spawn(\"echo\", &args)"),
+            "expected runtime auto-borrow for Vec args, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn json_get_codegen_auto_borrows_owned_value() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+use std::json
+
+pub fn parse_field(line: string) -> string {
+    match json::parse(line) {
+        Ok(v) => {
+            if let Some(f) = json::get(v, "field") {
+                return ""
+            }
+            return ""
+        }
+        Err(_) => return ""
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut generator = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        let output = generator.generate_program(&program, &analyzed);
+        assert!(
+            output.contains("json::get(&v,") || output.contains("json::get(& v,"),
+            "expected json::get(&v, ...) got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn hashmap_insert_owned_key_no_redundant_clone() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+    use std::collections::HashMap
+    
+    pub fn test(mut map: HashMap<string, int>, key: string) -> bool {
+        map.insert(key, 42);
+        return map.contains_key("test")
+    }
+    "#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut generator = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        let output = generator.generate_program(&program, &analyzed);
+        assert!(
+            (output.contains("map.insert(key, 42)")
+                || output.contains("map.insert(key, 42_i32)")
+                || output.contains("map.insert(key, 42_i64)")
+                || output.contains("map.insert(key.to_string(), 42_i64)")
+                || output.contains("map.insert(key.to_string(), 42_i32)"))
+                && !output.contains("map.insert(&key")
+                && !output.contains(".to_string().clone()"),
+            "insert should not add redundant clone. Generated:\n{output}"
+        );
+    }
+
 }

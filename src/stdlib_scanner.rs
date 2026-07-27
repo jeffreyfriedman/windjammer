@@ -72,18 +72,11 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         return None;
     }
 
-    // Extract function name
     let after_fn = line.strip_prefix("pub fn ")?;
-    let name_end = after_fn.find('(')?;
-    let func_name = &after_fn[..name_end];
-
-    // Extract parameters (between parentheses)
-    let params_start = after_fn.find('(')?;
-    let params_end = after_fn.find(')')?;
-    let params_str = &after_fn[params_start + 1..params_end];
+    let (func_name, params_str) = extract_rust_fn_name_and_params(after_fn)?;
 
     // Parse parameter ownership
-    let param_ownership = parse_parameters(params_str);
+    let param_ownership = parse_parameters(&params_str);
 
     // Build full name with module prefix
     let full_name = format!("{}::{}", module, func_name);
@@ -95,12 +88,57 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         param_ownership,
         return_type: None,                      // TODO: Extract from Rust AST
         return_ownership: OwnershipMode::Owned, // Default
-        has_self_receiver: false,               // Stdlib functions don't have self
-        is_extern: false,                       // Stdlib functions are not extern
+        has_self_receiver: false,               // Stdlib functions aren't extern
+        is_extern: false,
         emitted_rust_ref_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
     })
+}
+
+/// Strip `name<'a>` / `name<T>` generics and extract the parameter list.
+fn extract_rust_fn_name_and_params(after_fn: &str) -> Option<(String, String)> {
+    let name_end = after_fn.find(|c| c == '<' || c == '(')?;
+    let func_name = after_fn[..name_end].trim().to_string();
+    let mut rest = &after_fn[name_end..];
+    if rest.starts_with('<') {
+        let mut depth = 0;
+        let mut end = None;
+        for (i, c) in rest.char_indices() {
+            match c {
+                '<' => depth += 1,
+                '>' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let close = end?;
+        rest = &rest[close + 1..];
+    }
+    let open = rest.find('(')?;
+    let params_start = open + 1;
+    let mut depth = 0;
+    let mut params_end = None;
+    for (i, c) in rest[open..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    params_end = Some(open + i);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let params_end = params_end?;
+    Some((func_name, rest[params_start..params_end].to_string()))
 }
 
 fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
