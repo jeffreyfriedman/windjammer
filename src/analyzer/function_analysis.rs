@@ -627,7 +627,7 @@ impl<'ast> Analyzer<'ast> {
                 if Self::trait_param_is_owned_string(&param.type_)
                     && !str_ref_optimizable_params.contains(&param.name)
                 {
-                    if let Some(OwnershipMode::Borrowed) = self.infer_passthrough_ownership(
+                    if let Some(passthrough_mode) = self.infer_passthrough_ownership(
                         &param.name,
                         &param.type_,
                         &func.body,
@@ -635,14 +635,27 @@ impl<'ast> Analyzer<'ast> {
                         &func.name,
                         func,
                     ) {
-                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
-                        continue;
-                    }
-                    let current = inferred_ownership
-                        .get(&param.name)
-                        .copied()
-                        .unwrap_or(OwnershipMode::Owned);
-                    if current == OwnershipMode::Borrowed {
+                        match passthrough_mode {
+                            OwnershipMode::Owned => {
+                                inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                            }
+                            OwnershipMode::MutBorrowed => {
+                                if inferred_ownership.get(&param.name)
+                                    != Some(&OwnershipMode::Owned)
+                                {
+                                    inferred_ownership
+                                        .insert(param.name.clone(), OwnershipMode::MutBorrowed);
+                                }
+                            }
+                            OwnershipMode::Borrowed => {
+                                if inferred_ownership.get(&param.name)
+                                    != Some(&OwnershipMode::Owned)
+                                {
+                                    inferred_ownership
+                                        .insert(param.name.clone(), OwnershipMode::Borrowed);
+                                }
+                            }
+                        }
                         continue;
                     }
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
