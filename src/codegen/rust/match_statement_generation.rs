@@ -750,6 +750,21 @@ impl<'ast> CodeGenerator<'ast> {
                                 return true;
                             }
                             if match_binds_refs {
+                                // Copy enum payloads (i32, bool, …) bind by value even when the
+                                // scrutinee is matched by reference — never treat as ref bindings.
+                                if inferred.iter().any(|(name, ty)| {
+                                    name == *var && {
+                                        let inner = match ty {
+                                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                                inner.as_ref()
+                                            }
+                                            other => other,
+                                        };
+                                        self.is_type_copy(inner)
+                                    }
+                                }) {
+                                    return false;
+                                }
                                 // Borrowed `match self` on non-Copy enum payloads binds owned
                                 // values (call sites add `&` via IR coercion). Only ref-bind when
                                 // inference says the payload is already a reference type.

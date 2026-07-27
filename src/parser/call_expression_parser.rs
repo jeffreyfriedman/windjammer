@@ -403,6 +403,17 @@ impl Parser {
                         // Check for empty macro: vec![], println!()
                         let mut is_repeat_flag = false;
                         if self.current_token() != &end_token {
+                            if name == "thread_local" && delimiter == MacroDelimiter::Braces {
+                                let mut statements = Vec::new();
+                                while self.current_token() != &end_token {
+                                    statements.push(self.parse_statement()?);
+                                }
+                                args.push(self.alloc_expr(Expression::Block {
+                                    statements,
+                                    is_unsafe: false,
+                                    location: self.current_location(),
+                                }));
+                            } else {
                             // Parse first argument
                             args.push(self.parse_expression()?);
 
@@ -425,6 +436,7 @@ impl Parser {
 
                                     args.push(self.parse_expression()?);
                                 }
+                            }
                             }
                         }
 
