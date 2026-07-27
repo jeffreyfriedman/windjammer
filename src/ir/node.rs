@@ -255,7 +255,19 @@ impl IrFunction {
                         _ => OwnedType::Owned,
                     }
                 } else {
-                    OwnedType::Owned // placeholder; solver + impl convergence refine
+                    match analyzer_own {
+                        Some(crate::analyzer::OwnershipMode::Borrowed) => {
+                            let r = Region::fresh(region_counter);
+                            region_counter += 1;
+                            OwnedType::Ref(r)
+                        }
+                        Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
+                            let r = Region::fresh(region_counter);
+                            region_counter += 1;
+                            OwnedType::MutRef(r)
+                        }
+                        _ => OwnedType::Owned,
+                    }
                 };
 
                 // Mutated parameters must be MutRef even if ownership inference lagged.
