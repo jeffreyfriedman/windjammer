@@ -1534,6 +1534,21 @@ impl<'ast> CodeGenerator<'ast> {
                     self.type_to_rust(target)
                 )
             }
+            Item::Macro {
+                doc_comment,
+                expr,
+                ..
+            } => {
+                let mut out = String::new();
+                if let Some(doc) = doc_comment {
+                    for line in doc.lines() {
+                        out.push_str(&format!("// {}\n", line));
+                    }
+                }
+                out.push_str(&self.generate_expression(expr));
+                out.push('\n');
+                out
+            }
             _ => String::new(), // Ignore other items for now
         }
     }
@@ -2279,6 +2294,86 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
+    }
+
+    /// Wrap bare function identifiers when callee params are borrowed but the call site
+    /// passes owned values (e.g. `serve(handle)` → `serve(|req| handle(&req))`).
+    pub(crate) fn maybe_wrap_fn_pointer_callback_bridge(
+        &self,
+        arg: &Expression<'ast>,
+        arg_str: &str,
+    ) -> String {
+        let Expression::Identifier { name, .. } = arg else {
+            return arg_str.to_string();
+        };
+        let is_local_variable = self.local_var_types.contains_key(name.as_str())
+            || self.match_arm_bindings.contains(name.as_str())
+            || self.inferred_borrowed_params.contains(name.as_str())
+            || self.inferred_mut_borrowed_params.contains(name.as_str())
+            || self.current_function_params.iter().any(|p| p.name == *name);
+        if is_local_variable {
+            return arg_str.to_string();
+        }
+        let Some(func_sig) = self.signature_registry.get_signature(name) else {
+            return arg_str.to_string();
+        };
+        if func_sig.has_self_receiver || func_sig.is_extern {
+            return arg_str.to_string();
+        }
+        let has_borrowed: Vec<usize> = func_sig
+            .param_ownership
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| {
+                matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            })
+            .map(|(idx, _)| idx)
+            .collect();
+        if has_borrowed.is_empty() {
+            return arg_str.to_string();
+        }
+        let n = func_sig.param_ownership.len();
+        let wrapper: Vec<String> = (0..n).map(|j| format!("__cb{j}")).collect();
+        let call: Vec<String> = (0..n)
+            .map(|j| match func_sig.param_ownership[j] {
+                OwnershipMode::MutBorrowed => format!("&mut __cb{j}"),
+                OwnershipMode::Borrowed => format!("&__cb{j}"),
+                _ => format!("__cb{j}"),
+            })
+            .collect();
+        format!(
+            "|{}| {}({})",
+            wrapper.join(", "),
+            name,
+            call.join(", ")
+        )
+    }
+
+    /// Copy payload from a `match` / `if let` pattern (enum tuple field, etc.).
+    pub(crate) fn copy_match_payload_binding(&self, name: &str) -> bool {
+        self.match_arm_bindings.contains(name) && self.binding_name_is_copy(name)
+    }
+
+    /// Owned Copy match payloads pass by value at call sites — emit bare `qty`, not `*qty`.
+    pub(crate) fn normalize_owned_copy_match_binding_call_arg(
+        &self,
+        arg_expr: &Expression<'ast>,
+        coerced: &str,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+    ) -> String {
+        let Expression::Identifier { name, .. } = arg_expr else {
+            return coerced.to_string();
+        };
+        if !self.copy_match_payload_binding(name) {
+            return coerced.to_string();
+        }
+        let pidx = sig.arg_param_index(arg_index);
+        if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx) {
+            return coerced.to_string();
+        }
+        // Enum/`match` Copy payloads are owned bindings — pass by value (`qty`), not `*qty`.
+        name.to_string()
     }
 
     /// Whether a binding (param, local, or implicit struct field) is Copy.

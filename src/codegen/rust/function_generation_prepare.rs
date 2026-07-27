@@ -2366,7 +2366,9 @@ impl<'ast> CodeGenerator<'ast> {
             crate::analyzer::stdlib_method_traits::decompose_collection_key_lookup(expr)
         {
             for (i, (_, arg)) in arguments.iter().enumerate() {
-                if matches!(*arg, Expression::Identifier { name, .. } if name == param_name) {
+                if crate::codegen::rust::expression_helpers::expression_directly_uses_binding(
+                    arg, param_name,
+                ) {
                     visitor(object, method, i);
                 }
             }
@@ -2384,7 +2386,9 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if matches!(*arg, Expression::Identifier { name, .. } if name == param_name) {
+                    if crate::codegen::rust::expression_helpers::expression_directly_uses_binding(
+                        arg, param_name,
+                    ) {
                         visitor(object, method, i);
                     }
                 }

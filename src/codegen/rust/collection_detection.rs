@@ -71,6 +71,7 @@ impl CodeGenerator<'_> {
                 .any(|i| Self::item_references_collection(i, type_name)),
             Item::Use { .. } | Item::BoundAlias { .. } => false,
             Item::TypeAlias { target, .. } => Self::type_references_name(target, type_name),
+            Item::Macro { .. } => false,
         }
     }
 

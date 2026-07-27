@@ -122,6 +122,16 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_match_arm_needing_string = prev_match_arm;
         self.suppress_string_conversion.set(prev_suppress);
 
+        if name == "thread_local" && matches!(delimiter, MacroDelimiter::Braces) && args.len() == 1 {
+            if let Expression::Block { statements, .. } = args[0] {
+                let mut body = String::new();
+                for stmt in statements {
+                    body.push_str(&self.generate_statement(stmt));
+                }
+                return format!("thread_local! {{\n{body}}}");
+            }
+        }
+
         let (open, close) = match delimiter {
             MacroDelimiter::Parens => ("(", ")"),
             MacroDelimiter::Brackets => ("[", "]"),

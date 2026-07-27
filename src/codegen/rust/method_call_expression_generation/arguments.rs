@@ -770,6 +770,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
+                        coerced = self.normalize_owned_copy_match_binding_call_arg(
+                            arg_to_generate,
+                            &coerced,
+                            &contract_sig,
+                            i,
+                        );
+                        coerced = self.maybe_wrap_fn_pointer_callback_bridge(
+                            arg_to_generate,
+                            &coerced,
+                        );
                         return coerced;
                     }
                 }
@@ -866,6 +876,19 @@ impl<'ast> CodeGenerator<'ast> {
                         && !arg_str.ends_with(".clone()")
                     {
                         arg_str = format!("*{arg_str}");
+                    }
+                    if let Expression::Identifier { name, .. } = arg_to_generate {
+                        if self.copy_match_payload_binding(name)
+                            && (arg_str.starts_with('&') || arg_str.starts_with('*'))
+                        {
+                            while arg_str.starts_with('*') {
+                                arg_str = arg_str[1..].to_string();
+                            }
+                            arg_str = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &arg_str,
+                            )
+                            .to_string();
+                        }
                     } else if !is_copy
                         && !is_ref_to_copy
                         && !arg_str.ends_with(".clone()")
@@ -1735,10 +1758,21 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // Match-arm payloads: borrow at call sites (enum destructure binds owned values).
+                // Copy bindings (i32, f32, …) pass by value — no `&` (avoids `**qty`).
                 if let Expression::Identifier { name, .. } = arg_to_generate {
                     if self.match_arm_bindings.contains(name.as_str()) && !arg_str.starts_with('&') {
-                        borrow_decision.add_ref = true;
-                        borrow_decision.strip_clone = true;
+                        let binding_is_copy = self
+                            .infer_expression_type(arg_to_generate)
+                            .is_some_and(|t| match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    self.is_type_copy(inner.as_ref())
+                                }
+                                other => self.is_type_copy(&other),
+                            });
+                        if !binding_is_copy {
+                            borrow_decision.add_ref = true;
+                            borrow_decision.strip_clone = true;
+                        }
                     }
                 }
 
