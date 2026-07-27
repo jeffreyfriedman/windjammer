@@ -91,27 +91,49 @@ impl Lexer {
     }
 
     pub(in crate::lexer) fn read_raw_string(&mut self) -> Token {
-        // Skip r#"
         self.advance(); // r
-        self.advance(); // #
-        self.advance(); // "
+        let mut hash_count = 0usize;
+        while self.current_char == Some('#') {
+            hash_count += 1;
+            self.advance();
+        }
+        if self.current_char != Some('"') {
+            panic!("Expected '\"' after r#+ in raw string literal");
+        }
+        self.advance(); // opening "
 
         let mut content = String::new();
 
-        // Read until we find "#
-        while let Some(ch) = self.current_char {
-            if ch == '"' && self.peek(1) == Some('#') {
-                // Found closing "#
-                self.advance(); // "
-                self.advance(); // #
-                break;
-            } else {
-                content.push(ch);
-                self.advance();
+        'read: while let Some(ch) = self.current_char {
+            if ch == '"' {
+                let closes = (0..hash_count).all(|i| self.peek(1 + i) == Some('#'));
+                if closes {
+                    self.advance(); // "
+                    for _ in 0..hash_count {
+                        self.advance();
+                    }
+                    break 'read;
+                }
             }
+            content.push(ch);
+            self.advance();
         }
 
         Token::StringLiteral(content)
+    }
+
+    pub(in crate::lexer) fn read_lifetime(&mut self) -> Token {
+        self.advance(); // opening '
+        let mut name = String::new();
+        while let Some(ch) = self.current_char {
+            if ch.is_alphanumeric() || ch == '_' {
+                name.push(ch);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        Token::Lifetime(name)
     }
 
     pub(in crate::lexer) fn read_char(&mut self) -> Token {

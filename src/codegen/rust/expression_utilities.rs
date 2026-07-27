@@ -171,11 +171,13 @@ pub fn apply_mut_borrow_coercion(
     true
 }
 
-/// Whether `arg` can receive `&mut` at a call site (identifiers and `self.field` paths).
+/// Whether `arg` can receive `&mut` at a call site (lvalues: identifiers, fields, indices).
 pub fn arg_supports_mut_borrow_coercion(arg: &Expression) -> bool {
     matches!(
         arg,
-        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+        Expression::Identifier { .. }
+            | Expression::FieldAccess { .. }
+            | Expression::Index { .. }
     )
 }
 

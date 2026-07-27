@@ -212,6 +212,9 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
             // Phase 2: inferred &str (Reference(Custom("str")))
             } else if matches!(&**inner, Type::Custom(s) if s == "str") {
                 "&str".to_string()
+            // Explicit Rust FFI: &'static str
+            } else if matches!(&**inner, Type::Custom(s) if s == "static_str") {
+                "&'static str".to_string()
             // Vec<String>::contains and similar need &String, not &str
             } else if matches!(&**inner, Type::String) {
                 "&String".to_string()
@@ -416,6 +419,19 @@ pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
         }
         // Non-reference types: delegate to standard conversion
         _ => type_to_rust(type_),
+    }
+}
+
+/// Whether a function return type is `Vec<&T>` / `Vec<&mut T>` (either AST shape).
+pub(crate) fn return_type_is_vec_of_shared_refs(rt: Option<&Type>) -> bool {
+    match rt {
+        Some(Type::Vec(inner)) => {
+            matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
+        }
+        Some(Type::Parameterized(base, args)) if base == "Vec" && args.len() == 1 => {
+            matches!(args[0], Type::Reference(_) | Type::MutableReference(_))
+        }
+        _ => false,
     }
 }
 

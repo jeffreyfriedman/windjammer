@@ -259,14 +259,33 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
             {
                 expr.to_string()
             } else {
-                format!("{}.clone()", expr)
+                let core = if let Some(rest) = expr.strip_prefix("&mut ") {
+                    rest
+                } else if let Some(rest) = expr.strip_prefix('&') {
+                    rest
+                } else {
+                    expr
+                };
+                let core = core
+                    .strip_prefix('(')
+                    .and_then(|s| s.strip_suffix(')'))
+                    .unwrap_or(core);
+                format!("{core}.clone()")
             }
         }
         (Target::Rust, CoercionKind::Deref) => {
             if expr.starts_with('*') {
                 expr.to_string()
             } else {
-                format!("*{}", expr)
+                let core = expr
+                    .trim()
+                    .strip_prefix('(')
+                    .and_then(|s| s.strip_suffix(')'))
+                    .unwrap_or(expr)
+                    .trim()
+                    .trim_start_matches("&mut ")
+                    .trim_start_matches('&');
+                format!("*{core}")
             }
         }
         (Target::Rust, CoercionKind::ToOwnedString) => {

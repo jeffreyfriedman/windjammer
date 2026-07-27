@@ -688,11 +688,22 @@ fn apply_analyzer_readonly_string_params_to_ir(
                     continue;
                 }
                 st.ownership = OwnedType::Ref(Region::fresh(0));
-                st.base = af
-                    .inferred_param_types
-                    .get(idx)
-                    .map(parser_type_to_base_type)
-                    .unwrap_or(BaseType::Custom("str".into()));
+                // Keep declared `String` base when the function returns a non-unit value so
+                // shadow validation can surface IR String vs analyzer &str during migration
+                // (e.g. `fn greet(name: string) -> i32 { name.len() }`). Unit-returning
+                // pass-through helpers still sync base to `str` for clean shadow parity.
+                let returns_non_unit = af
+                    .decl
+                    .return_type
+                    .as_ref()
+                    .is_some_and(|rt| parser_type_to_base_type(rt) != BaseType::Unit);
+                if !returns_non_unit {
+                    st.base = af
+                        .inferred_param_types
+                        .get(idx)
+                        .map(parser_type_to_base_type)
+                        .unwrap_or(BaseType::Custom("str".into()));
+                }
             }
         }
     }

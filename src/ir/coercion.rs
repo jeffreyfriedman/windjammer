@@ -144,6 +144,19 @@ pub fn enforce_ownership_contract_on_coerced_arg(
     enforce_ownership_contract_on_coerced_arg_with_force_owned(coerced, actual, expected, false, false, false);
 }
 
+fn strip_rust_ref_expr(expr: &str) -> &str {
+    let trimmed = expr.trim();
+    let inner = if trimmed.starts_with('(') && trimmed.ends_with(')') {
+        trimmed[1..trimmed.len() - 1].trim()
+    } else {
+        trimmed
+    };
+    inner
+        .trim_start_matches("&mut ")
+        .trim_start_matches('&')
+        .trim()
+}
+
 pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     coerced: &mut String,
     actual: &SafetyType,
@@ -154,11 +167,37 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
 ) {
     if !preserve_runtime_std_borrow
         && (matches!(expected.ownership, OwnedType::Owned) || force_owned_contract)
-        && coerced.starts_with('&')
-        && !coerced.starts_with("&mut ")
     {
-        *coerced = coerced.trim_start_matches('&').to_string();
-        return;
+        let (is_ref, inner) = if coerced.starts_with("&mut ") {
+            (true, coerced["&mut ".len()..].trim())
+        } else if coerced.starts_with('&') {
+            (true, coerced[1..].trim())
+        } else if coerced.starts_with('(') && coerced.ends_with(')') {
+            let inner_expr = coerced[1..coerced.len() - 1].trim();
+            if inner_expr.starts_with("&mut ") {
+                (true, inner_expr["&mut ".len()..].trim())
+            } else if inner_expr.starts_with('&') {
+                (true, inner_expr[1..].trim())
+            } else {
+                (false, coerced.as_str())
+            }
+        } else {
+            (false, coerced.as_str())
+        };
+        if is_ref && !coerced.starts_with("&mut ") {
+            let inner = inner
+                .strip_prefix('(')
+                .and_then(|s| s.strip_suffix(')'))
+                .unwrap_or(inner);
+            if is_copy_base(&expected.base)
+                && !matches!(expected.base, BaseType::Custom(_))
+            {
+                *coerced = format!("*{inner}");
+            } else {
+                *coerced = format!("{inner}.clone()");
+            }
+            return;
+        }
     }
     if allow_rust_auto_borrow
         && coerced.starts_with('&')
@@ -201,11 +240,14 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 // StripBorrow on bare ref bindings is a no-op; prefer deref for Copy,
                 // clone otherwise (safe for aggregates).
                 if is_copy_base(&expected.base) || is_copy_base(&actual.base) {
-                    *coerced = format!("*{coerced}");
+                    let core = strip_rust_ref_expr(coerced);
+                    *coerced = format!("*{core}");
                 } else if matches!(kind, CoercionKind::Deref) {
-                    *coerced = format!("*{coerced}");
+                    let base = strip_rust_ref_expr(coerced);
+                    *coerced = format!("{base}.clone()");
                 } else if !coerced.ends_with(".clone()") {
-                    *coerced = format!("{coerced}.clone()");
+                    let base = strip_rust_ref_expr(coerced);
+                    *coerced = format!("{base}.clone()");
                 }
             }
             CoercionKind::Clone => {
@@ -213,7 +255,8 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     && !coerced.ends_with(".to_string()")
                     && !coerced.ends_with(".to_owned()")
                 {
-                    *coerced = format!("{coerced}.clone()");
+                    let base = strip_rust_ref_expr(coerced);
+                    *coerced = format!("{base}.clone()");
                 }
             }
             _ => {}

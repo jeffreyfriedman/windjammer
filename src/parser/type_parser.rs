@@ -212,14 +212,42 @@ impl Parser {
         // Handle reference types
         if self.current_token() == &Token::Ampersand {
             self.advance();
-            if self.current_token() == &Token::Mut {
+            let is_mut = if self.current_token() == &Token::Mut {
                 self.advance();
-                let inner = Box::new(self.parse_type()?);
-                return Ok(Type::MutableReference(inner));
+                true
             } else {
-                let inner = Box::new(self.parse_type()?);
-                return Ok(Type::Reference(inner));
-            }
+                false
+            };
+            let static_str = if let Token::Lifetime(lt) = self.current_token() {
+                if lt == "static" {
+                    self.advance();
+                    match self.current_token() {
+                        Token::String => {
+                            self.advance();
+                            true
+                        }
+                        Token::Ident(name) if name == "str" => {
+                            self.advance();
+                            true
+                        }
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            let inner = if static_str {
+                Box::new(Type::Custom("static_str".to_string()))
+            } else {
+                Box::new(self.parse_type()?)
+            };
+            return if is_mut {
+                Ok(Type::MutableReference(inner))
+            } else {
+                Ok(Type::Reference(inner))
+            };
         }
 
         let base_type = match self.current_token() {

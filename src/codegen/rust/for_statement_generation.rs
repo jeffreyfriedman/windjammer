@@ -177,7 +177,14 @@ impl<'ast> CodeGenerator<'ast> {
         // tuple element) is always `usize` (owned, Copy) — NOT a reference.
         // Only the value variable inherits the borrowed status from the iterator.
         let mut borrowed_bindings_added: Vec<String> = Vec::new();
-        if is_borrowed_iterator {
+        // `needs_borrow` can stay true after `copy_element_by_value` clears
+        // `is_borrowed_iterator`; any `&iterable` loop must track borrowed bindings.
+        // Also detect when `generate_expression` already emitted a leading `&`.
+        let tracks_borrowed_loop_var = needs_borrow
+            || is_borrowed_iterator
+            || needs_mut_borrow
+            || iter_expr.starts_with('&');
+        if tracks_borrowed_loop_var {
             let enumerate_index_var = Self::extract_enumerate_index_var(iterable, pattern);
             let mut all_bindings = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut all_bindings);
@@ -211,6 +218,15 @@ impl<'ast> CodeGenerator<'ast> {
         // TDD FIX: Track types for ALL bound variables (simple and tuple patterns)
         if let Some(iterable_type) = self.infer_expression_type(iterable) {
             if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
+                let elem_type = if tracks_borrowed_loop_var
+                    && !matches!(
+                        elem_type,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    ) {
+                    Type::Reference(Box::new(elem_type))
+                } else {
+                    elem_type
+                };
                 match pattern {
                     Pattern::Identifier(var) => {
                         self.local_var_types.insert(var.clone(), elem_type);

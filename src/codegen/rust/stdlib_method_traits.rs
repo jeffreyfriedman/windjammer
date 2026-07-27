@@ -147,12 +147,12 @@ pub fn is_known_readonly_qualified(
 ) -> bool {
     if let Some(sig) = lookup_sig(method, receiver_type, registry) {
         if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] != OwnershipMode::MutBorrowed;
+            return sig.param_ownership[0] == OwnershipMode::Borrowed;
         }
     }
     if let Some(sig) = lookup_suffix(method, registry) {
         if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] != OwnershipMode::MutBorrowed;
+            return sig.param_ownership[0] == OwnershipMode::Borrowed;
         }
     }
     false

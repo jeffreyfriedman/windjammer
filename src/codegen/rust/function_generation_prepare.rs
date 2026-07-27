@@ -621,50 +621,45 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Map/set key params keep owned formals in impl methods and free functions.
+    /// Text map/set key params keep owned `String` formals; call sites add `&`.
+    ///
+    /// Non-text keys (`QuestId`, `Key`, …) must **not** force owned formals — body-only
+    /// lookup usage converges to `&T` (and must beat stale engine metadata `Owned`).
     pub(in crate::codegen::rust) fn is_collection_key_owned_param(
         &self,
         param: &Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+            return false;
+        }
         if self.collection_key_owned_params.contains(&param.name) {
             return true;
         }
-        if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
-            if self.param_only_forwarded_to_map_key_callee(
-                func.body.as_slice(),
-                &param.name,
-                func,
-            ) || (func.parent_type.is_none()
-                && self.param_only_forwarded_to_qualified_map_key_callee(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                ))
-            {
-                return true;
-            }
-            if self.str_ref_optimized_params.contains(&param.name)
-                || self.inferred_borrowed_params.contains(&param.name)
-            {
-                return false;
-            }
-            // Text keys: owned formals for HashMap forwarding only; HashSet::contains keeps &str.
-            return false;
-        }
-        self.param_only_forwarded_to_collection_key_callee(
+        if self.param_only_forwarded_to_map_key_callee(
             func.body.as_slice(),
             &param.name,
             func,
         ) || (func.parent_type.is_none()
-            && self.param_only_forwarded_to_qualified_collection_key_callee(
+            && self.param_only_forwarded_to_qualified_map_key_callee(
                 func.body.as_slice(),
                 &param.name,
                 func,
             ))
+        {
+            return true;
+        }
+        if self.str_ref_optimized_params.contains(&param.name)
+            || self.inferred_borrowed_params.contains(&param.name)
+        {
+            return false;
+        }
+        // Text keys: owned formals for HashMap forwarding only; HashSet::contains keeps &str.
+        false
     }
 
-    /// Map/set key helpers keep owned `String` formals; call sites add `&` via collection-key finalization.
+    /// Text map/set key helpers keep owned `String` formals; call sites add `&`.
+    /// Non-text keys keep analyzer/IR borrow convergence (`&QuestId`).
     fn preserve_owned_formals_for_collection_key_only_params(
         &mut self,
         func: &FunctionDecl<'ast>,
@@ -673,28 +668,19 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" {
                 continue;
             }
-            let preserve = if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
-                if self.str_ref_optimized_params.contains(&param.name)
-                    || self.inferred_borrowed_params.contains(&param.name)
-                {
-                    false
-                } else {
-                    self.param_only_forwarded_to_qualified_map_key_callee(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    ) || self.param_only_forwarded_to_map_key_callee(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    )
-                }
+            if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+                continue;
+            }
+            let preserve = if self.str_ref_optimized_params.contains(&param.name)
+                || self.inferred_borrowed_params.contains(&param.name)
+            {
+                false
             } else {
-                self.param_only_forwarded_to_qualified_collection_key_callee(
+                self.param_only_forwarded_to_qualified_map_key_callee(
                     func.body.as_slice(),
                     &param.name,
                     func,
-                ) || self.param_only_forwarded_to_collection_key_callee(
+                ) || self.param_only_forwarded_to_map_key_callee(
                     func.body.as_slice(),
                     &param.name,
                     func,
@@ -1153,9 +1139,14 @@ impl<'ast> CodeGenerator<'ast> {
         let registry_sig = self.signature_registry.get_signature(&qualified);
 
         // Preregister/formal emission already converged emitted Rust contracts — do not downgrade.
+        // Stale `Some([false, …])` from analyzer pre-registration must not block codegen refresh.
         if registry_sig
             .or_else(|| self.get_signature_with_global(&qualified))
-            .is_some_and(|reg| reg.emitted_rust_ref_params.is_some())
+            .is_some_and(|reg| {
+                reg.emitted_rust_ref_params
+                    .as_ref()
+                    .is_some_and(|flags| flags.iter().any(|&f| f))
+            })
         {
             return;
         }
@@ -4961,68 +4952,122 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(impl_type) = self.current_struct_name.clone() else {
             return;
         };
-        let Some(methods) = self.method_signatures_by_type.get_mut(&impl_type) else {
-            return;
-        };
-        let Some(sig) = methods.get_mut(func.name.as_str()) else {
-            return;
-        };
+        let qualified = format!("{impl_type}::{}", func.name);
 
-        let mut param_idx = 0;
-        for param in &func.parameters {
-            if param.name == "self" {
-                continue;
+        if let Some(methods) = self.method_signatures_by_type.get_mut(&impl_type) {
+            if let Some(sig) = methods.get_mut(func.name.as_str()) {
+                let mut param_idx = 0;
+                for param in &func.parameters {
+                    if param.name == "self" {
+                        continue;
+                    }
+                    if param_idx >= sig.param_types.len() {
+                        break;
+                    }
+                    if self.inferred_mut_borrowed_params.contains(&param.name) {
+                        if !matches!(sig.param_types[param_idx], Type::MutableReference(_)) {
+                            sig.param_types[param_idx] =
+                                Type::MutableReference(Box::new(param.type_.clone()));
+                        }
+                        if param_idx < sig.param_ownership.len() {
+                            sig.param_ownership[param_idx] =
+                                crate::analyzer::OwnershipMode::MutBorrowed;
+                        }
+                    } else if self.emitted_rust_ref_formals.contains(&param.name)
+                        || self.str_ref_optimized_params.contains(&param.name)
+                    {
+                        if !matches!(sig.param_types[param_idx], Type::Reference(_)) {
+                            sig.param_types[param_idx] =
+                                Type::Reference(Box::new(param.type_.clone()));
+                        }
+                        if param_idx < sig.param_ownership.len() {
+                            sig.param_ownership[param_idx] =
+                                crate::analyzer::OwnershipMode::Borrowed;
+                        }
+                    } else if matches!(sig.param_types[param_idx], Type::Reference(_))
+                        && !self.emitted_rust_ref_formals.contains(&param.name)
+                    {
+                        // Emitted Rust uses owned `T` (including Copy structs like KeyRange/Key).
+                        sig.param_types[param_idx] = param.type_.clone();
+                        if param_idx < sig.param_ownership.len() {
+                            sig.param_ownership[param_idx] = crate::analyzer::OwnershipMode::Owned;
+                        }
+                    }
+                    param_idx += 1;
+                }
+
+                let mut ms_emitted = vec![false; sig.param_types.len()];
+                let mut user_param_idx = 0;
+                for param in &func.parameters {
+                    if param.name == "self" {
+                        continue;
+                    }
+                    if user_param_idx < ms_emitted.len() {
+                        ms_emitted[user_param_idx] = self.emitted_rust_ref_formals.contains(&param.name)
+                            || self.str_ref_optimized_params.contains(&param.name);
+                        ms_emitted[user_param_idx] = ms_emitted[user_param_idx]
+                            && !self.inferred_mut_borrowed_params.contains(&param.name);
+                    }
+                    user_param_idx += 1;
+                }
+                sig.emitted_rust_ref_params = Some(ms_emitted);
             }
-            if param_idx >= sig.param_types.len() {
-                break;
-            }
-            if self.inferred_mut_borrowed_params.contains(&param.name) {
-                if !matches!(sig.param_types[param_idx], Type::MutableReference(_)) {
-                    sig.param_types[param_idx] =
-                        Type::MutableReference(Box::new(param.type_.clone()));
-                }
-                if param_idx < sig.param_ownership.len() {
-                    sig.param_ownership[param_idx] = crate::analyzer::OwnershipMode::MutBorrowed;
-                }
-            } else if self.emitted_rust_ref_formals.contains(&param.name)
-                || self.str_ref_optimized_params.contains(&param.name)
-            {
-                if !matches!(sig.param_types[param_idx], Type::Reference(_)) {
-                    sig.param_types[param_idx] = Type::Reference(Box::new(param.type_.clone()));
-                }
-                if param_idx < sig.param_ownership.len() {
-                    sig.param_ownership[param_idx] = crate::analyzer::OwnershipMode::Borrowed;
-                }
-            } else if matches!(sig.param_types[param_idx], Type::Reference(_))
-                && !self.emitted_rust_ref_formals.contains(&param.name)
-            {
-                // Emitted Rust uses owned `T` (including Copy structs like KeyRange/Key).
-                sig.param_types[param_idx] = param.type_.clone();
-                if param_idx < sig.param_ownership.len() {
-                    sig.param_ownership[param_idx] = crate::analyzer::OwnershipMode::Owned;
-                }
-            }
-            param_idx += 1;
         }
 
-        let qualified = format!("{impl_type}::{}", func.name);
+        let base_sig = self
+            .method_signatures_by_type
+            .get(&impl_type)
+            .and_then(|methods| methods.get(func.name.as_str()))
+            .map(|sig| sig.to_function_signature());
         let mut updated = self
             .signature_registry
             .get_signature(&qualified)
             .cloned()
+            .or_else(|| base_sig.clone())
             .unwrap_or_else(|| {
-                let mut fs = sig.to_function_signature();
+                let mut fs = crate::analyzer::FunctionSignature::default();
                 fs.name = qualified.clone();
+                fs.has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
                 fs
             });
-        for (idx, pt) in sig.param_types.iter().enumerate() {
-            let reg_idx = if sig.has_self_receiver { idx + 1 } else { idx };
-            if reg_idx < updated.param_types.len() {
-                updated.param_types[reg_idx] = pt.clone();
+        if let Some(ref ms) = base_sig {
+            for (idx, pt) in ms.param_types.iter().enumerate() {
+                let reg_idx = if ms.has_self_receiver { idx + 1 } else { idx };
+                if reg_idx < updated.param_types.len() {
+                    updated.param_types[reg_idx] = pt.clone();
+                }
+                if reg_idx < updated.param_ownership.len() {
+                    if let Some(own) = ms.param_ownership.get(idx) {
+                        updated.param_ownership[reg_idx] = *own;
+                    }
+                }
             }
-            if reg_idx < updated.param_ownership.len() {
-                if let Some(own) = sig.param_ownership.get(idx) {
-                    updated.param_ownership[reg_idx] = *own;
+        } else {
+            for param in &func.parameters {
+                if param.name == "self" {
+                    continue;
+                }
+                let reg_idx = updated.param_types.len();
+                updated.param_types.push(if self.emitted_rust_ref_formals.contains(&param.name)
+                    || self.str_ref_optimized_params.contains(&param.name)
+                {
+                    Type::Reference(Box::new(param.type_.clone()))
+                } else {
+                    param.type_.clone()
+                });
+                updated.param_ownership.push(
+                    if self.inferred_mut_borrowed_params.contains(&param.name) {
+                        crate::analyzer::OwnershipMode::MutBorrowed
+                    } else if self.emitted_rust_ref_formals.contains(&param.name)
+                        || self.str_ref_optimized_params.contains(&param.name)
+                    {
+                        crate::analyzer::OwnershipMode::Borrowed
+                    } else {
+                        crate::analyzer::OwnershipMode::Owned
+                    },
+                );
+                if updated.formal_param_types.len() <= reg_idx {
+                    updated.formal_param_types.push(param.type_.clone());
                 }
             }
         }
@@ -5048,22 +5093,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         updated.emitted_rust_ref_params = Some(emitted);
         self.signature_registry.add_function(qualified, updated);
-
-        let mut ms_emitted = vec![false; sig.param_types.len()];
-        let mut user_param_idx = 0;
-        for param in &func.parameters {
-            if param.name == "self" {
-                continue;
-            }
-            if user_param_idx < ms_emitted.len() {
-                ms_emitted[user_param_idx] = self.emitted_rust_ref_formals.contains(&param.name)
-                    || self.str_ref_optimized_params.contains(&param.name);
-                ms_emitted[user_param_idx] =
-                    ms_emitted[user_param_idx] && !self.inferred_mut_borrowed_params.contains(&param.name);
-            }
-            user_param_idx += 1;
-        }
-        sig.emitted_rust_ref_params = Some(ms_emitted);
     }
 
     /// Align free-function registry entries with emitted Rust formals so cross-file call
@@ -5180,6 +5209,13 @@ impl<'ast> CodeGenerator<'ast> {
             if reg_idx >= updated.param_types.len() {
                 break;
             }
+            let emitted_shared = emitted_param_strings.get(emitted_idx).is_some_and(|s| {
+                (s.contains(": &") || s.contains(": &'a ") || s.starts_with("&self") || s.starts_with("&'a self"))
+                    && !s.contains(": &mut ")
+                    && !s.contains(": &'a mut ")
+                    && !s.starts_with("&mut self")
+                    && !s.starts_with("&'a mut self")
+            });
             let emitted_mut = emitted_param_strings.get(emitted_idx).is_some_and(|s| {
                 s.contains(": &mut ")
                     || s.contains(": &'a mut ")
@@ -5188,7 +5224,30 @@ impl<'ast> CodeGenerator<'ast> {
             if emitted_idx < emitted_param_strings.len() {
                 emitted_idx += 1;
             }
-            if emitted_mut || self.inferred_mut_borrowed_params.contains(&param.name) {
+            // Prefer the emitted formal string over stale inference:
+            // `&T` beats MutBorrowed inference; `&mut T` beats shared-ref bookkeeping
+            // (`emitted_rust_ref_formals` includes both `&` and `&mut` formals).
+            if emitted_mut {
+                if !matches!(updated.param_types[reg_idx], Type::MutableReference(_)) {
+                    updated.param_types[reg_idx] =
+                        Type::MutableReference(Box::new(param.type_.clone()));
+                }
+                if reg_idx < updated.param_ownership.len() {
+                    updated.param_ownership[reg_idx] =
+                        crate::analyzer::OwnershipMode::MutBorrowed;
+                }
+            } else if emitted_shared
+                || (self.emitted_rust_ref_formals.contains(&param.name)
+                    && !self.inferred_mut_borrowed_params.contains(&param.name))
+            {
+                if !matches!(updated.param_types[reg_idx], Type::Reference(_)) {
+                    updated.param_types[reg_idx] = Type::Reference(Box::new(param.type_.clone()));
+                }
+                if reg_idx < updated.param_ownership.len() {
+                    updated.param_ownership[reg_idx] =
+                        crate::analyzer::OwnershipMode::Borrowed;
+                }
+            } else if self.inferred_mut_borrowed_params.contains(&param.name) {
                 if !matches!(updated.param_types[reg_idx], Type::MutableReference(_)) {
                     updated.param_types[reg_idx] =
                         Type::MutableReference(Box::new(param.type_.clone()));

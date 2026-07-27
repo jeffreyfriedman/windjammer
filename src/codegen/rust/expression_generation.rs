@@ -878,6 +878,7 @@ impl<'ast> CodeGenerator<'ast> {
                 operand,
                 ..
             } => Self::self_access_root_field(operand),
+            Expression::Index { object, .. } => Self::self_access_root_field(object),
             _ => None,
         }
     }

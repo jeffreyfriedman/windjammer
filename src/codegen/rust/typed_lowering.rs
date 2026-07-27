@@ -362,7 +362,10 @@ pub fn correct_legacy_output(
     let formal_is_str_ref = formal_type
         .is_some_and(string_utilities::param_is_rust_str_ref);
 
-    if (converged_is_str_ref || formal_is_str_ref)
+    let formal_is_wj_text = formal_type
+        .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
+    if (converged_is_str_ref || formal_is_str_ref || formal_is_wj_text)
+        && effective == OwnershipMode::Borrowed
         && arg_str.ends_with(".clone()")
         && !arg_str.starts_with('&')
     {
