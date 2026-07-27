@@ -681,20 +681,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// When one `Vec` param is borrow-inferred, unused sibling `Vec` params should match
-    /// (`register(deps: &Vec, outs: Vec)` → both `&Vec` at call sites).
+    /// Promote readonly/unused `Vec` params to borrowed formals (`.len()` / `[i]` reads only).
     fn promote_unused_readonly_vec_params_to_borrowed(&mut self, func: &FunctionDecl<'ast>) {
-        let has_borrowed_vec = func.parameters.iter().any(|p| {
-            p.name != "self"
-                && matches!(p.type_, Type::Vec(_))
-                && self.inferred_borrowed_params.contains(&p.name)
-        });
-        if !has_borrowed_vec {
-            return;
-        }
         let unused = self.compute_unused_formal_parameter_names(func);
         for param in &func.parameters {
-            if param.name == "self" || !matches!(param.type_, Type::Vec(_)) {
+            if param.name == "self" || !Self::param_type_is_vec_container(&param.type_) {
                 continue;
             }
             if self.inferred_borrowed_params.contains(&param.name)
@@ -702,8 +693,14 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
+            if self.param_has_owning_method_use(func.body.as_slice(), &param.name, func) {
+                continue;
+            }
+            if self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name) {
+                continue;
+            }
             if unused.contains(&param.name)
-                && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
+                || self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
             {
                 self.inferred_borrowed_params.insert(param.name.clone());
             }
@@ -777,11 +774,18 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             // Trust analyzer/IR Owned — do not demote to shared `&T` in codegen.
+            // Exception: `Vec` params used only for readonly `.len()` / `[i]` may demote
+            // when analyzer over-owned due to indexing semantics.
             if matches!(
                 analyzed.inferred_ownership.get(&param.name),
                 Some(crate::analyzer::OwnershipMode::Owned)
             ) {
-                continue;
+                let vec_readonly = Self::param_type_is_vec_container(&param.type_)
+                    && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                    && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func);
+                if !vec_readonly {
+                    continue;
+                }
             }
             if (self.current_fn_mixed_forwarder_params.contains(&param.name)
                 || self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
@@ -811,7 +815,10 @@ impl<'ast> CodeGenerator<'ast> {
                 func.body.as_slice(),
                 &param.name,
                 func,
-            ) {
+            ) && !(Self::param_type_is_vec_container(&param.type_)
+                && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func))
+            {
                 continue;
             }
             if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name) {
@@ -839,7 +846,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Read-only use including `let _ = param.field` discard bindings (wdb apply_patch_put value).
-    fn param_has_readonly_expression_use(
+    pub(in crate::codegen::rust) fn param_has_readonly_expression_use(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,
@@ -1571,6 +1578,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Block { statements, .. } => {
                 self.param_used_as_read_operand(statements.as_slice(), param_name)
             }
+            Expression::Tuple { elements, .. } => elements.iter().any(|elem| {
+                self.expression_uses_param_as_read_operand(elem, param_name)
+            }),
+            Expression::Array { elements, .. } => elements.iter().any(|elem| {
+                self.expression_uses_param_as_read_operand(elem, param_name)
+            }),
             _ => false,
         }
     }
@@ -2084,7 +2097,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 arguments.iter().any(|(_, arg)| {
-                    self.expression_uses_param_as_read_operand(arg, param_name)
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                         || self.expression_passes_param_as_call_argument(arg, param_name, func)
                 }) || self.expression_passes_param_as_call_argument(object, param_name, func)
             }
@@ -2094,7 +2107,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 arguments.iter().any(|(_, arg)| {
-                    self.expression_uses_param_as_read_operand(arg, param_name)
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                         || self.expression_passes_param_as_call_argument(arg, param_name, func)
                 }) || self.expression_passes_param_as_call_argument(function, param_name, func)
             }
@@ -3023,6 +3036,9 @@ impl<'ast> CodeGenerator<'ast> {
     /// Covers bare `{ field: param }` and nested constructors such as
     /// `Objective { kind: ObjectiveType::KillEnemies(enemy_type, count) }` so codegen
     /// does not demote stored text params to borrowed formals (`&String` + `.clone()`).
+    ///
+    /// A bare identifier return (`fn identity(data) { data }`) is **not** a payload
+    /// store — that stays owned via `returned_parameters`, not this helper.
     pub(in crate::codegen::rust) fn param_moves_via_struct_literal_init(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -3035,7 +3051,16 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => expr,
             _ => return false,
         };
-        Self::expression_moves_param_into_owned_payload(expr, param_name)
+        match expr {
+            Expression::StructLiteral { .. }
+            | Expression::Call { .. }
+            | Expression::MethodCall { .. }
+            | Expression::Tuple { .. }
+            | Expression::Array { .. } => {
+                Self::expression_moves_param_into_owned_payload(expr, param_name)
+            }
+            _ => false,
+        }
     }
 
     /// Identifier moved into a struct field, tuple/array element, or enum/Option constructor.

@@ -74,6 +74,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.in_trait_impl
                     && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
+                    && !analyzed.returned_parameters.contains(&param.name)
                     && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
                     && !matches!(
@@ -618,6 +619,8 @@ impl<'ast> CodeGenerator<'ast> {
                         // left the converged formal as owned (wdb LsmEngine::get → MemoryEngine::get).
                         // Never demote mutated / MutBorrowed params to shared `&T`.
                         if !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
+                            && !analyzed.returned_parameters.contains(&param.name)
+                            && !analyzed.field_extract_parameters.contains(&param.name)
                             && self.param_should_emit_borrowed_delegation_formal(param, func)
                             && !self.param_moves_via_struct_literal_init(
                                 func.body.as_slice(),
@@ -691,6 +694,14 @@ impl<'ast> CodeGenerator<'ast> {
                             // formal so the body can move the field; call sites clone when the
                             // binding is reused (WDB-044/045).
                             if analyzed.field_extract_parameters.contains(&param.name)
+                                && !self.is_type_copy(&param.type_)
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                            }
+
+                            // Directly returned params must stay owned (identity / transform APIs).
+                            // Do not rely on call-arg heuristics for this — return is not a call.
+                            if analyzed.returned_parameters.contains(&param.name)
                                 && !self.is_type_copy(&param.type_)
                             {
                                 ownership_mode = OwnershipMode::Owned;
@@ -779,7 +790,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 func.body.as_slice(),
                                 &param.name,
                             ) {
-                                if matches!(&param.type_, Type::Vec(_)) {
+                                if matches!(&param.type_, Type::Vec(_))
+                                    || matches!(
+                                        &param.type_,
+                                        Type::Parameterized(name, _) if name == "Vec"
+                                    )
+                                {
                                     ownership_mode = OwnershipMode::Borrowed;
                                 } else {
                                     ownership_mode = OwnershipMode::Owned;
@@ -797,6 +813,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 Some(ownership_mode),
                             ) && !self.is_type_copy(&param.type_)
                                 && !analyzed.field_extract_parameters.contains(&param.name)
+                                && !analyzed.returned_parameters.contains(&param.name)
                                 && !self.param_moves_via_struct_literal_init(
                                     func.body.as_slice(),
                                     &param.name,
@@ -909,6 +926,22 @@ impl<'ast> CodeGenerator<'ast> {
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
+                                )
+                                && !(
+                                    (matches!(&param.type_, Type::Vec(_))
+                                        || matches!(
+                                            &param.type_,
+                                            Type::Parameterized(name, _) if name == "Vec"
+                                        ))
+                                        && self.param_has_readonly_expression_use(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                        )
+                                        && !self.param_has_owning_method_use(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        )
                                 )
                             {
                                 ownership_mode = OwnershipMode::Owned;
