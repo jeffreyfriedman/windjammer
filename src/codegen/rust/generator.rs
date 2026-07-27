@@ -86,6 +86,10 @@ pub struct CodeGenerator<'ast> {
     /// WJ source non-`self` formal types per method, merged across impl blocks for one struct.
     pub(crate) struct_method_ast_formal_param_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Vec<Type>>>,
+    /// Structs with ≥1 method that field-reads an owned non-Copy custom formal (lookup facade).
+    pub(crate) struct_has_owned_key_field_lookup: std::collections::HashSet<String>,
+    /// Structs with ≥1 method that only forwards an owned custom formal to a self sibling.
+    pub(crate) struct_has_owned_key_sibling_wrapper: std::collections::HashSet<String>,
     pub(crate) current_impl_instance_methods: std::collections::HashSet<String>, // Methods that take self
     /// Same-impl methods that codegen will emit with owned/`mut self` (consuming receiver).
     pub(crate) current_impl_consuming_self_methods: std::collections::HashSet<String>,
@@ -488,6 +492,8 @@ impl<'ast> CodeGenerator<'ast> {
             current_impl_methods: std::collections::HashSet::new(),
             preregistered_impl_sibling_types: std::collections::HashSet::new(),
             struct_method_ast_formal_param_types: std::collections::HashMap::new(),
+            struct_has_owned_key_field_lookup: std::collections::HashSet::new(),
+            struct_has_owned_key_sibling_wrapper: std::collections::HashSet::new(),
             current_impl_instance_methods: std::collections::HashSet::new(),
             current_impl_consuming_self_methods: std::collections::HashSet::new(),
             trivial_copy_field_accessors: std::collections::HashSet::new(),
@@ -2020,15 +2026,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         } else if callee_wants_owned
-            && coerced.starts_with('&')
-            && !coerced.starts_with("&mut ")
+            && (coerced.starts_with("&mut ")
+                || (coerced.starts_with('&') && !coerced.starts_with("&mut ")))
         {
-            let base = coerced.trim_start_matches('&');
-            *coerced = if base.ends_with(".clone()") {
-                base.to_string()
-            } else {
-                format!("{base}.clone()")
-            };
+            *coerced =
+                crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
         }
     }
 
@@ -2068,20 +2070,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if callee_wants_owned
             && !callee_wants_shared_borrow
-            && coerced.starts_with('&')
-            && !coerced.starts_with("&mut ")
+            && (coerced.starts_with("&mut ") || coerced.starts_with('&'))
         {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if self.match_arm_bindings.contains(name.as_str()) {
+                if self.match_arm_bindings.contains(name.as_str())
+                    && !coerced.starts_with("&mut ")
+                {
                     return;
                 }
             }
-            let base = coerced.trim_start_matches('&');
-            *coerced = if base.ends_with(".clone()") {
-                base.to_string()
-            } else {
-                format!("{base}.clone()")
-            };
+            *coerced =
+                crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
         } else if callee_wants_owned
             && !callee_wants_shared_borrow
             && !coerced.ends_with(".clone()")
@@ -2090,7 +2089,8 @@ impl<'ast> CodeGenerator<'ast> {
             && (self.current_fn_forward_ref_if_params.contains(name)
                 || self.current_fn_mixed_forwarder_params.contains(name))
         {
-            *coerced = format!("{coerced}.clone()");
+            *coerced =
+                crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
         } else if callee_wants_shared_borrow
             && !callee_wants_owned
             && !coerced.starts_with('&')

@@ -101,6 +101,17 @@ pub fn borrow_base_expr(expr_str: &str) -> &str {
     expr_str
 }
 
+/// Convert a borrowed/mut-borrowed call arg into an owned value for an owned formal.
+/// Avoids `key.clone().clone()` when the arg is already cloned.
+pub fn coerce_borrowed_arg_to_owned(expr_str: &str) -> String {
+    let base = borrow_base_expr(expr_str);
+    if base.ends_with(".clone()") {
+        base.to_string()
+    } else {
+        format!("{base}.clone()")
+    }
+}
+
 /// Strip a single shared borrow (`&T`), never mutilating `&mut T` into `mut T`.
 pub fn strip_shared_borrow_prefix(expr_str: &str) -> String {
     if let Some(rest) = expr_str.strip_prefix("&mut ") {

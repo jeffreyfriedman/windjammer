@@ -1234,6 +1234,10 @@ impl<'ast> CodeGenerator<'ast> {
                     ownership = crate::analyzer::OwnershipMode::MutBorrowed;
                 }
 
+                // Store/lookup facades keep owned non-Copy custom formals (WDB-046),
+                // except single-arg non-self owned forwards (`latest.has_key(key)` → `&Key` + clone).
+                let keep_owned_facade = self.param_keeps_owned_engine_key_facade(impl_type, param, func);
+
                 // Emitted Rust formals follow body-inferred ownership; IR param_types can
                 // lag as Owned for non-Copy user types (e.g. wdb `Key` → `&Key` at call sites).
                 if let Some(analyzed_own) = analyzed.inferred_ownership.get(&param.name) {
@@ -1243,6 +1247,7 @@ impl<'ast> CodeGenerator<'ast> {
                             | crate::analyzer::OwnershipMode::MutBorrowed
                     ) && matches!(ownership, crate::analyzer::OwnershipMode::Owned)
                         && !type_analysis::is_copy_type(&p_type)
+                        && !keep_owned_facade
                         && !self.param_passes_to_wj_owned_sibling_call(
                             func.body.as_slice(),
                             &param.name,
@@ -1272,11 +1277,17 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if matches!(ownership, crate::analyzer::OwnershipMode::Owned)
                     && !type_analysis::is_copy_type(&p_type)
+                    && !keep_owned_facade
                     && self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
                     && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
                     && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
                 {
                     ownership = crate::analyzer::OwnershipMode::Borrowed;
+                }
+
+                if keep_owned_facade {
+                    ownership = crate::analyzer::OwnershipMode::Owned;
+                    p_type = param.type_.clone();
                 }
 
                 if !has_self_receiver {
@@ -1384,6 +1395,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
+                    || self.param_keeps_owned_engine_key_facade(&impl_type, param, func)
                 {
                     return false;
                 }
@@ -2885,6 +2897,139 @@ impl<'ast> CodeGenerator<'ast> {
             .entry(struct_name.to_string())
             .or_default()
             .insert(func.name.clone(), formals);
+        // Lookup facades (get-style): owned non-Copy custom formals read via field access.
+        for param in &func.parameters {
+            if param.name == "self" || self.is_type_copy(&param.type_) {
+                continue;
+            }
+            if !matches!(&param.type_, Type::Custom(_)) {
+                continue;
+            }
+            if matches!(
+                &param.type_,
+                Type::Reference(_) | Type::MutableReference(_)
+            ) {
+                continue;
+            }
+            if self.param_passes_to_wj_owned_sibling_call(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) && self.param_only_used_as_call_argument(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
+                self.struct_has_owned_key_sibling_wrapper
+                    .insert(struct_name.to_string());
+            }
+            if self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func) {
+                continue;
+            }
+            if self.param_used_as_read_operand(func.body.as_slice(), &param.name)
+                || Self::expression_mentions_field_access_of(
+                    func.body.as_slice(),
+                    &param.name,
+                )
+            {
+                self.struct_has_owned_key_field_lookup
+                    .insert(struct_name.to_string());
+            }
+        }
+    }
+
+    /// True when `param_name` appears in a field-access expression in `body`.
+    fn expression_mentions_field_access_of(
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            Self::statement_mentions_field_access_of(stmt, param_name)
+        })
+    }
+
+    fn statement_mentions_field_access_of(stmt: &Statement<'ast>, param_name: &str) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return { value: Some(expr), .. }
+            | Statement::Let { value: expr, .. }
+            | Statement::Const { value: expr, .. } => {
+                Self::expr_mentions_field_access_of(expr, param_name)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::expr_mentions_field_access_of(condition, param_name)
+                    || Self::expression_mentions_field_access_of(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        Self::expression_mentions_field_access_of(b.as_slice(), param_name)
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                Self::expr_mentions_field_access_of(condition, param_name)
+                    || Self::expression_mentions_field_access_of(body.as_slice(), param_name)
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::expr_mentions_field_access_of(iterable, param_name)
+                    || Self::expression_mentions_field_access_of(body.as_slice(), param_name)
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                Self::expression_mentions_field_access_of(body.as_slice(), param_name)
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::expr_mentions_field_access_of(value, param_name)
+                    || arms.iter().any(|arm| {
+                        Self::expr_mentions_field_access_of(&arm.body, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_mentions_field_access_of(expr: &Expression<'ast>, param_name: &str) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == param_name)
+                    || Self::expr_mentions_field_access_of(object, param_name)
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                Self::expr_mentions_field_access_of(object, param_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| Self::expr_mentions_field_access_of(a, param_name))
+            }
+            Expression::Call { arguments, function, .. } => {
+                Self::expr_mentions_field_access_of(function, param_name)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| Self::expr_mentions_field_access_of(a, param_name))
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::expr_mentions_field_access_of(left, param_name)
+                    || Self::expr_mentions_field_access_of(right, param_name)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. } => {
+                Self::expr_mentions_field_access_of(operand, param_name)
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| Self::expr_mentions_field_access_of(e, param_name)),
+            Expression::Block { statements, .. } => {
+                Self::expression_mentions_field_access_of(statements.as_slice(), param_name)
+            }
+            _ => false,
+        }
     }
 
     fn ast_sibling_method_arg_is_owned_non_copy_formal(
@@ -4194,24 +4339,73 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// Multi-method engine / lookup facades keep owned `Key`/`Value` formals (WDB-046).
+    /// Multi-method store/lookup facades keep owned non-Copy custom formals (WDB-046).
+    ///
+    /// Signature-driven: if this impl declares the same owned non-Copy custom type on
+    /// ≥2 methods' formals, callers borrow at the outer edge and callees keep owned.
+    /// No hardcoded method-name lists.
     pub(in crate::codegen::rust) fn struct_is_owned_engine_key_facade(
         &self,
-        _struct_name: &str,
+        struct_name: &str,
         param: &crate::parser::Parameter,
     ) -> bool {
-        if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
+        if param.name == "self" || self.is_type_copy(&param.type_) {
             return false;
         }
-        if !matches!(&param.type_, Type::Custom(name) if name == "Key" || name == "Value") {
+        let Type::Custom(type_name) = &param.type_ else {
             return false;
-        }
-        let methods = &self.current_impl_methods;
-        (["get", "put", "delete"]
-            .iter()
-            .all(|name| methods.contains(*name)))
-            || (["get", "has_key"].iter().all(|name| methods.contains(*name)))
-            || methods.contains("seed_write")
+        };
+        let Some(methods) = self.struct_method_ast_formal_param_types.get(struct_name) else {
+            // Fallback while AST formals are not yet registered for this impl.
+            let method_names = &self.current_impl_methods;
+            return method_names.len() >= 2
+                && method_names.iter().any(|m| {
+                    self.signature_registry
+                        .get_signature(&format!("{struct_name}::{m}"))
+                        .or_else(|| self.signature_registry.lookup_method(m))
+                        .is_some_and(|sig| {
+                            sig.formal_param_types.iter().any(|t| {
+                                matches!(t, Type::Custom(n) if n == type_name)
+                                    && !self.is_type_copy(t)
+                            }) || sig.param_types.iter().any(|t| {
+                                let bare = match t {
+                                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                                        inner.as_ref()
+                                    }
+                                    other => other,
+                                };
+                                matches!(bare, Type::Custom(n) if n == type_name)
+                            })
+                        })
+                });
+        };
+        let methods_with_owned_same_type = methods
+            .values()
+            .filter(|formals| {
+                formals.iter().any(|t| {
+                    matches!(t, Type::Custom(n) if n == type_name)
+                        && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !self.is_type_copy(t)
+                })
+            })
+            .count();
+        methods_with_owned_same_type >= 2
+            && self.struct_has_owned_key_field_lookup.contains(struct_name)
+            && (self
+                .struct_has_owned_key_sibling_wrapper
+                .contains(struct_name)
+                || methods_with_owned_same_type >= 3)
+    }
+
+    /// Facade keeps owned formals except non-self owned-forward delegates (`latest.has_key(key)`).
+    pub(in crate::codegen::rust) fn param_keeps_owned_engine_key_facade(
+        &self,
+        struct_name: &str,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        self.struct_is_owned_engine_key_facade(struct_name, param)
+            && !self.param_should_emit_borrowed_delegation_formal(param, func)
     }
 
     /// True when `param_name` appears in an `if` condition expression in `func`.
@@ -4263,9 +4457,6 @@ impl<'ast> CodeGenerator<'ast> {
             && !to_owned_sibling
             && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
             && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
-            && !self.current_struct_name.as_ref().is_some_and(|sn| {
-                self.struct_is_owned_engine_key_facade(sn, param)
-            })
             && {
                 let to_owned_method = self.param_passed_to_owned_non_copy_method_arg(
                     func.body.as_slice(),

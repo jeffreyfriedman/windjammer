@@ -121,7 +121,7 @@ impl<'ast> CodeGenerator<'ast> {
                         func,
                     )
                     && !self.current_struct_name.as_ref().is_some_and(|sn| {
-                        self.struct_is_owned_engine_key_facade(sn, param)
+                        self.param_keeps_owned_engine_key_facade(sn, param, func)
                     })
                     && !self.is_collection_key_owned_param(param, func)
                     && !self.param_only_used_in_discarding_let_binding(
@@ -210,7 +210,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     ) || self.current_struct_name.as_ref().is_some_and(|sn| {
-                        self.struct_is_owned_engine_key_facade(sn, param)
+                        self.param_keeps_owned_engine_key_facade(sn, param, func)
                     }))
                 {
                     &param.type_
@@ -739,7 +739,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 .unwrap_or(OwnershipMode::Owned);
 
                             if self.current_struct_name.as_ref().is_some_and(|sn| {
-                                self.struct_is_owned_engine_key_facade(sn, param)
+                                self.param_keeps_owned_engine_key_facade(sn, param, func)
                             }) {
                                 ownership_mode = OwnershipMode::Owned;
                             }
@@ -896,7 +896,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     func,
                                 )
                                 && !self.current_struct_name.as_ref().is_some_and(|sn| {
-                                    self.struct_is_owned_engine_key_facade(sn, param)
+                                    self.param_keeps_owned_engine_key_facade(sn, param, func)
                                 })
                                 && !self.is_collection_key_owned_param(param, func)
                                 && !self.param_is_single_arg_call_only_delegate(param, func)
@@ -1031,9 +1031,35 @@ impl<'ast> CodeGenerator<'ast> {
 
                             // Converged analyzer ownership is authoritative unless the body stores
                             // the param in an owned payload (enum variant, constructor, struct field).
+                            // Do not overwrite facade / forward-ref / mixed-forwarder Owned contracts
+                            // with body-inferred Borrowed (WDB-046 get/has_key Key formals).
+                            let keep_owned_contract = payload_stored
+                                || self.current_struct_name.as_ref().is_some_and(|sn| {
+                                    self.param_keeps_owned_engine_key_facade(sn, param, func)
+                                })
+                                || self.current_fn_mixed_forwarder_params.contains(&param.name)
+                                || self.current_fn_forward_ref_if_params.contains(&param.name)
+                                || self.param_has_forward_ref_keep_owned(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                || self.param_passes_to_wj_owned_sibling_call(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                || analyzed.field_extract_parameters.contains(&param.name)
+                                || analyzed.returned_parameters.contains(&param.name)
+                                || self.param_moves_via_struct_literal_init(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                );
                             if payload_stored {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.str_ref_optimized_params.remove(&param.name);
+                            } else if keep_owned_contract {
+                                ownership_mode = OwnershipMode::Owned;
                             } else if let Some(analyzed_own) =
                                 analyzed.inferred_ownership.get(&param.name)
                             {
@@ -1067,16 +1093,27 @@ impl<'ast> CodeGenerator<'ast> {
 
                             copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {
                                 OwnershipMode::Owned => {
-                                    if crate::codegen::rust::types::is_windjammer_text_type(
+                                    // Body inference may leave `formal_type` as `Reference(T)`
+                                    // while facade/forward-ref ownership stays Owned — emit `T`.
+                                    let emit_ty = if matches!(
+                                        formal_type,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    ) && !matches!(
+                                        &param.type_,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    ) {
+                                        &param.type_
+                                    } else if crate::codegen::rust::types::is_windjammer_text_type(
                                         &param.type_,
                                     ) && !matches!(
                                         &param.type_,
                                         Type::Reference(_) | Type::MutableReference(_)
                                     ) {
-                                        self.type_to_rust(&param.type_)
+                                        &param.type_
                                     } else {
-                                        self.type_to_rust(formal_type)
-                                    }
+                                        formal_type
+                                    };
+                                    self.type_to_rust(emit_ty)
                                 }
                                 OwnershipMode::MutBorrowed if self.is_type_copy(formal_type) => {
                                     format!("&mut {}", self.type_to_rust(formal_type))

@@ -767,7 +767,10 @@ pub fn run() {
     let map = test.compile().expect("compile");
     let rs = map.get("store.rs").expect("store.rs");
     assert!(
-        rs.contains("pub fn put_value(&self, key: Key") || rs.contains("pub fn put_value(&mut self, key: Key"),
+        rs.contains("pub fn put_value(&self, key: Key")
+            || rs.contains("pub fn put_value(&self, mut key: Key")
+            || rs.contains("pub fn put_value(&mut self, key: Key")
+            || rs.contains("pub fn put_value(&mut self, mut key: Key"),
         "expected owned Key outer param. Got:\n{rs}"
     );
     assert!(
