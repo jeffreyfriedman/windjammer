@@ -577,22 +577,15 @@ impl<'ast> CodeGenerator<'ast> {
             arg_index,
             user_arg_count,
             Some(&sig),
-        )
-            && matches!(arg_expr, Expression::Identifier { .. })
+        ) && crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(arg_expr)
             && !coerced.starts_with("&mut ")
         {
-            if let Expression::Identifier { name, .. } = arg_expr {
-                if !self.identifier_already_mut_ref(name) {
-                    if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
-                        coerced = format!(
-                            "&mut {}",
-                            crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
-                        );
-                    } else {
-                        coerced = format!("&mut {coerced}");
-                    }
-                }
-            }
+            crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                arg_expr,
+                &mut coerced,
+                &self.current_function_params,
+                &self.inferred_mut_borrowed_params,
+            );
         }
 
         // Method-registry / global converged signatures must win over stale call-site

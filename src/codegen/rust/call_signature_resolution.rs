@@ -933,6 +933,16 @@ pub fn effective_param_ownership_for_arg(
     effective_param_ownership(sig, idx)
 }
 
+/// Whether resolved callee metadata expects `&mut T` for a user argument index.
+pub fn callee_user_arg_expects_mut_borrow(sig: &FunctionSignature, user_arg_index: usize) -> bool {
+    let pidx = sig.arg_param_index(user_arg_index);
+    matches!(sig.param_types.get(pidx), Some(Type::MutableReference(_)))
+        || matches!(
+            effective_param_ownership_for_arg(sig, user_arg_index),
+            OwnershipMode::MutBorrowed,
+        )
+}
+
 /// Static impl methods borrow at call sites when body analysis converged the param
 /// to `&str` in param_types or Borrowed text in param_ownership.
 pub(crate) fn static_impl_text_borrows_at_call_site(
