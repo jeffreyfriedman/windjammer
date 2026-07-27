@@ -1673,11 +1673,13 @@ impl<'ast> CodeGenerator<'ast> {
     ///  - `str_ref_optimized_params` (Phase 2 string→&str optimization)
     ///  - explicit `Reference`/`MutableReference`/`Custom("str")` AST types
     pub(crate) fn identifier_already_ref(&self, name: &str) -> bool {
-        if self.current_fn_mixed_forwarder_params.contains(name) {
-            return false;
-        }
+        // Emitted Rust `&T` formals always generate as references — even for mixed
+        // forwarders that keep an owned outer formal elsewhere in the call graph.
         if self.emitted_rust_ref_formals.contains(name) {
             return true;
+        }
+        if self.current_fn_mixed_forwarder_params.contains(name) {
+            return false;
         }
         if self.inferred_borrowed_params.contains(name) {
             // Current fn param with owned emitted formal (e.g. `key: Key`) may appear in

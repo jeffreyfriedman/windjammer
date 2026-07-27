@@ -613,7 +613,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     ) && !crate::ir::signature_bridge::call_site_expects_owned_pass(
                                         &reg_sig, pidx,
                                     ) && !matches!(arg_to_generate, Expression::Identifier { name, .. }
-                                        if self.caller_owned_non_copy_formal(name))
+                                        if self.emitted_rust_ref_formals.contains(name)
+                                            || self.binding_emits_as_rust_shared_ref(name)
+                                            || self.identifier_already_ref(name)
+                                            || self.caller_owned_non_copy_formal(name))
                                         // Literals are already `&str` — do not emit `&"…"`.
                                         && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
                                             arg_to_generate,
@@ -697,6 +700,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 arg_to_generate,
                                 Expression::Identifier { name, .. }
                                     if self.identifier_already_ref(name)
+                                        || self.emitted_rust_ref_formals.contains(name)
+                                        || self.binding_emits_as_rust_shared_ref(name)
                             )
                             && (matches!(
                                 arg_to_generate,
@@ -780,6 +785,17 @@ impl<'ast> CodeGenerator<'ast> {
                             arg_to_generate,
                             &coerced,
                         );
+                        // Pass-through for emitted `&T` formals (`engine.get(key)` not `&key`).
+                        if let Expression::Identifier { name, .. } = arg_to_generate {
+                            if self.emitted_rust_ref_formals.contains(name)
+                                || self.binding_emits_as_rust_shared_ref(name)
+                            {
+                                crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
+                                    arg_to_generate,
+                                    &mut coerced,
+                                );
+                            }
+                        }
                         return coerced;
                     }
                 }
@@ -2528,8 +2544,16 @@ impl<'ast> CodeGenerator<'ast> {
                         .or(method_signature.as_ref())
                     {
                         let pidx = sig.arg_param_index(i);
+                        let already_ref_formal = matches!(
+                            arg_to_generate,
+                            Expression::Identifier { name, .. }
+                                if self.emitted_rust_ref_formals.contains(name)
+                                    || self.binding_emits_as_rust_shared_ref(name)
+                                    || self.identifier_already_ref(name)
+                        );
                         if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
                             && !crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+                            && !already_ref_formal
                             && !matches!(arg_to_generate, Expression::Identifier { name, .. }
                                 if self.caller_owned_non_copy_formal(name))
                             // String literals are already `&str` — `&"lit"` is `&&str`.
