@@ -532,6 +532,12 @@ pub enum Item<'ast> {
         value: &'ast Expression<'ast>,
         location: SourceLocation,
     },
+    /// Top-level macro invocation (`thread_local! { ... }`, etc.)
+    Macro {
+        doc_comment: Option<String>,
+        expr: &'ast Expression<'ast>,
+        location: SourceLocation,
+    },
     ExternLet {
         name: String,
         type_: Type,
@@ -575,6 +581,7 @@ impl<'ast> Item<'ast> {
             Item::Impl { location, .. } => location.clone(),
             Item::Const { location, .. } => location.clone(),
             Item::Static { location, .. } => location.clone(),
+            Item::Macro { location, .. } => location.clone(),
             Item::ExternLet { location, .. } => location.clone(),
             Item::Use { location, .. } => location.clone(),
             Item::Mod { location, .. } => location.clone(),

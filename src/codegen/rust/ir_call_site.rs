@@ -620,6 +620,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        if matches!(kind, CoercionKind::Deref | CoercionKind::StripBorrow) {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.copy_match_payload_binding(name)
+                    && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+                {
+                    kind = CoercionKind::Identity;
+                }
+            }
+        }
         // Explicit `*binding` on Copy types: Rust auto-borrows at the call site — no `&*`.
         if matches!(
             arg_expr,
@@ -660,7 +669,15 @@ impl<'ast> CodeGenerator<'ast> {
             )
             && !prepared_arg.starts_with('&')
         {
-            prepared_arg = format!("&{prepared_arg}");
+            let binding_is_copy = self.infer_expression_type(arg_expr).is_some_and(|t| match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => {
+                    self.is_type_copy(inner.as_ref())
+                }
+                other => self.is_type_copy(&other),
+            });
+            if !binding_is_copy {
+                prepared_arg = format!("&{prepared_arg}");
+            }
         }
         let resolved_kind = kind;
         let coerced = apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust);
@@ -934,6 +951,14 @@ impl<'ast> CodeGenerator<'ast> {
                     coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
                 }
             } else if !coerced.ends_with(".clone()") {
+                let skip_user_closure_param = matches!(
+                    arg_expr,
+                    Expression::Identifier { name, .. }
+                        if self.in_user_written_closure && self.user_closure_params.contains(name)
+                );
+                if skip_user_closure_param {
+                    // Preserve user-written closure bodies (e.g. |e| predicate(e)).
+                } else {
                 let skip_iter_ref_collect = matches!(arg_expr, Expression::Identifier { name, .. }
                     if self.borrowed_iterator_vars.contains(name)
                         && self.current_function_return_type.as_ref().is_some_and(|rt| {
@@ -959,6 +984,7 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
                     }
+                }
                 }
                 }
             }
@@ -1221,6 +1247,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        coerced = self.normalize_owned_copy_match_binding_call_arg(
+            arg_expr,
+            &coerced,
+            &sig,
+            arg_index,
+        );
         Some(coerced)
     }
 
@@ -1317,6 +1349,56 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Enforce the ownership contract for a single call-site argument by computing
     /// actual vs expected safety types and applying the coercion (strip `&`, add `.clone()`, etc.).
+    /// Signature-driven: explicit `&x` at call site → owned callee formal gets `*x` (Copy) or `x.clone()`.
+    pub(crate) fn coerce_explicit_ref_for_owned_callee_arg(
+        &self,
+        arg_expr: &Expression<'ast>,
+        mut arg_str: String,
+        sig: Option<&crate::analyzer::FunctionSignature>,
+        arg_index: usize,
+    ) -> String {
+        if !crate::codegen::rust::expression_helpers::is_reference_expression(arg_expr) {
+            return arg_str;
+        }
+        let Some(sig) = sig else {
+            return arg_str;
+        };
+        let callee_wants_borrow = sig.param_types.get(arg_index).is_some_and(|t| {
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        }) || matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                sig, arg_index,
+            ),
+            crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed,
+        );
+        if callee_wants_borrow {
+            return arg_str;
+        }
+        let formal_idx = sig.arg_param_index(arg_index);
+        let callee_formal_is_copy = sig
+            .formal_param_type(formal_idx)
+            .or_else(|| sig.param_types.get(formal_idx))
+            .is_some_and(|t| match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => self.is_type_copy(inner),
+                other => self.is_type_copy(other),
+            });
+        // Undo erroneous `*(&x)` / `*&x` from legacy deref coercion on explicit borrows.
+        while arg_str.starts_with('*') {
+            arg_str = arg_str[1..].to_string();
+        }
+        if arg_str.ends_with(".clone()") {
+            return arg_str;
+        }
+        if callee_formal_is_copy {
+            return format!(
+                "*{}",
+                crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str)
+            );
+        }
+        let inner = crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str);
+        format!("{inner}.clone()")
+    }
+
     /// Uses `emitted_owned_arg_contract` to handle stale analyzer metadata.
     pub(crate) fn enforce_call_site_ownership_contract(
         &self,
@@ -1660,6 +1742,9 @@ impl<'ast> CodeGenerator<'ast> {
             && coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
         {
+            if self.copy_match_payload_binding(name) {
+                return coerced[1..].to_string();
+            }
             let is_copy = self
                 .local_var_types
                 .get(name)

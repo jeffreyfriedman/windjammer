@@ -60,6 +60,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             gen.restore_arg_gen_scope(scope);
             gen.suppress_borrowed_clone = prev_suppress;
             arg_str = gen.peel_copy_ref_match_binding_for_value(arg, &arg_str);
+            if let Expression::Identifier { name, .. } = arg {
+                if gen.copy_match_payload_binding(name)
+                    && (arg_str.starts_with('&') || arg_str.starts_with('*'))
+                {
+                    while arg_str.starts_with('*') {
+                        arg_str = arg_str[1..].to_string();
+                    }
+                    arg_str = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                        &arg_str,
+                    )
+                    .to_string();
+                }
+            }
             let is_copy_literal = matches!(
                 arg,
                 Expression::Literal {
@@ -508,6 +521,25 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             func_name,
                             i,
                         );
+                    }
+                    coerced = gen.coerce_explicit_ref_for_owned_callee_arg(
+                        arg,
+                        coerced,
+                        post_ir_borrow_sig
+                            .as_ref()
+                            .or(signature.as_ref()),
+                        i,
+                    );
+                    if gen.in_user_written_closure {
+                        if let Expression::Identifier { name, .. } = arg {
+                            if gen.user_closure_params.contains(name)
+                                && coerced.ends_with(".clone()")
+                            {
+                                coerced = coerced
+                                    [..coerced.len() - ".clone()".len()]
+                                    .to_string();
+                            }
+                        }
                     }
                     let callee_wants_mut = gen
                         .function_emitted_mut_arg_indices

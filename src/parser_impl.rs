@@ -581,6 +581,14 @@ impl Parser {
                     location: self.current_location(),
                 })
             }
+            Token::Ident(_) if self.peek(1) == Some(&Token::Bang) => {
+                let expr = self.parse_expression()?;
+                Ok(Item::Macro {
+                    doc_comment,
+                    expr,
+                    location: self.current_location(),
+                })
+            }
             _ => Err(format!(
                 "Unexpected token: {:?} (at token position {})",
                 self.current_token(),

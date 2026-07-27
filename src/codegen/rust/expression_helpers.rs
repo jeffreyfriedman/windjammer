@@ -31,6 +31,19 @@ pub fn is_reference_expression(expr: &Expression) -> bool {
     )
 }
 
+/// True when `expr` is `name` or an explicit borrow of `name` (`&name`, `&mut name`).
+pub fn expression_directly_uses_binding(expr: &Expression, name: &str) -> bool {
+    match expr {
+        Expression::Identifier { name: n, .. } => n == name,
+        Expression::Unary {
+            op: UnaryOp::Ref | UnaryOp::MutRef,
+            operand,
+            ..
+        } => expression_directly_uses_binding(operand, name),
+        _ => false,
+    }
+}
+
 /// True when a method call receiver is `self` or `self.field` / `self.field...`.
 pub fn method_receiver_is_self_or_field(object: &Expression) -> bool {
     matches!(object, Expression::Identifier { name, .. } if name == "self")

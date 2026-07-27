@@ -189,7 +189,9 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 .strip_prefix('(')
                 .and_then(|s| s.strip_suffix(')'))
                 .unwrap_or(inner);
-            if is_copy_base(&expected.base)
+            if inner.starts_with('*') {
+                *coerced = inner.to_string();
+            } else if is_copy_base(&expected.base)
                 && !matches!(expected.base, BaseType::Custom(_))
             {
                 *coerced = format!("*{inner}");
