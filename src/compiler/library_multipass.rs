@@ -1014,6 +1014,8 @@ pub(crate) fn build_library_multipass(
             "get_node",
             "SystemScheduler::register",
             "SceneManager::is_registered",
+            "QuestManager::is_quest_active",
+            "QuestManager::update_objective_progress",
             "draw::draw_text",
             "draw_text",
         ] {
@@ -1061,6 +1063,13 @@ pub(crate) fn build_library_multipass(
                 std::sync::Arc::make_mut(&mut final_global_registry),
             );
             ir_functions_by_index[i] = Some(module.functions);
+        }
+    }
+    {
+        use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        for sig in reg.signatures.values_mut() {
+            wrap_converged_borrow_param_types(sig);
         }
     }
     profile_phase("Step 4B-a-IR: IR lowering", step4b_ir_start);

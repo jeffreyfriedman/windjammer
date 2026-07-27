@@ -786,6 +786,16 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     Some(finalize(g.clone()))
                 }
+                (Some(l), Some(g))
+                    if crate::codegen::rust::signature_promotion::prefer_converged_over_stub(l, g) =>
+                {
+                    Some(finalize(g.clone()))
+                }
+                (Some(l), Some(g))
+                    if crate::codegen::rust::signature_promotion::prefer_converged_over_stub(g, l) =>
+                {
+                    Some(finalize(l.clone()))
+                }
                 (Some(l), _) => Some(finalize(l.clone())),
                 (None, Some(g)) => Some(finalize(g.clone())),
                 (None, None) => None,
@@ -2046,6 +2056,11 @@ impl<'ast> CodeGenerator<'ast> {
             && coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
         {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.match_arm_bindings.contains(name.as_str()) {
+                    return;
+                }
+            }
             let base = coerced.trim_start_matches('&');
             *coerced = if base.ends_with(".clone()") {
                 base.to_string()
@@ -2316,6 +2331,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
+        if self.match_arm_bindings.contains(name) {
+            return arg_str.to_string();
+        }
         if self.in_user_written_closure && self.user_closure_params.contains(name) {
             return arg_str.to_string();
         }
@@ -2357,10 +2375,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if self.borrowed_iterator_vars.contains(name)
-            && self.current_function_return_type.as_ref().is_some_and(|rt| {
-                matches!(rt, Type::Vec(inner) if matches!(**inner, Type::Reference(_) | Type::MutableReference(_)))
-            })
+            && crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
+                self.current_function_return_type.as_ref(),
+            )
         {
+            return arg_str.to_string();
+        }
+
+        if self.local_var_types.get(name).is_some_and(|t| {
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        }) && crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
+            self.current_function_return_type.as_ref(),
+        ) {
             return arg_str.to_string();
         }
 

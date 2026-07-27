@@ -550,6 +550,32 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.inferred_mut_borrowed_params,
                         );
                     }
+                    if let Expression::Identifier { name, .. } = arg {
+                        if gen.in_user_written_closure && gen.user_closure_params.contains(name) {
+                            let sig_for_closure = post_ir_borrow_sig
+                                .as_ref()
+                                .or(signature.as_ref())
+                                .or_else(|| gen.signature_registry.get_signature(func_name))
+                                .or_else(|| {
+                                    gen.global_signature_registry
+                                        .as_ref()
+                                        .and_then(|g| g.get_signature(func_name))
+                                });
+                            if let Some(sig) = sig_for_closure {
+                                let pidx = sig.arg_param_index(i);
+                                if (crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                    sig, pidx,
+                                ) || sig.param_types.get(pidx).is_some_and(|t| {
+                                    matches!(t, Type::Reference(_))
+                                }))
+                                    && !coerced.starts_with('&')
+                                    && !coerced.starts_with("&mut ")
+                                {
+                                    coerced = format!("&{coerced}");
+                                }
+                            }
+                        }
+                    }
                     return vec![coerced];
                 }
                 let callee_sig = signature.as_ref().or_else(|| {
@@ -996,6 +1022,32 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     }
                 }
+                if let Expression::Identifier { name, .. } = arg {
+                    if gen.in_user_written_closure && gen.user_closure_params.contains(name) {
+                        let pidx = sig.arg_param_index(i);
+                        let callee_borrows = crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                            sig, pidx,
+                        ) || sig.param_types.get(pidx).is_some_and(|t| {
+                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        }) || sig
+                            .emitted_rust_ref_params
+                            .as_ref()
+                            .and_then(|flags| flags.get(pidx).copied())
+                            .unwrap_or(false)
+                            || matches!(
+                                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                    sig, i,
+                                ),
+                                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed,
+                            );
+                        if callee_borrows {
+                            if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                                arg_str = format!("&{arg_str}");
+                            }
+                            return vec![arg_str];
+                        }
+                    }
+                }
                 match ownership {
                         OwnershipMode::Borrowed if !has_ownership_collision => {
                             // PHASE 1: Generate &String parameters for correctness
@@ -1213,20 +1265,42 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 }
                             ) && !arg_str.trim_start().starts_with('*')
                             {
-                                let pointee_is_copy = gen
-                                    .infer_expression_type(arg)
-                                    .as_ref()
-                                    .map(|t| match t {
+                                let callee_wants_borrow = sig.param_types.get(i).is_some_and(|t| {
+                                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                }) || matches!(
+                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                        sig, i,
+                                    ),
+                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed,
+                                );
+                                if callee_wants_borrow {
+                                    return vec![arg_str];
+                                }
+                                // Signature-driven: callee formal type decides deref vs clone,
+                                // not operand inference (explicit `&p` → owned `Light` needs clone).
+                                let formal_idx = sig.arg_param_index(i);
+                                let callee_formal_is_copy = sig
+                                    .formal_param_type(formal_idx)
+                                    .or_else(|| sig.param_types.get(formal_idx))
+                                    .is_some_and(|t| match t {
                                         Type::Reference(inner) | Type::MutableReference(inner) => {
                                             gen.is_type_copy(inner)
                                         }
                                         other => gen.is_type_copy(other),
-                                    })
-                                    .unwrap_or(false);
-                                if pointee_is_copy {
+                                    });
+                                if callee_formal_is_copy {
                                     arg_str = format!("*{}", arg_str);
                                 } else if !arg_str.ends_with(".clone()") {
-                                    let inner = if arg_str.starts_with("&mut ") {
+                                    let inner = if arg_str.starts_with('(') && arg_str.ends_with(')') {
+                                        let inner_expr = arg_str[1..arg_str.len() - 1].trim();
+                                        if inner_expr.starts_with("&mut ") {
+                                            inner_expr.strip_prefix("&mut ").unwrap_or(inner_expr)
+                                        } else if inner_expr.starts_with('&') {
+                                            inner_expr.strip_prefix('&').unwrap_or(inner_expr)
+                                        } else {
+                                            inner_expr
+                                        }
+                                    } else if arg_str.starts_with("&mut ") {
                                         arg_str.strip_prefix("&mut ").unwrap_or(&arg_str)
                                     } else if arg_str.starts_with('&') {
                                         arg_str.strip_prefix('&').unwrap_or(&arg_str)
@@ -1263,6 +1337,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 if gen.in_user_written_closure
                                     && gen.user_closure_params.contains(name)
                                 {
+                                    let pidx = sig.arg_param_index(i);
+                                    if (crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                        sig, pidx,
+                                    ) || sig.param_types.get(pidx).is_some_and(|t| {
+                                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    }))
+                                        && !arg_str.starts_with('&')
+                                        && !arg_str.starts_with("&mut ")
+                                    {
+                                        arg_str = format!("&{arg_str}");
+                                    }
                                     return vec![arg_str];
                                 }
                                 if !(gen.in_user_written_closure
@@ -1804,6 +1889,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         arg_str = format!("&{arg_str}");
                     }
                 }
+            }
+
+            if has_ownership_collision {
+                crate::codegen::rust::call_signature_resolution::strip_collision_blocked_call_site_coercions(
+                    &mut arg_str,
+                );
             }
 
             vec![arg_str]

@@ -115,11 +115,18 @@ impl Lexer {
                 self.skip_comment();
                 return self.next_token();
             }
-            Some('r') if self.peek(1) == Some('#') && self.peek(2) == Some('"') => {
-                // Raw string literal: r#"..."#
+            Some('r') if self.peek(1) == Some('#') => {
+                // Raw string literal: r#"..."# or r##"..."## etc.
                 self.read_raw_string()
             }
             Some('"') => self.read_string(),
+            Some('\'')
+                if self
+                    .peek(1)
+                    .is_some_and(|c| c.is_alphabetic() || c == '_') =>
+            {
+                self.read_lifetime()
+            }
             Some('\'') => self.read_char(),
             Some(ch) if ch.is_ascii_digit() => self.read_number(),
             Some(ch) if ch.is_alphabetic() || ch == '_' => self.read_identifier(),

@@ -32,6 +32,14 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
 
+            if let Some((folded, skip_idx)) =
+                self.try_fold_mut_string_if_else_assign(stmts, i)
+            {
+                output.push_str(&folded);
+                self.skip_block_indices.insert(skip_idx);
+                continue;
+            }
+
             let is_last = i == len - 1;
             // TDD: Track if this is the last statement (used by If handler)
             self.current_is_last_statement = is_last;
@@ -754,5 +762,99 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_void_block = saved_void_block;
         self.in_unsafe_block = old_in_unsafe;
         output
+    }
+
+    /// `let mut s = "".to_string(); if c { s = a } else { s = b }` → `let s = if c { a } else { b }`
+    fn try_fold_mut_string_if_else_assign(
+        &mut self,
+        stmts: &[&'ast Statement<'ast>],
+        i: usize,
+    ) -> Option<(String, usize)> {
+        let Statement::Let {
+            pattern: Pattern::Identifier(var),
+            mutable: true,
+            value,
+            else_block: None,
+            ..
+        } = stmts[i]
+        else {
+            return None;
+        };
+        if !Self::is_dead_string_init(value) {
+            return None;
+        }
+        let if_idx = i + 1;
+        if if_idx >= stmts.len() {
+            return None;
+        }
+        let Statement::If {
+            condition,
+            then_block,
+            else_block: Some(else_block),
+            ..
+        } = stmts[if_idx]
+        else {
+            return None;
+        };
+        let then_val = Self::single_ident_assign_value(then_block, var)?;
+        let else_val = Self::single_ident_assign_value(else_block, var)?;
+
+        if let Some(current_scope) = self.local_variable_scopes.last_mut() {
+            current_scope.insert(var.clone());
+        }
+
+        let cond_str = self.generate_expression(condition);
+        let then_str = self.generate_expression(then_val);
+        let else_str = self.generate_expression(else_val);
+        let mut out = self.indent();
+        out.push_str(&format!(
+            "let {var} = if {cond_str} {{ {then_str} }} else {{ {else_str} }};\n"
+        ));
+        Some((out, if_idx))
+    }
+
+    fn is_dead_string_init(value: &Expression<'_>) -> bool {
+        match value {
+            Expression::MethodCall { object, method, .. } if method == "to_string" => {
+                matches!(
+                    &**object,
+                    Expression::Literal {
+                        value: crate::parser::Literal::String(s),
+                        ..
+                    } if s.is_empty()
+                )
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let fname = crate::codegen::rust::ast_utilities::extract_function_name(function);
+                fname == "String::new" && arguments.is_empty()
+            }
+            _ => false,
+        }
+    }
+
+    fn single_ident_assign_value<'a>(
+        block: &[&'a Statement<'a>],
+        var: &str,
+    ) -> Option<&'a Expression<'a>> {
+        if block.len() != 1 {
+            return None;
+        }
+        match block[0] {
+            Statement::Assignment {
+                target:
+                    Expression::Identifier {
+                        name,
+                        ..
+                    },
+                value,
+                compound_op: None,
+                ..
+            } if name == var => Some(value),
+            _ => None,
+        }
     }
 }

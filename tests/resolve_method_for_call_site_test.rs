@@ -128,3 +128,162 @@ fn test_mannequin_generate_local_only_owned_formal() {
 
     assert_eq!(resolved.sig.param_ownership[0], OwnershipMode::Owned);
 }
+
+fn quest_engine_stub() -> FunctionSignature {
+    FunctionSignature {
+        name: "QuestManager::is_quest_active".into(),
+        param_types: vec![
+            Type::Custom("Self".into()),
+            Type::Custom("QuestId".into()),
+        ],
+        formal_param_types: vec![
+            Type::Custom("Self".into()),
+            Type::Custom("QuestId".into()),
+        ],
+        param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+        return_type: Some(Type::Bool),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: true,
+        is_extern: false,
+        emitted_rust_ref_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
+fn quest_converged_borrow() -> FunctionSignature {
+    FunctionSignature {
+        name: "QuestManager::is_quest_active".into(),
+        param_types: vec![
+            Type::Custom("Self".into()),
+            Type::Custom("QuestId".into()),
+        ],
+        formal_param_types: vec![
+            Type::Custom("Self".into()),
+            Type::Custom("QuestId".into()),
+        ],
+        param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+        return_type: Some(Type::Bool),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: true,
+        is_extern: false,
+        emitted_rust_ref_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
+#[test]
+fn quest_engine_local_stub_global_converged_borrow() {
+    let mut local = SignatureRegistry::new();
+    local.add_function(
+        "QuestManager::is_quest_active".into(),
+        quest_engine_stub(),
+    );
+
+    let mut global = SignatureRegistry::new();
+    global.add_function(
+        "QuestManager::is_quest_active".into(),
+        quest_converged_borrow(),
+    );
+
+    let resolved = resolve_method_for_call_site(
+        &local,
+        Some(&global),
+        "QuestManager",
+        "is_quest_active",
+        1,
+    )
+    .expect("resolve QuestManager::is_quest_active");
+
+    assert_eq!(
+        resolved.sig.param_ownership[1],
+        OwnershipMode::Borrowed,
+        "global converged borrow must beat stale engine local stub"
+    );
+    assert_eq!(
+        effective_param_ownership_for_arg(&resolved.sig, 0),
+        OwnershipMode::Borrowed,
+    );
+}
+
+#[test]
+fn quest_local_engine_global_converged_reference_types() {
+    let mut local = SignatureRegistry::new();
+    local.add_function(
+        "QuestManager::is_quest_active".into(),
+        quest_engine_stub(),
+    );
+
+    let mut global = SignatureRegistry::new();
+    global.add_function(
+        "QuestManager::is_quest_active".into(),
+        FunctionSignature {
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::Reference(Box::new(Type::Custom("QuestId".into()))),
+            ],
+            ..quest_converged_borrow()
+        },
+    );
+
+    let resolved = resolve_method_for_call_site(
+        &local,
+        Some(&global),
+        "QuestManager",
+        "is_quest_active",
+        1,
+    )
+    .expect("resolve");
+
+    assert_eq!(
+        effective_param_ownership_for_arg(&resolved.sig, 0),
+        OwnershipMode::Borrowed,
+    );
+    assert!(matches!(
+        resolved.sig.param_types[1],
+        Type::Reference(_)
+    ));
+}
+
+#[test]
+fn quest_local_borrowed_bare_global_borrowed_reference_types() {
+    let mut local = SignatureRegistry::new();
+    local.add_function(
+        "QuestManager::is_quest_active".into(),
+        FunctionSignature {
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::Custom("QuestId".into()),
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            ..quest_engine_stub()
+        },
+    );
+
+    let mut global = SignatureRegistry::new();
+    global.add_function(
+        "QuestManager::is_quest_active".into(),
+        FunctionSignature {
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::Reference(Box::new(Type::Custom("QuestId".into()))),
+            ],
+            ..quest_converged_borrow()
+        },
+    );
+
+    let resolved = resolve_method_for_call_site(
+        &local,
+        Some(&global),
+        "QuestManager",
+        "is_quest_active",
+        1,
+    )
+    .expect("resolve");
+
+    assert!(matches!(
+        resolved.sig.param_types[1],
+        Type::Reference(_)
+    ));
+}

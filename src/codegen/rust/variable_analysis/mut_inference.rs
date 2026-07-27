@@ -218,6 +218,13 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_nonreadonly_method_call_on_var(s, var_name)),
+            Expression::Binary { left, right, .. } => {
+                self.expression_nonreadonly_method_call_on_var(left, var_name)
+                    || self.expression_nonreadonly_method_call_on_var(right, var_name)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_nonreadonly_method_call_on_var(operand, var_name)
+            }
             _ => false,
         }
     }

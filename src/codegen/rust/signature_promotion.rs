@@ -20,6 +20,52 @@ fn arg_count_matches(sig: &FunctionSignature, call_arg_count: usize) -> bool {
     effective_user_arg_count(sig) == call_arg_count
 }
 
+fn count_reference_wrapped_params(sig: &FunctionSignature) -> usize {
+    sig.param_types
+        .iter()
+        .enumerate()
+        .filter(|(idx, t)| {
+            if sig.has_self_receiver && *idx == 0 {
+                return false;
+            }
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        })
+        .count()
+}
+
+/// Phase-3 mirror: when ownership converged to Borrowed/MutBorrowed but `param_types`
+/// stayed bare `T` (engine metadata / IR sync), wrap for call-site lowering.
+pub(crate) fn wrap_converged_borrow_param_types(sig: &mut FunctionSignature) {
+    for idx in 0..sig.param_ownership.len() {
+        if sig.has_self_receiver && idx == 0 {
+            continue;
+        }
+        let Some(ty) = sig.param_types.get(idx).cloned() else {
+            continue;
+        };
+        if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+            continue;
+        }
+        if crate::codegen::rust::string_utilities::param_is_rust_str_ref(&ty)
+            || crate::codegen::rust::types::is_windjammer_text_type(&ty)
+        {
+            continue;
+        }
+        if crate::codegen::rust::type_analysis_pure::is_copy_type(&ty) {
+            continue;
+        }
+        match sig.param_ownership.get(idx) {
+            Some(OwnershipMode::Borrowed) => {
+                sig.param_types[idx] = Type::Reference(Box::new(ty));
+            }
+            Some(OwnershipMode::MutBorrowed) => {
+                sig.param_types[idx] = Type::MutableReference(Box::new(ty));
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Stale engine/dependency metadata where ownership and param types disagree.
 ///
 /// Examples:
@@ -46,7 +92,9 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
             return false;
         }
         match own {
-            OwnershipMode::Borrowed => bare_non_copy,
+            // Body-converged borrow (Map keys, etc.) is valid even when param_types
+            // still show bare `Custom(T)` without `Reference(T)` wrapper.
+            OwnershipMode::Borrowed => false,
             // MutBorrowed is a genuine inference from mutation analysis, not a stale
             // stub artifact — never treat it as stale.
             OwnershipMode::MutBorrowed => false,
@@ -404,7 +452,8 @@ pub(crate) fn global_has_borrowed_text_over_local_owned_stub(
 }
 
 /// `b` has `Reference(T)` params with `Borrowed`/`MutBorrowed` ownership where `a` has
-/// bare `T` with `Owned`. Indicates `b` was refined by body analysis and should be preferred.
+/// bare `T` (owned stub or body-converged borrow without registry wrap). Indicates `b`
+/// was refined by body analysis / Phase-3 promotion and should be preferred.
 /// Ignores the self param (idx 0 when `has_self_receiver`).
 pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b: &FunctionSignature) -> bool {
     let min_len = a.param_ownership.len().min(b.param_ownership.len());
@@ -412,10 +461,18 @@ pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b:
         if a.has_self_receiver && idx == 0 {
             continue;
         }
-        let a_owned_bare = matches!(a.param_ownership.get(idx), Some(OwnershipMode::Owned))
-            && a.param_types
-                .get(idx)
-                .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+        let a_bare = a.param_types.get(idx).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+        });
+        let a_owned_bare = matches!(a.param_ownership.get(idx), Some(OwnershipMode::Owned)) && a_bare;
+        // Multipass: per-caller registry may already show Borrowed ownership while
+        // param_types stayed bare `Custom(T)` (engine stub + global merge). Prefer global
+        // entries that wrapped the converged borrow as `Reference(T)`.
+        let a_borrowed_bare = matches!(
+            a.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) && a_bare;
         let b_borrowed_ref = matches!(
             b.param_ownership.get(idx),
             Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -423,7 +480,7 @@ pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b:
             .param_types
             .get(idx)
             .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
-        if a_owned_bare && b_borrowed_ref {
+        if (a_owned_bare || a_borrowed_bare) && b_borrowed_ref {
             return true;
         }
     }
@@ -548,6 +605,14 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         // Vec defaults to owned emission (WDB-056), but body-converged `&Vec` / Borrowed
         // must not claim an owned contract — call sites need `&arg` (cross-crate upload_*).
         if is_non_copy_non_text || (is_vec && !converged_to_ref) {
+            if matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            ) && crate::codegen::rust::call_signature_resolution::formal_type_honors_converged_borrow(
+                formal,
+            ) {
+                return false;
+            }
             return true;
         }
     }
@@ -721,6 +786,34 @@ pub(crate) fn best_method_signature_for_receiver(
                 return true;
             }
             if str_ref_params < best_str_refs {
+                return false;
+            }
+            let stale_owned = |s: &FunctionSignature| {
+                s.param_ownership
+                    .iter()
+                    .enumerate()
+                    .filter(|(idx, o)| {
+                        matches!(o, OwnershipMode::Owned)
+                            && super::call_signature_resolution::param_type_is_owned_non_text(
+                                s, *idx,
+                            )
+                    })
+                    .count()
+            };
+            let sig_stale = stale_owned(sig);
+            let best_stale = stale_owned(best_sig);
+            if sig_stale < best_stale {
+                return true;
+            }
+            if sig_stale > best_stale {
+                return false;
+            }
+            let ref_wraps = count_reference_wrapped_params(sig);
+            let best_ref_wraps = count_reference_wrapped_params(best_sig);
+            if ref_wraps > best_ref_wraps {
+                return true;
+            }
+            if ref_wraps < best_ref_wraps {
                 return false;
             }
             if converged == *prev_converged {

@@ -109,17 +109,10 @@ impl<'ast> CodeGenerator<'ast> {
         impl_trait: Option<&str>,
         analyzed: &[AnalyzedFunction<'ast>],
     ) {
-        if self.preregistered_impl_sibling_types.contains(impl_type) {
-            return;
-        }
-
-        for af in analyzed.iter().filter(|af| {
-            af.decl.parent_type.as_deref() == Some(impl_type)
-                && af.decl.impl_trait.as_deref() == impl_trait
-                && !af.decl.is_extern
-        }) {
-            self.register_impl_ast_method_formals(impl_type, &af.decl);
-        }
+        let prev_struct = self.current_struct_name.clone();
+        let prev_in_impl = self.in_impl_block;
+        self.current_struct_name = Some(impl_type.to_string());
+        self.in_impl_block = true;
 
         let mut siblings: Vec<&AnalyzedFunction<'_>> = analyzed
             .iter()
@@ -129,22 +122,36 @@ impl<'ast> CodeGenerator<'ast> {
                     && !af.decl.is_extern
             })
             .collect();
-        siblings.sort_by_key(|af| {
-            af.decl.parameters.iter().any(|p| {
-                p.name != "self"
-                    && self.param_passed_to_borrowing_callee(
-                        af.decl.body.as_slice(),
-                        &p.name,
-                        &af.decl,
-                    )
-            }) as u8
-        });
 
-        for _ in 0..4 {
-            for af in &siblings {
-                self.select_ir_function_for(&af.decl.name);
-                self.prepare_codegen_environment_for_regular_function(af);
+        if !self.preregistered_impl_sibling_types.contains(impl_type) {
+            for af in analyzed.iter().filter(|af| {
+                af.decl.parent_type.as_deref() == Some(impl_type)
+                    && af.decl.impl_trait.as_deref() == impl_trait
+                    && !af.decl.is_extern
+            }) {
+                self.register_impl_ast_method_formals(impl_type, &af.decl);
             }
+
+            siblings.sort_by_key(|af| {
+                af.decl.parameters.iter().any(|p| {
+                    p.name != "self"
+                        && self.param_passed_to_borrowing_callee(
+                            af.decl.body.as_slice(),
+                            &p.name,
+                            &af.decl,
+                        )
+                }) as u8
+            });
+
+            for _ in 0..4 {
+                for af in &siblings {
+                    self.select_ir_function_for(&af.decl.name);
+                    self.prepare_codegen_environment_for_regular_function(af);
+                }
+            }
+
+            self.preregistered_impl_sibling_types
+                .insert(impl_type.to_string());
         }
 
         for af in siblings {
@@ -152,7 +159,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.preregister_function_formals_in_registry(af);
         }
 
-        self.preregistered_impl_sibling_types
-            .insert(impl_type.to_string());
+        self.current_struct_name = prev_struct;
+        self.in_impl_block = prev_in_impl;
     }
 }

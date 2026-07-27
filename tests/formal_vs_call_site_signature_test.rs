@@ -111,6 +111,37 @@ fn test_quest_id_converged_formal_bare_call_site_borrowed() {
 }
 
 #[test]
+fn test_quest_id_bare_param_types_borrowed_ownership_at_call_site() {
+    // Multipass engine metadata promotion may leave bare `Custom(QuestId)` in param_types
+    // while param_ownership converged to Borrowed (HashMap key lookup).
+    let sig = FunctionSignature {
+        name: "QuestManager::is_quest_active".into(),
+        param_types: vec![
+            Type::Custom("Self".into()),
+            Type::Custom("QuestId".into()),
+        ],
+        formal_param_types: vec![
+            Type::Custom("Self".into()),
+            Type::Custom("QuestId".into()),
+        ],
+        param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+        return_type: Some(Type::Custom("Bool".into())),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: true,
+        is_extern: false,
+        emitted_rust_ref_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    };
+
+    assert_eq!(
+        effective_param_ownership(&sig, 1),
+        OwnershipMode::Borrowed,
+        "type-qualified method with converged Borrowed must not force Owned"
+    );
+}
+
+#[test]
 fn build_signature_preserves_formal_when_param_types_get_reference_wrap() {
     let source = r#"
 pub struct MannequinConfig { pub torso_height: f32 }
