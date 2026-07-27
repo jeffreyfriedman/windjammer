@@ -1488,6 +1488,17 @@ impl<'ast> CodeGenerator<'ast> {
                 self.resolve_method_function_signature(rt, method, arg_count)
             {
                 let pidx = sig.arg_param_index(arg_index);
+                // Emitted owned formals win over stale MutBorrowed/Borrowed metadata.
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, pidx,
+                ) {
+                    if coerced.starts_with('&') {
+                        *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                            coerced,
+                        );
+                    }
+                    return;
+                }
                 let wants_mut = sig.param_types.get(pidx).is_some_and(|t| {
                     matches!(t, Type::MutableReference(_))
                 }) || matches!(

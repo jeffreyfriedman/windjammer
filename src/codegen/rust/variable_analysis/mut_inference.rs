@@ -328,6 +328,13 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|ty| matches!(ty, WjType::MutableReference(_)));
 
             if mut_borrow_via_ownership || mut_borrow_via_type {
+                // Emitted owned formals take the value by move/clone — caller binding stays immutable.
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig,
+                    sig_param_idx,
+                ) {
+                    continue;
+                }
                 if matches_var(arg) {
                     return true;
                 }
