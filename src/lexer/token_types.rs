@@ -59,6 +59,7 @@ pub enum Token {
     StringLiteral(String),
     InterpolatedString(Vec<StringPart>), // For strings with ${expr}
     CharLiteral(char),
+    Lifetime(String),
     BoolLiteral(bool),
 
     // Identifiers
@@ -165,6 +166,7 @@ impl std::hash::Hash for Token {
             Token::StringLiteral(s) => s.hash(state),
             Token::InterpolatedString(parts) => parts.hash(state),
             Token::CharLiteral(c) => c.hash(state),
+            Token::Lifetime(s) => s.hash(state),
             Token::BoolLiteral(b) => b.hash(state),
             Token::Ident(s) => s.hash(state),
             Token::DocComment(s) => s.hash(state),

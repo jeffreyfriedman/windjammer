@@ -676,7 +676,7 @@ pub(crate) fn global_suffix_param_ownership(
 }
 
 /// Whether a formal type should honor a body-converged borrow.
-fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
+pub(crate) fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
     match formal_ty {
         Type::Parameterized(base, _) => matches!(
             base.as_str(),
@@ -887,6 +887,28 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             .get(param_idx)
             .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
     {
+        // Body-converged borrow on bare non-Copy formals (Map keys, mutating lookups)
+        // must beat the default type-qualified owned pass-by-value rule — even when
+        // param_types stayed bare `Custom(T)` without a Reference wrap (multipass engine
+        // metadata promotion: QuestManager::is_quest_active id: Borrowed QuestId).
+        if let Some(own) = sig.param_ownership.get(param_idx) {
+            if matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) {
+                if let Some(formal_ty) = sig.formal_param_type(param_idx) {
+                    if formal_type_honors_converged_borrow(formal_ty) {
+                        if matches!(own, OwnershipMode::MutBorrowed)
+                            && sig
+                                .formal_param_type(param_idx)
+                                .is_some_and(crate::codegen::rust::type_analysis_pure::is_copy_type)
+                        {
+                            return OwnershipMode::MutBorrowed;
+                        }
+                        if matches!(own, OwnershipMode::Borrowed) {
+                            return OwnershipMode::Borrowed;
+                        }
+                    }
+                }
+            }
+        }
         if is_type_qualified_associated_call(&sig.name) {
             return OwnershipMode::Owned;
         }
@@ -1096,6 +1118,13 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
             continue;
         }
         if flags.get(idx).copied() != Some(false) {
+            continue;
+        }
+        // Body-converged / promoted borrow metadata beats stale engine emitted-owned flags.
+        if matches!(
+            sig.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) {
             continue;
         }
         let owned_formal = sig.formal_param_type(idx).map(|t| match t {

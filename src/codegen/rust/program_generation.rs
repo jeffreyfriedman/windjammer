@@ -194,6 +194,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Pre-populate struct field types before any impl body emits so forward references
+        // (`DialogCondition::evaluate` → `gs.inventory.has_item` when `GameState`/`Inventory`
+        // appear later in the file) resolve receiver types and method signatures.
+        for item in &program.items {
+            if let Item::Struct { decl: s, .. } = item {
+                let mut field_types = std::collections::HashMap::new();
+                for field in &s.fields {
+                    field_types.insert(field.name.clone(), field.field_type.clone());
+                }
+                self.struct_field_types.insert(s.name.clone(), field_types);
+            }
+        }
+
         // Track explicitly imported traits to avoid duplication with auto-imports
         let mut explicitly_imported_traits: std::collections::HashSet<String> =
             std::collections::HashSet::new();
@@ -498,6 +511,29 @@ impl<'ast> CodeGenerator<'ast> {
         }) {
             self.preregister_function_formals_in_registry(analyzed_func);
         }
+
+        // Preregister every impl type before any body emits (cross-type forward refs:
+        // DialogCondition::evaluate → Inventory::has_item when Inventory is defined later).
+        let mut impl_type_keys: std::collections::HashSet<(String, Option<String>)> =
+            std::collections::HashSet::new();
+        for item in &program.items {
+            if let Item::Impl { block, .. } = item {
+                impl_type_keys.insert((block.type_name.clone(), block.trait_name.clone()));
+            }
+        }
+        for (type_name, trait_name) in impl_type_keys {
+            if let Some(fields) = struct_fields.get(&type_name) {
+                self.current_struct_fields = fields.iter().cloned().collect();
+            } else {
+                self.current_struct_fields.clear();
+            }
+            self.preregister_all_impl_siblings_for_type_if_needed(
+                &type_name,
+                trait_name.as_deref(),
+                analyzed,
+            );
+        }
+        self.current_struct_fields.clear();
 
         // Generate structs, enums, and traits
         for item in &program.items {

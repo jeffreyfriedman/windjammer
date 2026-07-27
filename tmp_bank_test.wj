@@ -1,0 +1,12 @@
+pub fn bank_match_runtime_js() -> &'static str {
+    r##"
+(function () {
+  if (window.__wjBankMatchBound) return;
+  window.__wjBankMatchBound = true;
+})();
+"##
+}
+
+fn main() {
+    let _ = bank_match_runtime_js();
+}
