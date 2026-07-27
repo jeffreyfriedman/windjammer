@@ -252,12 +252,28 @@ impl Parser {
 
         let base_type = match self.current_token() {
             Token::Dyn => {
-                // Parse: dyn TraitName
+                // Parse: dyn TraitName or dyn Fn(...) -> Ret
                 self.advance();
                 if let Token::Ident(trait_name) = self.current_token() {
                     let name = trait_name.clone();
                     self.advance();
-                    Type::TraitObject(name)
+                    if name == "Fn" && self.current_token() == &Token::LParen {
+                        self.advance();
+                        while self.current_token() != &Token::RParen {
+                            self.parse_type()?;
+                            if self.current_token() == &Token::Comma {
+                                self.advance();
+                            }
+                        }
+                        self.advance();
+                        if self.current_token() == &Token::Arrow {
+                            self.advance();
+                            let _ = self.parse_type()?;
+                        }
+                        Type::TraitObject(name)
+                    } else {
+                        Type::TraitObject(name)
+                    }
                 } else {
                     return Err("Expected trait name after 'dyn'".to_string());
                 }
@@ -573,8 +589,6 @@ impl Parser {
                                 self.expect_gt_or_split_shr()?;
                                 break;
                             } else {
-                                eprintln!("DEBUG: Parsing type arguments for: {}", type_name);
-                                eprintln!("DEBUG: After parsing type arg, current token: {:?} at position: {}", self.current_token(), self.position);
                                 return Err(format!(
                                     "Expected ',' or '>' in type arguments for '{}', got {:?} at position {}",
                                     type_name, self.current_token(), self.position

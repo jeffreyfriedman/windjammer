@@ -88,7 +88,8 @@ impl Coercion {
             Coercion::None => {}
             Coercion::Deref => {
                 if !expr_str.starts_with('*') {
-                    *expr_str = format!("*{}", expr_str);
+                    let core = super::expression_utilities::borrow_base_expr(expr_str);
+                    *expr_str = format!("*{core}");
                 }
             }
             Coercion::Clone => {

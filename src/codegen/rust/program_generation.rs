@@ -476,6 +476,19 @@ impl<'ast> CodeGenerator<'ast> {
                         self.type_to_rust(target)
                     ));
                 }
+                Item::Macro {
+                    doc_comment,
+                    expr,
+                    ..
+                } => {
+                    if let Some(doc) = doc_comment {
+                        for line in doc.lines() {
+                            body.push_str(&format!("// {}\n", line));
+                        }
+                    }
+                    body.push_str(&self.generate_expression(expr));
+                    body.push_str("\n");
+                }
                 _ => {}
             }
         }

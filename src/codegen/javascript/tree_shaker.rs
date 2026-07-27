@@ -207,6 +207,7 @@ impl TreeShaker {
             Item::Mod { .. } => true,    // Keep all modules
             Item::BoundAlias { .. } => true, // Keep all bound aliases
             Item::TypeAlias { .. } => true, // Keep all type aliases
+            Item::Macro { .. } => true,
         }
     }
 }

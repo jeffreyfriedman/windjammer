@@ -98,12 +98,11 @@ pub fn type_to_rust_mapped(type_: &Type, map_custom: &dyn Fn(&str) -> String) ->
             map_custom(&dotted).replace('.', "::")
         }
         Type::TraitObject(trait_name) => {
-            // THE WINDJAMMER WAY: Trait objects generate just `dyn Trait`.
-            // When used inside Box<>, Vec<>, etc., the container handles the boxing.
-            // When used as a bare type (e.g., field type without Box), the user
-            // should use Box<dyn Trait> explicitly in Windjammer source.
-            // This prevents double-boxing: Box<dyn System> was becoming Box<Box<dyn System>>.
-            format!("dyn {}", trait_name)
+            if trait_name == "Fn" {
+                "dyn Fn()".to_string()
+            } else {
+                format!("dyn {}", trait_name)
+            }
         }
         Type::ImplTrait(trait_name) => {
             // THE WINDJAMMER WAY: `trait TraitName` in type position.

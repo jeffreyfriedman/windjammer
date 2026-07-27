@@ -205,6 +205,7 @@ pub fn collect_referenced_type_paths<'ast>(program: &Program<'ast>) -> HashSet<S
                 out.extend(collect_referenced_type_paths(&nested));
             }
             Item::Use { .. } | Item::BoundAlias { .. } => {}
+            Item::Macro { .. } => {}
         }
     }
     out
