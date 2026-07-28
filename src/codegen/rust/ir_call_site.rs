@@ -1228,6 +1228,7 @@ impl<'ast> CodeGenerator<'ast> {
             &sig,
             param_idx,
         );
+        crate::codegen::rust::expression_utilities::collapse_redundant_clones(&mut coerced);
         if coerced.ends_with(".to_string().clone()") || coerced.ends_with(".to_owned().clone()") {
             crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
         }
@@ -1338,18 +1339,14 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         };
         let needs = match arg_expr {
-            Expression::Identifier { name, .. } => {
-                analysis.needs_clone_anywhere(name)
-                    || analysis
-                        .needs_clone(name, self.current_statement_idx)
-                        .is_some()
-            }
+            Expression::Identifier { name, .. } => analysis
+                .needs_clone(name, self.current_statement_idx)
+                .is_some(),
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
-                    analysis.needs_clone_anywhere(&path)
-                        || analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
+                    analysis
+                        .needs_clone(&path, self.current_statement_idx)
+                        .is_some()
                 })
             }
             _ => false,
@@ -1530,6 +1527,11 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::analyzer::OwnershipMode::MutBorrowed
                 );
                 if wants_mut {
+                    // String literals are never `&mut` lvalues.
+                    if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                    {
+                        return;
+                    }
                     if coerced.starts_with("&mut ") {
                         return;
                     }
