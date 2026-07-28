@@ -469,7 +469,9 @@ pub fn should_borrow_at_call_site_with_copy_check(
                     }
                 }
                 Type::MutableReference(_) => {
-                    if expression_is_copy_literal(arg_expr) {
+                    if expression_is_copy_literal(arg_expr)
+                        || expression_is_string_literal(arg_expr)
+                    {
                         return CallSiteBorrowDecision::default();
                     }
                     if expression_supports_shared_borrow_at_call_site(arg_expr, arg_str) {
@@ -485,18 +487,20 @@ pub fn should_borrow_at_call_site_with_copy_check(
         }
     }
 
-    let param_expects_mut_borrowed = matches!(effective, OwnershipMode::MutBorrowed)
-        || matches!(
-            sig.param_ownership.get(param_idx),
-            Some(OwnershipMode::MutBorrowed)
-        );
+    let param_expects_mut_borrowed = matches!(effective, OwnershipMode::MutBorrowed);
 
     // &mut parameters: insert `&mut` even for Copy formals (e.g. `increment(&mut counter)`).
+    // Trust `effective_param_ownership` — raw `param_ownership` MutBorrowed can be stale
+    // (self-slot leakage / multipass) while effective correctly reports Owned.
     if param_expects_mut_borrowed {
         if arg_str.starts_with("&mut ") || arg_str.starts_with("&") {
             return CallSiteBorrowDecision::default();
         }
-        if expression_is_copy_literal(arg_expr) || arg_already_rust_ref {
+        // String literals are never `&mut` lvalues; owned String formals use `.to_string()`.
+        if expression_is_string_literal(arg_expr)
+            || expression_is_copy_literal(arg_expr)
+            || arg_already_rust_ref
+        {
             return CallSiteBorrowDecision::default();
         }
         return CallSiteBorrowDecision {
@@ -1044,5 +1048,52 @@ fn bar(y: string) -> bool {
         };
         apply_call_site_borrow(&decision, &mut arg);
         assert_eq!(arg, "&value");
+    }
+
+    #[test]
+    fn stale_mut_borrowed_ownership_does_not_mut_ref_owned_string_literal() {
+        let sig = FunctionSignature {
+            name: "Catalog::register_table".into(),
+            param_types: vec![
+                Type::MutableReference(Box::new(Type::Custom("Self".into()))),
+                Type::Custom("Catalog".into()),
+                Type::Int,
+            ],
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::Int,
+            ],
+            param_ownership: vec![
+                OwnershipMode::MutBorrowed,
+                OwnershipMode::MutBorrowed,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Int),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let arg = Expression::Literal {
+            value: Literal::String("users".into()),
+            location: Default::default(),
+        };
+        let decision = should_borrow_at_call_site(
+            &sig,
+            0,
+            &arg,
+            r#""users""#,
+            "register_table",
+            false,
+            Some("Catalog"),
+        );
+        assert!(
+            !decision.add_mut_ref,
+            "stale MutBorrowed on string formal must not emit &mut on string literal; effective={:?}",
+            effective_ownership_for_call_arg(&sig, 0)
+        );
     }
 }

@@ -127,6 +127,33 @@ impl<'ast> CodeGenerator<'ast> {
                             ownership = OwnershipMode::MutBorrowed;
                         }
                     }
+                    // Spurious `&mut` from stale IR call-site lowering: strip when the
+                    // converged contract is owned (not MutBorrowed).
+                    if matches!(ownership, OwnershipMode::Owned)
+                        && arg_str.starts_with("&mut ")
+                        && !matches!(
+                            sig.param_types.get(sig_param_idx),
+                            Some(Type::MutableReference(_))
+                        )
+                    {
+                        arg_str = arg_str["&mut ".len()..].to_string();
+                    }
+                    // After stripping stale `&mut`, owned WJ `string` formals still need
+                    // string-literal → String coercion at the call site.
+                    if matches!(ownership, OwnershipMode::Owned) {
+                        if let Some((_, arg_expr)) = arguments.get(i) {
+                            crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+                                Some(sig),
+                                i,
+                                Some(method),
+                                arg_expr,
+                                &mut arg_str,
+                                receiver_type_name.as_deref(),
+                                Some(&self.enum_variant_types),
+                                None,
+                            );
+                        }
+                    }
                     let param_is_copy = sig.param_types.get(sig_param_idx).is_some_and(|t| {
                         self.is_type_copy(t)
                     });
@@ -519,6 +546,19 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(i),
                             Some(arguments.len()),
                         );
+                        // Single-statement consuming moves: strip over-eager `.clone()`
+                        // (`local.merge(remote)`). Finalize runs after arguments.rs.
+                        if let Expression::Identifier { name, .. } = arg_expr {
+                            if arg_str.ends_with(".clone()")
+                                && !(callee_wants_shared && !callee_wants_owned)
+                                && self.caller_keeps_owned_outer_formal(name)
+                                && self.current_function_body.len() <= 1
+                            {
+                                crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                                    &mut arg_str,
+                                );
+                            }
+                        }
                     }
                     // Copy map/set keys still need `&K`; already-&str / shared-ref bindings must not.
                     // Delegate to the shared helper (same path as arguments.rs / trait calls).

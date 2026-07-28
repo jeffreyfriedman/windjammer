@@ -265,6 +265,11 @@ impl<'ast> CodeGenerator<'ast> {
             if !needs_mut_borrow {
                 continue;
             }
+            // Owned emitted formal (`mut deps: AppDeps`) — do not force `let mut` / &mut
+            // at call sites from stale MutBorrowed analyzer metadata.
+            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
+                continue;
+            }
             let matches_var = |e: &Expression| match e {
                 Expression::Identifier { name, .. } => name == var_name,
                 Expression::Unary {
