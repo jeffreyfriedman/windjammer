@@ -83,7 +83,10 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                         || matches!(e, Expression::Identifier { name, .. }
                         if self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                            a.needs_clone_anywhere(name)
+                            // Statement-local only — `needs_clone_anywhere` falsely clones
+                            // the final move after an earlier cloned move
+                            // (`copy_key_bytes(key.clone()); push((key, value))`).
+                            a.needs_clone(name, self.current_statement_idx).is_some()
                         })
                             && !self.param_used_in_prior_field_extract_call(name)
                         && !matches!(
