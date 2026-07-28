@@ -6,6 +6,28 @@ use crate::parser::*;
 
 use super::CodeGenerator;
 
+/// How a parameter appears in an expression tree (for readonly demotion decisions).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProjectionUsage {
+    None,
+    FieldOrIndexOnly,
+    BareOrOther,
+}
+
+impl ProjectionUsage {
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (ProjectionUsage::BareOrOther, _) | (_, ProjectionUsage::BareOrOther) => {
+                ProjectionUsage::BareOrOther
+            }
+            (ProjectionUsage::FieldOrIndexOnly, _) | (_, ProjectionUsage::FieldOrIndexOnly) => {
+                ProjectionUsage::FieldOrIndexOnly
+            }
+            (ProjectionUsage::None, ProjectionUsage::None) => ProjectionUsage::None,
+        }
+    }
+}
+
 impl<'ast> CodeGenerator<'ast> {
     /// Push `#[test]` for `test_*` functions in `*_test.wj` files when no `@test` / `@property_test`.
     pub(in crate::codegen::rust) fn push_auto_test_attribute_if_needed(
@@ -715,6 +737,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if unused.contains(&param.name)
                 || self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                // Store-only Vec constructors (`from_bytes` / field init) emit `&Vec` and
+                // clone at the struct field — callers can borrow (WDB-049).
+                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
+                || self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
             {
                 self.inferred_borrowed_params.insert(param.name.clone());
             }
@@ -743,10 +769,16 @@ impl<'ast> CodeGenerator<'ast> {
                 )
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                 || self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
-                || self
+                || (self
                     .current_struct_name
                     .as_ref()
                     .is_some_and(|sn| self.struct_is_owned_engine_key_facade(sn, param))
+                    // Asymmetric Value: field-projection-only params keep `&T` even on
+                    // Key-facade structs (`apply_patch_put(key, &value)`).
+                    && !self.param_only_used_via_field_or_index_projection(
+                        func.body.as_slice(),
+                        &param.name,
+                    ))
             {
                 self.inferred_borrowed_params.remove(&param.name);
                 self.inferred_mut_borrowed_params.remove(&param.name);
@@ -793,8 +825,11 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             // Trust analyzer/IR Owned — do not demote to shared `&T` in codegen.
-            // Exception: `Vec` params used only for readonly `.len()` / `[i]` may demote
-            // when analyzer over-owned due to indexing semantics.
+            // Exceptions:
+            // - `Vec` params used only for readonly `.len()` / `[i]` (indexing over-owns)
+            // - Custom/enum params used only via field projection (`value.data.len()`) so
+            //   asymmetric facades converge `&Value` before callers emit (apply_patch_put).
+            // - WJ `string` params only discarded (`let _ = path`) → `&str`.
             if matches!(
                 analyzed.inferred_ownership.get(&param.name),
                 Some(crate::analyzer::OwnershipMode::Owned)
@@ -802,7 +837,29 @@ impl<'ast> CodeGenerator<'ast> {
                 let vec_readonly = Self::param_type_is_vec_container(&param.type_)
                     && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                     && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func);
-                if !vec_readonly {
+                let field_proj_readonly = self.param_only_used_via_field_or_index_projection(
+                    func.body.as_slice(),
+                    &param.name,
+                ) && !self.param_has_owning_method_use(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                ) && !self.param_stored_in_owned_payload(
+                    func.body.as_slice(),
+                    &param.name,
+                );
+                let text_discard_only = crate::codegen::rust::types::is_windjammer_text_type(
+                    &param.type_,
+                ) && self.param_only_used_in_simple_or_tuple_discard(
+                    func.body.as_slice(),
+                    &param.name,
+                );
+                if !vec_readonly && !field_proj_readonly && !text_discard_only {
+                    continue;
+                }
+                if text_discard_only {
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.str_ref_optimized_params.insert(param.name.clone());
                     continue;
                 }
             }
@@ -818,7 +875,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }))
                 && !self.param_is_non_self_forward_facade_borrow_candidate(param, func)
             {
-                continue;
+                // Asymmetric facades: field-projection-only params (e.g. `value.data.len()`)
+                // still demote to `&T` even when the sibling Key param is a keep-owned facade.
+                if !self.param_only_used_via_field_or_index_projection(
+                    func.body.as_slice(),
+                    &param.name,
+                ) {
+                    continue;
+                }
             }
             if self.param_is_non_self_forward_facade_borrow_candidate(param, func) {
                 self.inferred_borrowed_params.insert(param.name.clone());
@@ -890,6 +954,223 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// True when every mention of `param_name` is under a field/index projection
+    /// (`param.field`, `param[i]`, `param.field.method()`), never as a bare value.
+    ///
+    /// Distinguishes `let _ = value.data.len()` (field projection → may borrow) from
+    /// `let _ = (key, value)` (bare move into tuple → keep owned).
+    pub(in crate::codegen::rust) fn param_only_used_via_field_or_index_projection(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        let mut found = false;
+        for stmt in body {
+            match self.statement_param_projection_usage(stmt, param_name) {
+                ProjectionUsage::None => {}
+                ProjectionUsage::FieldOrIndexOnly => found = true,
+                ProjectionUsage::BareOrOther => return false,
+            }
+        }
+        found
+    }
+
+    fn statement_param_projection_usage(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> ProjectionUsage {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_param_projection_usage(expr, param_name)
+            }
+            Statement::Return { .. } => ProjectionUsage::None,
+            Statement::Let { value, else_block, .. } => {
+                let mut usage = self.expression_param_projection_usage(value, param_name);
+                if let Some(b) = else_block {
+                    for s in b {
+                        usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                    }
+                }
+                usage
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_param_projection_usage(value, param_name)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let mut usage = self.expression_param_projection_usage(condition, param_name);
+                for s in then_block {
+                    usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                }
+                if let Some(b) = else_block {
+                    for s in b {
+                        usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                    }
+                }
+                usage
+            }
+            Statement::While { condition, body, .. } => {
+                let mut usage = self.expression_param_projection_usage(condition, param_name);
+                for s in body {
+                    usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                }
+                usage
+            }
+            Statement::For { iterable, body, .. } => {
+                let mut usage = self.expression_param_projection_usage(iterable, param_name);
+                for s in body {
+                    usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                }
+                usage
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                let mut usage = ProjectionUsage::None;
+                for s in body {
+                    usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                }
+                usage
+            }
+            Statement::Match { value, arms, .. } => {
+                let mut usage = self.expression_param_projection_usage(value, param_name);
+                for arm in arms {
+                    usage = usage.merge(self.expression_param_projection_usage(&arm.body, param_name));
+                }
+                usage
+            }
+            Statement::Defer { statement, .. } => {
+                self.statement_param_projection_usage(statement, param_name)
+            }
+            _ => {
+                if Self::statement_mentions_identifier(stmt, param_name) {
+                    ProjectionUsage::BareOrOther
+                } else {
+                    ProjectionUsage::None
+                }
+            }
+        }
+    }
+
+    fn expression_param_projection_usage(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> ProjectionUsage {
+        match expr {
+            Expression::Identifier { name, .. } if name == param_name => {
+                ProjectionUsage::BareOrOther
+            }
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                if matches!(
+                    object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    // `param.field` / `param[i]` — projection root. Nested mentions inside
+                    // index expressions are checked separately for Index.
+                    if let Expression::Index { index, .. } = expr {
+                        self.expression_param_projection_usage(index, param_name)
+                            .merge(ProjectionUsage::FieldOrIndexOnly)
+                    } else {
+                        // Nested field chains (`param.a.b`) and method calls on fields
+                        // (`param.a.len()`) are still field-projection-only.
+                        ProjectionUsage::FieldOrIndexOnly
+                    }
+                } else {
+                    let mut usage = self.expression_param_projection_usage(object, param_name);
+                    if let Expression::Index { index, .. } = expr {
+                        usage = usage
+                            .merge(self.expression_param_projection_usage(index, param_name));
+                    }
+                    usage
+                }
+            }
+            Expression::MethodCall { object, arguments, .. } => {
+                // `param.field.method()` — projection as method receiver is readonly.
+                // `callee(param.field)` — field value is moved into the callee.
+                let mut usage = self.expression_param_projection_usage(object, param_name);
+                for (_, arg) in arguments {
+                    usage = usage.merge(self.expression_field_arg_usage(arg, param_name));
+                }
+                usage
+            }
+            Expression::Call { function, arguments, .. } => {
+                let mut usage = self.expression_param_projection_usage(function, param_name);
+                for (_, arg) in arguments {
+                    usage = usage.merge(self.expression_field_arg_usage(arg, param_name));
+                }
+                usage
+            }
+            Expression::Binary { left, right, .. } => self
+                .expression_param_projection_usage(left, param_name)
+                .merge(self.expression_param_projection_usage(right, param_name)),
+            Expression::Unary { operand, .. } => {
+                self.expression_param_projection_usage(operand, param_name)
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                let mut usage = ProjectionUsage::None;
+                for elem in elements {
+                    usage = usage.merge(self.expression_param_projection_usage(elem, param_name));
+                }
+                usage
+            }
+            Expression::Block { statements, .. } => {
+                let mut usage = ProjectionUsage::None;
+                for s in statements {
+                    usage = usage.merge(self.statement_param_projection_usage(s, param_name));
+                }
+                usage
+            }
+            Expression::StructLiteral { fields, .. } => {
+                let mut usage = ProjectionUsage::None;
+                for (_, value) in fields {
+                    // Field values in struct literals are moves into owned payload.
+                    usage = usage.merge(self.expression_field_arg_usage(value, param_name));
+                }
+                usage
+            }
+            _ => {
+                if Self::expression_mentions_identifier(expr, param_name) {
+                    ProjectionUsage::BareOrOther
+                } else {
+                    ProjectionUsage::None
+                }
+            }
+        }
+    }
+
+    /// Call/struct args: a bare `param.field` is a field *move*, not a readonly projection.
+    fn expression_field_arg_usage(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> ProjectionUsage {
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. }
+                if matches!(
+                    object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) =>
+            {
+                ProjectionUsage::BareOrOther
+            }
+            Expression::FieldAccess { object, .. } => {
+                // Nested `param.a.b` as a moved arg is still a move of projected data.
+                if Self::expression_mentions_identifier(object, param_name) {
+                    ProjectionUsage::BareOrOther
+                } else {
+                    self.expression_param_projection_usage(expr, param_name)
+                }
+            }
+            _ => self.expression_param_projection_usage(expr, param_name),
+        }
     }
 
     /// Promote owned params to borrowed when the body only forwards them to borrowing callees.
@@ -1206,18 +1487,41 @@ impl<'ast> CodeGenerator<'ast> {
                         .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 };
 
-                // Module-level `string` formals stay owned; impl methods may converge to &str.
+                // Module-level `string` formals stay owned unless discard/unused converges to `&str`.
                 if ast_owned_string && is_module_level {
-                    p_type = param.type_.clone();
-                    ownership = crate::analyzer::OwnershipMode::Owned;
+                    let discard_or_unused = self.param_only_used_in_simple_or_tuple_discard(
+                        func.body.as_slice(),
+                        &param.name,
+                    ) || self
+                        .compute_unused_formal_parameter_names(func)
+                        .contains(&param.name)
+                        || self.str_ref_optimized_params.contains(&param.name)
+                        || self.inferred_borrowed_params.contains(&param.name);
+                    if !discard_or_unused {
+                        p_type = param.type_.clone();
+                        ownership = crate::analyzer::OwnershipMode::Owned;
+                    } else {
+                        ownership = crate::analyzer::OwnershipMode::Borrowed;
+                        p_type = Type::Reference(Box::new(Type::Custom("str".to_string())));
+                    }
                 } else if let Some(reg) = registry_sig {
                     if let Some(formal) = reg.formal_param_type(idx) {
                         if crate::codegen::rust::types::is_windjammer_text_type(formal)
                             && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
                             && is_module_level
                         {
-                            p_type = formal.clone();
-                            ownership = crate::analyzer::OwnershipMode::Owned;
+                            let discard_or_unused = self.param_only_used_in_simple_or_tuple_discard(
+                                func.body.as_slice(),
+                                &param.name,
+                            ) || self
+                                .compute_unused_formal_parameter_names(func)
+                                .contains(&param.name)
+                                || self.str_ref_optimized_params.contains(&param.name)
+                                || self.inferred_borrowed_params.contains(&param.name);
+                            if !discard_or_unused {
+                                p_type = formal.clone();
+                                ownership = crate::analyzer::OwnershipMode::Owned;
+                            }
                         }
                     }
                 }
@@ -1395,12 +1699,18 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
-                    || self.param_keeps_owned_engine_key_facade(&impl_type, param, func)
+                    || (self.param_keeps_owned_engine_key_facade(&impl_type, param, func)
+                        && !self.param_only_used_via_field_or_index_projection(
+                            func.body.as_slice(),
+                            &param.name,
+                        ))
                 {
                     return false;
                 }
                 if !forwarded
                     && !self.param_used_as_read_operand(func.body.as_slice(), &param.name)
+                    && !self.inferred_borrowed_params.contains(&param.name)
+                    && !self.str_ref_optimized_params.contains(&param.name)
                 {
                     return false;
                 }
@@ -1413,6 +1723,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .get(&param.name)
                         .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Borrowed))
                     || self.param_used_as_read_operand(func.body.as_slice(), &param.name)
+                    || self.str_ref_optimized_params.contains(&param.name)
             })
             .collect();
         let Some(methods) = self.method_signatures_by_type.get_mut(&impl_type) else {
@@ -3098,6 +3409,38 @@ impl<'ast> CodeGenerator<'ast> {
         found_in_tuple_discard
     }
 
+    /// True when every mention of `param_name` is inside any discarding `let _ = …`
+    /// (tuple or simple). Used to demote discarded WJ `string` formals to `&str`.
+    pub(in crate::codegen::rust) fn param_only_used_in_simple_or_tuple_discard(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        if body.is_empty() {
+            return false;
+        }
+        let mut found = false;
+        for stmt in body {
+            match stmt {
+                Statement::Let { pattern, value, .. } => {
+                    if Self::expression_mentions_identifier(value, param_name) {
+                        if Self::is_discarding_let_pattern(pattern) {
+                            found = true;
+                        } else {
+                            return false;
+                        }
+                    }
+                }
+                _ => {
+                    if Self::statement_mentions_identifier(stmt, param_name) {
+                        return false;
+                    }
+                }
+            }
+        }
+        found
+    }
+
     fn is_discarding_let_pattern(pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Wildcard => true,
@@ -4439,6 +4782,23 @@ impl<'ast> CodeGenerator<'ast> {
             self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func);
         let to_owned_sibling =
             self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func);
+        let to_owned_method = self.param_passed_to_owned_non_copy_method_arg(
+            func.body.as_slice(),
+            &param.name,
+            func,
+        );
+        // Multi-param helpers that only forward into owned store methods (`apply_patch_put`
+        // → `apply_put` / `put_value`): emit `&T` + clone so outer forward-ref callers can
+        // borrow (`put_value` → `apply_patch_put(&key, value)`). Single-param mixed
+        // forwards (`apply_patch_delete`) keep owned (count < 2).
+        // Note: do not require `non_self_facade` here — that helper gates on
+        // `!to_owned_sibling`, which is true for store forwards and would never fire.
+        let multiparam_store_forward_borrow = only_as_call_arg
+            && to_owned_method
+            && self.count_non_self_params(func) >= 2
+            && func.body.len() > 1
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+            && !self.is_type_copy(&param.type_);
         param.name != "self"
             // Registry-aware Copy (Vec3, etc.) — not the primitive-only `type_analysis` helper.
             && !self.is_type_copy(&param.type_)
@@ -4454,15 +4814,10 @@ impl<'ast> CodeGenerator<'ast> {
             )
             && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
             && (!self.current_fn_mixed_forwarder_params.contains(&param.name) || non_self_facade)
-            && !to_owned_sibling
+            && (!to_owned_sibling || multiparam_store_forward_borrow)
             && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
             && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
             && {
-                let to_owned_method = self.param_passed_to_owned_non_copy_method_arg(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                );
                 let single_stmt_multi_param_forward = only_as_call_arg
                     && self.count_non_self_params(func) >= 2
                     && func.body.len() == 1
@@ -4497,14 +4852,23 @@ impl<'ast> CodeGenerator<'ast> {
                 // Single-stmt `merge(remote)` is both facade and multi-param forward; do not
                 // borrow when the method consumes an owned non-copy arg. Multi-stmt helpers
                 // like `put_value` keep ungated facade borrowing.
+                // Mixed owned+borrowed callees (`apply_patch_delete` → owned apply_delete +
+                // borrowed HotPart::delete_key) keep owned — do not demote solely because one
+                // callee borrows.
                 (non_self_facade && !(single_stmt_multi_param_forward && to_owned_method))
                     || (single_stmt_multi_param_forward && !to_owned_method)
                     || non_self_owned_forward
-                    || self.param_passed_to_borrowing_callee(
+                    || multiparam_store_forward_borrow
+                    || (self.param_passed_to_borrowing_callee(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
+                    ) && !to_owned_method
+                        && !self.param_passed_to_self_or_field_receiver_method_arg(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ))
             }
     }
 
@@ -4760,7 +5124,7 @@ impl<'ast> CodeGenerator<'ast> {
             && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
     }
 
-    fn param_type_is_vec_container(ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn param_type_is_vec_container(ty: &Type) -> bool {
         match ty {
             Type::Vec(_) => true,
             Type::Parameterized(name, _) if name == "Vec" => true,
@@ -5353,10 +5717,9 @@ impl<'ast> CodeGenerator<'ast> {
                 emitted_param_strings,
             );
             self.signature_registry.add_function(key.clone(), updated);
-            let mut mut_arg_indices = self
-                .function_emitted_mut_arg_indices
-                .entry(key.clone())
-                .or_default();
+            // Rebuild mut-arg indices from this emission only — do not retain stale
+            // `&mut` slots from a prior multipass when the formal is now owned.
+            let mut mut_arg_indices = std::collections::HashSet::new();
             mut_arg_indices.extend(self.current_fn_emitted_mut_arg_indices.iter().copied());
             for (idx, param_str) in emitted_param_strings.iter().enumerate() {
                 if (param_str.contains(": &mut ")
@@ -5378,6 +5741,8 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
+            self.function_emitted_mut_arg_indices
+                .insert(key.clone(), mut_arg_indices);
         }
     }
 
@@ -5442,7 +5807,12 @@ impl<'ast> CodeGenerator<'ast> {
                     updated.param_ownership[reg_idx] =
                         crate::analyzer::OwnershipMode::Borrowed;
                 }
-            } else if self.inferred_mut_borrowed_params.contains(&param.name) {
+            } else if self.inferred_mut_borrowed_params.contains(&param.name)
+                && self.emitted_rust_ref_formals.contains(&param.name)
+            {
+                // Only keep MutBorrowed registry metadata when the emitted formal is `&mut T`.
+                // Owned Copy aggregates (`mut deps: AppDeps`) clear inferred_mut before sync;
+                // if metadata is stale, do not re-promote to MutableReference.
                 if !matches!(updated.param_types[reg_idx], Type::MutableReference(_)) {
                     updated.param_types[reg_idx] =
                         Type::MutableReference(Box::new(param.type_.clone()));
@@ -5459,9 +5829,13 @@ impl<'ast> CodeGenerator<'ast> {
                     updated.param_ownership[reg_idx] =
                         crate::analyzer::OwnershipMode::Borrowed;
                 }
-            } else if matches!(updated.param_types[reg_idx], Type::Reference(_))
-                && !self.emitted_rust_ref_formals.contains(&param.name)
+            } else if matches!(
+                updated.param_types[reg_idx],
+                Type::Reference(_) | Type::MutableReference(_)
+            ) && !self.emitted_rust_ref_formals.contains(&param.name)
             {
+                // Owned emitted formal: clear stale shared/mut-ref analyzer metadata so
+                // call sites pass by value (`mut deps: AppDeps`, not `&mut deps`).
                 updated.param_types[reg_idx] = param.type_.clone();
                 if reg_idx < updated.param_ownership.len() {
                     updated.param_ownership[reg_idx] = crate::analyzer::OwnershipMode::Owned;

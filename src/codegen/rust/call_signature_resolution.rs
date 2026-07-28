@@ -79,8 +79,8 @@ pub(crate) fn strip_collision_blocked_call_site_coercions(coerced: &mut String) 
         *coerced = coerced[1..].to_string();
     }
     crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
-    if coerced.ends_with(".to_string()") {
-        *coerced = coerced[..coerced.len() - 11].to_string();
+    if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+        *coerced = stripped.to_string();
     }
 }
 
@@ -721,6 +721,13 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         return OwnershipMode::Owned;
     }
 
+    // Emitted Rust formal is owned (`deps: AppDeps` / `mut deps: AppDeps`) — call sites
+    // must pass by value even when analyzer still marks MutBorrowed (Copy aggregates after
+    // `.len()` + field method; LedgerKit reverse_journal_entry / codegen_mut_owned_param_moved).
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return OwnershipMode::Owned;
+    }
+
     if let Some(converged_ty) = sig.param_types.get(param_idx) {
         if crate::codegen::rust::string_utilities::param_is_rust_str_ref(converged_ty) {
             let trait_owned_string = sig.has_self_receiver
@@ -756,6 +763,25 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                     sig, param_idx,
                 ) {
                     return OwnershipMode::Owned;
+                }
+                // Stale analyzer MutableReference on Copy aggregates (AppDeps) that emit as
+                // owned `mut deps: AppDeps` — call sites must pass by value.
+                if let Some(formal) = sig.formal_param_type(param_idx) {
+                    let bare = match formal {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    let is_copy_aggregate = crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+                        && !crate::type_classification::is_copy_pass_by_value_formal(bare);
+                    let is_bare_custom_struct = matches!(formal, Type::Custom(_));
+                    if (is_copy_aggregate || is_bare_custom_struct)
+                        && !matches!(
+                            formal,
+                            Type::Reference(_) | Type::MutableReference(_)
+                        )
+                    {
+                        return OwnershipMode::Owned;
+                    }
                 }
                 return OwnershipMode::MutBorrowed;
             }
@@ -896,11 +922,14 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
                     if formal_type_honors_converged_borrow(formal_ty) {
                         if matches!(own, OwnershipMode::MutBorrowed)
-                            && sig
-                                .formal_param_type(param_idx)
-                                .is_some_and(crate::codegen::rust::type_analysis_pure::is_copy_type)
+                            && crate::codegen::rust::type_analysis_pure::is_copy_type(formal_ty)
                         {
-                            return OwnershipMode::MutBorrowed;
+                            // Copy scalars → &mut at call site; Copy aggregates → owned.
+                            if crate::type_classification::is_copy_pass_by_value_formal(formal_ty)
+                            {
+                                return OwnershipMode::MutBorrowed;
+                            }
+                            return OwnershipMode::Owned;
                         }
                         if matches!(own, OwnershipMode::Borrowed) {
                             return OwnershipMode::Borrowed;
@@ -914,13 +943,22 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         }
         if let Some(own) = sig.param_ownership.get(param_idx) {
             if matches!(own, OwnershipMode::MutBorrowed) {
+                // Emitted owned formal wins over stale MutBorrowed (Copy aggregates).
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                ) {
+                    return OwnershipMode::Owned;
+                }
                 // Copy primitives with body mutation use `&mut T` at formal and call site
                 // (e.g. `fn increment(x: &mut i64)` / `increment(&mut counter)`).
-                if sig
-                    .formal_param_type(param_idx)
-                    .is_some_and(crate::codegen::rust::type_analysis_pure::is_copy_type)
-                {
-                    return OwnershipMode::MutBorrowed;
+                // Copy *structs* (AppDeps) keep owned formals — pass by value at call sites.
+                if let Some(formal_ty) = sig.formal_param_type(param_idx) {
+                    if crate::codegen::rust::type_analysis_pure::is_copy_type(formal_ty) {
+                        if crate::type_classification::is_copy_pass_by_value_formal(formal_ty) {
+                            return OwnershipMode::MutBorrowed;
+                        }
+                        return OwnershipMode::Owned;
+                    }
                 }
                 // Non-Copy owned formals pass by value even when body analysis marks MutBorrowed.
                 return OwnershipMode::Owned;
@@ -958,6 +996,22 @@ pub fn effective_param_ownership_for_arg(
 /// Whether resolved callee metadata expects `&mut T` for a user argument index.
 pub fn callee_user_arg_expects_mut_borrow(sig: &FunctionSignature, user_arg_index: usize) -> bool {
     let pidx = sig.arg_param_index(user_arg_index);
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+        return false;
+    }
+    // Copy aggregates emit owned formals — never ask for `&mut` at call sites.
+    if let Some(formal) = sig.formal_param_type(pidx) {
+        let bare = match formal {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+            && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+            && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+        {
+            return false;
+        }
+    }
     matches!(sig.param_types.get(pidx), Some(Type::MutableReference(_)))
         || matches!(
             effective_param_ownership_for_arg(sig, user_arg_index),
@@ -1961,6 +2015,13 @@ pub fn parse_field(line: string) -> string {
                 && !output.contains(".to_string().clone()"),
             "insert should not add redundant clone. Generated:\n{output}"
         );
+    }
+
+    #[test]
+    fn strip_collision_blocked_removes_full_to_string_suffix() {
+        let mut s = r#""recover".to_string()"#.to_string();
+        strip_collision_blocked_call_site_coercions(&mut s);
+        assert_eq!(s, r#""recover""#);
     }
 
 }

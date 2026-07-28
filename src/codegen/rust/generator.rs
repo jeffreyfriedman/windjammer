@@ -1973,7 +1973,8 @@ impl<'ast> CodeGenerator<'ast> {
                 && !callee_wants_shared_borrow
                 && !coerced.starts_with('&')
             {
-                *coerced = format!("&{coerced}");
+                // Do not borrow an owned arg for an owned callee just because a
+                // *sibling* param is a forward-ref — that forces a later `.clone()`.
                 return;
             }
             if !self.in_if_condition
@@ -2091,8 +2092,15 @@ impl<'ast> CodeGenerator<'ast> {
             && (self.current_fn_forward_ref_if_params.contains(name)
                 || self.current_fn_mixed_forwarder_params.contains(name))
         {
-            *coerced =
-                crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
+            // Bare owned formals move by value. Only clone when auto-clone says this
+            // statement reuses the binding — never unconditional `.clone()` on
+            // `local.merge(remote)` / other single-use owned method args.
+            let needs_reuse = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                a.needs_clone(name, self.current_statement_idx).is_some()
+            });
+            if needs_reuse {
+                *coerced = format!("{coerced}.clone()");
+            }
         } else if callee_wants_shared_borrow
             && !callee_wants_owned
             && !coerced.starts_with('&')

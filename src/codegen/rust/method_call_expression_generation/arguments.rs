@@ -2753,11 +2753,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Single-statement consuming moves: owned formals pass by value without
                 // `.clone()` (`local.merge(remote)`). Auto-clone can over-mark cross-crate
-                // method args when the callee returns the same type.
+                // method args when the callee returns the same type. Apply for Copy and
+                // non-Copy owned formals — `.clone()` is noise either way.
                 if let Expression::Identifier { name, .. } = arg_to_generate {
                     if arg_str.ends_with(".clone()")
                         && !wants_ref
-                        && self.caller_owned_non_copy_formal(name)
+                        && self.caller_keeps_owned_outer_formal(name)
                         && self.current_function_body.len() <= 1
                     {
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(

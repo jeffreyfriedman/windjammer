@@ -776,6 +776,34 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.inferred_mut_borrowed_params,
             );
         }
+        // Owned effective formals must not keep a stale `&mut` from earlier passes
+        // (Copy aggregates like AppDeps emit `mut deps: AppDeps`).
+        if matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                &sig, arg_index,
+            ),
+            crate::analyzer::OwnershipMode::Owned,
+        ) && coerced.starts_with("&mut ")
+        {
+            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                .to_string();
+        }
+        // Belt-and-suspenders: Copy aggregates always pass by value at call sites.
+        if coerced.starts_with("&mut ") {
+            if let Some(formal) = sig.formal_param_type(param_idx) {
+                let bare = match formal {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+                    && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                {
+                    coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                        .to_string();
+                }
+            }
+        }
 
         // Method-registry / global converged signatures must win over stale call-site
         // metadata (wdb `engine.put` delegation, forward refs to later impl methods).
@@ -2182,6 +2210,9 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return false;
+        }
         sig.param_types.get(pidx).is_some_and(|t| matches!(t, Type::MutableReference(_)))
             || matches!(
                 crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
@@ -2206,7 +2237,26 @@ impl<'ast> CodeGenerator<'ast> {
             .or_else(|| self.function_emitted_mut_arg_indices.get(simple))
             .is_some_and(|indices| indices.contains(&arg_index))
         {
-            return true;
+            // Stale multipass slots can linger; prefer emitted owned contract.
+            let owned_emitted = local_sig
+                .map(|sig| {
+                    let pidx = sig.arg_param_index(arg_index);
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, pidx,
+                    )
+                })
+                .or_else(|| {
+                    registry.get_signature(callee_name).map(|sig| {
+                        let pidx = sig.arg_param_index(arg_index);
+                        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            sig, pidx,
+                        )
+                    })
+                })
+                .unwrap_or(false);
+            if !owned_emitted {
+                return true;
+            }
         }
         if let Some(sig) = local_sig {
             if self.ir_sig_arg_expects_mut_borrow(sig, arg_index) {
