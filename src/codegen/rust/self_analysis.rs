@@ -329,10 +329,10 @@ fn method_takes_owned_self(
         {
             return false;
         }
-        matches!(
-            sig.param_ownership.first(),
-            Some(OwnershipMode::Owned | OwnershipMode::MutBorrowed)
-        )
+        // Only true by-value `self` / `mut self` is consuming. `MutBorrowed` is `&mut self`
+        // — treating it as owned collapsed delegating wrappers (`log_two` → `log`) to bare
+        // `self` once registry refresh copied MethodSignature's default MutBorrowed self slot.
+        matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
     }
     if let Some(sig) = registry.get_signature(method) {
         if sig_takes_by_value_self(sig) {

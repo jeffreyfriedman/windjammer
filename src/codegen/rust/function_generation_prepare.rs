@@ -610,6 +610,15 @@ impl<'ast> CodeGenerator<'ast> {
                 if param_name == "self" {
                     continue;
                 }
+                // Copy aggregates (`through: Lsn`) pass by value — stale IR Borrowed from
+                // readonly field reads must not demote caller params to `&through` (WDB-060).
+                if func.parameters.iter().any(|p| {
+                    p.name == *param_name
+                        && self.is_type_copy(&p.type_)
+                        && !crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+                }) {
+                    continue;
+                }
                 if !matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
                     continue;
                 }
@@ -750,7 +759,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Params forwarded to both borrowing and owning callees keep owned formals (wdb `Key`).
     fn strip_borrow_inference_for_owning_param_uses(&mut self, func: &FunctionDecl<'ast>) {
         for param in &func.parameters {
-            if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
+            if param.name == "self" || self.is_type_copy(&param.type_) {
                 continue;
             }
             if self.param_is_non_self_forward_facade_borrow_candidate(param, func) {
@@ -795,7 +804,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'_>,
     ) {
         for param in &func.parameters {
-            if param.name == "self" || type_analysis::is_copy_type(&param.type_) {
+            if param.name == "self" || self.is_type_copy(&param.type_) {
                 continue;
             }
             if matches!(
@@ -1682,6 +1691,11 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .filter(|p| p.name != "self")
             .map(|param| {
+                if self.is_type_copy(&param.type_)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                {
+                    return false;
+                }
                 let forwarded = self.param_passed_to_borrowing_callee(
                     func.body.as_slice(),
                     &param.name,
@@ -3578,8 +3592,18 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
     ) -> bool {
         match stmt {
-            Statement::Let { value, else_block, .. } => {
-                self.expression_moves_param_into_owned_payload(value, param_name)
+            Statement::Let {
+                pattern,
+                value,
+                else_block,
+                ..
+            } => {
+                // `let _ = path` / `let _ = (path, n)` discards — not an owned payload store.
+                // Treating discard as payload forced WJ `string` formals to stay `String`
+                // (WDB-049 `replay_all(path)` must emit `&str`).
+                let value_is_payload = !Self::is_discarding_let_pattern(pattern)
+                    && self.expression_moves_param_into_owned_payload(value, param_name);
+                value_is_payload
                     || else_block.as_ref().is_some_and(|b| {
                         self.param_stored_in_owned_payload(b.as_slice(), param_name)
                     })
@@ -3770,9 +3794,35 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_moves_param_into_owned_payload(left, param_name)
                     || self.expression_moves_param_into_owned_payload(right, param_name)
             }
-            Expression::MacroInvocation { args, .. } => args.iter().any(|arg| {
-                self.expression_moves_param_into_owned_payload(arg, param_name)
-            }),
+            Expression::MacroInvocation { name, args, .. } => {
+                // Formatting macros only borrow (`format!`, `println!`, …) — not owned
+                // payload stores. Treating them as stores forced WJ `string` formals to
+                // stay `String` and call sites to emit `"lit".to_string()` (WDB-048).
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
+                );
+                if borrows_only {
+                    false
+                } else {
+                    args.iter().any(|arg| {
+                        self.expression_moves_param_into_owned_payload(arg, param_name)
+                    })
+                }
+            }
             Expression::Block { statements, .. } => statements.iter().any(|s| match s {
                 Statement::Expression { expr, .. }
                 | Statement::Return {
@@ -3815,6 +3865,18 @@ impl<'ast> CodeGenerator<'ast> {
         if self.ast_sibling_method_arg_is_owned_non_copy_formal(method, arg_index) {
             return true;
         }
+        self.method_call_callee_emits_owned_arg(object, method, arg_index, func)
+    }
+
+    /// True when the callee's codegen-emitted (or AST-owned without shared-ref emission)
+    /// contract takes this arg by value — not a readonly `&T` demotion like `MemoryEngine::get`.
+    fn method_call_callee_emits_owned_arg(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_index: usize,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
         let Some(rt) = (if let Expression::Identifier { name, .. } = object {
             if name == "self" && self.in_impl_block {
                 self.current_struct_name.clone()
@@ -3840,18 +3902,28 @@ impl<'ast> CodeGenerator<'ast> {
                     sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
                     sig.formal_param_types = reg.formal_param_types.clone();
                     sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
+                    sig.param_types = reg.param_types.clone();
+                    sig.param_ownership = reg.param_ownership.clone();
                 }
             }
             sig
         } else if let Some(reg) = registry_sig {
             reg.clone()
         } else {
-            return false;
+            // AST fallback when the callee signature is not yet in the registry
+            // (cross-module `PatchPart::apply_put` while generating `apply_patch_put`).
+            return self
+                .struct_method_ast_formal_param_types
+                .get(&rt)
+                .and_then(|methods| methods.get(method))
+                .and_then(|formals| formals.get(arg_index))
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !self.is_type_copy(t)
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                });
         };
         let pidx = sig.arg_param_index(arg_index);
-        // WJ source formals (`key: Key`) are authoritative for mixed-forwarder detection.
-        // Converged registry `param_types` may already be `&Key` for borrow-only delegates
-        // (has_key) — using those would falsely reject owned siblings (patch_put/hot_put).
         if sig
             .forwarding_borrow_params
             .as_ref()
@@ -3861,12 +3933,40 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
+        // Codegen-confirmed shared-ref formal → not an owned sibling.
         if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
             flags.get(pidx).copied().unwrap_or(false)
         }) {
             return false;
         }
-        sig.formal_param_types
+        // Codegen-confirmed owned formal (`Some(false)`).
+        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+            flags.get(pidx).copied() == Some(false)
+        }) {
+            return sig
+                .formal_param_type(pidx)
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !type_analysis::is_copy_type(t)
+                });
+        }
+        // No codegen refresh yet: do NOT use `emitted_owned_arg_contract`'s bare-Custom
+        // heuristic (treats every `Key` as owned). Trust analyzer borrow / Reference wrap
+        // so `MemoryEngine::get(key.bytes.len())` demotes callers (WDB-046).
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(crate::analyzer::OwnershipMode::Borrowed)
+                | Some(crate::analyzer::OwnershipMode::MutBorrowed)
+        ) || sig.param_types.get(pidx).is_some_and(|t| {
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        }) {
+            return false;
+        }
+        matches!(
+            sig.param_ownership.get(pidx),
+            Some(crate::analyzer::OwnershipMode::Owned) | None
+        ) && sig
+            .formal_param_types
             .get(pidx)
             .or_else(|| sig.formal_param_type(pidx))
             .is_some_and(|t| {
@@ -4605,17 +4705,42 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
-                let is_self_sibling = matches!(
+                let is_self_receiver = matches!(
                     &**object,
                     Expression::Identifier { name, .. } if name == "self"
                 );
-                if is_self_sibling {
-                    for (i, (_, arg)) in arguments.iter().enumerate() {
-                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                            && self.method_call_sibling_ast_expects_owned_arg(
-                                object, method, i, func,
-                            )
-                        {
+                let is_self_field_receiver = matches!(
+                    &**object,
+                    Expression::FieldAccess { object: inner, .. }
+                        if matches!(
+                            &**inner,
+                            Expression::Identifier { name, .. } if name == "self"
+                        )
+                );
+                // Locals like `patch.apply_delete(key)` and `self.hot.put_value(key)` must
+                // keep the param owned when the *emitted* callee contract is owned. Do not use
+                // same-impl AST name lookup for non-self receivers — `self.engine.get(key)`
+                // would falsely match `Self::get` and block borrow demotion (WDB-046).
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if !matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    {
+                        continue;
+                    }
+                    if is_self_receiver {
+                        if self.method_call_sibling_ast_expects_owned_arg(
+                            object, method, i, func,
+                        ) {
+                            return true;
+                        }
+                    } else if is_self_field_receiver
+                        || matches!(
+                            &**object,
+                            Expression::Identifier { .. }
+                                | Expression::Index { .. }
+                                | Expression::FieldAccess { .. }
+                        )
+                    {
+                        if self.method_call_callee_emits_owned_arg(object, method, i, func) {
                             return true;
                         }
                     }
@@ -4793,13 +4918,45 @@ impl<'ast> CodeGenerator<'ast> {
         // forwards (`apply_patch_delete`) keep owned (count < 2).
         // Note: do not require `non_self_facade` here — that helper gates on
         // `!to_owned_sibling`, which is true for store forwards and would never fire.
+        // Prefer `to_owned_sibling` (emitted-contract aware) over `to_owned_method`, which
+        // can miss when analyzer marks Borrowed on bare owned AST formals.
+        // Outer forward-ref facades (`put_value` → `if key_in_latest_base(key)`) must
+        // keep owned formals for *all* non-self params — demoting only `value` while
+        // keeping `key` owned breaks asymmetric call-site borrow (`&value`).
+        // Pure store helpers (`apply_patch_put`) have no forward-ref keep-owned params.
+        let any_forward_ref_keep_owned = func.parameters.iter().any(|p| {
+            p.name != "self"
+                && self.param_has_forward_ref_keep_owned(func.body.as_slice(), &p.name, func)
+        });
         let multiparam_store_forward_borrow = only_as_call_arg
-            && to_owned_method
+            && (to_owned_method || to_owned_sibling)
             && self.count_non_self_params(func) >= 2
-            && func.body.len() > 1
+            && !func.body.is_empty()
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-            && !self.is_type_copy(&param.type_);
-        param.name != "self"
+            && !self.is_type_copy(&param.type_)
+            && !any_forward_ref_keep_owned;
+        // Exclusive non-self owned forward to a local receiver (`latest.has_key(key)`):
+        // emit `&T` + clone so outer forward-ref callers can borrow. Self-sibling wrappers
+        // (`has_key` → `self.get`) still hit `to_owned_sibling` but must keep owned formals.
+        let non_self_owned_forward = only_as_call_arg
+            && to_owned_method
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+            && self.param_passed_to_non_self_receiver_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
+            && !self.param_passed_to_self_or_field_receiver_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
+            && !self.param_passed_to_other_param_receiver_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            );
+        let result = param.name != "self"
             // Registry-aware Copy (Vec3, etc.) — not the primitive-only `type_analysis` helper.
             && !self.is_type_copy(&param.type_)
             && !matches!(
@@ -4807,16 +4964,29 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Reference(_) | Type::MutableReference(_)
             )
             && (!self.param_passed_from_multiple_statements(func.body.as_slice(), &param.name, func)
-                || non_self_facade)
-            && !self.param_used_in_if_with_condition_and_branches(
+                || non_self_facade
+                // Multi-stmt `apply_patch_put` forwards the same key into several owned
+                // store calls — still emit `&Key` so outer forward-ref callers can borrow.
+                || multiparam_store_forward_borrow)
+            // Nested if/else store forwards still demote (`apply_patch_put` key into
+            // `apply_put` / `hot.put_value`); the if-gate keeps single-param mixed
+            // owned/borrow forwards owned.
+            && (!self.param_used_in_if_with_condition_and_branches(
                 func.body.as_slice(),
                 &param.name,
-            )
-            && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
-            && (!self.current_fn_mixed_forwarder_params.contains(&param.name) || non_self_facade)
-            && (!to_owned_sibling || multiparam_store_forward_borrow)
-            && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
-            && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
+            ) || multiparam_store_forward_borrow)
+            && (!self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
+                || multiparam_store_forward_borrow)
+            && (!self.current_fn_mixed_forwarder_params.contains(&param.name)
+                || non_self_facade
+                || multiparam_store_forward_borrow)
+            && (!to_owned_sibling || multiparam_store_forward_borrow || non_self_owned_forward)
+            // Multiparam store forwards (`apply_patch_put` → `apply_put`) "store" via
+            // owned callee args; still emit `&Key` + clone at those call sites.
+            && (!self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
+                || multiparam_store_forward_borrow)
+            && (!self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
+                || multiparam_store_forward_borrow)
             && {
                 let single_stmt_multi_param_forward = only_as_call_arg
                     && self.count_non_self_params(func) >= 2
@@ -4831,24 +5001,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // (`latest.has_key(key)` for non-text Key): emit `&T` + clone so
                 // outer forward-ref callers can borrow. Text params (`string`) and
                 // forwards onto sibling params (`items.push(item)`) keep owned.
-                let non_self_owned_forward = only_as_call_arg
-                    && to_owned_method
-                    && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                    && self.param_passed_to_non_self_receiver_method_arg(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    )
-                    && !self.param_passed_to_self_or_field_receiver_method_arg(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    )
-                    && !self.param_passed_to_other_param_receiver_method_arg(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    );
+                // (non_self_owned_forward computed above — hoisted for `to_owned_sibling` gate.)
                 // Single-stmt `merge(remote)` is both facade and multi-param forward; do not
                 // borrow when the method consumes an owned non-copy arg. Multi-stmt helpers
                 // like `put_value` keep ungated facade borrowing.
@@ -4869,7 +5022,8 @@ impl<'ast> CodeGenerator<'ast> {
                             &param.name,
                             func,
                         ))
-            }
+            };
+        result
     }
 
     /// True when `param_name` is passed to a method argument that emits owned non-copy
@@ -5436,25 +5590,70 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) else {
+        if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
+            let pidx = sig.arg_param_index(arg_index);
+            // Codegen-confirmed owned formals beat stale analyzer Borrowed on bare Custom.
+            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
+                return true;
+            }
+            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(&sig, pidx)
+            {
+                return false;
+            }
+            let converged_ref = sig.param_types.get(pidx).is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            }) || matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    &sig, pidx,
+                ),
+                crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
+            );
+            // Bare WJ owned non-Copy formals still move at store APIs even when analyzer
+            // left Borrowed/`Reference(T)` from sibling readonly methods. Prefer the AST
+            // formal over stale convergence so multiparam store forwards demote correctly
+            // (WDB-047 `apply_patch_put` → `apply_put(key, …)`).
+            if sig.formal_param_type(pidx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && !self.is_type_copy(t)
+                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
+            }) {
+                return true;
+            }
+            if converged_ref {
+                return false;
+            }
+            if sig.formal_param_type(pidx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && !type_analysis::is_copy_type(t)
+            }) {
+                return true;
+            }
+        }
+        // AST fallback when the callee signature is not yet in the registry (cross-module
+        // `PatchPart::apply_put` while generating `LsmStore::apply_patch_put`).
+        let rt = if let Expression::Identifier { name, .. } = object {
+            if name == "self" && self.in_impl_block {
+                self.current_struct_name.clone()
+            } else {
+                self.infer_local_binding_type_name(func.body.as_slice(), name)
+                    .or_else(|| self.infer_type_name(object))
+            }
+        } else {
+            self.mc_infer_method_receiver_type_name(object)
+                .or_else(|| self.infer_type_name(object))
+        };
+        let Some(rt) = rt else {
             return false;
         };
-        let pidx = sig.arg_param_index(arg_index);
-        let converged_ref = sig.param_types.get(pidx).is_some_and(|t| {
-            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        }) || matches!(
-            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                &sig, pidx,
-            ),
-            crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
-        );
-        if converged_ref {
-            return false;
-        }
-        sig.formal_param_type(pidx).is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && !type_analysis::is_copy_type(t)
-        })
+        self.struct_method_ast_formal_param_types
+            .get(&rt)
+            .and_then(|methods| methods.get(method))
+            .and_then(|formals| formals.get(arg_index))
+            .is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && !self.is_type_copy(t)
+                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
+            })
     }
 
     fn method_call_signature_for_arg(
@@ -5543,13 +5742,26 @@ impl<'ast> CodeGenerator<'ast> {
                             sig.param_ownership[param_idx] =
                                 crate::analyzer::OwnershipMode::Borrowed;
                         }
-                    } else if matches!(sig.param_types[param_idx], Type::Reference(_))
-                        && !self.emitted_rust_ref_formals.contains(&param.name)
-                    {
-                        // Emitted Rust uses owned `T` (including Copy structs like KeyRange/Key).
-                        sig.param_types[param_idx] = param.type_.clone();
+                    } else {
+                        // Emitted owned Rust formal (including Copy aggregates whose
+                        // analyzer ownership stayed Borrowed from field reads — WDB-060
+                        // `other: Lsn`). Align registry so call sites strip `&through`.
+                        if matches!(sig.param_types[param_idx], Type::Reference(_)) {
+                            sig.param_types[param_idx] = param.type_.clone();
+                        }
+                        if param_idx < sig.formal_param_types.len()
+                            && matches!(
+                                sig.formal_param_types[param_idx],
+                                Type::Reference(_) | Type::MutableReference(_)
+                            )
+                        {
+                            sig.formal_param_types[param_idx] = param.type_.clone();
+                        } else if sig.formal_param_types.len() <= param_idx {
+                            sig.formal_param_types.push(param.type_.clone());
+                        }
                         if param_idx < sig.param_ownership.len() {
-                            sig.param_ownership[param_idx] = crate::analyzer::OwnershipMode::Owned;
+                            sig.param_ownership[param_idx] =
+                                crate::analyzer::OwnershipMode::Owned;
                         }
                     }
                     param_idx += 1;
@@ -5561,10 +5773,15 @@ impl<'ast> CodeGenerator<'ast> {
                     if param.name == "self" {
                         continue;
                     }
-                    if user_param_idx < ms_emitted.len() {
-                        ms_emitted[user_param_idx] = self.emitted_rust_ref_formals.contains(&param.name)
+                    let reg_idx = if sig.has_self_receiver {
+                        user_param_idx + 1
+                    } else {
+                        user_param_idx
+                    };
+                    if reg_idx < ms_emitted.len() {
+                        ms_emitted[reg_idx] = self.emitted_rust_ref_formals.contains(&param.name)
                             || self.str_ref_optimized_params.contains(&param.name);
-                        ms_emitted[user_param_idx] = ms_emitted[user_param_idx]
+                        ms_emitted[reg_idx] = ms_emitted[reg_idx]
                             && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;
@@ -5590,15 +5807,31 @@ impl<'ast> CodeGenerator<'ast> {
                 fs
             });
         if let Some(ref ms) = base_sig {
+            // `base_sig` is already `to_function_signature()` — index 0 is the self slot when
+            // `has_self_receiver`. Sync user-param metadata at the same indices, but do not
+            // overwrite self: `to_function_signature` defaults self to MutBorrowed, which is
+            // not the analyzer/codegen-resolved receiver and must not clobber it.
             for (idx, pt) in ms.param_types.iter().enumerate() {
-                let reg_idx = if ms.has_self_receiver { idx + 1 } else { idx };
-                if reg_idx < updated.param_types.len() {
-                    updated.param_types[reg_idx] = pt.clone();
+                if ms.has_self_receiver && idx == 0 {
+                    continue;
                 }
-                if reg_idx < updated.param_ownership.len() {
+                if idx < updated.param_types.len() {
+                    updated.param_types[idx] = pt.clone();
+                }
+                if idx < updated.param_ownership.len() {
                     if let Some(own) = ms.param_ownership.get(idx) {
-                        updated.param_ownership[reg_idx] = *own;
+                        updated.param_ownership[idx] = *own;
                     }
+                }
+            }
+            for (idx, pt) in ms.formal_param_types.iter().enumerate() {
+                if ms.has_self_receiver && idx == 0 {
+                    continue;
+                }
+                if idx < updated.formal_param_types.len() {
+                    updated.formal_param_types[idx] = pt.clone();
+                } else {
+                    updated.formal_param_types.push(pt.clone());
                 }
             }
         } else {
@@ -5800,8 +6033,26 @@ impl<'ast> CodeGenerator<'ast> {
                 || (self.emitted_rust_ref_formals.contains(&param.name)
                     && !self.inferred_mut_borrowed_params.contains(&param.name))
             {
+                let shared_ty = if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && emitted_param_strings
+                        .get(emitted_idx.saturating_sub(1))
+                        .is_some_and(|s| s.contains("&str"))
+                {
+                    // Emit `&str` in the registry (not `Reference(string)`) so call-site
+                    // text finalize recognizes the formal (WDB-049 replay_to_lsn).
+                    Type::Reference(Box::new(Type::Custom("str".into())))
+                } else {
+                    Type::Reference(Box::new(param.type_.clone()))
+                };
                 if !matches!(updated.param_types[reg_idx], Type::Reference(_)) {
-                    updated.param_types[reg_idx] = Type::Reference(Box::new(param.type_.clone()));
+                    updated.param_types[reg_idx] = shared_ty;
+                } else if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && emitted_param_strings
+                        .get(emitted_idx.saturating_sub(1))
+                        .is_some_and(|s| s.contains("&str"))
+                {
+                    updated.param_types[reg_idx] =
+                        Type::Reference(Box::new(Type::Custom("str".into())));
                 }
                 if reg_idx < updated.param_ownership.len() {
                     updated.param_ownership[reg_idx] =
@@ -5854,8 +6105,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut emitted = vec![false; updated.param_ownership.len()];
         let mut user_param_idx = 0;
+        let mut emitted_idx = 0;
         for param in &func.parameters {
             if param.name == "self" {
+                if emitted_idx < emitted_param_strings.len() {
+                    emitted_idx += 1;
+                }
                 continue;
             }
             let reg_idx = if updated.has_self_receiver {
@@ -5864,7 +6119,22 @@ impl<'ast> CodeGenerator<'ast> {
                 user_param_idx
             };
             if reg_idx < emitted.len() {
-                emitted[reg_idx] = self.emitted_rust_ref_formals.contains(&param.name);
+                let emitted_shared = emitted_param_strings.get(emitted_idx).is_some_and(|s| {
+                    (s.contains(": &") || s.contains(": &'a ") || s.starts_with("&self") || s.starts_with("&'a self"))
+                        && !s.contains(": &mut ")
+                        && !s.contains(": &'a mut ")
+                        && !s.starts_with("&mut self")
+                        && !s.starts_with("&'a mut self")
+                });
+                // Prefer the emitted formal string (including `&str`) over bookkeeping sets —
+                // `str_ref_optimized` alone must also mark shared-ref for cross-file call sites.
+                emitted[reg_idx] = emitted_shared
+                    || ((self.emitted_rust_ref_formals.contains(&param.name)
+                        || self.str_ref_optimized_params.contains(&param.name))
+                        && !self.inferred_mut_borrowed_params.contains(&param.name));
+            }
+            if emitted_idx < emitted_param_strings.len() {
+                emitted_idx += 1;
             }
             user_param_idx += 1;
         }

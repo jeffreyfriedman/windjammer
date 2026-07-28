@@ -424,21 +424,35 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         };
 
     let param_idx = sig.arg_param_index(arg_index);
-    let callee_expects_rust_borrow = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+    let callee_emits_rust_ref = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
         sig, param_idx,
-    ) || (!crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-        sig, param_idx,
-    ) && (matches!(effective, OwnershipMode::Borrowed)
-        || sig.param_types.get(param_idx).is_some_and(|t| {
-            param_is_rust_str_ref(t) || matches!(t, Type::Reference(_))
-        })));
+    );
+    let callee_expects_rust_borrow = callee_emits_rust_ref
+        || (!crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            sig, param_idx,
+        ) && (matches!(effective, OwnershipMode::Borrowed)
+            || sig.param_types.get(param_idx).is_some_and(|t| {
+                param_is_rust_str_ref(t) || matches!(t, Type::Reference(_))
+            })));
     if !callee_expects_rust_borrow {
         return;
     }
 
+    // `&str` formals, `&String` formals, plain WJ `string`, or codegen-emitted shared
+    // text refs (`Reference(string)` from refresh — not only `Reference(str)`).
     let param_is_text = sig.param_type_for_arg(arg_index).is_some_and(|t| {
-        param_is_rust_str_ref(t) || crate::codegen::rust::types::is_windjammer_text_type(t)
-    });
+        param_is_rust_str_ref(t)
+            || param_is_rust_string_ref(t)
+            || crate::codegen::rust::types::is_windjammer_text_type(t)
+            || matches!(
+                t,
+                Type::Reference(inner)
+                    if crate::codegen::rust::types::is_windjammer_text_type(inner)
+            )
+    }) || (callee_emits_rust_ref
+        && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            sig, param_idx,
+        ));
     if !param_is_text {
         return;
     }
@@ -446,9 +460,6 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     // Plain owned `string` formals pass by value at call sites when the callee also
     // emits an owned Rust `String` param. When the callee converged to `&str`, still
     // add `&` for owned caller bindings (forward-ref / borrow-at-call-site).
-    let callee_emits_rust_ref = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-        sig, param_idx,
-    );
     if sig.formal_param_type(param_idx).is_some_and(|t| {
         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             && crate::codegen::rust::types::is_windjammer_text_type(t)

@@ -1134,36 +1134,7 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
             return false;
         }
-        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(&sig, pidx) {
-            return true;
-        }
-        if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-            &sig, pidx,
-        ) {
-            return false;
-        }
-        if sig.param_types.get(pidx).is_some_and(|t| {
-            matches!(t, Type::MutableReference(_))
-        }) {
-            return false;
-        }
-        if matches!(
-            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                &sig, arg_index,
-            ),
-            crate::analyzer::OwnershipMode::MutBorrowed
-        ) {
-            return false;
-        }
-        sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-            flags.get(pidx).copied().unwrap_or(false)
-        }) || sig.param_types.get(pidx).is_some_and(|t| matches!(t, Type::Reference(_)))
-            || matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                    &sig, arg_index,
-                ),
-                crate::analyzer::OwnershipMode::Borrowed
-            )
+        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(&sig, pidx)
     }
 
     pub(crate) fn find_signature_by_name_and_arg_count_with_global(
@@ -1844,15 +1815,47 @@ impl<'ast> CodeGenerator<'ast> {
             .get_signature(callee_name)
             .or_else(|| registry.lookup_method(callee_name))
             .or_else(|| registry.find_signature_ending_with(simple))
+            .or_else(|| {
+                self.signature_registry
+                    .get_signature(callee_name)
+                    .or_else(|| self.signature_registry.lookup_method(callee_name))
+                    .or_else(|| self.signature_registry.find_signature_ending_with(simple))
+            })
         else {
             return false;
         };
         let param_idx = sig.arg_param_index(arg_index);
-        sig.field_extract_params
+        // Match `auto_clone::callee_arg_field_extracts`: field-extract demotes Move→Read
+        // only for shared-ref formals. Owned WJ formals that match/project
+        // (`value_tag(value: Value)`) still move — callers must `.clone()` on reuse (WDB-063).
+        let field_extract = sig
+            .field_extract_params
             .as_ref()
             .and_then(|flags| flags.get(param_idx))
             .copied()
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if !field_extract {
+            return false;
+        }
+        match sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+        {
+            Some(true) => return true,
+            Some(false) => return false,
+            None => {}
+        }
+        // Bare WJ source formals still move. Only explicit `&T` in `formal_param_types`
+        // field-extracts as Read — never trust converged `param_types` Reference wraps.
+        if !sig.formal_param_types.is_empty() {
+            sig.formal_param_types.get(param_idx).is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
+        } else {
+            false
+        }
     }
 
     /// Check if a binding needs `.clone()` per auto-clone analysis and apply it.
@@ -1947,7 +1950,17 @@ impl<'ast> CodeGenerator<'ast> {
         if self.in_if_condition && caller_owned {
             // Copy / owned-pass formals must stay by-value (`search.update(dt)` not `&dt`).
             // Forward-ref borrowing in `if` is only for non-Copy values that would move.
-            if self.caller_param_is_copy_pass_by_value(name) || callee_wants_owned {
+            // Copy aggregates (`through: Lsn`) are not scalar pass-by-value but still
+            // must not gain `&through` into owned formals (WDB-060).
+            let caller_copy_aggregate = self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && self.is_type_copy(&p.type_)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+            });
+            if self.caller_param_is_copy_pass_by_value(name)
+                || caller_copy_aggregate
+                || callee_wants_owned
+            {
                 return;
             }
             if coerced.ends_with(".clone()") {
@@ -2055,7 +2068,17 @@ impl<'ast> CodeGenerator<'ast> {
             // Signature-driven: never borrow Copy / owned-pass args in `if` conditions.
             // The forward-ref heuristic exists to avoid moving non-Copy formals; Copy
             // and callee-owned contracts must remain by-value (`update(dt)` not `&dt`).
-            if self.caller_param_is_copy_pass_by_value(name) || callee_wants_owned {
+            // Copy aggregates (`through: Lsn`) are not `is_copy_pass_by_value_formal`
+            // but still pass by value into owned formals (WDB-060).
+            let caller_copy_aggregate = self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && self.is_type_copy(&p.type_)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+            });
+            if self.caller_param_is_copy_pass_by_value(name)
+                || caller_copy_aggregate
+                || callee_wants_owned
+            {
                 return;
             }
             if !callee_wants_shared_borrow {
@@ -2171,8 +2194,9 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" || self.emitted_rust_ref_formals.contains(&param.name) {
                 continue;
             }
-            // Copy / pass-by-value formals must not be rewritten to `(&param)` in conditions.
-            if crate::type_classification::is_copy_pass_by_value_formal(&param.type_) {
+            // Copy scalars and Copy aggregates (Lsn, …) pass by value at call sites —
+            // do not rewrite to `(&param)` in if conditions (WDB-060).
+            if self.is_type_copy(&param.type_) {
                 continue;
             }
             let forward_ref = self.current_fn_forward_ref_if_params.contains(&param.name)
@@ -2461,10 +2485,10 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
 
-        let dominated = self
-            .auto_clone_analysis
-            .as_ref()
-            .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
+        let dominated = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+            a.needs_clone(name, self.current_statement_idx).is_some()
+                || a.needs_clone_anywhere(name)
+        });
 
         if !dominated
             || arg_str.ends_with(".clone()")
@@ -2473,8 +2497,13 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
 
-        if self.inferred_borrowed_params.contains(name)
-            || self.inferred_mut_borrowed_params.contains(name)
+        // Borrowed *emitted* formals (`&T`) don't move — skip clone. Owned formals that
+        // the analyzer still marks Borrowed (Copy aggregates / match-project callees)
+        // still move at owned call sites and need `.clone()` on reuse (WDB-063 Value).
+        if (self.inferred_borrowed_params.contains(name)
+            || self.inferred_mut_borrowed_params.contains(name))
+            && (self.emitted_rust_ref_formals.contains(name)
+                || self.binding_emits_as_rust_shared_ref(name))
         {
             return arg_str.to_string();
         }
@@ -2495,7 +2524,9 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
 
-        if self.binding_name_is_copy(name) {
+        // Only scalar Copy formals (i64/bool/…) skip clone. Copy aggregates/enums
+        // (Value, Lsn, …) still need `.clone()` for multi-use owned moves (WDB-063).
+        if self.binding_is_copy_pass_by_value_scalar(name) {
             return arg_str.to_string();
         }
 
@@ -2504,6 +2535,22 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             format!("{}.clone()", arg_str)
         }
+    }
+
+    /// True when `name` is a scalar Copy pass-by-value binding (`i64`, `bool`, …),
+    /// not a Copy aggregate/enum that still moves at the Rust ABI.
+    pub(crate) fn binding_is_copy_pass_by_value_scalar(&self, name: &str) -> bool {
+        if let Some(p) = self.current_function_params.iter().find(|p| p.name == name) {
+            return crate::type_classification::is_copy_pass_by_value_formal(&p.type_);
+        }
+        if let Some(t) = self.local_var_types.get(name) {
+            let bare = match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            return crate::type_classification::is_copy_pass_by_value_formal(bare);
+        }
+        false
     }
 
     /// Deref `&Copy` / `&mut Copy` expressions when the function returns an owned Copy type.

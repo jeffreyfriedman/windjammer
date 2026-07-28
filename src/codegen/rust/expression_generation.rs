@@ -446,7 +446,15 @@ impl<'ast> CodeGenerator<'ast> {
         if string_literal_converted {
             return arg_str;
         }
-        if method_signature.as_ref().is_some_and(|sig| {
+        // Owned/`string` formal metadata must not block FieldAccess borrow when codegen
+        // confirmed the callee emits `&str` / shared ref (WDB-049 `replay_all(self.path)`).
+        let callee_confirmed_shared_ref = method_signature.as_ref().is_some_and(|sig| {
+            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                sig, sig_param_idx,
+            )
+        });
+        if !callee_confirmed_shared_ref
+            && method_signature.as_ref().is_some_and(|sig| {
             sig.formal_param_type(sig_param_idx).is_some_and(|t| {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && crate::codegen::rust::types::is_windjammer_text_type(t)
@@ -499,7 +507,13 @@ impl<'ast> CodeGenerator<'ast> {
             crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(&mut borrowed);
             return borrowed;
         }
-        if matches!(
+        // Only auto-borrow FieldAccess/Identifier when the callee expects a text slice
+        // (`&str`). Generic Borrowed formals (`&Vec`, `&Key`) must not enter here — callers
+        // that previously gated on string formals relied on that filter.
+        if crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(
+            method_signature,
+            sig_param_idx,
+        ) && matches!(
             arg_to_generate,
             Expression::Identifier { .. } | Expression::FieldAccess { .. }
         ) {
@@ -511,6 +525,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `match` / `if let` on `&enum` binds `&U` for Copy payloads; value contexts need `U`.
+    ///
+    /// Only identifiers need an explicit `*`. Field access of a Copy field through `&Struct`
+    /// already yields the Copy value in Rust (`failure.status` is `i64`, not `&i64`) — emitting
+    /// `*failure.status` causes E0614 (LedgerKit `json_cors_error(failure.status, …)`).
     pub(in crate::codegen::rust) fn peel_copy_ref_match_binding_for_value(
         &self,
         expr: &Expression<'ast>,
@@ -519,6 +537,9 @@ impl<'ast> CodeGenerator<'ast> {
         if generated.starts_with('*') {
             return generated.to_string();
         }
+        let Expression::Identifier { name, .. } = expr else {
+            return generated.to_string();
+        };
         let Some(ty) = self.infer_expression_type(expr) else {
             return generated.to_string();
         };
@@ -529,14 +550,12 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.is_type_copy(pointee) {
             return generated.to_string();
         }
-        if let Expression::Identifier { name, .. } = expr {
-            if self.match_arm_bindings.contains(name.as_str()) {
-                // HashMap/Option match arms already lower Copy payloads as owned locals.
-                return generated.to_string();
-            }
-            if generated == *name {
-                return format!("*{generated}");
-            }
+        if self.match_arm_bindings.contains(name.as_str()) {
+            // HashMap/Option match arms already lower Copy payloads as owned locals.
+            return generated.to_string();
+        }
+        if generated == *name {
+            return format!("*{generated}");
         }
         format!("*({generated})")
     }

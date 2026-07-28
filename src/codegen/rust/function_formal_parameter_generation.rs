@@ -109,6 +109,10 @@ impl<'ast> CodeGenerator<'ast> {
                 ) && !payload_forces_owned;
                 let borrow_delegation =
                     self.param_should_emit_borrowed_delegation_formal(param, func);
+                // Multiparam store forwards (`apply_patch_put` → owned `apply_put`) still
+                // emit `&Key` + clone — payload store via callee must not force owned.
+                let payload_forces_owned =
+                    payload_forces_owned && !borrow_delegation;
                 // Analyzer Owned must not block demotion for field-projection-only Custom
                 // params, store-only Vec constructors, or borrowed-delegation formals.
                 let analyzer_or_ir_owned = payload_forces_owned
@@ -126,7 +130,9 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
                     && !analyzed.returned_parameters.contains(&param.name)
-                    && !(moves_via_struct_init && !vec_store_borrow_ok)
+                    // Multiparam store forwards (`apply_patch_put` → `apply_put`) store via
+                    // owned callees; still emit `&Key` + clone (WDB-047 full store layout).
+                    && (!(moves_via_struct_init && !vec_store_borrow_ok) || borrow_delegation)
                     && !self.is_type_copy(&param.type_)
                     && !matches!(
                         &param.type_,
@@ -138,12 +144,16 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     ) || borrow_delegation)
-                    && !self.param_has_forward_ref_keep_owned(
+                    // Multiparam store forwards (`apply_patch_put`) compute borrow_delegation
+                    // despite nested if/else uses — do not let forward-ref keep-owned block
+                    // the demotion that borrow_delegation already approved (WDB full store).
+                    && (!self.param_has_forward_ref_keep_owned(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
-                    && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+                    ) || borrow_delegation)
+                    && (!self.current_fn_mixed_forwarder_params.contains(&param.name)
+                        || borrow_delegation)
                     && (!self.param_passes_to_wj_owned_sibling_call(
                         func.body.as_slice(),
                         &param.name,
@@ -459,10 +469,6 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                         if param.name != "self"
-                            && !self.param_moves_via_struct_literal_init(
-                                func.body.as_slice(),
-                                &param.name,
-                            )
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
                                 &param.name,
@@ -711,21 +717,15 @@ impl<'ast> CodeGenerator<'ast> {
                             && !analyzed.returned_parameters.contains(&param.name)
                             && !analyzed.field_extract_parameters.contains(&param.name)
                             && self.param_should_emit_borrowed_delegation_formal(param, func)
-                            && !self.param_moves_via_struct_literal_init(
-                                func.body.as_slice(),
-                                &param.name,
-                            )
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
                                 &param.name,
                                 func,
                             )
                             && !self.is_collection_key_owned_param(param, func)
-                            && !self.param_passed_from_multiple_statements(
-                                func.body.as_slice(),
-                                &param.name,
-                                func,
-                            )
+                            // Multi-stmt allowed: `param_should_emit_borrowed_delegation_formal`
+                            // already gates multiparam store forwards (`apply_patch_put`),
+                            // including when the body stores via owned callees (WDB-047).
                             && !self.func_is_pure_forwarding_delegate(func)
                         {
                             let type_str =
@@ -891,14 +891,16 @@ impl<'ast> CodeGenerator<'ast> {
                             if self.param_stored_in_owned_payload(
                                 func.body.as_slice(),
                                 &param.name,
-                            ) {
+                            ) && !self.param_should_emit_borrowed_delegation_formal(param, func)
+                            {
                                 ownership_mode = OwnershipMode::Owned;
                             }
 
                             if self.param_moves_via_struct_literal_init(
                                 func.body.as_slice(),
                                 &param.name,
-                            ) {
+                            ) && !self.param_should_emit_borrowed_delegation_formal(param, func)
+                            {
                                 ownership_mode = OwnershipMode::Owned;
                             }
 
@@ -914,14 +916,14 @@ impl<'ast> CodeGenerator<'ast> {
                             ) && !self.is_type_copy(&param.type_)
                                 && !analyzed.field_extract_parameters.contains(&param.name)
                                 && !analyzed.returned_parameters.contains(&param.name)
-                                && !self.param_stored_in_owned_payload(
+                                && (!self.param_stored_in_owned_payload(
                                     func.body.as_slice(),
                                     &param.name,
-                                )
-                                && !self.param_moves_via_struct_literal_init(
+                                ) || self.param_should_emit_borrowed_delegation_formal(param, func))
+                                && (!self.param_moves_via_struct_literal_init(
                                     func.body.as_slice(),
                                     &param.name,
-                                )
+                                ) || self.param_should_emit_borrowed_delegation_formal(param, func))
                                 && !matches!(
                                     &param.type_,
                                     Type::Reference(_) | Type::MutableReference(_)
@@ -1118,17 +1120,19 @@ impl<'ast> CodeGenerator<'ast> {
                             let keep_owned_contract = payload_forces_owned
                                 || discard_keep_owned
                                 || keep_owned_facade
-                                || self.current_fn_mixed_forwarder_params.contains(&param.name)
-                                || self.current_fn_forward_ref_if_params.contains(&param.name)
-                                || self.param_has_forward_ref_keep_owned(
+                                || (self.current_fn_mixed_forwarder_params.contains(&param.name)
+                                    && !borrow_delegation)
+                                || (self.current_fn_forward_ref_if_params.contains(&param.name)
+                                    && !borrow_delegation)
+                                || (self.param_has_forward_ref_keep_owned(
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
-                                )
+                                ) && !borrow_delegation)
                                 || (to_owned_sibling && !borrow_delegation)
                                 || analyzed.field_extract_parameters.contains(&param.name)
                                 || analyzed.returned_parameters.contains(&param.name)
-                                || (moves_via_struct_init && !vec_store_borrow_ok);
+                                || (moves_via_struct_init && !vec_store_borrow_ok && !borrow_delegation);
                             if payload_forces_owned {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.str_ref_optimized_params.remove(&param.name);
@@ -1156,7 +1160,14 @@ impl<'ast> CodeGenerator<'ast> {
                             // Readonly unused WJ `string` formals emit `&str` so forward-ref
                             // call sites (DialogCondition → Inventory::has_item) see converged borrow.
                             // Free functions included (wal `replay_all(path)`).
-                            if unused_params.contains(&param.name)
+                            // Discard-only `let _ = path` / `let _ = (path, …)` also demote — analyzer
+                            // often keeps Owned for the move-into-discard, which must not win here.
+                            if (unused_params.contains(&param.name)
+                                || self.param_only_used_in_simple_or_tuple_discard(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
+                                || self.str_ref_optimized_params.contains(&param.name))
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
                                     &param.type_,
@@ -1164,21 +1175,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                                 && !payload_stored
                                 && !self.param_stored_in_owned_payload(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                )
-                            {
-                                ownership_mode = OwnershipMode::Borrowed;
-                                self.str_ref_optimized_params.insert(param.name.clone());
-                                self.inferred_borrowed_params.insert(param.name.clone());
-                                self.inferred_mut_borrowed_params.remove(&param.name);
-                            } else if crate::codegen::rust::types::is_windjammer_text_type(
-                                &param.type_,
-                            ) && !matches!(
-                                &param.type_,
-                                Type::Reference(_) | Type::MutableReference(_)
-                            ) && !payload_stored
-                                && self.param_only_used_in_simple_or_tuple_discard(
                                     func.body.as_slice(),
                                     &param.name,
                                 )
@@ -1264,9 +1260,10 @@ impl<'ast> CodeGenerator<'ast> {
                                             && ownership_mode
                                                 != OwnershipMode::Owned
                                             && !payload_stored
-                                            && analyzed.inferred_ownership.get(&param.name)
-                                                != Some(&OwnershipMode::Owned)
                                         {
+                                            // Discard-only / unused `string` formals: analyzer may
+                                            // still say Owned (move into `let _ = path`) — trust
+                                            // str_ref_optimized / registry &str over that.
                                             "&str".to_string()
                                         } else {
                                             "&String".to_string()
@@ -1435,6 +1432,18 @@ impl<'ast> CodeGenerator<'ast> {
             analyzed.inferred_ownership.get(param_name),
             Some(OwnershipMode::Owned)
         ) {
+            // Multiparam store forwards intentionally demote Owned formals to `&T`
+            // and `.clone()` at owned callee sites (WDB-047 `apply_patch_put`).
+            if let Some(param) = analyzed
+                .decl
+                .parameters
+                .iter()
+                .find(|p| p.name == *param_name)
+            {
+                if self.param_should_emit_borrowed_delegation_formal(param, &analyzed.decl) {
+                    return false;
+                }
+            }
             return true;
         }
         if self.param_stored_in_owned_payload(analyzed.decl.body.as_slice(), param_name) {

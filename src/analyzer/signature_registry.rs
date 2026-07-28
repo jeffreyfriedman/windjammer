@@ -687,6 +687,44 @@ impl SignatureRegistry {
 
     /// Returns true when every ownership difference between `base` and `refined`
     /// is an Owned→Borrowed or Owned→MutBorrowed refinement on a non-text type
+    /// String/`string` ↔ `&str` / `Reference(string)` is a single-function codegen
+    /// text-formal refinement (discard-only `path: string` → `path: &str`), not a
+    /// cross-module type collision (WDB-049).
+    fn is_text_formal_type_refinement(a: &FunctionSignature, b: &FunctionSignature) -> bool {
+        if a.param_types.len() != b.param_types.len() {
+            return false;
+        }
+        let mut saw_text_refine = false;
+        for (idx, (ta, tb)) in a.param_types.iter().zip(b.param_types.iter()).enumerate() {
+            if a.has_self_receiver && idx == 0 {
+                continue;
+            }
+            if ta == tb {
+                continue;
+            }
+            let a_owned_text = Self::is_declaration_stub_text_type(ta);
+            let b_owned_text = Self::is_declaration_stub_text_type(tb);
+            let a_text_ref = matches!(
+                ta,
+                Type::Reference(inner)
+                    if Self::is_declaration_stub_text_type(inner)
+                        || matches!(&**inner, Type::Custom(n) if n == "str")
+            );
+            let b_text_ref = matches!(
+                tb,
+                Type::Reference(inner)
+                    if Self::is_declaration_stub_text_type(inner)
+                        || matches!(&**inner, Type::Custom(n) if n == "str")
+            );
+            if (a_owned_text && b_text_ref) || (b_owned_text && a_text_ref) {
+                saw_text_refine = true;
+                continue;
+            }
+            return false;
+        }
+        saw_text_refine
+    }
+
     /// (i.e. body analysis narrowed the ownership from the initial stub).
     ///
     /// For text types (String/string), Owned→Borrowed changes the Rust type
@@ -778,7 +816,11 @@ impl SignatureRegistry {
                 let codegen_refreshed = sig.emitted_rust_ref_params.is_some();
                 if existing.param_types != sig.param_types {
                     let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
-                    if !stub_like {
+                    // String ↔ `&str` / `Reference(string)` is a codegen text-formal
+                    // refinement (WDB-049), not a cross-module type collision.
+                    let text_formal_refinement = Self::is_text_formal_type_refinement(existing, sig)
+                        || Self::is_text_formal_type_refinement(sig, existing);
+                    if !stub_like && !text_formal_refinement {
                         self.type_collision_keys.insert(name.clone());
                     }
                 } else if existing.param_ownership != sig.param_ownership {

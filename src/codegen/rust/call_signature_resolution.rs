@@ -754,6 +754,35 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                 ) {
                     return OwnershipMode::Owned;
                 }
+                if sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    == Some(false)
+                {
+                    return OwnershipMode::Owned;
+                }
+                // Stale `Reference(T)` when codegen emitted bare owned formal (`other: Lsn`).
+                if let Some(formal) = sig.formal_param_type(param_idx) {
+                    if !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                        && formal == inner.as_ref()
+                    {
+                        if matches!(
+                            sig.param_ownership.get(param_idx),
+                            Some(OwnershipMode::Owned)
+                        ) || (crate::codegen::rust::type_analysis_pure::is_copy_type(formal)
+                            || matches!(
+                                formal,
+                                Type::Custom(name)
+                                    if crate::type_classification::is_known_copy_aggregate(name)
+                            ))
+                            && !crate::type_classification::is_copy_pass_by_value_formal(formal)
+                        {
+                            return OwnershipMode::Owned;
+                        }
+                    }
+                }
                 return OwnershipMode::Borrowed;
             }
             Type::MutableReference(inner)
@@ -865,7 +894,29 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
             }
         }
         match ty {
-            Type::Reference(_) => return OwnershipMode::Borrowed,
+            Type::Reference(inner) => {
+                if sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    == Some(false)
+                {
+                    return OwnershipMode::Owned;
+                }
+                if let Some(formal) = sig.formal_param_type(param_idx) {
+                    if !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                        && formal == inner.as_ref()
+                        && matches!(
+                            sig.param_ownership.get(param_idx),
+                            Some(OwnershipMode::Owned)
+                        )
+                    {
+                        return OwnershipMode::Owned;
+                    }
+                }
+                return OwnershipMode::Borrowed;
+            }
             Type::MutableReference(_) => return OwnershipMode::MutBorrowed,
             _ => {}
         }
@@ -1174,12 +1225,41 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
         if flags.get(idx).copied() != Some(false) {
             continue;
         }
-        // Body-converged / promoted borrow metadata beats stale engine emitted-owned flags.
+        // Body-converged / promoted borrow metadata beats stale engine emitted-owned flags,
+        // except when the WJ formal is bare Custom (including Copy aggregates like Lsn) —
+        // those always emit owned formals. Non-Copy demotions to `&T` set
+        // `emitted_rust_ref_params[idx] == true` instead of false.
         if matches!(
             sig.param_ownership.get(idx),
             Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
         ) {
-            continue;
+            let bare_custom_owned_emit = sig.formal_param_type(idx).is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                matches!(bare, Type::Custom(_))
+                    && !crate::codegen::rust::types::is_windjammer_text_type(bare)
+            }) || sig.formal_param_types.get(idx).is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                matches!(bare, Type::Custom(_))
+                    && !crate::codegen::rust::types::is_windjammer_text_type(bare)
+            });
+            let copy_aggregate_owned_emit = sig.formal_param_type(idx).is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            });
+            if !bare_custom_owned_emit && !copy_aggregate_owned_emit {
+                continue;
+            }
         }
         let owned_formal = sig.formal_param_type(idx).map(|t| match t {
             Type::Reference(inner) | Type::MutableReference(inner) => *inner.clone(),

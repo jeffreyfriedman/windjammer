@@ -91,13 +91,10 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
                     (&actual.base, &expected.base),
                     (BaseType::Custom(_), BaseType::Custom(_))
                 ) {
-                    // Non-Copy aggregates auto-ref at Rust call sites (WDB-055 engine.put).
-                    // Copy map/set keys (tuple IDs, TimerId, …) still need explicit `&`.
-                    if is_copy_base(&actual.base) {
-                        CoercionKind::Borrow
-                    } else {
-                        CoercionKind::Identity
-                    }
+                    // Owned Custom → `&T` formal: emit explicit `&` (WDB-039 keys_equal,
+                    // Copy map/set keys). Rust auto-ref alone leaves bare locals that fail
+                    // dogfooding assertions and asymmetric clone lowering.
+                    CoercionKind::Borrow
                 } else {
                     CoercionKind::Borrow
                 }
@@ -184,7 +181,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         } else {
             (false, coerced.as_str())
         };
-        if is_ref && !coerced.starts_with("&mut ") {
+            if is_ref && !coerced.starts_with("&mut ") {
             let inner = inner
                 .strip_prefix('(')
                 .and_then(|s| s.strip_suffix(')'))
@@ -230,12 +227,16 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     }
     // Ref binding → owned formal: deref Copy (`*through`) or clone non-Copy.
     // Text `&x` was handled above (strip). Bare `through` where through: &T needs this.
+    // Skip when the Rust text is already a field/index projection (`failure.status`) —
+    // those Copy projections are values, not places that need `*`.
     if matches!(
         expected.ownership,
         OwnedType::Owned | OwnedType::Copy
     ) && matches!(actual.ownership, OwnedType::Ref(_))
         && !coerced.starts_with('&')
         && !coerced.starts_with('*')
+        && !coerced.contains('.')
+        && !coerced.contains('[')
     {
         match kind {
             CoercionKind::Deref | CoercionKind::StripBorrow => {

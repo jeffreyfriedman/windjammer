@@ -595,6 +595,25 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     }
                 }
                 signature = Some(r.sig);
+                if let Some(ref mut sig) = signature {
+                    // Prefer defining-module codegen refresh from the converged global registry.
+                    if let Some(global) = gen.global_signature_registry.as_ref() {
+                        crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                            sig,
+                            global,
+                            &[
+                                r.qualified_key.clone(),
+                                sig_lookup_name.clone(),
+                                func_name.to_string(),
+                                func_name
+                                    .rsplit("::")
+                                    .next()
+                                    .unwrap_or(func_name)
+                                    .to_string(),
+                            ],
+                        );
+                    }
+                }
             }
         }
     }

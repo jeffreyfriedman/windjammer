@@ -265,13 +265,48 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 None
                             }
                         })
-                        .or_else(|| signature.clone());
+                        .or_else(|| {
+                            // Free calls: prefer defining-module refreshed `&str` over a
+                            // stale call-site stub (WDB-049 replay_to_lsn).
+                            let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                            let mut refreshed = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                                gen.global_signature_registry
+                                    .as_ref()
+                                    .and_then(|g| g.get_signature(func_name).cloned()),
+                                gen.global_signature_registry
+                                    .as_ref()
+                                    .and_then(|g| g.get_signature(simple).cloned()),
+                                gen.signature_registry.get_signature(func_name).cloned(),
+                                gen.signature_registry.get_signature(simple).cloned(),
+                                signature.clone(),
+                            ]);
+                            let pidx = refreshed
+                                .as_ref()
+                                .map(|s| s.arg_param_index(i))
+                                .unwrap_or(i);
+                            for challenger in [
+                                gen.global_signature_registry
+                                    .as_ref()
+                                    .and_then(|g| g.get_signature(func_name)),
+                                gen.global_signature_registry
+                                    .as_ref()
+                                    .and_then(|g| g.get_signature(simple)),
+                                gen.signature_registry.get_signature(func_name),
+                                gen.signature_registry.get_signature(simple),
+                            ] {
+                                refreshed = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                                    refreshed, challenger, pidx,
+                                );
+                            }
+                            refreshed.or_else(|| signature.clone())
+                        });
                     if let Some(ref sig) = post_ir_borrow_sig {
                         if !has_ownership_collision {
                             let param_idx = sig.arg_param_index(i);
                             let skip_post_ir_stale_borrow = !func_name.contains("::")
-                                && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn(
+                                && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
                                     &gen.signature_registry,
+                                    gen.global_signature_registry.as_deref(),
                                     func_name,
                                     sig,
                                     param_idx,
@@ -659,6 +694,101 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
+                    // IR early-return skips the non-IR finalize path — still align text
+                    // FieldAccess args with codegen-refreshed `&str` formals (WDB-049
+                    // `replay_to_lsn(self.path)` vs `replay_all(&self.path)`).
+                    // Run even under type-collision (String→&str refresh homonym): collision
+                    // must not block text FieldAccess borrow for confirmed `&str` formals.
+                    {
+                        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                        // Prefer defining-module / global refresh before call-site stubs so
+                        // cross-file `replay_to_lsn(path: &str)` beats a stale local
+                        // `emitted_rust_ref_params = Some([false, …])` (WDB-049).
+                        let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(func_name).cloned()),
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(simple).cloned()),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.signature_registry.get_signature(simple).cloned(),
+                            post_ir_borrow_sig.clone(),
+                            signature.clone(),
+                        ]);
+                        let pidx_for_upgrade = text_sig
+                            .as_ref()
+                            .map(|s| s.arg_param_index(i))
+                            .unwrap_or(i);
+                        for challenger in [
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(func_name)),
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(simple)),
+                            gen.signature_registry.get_signature(func_name),
+                            gen.signature_registry.get_signature(simple),
+                        ] {
+                            text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                                text_sig,
+                                challenger,
+                                pidx_for_upgrade,
+                            );
+                        }
+                        let arg_already_rust_ref = matches!(
+                            arg,
+                            Expression::Identifier { name, .. }
+                                if gen.identifier_already_ref(name)
+                                    || gen.str_ref_optimized_params.contains(name.as_str())
+                                    || gen.inferred_borrowed_params.contains(name)
+                        );
+                        crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
+                            text_sig.as_ref(),
+                            i,
+                            None,
+                            arg,
+                            &mut coerced,
+                            arg_already_rust_ref,
+                        );
+                        if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
+                        {
+                            let pidx = text_sig
+                                .as_ref()
+                                .map(|s| s.arg_param_index(i))
+                                .unwrap_or(i);
+                            coerced = gen.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                                &text_sig,
+                                pidx,
+                                arg,
+                                coerced,
+                                false,
+                            );
+                            // Belt-and-suspenders: confirmed `&str` formal + owned String
+                            // FieldAccess must borrow (WDB-049 replay_to_lsn(self.path)).
+                            if !coerced.starts_with('&')
+                                && text_sig.as_ref().is_some_and(|sig| {
+                                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                        sig, pidx,
+                                    ) && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                        sig, pidx,
+                                    ) || sig.param_types.get(pidx).is_some_and(|t| {
+                                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                                            || matches!(
+                                                t,
+                                                Type::Reference(inner)
+                                                    if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                                            )
+                                    }))
+                                })
+                                && gen.infer_expression_type(arg).as_ref().is_some_and(
+                                    crate::codegen::rust::types::is_windjammer_text_type,
+                                )
+                            {
+                                coerced = format!("&{coerced}");
+                            }
+                        }
+                    }
                     return vec![coerced];
                 }
                 let callee_sig = signature.as_ref().or_else(|| {
@@ -725,14 +855,47 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     ..
                 }
             ) {
-                let skip_owned_string_literal = signature.as_ref().is_some_and(|sig| {
-                    let pidx = sig.arg_param_index(i);
-                    crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
-                        sig, i,
-                    ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                        sig, pidx,
-                    )
-                });
+                let skip_owned_string_literal = {
+                    let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                    let refreshed = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(func_name).cloned()),
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(simple).cloned()),
+                        gen.signature_registry.get_signature(func_name).cloned(),
+                        gen.signature_registry.get_signature(simple).cloned(),
+                        signature.clone(),
+                    ]);
+                    let mut text_sig = refreshed.or_else(|| signature.clone());
+                    let pidx_for_upgrade = text_sig
+                        .as_ref()
+                        .map(|s| s.arg_param_index(i))
+                        .unwrap_or(i);
+                    for challenger in [
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(func_name)),
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(simple)),
+                        gen.signature_registry.get_signature(func_name),
+                        gen.signature_registry.get_signature(simple),
+                    ] {
+                        text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                            text_sig, challenger, pidx_for_upgrade,
+                        );
+                    }
+                    text_sig.as_ref().is_some_and(|sig| {
+                        let pidx = sig.arg_param_index(i);
+                        crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                            sig, i,
+                        ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            sig, pidx,
+                        )
+                    })
+                };
 
                 let should_convert = if skip_owned_string_literal {
                     false
@@ -817,8 +980,39 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             || gen.str_ref_optimized_params.contains(name.as_str())
                             || gen.inferred_borrowed_params.contains(name)
                 );
+                let mut text_sig = signature.clone();
+                if let Some(global) = gen.global_signature_registry.as_ref() {
+                    let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                    let refreshed =
+                        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                            text_sig.clone(),
+                            global.get_signature(func_name).cloned(),
+                            global.get_signature(simple).cloned(),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.signature_registry.get_signature(simple).cloned(),
+                        ]);
+                    if refreshed.is_some() {
+                        text_sig = refreshed;
+                    }
+                    let pidx_for_upgrade = text_sig
+                        .as_ref()
+                        .map(|s| s.arg_param_index(i))
+                        .unwrap_or(i);
+                    for challenger in [
+                        global.get_signature(func_name),
+                        global.get_signature(simple),
+                        gen.signature_registry.get_signature(func_name),
+                        gen.signature_registry.get_signature(simple),
+                    ] {
+                        text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                            text_sig,
+                            challenger,
+                            pidx_for_upgrade,
+                        );
+                    }
+                }
                 crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
-                    signature.as_ref(),
+                    text_sig.as_ref(),
                     i,
                     func_name
                         .rsplit_once("::")
@@ -827,6 +1021,73 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     arg,
                     &mut arg_str,
                     arg_already_rust_ref,
+                );
+                if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. }) {
+                    let pidx = text_sig
+                        .as_ref()
+                        .map(|s| s.arg_param_index(i))
+                        .unwrap_or(i);
+                    arg_str = gen.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                        &text_sig,
+                        pidx,
+                        arg,
+                        arg_str,
+                        false,
+                    );
+                }
+            } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. }) {
+                // Type collision (e.g. String→&str refresh) must not block text FieldAccess
+                // borrows for confirmed `&str` formals (WDB-049 replay_to_lsn).
+                let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(func_name).cloned()),
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple).cloned()),
+                    gen.signature_registry.get_signature(func_name).cloned(),
+                    gen.signature_registry.get_signature(simple).cloned(),
+                    signature.clone(),
+                ]);
+                let pidx_for_upgrade = text_sig
+                    .as_ref()
+                    .map(|s| s.arg_param_index(i))
+                    .unwrap_or(i);
+                for challenger in [
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(func_name)),
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple)),
+                    gen.signature_registry.get_signature(func_name),
+                    gen.signature_registry.get_signature(simple),
+                ] {
+                    text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                        text_sig,
+                        challenger,
+                        pidx_for_upgrade,
+                    );
+                }
+                crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
+                    text_sig.as_ref(),
+                    i,
+                    None,
+                    arg,
+                    &mut arg_str,
+                    false,
+                );
+                let pidx = text_sig
+                    .as_ref()
+                    .map(|s| s.arg_param_index(i))
+                    .unwrap_or(i);
+                arg_str = gen.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                    &text_sig,
+                    pidx,
+                    arg,
+                    arg_str,
+                    false,
                 );
             }
 
@@ -906,8 +1167,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 if all_params_borrowed {
                     let param_idx = sig.arg_param_index(i);
                     let skip_stale_owned_free_fn = !func_name.contains("::")
-                        && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn(
+                        && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
                             &gen.signature_registry,
+                            gen.global_signature_registry.as_deref(),
                             func_name,
                             sig,
                             param_idx,
@@ -2020,9 +2282,91 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             }
 
             if has_ownership_collision {
-                crate::codegen::rust::call_signature_resolution::strip_collision_blocked_call_site_coercions(
-                    &mut arg_str,
-                );
+                let preserve_text_borrow = {
+                    let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                    let sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(func_name).cloned()),
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(simple).cloned()),
+                        gen.signature_registry.get_signature(func_name).cloned(),
+                        gen.signature_registry.get_signature(simple).cloned(),
+                        signature.clone(),
+                    ]);
+                    sig.as_ref().is_some_and(|s| {
+                        let pidx = s.arg_param_index(i);
+                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            s, pidx,
+                        ) && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                            s, pidx,
+                        ) || s.param_types.get(pidx).is_some_and(|t| {
+                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                                || matches!(
+                                    t,
+                                    Type::Reference(inner)
+                                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                                )
+                        }))
+                    })
+                };
+                // String→&str multipass marks ownership collision; still keep `&self.path`
+                // when codegen confirmed the formal is `&str` (WDB-049 replay_to_lsn).
+                // Still strip `.to_string()` — literals must stay bare `"recover"` for
+                // `&str` formals (WDB-048 temp_path), not `"recover".to_string()`.
+                if preserve_text_borrow {
+                    if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
+                        arg_str = stripped.to_string();
+                    }
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
+                } else {
+                    crate::codegen::rust::call_signature_resolution::strip_collision_blocked_call_site_coercions(
+                        &mut arg_str,
+                    );
+                }
+            } else {
+                // Even without an ownership collision, strip literal `.to_string()` when the
+                // defining module refreshed a plain `string` formal to `&str` (WDB-048).
+                let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(func_name).cloned()),
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple).cloned()),
+                    gen.signature_registry.get_signature(func_name).cloned(),
+                    gen.signature_registry.get_signature(simple).cloned(),
+                    signature.clone(),
+                ]);
+                let pidx = text_sig
+                    .as_ref()
+                    .map(|s| s.arg_param_index(i))
+                    .unwrap_or(i);
+                for challenger in [
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(func_name)),
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple)),
+                    gen.signature_registry.get_signature(func_name),
+                    gen.signature_registry.get_signature(simple),
+                ] {
+                    text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                        text_sig, challenger, pidx,
+                    );
+                }
+                if text_sig.as_ref().is_some_and(|s| {
+                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        s, s.arg_param_index(i),
+                    )
+                }) {
+                    if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
+                        arg_str = stripped.to_string();
+                    }
+                }
             }
 
             vec![arg_str]
