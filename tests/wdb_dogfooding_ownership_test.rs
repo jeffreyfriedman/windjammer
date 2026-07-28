@@ -157,12 +157,19 @@ pub fn main() {
 
     let map = test.compile().expect("compile");
     let rs = map.get("embedded/app.rs").expect("embedded/app.rs");
+    // Canonical owned-literal form is `String::from("…")` (see literals::string_literal_to_owned_rust);
+    // `.to_string()` is also accepted for older call-site paths.
+    let owned_literal = rs.contains(r#"String::from("users")"#)
+        || rs.contains(r#""users".to_string()"#)
+        || rs.contains(r#""users".to_string("#);
     assert!(
-        rs.contains(r#""users".to_string()"#) || rs.contains(r#""users".to_string("#),
+        owned_literal,
         "cross-crate string literal must coerce to owned String. Got:\n{rs}"
     );
     assert!(
-        !rs.contains(r#"register_table("users""#) || rs.contains(".to_string()"),
+        !rs.contains(r#"register_table("users""#)
+            || owned_literal
+            || rs.contains(".to_string()"),
         "must not pass bare &str when callee expects owned string. Got:\n{rs}"
     );
 }

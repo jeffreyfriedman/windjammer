@@ -573,6 +573,27 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         }
     }
 
+    // Copy aggregates (structs registered as Copy) emit as owned `mut x: T` when body
+    // analysis marks MutBorrowed — same contract as formal generation's copy_mut_as_owned.
+    // Without this, stale MutableReference in param_types makes call sites pass `&mut`.
+    // Also covers Custom structs that are Copy-derived but not yet in the copy registry
+    // at call-site resolution time (LedgerKit AppDeps / codegen_mut_owned_param_moved).
+    if let Some(formal) = sig.formal_param_type(param_idx) {
+        let bare = match formal {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        let is_copy_aggregate = crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+            && !crate::type_classification::is_copy_pass_by_value_formal(bare);
+        let is_bare_custom_struct = matches!(formal, Type::Custom(_));
+        if (is_copy_aggregate || is_bare_custom_struct)
+            && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+            && !param_type_is_borrowed_text(sig, param_idx)
+        {
+            return true;
+        }
+    }
+
     // Non-Copy non-text WJ formals emit as owned in generated Rust when the body
     // actually consumes the param (WDB-055 `engine.put(key: Key)`, WDB-056 Vec<u8>).
     // When body-convergence says Borrowed AND param_types confirms Reference(T),
@@ -622,19 +643,11 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
     }) && !sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
         flags.get(param_idx).copied() == Some(false)
     }) {
+        // Bare Custom / Copy-aggregate formals still emit owned even when param_types
+        // was promoted to MutableReference by body analysis (handled above).
         return false;
     }
-    if matches!(
-        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-            sig, param_idx,
-        ),
-        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-    ) && !sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-        flags.get(param_idx).copied() == Some(false)
-    }) {
-        return false;
-    }
-
+    // Do NOT call effective_param_ownership here — it calls this function (recursion).
     matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
         && param_type_is_owned_non_text(sig, param_idx)
 }

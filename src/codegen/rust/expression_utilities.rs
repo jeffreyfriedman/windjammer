@@ -52,6 +52,14 @@ pub fn strip_trailing_clone(arg_str: &mut String) {
     }
 }
 
+/// Collapse `expr.clone().clone()` (and longer chains) to a single `.clone()`.
+/// Call-site ownership + auto-clone can each append `.clone()` once.
+pub fn collapse_redundant_clones(arg_str: &mut String) {
+    while arg_str.ends_with(".clone().clone()") {
+        arg_str.truncate(arg_str.len() - 8);
+    }
+}
+
 /// True when prefix `&` would bind to the first sub-expression only (e.g. `&a + b`).
 fn expr_needs_borrow_parentheses(expr_str: &str) -> bool {
     if expr_str.starts_with('(') {

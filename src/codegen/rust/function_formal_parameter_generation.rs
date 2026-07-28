@@ -59,8 +59,22 @@ impl<'ast> CodeGenerator<'ast> {
                     func.body.as_slice(),
                     &param.name,
                 );
+                let moves_via_struct_init = self.param_moves_via_struct_literal_init(
+                    func.body.as_slice(),
+                    &param.name,
+                );
+                // Store-only Vec formals (`from_bytes(bytes)` → `WalSegment { bytes }`) emit
+                // `&Vec` + `.clone()` at the field — do not treat payload store as Owned force.
+                let vec_store_borrow_ok = (payload_stored || moves_via_struct_init)
+                    && Self::param_type_is_vec_container(&param.type_)
+                    && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    );
+                let payload_forces_owned = payload_stored && !vec_store_borrow_ok;
                 // SMART STRING INFERENCE: Use the inferred type from analyzer (string → &str vs String)
-                let inferred_type = if payload_stored
+                let inferred_type = if payload_forces_owned
                     || matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Owned)
@@ -85,54 +99,77 @@ impl<'ast> CodeGenerator<'ast> {
                     analyzed.inferred_ownership.get(&param.name),
                     Some(OwnershipMode::Borrowed)
                 );
-                let analyzer_or_ir_owned = payload_stored
-                    || matches!(
+                let field_proj_readonly = self.param_only_used_via_field_or_index_projection(
+                    func.body.as_slice(),
+                    &param.name,
+                ) && !self.param_has_owning_method_use(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                ) && !payload_forces_owned;
+                let borrow_delegation =
+                    self.param_should_emit_borrowed_delegation_formal(param, func);
+                // Analyzer Owned must not block demotion for field-projection-only Custom
+                // params, store-only Vec constructors, or borrowed-delegation formals.
+                let analyzer_or_ir_owned = payload_forces_owned
+                    || ((matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Owned)
-                    )
-                    || self.get_param_ownership(&param.name, analyzed) == Some(OwnershipMode::Owned);
+                    ) || self.get_param_ownership(&param.name, analyzed)
+                        == Some(OwnershipMode::Owned))
+                        && !field_proj_readonly
+                        && !vec_store_borrow_ok
+                        && !borrow_delegation);
                 if param.name != "self"
                     && !analyzer_or_ir_owned
                     && !self.in_trait_impl
                     && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
                     && !analyzed.returned_parameters.contains(&param.name)
-                    && !self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
+                    && !(moves_via_struct_init && !vec_store_borrow_ok)
                     && !self.is_type_copy(&param.type_)
                     && !matches!(
                         &param.type_,
                         Type::Reference(_) | Type::MutableReference(_)
                     )
                     && !self.func_is_pure_forwarding_delegate(func)
-                    && !self.param_passed_from_multiple_statements(
+                    && (!self.param_passed_from_multiple_statements(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
+                    ) || borrow_delegation)
                     && !self.param_has_forward_ref_keep_owned(
                         func.body.as_slice(),
                         &param.name,
                         func,
                     )
                     && !self.current_fn_mixed_forwarder_params.contains(&param.name)
-                    && !self.param_passes_to_wj_owned_sibling_call(
+                    && (!self.param_passes_to_wj_owned_sibling_call(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
-                    && !self.current_struct_name.as_ref().is_some_and(|sn| {
-                        self.param_keeps_owned_engine_key_facade(sn, param, func)
-                    })
+                    ) || borrow_delegation)
+                    // Key-facade keep-owned must not block asymmetric field-projection
+                    // params (`value.data.len()` → `&Value` beside owned Key) or
+                    // borrowed-delegation formals. Avoid `param_keeps_owned_*` here — it
+                    // re-enters `param_should_emit_borrowed_delegation_formal`.
+                    && (field_proj_readonly
+                        || borrow_delegation
+                        || !self.current_struct_name.as_ref().is_some_and(|sn| {
+                            self.struct_is_owned_engine_key_facade(sn, param)
+                        }))
                     && !self.is_collection_key_owned_param(param, func)
                     && !self.param_only_used_in_discarding_let_binding(
                         func.body.as_slice(),
                         &param.name,
                         func,
                     )
-                    && (self.param_should_emit_borrowed_delegation_formal(param, func)
+                    && (borrow_delegation
                         || (converged_analyzer_borrow
                             && (crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 || self.is_type_copy(&param.type_)))
+                        || field_proj_readonly
+                        || vec_store_borrow_ok
                         || (self.inferred_borrowed_params.contains(&param.name)
                             && !self.param_is_single_arg_call_only_delegate(param, func)
                             && !self.param_passed_from_multiple_statements(
@@ -426,6 +463,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 func.body.as_slice(),
                                 &param.name,
                             )
+                            && !self.param_only_used_in_discarding_let_binding(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            )
                             && self.param_should_emit_borrowed_delegation_formal(param, func)
                             && !self.is_collection_key_owned_param(param, func)
                         {
@@ -664,6 +706,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Pure delegation / call-only forwarders: emit &T even when IR/analyzer
                         // left the converged formal as owned (wdb LsmEngine::get → MemoryEngine::get).
                         // Never demote mutated / MutBorrowed params to shared `&T`.
+                        // Tuple discards (`let _ = (key.bytes.len(), value)`) keep source ownership.
                         if !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                             && !analyzed.returned_parameters.contains(&param.name)
                             && !analyzed.field_extract_parameters.contains(&param.name)
@@ -671,6 +714,11 @@ impl<'ast> CodeGenerator<'ast> {
                             && !self.param_moves_via_struct_literal_init(
                                 func.body.as_slice(),
                                 &param.name,
+                            )
+                            && !self.param_only_used_in_discarding_let_binding(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
                             )
                             && !self.is_collection_key_owned_param(param, func)
                             && !self.param_passed_from_multiple_statements(
@@ -897,6 +945,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                                 && !self.current_struct_name.as_ref().is_some_and(|sn| {
                                     self.param_keeps_owned_engine_key_facade(sn, param, func)
+                                        && !self.param_only_used_via_field_or_index_projection(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                        )
                                 })
                                 && !self.is_collection_key_owned_param(param, func)
                                 && !self.param_is_single_arg_call_only_delegate(param, func)
@@ -1033,10 +1085,39 @@ impl<'ast> CodeGenerator<'ast> {
                             // the param in an owned payload (enum variant, constructor, struct field).
                             // Do not overwrite facade / forward-ref / mixed-forwarder Owned contracts
                             // with body-inferred Borrowed (WDB-046 get/has_key Key formals).
-                            let keep_owned_contract = payload_stored
-                                || self.current_struct_name.as_ref().is_some_and(|sn| {
-                                    self.param_keeps_owned_engine_key_facade(sn, param, func)
-                                })
+                            // Tuple-discard suppress-unused (`let _ = (key.bytes.len(), value)`)
+                            // must keep source ownership — analyzer Borrowed from field reads
+                            // must not overwrite (WDB MemoryEngine::put / seed_write).
+                            // Exception: Vec readonly tuple discards still demote to `&Vec`
+                            // (`append_put` / `let _ = (key.len(), value.len())`).
+                            let discard_keep_owned = self.param_only_used_in_discarding_let_binding(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) && !(Self::param_type_is_vec_container(&param.type_)
+                                && self.param_has_readonly_expression_use(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
+                                && !self.param_has_owning_method_use(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ));
+                            let keep_owned_facade = self.current_struct_name.as_ref().is_some_and(
+                                |sn| self.struct_is_owned_engine_key_facade(sn, param),
+                            ) && !field_proj_readonly
+                                && !borrow_delegation;
+                            let to_owned_sibling = self.param_passes_to_wj_owned_sibling_call(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            );
+                            // Reuse outer `borrow_delegation` — do not re-enter
+                            // `param_should_emit_borrowed_delegation_formal` (stack overflow).
+                            let keep_owned_contract = payload_forces_owned
+                                || discard_keep_owned
+                                || keep_owned_facade
                                 || self.current_fn_mixed_forwarder_params.contains(&param.name)
                                 || self.current_fn_forward_ref_if_params.contains(&param.name)
                                 || self.param_has_forward_ref_keep_owned(
@@ -1044,22 +1125,24 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.name,
                                     func,
                                 )
-                                || self.param_passes_to_wj_owned_sibling_call(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                    func,
-                                )
+                                || (to_owned_sibling && !borrow_delegation)
                                 || analyzed.field_extract_parameters.contains(&param.name)
                                 || analyzed.returned_parameters.contains(&param.name)
-                                || self.param_moves_via_struct_literal_init(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                );
-                            if payload_stored {
+                                || (moves_via_struct_init && !vec_store_borrow_ok);
+                            if payload_forces_owned {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.str_ref_optimized_params.remove(&param.name);
                             } else if keep_owned_contract {
                                 ownership_mode = OwnershipMode::Owned;
+                            } else if field_proj_readonly
+                                || vec_store_borrow_ok
+                                || self.inferred_borrowed_params.contains(&param.name)
+                            {
+                                // Promote-readonly / store-only Vec / field-proj beat analyzer Owned.
+                                ownership_mode = OwnershipMode::Borrowed;
+                                if field_proj_readonly || vec_store_borrow_ok {
+                                    self.inferred_borrowed_params.insert(param.name.clone());
+                                }
                             } else if let Some(analyzed_own) =
                                 analyzed.inferred_ownership.get(&param.name)
                             {
@@ -1070,10 +1153,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 ownership_mode = OwnershipMode::Owned;
                             }
 
-                            // Readonly unused WJ `string` impl formals emit `&str` so forward-ref
+                            // Readonly unused WJ `string` formals emit `&str` so forward-ref
                             // call sites (DialogCondition → Inventory::has_item) see converged borrow.
-                            if self.current_struct_name.is_some()
-                                && unused_params.contains(&param.name)
+                            // Free functions included (wal `replay_all(path)`).
+                            if unused_params.contains(&param.name)
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
                                     &param.type_,
@@ -1081,6 +1164,21 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                                 && !payload_stored
                                 && !self.param_stored_in_owned_payload(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
+                            {
+                                ownership_mode = OwnershipMode::Borrowed;
+                                self.str_ref_optimized_params.insert(param.name.clone());
+                                self.inferred_borrowed_params.insert(param.name.clone());
+                                self.inferred_mut_borrowed_params.remove(&param.name);
+                            } else if crate::codegen::rust::types::is_windjammer_text_type(
+                                &param.type_,
+                            ) && !matches!(
+                                &param.type_,
+                                Type::Reference(_) | Type::MutableReference(_)
+                            ) && !payload_stored
+                                && self.param_only_used_in_simple_or_tuple_discard(
                                     func.body.as_slice(),
                                     &param.name,
                                 )
@@ -1258,6 +1356,16 @@ impl<'ast> CodeGenerator<'ast> {
                         self.inferred_borrowed_params.remove(&param.name);
                         self.inferred_mut_borrowed_params.remove(&param.name);
                         self.str_ref_optimized_params.remove(&param.name);
+                        if param.name != "self" {
+                            let user_arg_idx = func
+                                .parameters
+                                .iter()
+                                .filter(|p| p.name != "self")
+                                .position(|p| p.name == param.name)
+                                .unwrap_or(param_idx);
+                            self.current_fn_emitted_mut_arg_indices
+                                .remove(&user_arg_idx);
+                        }
                     }
                 }
 
