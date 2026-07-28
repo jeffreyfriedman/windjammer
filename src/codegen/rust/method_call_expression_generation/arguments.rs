@@ -569,8 +569,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 // Unconditional clone breaks consuming APIs (`Vec::push(item)`).
                                 let needs_reuse_clone = self.auto_clone_analysis.as_ref().is_some_and(
                                     |a| {
+                                        // Statement-local reuse only — `needs_clone_anywhere`
+                                        // falsely clones single-use owned method args
+                                        // (`local.merge(remote)` → `remote.clone()`).
                                         a.needs_clone(name, self.current_statement_idx).is_some()
-                                            || a.needs_clone_anywhere(name)
                                     },
                                 );
                                 if needs_reuse_clone
@@ -962,7 +964,20 @@ impl<'ast> CodeGenerator<'ast> {
                                 arg_str = format!("{}.to_string()", arg_str);
                             }
                         } else {
-                            arg_str = format!("{}.clone()", arg_str);
+                            // Only clone when the owned binding is reused after this call.
+                            // Unconditional clone breaks consuming moves (`local.merge(remote)`).
+                            let needs_reuse_clone = matches!(
+                                arg_to_generate,
+                                Expression::Identifier { .. }
+                            ) && self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                                let Expression::Identifier { name, .. } = arg_to_generate else {
+                                    return false;
+                                };
+                                a.needs_clone(name, self.current_statement_idx).is_some()
+                            });
+                            if needs_reuse_clone {
+                                arg_str = format!("{}.clone()", arg_str);
+                            }
                         }
                     }
                 }
@@ -2735,6 +2750,21 @@ impl<'ast> CodeGenerator<'ast> {
                     Some(i),
                     Some(arguments.len()),
                 );
+
+                // Single-statement consuming moves: owned formals pass by value without
+                // `.clone()` (`local.merge(remote)`). Auto-clone can over-mark cross-crate
+                // method args when the callee returns the same type.
+                if let Expression::Identifier { name, .. } = arg_to_generate {
+                    if arg_str.ends_with(".clone()")
+                        && !wants_ref
+                        && self.caller_owned_non_copy_formal(name)
+                        && self.current_function_body.len() <= 1
+                    {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut arg_str,
+                        );
+                    }
+                }
 
                 if (self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_to_generate)
                     || legacy_sig.is_some_and(|sig| {
