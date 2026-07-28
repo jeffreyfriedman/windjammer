@@ -65,6 +65,9 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
     sig: &FunctionSignature,
     param_idx: usize,
 ) -> bool {
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return false;
+    }
     if let Some(ref flags) = sig.emitted_rust_ref_params {
         if flags.get(param_idx).copied().unwrap_or(false) {
             return true;
@@ -114,9 +117,92 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
     ) {
         return true;
     }
+    // Bare WJ Custom formals (`other: Lsn`, `key: Key`) emit owned Rust unless codegen
+    // recorded shared-ref (`emitted_rust_ref_params[idx] == true`). Stale `Reference(T)`
+    // in formal_param_types / param_types must not force call-site `&` (WDB-060).
+    if let Some(formal) = sig.formal_param_type(param_idx) {
+        let bare = match formal {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        if matches!(bare, Type::Custom(_))
+            && !crate::codegen::rust::types::is_windjammer_text_type(bare)
+            && sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(param_idx))
+                .copied()
+                != Some(true)
+        {
+            return false;
+        }
+        // Copy aggregates (`other: Lsn`) always emit owned formals; stale Reference wrap
+        // in formal_param_types must not resurrect `&through` at call sites (WDB-060).
+        if crate::codegen::rust::type_analysis::is_copy_type(bare)
+            && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+            && sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(param_idx))
+                .copied()
+                != Some(true)
+        {
+            return false;
+        }
+    }
     sig.param_types.get(param_idx).is_some_and(|t| match t {
         Type::Reference(inner) | Type::MutableReference(inner) => {
-            !types::is_windjammer_text_type(inner.as_ref())
+            let inner = inner.as_ref();
+            if types::is_windjammer_text_type(inner) {
+                return false;
+            }
+            // Codegen-converged bare formal beats stale `Reference(T)` in `param_types`
+            // (`other: Lsn` emission vs analyzer `Reference(Lsn)` — WDB-060).
+            if !sig.formal_param_types.is_empty() {
+                if let Some(formal) = sig.formal_param_types.get(param_idx) {
+                    if !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                        && formal == inner
+                        && sig
+                            .emitted_rust_ref_params
+                            .as_ref()
+                            .and_then(|flags| flags.get(param_idx))
+                            .copied()
+                            != Some(true)
+                    {
+                        return false;
+                    }
+                }
+            }
+            // Copy aggregates emit owned Rust formals — stale Reference(T) must not borrow (WDB-060).
+            if (crate::codegen::rust::type_analysis::is_copy_type(inner)
+                || matches!(
+                    inner,
+                    Type::Custom(name)
+                        if crate::type_classification::is_known_copy_aggregate(name)
+                ))
+                && !crate::type_classification::is_copy_pass_by_value_formal(inner)
+                && sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    != Some(true)
+            {
+                return false;
+            }
+            // Stale `Reference(Custom)` is not proof of emitted `&T` unless codegen
+            // confirmed shared-ref emission (WDB-060 `Lsn::is_at_or_before`).
+            if matches!(inner, Type::Custom(_))
+                && sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    != Some(true)
+            {
+                return false;
+            }
+            true
         }
         _ => false,
     })
@@ -231,10 +317,29 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
     param_idx: usize,
     arg_index: usize,
 ) -> bool {
+    skip_stale_borrow_on_owned_user_free_fn_with_global(
+        registry, None, callee_name, call_sig, param_idx, arg_index,
+    )
+}
+
+/// Same as [`skip_stale_borrow_on_owned_user_free_fn`] but also consults a converged
+/// global registry so cross-module `&str` emission is not treated as a stale borrow.
+pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
+    registry: &crate::analyzer::SignatureRegistry,
+    global: Option<&crate::analyzer::SignatureRegistry>,
+    callee_name: &str,
+    call_sig: &FunctionSignature,
+    param_idx: usize,
+    arg_index: usize,
+) -> bool {
     if callee_name.contains("::") {
         return false;
     }
     let check = |sig: &FunctionSignature, pidx: usize| -> bool {
+        // Codegen confirmed shared-ref (`&str`) — never skip the borrow prefix.
+        if callee_emits_shared_rust_ref_param(sig, pidx) {
+            return false;
+        }
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return true;
         }
@@ -249,12 +354,31 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
         plain_string_formal_passes_owned_at_call_site(sig, pidx)
     };
     if check(call_sig, param_idx) {
+        // Still allow global codegen refresh to veto the skip.
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let global_emits_ref = global.is_some_and(|g| {
+            g.get_signature(callee_name)
+                .or_else(|| g.get_signature(simple))
+                .is_some_and(|rs| {
+                    let pidx = rs.arg_param_index(arg_index);
+                    callee_emits_shared_rust_ref_param(rs, pidx)
+                })
+        });
+        if global_emits_ref {
+            return false;
+        }
         return true;
     }
     let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
     registry
         .get_signature(callee_name)
         .or_else(|| registry.get_signature(simple))
+        .or_else(|| {
+            global.and_then(|g| {
+                g.get_signature(callee_name)
+                    .or_else(|| g.get_signature(simple))
+            })
+        })
         .is_some_and(|rs| {
             let pidx = rs.arg_param_index(arg_index);
             check(rs, pidx)
@@ -571,9 +695,15 @@ pub fn should_borrow_at_call_site_with_copy_check(
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::Borrowed)
             )
-            || sig.param_types.get(param_idx).is_some_and(|t| {
+            || (sig.param_types.get(param_idx).is_some_and(|t| {
                 matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            })
+            }) && callee_emits_rust_ref
+                && sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    != Some(false))
             || callee_emits_rust_ref
     };
 

@@ -310,11 +310,42 @@ impl AutoCloneAnalysis {
             return false;
         };
         let param_idx = sig.arg_param_index(arg_index);
-        sig.field_extract_params
+        let field_extract = sig
+            .field_extract_params
             .as_ref()
             .and_then(|flags| flags.get(param_idx))
             .copied()
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if !field_extract {
+            return false;
+        }
+        // Field-extract demotes Move→Read only for shared-ref formals. Owned WJ
+        // formals that match/project (`value_tag(value: Value)`) still move — callers
+        // must `.clone()` on reuse (WDB-063).
+        match sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+        {
+            Some(true) => return true,
+            Some(false) => return false,
+            None => {}
+        }
+        // Bare WJ source formals (`value: Value`) still move — even when analyzer marks
+        // Borrowed from match/field reads. Only explicit `&T` formals field-extract as Read.
+        // Do not fall back to converged `param_types` (may be `Reference(T)` while the WJ
+        // source formal stayed bare owned).
+        if !sig.formal_param_types.is_empty() {
+            sig.formal_param_types.get(param_idx).is_some_and(|t| {
+                matches!(
+                    t,
+                    crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)
+                )
+            })
+        } else {
+            false
+        }
     }
 
     /// Collect usages from an expression
@@ -861,6 +892,102 @@ mod tests {
     }
 
     #[test]
+    fn test_owned_field_extract_value_param_still_needs_clone_on_reuse() {
+        // WDB-063: value_tag(value: Value) match-projects but emits owned Value —
+        // field_extract must not demote Move→Read; first call needs .clone().
+        let mut registry = crate::analyzer::SignatureRegistry::new();
+        let mut sig = crate::analyzer::FunctionSignature {
+            name: "value_tag".to_string(),
+            param_types: vec![Type::Custom("Value".to_string())],
+            formal_param_types: vec![Type::Custom("Value".to_string())],
+            param_ownership: vec![crate::analyzer::OwnershipMode::Borrowed],
+            return_type: Some(Type::Int32),
+            return_ownership: crate::analyzer::OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            field_extract_params: Some(vec![true]),
+            forwarding_borrow_params: None,
+        };
+        registry.add_function("value_tag".to_string(), sig.clone());
+        sig.name = "value_i64".to_string();
+        registry.add_function("value_i64".to_string(), sig);
+
+        let func = FunctionDecl {
+            name: "seed_write".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "value".to_string(),
+                pattern: None,
+                type_: Type::Custom("Value".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("tag".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "value_tag".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "value".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("payload".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "value_i64".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "value".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function_with_registry(&func, Some(&registry));
+        assert!(
+            analysis.needs_clone("value", 0).is_some(),
+            "owned field-extract formal must still move — clone at first use"
+        );
+    }
+
+    #[test]
     fn test_param_let_alias_then_reuse_needs_clone_at_alias() {
         let func = FunctionDecl {
             name: "send".to_string(),
@@ -1132,5 +1259,177 @@ mod tests {
             "self.color in while loop if-expression must be flagged for clone"
         );
     }
-}
 
+    #[test]
+    fn test_owned_field_extract_without_emitted_flags_still_moves() {
+        let mut registry = crate::analyzer::SignatureRegistry::new();
+        let sig = crate::analyzer::FunctionSignature {
+            name: "value_tag".to_string(),
+            param_types: vec![Type::Reference(Box::new(Type::Custom("Value".to_string())))],
+            formal_param_types: vec![Type::Custom("Value".to_string())],
+            param_ownership: vec![crate::analyzer::OwnershipMode::Borrowed],
+            return_type: Some(Type::Int32),
+            return_ownership: crate::analyzer::OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: Some(vec![true]),
+            forwarding_borrow_params: None,
+        };
+        registry.add_function("value_tag".to_string(), sig.clone());
+        let mut sig2 = sig.clone();
+        sig2.name = "value_i64".to_string();
+        registry.add_function("value_i64".to_string(), sig2);
+
+        let func = FunctionDecl {
+            name: "seed_write".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "value".to_string(),
+                pattern: None,
+                type_: Type::Custom("Value".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("tag".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "value_tag".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "value".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("payload".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "value_i64".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "value".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function_with_registry(&func, Some(&registry));
+        assert!(
+            analysis.needs_clone("value", 0).is_some(),
+            "bare WJ formal + Reference param_types must still move; got sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn test_seed_write_value_reuse_needs_clone_without_registry() {
+        let func = FunctionDecl {
+            name: "seed_write".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "value".to_string(),
+                pattern: None,
+                type_: Type::Custom("Value".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("tag".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "value_tag".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "value".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("payload".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "value_i64".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "value".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("value", 0).is_some(),
+            "seed_write without registry must still clone; sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+}
