@@ -23,17 +23,31 @@ impl<'ast> CodeGenerator<'ast> {
         let receiver_type_name = self
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));
+        let inferred_receiver_ty = self.infer_expression_type(object);
         let resolved_signature = resolved_signature.map(|mut sig| {
             if let Some(rt) = receiver_type_name.as_deref() {
-                if let Some(reg) =
-                    self.resolve_method_function_signature(rt, method, arguments.len())
-                {
+                if let Some(reg) = self.resolve_method_function_signature_specialized(
+                    rt,
+                    method,
+                    arguments.len(),
+                    inferred_receiver_ty.as_ref(),
+                ) {
                     crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
                         &mut sig, &reg,
                     );
                 }
                 if let Some(ms) = self.lookup_method_signature(rt, method) {
-                    let reg_sig = ms.to_function_signature();
+                    let mut reg_sig = ms.to_function_signature();
+                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                        Some(rt),
+                        inferred_receiver_ty.as_ref(),
+                        self.current_function_return_type.as_ref(),
+                    ) {
+                        crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                            &mut reg_sig,
+                            &recv_ty,
+                        );
+                    }
                     use crate::codegen::rust::signature_promotion::{
                         converged_has_reference_params_over_bare,
                         method_registry_reflects_emitted_owned,
@@ -44,6 +58,17 @@ impl<'ast> CodeGenerator<'ast> {
                         sig = reg_sig;
                     }
                 }
+            }
+            if let Some(recv_ty) =
+                crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    receiver_type_name.as_deref(),
+                    inferred_receiver_ty.as_ref(),
+                    self.current_function_return_type.as_ref(),
+                )
+            {
+                crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                    &mut sig, &recv_ty,
+                );
             }
             sig
         });
@@ -145,6 +170,16 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         arg_str = arg_str["&mut ".len()..].to_string();
                     }
+                    // Signature-driven: owned String expression at an `&str` formal needs `&`.
+                    // Preserves source `.to_string()` (i32→String) while satisfying push_str.
+                    if !arg_str.starts_with('&')
+                        && arg_str.ends_with(".to_string()")
+                        && sig.param_type_for_arg(i).is_some_and(|t| {
+                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                        })
+                    {
+                        arg_str = format!("&{arg_str}");
+                    }
                     // After stripping stale `&mut`, owned WJ `string` formals still need
                     // string-literal → String coercion at the call site.
                     if matches!(ownership, OwnershipMode::Owned) {
@@ -220,9 +255,6 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             return;
                         }
-                        let param_is_str_ref = sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                        });
                         let arg_is_string_literal = matches!(
                             arguments.get(i).map(|(_, e)| e),
                             Some(Expression::Literal {
@@ -248,6 +280,15 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Expression::Identifier { name, .. } = inner {
                                 if self.identifier_already_ref(name)
                                     || self.str_ref_optimized_params.contains(name.as_str())
+                                    || self.emitted_rust_ref_formals.contains(name.as_str())
+                                    || (self.inferred_borrowed_params.contains(name.as_str())
+                                        && !self.collection_key_owned_params.contains(name.as_str())
+                                        && self.current_function_params.iter().any(|p| {
+                                            p.name == *name
+                                                && crate::codegen::rust::types::is_windjammer_text_type(
+                                                    &p.type_,
+                                                )
+                                        }))
                                 {
                                     return;
                                 }
@@ -284,7 +325,15 @@ impl<'ast> CodeGenerator<'ast> {
                             if is_collection_key || !can_mut {
                                 apply_borrow(&mut arg_str);
                                 arg_str
-                            } else if callee_formal_is_copy {
+                            } else if callee_formal_is_copy
+                                && callee_arg_emits_owned
+                                && !matches!(ownership, OwnershipMode::MutBorrowed)
+                            {
+                                // Owned Copy aggregates (`mut deps: AppDeps`) pass by value.
+                                // Cross-file `function_emitted_mut_arg_indices` may upgrade
+                                // local `ownership` to MutBorrowed while the looked-up sig still
+                                // claims an owned Copy contract — honor the upgrade (`&mut
+                                // self.player` into `player: &mut PlayerState`).
                                 return arg_str;
                             } else if let Some(Expression::Identifier { name, .. }) = arg_expr {
                                 if self.identifier_already_mut_ref(name) {
@@ -324,6 +373,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 return format!("&{}", arg_str.trim_start_matches("&mut "));
                             }
                             if arg_str.starts_with('&') {
+                                // Strip stale `&` when the binding is already a Rust shared ref
+                                // (`key: &str` → `map.get(key)`, not `map.get(&key)`).
+                                if let Some((_, arg_expr)) = arguments.get(i) {
+                                    if let Expression::Identifier { name, .. } = arg_expr {
+                                        if (self.emitted_rust_ref_formals.contains(name.as_str())
+                                            || self.str_ref_optimized_params.contains(name.as_str())
+                                            || self.identifier_already_ref(name))
+                                            && !self.collection_key_owned_params.contains(name.as_str())
+                                        {
+                                            let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                                &arg_str,
+                                            );
+                                            if base == name.as_str() {
+                                                return name.clone();
+                                            }
+                                        }
+                                    }
+                                }
                                 return arg_str;
                             }
                             if !is_collection_key
@@ -721,6 +788,7 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Identifier { name, .. } => {
                                 self.identifier_already_ref(name)
                                     || self.str_ref_optimized_params.contains(name.as_str())
+                                    || self.emitted_rust_ref_formals.contains(name.as_str())
                             }
                             Expression::Unary {
                                 op: UnaryOp::Ref, ..
@@ -731,6 +799,7 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(arg_expr, Expression::Identifier { name, .. }
                                 if self.identifier_already_ref(name)
                                     || self.str_ref_optimized_params.contains(name.as_str())
+                                    || self.emitted_rust_ref_formals.contains(name.as_str())
                                     || self.inferred_borrowed_params.contains(name));
                         crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
                             Some(sig),
@@ -741,6 +810,32 @@ impl<'ast> CodeGenerator<'ast> {
                             receiver_type_name.as_deref(),
                             arg_binding_already_shared_ref,
                         );
+                    }
+                    // Final strip: already-emitted shared-ref formals must not become `&&T`.
+                    if let Some((_, Expression::Identifier { name, .. })) = arguments.get(i) {
+                        if (self.emitted_rust_ref_formals.contains(name.as_str())
+                            || self.str_ref_optimized_params.contains(name.as_str())
+                            || self.identifier_already_ref(name)
+                            || (self.inferred_borrowed_params.contains(name.as_str())
+                                && !self.collection_key_owned_params.contains(name.as_str())
+                                && self.current_function_params.iter().any(|p| {
+                                    p.name == *name
+                                        && crate::codegen::rust::types::is_windjammer_text_type(
+                                            &p.type_,
+                                        )
+                                })))
+                            && !self.collection_key_owned_params.contains(name.as_str())
+                            && arg_str.starts_with('&')
+                            && !arg_str.starts_with("&mut ")
+                        {
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &arg_str,
+                                );
+                            if base == name.as_str() {
+                                arg_str = name.clone();
+                            }
+                        }
                     }
                     arg_str
                 })
@@ -857,14 +952,39 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
         }
 
-        // Special case: String-returning args passed to &str parameters need .as_str()
+        // Signature-driven: owned String-producing args at `&str` formals need a borrow.
+        // Prefer `&expr.to_string()` so source `.to_string()` remains visible (TDD).
         if args.len() == 1 {
+            let receiver_is_string = receiver_type_name.as_deref().is_some_and(|rt| {
+                rt == "String" || rt == "string" || rt.ends_with("::String")
+            }) || matches!(
+                object,
+                Expression::Identifier { name, .. }
+                    if self.local_var_types.get(name).is_some_and(|t| {
+                        matches!(t, Type::String)
+                            || matches!(t, Type::Custom(n) if n == "String" || n == "string")
+                    })
+            );
             let param_wants_str_ref = resolved_signature
                 .as_ref()
                 .and_then(|sig| sig.param_type_for_arg(0))
                 .is_some_and(|t| {
                     crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                });
+                })
+                || receiver_type_name.as_deref().is_some_and(|rt| {
+                    self.lookup_method_signature(rt, method)
+                        .and_then(|ms| ms.param_types.first())
+                        .is_some_and(|t| {
+                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                        })
+                })
+                || (receiver_is_string
+                    && self
+                        .lookup_method_signature("String", method)
+                        .and_then(|ms| ms.param_types.first())
+                        .is_some_and(|t| {
+                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                        }));
             if param_wants_str_ref {
                 if let Some((_label, arg)) = arguments.first() {
                     // `"lit".to_string()` at a &str param is already satisfied by the literal.
@@ -884,17 +1004,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 let bare = lit.strip_suffix(".to_string()").unwrap_or(lit);
                                 return format!("{}.{}({})", obj_str, method, bare);
                             }
-                        }
-                        if matches!(
-                            m.as_str(),
-                            "to_lowercase" | "to_uppercase" | "to_string" | "trim" | "clone"
-                        ) {
-                            let inner = args[0].trim_start_matches('&');
-                            if inner.starts_with('"') || inner.starts_with("r\"") {
-                                return format!("{}.{}({})", obj_str, method, inner);
+                            // Prefer `&expr.to_string()` (coerces to &str); keeps `.to_string()`
+                            // visible for non-string→String conversions (TDD: to_string_push_str).
+                            if !args[0].starts_with('&') {
+                                return format!("{}.{}(&{})", obj_str, method, args[0]);
                             }
-                            return format!("{}.{}({}.as_str())", obj_str, method, inner);
                         }
+                    }
+                    // Generated arg may already be `….to_string()` even if AST shape differs.
+                    if args[0].ends_with(".to_string()") && !args[0].starts_with('&') {
+                        return format!("{}.{}(&{})", obj_str, method, args[0]);
                     }
                 }
             }
@@ -1008,6 +1127,14 @@ impl<'ast> CodeGenerator<'ast> {
         // DISABLED: Too aggressive - needs type checking to determine if parameter expects VNode
         // TODO: Re-enable with proper type checking when VNode type bindings are implemented
         let mut processed_args = args;
+        // Always strip stale `&` on already-emitted shared-ref formals (`key: &str` →
+        // `map.get(key)`, never `map.get(&key)` / `&&str`).
+        for (i, arg_str) in processed_args.iter_mut().enumerate() {
+            let Some((_, arg_expr)) = arguments.get(i) else {
+                continue;
+            };
+            self.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
+        }
         if let Some(ref rt) = receiver_type_name {
             let qualified = format!("{rt}::{method}");
             for (i, arg_str) in processed_args.iter_mut().enumerate() {
@@ -1038,6 +1165,13 @@ impl<'ast> CodeGenerator<'ast> {
                         arguments.len(),
                     );
                 if !wants_borrow {
+                    continue;
+                }
+                // Already-emitted shared-ref bindings are already borrowed.
+                if self.emitted_rust_ref_formals.contains(name.as_str())
+                    || self.str_ref_optimized_params.contains(name.as_str())
+                    || self.identifier_already_ref(name)
+                {
                     continue;
                 }
                 let is_vec_local = self.local_var_types.get(name).is_some_and(|t| {
@@ -1110,12 +1244,19 @@ impl<'ast> CodeGenerator<'ast> {
                         let param_wants_owned_string = sig_for_format
                             .map(|sig| {
                                 let idx = sig.arg_param_index(arg_idx);
-                                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                let effective =
+                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                                        sig,
+                                        arg_idx,
+                                        receiver_type_name.as_deref(),
+                                    );
+                                (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                     sig, idx,
-                                ) && sig.formal_param_type(idx).is_some_and(|t| {
-                                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                        && crate::codegen::rust::types::is_windjammer_text_type(t)
-                                })
+                                ) || matches!(effective, OwnershipMode::Owned))
+                                    && sig.formal_param_type(idx).is_some_and(|t| {
+                                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                            && crate::codegen::rust::types::is_windjammer_text_type(t)
+                                    })
                             })
                             .unwrap_or(false)
                             || self.mc_method_param_expects_owned_string_from_global(

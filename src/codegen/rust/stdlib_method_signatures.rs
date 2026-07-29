@@ -110,6 +110,17 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     // String methods
     let mut string_methods = HashMap::new();
     string_methods.insert(
+        "new".to_string(),
+        MethodSignature::new(
+            "String",
+            "new",
+            vec![],
+            vec![],
+            Some(Type::String),
+            false, // static constructor
+        ),
+    );
+    string_methods.insert(
         "contains".to_string(),
         MethodSignature::new(
             "String",

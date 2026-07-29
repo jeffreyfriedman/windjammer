@@ -171,6 +171,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         } else {
                                             Some(Type::Custom(type_name.to_string()))
                                         }
+                                    } else if type_name == "String" {
+                                        Some(Type::String)
                                     } else {
                                         Some(Type::Custom(type_name.to_string()))
                                     }
@@ -224,11 +226,41 @@ impl<'ast> CodeGenerator<'ast> {
                                 } else {
                                     Some(Type::Custom(collection_name.to_string()))
                                 }
+                            } else if fn_name == "String::new" {
+                                Some(Type::String)
                             } else {
                                 self.infer_expression_type(value)
                             }
                         } else {
                             // Simple function call: look up in signature registry
+                            self.infer_expression_type(value)
+                        }
+                    }
+                    Expression::MethodCall {
+                        object, method, ..
+                    } => {
+                        // `String::new()` may parse as MethodCall on a type identifier.
+                        if let Expression::Identifier {
+                            name: type_name, ..
+                        } = &**object
+                        {
+                            if type_name.chars().next().is_some_and(|c| c.is_uppercase())
+                                && (method == "new"
+                                    || method.starts_with("from_")
+                                    || method.starts_with("with_")
+                                    || method == "default")
+                            {
+                                if *type_name == "String" {
+                                    Some(Type::String)
+                                } else {
+                                    self.infer_expression_type(value).or_else(|| {
+                                        Some(Type::Custom(type_name.to_string()))
+                                    })
+                                }
+                            } else {
+                                self.infer_expression_type(value)
+                            }
+                        } else {
                             self.infer_expression_type(value)
                         }
                     }

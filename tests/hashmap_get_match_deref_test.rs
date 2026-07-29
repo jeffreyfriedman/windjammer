@@ -70,15 +70,16 @@ fn main() {
 
     match test_utils::compile_single_result(code) {
         Ok(generated) => {
-            // For Copy types (i32, f32, bool), bindings from HashMap .get() match
-            // should be auto-dereferenced with *value
-            let has_deref = generated.contains("*value")
+            // For Copy types (i32, f32, bool), HashMap.get() → Option<&V> must become
+            // owned via `.copied()` and/or auto-deref (`*value`) / clone.
+            let has_owned_copy_binding = generated.contains(".copied()")
+                || generated.contains("*value")
                 || generated.contains("*val")
                 || generated.contains(".clone()");
 
             assert!(
-                has_deref,
-                "HashMap .get() match bindings should have auto-deref (*value) or clone.\nGenerated code:\n{}",
+                has_owned_copy_binding,
+                "HashMap .get() match bindings should use .copied() and/or auto-deref (*value) or clone.\nGenerated code:\n{}",
                 generated
             );
 

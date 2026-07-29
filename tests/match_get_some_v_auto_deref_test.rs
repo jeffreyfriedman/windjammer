@@ -29,8 +29,11 @@ pub fn score(g_score: HashMap<u32, f32>, key: u32) -> f32 {
 
     let rust_code = test_utils::compile_single(source);
     assert!(
-        rust_code.contains("Some(v) => *v") || rust_code.contains("Some(v) => * v"),
-        "Some(v) arm should deref borrowed get() value, got:\n{rust_code}"
+        rust_code.contains("Some(v) => *v")
+            || rust_code.contains("Some(v) => * v")
+            || (rust_code.contains(".copied()")
+                && (rust_code.contains("Some(v) => v") || rust_code.contains("Some(v)=>v"))),
+        "Some(v) arm should deref borrowed get() value or use .copied() for Copy V, got:\n{rust_code}"
     );
     test_utils::verify_rust_compiles(&rust_code).expect("generated match should compile");
 }

@@ -512,6 +512,33 @@ pub(crate) fn merge_codegen_refresh_metadata(
     for idx in 0..flags.len().min(into.param_types.len()) {
         match flags.get(idx).copied() {
             Some(false) => {
+                // `false` means "not shared `&T`" — either owned or `&mut T`.
+                // Prefer `from`'s MutBorrowed / MutableReference over forcing Owned.
+                if matches!(
+                    from.param_ownership.get(idx),
+                    Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                ) || matches!(
+                    from.param_types.get(idx),
+                    Some(Type::MutableReference(_))
+                ) {
+                    if let Some(Type::MutableReference(inner)) = from.param_types.get(idx) {
+                        into.param_types[idx] = Type::MutableReference(inner.clone());
+                    } else if let Some(formal) = from.formal_param_type(idx).or_else(|| {
+                        into.formal_param_type(idx)
+                    }) {
+                        let bare = match formal {
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                inner.as_ref().clone()
+                            }
+                            other => other.clone(),
+                        };
+                        into.param_types[idx] = Type::MutableReference(Box::new(bare));
+                    }
+                    if idx < into.param_ownership.len() {
+                        into.param_ownership[idx] = crate::analyzer::OwnershipMode::MutBorrowed;
+                    }
+                    continue;
+                }
                 let Some(formal) = into.formal_param_type(idx) else {
                     continue;
                 };
@@ -575,8 +602,21 @@ pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) ->
     })
 }
 
-/// Single argument emits as owned non-text in generated Rust (not `&T`).
+/// Single argument emits as owned non-text in generated Rust (not `&T` / `&mut T`).
 pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usize) -> bool {
+    // `&mut T` formals: `emitted_rust_ref_params` is often `false` (flag means shared `&T`
+    // only), but call sites must still pass `&mut` — not owned / `.clone()`.
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::MutBorrowed)
+    ) || sig
+        .param_types
+        .get(param_idx)
+        .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+    {
+        return false;
+    }
+
     if let Some(ref flags) = sig.emitted_rust_ref_params {
         if flags.get(param_idx).copied().unwrap_or(false) {
             return false;
@@ -593,7 +633,7 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
     // call sites from emitting `&through` into an owned Lsn formal (WDB-053/060).
     //
     // Bare non-Copy Custom with Borrowed ownership emits `&T` (keys_equal) — do not
-    // claim owned for those.
+    // claim owned for those. MutBorrowed Copy (`&mut PlayerState`) already returned above.
     if let Some(formal) = sig
         .formal_param_type(param_idx)
         .or_else(|| sig.param_types.get(param_idx))
@@ -667,13 +707,17 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         let param_types_ref = sig.param_types.get(param_idx).is_some_and(|t| {
             matches!(t, Type::Reference(_) | Type::MutableReference(_))
         });
-        // Bare Custom formal + bare param_types → owned emission even when analyzer
-        // still says Borrowed from field reads (`other: Lsn`). True `&T` demotion
-        // wraps `param_types` as Reference (keys_equal) or sets emitted_rust_ref=true.
+        // Bare Custom + Owned (or Copy aggregate) → owned emission. Body-converged
+        // Borrowed on non-Copy Custom (QuestId map-key lookup) must NOT claim owned —
+        // call sites need `&QuestId`. Copy aggregates (Lsn) already returned above via
+        // `is_copy_aggregate`; codegen-refreshed owned formals use emitted_rust_ref=false.
+        // True non-Copy `&T` demotion also wraps `param_types` as Reference or sets
+        // emitted_rust_ref=true.
         if is_bare_custom_struct
             && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
             && !param_type_is_borrowed_text(sig, param_idx)
             && !param_types_ref
+            && (is_copy_aggregate || !analyzer_borrows)
         {
             return true;
         }

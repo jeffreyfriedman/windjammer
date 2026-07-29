@@ -1011,6 +1011,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         );
                     }
                 }
+                // Re-finalize literals with refreshed `&String` / `&str` param types.
+                crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+                    text_sig.as_ref(),
+                    i,
+                    func_name.rsplit("::").next(),
+                    arg,
+                    &mut arg_str,
+                    func_name
+                        .split("::")
+                        .next()
+                        .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
+                    Some(&gen.enum_variant_types),
+                    func_name.split("::").next(),
+                );
                 crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
                     text_sig.as_ref(),
                     i,
@@ -1634,7 +1648,21 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                         other => gen.is_type_copy(other),
                                     });
                                 if callee_formal_is_copy {
-                                    arg_str = format!("*{}", arg_str);
+                                    // Explicit `&x` / `(&x)` → owned Copy formal: pass by value.
+                                    // Expression gen may already have stripped `&`, leaving a
+                                    // bare `x` — do NOT emit `*x` (E0614 on owned locals).
+                                    if arg_str.starts_with("&mut ") {
+                                        arg_str = arg_str["&mut ".len()..].to_string();
+                                    } else if arg_str.starts_with('&') {
+                                        arg_str = arg_str[1..].trim_start().to_string();
+                                    } else if arg_str.starts_with('(') && arg_str.ends_with(')') {
+                                        let inner = arg_str[1..arg_str.len() - 1].trim();
+                                        if let Some(rest) = inner.strip_prefix("&mut ") {
+                                            arg_str = rest.to_string();
+                                        } else if let Some(rest) = inner.strip_prefix('&') {
+                                            arg_str = rest.trim_start().to_string();
+                                        }
+                                    }
                                 } else if !arg_str.ends_with(".clone()") {
                                     let inner = if arg_str.starts_with('(') && arg_str.ends_with(')') {
                                         let inner_expr = arg_str[1..arg_str.len() - 1].trim();

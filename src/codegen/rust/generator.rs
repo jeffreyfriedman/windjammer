@@ -808,17 +808,57 @@ impl<'ast> CodeGenerator<'ast> {
             }
         };
 
-        if let Some(sig) = pick(local, global_only) {
-            return Some(sig);
-        }
-        if let Some(sig) = self.find_method_on_receiver_with_global(receiver_type, method, arg_count)
+        let mut resolved = if let Some(sig) = pick(local, global_only) {
+            Some(sig)
+        } else if let Some(sig) =
+            self.find_method_on_receiver_with_global(receiver_type, method, arg_count)
         {
-            return Some(finalize(sig.clone()));
+            Some(finalize(sig.clone()))
+        } else if let Some(ms) = self.lookup_method_signature(receiver_type, method) {
+            Some(finalize(ms.to_function_signature()))
+        } else {
+            None
+        }?;
+
+        if let Some(recv_ty) =
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                Some(receiver_type),
+                None,
+                self.current_function_return_type.as_ref(),
+            )
+        {
+            crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                &mut resolved,
+                &recv_ty,
+            );
         }
-        if let Some(ms) = self.lookup_method_signature(receiver_type, method) {
-            return Some(finalize(ms.to_function_signature()));
+        Some(resolved)
+    }
+
+    /// Resolve a method `FunctionSignature` and specialize stdlib generics from a
+    /// concrete receiver `Type` (e.g. `Vec<String>` → `push(String)`).
+    pub(crate) fn resolve_method_function_signature_specialized(
+        &self,
+        receiver_type_name: &str,
+        method: &str,
+        arg_count: usize,
+        receiver_ty: Option<&Type>,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let mut sig =
+            self.resolve_method_function_signature(receiver_type_name, method, arg_count)?;
+        if let Some(recv_ty) =
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                Some(receiver_type_name),
+                receiver_ty,
+                self.current_function_return_type.as_ref(),
+            )
+        {
+            crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                &mut sig,
+                &recv_ty,
+            );
         }
-        None
+        Some(sig)
     }
 
     /// Register a user-defined method signature
@@ -996,6 +1036,27 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed.inferred_ownership.get(param_name).copied()
     }
 
+    /// Ownership for formal demotion / str_ref: analyzer `Borrowed`/`MutBorrowed` beats stale IR `Owned`.
+    ///
+    /// The solver may leave plain `string` or readonly aggregates as `Owned` while multipass
+    /// convergence and the analyzer already settled on shared/mut borrows. Codegen must trust
+    /// the analyzer contract for emitted Rust formals (`&str`, `&Vec<T>`, `&mut Grid`, …).
+    pub(crate) fn param_ownership_for_formal_demotion(
+        &self,
+        param_name: &str,
+        analyzed: &AnalyzedFunction<'_>,
+    ) -> Option<OwnershipMode> {
+        let analyzer = analyzed.inferred_ownership.get(param_name).copied();
+        let ir = self.get_param_ownership(param_name, analyzed);
+        match (analyzer, ir) {
+            (
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
+                Some(OwnershipMode::Owned),
+            ) => analyzer,
+            _ => ir.or(analyzer),
+        }
+    }
+
     /// Check if a parameter name has ownership info (in IR or analyzer).
     pub(crate) fn has_param_ownership(
         &self,
@@ -1075,6 +1136,19 @@ impl<'ast> CodeGenerator<'ast> {
         self.extern_function_names
             .extend(registry.collect_all_extern_names());
         self.global_signature_registry = Some(registry);
+    }
+
+    /// Seed mut-arg indices from prior files' codegen refresh (cross-file `&mut` call sites).
+    pub fn merge_function_emitted_mut_arg_indices(
+        &mut self,
+        indices: &std::collections::HashMap<String, std::collections::HashSet<usize>>,
+    ) {
+        for (name, set) in indices {
+            self.function_emitted_mut_arg_indices
+                .entry(name.clone())
+                .or_default()
+                .extend(set.iter().copied());
+        }
     }
 
     pub(crate) fn get_signature_with_global(&self, name: &str) -> Option<&FunctionSignature> {
@@ -1643,6 +1717,37 @@ impl<'ast> CodeGenerator<'ast> {
     ///  - `inferred_borrowed_params` (analyzer ownership inference)
     ///  - `str_ref_optimized_params` (Phase 2 string→&str optimization)
     ///  - explicit `Reference`/`MutableReference`/`Custom("str")` AST types
+    /// Strip a leading `&ident` when `ident` already emits as a Rust shared-ref binding.
+    /// Prevents `map.get(&key)` → `&&str` for `key: &str` (Call(FieldAccess) and MethodCall).
+    pub(crate) fn strip_stale_amp_on_already_ref_arg(
+        &self,
+        arg_expr: &Expression<'_>,
+        arg_str: &mut String,
+    ) {
+        let Expression::Identifier { name, .. } = arg_expr else {
+            crate::codegen::rust::call_site_borrow::strip_double_ref_on_shared_binding(
+                arg_expr,
+                arg_str,
+                false,
+            );
+            return;
+        };
+        if self.collection_key_owned_params.contains(name.as_str()) {
+            return;
+        }
+        let text_borrowed_formal = self.inferred_borrowed_params.contains(name.as_str())
+            && self.current_function_params.iter().any(|p| {
+                p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+            });
+        let already = self.emitted_rust_ref_formals.contains(name.as_str())
+            || self.str_ref_optimized_params.contains(name.as_str())
+            || self.identifier_already_ref(name)
+            || text_borrowed_formal;
+        crate::codegen::rust::call_site_borrow::strip_double_ref_on_shared_binding(
+            arg_expr, arg_str, already,
+        );
+    }
+
     pub(crate) fn identifier_already_ref(&self, name: &str) -> bool {
         // Emitted Rust `&T` formals always generate as references — even for mixed
         // forwarders that keep an owned outer formal elsewhere in the call graph.
@@ -1655,13 +1760,21 @@ impl<'ast> CodeGenerator<'ast> {
         if self.inferred_borrowed_params.contains(name) {
             // Current fn param with owned emitted formal (e.g. `key: Key`) may appear in
             // inferred_borrowed_params for callee-forward analysis — not a Rust `&` binding.
-            if self
-                .current_function_params
-                .iter()
-                .any(|p| p.name == name)
-            {
-                return self.str_ref_optimized_params.contains(name)
-                    || self.emitted_rust_ref_formals.contains(name);
+            if let Some(p) = self.current_function_params.iter().find(|p| p.name == name) {
+                if self.str_ref_optimized_params.contains(name)
+                    || self.emitted_rust_ref_formals.contains(name)
+                {
+                    return true;
+                }
+                // Read-only WJ `string` keys demoted to `&str` / `&String` are already
+                // shared refs — do not wait solely on emitted_rust_ref (avoids
+                // `map.get(&key)` → `&&str` when the formal is `key: &str`).
+                if crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    && !self.collection_key_owned_params.contains(name)
+                {
+                    return true;
+                }
+                return false;
             }
             return true;
         }
@@ -1692,12 +1805,9 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if self.str_ref_optimized_params.contains(name) {
-            // Owned emitted formals keep stale Phase-2 metadata — not Rust `&` bindings.
-            if self
-                .current_function_params
-                .iter()
-                .any(|p| p.name == name && !self.emitted_rust_ref_formals.contains(name))
-            {
+            // Phase-2 `&str` emission: the binding is already a shared ref at call sites.
+            // Only treat as owned when an explicit keep-owned mark wins (payload stores).
+            if self.collection_key_owned_params.contains(name) {
                 return false;
             }
             return true;

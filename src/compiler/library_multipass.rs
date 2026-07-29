@@ -1153,6 +1153,12 @@ pub(crate) fn build_library_multipass(
 
     let total_codegen = codegen_indices.len();
     let mut _codegen_done = 0usize;
+    // Cross-file: `&mut` formal slots discovered during codegen must reach later call sites
+    // (`Ability::activate` → `self.dash.activate(&mut self.player)`).
+    let mut accumulated_emitted_mut_arg_indices: std::collections::HashMap<
+        String,
+        std::collections::HashSet<usize>,
+    > = std::collections::HashMap::new();
 
     for batch_start in (0..total_codegen).step_by(CODEGEN_BATCH_SIZE) {
         let batch_end = (batch_start + CODEGEN_BATCH_SIZE).min(total_codegen);
@@ -1195,6 +1201,7 @@ pub(crate) fn build_library_multipass(
 
             let mut codegen = CodeGenerator::new_for_module(full_registry, target);
             codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
+            codegen.merge_function_emitted_mut_arg_indices(&accumulated_emitted_mut_arg_indices);
             codegen.set_copy_types_registry((*global_copy_structs).clone());
             codegen
                 .set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
@@ -1228,6 +1235,12 @@ pub(crate) fn build_library_multipass(
 
             let reg = std::sync::Arc::make_mut(&mut final_global_registry);
             reg.merge(&codegen.signature_registry);
+            for (name, indices) in &codegen.function_emitted_mut_arg_indices {
+                accumulated_emitted_mut_arg_indices
+                    .entry(name.clone())
+                    .or_default()
+                    .extend(indices.iter().copied());
+            }
             for (name, mode) in &codegen.self_receiver_upgrades {
                 if let Some(sig) = reg.signatures.get_mut(name) {
                     sig.has_self_receiver = true;

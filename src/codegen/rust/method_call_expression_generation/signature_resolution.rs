@@ -68,6 +68,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ResolutionMethod, ResolvedSignature,
             };
 
+            let inferred_receiver_ty = self.infer_expression_type(object);
             let from_method_registry = self.lookup_method_signature(tn, method).and_then(|ms| {
                 let mut sig = ms.to_function_signature();
                 let qualified = format!("{tn}::{method}");
@@ -82,6 +83,15 @@ impl<'ast> CodeGenerator<'ast> {
                         sig.param_ownership = reg.param_ownership.clone();
                         sig.formal_param_types = reg.formal_param_types.clone();
                     }
+                }
+                if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                    Some(tn),
+                    inferred_receiver_ty.as_ref(),
+                    self.current_function_return_type.as_ref(),
+                ) {
+                    crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                        &mut sig, &recv_ty,
+                    );
                 }
                 if validate_arg_count(&sig, arguments.len()) {
                     Some(ResolvedSignature {

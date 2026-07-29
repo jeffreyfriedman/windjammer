@@ -232,6 +232,33 @@ fn test_char_literals_escape() {
     assert_eq!(first_token("'\\\\'"), Token::CharLiteral('\\'));
 }
 
+#[test]
+fn test_lifetime_not_confused_with_char() {
+    assert_eq!(first_token("'a"), Token::Lifetime("a".to_string()));
+    assert_eq!(first_token("'static"), Token::Lifetime("static".to_string()));
+    assert_eq!(first_token("'_"), Token::Lifetime("_".to_string()));
+}
+
+#[test]
+fn test_raw_string_vs_raw_identifier() {
+    assert_eq!(
+        first_token(r###"r#"hello"#"###),
+        Token::StringLiteral("hello".to_string())
+    );
+    assert_eq!(
+        first_token(r####"r##"a"#b"##"####),
+        Token::StringLiteral("a\"#b".to_string())
+    );
+    assert_eq!(
+        first_token("r#type"),
+        Token::Ident("r#type".to_string())
+    );
+    assert_eq!(
+        first_token("r#fn"),
+        Token::Ident("r#fn".to_string())
+    );
+}
+
 // ============================================================================
 // BOOLEAN LITERALS
 // ============================================================================

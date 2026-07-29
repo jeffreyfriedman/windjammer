@@ -311,35 +311,24 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Track Phase 2 string-optimized parameters (string type params that become &str).
         // Uses IR-backed str_ref check when cutover is enabled.
+        for param in &func.parameters {
+            if param.decorators.iter().any(|d| d.name == "string_ref") {
+                self.str_ref_optimized_params.remove(&param.name);
+            }
+        }
         if self.ir_cutover.str_ref && self.current_ir_function.is_some() {
             if let Some(ir_fn) = &self.current_ir_function {
                 for param_name in &ir_fn.str_ref_params {
-                    if self.get_param_ownership(param_name, analyzed)
-                        == Some(crate::analyzer::OwnershipMode::Owned)
-                    {
-                        continue;
-                    }
                     if analyzed.inferred_ownership.get(param_name)
                         == Some(&crate::analyzer::OwnershipMode::Owned)
                     {
                         continue;
                     }
-                    if !self.param_only_forwarded_to_qualified_collection_key_callee(
-                        func.body.as_slice(),
-                        param_name,
-                        func,
-                    ) {
-                        self.str_ref_optimized_params.insert(param_name.clone());
-                    }
+                    self.str_ref_optimized_params.insert(param_name.clone());
                 }
             }
             for param_name in &analyzed.str_ref_optimizable_params {
                 if self.str_ref_optimized_params.contains(param_name) {
-                    continue;
-                }
-                if self.get_param_ownership(param_name, analyzed)
-                    == Some(crate::analyzer::OwnershipMode::Owned)
-                {
                     continue;
                 }
                 if analyzed.inferred_ownership.get(param_name)
@@ -347,13 +336,8 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     continue;
                 }
-                if !self.param_only_forwarded_to_qualified_collection_key_callee(
-                    func.body.as_slice(),
-                    param_name,
-                    func,
-                ) {
-                    self.str_ref_optimized_params.insert(param_name.clone());
-                }
+                // Read-only HashMap key helpers prefer &str (get(key), not get(&key)).
+                self.str_ref_optimized_params.insert(param_name.clone());
             }
         } else {
             for param_name in &analyzed.str_ref_optimizable_params {
@@ -362,13 +346,9 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     continue;
                 }
-                if !self.param_only_forwarded_to_qualified_collection_key_callee(
-                    func.body.as_slice(),
-                    param_name,
-                    func,
-                ) {
-                    self.str_ref_optimized_params.insert(param_name.clone());
-                }
+                // Read-only map-key formals use &str; call sites pass the key without
+                // an extra `&` (avoids &&str when the formal is already borrowed).
+                self.str_ref_optimized_params.insert(param_name.clone());
             }
         }
 
@@ -409,7 +389,7 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
                 match self
-                    .get_param_ownership(&param.name, analyzed)
+                    .param_ownership_for_formal_demotion(&param.name, analyzed)
                     .or_else(|| analyzed.inferred_ownership.get(&param.name).copied())
                 {
                     Some(crate::analyzer::OwnershipMode::Borrowed) => {
@@ -444,14 +424,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     continue;
                 }
-                if self.collection_key_owned_params.contains(&param.name)
-                    || (func.parent_type.is_none()
-                        && self.param_only_forwarded_to_qualified_collection_key_callee(
-                            func.body.as_slice(),
-                            &param.name,
-                            func,
-                        ))
-                {
+                if self.collection_key_owned_params.contains(&param.name) {
                     continue;
                 }
                 if self.param_only_used_in_discarding_let_binding(
@@ -594,6 +567,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
 
         self.promote_callee_forwarded_borrows(func);
+        self.promote_callee_forwarded_mut_borrows(func);
         self.promote_readonly_operand_borrows(func, analyzed);
         self.strip_borrow_inference_for_owning_param_uses(func);
         if self.in_impl_block {
@@ -652,7 +626,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Text map/set key params keep owned `String` formals; call sites add `&`.
+    /// Text map/set key params prefer `&str` when body-only lookup usage converges
+    /// to Borrowed / str_ref. Owned `String` is reserved for explicit
+    /// `collection_key_owned_params` marks (payload stores / WDB keep-owned facades).
     ///
     /// Non-text keys (`QuestId`, `Key`, …) must **not** force owned formals — body-only
     /// lookup usage converges to `&T` (and must beat stale engine metadata `Owned`).
@@ -667,30 +643,19 @@ impl<'ast> CodeGenerator<'ast> {
         if self.collection_key_owned_params.contains(&param.name) {
             return true;
         }
-        if self.param_only_forwarded_to_map_key_callee(
-            func.body.as_slice(),
-            &param.name,
-            func,
-        ) || (func.parent_type.is_none()
-            && self.param_only_forwarded_to_qualified_map_key_callee(
-                func.body.as_slice(),
-                &param.name,
-                func,
-            ))
-        {
-            return true;
-        }
         if self.str_ref_optimized_params.contains(&param.name)
             || self.inferred_borrowed_params.contains(&param.name)
         {
             return false;
         }
-        // Text keys: owned formals for HashMap forwarding only; HashSet::contains keeps &str.
+        // Do not force owned String merely because the param is a HashMap lookup key —
+        // that path caused `key: String` + `get(&key)` while callers held `&str`.
+        let _ = func;
         false
     }
 
-    /// Text map/set key helpers keep owned `String` formals; call sites add `&`.
-    /// Non-text keys keep analyzer/IR borrow convergence (`&QuestId`).
+    /// Only preserve owned text formals when explicitly marked; map-key-only Borrowed
+    /// params keep `&str` so call sites avoid double-ref.
     fn preserve_owned_formals_for_collection_key_only_params(
         &mut self,
         func: &FunctionDecl<'ast>,
@@ -702,27 +667,13 @@ impl<'ast> CodeGenerator<'ast> {
             if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
                 continue;
             }
-            let preserve = if self.str_ref_optimized_params.contains(&param.name)
-                || self.inferred_borrowed_params.contains(&param.name)
-            {
-                false
-            } else {
-                self.param_only_forwarded_to_qualified_map_key_callee(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                ) || self.param_only_forwarded_to_map_key_callee(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                )
-            };
-            if preserve {
+            // Explicit keep-owned marks only — do not demote Borrowed map keys to Owned.
+            if self.collection_key_owned_params.contains(&param.name) {
                 self.inferred_borrowed_params.remove(&param.name);
                 self.inferred_mut_borrowed_params.remove(&param.name);
                 self.str_ref_optimized_params.remove(&param.name);
-                self.collection_key_owned_params.insert(param.name.clone());
             }
+            let _ = func;
         }
     }
 
@@ -746,12 +697,33 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if unused.contains(&param.name)
                 || self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
-                // Store-only Vec constructors (`from_bytes` / field init) emit `&Vec` and
-                // clone at the struct field — callers can borrow (WDB-049).
-                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
-                || self.param_moves_via_struct_literal_init(func.body.as_slice(), &param.name)
+                // Store-only `Vec<u8>` constructors (`from_bytes`) emit `&Vec` and clone at
+                // the struct field — callers can borrow (WDB-049). Other Vec element types
+                // (e.g. `Vec<String>` field assignment) keep Owned formals.
+                || (Self::param_type_is_byte_vec(&param.type_)
+                    && (self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
+                        || self.param_moves_via_struct_literal_init(
+                            func.body.as_slice(),
+                            &param.name,
+                        )))
             {
                 self.inferred_borrowed_params.insert(param.name.clone());
+            }
+        }
+    }
+
+    /// Promote params forwarded to `&mut T` callees (e.g. `cache.clear(grid, …)`).
+    fn promote_callee_forwarded_mut_borrows(&mut self, func: &FunctionDecl<'ast>) {
+        for param in &func.parameters {
+            if param.name == "self" || self.is_type_copy(&param.type_) {
+                continue;
+            }
+            if self.inferred_mut_borrowed_params.contains(&param.name) {
+                continue;
+            }
+            if self.param_passed_to_mut_borrowing_callee(func.body.as_slice(), &param.name, func) {
+                self.inferred_mut_borrowed_params.insert(param.name.clone());
+                self.inferred_borrowed_params.remove(&param.name);
             }
         }
     }
@@ -825,9 +797,13 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             // Returned/moved params must stay Owned (solver lattice + API intent).
+            // Exception: associated WJ `string` identity returns may demote to `&str`
+            // (`Self::extract_extension`) — free-function identity stays owned.
             if analyzed.returned_parameters.contains(&param.name) {
-                self.inferred_borrowed_params.remove(&param.name);
-                continue;
+                if !self.associated_text_identity_return_may_borrow(func, param, analyzed) {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    continue;
+                }
             }
             if self.param_stored_in_owned_payload(func.body.as_slice(), &param.name) {
                 self.inferred_borrowed_params.remove(&param.name);
@@ -856,17 +832,26 @@ impl<'ast> CodeGenerator<'ast> {
                 ) && !self.param_stored_in_owned_payload(
                     func.body.as_slice(),
                     &param.name,
-                );
+                ) && !(analyzed.mutated_parameters.contains(&param.name)
+                    && !analyzed.returned_parameters.contains(&param.name))
+                    && !matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                    );
                 let text_discard_only = crate::codegen::rust::types::is_windjammer_text_type(
                     &param.type_,
                 ) && self.param_only_used_in_simple_or_tuple_discard(
                     func.body.as_slice(),
                     &param.name,
                 );
-                if !vec_readonly && !field_proj_readonly && !text_discard_only {
+                // Returned associated WJ `string` → `&str` + `.to_string()` at return/tail.
+                let text_return_coerce =
+                    self.associated_text_identity_return_may_borrow(func, param, analyzed);
+                if !vec_readonly && !field_proj_readonly && !text_discard_only && !text_return_coerce
+                {
                     continue;
                 }
-                if text_discard_only {
+                if text_discard_only || text_return_coerce {
                     self.inferred_borrowed_params.insert(param.name.clone());
                     self.str_ref_optimized_params.insert(param.name.clone());
                     continue;
@@ -986,6 +971,22 @@ impl<'ast> CodeGenerator<'ast> {
         found
     }
 
+    /// Assignment LHS roots at `param` via field/index (`c.value = …`, `arr[i] = …`).
+    fn assignment_target_projects_param(target: &Expression<'ast>, param_name: &str) -> bool {
+        match target {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::assignment_target_projects_param(object, param_name)
+            }
+            Expression::Unary {
+                op: UnaryOp::Deref,
+                operand,
+                ..
+            } => Self::assignment_target_projects_param(operand, param_name),
+            _ => false,
+        }
+    }
+
     fn statement_param_projection_usage(
         &self,
         stmt: &Statement<'ast>,
@@ -1005,8 +1006,17 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 usage
             }
-            Statement::Assignment { value, .. } => {
-                self.expression_param_projection_usage(value, param_name)
+            Statement::Assignment { target, value, .. } => {
+                // Field/index assignment targets (`c.value = …`, `slots[i] = …`) are writes
+                // through the param — not readonly projection. Treat as BareOrOther so
+                // demotion to shared `&T` cannot fire for mutated formals.
+                let target_usage = if Self::assignment_target_projects_param(target, param_name)
+                {
+                    ProjectionUsage::BareOrOther
+                } else {
+                    ProjectionUsage::None
+                };
+                target_usage.merge(self.expression_param_projection_usage(value, param_name))
             }
             Statement::If {
                 condition,
@@ -1102,9 +1112,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Expression::MethodCall { object, arguments, .. } => {
-                // `param.field.method()` — projection as method receiver is readonly.
-                // `callee(param.field)` — field value is moved into the callee.
-                let mut usage = self.expression_param_projection_usage(object, param_name);
+                // `param.method(...)` — receiving through the param is projection-like
+                // (borrow demotion), same as `param.field`. Nested `param.field.method()`
+                // stays FieldOrIndexOnly via the FieldAccess arm.
+                // `callee(param)` / `callee(param.field)` remain BareOrOther via args.
+                let mut usage = if matches!(
+                    object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    ProjectionUsage::FieldOrIndexOnly
+                } else {
+                    self.expression_param_projection_usage(object, param_name)
+                };
                 for (_, arg) in arguments {
                     usage = usage.merge(self.expression_field_arg_usage(arg, param_name));
                 }
@@ -2505,6 +2524,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when the body forwards `param_name` to a method that already expects `&mut T`.
+    pub(in crate::codegen::rust) fn param_passed_to_mut_borrowing_callee(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_passes_param_to_mut_borrowing_callee(stmt, param_name, func) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// True when the body forwards `param_name` to a method that already expects a borrow.
     pub(in crate::codegen::rust) fn param_passed_to_borrowing_callee(
         &self,
@@ -2996,6 +3030,70 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    fn statement_passes_param_to_mut_borrowing_callee(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(expr, param_name, func)
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(value, param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_to_mut_borrowing_callee(b.as_slice(), param_name, func)
+                    })
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(value, param_name, func)
+            }
+            Statement::Return { value, .. } => value.is_some_and(|v| {
+                self.expression_passes_param_to_mut_borrowing_callee(v, param_name, func)
+            }),
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_passes_param_to_mut_borrowing_callee(condition, param_name, func)
+                    || self.param_passed_to_mut_borrowing_callee(then_block.as_slice(), param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_to_mut_borrowing_callee(b.as_slice(), param_name, func)
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(condition, param_name, func)
+                    || self.param_passed_to_mut_borrowing_callee(body.as_slice(), param_name, func)
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(iterable, param_name, func)
+                    || self.param_passed_to_mut_borrowing_callee(body.as_slice(), param_name, func)
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                self.param_passed_to_mut_borrowing_callee(body.as_slice(), param_name, func)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(value, param_name, func)
+                    || arms.iter().any(|arm| {
+                        self.expression_passes_param_to_mut_borrowing_callee(
+                            &arm.body,
+                            param_name,
+                            func,
+                        )
+                    })
+            }
+            Statement::Defer { statement, .. } => {
+                self.statement_passes_param_to_mut_borrowing_callee(statement, param_name, func)
+            }
+            _ => false,
+        }
+    }
+
     fn statement_passes_param_to_borrowing_callee(
         &self,
         stmt: &'ast Statement<'ast>,
@@ -3114,6 +3212,61 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         None
+    }
+
+    fn expression_passes_param_to_mut_borrowing_callee(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        && self.method_call_arg_expects_mut_borrow(object, method, i, func)
+                    {
+                        return true;
+                    }
+                }
+                self.expression_passes_param_to_mut_borrowing_callee(object, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_passes_param_to_mut_borrowing_callee(arg, param_name, func)
+                    })
+            }
+            Expression::Call { arguments, function, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(function, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_passes_param_to_mut_borrowing_callee(arg, param_name, func)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(left, param_name, func)
+                    || self.expression_passes_param_to_mut_borrowing_callee(right, param_name, func)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(operand, param_name, func)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(object, param_name, func)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_passes_param_to_mut_borrowing_callee(object, param_name, func)
+                    || self.expression_passes_param_to_mut_borrowing_callee(index, param_name, func)
+            }
+            Expression::Block { statements, .. } => {
+                self.param_passed_to_mut_borrowing_callee(statements.as_slice(), param_name, func)
+            }
+            Expression::MacroInvocation { args, .. } => args.iter().any(|arg| {
+                self.expression_passes_param_to_mut_borrowing_callee(arg, param_name, func)
+            }),
+            _ => false,
+        }
     }
 
     fn expression_passes_param_to_borrowing_callee(
@@ -3251,12 +3404,14 @@ impl<'ast> CodeGenerator<'ast> {
             if self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func) {
                 continue;
             }
-            if self.param_used_as_read_operand(func.body.as_slice(), &param.name)
-                || Self::expression_mentions_field_access_of(
-                    func.body.as_slice(),
-                    &param.name,
-                )
-            {
+            // Only real field projections (`key.bytes`) mark lookup facades.
+            // Method receivers (`grid.is_solid()`) are not key-field lookups — treating
+            // them as such blocked borrow demotion for static passthrough
+            // (`FpsCamera::update` → `&VoxelGrid`).
+            if Self::expression_mentions_field_access_of(
+                func.body.as_slice(),
+                &param.name,
+            ) {
                 self.struct_has_owned_key_field_lookup
                     .insert(struct_name.to_string());
             }
@@ -3586,6 +3741,39 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// Associated/`Self::` helpers that only return a WJ `string` param may emit `&str`
+    /// + `.to_string()` so constructors can reuse the binding without clone.
+    /// Free-function identity returns stay owned (`extract_path(p)` move, not `&p`).
+    pub(in crate::codegen::rust) fn associated_text_identity_return_may_borrow(
+        &self,
+        func: &FunctionDecl<'ast>,
+        param: &Parameter,
+        analyzed: &AnalyzedFunction<'_>,
+    ) -> bool {
+        if self.current_struct_name.is_none() {
+            return false;
+        }
+        if func.parameters.iter().any(|p| p.name == "self") {
+            return false;
+        }
+        if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+            return false;
+        }
+        if matches!(
+            &param.type_,
+            Type::Reference(_) | Type::MutableReference(_)
+        ) {
+            return false;
+        }
+        if !analyzed.returned_parameters.contains(&param.name) {
+            return false;
+        }
+        if self.param_stored_in_owned_payload(func.body.as_slice(), &param.name) {
+            return false;
+        }
+        super::string_utilities::return_type_expects_owned_string(&func.return_type)
+    }
+
     fn statement_moves_param_into_owned_payload(
         &self,
         stmt: &Statement<'ast>,
@@ -3611,7 +3799,19 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Expression { expr, .. }
             | Statement::Return {
                 value: Some(expr), ..
-            } => self.expression_moves_param_into_owned_payload(expr, param_name),
+            } => {
+                // Bare identity return (`fn id(s: string) -> string { s }`) is not a payload
+                // store — ownership is tracked via `returned_parameters`. Nested constructors
+                // still count (StructLiteral / Call / MethodCall below).
+                if matches!(
+                    expr,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    false
+                } else {
+                    self.expression_moves_param_into_owned_payload(expr, param_name)
+                }
+            }
             Statement::Assignment { value, .. } => {
                 self.expression_moves_param_into_owned_payload(value, param_name)
             }
@@ -3752,6 +3952,44 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `Some`/`Ok`/`Err` / `Type::Variant` (PascalCase after `::` or FieldAccess).
+    /// Static methods (`Type::snake_case`) are excluded — they are not payload stores.
+    fn call_is_enum_or_lang_payload_constructor(function: &Expression<'ast>) -> bool {
+        match function {
+            Expression::Identifier { name, .. } => {
+                matches!(name.as_str(), "Some" | "Ok" | "Err")
+                    || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(name)
+            }
+            Expression::FieldAccess { field, .. } => {
+                matches!(field.as_str(), "Some" | "Ok" | "Err")
+                    || field
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase())
+            }
+            _ => false,
+        }
+    }
+
+    /// Recurse into nested constructors without treating a bare identifier arg as a store.
+    fn expression_moves_param_into_nested_owned_payload(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Call { .. }
+            | Expression::StructLiteral { .. }
+            | Expression::MethodCall { .. }
+            | Expression::Tuple { .. }
+            | Expression::Array { .. }
+            | Expression::Block { .. } => {
+                self.expression_moves_param_into_owned_payload(expr, param_name)
+            }
+            _ => false,
+        }
+    }
+
     /// Identifier moved into a struct field, tuple/array element, or enum/Option/constructor.
     fn expression_moves_param_into_owned_payload(
         &self,
@@ -3770,29 +4008,62 @@ impl<'ast> CodeGenerator<'ast> {
                 function,
                 arguments,
                 ..
-            } => arguments.iter().enumerate().any(|(i, (_, arg))| {
-                self.call_argument_stores_owned_payload(function, i, arguments.len())
-                    && self.expression_moves_param_into_owned_payload(arg, param_name)
-            }),
+            } => {
+                let is_lang_payload = Self::call_is_enum_or_lang_payload_constructor(function);
+                arguments.iter().enumerate().any(|(i, (_, arg))| {
+                    let stores = is_lang_payload
+                        || self.call_argument_stores_owned_payload(
+                            function,
+                            i,
+                            arguments.len(),
+                        );
+                    if stores {
+                        self.expression_moves_param_into_owned_payload(arg, param_name)
+                    } else {
+                        // Nested `Outer::new(..., Enum::Variant(param), ...)` — registry may
+                        // not mark the outer slot as owned, but the inner variant still stores.
+                        self.expression_moves_param_into_nested_owned_payload(arg, param_name)
+                    }
+                })
+            }
             Expression::MethodCall {
                 method,
                 arguments,
                 object,
                 ..
-            } => arguments.iter().enumerate().any(|(i, (_, arg))| {
-                self.method_call_argument_stores_owned_payload(
-                    method,
-                    object,
-                    i,
-                    arguments.len(),
-                ) && self.expression_moves_param_into_owned_payload(arg, param_name)
-            }),
-            Expression::Unary { operand, .. } => {
-                self.expression_moves_param_into_owned_payload(operand, param_name)
+            } => {
+                // `vec.push(param)` / `self.components.push(component)` — storage methods
+                // consume owned elements even when receiver-type registry lookup fails (`self`).
+                let is_storage =
+                    crate::analyzer::stdlib_method_traits::is_storage_method(method);
+                let is_lang_payload = matches!(method.as_str(), "Some" | "Ok" | "Err")
+                    || method
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_uppercase());
+                arguments.iter().enumerate().any(|(i, (_, arg))| {
+                    let stores = is_storage
+                        || is_lang_payload
+                        || self.method_call_argument_stores_owned_payload(
+                            method,
+                            object,
+                            i,
+                            arguments.len(),
+                        );
+                    if stores {
+                        self.expression_moves_param_into_owned_payload(arg, param_name)
+                    } else {
+                        self.expression_moves_param_into_nested_owned_payload(arg, param_name)
+                    }
+                })
             }
-            Expression::Binary { left, right, .. } => {
-                self.expression_moves_param_into_owned_payload(left, param_name)
-                    || self.expression_moves_param_into_owned_payload(right, param_name)
+            Expression::Unary { .. } => {
+                // Arithmetic / deref on a param is not an owned payload store.
+                false
+            }
+            Expression::Binary { .. } => {
+                // `x = x + 1` / comparisons only read the param — not a struct/enum/tuple store.
+                false
             }
             Expression::MacroInvocation { name, args, .. } => {
                 // Formatting macros only borrow (`format!`, `println!`, …) — not owned
@@ -3898,13 +4169,11 @@ impl<'ast> CodeGenerator<'ast> {
         let mut sig = if let Some(ms) = self.lookup_method_signature(&rt, method) {
             let mut sig = ms.to_function_signature();
             if let Some(reg) = registry_sig {
-                if reg.emitted_rust_ref_params.is_some() {
-                    sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
-                    sig.formal_param_types = reg.formal_param_types.clone();
-                    sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
-                    sig.param_types = reg.param_types.clone();
-                    sig.param_ownership = reg.param_ownership.clone();
-                }
+                // Always merge analyzer-converged ownership / Reference wraps.
+                // Method-index stubs keep AST Owned until the callee is codegen'd;
+                // without this, static `Type::method` forwards look owned and block
+                // promote (`FpsCamera::update` → `collides`/`depenetrate`).
+                Self::merge_registry_sig_into_method_sig(&mut sig, reg);
             }
             sig
         } else if let Some(reg) = registry_sig {
@@ -4771,11 +5040,29 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
             // WJ AST owned non-copy formals are not borrowing callees for delegation
-            // decisions unless codegen already recorded an emitted `&T` formal.
+            // decisions unless ownership is Borrowed/MutBorrowed (analyzer) or codegen
+            // already recorded an emitted `&T` formal. Same-impl static methods like
+            // `FpsCamera::collides(grid: VoxelGrid)` analyze as Borrowed before codegen
+            // refreshes `param_types` to `Reference(VoxelGrid)`.
             if sig.formal_param_type(pidx).is_some_and(|t| {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && !type_analysis::is_copy_type(t)
             }) {
+                if matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(
+                        crate::analyzer::OwnershipMode::Borrowed
+                            | crate::analyzer::OwnershipMode::MutBorrowed
+                    )
+                ) || sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(pidx))
+                    .copied()
+                    == Some(true)
+                {
+                    return true;
+                }
                 return false;
             }
             if sig
@@ -4793,6 +5080,17 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         self.method_has_forwarding_borrow_param(method, arg_index)
+    }
+
+    fn method_call_arg_expects_mut_borrow(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_index: usize,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        self.method_call_signature_for_arg(object, method, arg_index, func)
+            .is_some_and(|sig| self.signature_param_expects_mut_borrow(&sig, arg_index))
     }
 
     /// Fallback when receiver type inference fails (e.g. `latest.has_key(key)` after vec index).
@@ -5286,6 +5584,724 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `Vec<u8>` / `Vec<uint8>` — FFI/WAL byte buffers may emit `&Vec` + clone at store sites.
+    pub(in crate::codegen::rust) fn param_type_is_byte_vec(ty: &Type) -> bool {
+        let elem_is_u8 = |inner: &Type| {
+            matches!(
+                inner,
+                Type::Custom(n) if n == "u8" || n == "uint8" || n == "byte"
+            )
+        };
+        match ty {
+            Type::Vec(inner) => elem_is_u8(inner),
+            Type::Parameterized(name, args) if name == "Vec" => {
+                args.first().is_some_and(elem_is_u8)
+            }
+            _ => false,
+        }
+    }
+
+    /// True when every use of `param_name` is forwarding into a runtime AsRef<&str>
+    /// module (`db`, `env`, …). Those APIs keep owned WJ `string` formals and borrow
+    /// at the call site (`db::connect(&url)`).
+    pub(in crate::codegen::rust) fn param_only_forwarded_to_asref_str_runtime(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        let mut saw_forward = false;
+        for stmt in body {
+            if !self.statement_param_only_asref_runtime_forward(stmt, param_name, &mut saw_forward)
+            {
+                return false;
+            }
+        }
+        saw_forward
+    }
+
+    fn statement_param_only_asref_runtime_forward(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        saw_forward: &mut bool,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_param_only_asref_runtime_forward(expr, param_name, saw_forward),
+            Statement::Let { value, else_block, .. } => {
+                self.expression_param_only_asref_runtime_forward(value, param_name, saw_forward)
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter().all(|s| {
+                            self.statement_param_only_asref_runtime_forward(s, param_name, saw_forward)
+                        })
+                    })
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_param_only_asref_runtime_forward(condition, param_name, saw_forward)
+                    && then_block.iter().all(|s| {
+                        self.statement_param_only_asref_runtime_forward(s, param_name, saw_forward)
+                    })
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter().all(|s| {
+                            self.statement_param_only_asref_runtime_forward(s, param_name, saw_forward)
+                        })
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_param_only_asref_runtime_forward(value, param_name, saw_forward)
+                    && arms.iter().all(|arm| {
+                        self.expression_param_only_asref_runtime_forward(
+                            &arm.body,
+                            param_name,
+                            saw_forward,
+                        )
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_param_only_asref_runtime_forward(condition, param_name, saw_forward)
+                    && body.iter().all(|s| {
+                        self.statement_param_only_asref_runtime_forward(s, param_name, saw_forward)
+                    })
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => body.iter().all(|s| {
+                self.statement_param_only_asref_runtime_forward(s, param_name, saw_forward)
+            }),
+            _ => true,
+        }
+    }
+
+    fn expression_param_only_asref_runtime_forward(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        saw_forward: &mut bool,
+    ) -> bool {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if crate::analyzer::stdlib_method_traits::decompose_collection_key_lookup(expr)
+                    .is_some_and(|(_, _, args)| {
+                        args.iter().any(|(_, arg)| {
+                            matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                                || matches!(
+                                    arg,
+                                    Expression::Unary {
+                                        op: crate::parser::UnaryOp::Ref,
+                                        operand,
+                                        ..
+                                    } if matches!(
+                                        &**operand,
+                                        Expression::Identifier { name, .. } if name == param_name
+                                    )
+                                )
+                        })
+                    })
+                {
+                    return false;
+                }
+                for (_, arg) in arguments {
+                    let is_param = matches!(
+                        arg,
+                        Expression::Identifier { name, .. } if name == param_name
+                    ) || matches!(
+                        arg,
+                        Expression::Unary {
+                            op: crate::parser::UnaryOp::Ref,
+                            operand,
+                            ..
+                        } if matches!(&**operand, Expression::Identifier { name, .. } if name == param_name)
+                    );
+                    if is_param {
+                        *saw_forward = true;
+                        if !self.call_function_is_asref_str_runtime(function) {
+                            return false;
+                        }
+                    } else if !self.expression_param_only_asref_runtime_forward(
+                        arg,
+                        param_name,
+                        saw_forward,
+                    ) {
+                        return false;
+                    }
+                }
+                self.expression_param_only_asref_runtime_forward(function, param_name, saw_forward)
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                if crate::analyzer::stdlib_method_traits::decompose_collection_key_lookup(expr)
+                    .is_some_and(|(_, _, args)| {
+                        args.iter().any(|(_, arg)| {
+                            matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                                || matches!(
+                                    arg,
+                                    Expression::Unary {
+                                        op: crate::parser::UnaryOp::Ref,
+                                        operand,
+                                        ..
+                                    } if matches!(
+                                        &**operand,
+                                        Expression::Identifier { name, .. } if name == param_name
+                                    )
+                                )
+                        })
+                    })
+                {
+                    return false;
+                }
+                let recv_asref = self
+                    .infer_type_name(object)
+                    .as_deref()
+                    .and_then(crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type)
+                    .is_some_and(crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str)
+                    || matches!(
+                        &**object,
+                        Expression::Identifier { name, .. }
+                            if self.is_imported_runtime_std_module(name)
+                                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                                    name,
+                                )
+                                || self.param_type_is_asref_runtime_receiver(name)
+                    );
+                for (_, arg) in arguments {
+                    let is_param = matches!(
+                        arg,
+                        Expression::Identifier { name, .. } if name == param_name
+                    ) || matches!(
+                        arg,
+                        Expression::Unary {
+                            op: crate::parser::UnaryOp::Ref,
+                            operand,
+                            ..
+                        } if matches!(&**operand, Expression::Identifier { name, .. } if name == param_name)
+                    );
+                    if is_param {
+                        *saw_forward = true;
+                        if !recv_asref {
+                            return false;
+                        }
+                    } else if !self.expression_param_only_asref_runtime_forward(
+                        arg,
+                        param_name,
+                        saw_forward,
+                    ) {
+                        return false;
+                    }
+                }
+                self.expression_param_only_asref_runtime_forward(object, param_name, saw_forward)
+            }
+            Expression::MacroInvocation { name, args, .. } => {
+                // `vec![tenant]` is an owned collection literal, not an AsRef forward of
+                // `tenant`. Other args of the same call (`sql`) must still qualify.
+                // Only fail when the *tracked* param is placed inside a non-AsRef macro.
+                if args.iter().any(|a| {
+                    matches!(a, Expression::Identifier { name: n, .. } if n == param_name)
+                        || matches!(
+                            a,
+                            Expression::Unary {
+                                op: crate::parser::UnaryOp::Ref,
+                                operand,
+                                ..
+                            } if matches!(&**operand, Expression::Identifier { name: n, .. } if n == param_name)
+                        )
+                }) {
+                    // Formatting macros borrow; `vec!` / `format!` etc. are not AsRef module APIs.
+                    let borrows_only = matches!(
+                        name.as_str(),
+                        "format"
+                            | "println"
+                            | "print"
+                            | "eprintln"
+                            | "eprint"
+                            | "write"
+                            | "writeln"
+                    );
+                    if borrows_only {
+                        // Formatting macros borrow — not db/env AsRef runtime forwards.
+                        // Must not set saw_forward or readonly string formals stay owned String.
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    args.iter().all(|a| {
+                        self.expression_param_only_asref_runtime_forward(a, param_name, saw_forward)
+                    })
+                }
+            }
+            Expression::Identifier { name, .. } if name == param_name => false,
+            Expression::Binary { left, right, .. } => {
+                self.expression_param_only_asref_runtime_forward(left, param_name, saw_forward)
+                    && self.expression_param_only_asref_runtime_forward(right, param_name, saw_forward)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expression_param_only_asref_runtime_forward(operand, param_name, saw_forward)
+            }
+            Expression::Block { statements, .. } => statements.iter().all(|s| {
+                self.statement_param_only_asref_runtime_forward(s, param_name, saw_forward)
+            }),
+            _ => true,
+        }
+    }
+
+    fn call_function_is_asref_str_runtime(&self, function: &Expression<'ast>) -> bool {
+        match function {
+            Expression::FieldAccess { object, .. } => matches!(
+                &**object,
+                Expression::Identifier { name, .. }
+                    if self.is_imported_runtime_std_module(name)
+                        || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                            name,
+                        )
+                        || self.param_type_is_asref_runtime_receiver(name)
+            ),
+            Expression::Identifier { name, .. } => {
+                // `db::connect` may lower as path Identifier "connect" with module context,
+                // or qualified name containing `db`.
+                name.contains("db::")
+                    || name.ends_with("::connect")
+                    || name.ends_with("::query")
+                    || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                        name,
+                    )
+            }
+            _ => false,
+        }
+    }
+
+    /// `conn: Connection` (or `&Connection`) — method receiver for AsRef<&str> db APIs.
+    fn param_type_is_asref_runtime_receiver(&self, name: &str) -> bool {
+        self.current_function_params.iter().find(|p| p.name == name).is_some_and(|p| {
+            let bare = match &p.type_ {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            match bare {
+                Type::Custom(tn) => {
+                    crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type(tn)
+                        .is_some_and(
+                            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                        )
+                }
+                _ => false,
+            }
+        })
+    }
+
+    /// True when the body assigns through a field/index of `param_name` (`p.x = …`, `p[i] = …`).
+    pub(in crate::codegen::rust) fn param_has_field_or_index_write(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.statement_has_field_or_index_write(stmt, param_name)
+        })
+    }
+
+    /// True when `param_name` is the direct receiver of a method call (`grid.set(…)`),
+    /// not a field projection (`deps.writer.reverse(…)`).
+    pub(in crate::codegen::rust) fn param_is_direct_method_receiver(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.statement_has_direct_method_receiver(stmt, param_name))
+    }
+
+    /// True when a `&mut self` method is invoked through a field of `param_name`
+    /// (`outer.inner.set(…)`). Readonly field methods (`deps.writer.reverse`) do not match.
+    pub(in crate::codegen::rust) fn param_has_mut_method_via_field_projection(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.statement_has_mut_method_via_field(stmt, param_name))
+    }
+
+    fn statement_has_mut_method_via_field(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_has_mut_method_via_field(expr, param_name),
+            Statement::Let { value, else_block, .. } => {
+                self.expression_has_mut_method_via_field(value, param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_has_mut_method_via_field_projection(b.as_slice(), param_name)
+                    })
+            }
+            Statement::Assignment { target, value, .. } => {
+                self.expression_has_mut_method_via_field(target, param_name)
+                    || self.expression_has_mut_method_via_field(value, param_name)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_has_mut_method_via_field(condition, param_name)
+                    || self.param_has_mut_method_via_field_projection(
+                        then_block.as_slice(),
+                        param_name,
+                    )
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_has_mut_method_via_field_projection(b.as_slice(), param_name)
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_has_mut_method_via_field(condition, param_name)
+                    || self.param_has_mut_method_via_field_projection(body.as_slice(), param_name)
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                self.param_has_mut_method_via_field_projection(body.as_slice(), param_name)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_has_mut_method_via_field(value, param_name)
+                    || arms.iter().any(|arm| {
+                        self.expression_has_mut_method_via_field(&arm.body, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_has_mut_method_via_field(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                let projects_param = matches!(
+                    &**object,
+                    Expression::FieldAccess { object: inner, .. }
+                        if matches!(&**inner, Expression::Identifier { name, .. } if name == param_name)
+                );
+                if projects_param && self.method_receiver_is_mut_borrowed(object, method) {
+                    return true;
+                }
+                self.expression_has_mut_method_via_field(object, param_name)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_has_mut_method_via_field(a, param_name)
+                    })
+            }
+            Expression::Block { statements, .. } => self
+                .param_has_mut_method_via_field_projection(statements.as_slice(), param_name),
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_mut_method_via_field(left, param_name)
+                    || self.expression_has_mut_method_via_field(right, param_name)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expression_has_mut_method_via_field(operand, param_name)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_has_mut_method_via_field(object, param_name)
+                    || self.expression_has_mut_method_via_field(index, param_name)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expression_has_mut_method_via_field(function, param_name)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_has_mut_method_via_field(a, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether `receiver.method(…)` requires `&mut self` (signature registry).
+    fn method_receiver_is_mut_borrowed(
+        &self,
+        receiver: &Expression<'ast>,
+        method: &str,
+    ) -> bool {
+        if let Expression::FieldAccess {
+            object: inner,
+            field,
+            ..
+        } = receiver
+        {
+            if let Expression::Identifier { name: owner, .. } = &**inner {
+                if let Some(owner_ty) = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *owner)
+                    .map(|p| &p.type_)
+                {
+                    let struct_name = match owner_ty {
+                        Type::Custom(n) => Some(n.as_str()),
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            match &**inner {
+                                Type::Custom(n) => Some(n.as_str()),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    if let Some(sn) = struct_name {
+                        if let Some(field_ty) = self
+                            .struct_field_types
+                            .get(sn)
+                            .and_then(|fields| fields.get(field.as_str()))
+                        {
+                            let field_type_name = match field_ty {
+                                Type::Custom(n) => Some(n.as_str()),
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    match &**inner {
+                                        Type::Custom(n) => Some(n.as_str()),
+                                        _ => None,
+                                    }
+                                }
+                                _ => None,
+                            };
+                            if let Some(ft) = field_type_name {
+                                if self.qualified_method_self_is_mut(ft, method) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn qualified_method_self_is_mut(&self, type_name: &str, method: &str) -> bool {
+        let key = format!("{type_name}::{method}");
+        let check = |sig: &crate::analyzer::FunctionSignature| {
+            sig.has_self_receiver
+                && sig
+                    .param_ownership
+                    .first()
+                    .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::MutBorrowed))
+        };
+        self.get_signature_with_global(&key).is_some_and(check)
+    }
+
+    fn statement_has_direct_method_receiver(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_has_direct_method_receiver(expr, param_name),
+            Statement::Let { value, else_block, .. } => {
+                self.expression_has_direct_method_receiver(value, param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_is_direct_method_receiver(b.as_slice(), param_name)
+                    })
+            }
+            Statement::Assignment { target, value, .. } => {
+                self.expression_has_direct_method_receiver(target, param_name)
+                    || self.expression_has_direct_method_receiver(value, param_name)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_has_direct_method_receiver(condition, param_name)
+                    || self.param_is_direct_method_receiver(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_is_direct_method_receiver(b.as_slice(), param_name)
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_has_direct_method_receiver(condition, param_name)
+                    || self.param_is_direct_method_receiver(body.as_slice(), param_name)
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                self.param_is_direct_method_receiver(body.as_slice(), param_name)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_has_direct_method_receiver(value, param_name)
+                    || arms.iter().any(|arm| {
+                        self.expression_has_direct_method_receiver(&arm.body, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_has_direct_method_receiver(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                matches!(&**object, Expression::Identifier { name, .. } if name == param_name)
+                    || self.expression_has_direct_method_receiver(object, param_name)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_has_direct_method_receiver(a, param_name)
+                    })
+            }
+            Expression::Block { statements, .. } => {
+                self.param_is_direct_method_receiver(statements.as_slice(), param_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_direct_method_receiver(left, param_name)
+                    || self.expression_has_direct_method_receiver(right, param_name)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expression_has_direct_method_receiver(operand, param_name)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_has_direct_method_receiver(object, param_name)
+                    || self.expression_has_direct_method_receiver(index, param_name)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expression_has_direct_method_receiver(function, param_name)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_has_direct_method_receiver(a, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn statement_has_field_or_index_write(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment { target, value, .. } => {
+                Self::assignment_target_projects_param(target, param_name)
+                    || self.expression_has_field_or_index_write(value, param_name)
+            }
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_has_field_or_index_write(expr, param_name),
+            Statement::Let { value, else_block, .. } => {
+                self.expression_has_field_or_index_write(value, param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_has_field_or_index_write(b.as_slice(), param_name)
+                    })
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_has_field_or_index_write(condition, param_name)
+                    || self.param_has_field_or_index_write(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_has_field_or_index_write(b.as_slice(), param_name)
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_has_field_or_index_write(condition, param_name)
+                    || self.param_has_field_or_index_write(body.as_slice(), param_name)
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                self.param_has_field_or_index_write(body.as_slice(), param_name)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_has_field_or_index_write(value, param_name)
+                    || arms.iter().any(|arm| {
+                        self.expression_has_field_or_index_write(&arm.body, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_has_field_or_index_write(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Block { statements, .. } => {
+                self.param_has_field_or_index_write(statements.as_slice(), param_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_field_or_index_write(left, param_name)
+                    || self.expression_has_field_or_index_write(right, param_name)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expression_has_field_or_index_write(operand, param_name)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_has_field_or_index_write(object, param_name)
+                    || self.expression_has_field_or_index_write(index, param_name)
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_has_field_or_index_write(function, param_name)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_has_field_or_index_write(a, param_name)
+                    })
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expression_has_field_or_index_write(object, param_name)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_has_field_or_index_write(a, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
     /// Rust type for a borrowed formal (`&str` when Phase 2 applies, else `&T`).
     pub(in crate::codegen::rust) fn borrowed_formal_rust_type_for_param(
         &self,
@@ -5296,6 +6312,15 @@ impl<'ast> CodeGenerator<'ast> {
         let is_string = matches!(param.type_, Type::String)
             || matches!(param.type_, Type::Custom(ref name) if name == "string");
         if is_string {
+            // @string_ref forces &String even when Phase 2 would choose &str.
+            if param.decorators.iter().any(|d| d.name == "string_ref") {
+                return "&String".to_string();
+            }
+            // Vec::contains / binary_search need &T (= &String for Vec<String>).
+            if self.param_passed_to_slice_search_string_elem(func.body.as_slice(), &param.name, func)
+            {
+                return "&String".to_string();
+            }
             let registry_str_ref = self
                 .get_signature_with_global(&func.name)
                 .and_then(|sig| sig.param_types.get(param_idx))
@@ -5306,20 +6331,203 @@ impl<'ast> CodeGenerator<'ast> {
                             if matches!(&**inner, Type::Custom(n) if n == "str")
                     )
                 });
+            let registry_string_ref = self
+                .get_signature_with_global(&func.name)
+                .and_then(|sig| sig.param_types.get(param_idx))
+                .is_some_and(|ty| {
+                    matches!(
+                        ty,
+                        Type::Reference(inner)
+                            if matches!(&**inner, Type::String)
+                                || matches!(&**inner, Type::Custom(n) if n == "string")
+                    )
+                });
+            if registry_string_ref {
+                return "&String".to_string();
+            }
             if self.str_ref_optimized_params.contains(&param.name) || registry_str_ref {
-                if self.param_only_forwarded_to_qualified_collection_key_callee(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                ) && func.parent_type.is_none()
-                {
-                    return format!("&{}", self.type_to_rust(&param.type_));
-                }
                 return "&str".to_string();
             }
-            return "&String".to_string();
+            return "&str".to_string();
         }
         format!("&{}", self.type_to_rust(&param.type_))
+    }
+
+    /// True when `param_name` is passed to `Vec`/`slice` search (`contains` / `binary_search`)
+    /// where the element type is a Windjammer string — Rust formal must be `&String`, not `&str`.
+    pub(in crate::codegen::rust) fn param_passed_to_slice_search_string_elem(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.statement_passes_param_to_slice_search_string_elem(stmt, param_name, func)
+        })
+    }
+
+    fn statement_passes_param_to_slice_search_string_elem(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(expr, param_name, func)
+            }
+            Statement::Let { value, else_block, .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(value, param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_to_slice_search_string_elem(b.as_slice(), param_name, func)
+                    })
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_passes_param_to_slice_search_string_elem(
+                    condition, param_name, func,
+                ) || self.param_passed_to_slice_search_string_elem(
+                    then_block.as_slice(),
+                    param_name,
+                    func,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.param_passed_to_slice_search_string_elem(b.as_slice(), param_name, func)
+                })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(
+                    condition, param_name, func,
+                ) || self.param_passed_to_slice_search_string_elem(body.as_slice(), param_name, func)
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                self.param_passed_to_slice_search_string_elem(body.as_slice(), param_name, func)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(value, param_name, func)
+                    || arms.iter().any(|arm| {
+                        self.expression_passes_param_to_slice_search_string_elem(
+                            &arm.body, param_name, func,
+                        )
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_passes_param_to_slice_search_string_elem(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                let is_slice_search =
+                    crate::analyzer::stdlib_method_traits::is_slice_search_method(method);
+                if is_slice_search {
+                    let arg0_is_param = arguments.first().is_some_and(|(_, a)| {
+                        matches!(a, Expression::Identifier { name, .. } if name == param_name)
+                            || matches!(
+                                a,
+                                Expression::Unary {
+                                    op: crate::parser::UnaryOp::Ref,
+                                    operand,
+                                    ..
+                                } if matches!(
+                                    &**operand,
+                                    Expression::Identifier { name, .. } if name == param_name
+                                )
+                            )
+                    });
+                    if arg0_is_param {
+                        let recv_is_string_vec = match &**object {
+                            Expression::Identifier { name, .. } => func
+                                .parameters
+                                .iter()
+                                .find(|p| p.name == *name)
+                                .is_some_and(|p| self.type_is_string_element_vec(&p.type_))
+                                || self
+                                    .local_var_types
+                                    .get(name.as_str())
+                                    .is_some_and(|t| self.type_is_string_element_vec(t)),
+                            Expression::FieldAccess { field, .. } => {
+                                // Only when struct-field type registry says Vec<string>.
+                                self.current_struct_name
+                                    .as_ref()
+                                    .and_then(|sn| {
+                                        self.struct_field_types
+                                            .get(sn.as_str())
+                                            .and_then(|fields| fields.get(field.as_str()))
+                                    })
+                                    .is_some_and(|t| self.type_is_string_element_vec(t))
+                            }
+                            _ => false,
+                        };
+                        if recv_is_string_vec {
+                            return true;
+                        }
+                    }
+                }
+                self.expression_passes_param_to_slice_search_string_elem(
+                    object, param_name, func,
+                ) || arguments.iter().any(|(_, a)| {
+                    self.expression_passes_param_to_slice_search_string_elem(a, param_name, func)
+                })
+            }
+            Expression::Call { arguments, function, .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(
+                    function, param_name, func,
+                ) || arguments.iter().any(|(_, a)| {
+                    self.expression_passes_param_to_slice_search_string_elem(a, param_name, func)
+                })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(left, param_name, func)
+                    || self.expression_passes_param_to_slice_search_string_elem(
+                        right, param_name, func,
+                    )
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expression_passes_param_to_slice_search_string_elem(operand, param_name, func)
+            }
+            Expression::Block { statements, .. } => {
+                self.param_passed_to_slice_search_string_elem(statements.as_slice(), param_name, func)
+            }
+            _ => false,
+        }
+    }
+
+    fn type_is_string_element_vec(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Vec(inner) => {
+                matches!(inner.as_ref(), Type::String)
+                    || matches!(inner.as_ref(), Type::Custom(n) if n == "string" || n == "String")
+            }
+            Type::Parameterized(name, args) if name == "Vec" => args.first().is_some_and(|a| {
+                matches!(a, Type::String)
+                    || matches!(a, Type::Custom(n) if n == "string" || n == "String")
+            }),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.type_is_string_element_vec(inner)
+            }
+            Type::Custom(name) if name.starts_with("Vec<") => {
+                name.contains("string") || name.contains("String")
+            }
+            _ => false,
+        }
     }
 
     /// True when the body only forwards `param_name` to callees that emit owned non-Copy formals.
@@ -5569,6 +6777,30 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
+    fn signature_param_expects_mut_borrow(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+    ) -> bool {
+        let pidx = sig.arg_param_index(arg_index);
+        if sig.param_types.get(pidx).is_some_and(|t| matches!(t, Type::MutableReference(_))) {
+            return true;
+        }
+        if sig
+            .formal_param_types
+            .get(pidx)
+            .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+        {
+            return true;
+        }
+        matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                sig, pidx,
+            ),
+            crate::analyzer::OwnershipMode::MutBorrowed
+        )
+    }
+
     fn callee_name_from_call_function(&self, function: &Expression<'ast>) -> Option<String> {
         match function {
             Expression::Identifier { name, .. } => Some(name.clone()),
@@ -5690,15 +6922,79 @@ impl<'ast> CodeGenerator<'ast> {
             .get_signature(&qualified)
             .or_else(|| self.get_signature_with_global(&qualified))
         {
-            if reg.emitted_rust_ref_params.is_some() {
-                sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
-                sig.param_types = reg.param_types.clone();
-                sig.param_ownership = reg.param_ownership.clone();
-                sig.formal_param_types = reg.formal_param_types.clone();
-                sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
-            }
+            // Always merge analyzer ownership / param_types (not only when
+            // emitted_rust_ref_params is set). Stale method-index Owned stubs
+            // otherwise make static Type::method callees look owning.
+            Self::merge_registry_sig_into_method_sig(&mut sig, reg);
         }
         Some(sig)
+    }
+
+    /// Overlay signature-registry convergence onto a method-index stub.
+    ///
+    /// When `emitted_rust_ref_params` is set, trust the codegen-confirmed contract fully.
+    /// Otherwise only *upgrade* stale AST Owned stubs to analyzer Borrowed/MutBorrowed
+    /// (and Borrowed → MutBorrowed). Never downgrade MutBorrowed — that breaks mut
+    /// passthrough inference (`setup(renderer)` → `&mut Renderer`).
+    fn merge_registry_sig_into_method_sig(
+        sig: &mut crate::analyzer::FunctionSignature,
+        reg: &crate::analyzer::FunctionSignature,
+    ) {
+        use crate::analyzer::OwnershipMode;
+
+        if reg.emitted_rust_ref_params.is_some() {
+            sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
+            sig.param_types = reg.param_types.clone();
+            sig.param_ownership = reg.param_ownership.clone();
+            if !reg.formal_param_types.is_empty() {
+                sig.formal_param_types = reg.formal_param_types.clone();
+            }
+            if reg.forwarding_borrow_params.is_some() {
+                sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
+            }
+            return;
+        }
+
+        let len = sig
+            .param_ownership
+            .len()
+            .min(reg.param_ownership.len())
+            .min(sig.param_types.len())
+            .min(reg.param_types.len());
+        for i in 0..len {
+            let stub = sig.param_ownership[i];
+            let analyzed = reg.param_ownership[i];
+            let upgrade = match (stub, analyzed) {
+                (OwnershipMode::Owned, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed) => {
+                    true
+                }
+                (OwnershipMode::Borrowed, OwnershipMode::MutBorrowed) => true,
+                _ => false,
+            };
+            if upgrade {
+                sig.param_ownership[i] = analyzed;
+                sig.param_types[i] = reg.param_types[i].clone();
+            } else if matches!(stub, OwnershipMode::Owned)
+                && matches!(
+                    &reg.param_types[i],
+                    Type::Reference(_) | Type::MutableReference(_)
+                )
+            {
+                // Analyzer wrapped the formal as `&T`/`&mut T` while ownership stayed Owned.
+                sig.param_types[i] = reg.param_types[i].clone();
+                if matches!(reg.param_types[i], Type::MutableReference(_)) {
+                    sig.param_ownership[i] = OwnershipMode::MutBorrowed;
+                } else if matches!(reg.param_types[i], Type::Reference(_)) {
+                    sig.param_ownership[i] = OwnershipMode::Borrowed;
+                }
+            }
+        }
+        if !reg.formal_param_types.is_empty() && sig.formal_param_types.is_empty() {
+            sig.formal_param_types = reg.formal_param_types.clone();
+        }
+        if sig.forwarding_borrow_params.is_none() && reg.forwarding_borrow_params.is_some() {
+            sig.forwarding_borrow_params = reg.forwarding_borrow_params.clone();
+        }
     }
 
     /// Align method registry with emitted Rust formals (`&Key`, `&str`, etc.) so later
@@ -5773,15 +7069,14 @@ impl<'ast> CodeGenerator<'ast> {
                     if param.name == "self" {
                         continue;
                     }
-                    let reg_idx = if sig.has_self_receiver {
-                        user_param_idx + 1
-                    } else {
-                        user_param_idx
-                    };
-                    if reg_idx < ms_emitted.len() {
-                        ms_emitted[reg_idx] = self.emitted_rust_ref_formals.contains(&param.name)
-                            || self.str_ref_optimized_params.contains(&param.name);
-                        ms_emitted[reg_idx] = ms_emitted[reg_idx]
+                    // MethodSignature param vectors exclude `self` — index by user param only.
+                    if user_param_idx < ms_emitted.len() {
+                        // Shared `&T` only; `&mut T` is tracked via param_ownership MutBorrowed
+                        // and `function_emitted_mut_arg_indices`.
+                        ms_emitted[user_param_idx] = (self
+                            .emitted_rust_ref_formals
+                            .contains(&param.name)
+                            || self.str_ref_optimized_params.contains(&param.name))
                             && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;
@@ -5884,7 +7179,26 @@ impl<'ast> CodeGenerator<'ast> {
             user_param_idx += 1;
         }
         updated.emitted_rust_ref_params = Some(emitted);
-        self.signature_registry.add_function(qualified, updated);
+        self.signature_registry.add_function(qualified.clone(), updated);
+
+        // Record `&mut` user-arg slots so later files' call sites can auto-borrow
+        // (`Ability::activate(player: &mut PlayerState)` → `&mut self.player`).
+        let mut mut_arg_indices = std::collections::HashSet::new();
+        mut_arg_indices.extend(self.current_fn_emitted_mut_arg_indices.iter().copied());
+        let mut user_param_idx = 0usize;
+        for param in &func.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            if self.inferred_mut_borrowed_params.contains(&param.name) {
+                mut_arg_indices.insert(user_param_idx);
+            }
+            user_param_idx += 1;
+        }
+        if !mut_arg_indices.is_empty() {
+            self.function_emitted_mut_arg_indices
+                .insert(qualified, mut_arg_indices);
+        }
     }
 
     /// Align free-function registry entries with emitted Rust formals so cross-file call
@@ -6033,26 +7347,29 @@ impl<'ast> CodeGenerator<'ast> {
                 || (self.emitted_rust_ref_formals.contains(&param.name)
                     && !self.inferred_mut_borrowed_params.contains(&param.name))
             {
+                let emitted_formal = emitted_param_strings
+                    .get(emitted_idx.saturating_sub(1))
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
                 let shared_ty = if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                    && emitted_param_strings
-                        .get(emitted_idx.saturating_sub(1))
-                        .is_some_and(|s| s.contains("&str"))
+                    && (emitted_formal.contains(": &str")
+                        || emitted_formal.contains(": &'a str")
+                        || emitted_formal.ends_with(": &str"))
                 {
                     // Emit `&str` in the registry (not `Reference(string)`) so call-site
                     // text finalize recognizes the formal (WDB-049 replay_to_lsn).
                     Type::Reference(Box::new(Type::Custom("str".into())))
+                } else if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+                    // `&String` (Phase 2 Vec::contains / @string_ref) — not bare `string`.
+                    Type::Reference(Box::new(Type::String))
                 } else {
                     Type::Reference(Box::new(param.type_.clone()))
                 };
-                if !matches!(updated.param_types[reg_idx], Type::Reference(_)) {
-                    updated.param_types[reg_idx] = shared_ty;
-                } else if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                    && emitted_param_strings
-                        .get(emitted_idx.saturating_sub(1))
-                        .is_some_and(|s| s.contains("&str"))
+                // Always sync text shared-ref kind (&str vs &String) from the emitted formal.
+                if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    || !matches!(updated.param_types[reg_idx], Type::Reference(_))
                 {
-                    updated.param_types[reg_idx] =
-                        Type::Reference(Box::new(Type::Custom("str".into())));
+                    updated.param_types[reg_idx] = shared_ty;
                 }
                 if reg_idx < updated.param_ownership.len() {
                     updated.param_ownership[reg_idx] =
