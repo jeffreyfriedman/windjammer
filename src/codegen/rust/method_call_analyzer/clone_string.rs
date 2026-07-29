@@ -26,7 +26,7 @@ impl MethodCallAnalyzer {
     pub fn should_add_clone(
         arg: &Expression,
         arg_str: &str,
-        _method: &str,
+        method: &str,
         param_idx: usize,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
         borrowed_iterator_vars: &HashSet<String>,
@@ -77,6 +77,10 @@ impl MethodCallAnalyzer {
                                 return true;
                             }
                         }
+                    } else if crate::analyzer::stdlib_method_traits::is_storage_method(method) {
+                        // `Vec::push` / `insert` often lack a resolved signature in method
+                        // codegen — still clone `&T` iterator items into owned slots.
+                        return true;
                     }
                 }
             }

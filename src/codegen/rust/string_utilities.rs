@@ -468,7 +468,58 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         return;
     }
 
-    if !is_genuine_non_literal_to_string_conversion(arg) {
+    // `&String` formals need `&"lit".to_string()` — never strip to a bare `&"lit"` (&str).
+    // Exception: map-key methods (`contains_key`/`get`/…) accept `&Q where K: Borrow<Q>`,
+    // so a bare `"lit"` (&str) is correct for `HashMap<String, _>` — do not allocate.
+    let method_name = sig.name.rsplit("::").next().unwrap_or(sig.name.as_str());
+    let is_map_key_lookup =
+        crate::codegen::rust::stdlib_method_traits::is_map_key_method(method_name);
+    let param_is_amp_string = !is_map_key_lookup
+        && sig.param_types.get(param_idx).is_some_and(|t| {
+            param_is_rust_string_ref(t)
+                || (callee_emits_rust_ref
+                    && crate::codegen::rust::types::is_windjammer_text_type(t)
+                    && !param_is_rust_str_ref(t)
+                    && !matches!(
+                        t,
+                        Type::Reference(inner) if matches!(&**inner, Type::Custom(n) if n == "str")
+                    ))
+        });
+    if param_is_amp_string
+        && matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        )
+    {
+        let base = arg_str.trim_start_matches('&');
+        let owned = if base.ends_with(".to_string()") {
+            base.to_string()
+        } else {
+            format!("{base}.to_string()")
+        };
+        *arg_str = format!("&{owned}");
+        return;
+    }
+    // Map-key `&K` with K=String: keep bare string literals (Borrow<&str>).
+    if is_map_key_lookup
+        && matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        )
+    {
+        let base = arg_str.trim_start_matches('&');
+        let bare = base.strip_suffix(".to_string()").unwrap_or(base);
+        *arg_str = bare.to_string();
+        return;
+    }
+
+    if !param_is_amp_string && !is_genuine_non_literal_to_string_conversion(arg) {
         if arg_str.ends_with(".to_string()") {
             *arg_str = arg_str[..arg_str.len() - 12].to_string();
         } else if arg_str.ends_with(".into()") {

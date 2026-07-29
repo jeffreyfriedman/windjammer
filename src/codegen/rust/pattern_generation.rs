@@ -126,7 +126,19 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::EnumPatternBinding;
         match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => {
-                bindings.insert(name.clone());
+                // Unit enum variants (`None`, `Empty`, …) parse as Identifier; they are
+                // not variable bindings. Treating them as bindings makes match arms emit
+                // `None.clone()` when the scrutinee is behind a reference (E0614-ish noise /
+                // nonsense for Option::None).
+                if name
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                {
+                    // not a binding
+                } else {
+                    bindings.insert(name.clone());
+                }
             }
             Pattern::Reference(inner) => {
                 self.extract_pattern_bindings(inner, bindings);

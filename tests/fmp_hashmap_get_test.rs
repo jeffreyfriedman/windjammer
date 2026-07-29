@@ -56,8 +56,8 @@ fn query_get_owned(query: std::collections::HashMap<string, string>, key: string
     let (success, generated, output) = compile_wj_to_rs(source);
     assert!(success, "HashMap get with owned key should compile: {output}");
     assert!(
-        generated.contains(".get(&key)"),
-        "expected `.get(&key)` for owned String key, got:\n{generated}"
+        generated.contains(".get(&key)") || generated.contains(".get(key)"),
+        "expected `.get(&key)` (owned String) or `.get(key)` (&str formal), got:\n{generated}"
     );
     assert!(
         !generated.contains(".get(&&key)"),

@@ -317,6 +317,14 @@ impl SignatureRegistry {
         if qualified_key.is_some_and(|k| self.type_collision_keys.contains(k)) {
             return true;
         }
+        // Same-key overwrites (`Emitter::new` from two modules) leave only one
+        // surviving signature in `signatures`, but still flag type_collision_keys.
+        if let Some(tn) = type_name {
+            let key = format!("{tn}::{method}");
+            if self.type_collision_keys.contains(&key) {
+                return true;
+            }
+        }
         if self.has_method_name_collision_for_type(type_name, method) {
             return true;
         }
@@ -332,6 +340,15 @@ impl SignatureRegistry {
         type_name: Option<&str>,
         method: &str,
     ) -> bool {
+        // Same-key type collisions (two modules define `Emitter::new` differently)
+        // overwrite `signatures` so method_index duplicate keys compare equal —
+        // consult type_collision_keys first.
+        if let Some(tn) = type_name {
+            let key = format!("{tn}::{method}");
+            if self.type_collision_keys.contains(&key) {
+                return true;
+            }
+        }
         let Some(keys) = self.method_index.get(method) else {
             return self
                 .global_fallback

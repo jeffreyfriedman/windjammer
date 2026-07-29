@@ -618,6 +618,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// When `&self` + `if let Some(x) = self.opt` but the arm calls mutating methods on `x`, use `&mut`.
+    /// Also upgrades indexed Option params (`slots[i]`) when the Some-binding is mutated.
     pub(in crate::codegen::rust) fn effective_option_scrutinee_ref_prefix(
         &self,
         value: &Expression<'ast>,
@@ -629,43 +630,40 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         let base = self.option_scrutinee_ref_prefix(value);
+        // Indexed Option mutation (`slots[i]` + field write): prefer `Some(ref mut x) = slots[i]`
+        // on an `&mut Vec` formal — do not emit a redundant `&mut slots[i]` prefix (match
+        // ergonomics + IndexMut already yield a mutable place).
+        if self.option_indexed_scrutinee_needs_mut_opt(some_arm, value) {
+            return "";
+        }
         if base == "&" {
             // When the Option's inner type is Copy and the arm body doesn't mutate
             // the binding, no `&` prefix is needed — Option<Copy> auto-copies.
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
                 if self.is_type_copy(&inner) {
+                    if let Some(arm) = some_arm {
+                        if self.option_arm_mutates_some_binding(arm, value) {
+                            return "&mut ";
+                        }
+                    }
                     return "";
                 }
             }
         }
         if base == "&mut " {
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
-                // For Copy inner types, strip &mut UNLESS the body calls
-                // mutating methods on the binding.
+                // For Copy inner types, strip &mut UNLESS the body mutates the binding
+                // (field writes or mutating method calls).
                 if self.is_type_copy(&inner) {
                     let body_mutates = some_arm
-                        .and_then(|arm| {
-                            Self::some_pattern_single_binding(&arm.pattern).map(|b| {
-                                self.binding_receives_mutating_call_with_sig_check(
-                                    arm.body, b, &inner,
-                                )
-                            })
-                        })
-                        .unwrap_or(false);
+                        .is_some_and(|arm| self.option_arm_mutates_some_binding(arm, value));
                     if !body_mutates {
                         return "";
                     }
                 }
                 if !self.is_type_copy(&inner) {
                     let body_mutates = some_arm
-                        .and_then(|arm| {
-                            Self::some_pattern_single_binding(&arm.pattern).map(|b| {
-                                self.binding_receives_mutating_call_with_sig_check(
-                                    arm.body, b, &inner,
-                                )
-                            })
-                        })
-                        .unwrap_or(false);
+                        .is_some_and(|arm| self.option_arm_mutates_some_binding(arm, value));
                     if !body_mutates && !self.match_scrutinee_is_self_field(value) {
                         return "";
                     }
@@ -689,6 +687,70 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             _ => None,
+        }
+    }
+
+    /// True when the Some-arm mutates its binding (field write or mutating method).
+    fn option_arm_mutates_some_binding(
+        &self,
+        arm: &MatchArm<'ast>,
+        scrutinee: &Expression<'ast>,
+    ) -> bool {
+        let Some(b) = Self::some_pattern_single_binding(&arm.pattern) else {
+            return false;
+        };
+        if let Expression::Block { statements, .. } = arm.body {
+            if statements
+                .iter()
+                .any(|s| self.statement_mutates_variable_field(s, b))
+            {
+                return true;
+            }
+            if statements
+                .iter()
+                .any(|s| self.statement_nonreadonly_method_call_on_var(s, b))
+            {
+                return true;
+            }
+        } else if self.expr_binding_receives_mutating_method_call(arm.body, b) {
+            return true;
+        }
+        if let Some(Type::Option(inner)) = self.infer_expression_type(scrutinee) {
+            return self.binding_receives_mutating_call_with_sig_check(
+                arm.body,
+                b,
+                inner.as_ref(),
+            );
+        }
+        false
+    }
+
+    /// Indexed Option (`slots[i]` / `self.slots[i]`) whose Some-binding is mutated.
+    pub(in crate::codegen::rust) fn option_indexed_scrutinee_needs_mut_opt(
+        &self,
+        some_arm: Option<&MatchArm<'ast>>,
+        scrutinee: &Expression<'ast>,
+    ) -> bool {
+        some_arm.is_some_and(|arm| self.option_indexed_scrutinee_needs_mut(arm, scrutinee))
+    }
+
+    /// Indexed Option (`slots[i]` / `self.slots[i]`) whose Some-binding is mutated.
+    fn option_indexed_scrutinee_needs_mut(
+        &self,
+        arm: &MatchArm<'ast>,
+        scrutinee: &Expression<'ast>,
+    ) -> bool {
+        if !Self::expr_has_index_access(scrutinee) {
+            return false;
+        }
+        self.option_arm_mutates_some_binding(arm, scrutinee)
+    }
+
+    fn expr_has_index_access(expr: &Expression<'_>) -> bool {
+        match expr {
+            Expression::Index { .. } => true,
+            Expression::FieldAccess { object, .. } => Self::expr_has_index_access(object),
+            _ => false,
         }
     }
 
@@ -856,17 +918,44 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression,
     ) -> bool {
-        let Some(ty) = self.infer_expression_type(expr) else {
-            return false;
-        };
-        let Type::Option(inner) = ty else {
-            return false;
-        };
-        let pointee = match inner.as_ref() {
-            Type::Reference(r) | Type::MutableReference(r) => r.as_ref(),
-            _ => return false,
-        };
-        self.is_type_copy(pointee)
+        if let Some(ty) = self.infer_expression_type(expr) {
+            if let Type::Option(inner) = ty {
+                let pointee = match inner.as_ref() {
+                    Type::Reference(r) | Type::MutableReference(r) => Some(r.as_ref()),
+                    _ => None,
+                };
+                if let Some(pointee) = pointee {
+                    if self.is_type_copy(pointee) {
+                        return true;
+                    }
+                }
+            }
+        }
+        // Fallback: `HashMap`/`BTreeMap`/`Map`.get returns `Option<&V>` in Rust. When
+        // inference loses the inner Reference wrap, still use `.copied()` for Copy `V`
+        // so `Some(v) => v` is owned `V` (not `&V` vs owned default arm).
+        if let Expression::MethodCall { object, method, .. } = expr {
+            if method == "get" {
+                if let Some(obj_ty) = self.infer_expression_type(object) {
+                    let bare = match &obj_ty {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    if let Type::Parameterized(name, args) = bare {
+                        let base = name.split('<').next().unwrap_or(name.as_str());
+                        if matches!(
+                            base,
+                            "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "OrderedMap"
+                        ) && args.len() >= 2
+                            && self.is_type_copy(&args[1])
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// Borrow-break on `self.method()` returning `Option<&Copy>` should use `.copied()`.
