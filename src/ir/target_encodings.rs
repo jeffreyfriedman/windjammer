@@ -276,7 +276,10 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
         (Target::Rust, CoercionKind::Deref) => {
             if expr.starts_with('*') {
                 expr.to_string()
-            } else {
+            } else if expr.trim().starts_with('&')
+                || (expr.trim().starts_with('(') && expr.contains('&'))
+            {
+                // `&x` / `(&x)` → owned Copy: strip borrow (auto-copy), do not `*x`.
                 let core = expr
                     .trim()
                     .strip_prefix('(')
@@ -285,6 +288,15 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
                     .trim()
                     .trim_start_matches("&mut ")
                     .trim_start_matches('&');
+                core.to_string()
+            } else {
+                // Bare `&T` binding name → `*name`.
+                let core = expr
+                    .trim()
+                    .strip_prefix('(')
+                    .and_then(|s| s.strip_suffix(')'))
+                    .unwrap_or(expr)
+                    .trim();
                 format!("*{core}")
             }
         }
@@ -303,10 +315,20 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
             }
         }
         (Target::Rust, CoercionKind::StripBorrow) => {
-            if let Some(rest) = expr.strip_prefix("&mut ") {
+            let trimmed = expr.trim();
+            if let Some(rest) = trimmed.strip_prefix("&mut ") {
                 rest.to_string()
-            } else if let Some(rest) = expr.strip_prefix('&') {
+            } else if let Some(rest) = trimmed.strip_prefix('&') {
                 rest.to_string()
+            } else if trimmed.starts_with('(') && trimmed.ends_with(')') {
+                let inner = trimmed[1..trimmed.len() - 1].trim();
+                if let Some(rest) = inner.strip_prefix("&mut ") {
+                    rest.to_string()
+                } else if let Some(rest) = inner.strip_prefix('&') {
+                    rest.to_string()
+                } else {
+                    inner.to_string()
+                }
             } else {
                 expr.to_string()
             }

@@ -99,6 +99,14 @@ fn coerce_string_arg_for_borrowed_callee<'ast>(
     mut arg_str: String,
 ) -> String {
     use crate::codegen::rust::string_utilities;
+    if matches!(
+        arg,
+        Expression::Identifier { name, .. } if gen.identifier_already_ref(name)
+            || gen.emitted_rust_ref_formals.contains(name)
+            || gen.str_ref_optimized_params.contains(name.as_str())
+    ) {
+        return arg_str;
+    }
     if let Some(param_ty) = sig.param_types.get(sig_param_idx) {
         let param_is_str_ref = string_utilities::param_is_rust_str_ref(param_ty);
         let callee_borrows = !arg_str.contains("string_to_ffi(")
@@ -253,6 +261,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         arg_to_generate,
                         coerced,
                     );
+                    gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut coerced);
                     return vec![coerced];
                 }
             }
@@ -286,6 +295,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
             let callee_formal_is_copy = sig
                 .formal_param_type(sig_param_idx)
                 .is_some_and(|t| gen.is_type_copy(t));
+            // Copy aggregates that emit `&mut T` still need mut-borrow at the call site.
+            let apply_mut_despite_copy = callee_formal_is_copy
+                && (matches!(
+                    sig.param_types.get(sig_param_idx),
+                    Some(Type::MutableReference(_))
+                ) || crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                    sig, i,
+                ));
 
             match ownership {
                     OwnershipMode::Borrowed if !has_method_collision && !callee_formal_is_copy => {
@@ -350,7 +367,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             string_literal_converted_here,
                         );
                     }
-                    OwnershipMode::MutBorrowed if !has_method_collision && !callee_formal_is_copy => {
+                    OwnershipMode::MutBorrowed
+                        if !has_method_collision
+                            && (!callee_formal_is_copy || apply_mut_despite_copy) =>
+                    {
                         crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
                             arg_to_generate,
                             &mut arg_str,
@@ -504,7 +524,16 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 
             // Borrow owned String/expr args when callee's `string` param is Borrowed (&str in Rust).
             // Skip when ownership collision detected for this method.
+            // Skip when the arg binding is already a shared-ref formal (`key: &str`).
+            let arg_already_shared_ref = matches!(
+                arg_to_generate,
+                Expression::Identifier { name, .. }
+                    if gen.identifier_already_ref(name)
+                        || gen.emitted_rust_ref_formals.contains(name)
+                        || gen.str_ref_optimized_params.contains(name.as_str())
+            );
             if !has_method_collision
+                && !arg_already_shared_ref
                 && matches!(
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership(
                         sig, sig_param_idx,
@@ -574,6 +603,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 arg_to_generate,
                 arg_str,
             );
+
+            gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut arg_str);
 
             vec![arg_str]
         })
@@ -872,6 +903,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     );
                 }
             }
+
+            gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut arg_str);
 
             arg_str
         })

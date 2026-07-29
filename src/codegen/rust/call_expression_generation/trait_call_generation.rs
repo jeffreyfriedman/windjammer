@@ -306,6 +306,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 type_name.as_deref(),
                 false,
             );
+            gen.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
         }
     }
 

@@ -224,6 +224,10 @@ impl<'ast> Analyzer<'ast> {
         let mut passthrough_calls: Vec<(String, usize, bool, bool)> = Vec::new();
         self.collect_passthrough_calls(param_name, body, func, &mut passthrough_calls);
 
+        if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
+            eprintln!("[PASSTHROUGH] fn={} param={} calls={:?}", current_func_name, param_name, passthrough_calls);
+        }
+
         // Skip recursive calls to the current function to break circular ownership inference.
         // Without this, recursive functions like `traverse(bvh, ray)` calling `traverse(bvh, ray)`
         // would see their own Owned signature and keep inferring Owned, preventing convergence.
@@ -270,7 +274,16 @@ impl<'ast> Analyzer<'ast> {
                         if simple != func_name {
                             match registry.get_signature(simple) {
                                 Some(s) => s,
-                                None => continue,
+                                None => {
+                                    if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
+                                        let matching: Vec<_> = registry.all_signatures()
+                                            .filter(|(k, _)| k.contains("clear") || k.contains("place") || k.contains("Cache"))
+                                            .map(|(k, _)| k.clone())
+                                            .collect();
+                                        eprintln!("[PASSTHROUGH] fn={} callee={} NOT FOUND in registry (tried simple={}). Related keys: {:?}", current_func_name, func_name, simple, matching);
+                                    }
+                                    continue;
+                                },
                             }
                         } else {
                             continue;
@@ -280,6 +293,9 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             };
+            if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
+                eprintln!("[PASSTHROUGH] fn={} callee={} found sig ownership={:?} has_self={}", current_func_name, func_name, sig.param_ownership, sig.has_self_receiver);
+            }
             let adjusted_position = if sig.has_self_receiver {
                 *arg_position + 1
             } else {
@@ -1359,5 +1375,56 @@ impl<'ast> Analyzer<'ast> {
             }
             _ => {}
         }
+    }
+
+    /// Module-level `string` params that only forward to a peer function which forwards back
+    /// (e.g. `foo(x)` ↔ `bar(y)`) must keep owned `String` at call sites — stale
+    /// `Borrowed`/`Reference(str)` from incomplete multipass must not win.
+    pub(crate) fn module_string_in_mutual_recursion_owned_contract(
+        &self,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        let Some(ref tops) = self.top_level_functions else {
+            return false;
+        };
+
+        let mut passthrough_calls: Vec<(String, usize, bool, bool)> = Vec::new();
+        self.collect_passthrough_calls(param_name, &func.body, func, &mut passthrough_calls);
+
+        for (callee_name, arg_pos, _is_field, is_bare) in passthrough_calls {
+            if !is_bare {
+                continue;
+            }
+            if callee_name == func.name {
+                return true;
+            }
+            let Some(callee_decl) = tops.get(&callee_name) else {
+                continue;
+            };
+            let Some(callee_param) = callee_decl.parameters.get(arg_pos) else {
+                continue;
+            };
+            if !Self::is_windjammer_text_param_type(&callee_param.type_) {
+                continue;
+            }
+            let mut back_calls: Vec<(String, usize, bool, bool)> = Vec::new();
+            self.collect_passthrough_calls(
+                &callee_param.name,
+                &callee_decl.body,
+                callee_decl,
+                &mut back_calls,
+            );
+            if back_calls
+                .iter()
+                .any(|(name, _, _, bare)| *bare && name == &func.name)
+            {
+                return true;
+            }
+            // Registry-backed one-hop: callee already converged to forward to us.
+            let _ = registry;
+        }
+        false
     }
 }

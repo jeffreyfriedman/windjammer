@@ -248,10 +248,11 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(var_name.clone(), var_type.clone());
                 }
 
-                // Upgrade pattern bindings to `mut` when the body mutates them.
-                // Only use ref mut when the scrutinee is &mut (mutable borrow).
-                // When &self (immutable), ref mut is invalid.
-                let scrutinee_is_mut_ref = scrutinee_ref_prefix.contains("mut");
+                // Upgrade pattern bindings to `mut` / `ref mut` when the body mutates them.
+                // `ref mut` when the scrutinee is `&mut` OR an indexed Option place on a
+                // mutably borrowed collection (`slots[i]` → IndexMut).
+                let scrutinee_is_mut_ref = scrutinee_ref_prefix.contains("mut")
+                    || self.option_indexed_scrutinee_needs_mut_opt(Some(main_arm), value);
                 let upgraded_pattern = if let Expression::Block { statements, .. } = main_arm.body {
                     self.upgrade_pattern_mut_bindings(
                         &main_arm.pattern,
@@ -352,7 +353,10 @@ impl<'ast> CodeGenerator<'ast> {
                     let mut body_str = self.generate_expression(main_arm.body);
                     if match_binds_refs_early_check {
                         if let Expression::Identifier { name, .. } = main_arm.body {
-                            if added_borrowed.contains(name) {
+                            // Unit enum constructors (`None`) are not ref bindings.
+                            if !name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                                && added_borrowed.contains(name)
+                            {
                                 let binding_type = match_bound_type_entries
                                     .iter()
                                     .find(|(n, _)| n == name)
@@ -463,6 +467,15 @@ impl<'ast> CodeGenerator<'ast> {
             self.generate_expression(value)
         };
 
+        // `Option<&T>` with `T: Copy` (e.g. HashMap::get) → `.copied()` so arm bindings
+        // are owned `T` (`Some(v) => v` matches `None => 0.0` without `*v`).
+        let use_copied_option = self.match_scrutinee_option_yields_copy(value);
+        let value_str = if use_copied_option && !value_str.ends_with(".copied()") {
+            format!("{value_str}.copied()")
+        } else {
+            value_str
+        };
+
         // E0507 fix: match on Option behind a borrow needs & / &mut scrutinee
         let some_arm = arms.iter().find(|arm| {
             matches!(&arm.pattern, Pattern::EnumVariant(name, _) if name == "Some" || name.ends_with("::Some"))
@@ -471,7 +484,10 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .is_some_and(|arm| self.option_arm_reassigns_scrutinee_field(value, arm.body));
         let match_scrutinee_ref_prefix: &str;
-        let value_str = if let Some(arm) = some_arm {
+        let value_str = if use_copied_option {
+            match_scrutinee_ref_prefix = "";
+            value_str
+        } else if let Some(arm) = some_arm {
             let p = if option_reassigns {
                 ""
             } else {
@@ -636,6 +652,7 @@ impl<'ast> CodeGenerator<'ast> {
         let match_binds_refs = if use_copied_borrow_break
             || use_owned_copy_borrow_break
             || use_owned_clone_borrow_break
+            || use_copied_option
         {
             false
         } else {
@@ -685,7 +702,11 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 false
             };
-        if use_copied_borrow_break || use_owned_copy_borrow_break || use_owned_clone_borrow_break {
+        if use_copied_borrow_break
+            || use_owned_copy_borrow_break
+            || use_owned_clone_borrow_break
+            || use_copied_option
+        {
             owned_bindings_from_copy_deref = true;
         }
 
@@ -696,6 +717,7 @@ impl<'ast> CodeGenerator<'ast> {
         let scrutinee_prefix_binds_refs = if use_copied_borrow_break
             || use_owned_copy_borrow_break
             || use_owned_clone_borrow_break
+            || use_copied_option
         {
             false
         } else {
@@ -713,7 +735,8 @@ impl<'ast> CodeGenerator<'ast> {
             let upgraded_pattern = self.upgrade_pattern_mut_bindings(
                 &arm.pattern,
                 body_stmts,
-                match_scrutinee_ref_prefix.contains("mut"),
+                match_scrutinee_ref_prefix.contains("mut")
+                    || self.option_indexed_scrutinee_needs_mut_opt(Some(arm), value),
                 Some(arm.body),
                 Some(value),
             );
@@ -884,8 +907,11 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         None
                     };
-                let is_simple_binding_return =
-                    binding_name.is_some_and(|n| added_borrowed.contains(&n.to_string()));
+                let is_simple_binding_return = binding_name.is_some_and(|n| {
+                    // Unit enum constructors (`None`) are not ref bindings.
+                    !n.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                        && added_borrowed.contains(&n.to_string())
+                });
                 if is_simple_binding_return {
                     let bname = binding_name.unwrap();
                     let binding_type = match_bound_type_entries
