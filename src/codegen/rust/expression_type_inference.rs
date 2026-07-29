@@ -245,6 +245,19 @@ impl<'ast> CodeGenerator<'ast> {
                 if matches!(method.as_str(), "len" | "capacity" | "count") {
                     return Some(Type::Custom("usize".to_string()));
                 }
+                // Static constructors: `String::new()` → String via stdlib signature registry.
+                if let Expression::Identifier { name: type_name, .. } = &**object {
+                    if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                        if let Some(ms) = self.lookup_method_signature(type_name, method) {
+                            if let Some(ret) = &ms.return_type {
+                                return Some(ret.clone());
+                            }
+                        }
+                        if method == "new" && type_name == "String" {
+                            return Some(Type::String);
+                        }
+                    }
+                }
                 // .clone() returns the same type as the object
                 // This enables type inference through cloned iterables:
                 //   for x in &collection.clone() → x has same element type as collection

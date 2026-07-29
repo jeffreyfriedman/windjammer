@@ -329,6 +329,17 @@ impl<'ast> Analyzer<'ast> {
         let mut analyzed = Vec::new();
         let mut registry = existing_registry.clone();
 
+        let mut top_level_functions: std::collections::HashMap<
+            String,
+            crate::parser::ast::FunctionDecl<'ast>,
+        > = std::collections::HashMap::new();
+        for item in &program.items {
+            if let crate::parser::ast::Item::Function { decl, .. } = item {
+                top_level_functions.insert(decl.name.clone(), decl.clone());
+            }
+        }
+        self.top_level_functions = Some(top_level_functions);
+
         // NOTE: Trait signature inference is now done GLOBALLY after all files are compiled
         // See ModuleCompiler::finalize_trait_inference() in main.rs
         // (We no longer call infer_trait_signatures_from_impls here for single files)

@@ -44,9 +44,11 @@ pub fn main() {
     let (rust, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     assert!(
-        rust.contains("*v") || rust.contains("v.clone()"),
-        "Some(v) should be dereferenced when None arm is an owned value.\n\
-         Expected `*v` or `v.clone()` in Some arm.\nGenerated:\n{}",
+        rust.contains("*v")
+            || rust.contains("v.clone()")
+            || rust.contains(".copied()"),
+        "Some(v) should be Copy-owned via `.copied()` or dereferenced when None arm is owned.\n\
+         Expected `.copied()`, `*v`, or `v.clone()`.\nGenerated:\n{}",
         rust
     );
 }
@@ -72,8 +74,10 @@ pub fn main() {
     let (rust, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     assert!(
-        rust.contains("*v") || rust.contains("v.clone()"),
-        "Some(v) from HashMap.get() should be dereferenced.\nGenerated:\n{}",
+        rust.contains("*v")
+            || rust.contains("v.clone()")
+            || rust.contains(".copied()"),
+        "Some(v) from HashMap.get() should be Copy-owned via `.copied()` or dereferenced.\nGenerated:\n{}",
         rust
     );
 }

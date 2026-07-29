@@ -286,6 +286,8 @@ impl IrPipeline {
             registry,
             &struct_field_types,
         );
+        // Delegation may force Owned on wrappers; mutated non-returned params stay MutRef.
+        restore_mutated_param_mutrefs(&mut functions, analyzed);
 
         diagnostics.push(IrDiagnostic {
             severity: DiagnosticSeverity::Info,
@@ -703,6 +705,39 @@ fn apply_analyzer_readonly_string_params_to_ir(
                         .get(idx)
                         .map(parser_type_to_base_type)
                         .unwrap_or(BaseType::Custom("str".into()));
+                }
+            }
+        }
+    }
+}
+
+/// Keep mutated non-returned params as MutRef after delegation/impl convergence.
+fn restore_mutated_param_mutrefs(
+    functions: &mut [IrFunction],
+    analyzed: &[crate::analyzer::AnalyzedFunction],
+) {
+    for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
+        for param_name in af.mutated_parameters.iter().chain(ir_fn.mutated_params.iter()) {
+            if af.returned_parameters.contains(param_name) {
+                continue;
+            }
+            if af.inferred_ownership.get(param_name) == Some(&OwnershipMode::Owned)
+                && !af.mutated_parameters.contains(param_name)
+            {
+                continue;
+            }
+            if let Some(st) = ir_fn.param_types.get_mut(param_name) {
+                if !matches!(st.ownership, OwnedType::MutRef(_)) {
+                    st.ownership = OwnedType::MutRef(Region::fresh(0));
+                }
+            }
+        }
+        for (name, mode) in &af.inferred_ownership {
+            if *mode == OwnershipMode::MutBorrowed && !af.returned_parameters.contains(name) {
+                if let Some(st) = ir_fn.param_types.get_mut(name) {
+                    if !matches!(st.ownership, OwnedType::MutRef(_)) {
+                        st.ownership = OwnedType::MutRef(Region::fresh(0));
+                    }
                 }
             }
         }

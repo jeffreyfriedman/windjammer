@@ -48,6 +48,32 @@ impl Lexer {
         self.input.get(self.position + offset).copied()
     }
 
+    /// `r#"..."#` / `r##"..."##` vs raw identifier `r#type`: true only if `#`+ is followed by `"`.
+    fn is_raw_string_start(&self) -> bool {
+        // current_char is 'r'
+        let mut i = 1;
+        while self.peek(i) == Some('#') {
+            i += 1;
+        }
+        // Must have consumed at least one '#', then see opening quote.
+        i > 1 && self.peek(i) == Some('"')
+    }
+
+    /// `'a'` is a char; `'a` / `'static` are lifetimes. Look ahead for the closing `'`.
+    fn is_lifetime_start(&self) -> bool {
+        // current_char is '\''
+        match self.peek(1) {
+            // Escaped char literal: '\n', '\'', etc.
+            Some('\\') => false,
+            Some(c) if c.is_alphabetic() || c == '_' => {
+                // Single quoted char: 'a', '_', 'Z' — peek(2) is closing quote.
+                // Lifetime: 'a, 'static, 'foo — peek(2) is not '\''.
+                self.peek(2) != Some('\'')
+            }
+            _ => false,
+        }
+    }
+
     fn skip_whitespace(&mut self) {
         while let Some(ch) = self.current_char {
             if ch.is_whitespace() && ch != '\n' {
@@ -115,18 +141,13 @@ impl Lexer {
                 self.skip_comment();
                 return self.next_token();
             }
-            Some('r') if self.peek(1) == Some('#') => {
+            Some('r') if self.peek(1) == Some('#') && self.is_raw_string_start() => {
                 // Raw string literal: r#"..."# or r##"..."## etc.
+                // (r#ident is a raw identifier — handled by read_identifier)
                 self.read_raw_string()
             }
             Some('"') => self.read_string(),
-            Some('\'')
-                if self
-                    .peek(1)
-                    .is_some_and(|c| c.is_alphabetic() || c == '_') =>
-            {
-                self.read_lifetime()
-            }
+            Some('\'') if self.is_lifetime_start() => self.read_lifetime(),
             Some('\'') => self.read_char(),
             Some(ch) if ch.is_ascii_digit() => self.read_number(),
             Some(ch) if ch.is_alphabetic() || ch == '_' => self.read_identifier(),

@@ -302,6 +302,8 @@ pub struct Analyzer<'ast> {
     /// When true, global ownership already converged (library Step 3) — skip
     /// per-file multi-pass ownership loop in analyze_program_with_global_arc.
     pub ownership_preconverged: bool,
+    /// Top-level module functions in the current file (for mutual-recursion string contracts).
+    top_level_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
 }
 
 impl<'ast> Analyzer<'ast> {
@@ -324,6 +326,7 @@ impl<'ast> Analyzer<'ast> {
             struct_defining_module_paths: Arc::new(HashMap::new()),
             convergence_only: false,
             ownership_preconverged: false,
+            top_level_functions: None,
         }
     }
 

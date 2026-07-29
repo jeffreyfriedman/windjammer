@@ -37,9 +37,14 @@ pub fn open_from_url(url: string) -> bool {
 
     let map = test.compile().expect("compile");
     let rs = map.get("adapter.rs").expect("adapter.rs");
+    // Phase-2 may demote the formal to `&str` (passthrough to connect(&str)), or keep
+    // owned `String` and borrow at the call site — both satisfy the `&str` contract.
+    let connects_ok = rs.contains("db::connect(&url")
+        || rs.contains("db::connect( &url")
+        || (rs.contains("url: &str") && rs.contains("db::connect(url"));
     assert!(
-        rs.contains("db::connect(&url") || rs.contains("db::connect( &url"),
-        "owned url must borrow for runtime db::connect(&str). Got:\n{rs}"
+        connects_ok,
+        "url must reach db::connect as &str (owned+& or Phase-2 &str formal). Got:\n{rs}"
     );
     // cargo check skipped: db feature requires libsqlite3-sys native build
 }

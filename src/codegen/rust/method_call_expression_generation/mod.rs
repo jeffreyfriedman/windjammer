@@ -23,7 +23,6 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" { "to_string" } else { method };
-
         if super::rust_stdlib_annotations::is_strip_redundant(method) && arguments.is_empty() {
             if let Expression::Identifier { name, .. } = object {
                 let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());

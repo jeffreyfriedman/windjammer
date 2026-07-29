@@ -81,6 +81,7 @@ pub mod statement_generation;
 pub mod statement_mut_binding_scan;
 pub mod statements;
 pub mod stdlib_method_signatures;
+pub mod stdlib_signature_specialization;
 pub mod string_analysis;
 pub mod string_utilities;
 pub mod thread_async_generation;

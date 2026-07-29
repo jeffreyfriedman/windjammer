@@ -479,8 +479,8 @@ impl<'ast> Analyzer<'ast> {
             smallvec_optimizations,
             cow_optimizations,
             cache_locality,
-            str_ref_optimizable_params,
-            inferred_param_types,
+            mut str_ref_optimizable_params,
+            mut inferred_param_types,
         ) = if self.convergence_only {
             // str_ref analysis is cheap and affects signatures (param_types change
             // from String to &str), so it MUST run during convergence.
@@ -624,9 +624,41 @@ impl<'ast> Analyzer<'ast> {
         // owned `String` at the API boundary with borrow at `.get()` call sites.
         if func.parent_type.is_none() {
             for param in &func.parameters {
+                if Self::trait_param_is_owned_string(&param.type_) {
+                    if param.decorators.iter().any(|d| d.name == "str_ref") {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        str_ref_optimizable_params.insert(param.name.clone());
+                        continue;
+                    }
+                    if param.decorators.iter().any(|d| d.name == "string_ref") {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        str_ref_optimizable_params.remove(&param.name);
+                        continue;
+                    }
+                    if self.module_string_in_mutual_recursion_owned_contract(
+                        &param.name,
+                        func,
+                        registry,
+                    ) {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                        str_ref_optimizable_params.remove(&param.name);
+                        continue;
+                    }
+                }
                 if Self::trait_param_is_owned_string(&param.type_)
                     && !str_ref_optimizable_params.contains(&param.name)
                 {
+                    if self.param_needs_string_ref(&param.name, &func.body, registry) {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        str_ref_optimizable_params.remove(&param.name);
+                        continue;
+                    }
+                    if matches!(
+                        inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::Borrowed)
+                    ) {
+                        continue;
+                    }
                     if let Some(passthrough_mode) = self.infer_passthrough_ownership(
                         &param.name,
                         &param.type_,
@@ -662,6 +694,75 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
         }
+
+        // Signature-registry passthrough: readonly/mut-borrow callees win over stale Owned stubs.
+        for param in &func.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            if Self::trait_param_is_owned_string(&param.type_) {
+                if self.param_needs_string_ref(&param.name, &func.body, registry) {
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                    str_ref_optimizable_params.remove(&param.name);
+                    continue;
+                }
+                if self.is_stored(&param.name, &func.body, registry)
+                    || self.is_returned(&param.name, &func.body)
+                    || self.param_is_consumed_into_return(&param.name, &func.body)
+                {
+                    continue;
+                }
+                if matches!(
+                    self.infer_passthrough_ownership(
+                        &param.name,
+                        &param.type_,
+                        &func.body,
+                        registry,
+                        &func.name,
+                        func,
+                    ),
+                    Some(OwnershipMode::Borrowed)
+                ) {
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                    str_ref_optimizable_params.insert(param.name.clone());
+                }
+                continue;
+            }
+            if !self.is_copy_type(&param.type_)
+                && matches!(
+                    self.infer_passthrough_ownership(
+                        &param.name,
+                        &param.type_,
+                        &func.body,
+                        registry,
+                        &func.name,
+                        func,
+                    ),
+                    Some(OwnershipMode::MutBorrowed)
+                )
+            {
+                inferred_ownership.insert(param.name.clone(), OwnershipMode::MutBorrowed);
+            }
+        }
+
+        inferred_param_types = func
+            .parameters
+            .iter()
+            .map(|param| {
+                let is_string = matches!(param.type_, Type::String)
+                    || matches!(param.type_, Type::Custom(ref name) if name == "string");
+                if str_ref_optimizable_params.contains(&param.name) {
+                    Type::Reference(Box::new(Type::Custom("str".to_string())))
+                } else if is_string
+                    && (param.decorators.iter().any(|d| d.name == "string_ref")
+                        || self.param_needs_string_ref(&param.name, &func.body, registry))
+                {
+                    Type::Reference(Box::new(Type::String))
+                } else {
+                    param.type_.clone()
+                }
+            })
+            .collect();
 
         Ok(AnalyzedFunction {
             decl: func.clone(),
@@ -1192,9 +1293,34 @@ impl<'ast> Analyzer<'ast> {
                 std::collections::HashSet::new()
             };
             for (idx, param) in func.decl.parameters.iter().enumerate() {
+                if self.module_string_in_mutual_recursion_owned_contract(
+                    &param.name,
+                    &func.decl,
+                    registry,
+                ) {
+                    if idx < formal_param_types.len() {
+                        formal_param_types[idx] = param.type_.clone();
+                    }
+                    if idx < param_ownership.len() {
+                        param_ownership[idx] = OwnershipMode::Owned;
+                    }
+                    if idx < param_types.len() {
+                        param_types[idx] = param.type_.clone();
+                    }
+                    continue;
+                }
                 if Self::trait_param_is_owned_string(&param.type_)
                     && !str_ref_optimized.contains(&param.name)
                 {
+                    if self.param_needs_string_ref(&param.name, &func.decl.body, registry) {
+                        if idx < param_ownership.len() {
+                            param_ownership[idx] = OwnershipMode::Borrowed;
+                        }
+                        if idx < param_types.len() {
+                            param_types[idx] = PType::Reference(Box::new(PType::String));
+                        }
+                        continue;
+                    }
                     if param_ownership.get(idx).is_some_and(|o| {
                         matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
                     }) {

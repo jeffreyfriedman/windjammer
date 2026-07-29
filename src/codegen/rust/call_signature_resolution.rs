@@ -795,6 +795,9 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                 }
                 // Stale analyzer MutableReference on Copy aggregates (AppDeps) that emit as
                 // owned `mut deps: AppDeps` — call sites must pass by value.
+                // Do NOT treat bare non-Copy Custom (`Grid`) as owned: source formals stay
+                // `Grid` while converged `param_types` is `MutableReference` + MutBorrowed,
+                // and call sites must emit `&mut self.grid` (cross-file passthrough).
                 if let Some(formal) = sig.formal_param_type(param_idx) {
                     let bare = match formal {
                         Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -802,11 +805,14 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                     };
                     let is_copy_aggregate = crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
                         && !crate::type_classification::is_copy_pass_by_value_formal(bare);
-                    let is_bare_custom_struct = matches!(formal, Type::Custom(_));
-                    if (is_copy_aggregate || is_bare_custom_struct)
+                    if is_copy_aggregate
                         && !matches!(
                             formal,
                             Type::Reference(_) | Type::MutableReference(_)
+                        )
+                        && !matches!(
+                            sig.param_ownership.get(param_idx),
+                            Some(OwnershipMode::MutBorrowed)
                         )
                     {
                         return OwnershipMode::Owned;
@@ -975,12 +981,16 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                         if matches!(own, OwnershipMode::MutBorrowed)
                             && crate::codegen::rust::type_analysis_pure::is_copy_type(formal_ty)
                         {
-                            // Copy scalars → &mut at call site; Copy aggregates → owned.
-                            if crate::type_classification::is_copy_pass_by_value_formal(formal_ty)
-                            {
-                                return OwnershipMode::MutBorrowed;
+                            // Copy scalars and Copy aggregates that emit `&mut T`
+                            // (`player: &mut PlayerState`) need MutBorrowed at call sites.
+                            // Only demote to owned when codegen recorded an owned formal
+                            // (AppDeps / WDB-060) via emitted_owned_arg_contract.
+                            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, param_idx,
+                            ) {
+                                return OwnershipMode::Owned;
                             }
-                            return OwnershipMode::Owned;
+                            return OwnershipMode::MutBorrowed;
                         }
                         if matches!(own, OwnershipMode::Borrowed) {
                             return OwnershipMode::Borrowed;
@@ -994,25 +1004,15 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         }
         if let Some(own) = sig.param_ownership.get(param_idx) {
             if matches!(own, OwnershipMode::MutBorrowed) {
-                // Emitted owned formal wins over stale MutBorrowed (Copy aggregates).
+                // Emitted owned formal wins over stale MutBorrowed (Copy aggregates
+                // that stay `mut deps: AppDeps`). When MutBorrowed is genuine
+                // (`player: &mut PlayerState`), emitted_owned_arg_contract is false.
                 if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
                 ) {
                     return OwnershipMode::Owned;
                 }
-                // Copy primitives with body mutation use `&mut T` at formal and call site
-                // (e.g. `fn increment(x: &mut i64)` / `increment(&mut counter)`).
-                // Copy *structs* (AppDeps) keep owned formals — pass by value at call sites.
-                if let Some(formal_ty) = sig.formal_param_type(param_idx) {
-                    if crate::codegen::rust::type_analysis_pure::is_copy_type(formal_ty) {
-                        if crate::type_classification::is_copy_pass_by_value_formal(formal_ty) {
-                            return OwnershipMode::MutBorrowed;
-                        }
-                        return OwnershipMode::Owned;
-                    }
-                }
-                // Non-Copy owned formals pass by value even when body analysis marks MutBorrowed.
-                return OwnershipMode::Owned;
+                return OwnershipMode::MutBorrowed;
             }
             if matches!(own, OwnershipMode::Borrowed) {
                 if let Some(formal_ty) = sig.formal_param_type(param_idx) {
@@ -1050,15 +1050,26 @@ pub fn callee_user_arg_expects_mut_borrow(sig: &FunctionSignature, user_arg_inde
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
         return false;
     }
-    // Copy aggregates emit owned formals — never ask for `&mut` at call sites.
+    // Copy aggregates that emit owned formals (`mut deps: AppDeps`) must not ask for
+    // `&mut` at call sites. Copy aggregates that emit `&mut T` (`player: &mut PlayerState`)
+    // keep MutBorrowed / MutableReference metadata — still ask for `&mut`.
     if let Some(formal) = sig.formal_param_type(pidx) {
         let bare = match formal {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
             other => other,
         };
-        if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+        let copy_aggregate = crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
             && !crate::type_classification::is_copy_pass_by_value_formal(bare)
-            && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+            && !matches!(formal, Type::Reference(_) | Type::MutableReference(_));
+        if copy_aggregate
+            && !matches!(
+                sig.param_ownership.get(pidx),
+                Some(OwnershipMode::MutBorrowed)
+            )
+            && !matches!(
+                sig.param_types.get(pidx),
+                Some(Type::MutableReference(_))
+            )
         {
             return false;
         }

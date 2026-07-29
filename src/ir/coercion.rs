@@ -118,8 +118,10 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
             OwnedType::Ref(_) => {
                 if is_string_base(&expected.base) {
                     CoercionKind::ToOwnedString
-                } else if is_copy_base(&actual.base) {
-                    CoercionKind::Deref
+                } else if is_copy_base(&actual.base) || is_copy_base(&expected.base) {
+                    // Owned Copy formal: strip `&` / pass bare value (auto-copy). Never
+                    // `*x` when codegen already lowered `&x` to the operand name `x`.
+                    CoercionKind::StripBorrow
                 } else {
                     CoercionKind::Clone
                 }
@@ -239,15 +241,24 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         && !coerced.contains('[')
     {
         match kind {
-            CoercionKind::Deref | CoercionKind::StripBorrow => {
-                // StripBorrow on bare ref bindings is a no-op; prefer deref for Copy,
-                // clone otherwise (safe for aggregates).
+            CoercionKind::StripBorrow => {
+                // Already bare (explicit `&x` lowered to `x`) — pass through for Copy.
+                // If a leading `&` remains, strip it.
+                if coerced.starts_with('&') || coerced.starts_with("(&") {
+                    *coerced = strip_rust_ref_expr(coerced).to_string();
+                }
+            }
+            CoercionKind::Deref => {
+                // True `&T` bindings (`x: &Copy`) need `*x`. Do not treat an already-bare
+                // name from stripping explicit `&x` as needing another deref — that is
+                // StripBorrow (handled above).
                 if is_copy_base(&expected.base) || is_copy_base(&actual.base) {
-                    let core = strip_rust_ref_expr(coerced);
-                    *coerced = format!("*{core}");
-                } else if matches!(kind, CoercionKind::Deref) {
-                    let base = strip_rust_ref_expr(coerced);
-                    *coerced = format!("{base}.clone()");
+                    if coerced.starts_with('&') || coerced.starts_with("(&") {
+                        *coerced = strip_rust_ref_expr(coerced).to_string();
+                    } else if !coerced.starts_with('*') {
+                        let core = strip_rust_ref_expr(coerced);
+                        *coerced = format!("*{core}");
+                    }
                 } else if !coerced.ends_with(".clone()") {
                     let base = strip_rust_ref_expr(coerced);
                     *coerced = format!("{base}.clone()");

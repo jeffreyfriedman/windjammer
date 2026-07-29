@@ -618,7 +618,8 @@ pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
 
 /// Stdlib struct types that lower to a `windjammer_runtime` module (receiver type → module).
 pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
-    match type_name {
+    let base = type_name.rsplit("::").next().unwrap_or(type_name);
+    match base {
         "Connection" | "Row" | "DatabaseType" => Some("db"),
         _ => None,
     }

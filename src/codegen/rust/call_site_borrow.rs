@@ -28,14 +28,15 @@ pub(crate) fn plain_string_formal_passes_owned_at_call_site(
     if callee_emits_shared_rust_ref_param(sig, param_idx) {
         return false;
     }
-    // Stale converged `Reference(str)` without codegen confirmation → owned pass.
+    // Body/codegen converged to `&str` + Borrowed (cross-file `.wj.meta` often lacks
+    // `emitted_rust_ref_params`) — pass as borrow, never force owned `.to_string()`.
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
     ) && sig.param_types.get(param_idx).is_some_and(|t| {
         string_utilities::param_is_rust_str_ref(t) || matches!(t, Type::Reference(_))
     }) {
-        return !callee_emits_shared_rust_ref_param(sig, param_idx);
+        return false;
     }
     // Body-inferred borrow without converged param_types yet (readonly string callees).
     if matches!(
@@ -77,11 +78,20 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
             return false;
         }
     }
-    // Plain WJ `string` formals only borrow after codegen records emitted_rust_ref_params
-    // (see top). Stale analyzer Reference(str) must not force call-site `&`.
+    // Plain WJ `string` formals: trust body/codegen convergence to `&str` + Borrowed
+    // (metadata often omits `emitted_rust_ref_params`). Stale `Reference(str)` with
+    // *Owned* ownership still falls through to false below.
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
     ) {
+        if sig.param_types.get(param_idx).is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+        }) && matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) {
+            return true;
+        }
         if sig.is_extern
             && sig.param_types.get(param_idx).is_some_and(|t| {
                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
@@ -510,6 +520,19 @@ pub fn strip_redundant_borrow_on_ref_binding(arg_expr: &Expression, arg_str: &mu
             *arg_str = name;
         }
     }
+}
+
+/// Strip a leading `&ident` only when the binding already lowers as a Rust shared ref
+/// (`key: &str` → `map.get(key)`, never `map.get(&key)` / `&&str`).
+pub fn strip_double_ref_on_shared_binding(
+    arg_expr: &Expression,
+    arg_str: &mut String,
+    binding_already_shared_ref: bool,
+) {
+    if !binding_already_shared_ref {
+        return;
+    }
+    strip_redundant_borrow_on_ref_binding(arg_expr, arg_str);
 }
 
 /// Decide call-site borrow lowering from effective ownership, formal types, and the argument.

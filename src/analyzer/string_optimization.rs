@@ -94,11 +94,32 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
 
+                // Runtime AsRef<&str> modules (`db.connect`, `env::var`, …): keep owned
+                // WJ `string` + borrow at the call site — do not demote to `&str`.
+                if !needs_string_ref
+                    && self.param_only_forwarded_to_asref_str_runtime_modules(
+                        &param.name,
+                        &func.body,
+                    )
+                {
+                    continue;
+                }
+
+                // Qualified HashMap get-key-only params: prefer &str (Borrow) rather than
+                // forcing owned String — avoids `&&str` when call sites already hold refs.
                 if self.param_only_used_as_qualified_map_get_key(&param.name, &func.body, func) {
+                    if !needs_string_ref && !self.is_stored(&param.name, &func.body, registry) {
+                        optimizable.insert(param.name.clone());
+                    }
                     continue;
                 }
 
                 if self.is_stored(&param.name, &func.body, registry) {
+                    continue;
+                }
+
+                // LHS of string `+` consumes the param (owned String), not &str.
+                if self.param_is_string_concat_lhs(&param.name, &func.body) {
                     continue;
                 }
 
@@ -109,6 +130,50 @@ impl<'ast> Analyzer<'ast> {
         }
 
         optimizable
+    }
+
+    /// True when `param_name` appears as the LHS of a `+` binary expression
+    /// (string concatenation consumes the LHS — needs owned String, not &str).
+    pub(crate) fn param_is_string_concat_lhs(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        body.iter().any(|stmt| self.stmt_has_param_as_concat_lhs(param_name, stmt))
+    }
+
+    fn stmt_has_param_as_concat_lhs(&self, param_name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expr_has_param_as_concat_lhs(param_name, expr)
+            }
+            Statement::Let { value, .. } => self.expr_has_param_as_concat_lhs(param_name, value),
+            Statement::If { condition, then_block, else_block, .. } => {
+                self.expr_has_param_as_concat_lhs(param_name, condition)
+                    || then_block.iter().any(|s| self.stmt_has_param_as_concat_lhs(param_name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| self.stmt_has_param_as_concat_lhs(param_name, s))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_has_param_as_concat_lhs(&self, param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Binary { left, right, op, .. } => {
+                if matches!(op, crate::parser::BinaryOp::Add) {
+                    if let Expression::Identifier { name, .. } = &**left {
+                        if name == param_name {
+                            return true;
+                        }
+                    }
+                }
+                self.expr_has_param_as_concat_lhs(param_name, left)
+                    || self.expr_has_param_as_concat_lhs(param_name, right)
+            }
+            _ => false,
+        }
     }
 
     /// Check if a parameter needs &String (passed to method that requires it)
@@ -445,15 +510,11 @@ impl<'ast> Analyzer<'ast> {
             Expression::Binary {
                 left, right, op, ..
             } => {
-                // SPECIAL CASE: String concatenation `a + b` consumes the LHS (a must be String, not &str)
-                // If parameter is the LHS of +, it must be String (owned)
-                if matches!(op, crate::parser::BinaryOp::Add) {
-                    if let Expression::Identifier { name, .. } = &**left {
-                        if name == param_name {
-                            return true; // LHS of + must be String (owned), not &str
-                        }
-                    }
-                }
+                // NOTE: LHS of string `+` needs owned String, not &String.
+                // That is NOT a "&String context" — it is an owned context.
+                // Handled by `param_is_string_concat_lhs` which blocks
+                // str_ref optimization AND keeps ownership Owned.
+                let _ = op;
 
                 // Recursively check both sides
                 self.expr_uses_param_in_string_ref_context(param_name, left, registry)
@@ -609,6 +670,225 @@ impl<'ast> Analyzer<'ast> {
             }
         }
         false
+    }
+
+    /// `db.connect(url)` / `conn.query(sql, …)` — runtime AsRef<&str> APIs. Keep owned
+    /// WJ `string` formals so call sites emit `&url` (std_db_call_site_borrow_test).
+    fn param_only_forwarded_to_asref_str_runtime_modules(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        let mut saw = false;
+        for stmt in body {
+            if !self.statement_asref_runtime_forward(param_name, stmt, &mut saw) {
+                return false;
+            }
+        }
+        saw
+    }
+
+    fn statement_asref_runtime_forward(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        saw: &mut bool,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_asref_runtime_forward(param_name, expr, saw),
+            Statement::Let { value, else_block, .. } => {
+                self.expr_asref_runtime_forward(param_name, value, saw)
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter()
+                            .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                    })
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_asref_runtime_forward(param_name, condition, saw)
+                    && then_block
+                        .iter()
+                        .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter()
+                            .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_asref_runtime_forward(param_name, value, saw)
+                    && arms
+                        .iter()
+                        .all(|arm| self.expr_asref_runtime_forward(param_name, &arm.body, saw))
+            }
+            Statement::While { body, condition, .. } => {
+                self.expr_asref_runtime_forward(param_name, condition, saw)
+                    && body
+                        .iter()
+                        .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+            }
+            Statement::For { body, .. } | Statement::Loop { body, .. } => body
+                .iter()
+                .all(|s| self.statement_asref_runtime_forward(param_name, s, saw)),
+            _ => true,
+        }
+    }
+
+    fn expr_asref_runtime_forward(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        saw: &mut bool,
+    ) -> bool {
+        let is_asref_module = |name: &str| {
+            matches!(
+                name,
+                "db" | "env" | "strings" | "json" | "jwt" | "regex" | "csv" | "mime" | "http"
+            ) || name.ends_with("::db")
+                || name.contains("db::")
+        };
+        let arg_is_param = |arg: &Expression| {
+            matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                || matches!(
+                    arg,
+                    Expression::Unary {
+                        op: crate::parser::UnaryOp::Ref,
+                        operand,
+                        ..
+                    } if matches!(&**operand, Expression::Identifier { name, .. } if name == param_name)
+                )
+        };
+        match expr {
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                for (_, arg) in arguments {
+                    if arg_is_param(arg) {
+                        *saw = true;
+                        let recv_ok = match &**object {
+                            Expression::Identifier { name, .. } => {
+                                is_asref_module(name) || name == "conn"
+                            }
+                            _ => {
+                                // `conn.query(sql, …)` — Connection methods take &str.
+                                true
+                            }
+                        };
+                        if !recv_ok {
+                            return false;
+                        }
+                    } else if !self.expr_asref_runtime_forward(param_name, arg, saw) {
+                        return false;
+                    }
+                }
+                self.expr_asref_runtime_forward(param_name, object, saw)
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                for (_, arg) in arguments {
+                    if arg_is_param(arg) {
+                        *saw = true;
+                        let ok = match &**function {
+                            Expression::FieldAccess { object, .. } => matches!(
+                                &**object,
+                                Expression::Identifier { name, .. }
+                                    if is_asref_module(name) || name == "conn"
+                            ),
+                            Expression::Identifier { name, .. } => {
+                                is_asref_module(name) || name.contains("db::")
+                            }
+                            _ => false,
+                        };
+                        if !ok {
+                            return false;
+                        }
+                    } else if !self.expr_asref_runtime_forward(param_name, arg, saw) {
+                        return false;
+                    }
+                }
+                self.expr_asref_runtime_forward(param_name, function, saw)
+            }
+            Expression::Identifier { name, .. } if name == param_name => false,
+            Expression::Binary { left, right, .. } => {
+                self.expr_asref_runtime_forward(param_name, left, saw)
+                    && self.expr_asref_runtime_forward(param_name, right, saw)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expr_asref_runtime_forward(param_name, operand, saw)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .all(|s| self.statement_asref_runtime_forward(param_name, s, saw)),
+            Expression::StructLiteral { fields, .. } => {
+                // Constructing owned values from the param is not an AsRef forward.
+                !fields
+                    .iter()
+                    .any(|(_, e)| self.expr_mentions_param(param_name, e))
+            }
+            Expression::MacroInvocation { args, .. } => {
+                // `vec![tenant]` needs owned String — not an AsRef-only forward.
+                !args
+                    .iter()
+                    .any(|a| self.expr_mentions_param(param_name, a))
+            }
+            _ => true,
+        }
+    }
+
+    fn expr_mentions_param(&self, param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expr_mentions_param(param_name, operand)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_mentions_param(param_name, left)
+                    || self.expr_mentions_param(param_name, right)
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expr_mentions_param(param_name, function)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expr_mentions_param(param_name, a))
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expr_mentions_param(param_name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expr_mentions_param(param_name, a))
+            }
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|a| self.expr_mentions_param(param_name, a)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, e)| self.expr_mentions_param(param_name, e)),
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|e| self.expr_mentions_param(param_name, e)),
+            _ => false,
+        }
     }
 
     fn statement_forwards_param_as_owned_pass_through(
