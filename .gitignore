@@ -45,8 +45,11 @@ coverage/
 std/**/*.rs
 !std/**/lib.rs
 
-# Parallel cargo target dir used by agents to avoid lock contention
+# Parallel cargo target dirs used by agents to avoid lock contention
 /target-verify/
+/target-agent*/
 
 # Local agent/debug scratch
 tmp_*
+.agent-wip/
+**/*.wip.rs
