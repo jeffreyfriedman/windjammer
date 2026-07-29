@@ -1,0 +1,16 @@
+---
+description: Windjammer test-only sessions must not stage or commit compiler src
+alwaysApply: true
+---
+
+# Windjammer: tests-only vs compiler sessions
+
+When this session is writing **failing codegen repros** (or any `tests/*_test.rs` work) and is **not** fixing the compiler:
+
+- **Do not** edit files under `src/`.
+- **Do not** run `git add -A`, `git add -u`, or `git commit -a`.
+- Stage **only** explicit test paths, e.g. `git add tests/codegen_foo_test.rs`.
+- Before commit, run `git diff --cached --name-only` and abort if any path starts with `src/`.
+- Leave the other agent’s dirty `src/` tree alone (no stash/reset/checkout of their WIP).
+
+`.gitignore` entries for `.agent-wip/` and `*.wip.rs` are for scratch only — they do **not** replace the staged-path check above.
