@@ -801,6 +801,34 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
+        // `rows[i]` cannot move a non-Copy element into an owned formal (E0507).
+        // Reuse-based auto-clone misses single-use index sites (LedgerKit row helpers).
+        if matches!(arg_expr, Expression::Index { .. })
+            && matches!(expected.ownership, OwnedType::Owned)
+            && !prepared_arg.ends_with(".clone()")
+            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &sig, param_idx,
+            )
+        {
+            let elem_needs_clone = self.infer_expression_type(arg_expr).map_or_else(
+                || {
+                    matches!(
+                        expected.base,
+                        BaseType::Custom(_) | BaseType::String
+                    )
+                },
+                |t| {
+                    let bare = match &t {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    !self.is_type_copy(bare)
+                },
+            );
+            if elem_needs_clone {
+                kind = CoercionKind::Clone;
+            }
+        }
         if matches!(kind, CoercionKind::ToOwnedString)
             && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
@@ -1167,9 +1195,18 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.inferred_mut_borrowed_params,
             );
         }
-        // Owned effective formals must not keep a stale `&mut` from earlier passes
-        // (Copy aggregates like AppDeps emit `mut deps: AppDeps`).
-        if matches!(
+        // Owned effective formals must not keep a stale `&` / `&mut` from earlier passes
+        // (Copy aggregates and non-Copy deps like AppDeps emit `mut deps: AppDeps`).
+        if crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
+            || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, param_idx)
+        {
+            if coerced.starts_with("&mut ")
+                || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
+            {
+                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                    .to_string();
+            }
+        } else if matches!(
             crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                 &sig, arg_index,
             ),
@@ -1239,6 +1276,23 @@ impl<'ast> CodeGenerator<'ast> {
                     || !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index))
                 && coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
+            {
+                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                    .to_string();
+            }
+        }
+
+        // Final owned-contract enforcement after registry re-borrow (LedgerKit AppDeps:
+        // `create_export_job(&deps.clone(), …)` while formal emits owned `mut deps: AppDeps`).
+        // Never strip when this slot is a confirmed shared-ref formal (`&str` / `&T`).
+        if !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+            && (crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, param_idx,
+                ))
+        {
+            if coerced.starts_with("&mut ")
+                || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
             {
                 coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
                     .to_string();
@@ -1972,6 +2026,25 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.ends_with(".to_string()") {
             return arg_str.to_string();
         }
+        // Indexing a non-Copy element into an owned formal is always an invalid move
+        // (E0507), even on single-use sites that reuse analysis does not flag.
+        if matches!(arg_expr, Expression::Index { .. })
+            && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                sig, param_idx,
+            )
+        {
+            let elem_is_copy = self.infer_expression_type(arg_expr).is_some_and(|t| {
+                let bare = match &t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(bare)
+            });
+            if !elem_is_copy {
+                return format!("{arg_str}.clone()");
+            }
+        }
         if let Expression::Identifier { name, .. } = arg_expr {
             if self.match_arm_bindings.contains(name.as_str()) {
                 let mut out = arg_str.to_string();
@@ -2240,7 +2313,8 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if s.starts_with("&mut ") {
-                    break;
+                    s = s["&mut ".len()..].trim().to_string();
+                    continue;
                 }
                 if s.starts_with('&') {
                     s = s[1..].trim().to_string();

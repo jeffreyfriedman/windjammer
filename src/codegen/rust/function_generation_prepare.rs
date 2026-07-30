@@ -28,6 +28,31 @@ impl ProjectionUsage {
     }
 }
 
+/// Usage classification for AppDeps-style owned-mut facade decisions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OwnedMutFacadeUsage {
+    None,
+    /// `deps.port.method(...)` / nested field access rooted at the param.
+    FieldMethodReceiver,
+    /// Bare `deps` as a value / direct `deps.method()` — not an owned-mut facade.
+    Disallowed,
+}
+
+impl OwnedMutFacadeUsage {
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (OwnedMutFacadeUsage::Disallowed, _) | (_, OwnedMutFacadeUsage::Disallowed) => {
+                OwnedMutFacadeUsage::Disallowed
+            }
+            (OwnedMutFacadeUsage::FieldMethodReceiver, _)
+            | (_, OwnedMutFacadeUsage::FieldMethodReceiver) => {
+                OwnedMutFacadeUsage::FieldMethodReceiver
+            }
+            (OwnedMutFacadeUsage::None, OwnedMutFacadeUsage::None) => OwnedMutFacadeUsage::None,
+        }
+    }
+}
+
 impl<'ast> CodeGenerator<'ast> {
     /// Push `#[test]` for `test_*` functions in `*_test.wj` files when no `@test` / `@property_test`.
     pub(in crate::codegen::rust) fn push_auto_test_attribute_if_needed(
@@ -408,7 +433,19 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
-                        self.inferred_mut_borrowed_params.insert(param.name.clone());
+                        // Body-converged MutBorrowed must not demote forwarders to `&mut T`
+                        // when the callee emits owned `mut deps: AppDeps` (LedgerKit journal).
+                        if !self.param_passes_to_wj_owned_sibling_call(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ) && !self.param_only_forwards_to_emitted_owned_callees(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ) {
+                            self.inferred_mut_borrowed_params.insert(param.name.clone());
+                        }
                     }
                     _ => {}
                 }
@@ -1283,6 +1320,195 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         self.param_passed_as_call_argument(body, param_name, func)
             && !self.param_has_use_outside_call_arguments(body, param_name, func)
+    }
+
+    /// MutBorrowed solely via nested field methods (`deps.port.append(...)`), not via
+    /// passing the whole param to a `&mut T` formal. Emit owned `mut T` (LedgerKit AppDeps).
+    pub(in crate::codegen::rust) fn param_is_owned_mut_field_method_facade(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if self.param_passed_to_mut_borrowing_callee(body, param_name, func) {
+            return false;
+        }
+        let mut saw_field_method = false;
+        for stmt in body {
+            match self.statement_owned_mut_facade_usage(stmt, param_name) {
+                OwnedMutFacadeUsage::None => {}
+                OwnedMutFacadeUsage::FieldMethodReceiver => saw_field_method = true,
+                OwnedMutFacadeUsage::Disallowed => return false,
+            }
+        }
+        saw_field_method
+    }
+
+    fn statement_owned_mut_facade_usage(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> OwnedMutFacadeUsage {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_owned_mut_facade_usage(expr, param_name)
+            }
+            Statement::Return { .. } => OwnedMutFacadeUsage::None,
+            Statement::Let { value, else_block, .. } => {
+                let mut usage = self.expression_owned_mut_facade_usage(value, param_name);
+                if let Some(b) = else_block {
+                    for s in b {
+                        usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    }
+                }
+                usage
+            }
+            Statement::Assignment { target, value, .. } => {
+                // Direct / nested field writes on the param are handled by field_mutated
+                // prefer_owned_mut; treat bare assignment roots as disallowed here only when
+                // the whole param is the target.
+                let target_usage = match target {
+                    Expression::Identifier { name, .. } if name == param_name => {
+                        OwnedMutFacadeUsage::Disallowed
+                    }
+                    Expression::FieldAccess { object, .. }
+                        if Self::expr_is_param_field_chain(object, param_name) =>
+                    {
+                        OwnedMutFacadeUsage::FieldMethodReceiver
+                    }
+                    _ => OwnedMutFacadeUsage::None,
+                };
+                target_usage.merge(self.expression_owned_mut_facade_usage(value, param_name))
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let mut usage = self.expression_owned_mut_facade_usage(condition, param_name);
+                for s in then_block {
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                }
+                if let Some(b) = else_block {
+                    for s in b {
+                        usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    }
+                }
+                usage
+            }
+            Statement::While { body, condition, .. } => {
+                let mut usage = self.expression_owned_mut_facade_usage(condition, param_name);
+                for s in body {
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                }
+                usage
+            }
+            Statement::For { body, iterable, .. } => {
+                let mut usage = self.expression_owned_mut_facade_usage(iterable, param_name);
+                for s in body {
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                }
+                usage
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                let mut usage = OwnedMutFacadeUsage::None;
+                for s in body {
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                }
+                usage
+            }
+            Statement::Match { value, arms, .. } => {
+                let mut usage = self.expression_owned_mut_facade_usage(value, param_name);
+                for arm in arms {
+                    usage = usage.merge(self.expression_owned_mut_facade_usage(&arm.body, param_name));
+                }
+                usage
+            }
+            _ => OwnedMutFacadeUsage::None,
+        }
+    }
+
+    fn expression_owned_mut_facade_usage(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> OwnedMutFacadeUsage {
+        match expr {
+            Expression::Identifier { name, .. } if name == param_name => {
+                OwnedMutFacadeUsage::Disallowed
+            }
+            Expression::MethodCall { object, arguments, .. } => {
+                let recv = if Self::expr_is_param_field_chain(object, param_name) {
+                    OwnedMutFacadeUsage::FieldMethodReceiver
+                } else if matches!(
+                    **object,
+                    Expression::Identifier { ref name, .. } if name == param_name
+                ) {
+                    // Direct `param.method()` — keep `&mut T` demotion for data structs.
+                    OwnedMutFacadeUsage::Disallowed
+                } else {
+                    self.expression_owned_mut_facade_usage(object, param_name)
+                };
+                arguments.iter().fold(recv, |acc, (_, arg)| {
+                    acc.merge(self.expression_owned_mut_facade_usage(arg, param_name))
+                })
+            }
+            Expression::Call { function, arguments, .. } => {
+                let mut usage = self.expression_owned_mut_facade_usage(function, param_name);
+                for (_, arg) in arguments {
+                    usage = usage.merge(self.expression_owned_mut_facade_usage(arg, param_name));
+                }
+                usage
+            }
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                if Self::expr_is_param_field_chain(object, param_name)
+                    || matches!(
+                        **object,
+                        Expression::Identifier { ref name, .. } if name == param_name
+                    )
+                {
+                    OwnedMutFacadeUsage::FieldMethodReceiver
+                } else {
+                    self.expression_owned_mut_facade_usage(object, param_name)
+                }
+            }
+            Expression::Binary { left, right, .. } => self
+                .expression_owned_mut_facade_usage(left, param_name)
+                .merge(self.expression_owned_mut_facade_usage(right, param_name)),
+            Expression::Unary { operand, .. } => {
+                self.expression_owned_mut_facade_usage(operand, param_name)
+            }
+            Expression::StructLiteral { fields, .. } => fields.iter().fold(
+                OwnedMutFacadeUsage::None,
+                |acc, (_, v)| acc.merge(self.expression_owned_mut_facade_usage(v, param_name)),
+            ),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                elements.iter().fold(OwnedMutFacadeUsage::None, |acc, e| {
+                    acc.merge(self.expression_owned_mut_facade_usage(e, param_name))
+                })
+            }
+            Expression::Block { statements, .. } => {
+                let mut usage = OwnedMutFacadeUsage::None;
+                for s in statements {
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                }
+                usage
+            }
+            _ => OwnedMutFacadeUsage::None,
+        }
+    }
+
+    fn expr_is_param_field_chain(expr: &Expression<'ast>, param_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::expr_is_param_field_chain(object, param_name)
+            }
+            _ => false,
+        }
     }
 
     fn param_has_use_outside_call_arguments(
@@ -5056,6 +5282,12 @@ impl<'ast> CodeGenerator<'ast> {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if !matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                     {
+                        // Nested calls in method args (`ServerResponse::error(..., error_json(message))`)
+                        // and chained receivers (`.header(...)`) must still be visited.
+                        if self.expression_passes_to_wj_owned_sibling_call(arg, param_name, func)
+                        {
+                            return true;
+                        }
                         continue;
                     }
                     if is_self_receiver {
@@ -5077,13 +5309,14 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                false
+                self.expression_passes_to_wj_owned_sibling_call(object, param_name, func)
             }
             Expression::Call {
                 function,
                 arguments,
                 ..
             } => {
+                let call_arg_count = arguments.len();
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if !matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                     {
@@ -5093,7 +5326,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         continue;
                     }
-                    if self.free_call_callee_emits_owned_arg(function, i, func) {
+                    if self.free_call_callee_emits_owned_arg_with_call_count(
+                        function,
+                        i,
+                        Some(call_arg_count),
+                    ) {
                         return true;
                     }
                 }
@@ -5121,6 +5358,53 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    fn resolve_free_call_signature(
+        &self,
+        function: &Expression<'ast>,
+        call_arg_count: Option<usize>,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        match function {
+            Expression::Identifier { name, .. } => {
+                let simple = name.rsplit("::").next().unwrap_or(name.as_str());
+                call_arg_count
+                    .and_then(|n| {
+                        self.find_signature_by_name_and_arg_count_with_global(name, n)
+                            .cloned()
+                    })
+                    .or_else(|| self.get_signature_with_global(name).cloned())
+                    .or_else(|| self.signature_registry.get_signature(name).cloned())
+                    .or_else(|| {
+                        self.signature_registry
+                            .find_signature_ending_with(simple)
+                            .cloned()
+                    })
+                    .or_else(|| {
+                        self.global_signature_registry.as_ref().and_then(|g| {
+                            g.find_signature_ending_with(simple).cloned()
+                        })
+                    })
+            }
+            Expression::FieldAccess { object, field, .. } => {
+                let type_or_module = match &**object {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    _ => None,
+                };
+                type_or_module.and_then(|receiver| {
+                    let key = format!("{receiver}::{field}");
+                    call_arg_count
+                        .and_then(|n| {
+                            self.find_signature_by_name_and_arg_count_with_global(&key, n)
+                                .cloned()
+                        })
+                        .or_else(|| self.get_signature_with_global(&key).cloned())
+                        .or_else(|| self.signature_registry.get_signature(&key).cloned())
+                        .or_else(|| self.signature_registry.lookup_method(&key).cloned())
+                })
+            }
+            _ => None,
+        }
+    }
+
     /// Free-function / associated-fn call: argument `i` expects an owned WJ formal.
     fn free_call_callee_emits_owned_arg(
         &self,
@@ -5128,28 +5412,16 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         _func: &FunctionDecl<'ast>,
     ) -> bool {
-        let sig = match function {
-            Expression::Identifier { name, .. } => self
-                .get_signature_with_global(name)
-                .cloned()
-                .or_else(|| self.signature_registry.get_signature(name).cloned()),
-            Expression::FieldAccess { object, field, .. } => {
-                // `Module::helper(arg)` / `Type::assoc(arg)`
-                let type_or_module = match &**object {
-                    Expression::Identifier { name, .. } => Some(name.as_str()),
-                    _ => None,
-                };
-                type_or_module.and_then(|receiver| {
-                    let key = format!("{receiver}::{field}");
-                    self.get_signature_with_global(&key)
-                        .cloned()
-                        .or_else(|| self.signature_registry.get_signature(&key).cloned())
-                        .or_else(|| self.signature_registry.lookup_method(&key).cloned())
-                })
-            }
-            _ => None,
-        };
-        let Some(sig) = sig else {
+        self.free_call_callee_emits_owned_arg_with_call_count(function, arg_index, None)
+    }
+
+    fn free_call_callee_emits_owned_arg_with_call_count(
+        &self,
+        function: &Expression<'ast>,
+        arg_index: usize,
+        call_arg_count: Option<usize>,
+    ) -> bool {
+        let Some(sig) = self.resolve_free_call_signature(function, call_arg_count) else {
             return false;
         };
         let pidx = sig.arg_param_index(arg_index);
@@ -6848,27 +7120,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Expression::Call { function, arguments, .. } => {
-                if let Some(callee_name) = self.callee_name_from_call_function(function) {
-                    for (i, (_, arg)) in arguments.iter().enumerate() {
-                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
-                            let simple = callee_name.rsplit("::").next().unwrap_or(&callee_name);
-                            let sig = self
-                                .signature_registry
-                                .get_signature(&callee_name)
-                                .or_else(|| self.signature_registry.lookup_method(&callee_name))
-                                .or_else(|| {
-                                    self.signature_registry.find_signature_ending_with(simple)
-                                })
-                                .or_else(|| {
-                                    self.global_signature_registry.as_ref().and_then(|g| {
-                                        g.get_signature(&callee_name)
-                                            .or_else(|| g.lookup_method(&callee_name))
-                                            .or_else(|| g.find_signature_ending_with(simple))
-                                    })
-                                });
-                            if let Some(sig) = sig {
-                                visit(sig, i);
-                            }
+                let call_arg_count = arguments.len();
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        if let Some(sig) =
+                            self.resolve_free_call_signature(function, Some(call_arg_count))
+                        {
+                            visit(&sig, i);
                         }
                     }
                 }
@@ -7353,18 +7611,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Record `&mut` user-arg slots so later files' call sites can auto-borrow
         // (`Ability::activate(player: &mut PlayerState)` → `&mut self.player`).
+        // Only trust formals that actually emitted `: &mut T` — analyzer MutBorrowed on
+        // owned `mut deps: AppDeps` must not poison cross-module call sites.
         let mut mut_arg_indices = std::collections::HashSet::new();
         mut_arg_indices.extend(self.current_fn_emitted_mut_arg_indices.iter().copied());
-        let mut user_param_idx = 0usize;
-        for param in &func.parameters {
-            if param.name == "self" {
-                continue;
-            }
-            if self.inferred_mut_borrowed_params.contains(&param.name) {
-                mut_arg_indices.insert(user_param_idx);
-            }
-            user_param_idx += 1;
-        }
         if !mut_arg_indices.is_empty() {
             self.function_emitted_mut_arg_indices
                 .insert(qualified, mut_arg_indices);

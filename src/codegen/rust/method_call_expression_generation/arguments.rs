@@ -2152,9 +2152,16 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let is_temp_variable = arg_str.starts_with("_temp")
                     && arg_str.chars().skip(5).all(|c| c.is_ascii_digit());
+                let temp_needs_shared_borrow = is_temp_variable
+                    && method_signature.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            sig,
+                            sig.arg_param_index(i),
+                        )
+                    });
 
                 if borrow_decision.add_ref
-                    && !is_temp_variable
+                    && (!is_temp_variable || temp_needs_shared_borrow)
                     && !arg_str.starts_with('&')
                     && (matches!(arg_to_generate, Expression::Identifier { name, .. }
                         if self.match_arm_bindings.contains(name.as_str()))

@@ -1172,6 +1172,20 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .and_then(|g| g.get_signature(name));
         match (local, global) {
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
+                    g, l,
+                ) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
+                    l, g,
+                ) =>
+            {
+                Some(l)
+            }
             (Some(l), Some(g)) if g.emitted_rust_ref_params.is_some()
                 && l.emitted_rust_ref_params.is_none() =>
             {
@@ -1179,6 +1193,30 @@ impl<'ast> CodeGenerator<'ast> {
             }
             (Some(l), Some(g)) if l.emitted_rust_ref_params.is_some()
                 && g.emitted_rust_ref_params.is_none() =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                    g, l,
+                ) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                    l, g,
+                ) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(g, l) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(l, g) =>
             {
                 Some(l)
             }
@@ -1230,15 +1268,73 @@ impl<'ast> CodeGenerator<'ast> {
         name: &str,
         arg_count: usize,
     ) -> Option<&FunctionSignature> {
-        if let Some(sig) = self
+        let local = self
             .signature_registry
-            .find_signature_by_name_and_arg_count(name, arg_count)
-        {
-            return Some(sig);
+            .find_signature_by_name_and_arg_count(name, arg_count);
+        let global = self.global_signature_registry.as_ref().and_then(|g| {
+            g.find_signature_by_name_and_arg_count(name, arg_count)
+        });
+        // Same refresh preference as `get_signature_with_global`: defining-module
+        // owned emission must beat importer analysis stubs (create→post AppDeps).
+        match (local, global) {
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
+                    g, l,
+                ) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
+                    l, g,
+                ) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if g.emitted_rust_ref_params.is_some() && l.emitted_rust_ref_params.is_none() =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if l.emitted_rust_ref_params.is_some() && g.emitted_rust_ref_params.is_none() =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                    g, l,
+                ) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                    l, g,
+                ) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(g, l) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(l, g) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(g, 0)
+                    && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(l, 0) =>
+            {
+                Some(g)
+            }
+            (Some(l), _) => Some(l),
+            (None, Some(g)) => Some(g),
+            (None, None) => None,
         }
-        self.global_signature_registry
-            .as_ref()?
-            .find_signature_by_name_and_arg_count(name, arg_count)
     }
 
     pub(crate) fn global_signature_registry(&self) -> Option<&SignatureRegistry> {

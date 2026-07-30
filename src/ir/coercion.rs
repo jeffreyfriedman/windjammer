@@ -183,7 +183,9 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         } else {
             (false, coerced.as_str())
         };
-            if is_ref && !coerced.starts_with("&mut ") {
+        // Owned / force-owned formals: strip both `&T` and `&mut T` (LedgerKit AppDeps —
+        // call sites must not keep `&mut deps` / `&deps.clone()` into `mut deps: AppDeps`).
+        if is_ref {
             let inner = inner
                 .strip_prefix('(')
                 .and_then(|s| s.strip_suffix(')'))
@@ -194,6 +196,9 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 && !matches!(expected.base, BaseType::Custom(_))
             {
                 *coerced = format!("*{inner}");
+            } else if coerced.starts_with("&mut ") {
+                // `&mut place` is already an lvalue; owned formals take the place by value.
+                *coerced = inner.to_string();
             } else {
                 *coerced = format!("{inner}.clone()");
             }

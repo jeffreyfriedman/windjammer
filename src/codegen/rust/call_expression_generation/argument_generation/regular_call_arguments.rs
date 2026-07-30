@@ -370,12 +370,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 );
                             }
                             if skip_post_ir_stale_borrow
-                                && coerced.starts_with('&')
-                                && !coerced.starts_with("&mut ")
+                                && (coerced.starts_with("&mut ")
+                                    || (coerced.starts_with('&') && !coerced.starts_with("&mut ")))
                             {
-                                coerced = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
+                                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
                                     &coerced,
-                                );
+                                )
+                                .to_string();
                             }
                         }
                     } else if let Some(sig) = gen
@@ -412,36 +413,63 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
-                    let callee_wants_mut_arg = gen
-                        .function_emitted_mut_arg_indices
-                        .get(func_name)
-                        .or_else(|| {
+                    let callee_wants_mut_arg = {
+                        let refreshed = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                            signature.clone(),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(func_name).cloned()),
                             func_name
                                 .rsplit("::")
                                 .next()
                                 .and_then(|simple| {
-                                    gen.function_emitted_mut_arg_indices.get(simple)
-                                })
-                        })
-                        .is_some_and(|indices| indices.contains(&i))
-                        || signature.as_ref().is_some_and(|sig| {
-                            crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
-                                sig, i,
+                                    gen.signature_registry.get_signature(simple).cloned().or_else(
+                                        || {
+                                            gen.global_signature_registry.as_ref().and_then(|g| {
+                                                g.get_signature(simple).cloned()
+                                            })
+                                        },
+                                    )
+                                }),
+                        ]);
+                        let owned_formal = refreshed.as_ref().is_some_and(|sig| {
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig,
+                                sig.arg_param_index(i),
                             )
-                        })
-                        || gen
-                            .signature_registry
-                            .get_signature(func_name)
-                            .or_else(|| {
-                                gen.global_signature_registry
-                                    .as_ref()
-                                    .and_then(|g| g.get_signature(func_name))
-                            })
-                            .is_some_and(|sig| {
-                                crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
-                                    sig, i,
-                                )
-                            });
+                        });
+                        if owned_formal {
+                            false
+                        } else {
+                            gen.function_emitted_mut_arg_indices
+                                .get(func_name)
+                                .or_else(|| {
+                                    func_name.rsplit("::").next().and_then(|simple| {
+                                        gen.function_emitted_mut_arg_indices.get(simple)
+                                    })
+                                })
+                                .is_some_and(|indices| indices.contains(&i))
+                                || signature.as_ref().is_some_and(|sig| {
+                                    crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                                        sig, i,
+                                    )
+                                })
+                                || gen
+                                    .signature_registry
+                                    .get_signature(func_name)
+                                    .or_else(|| {
+                                        gen.global_signature_registry
+                                            .as_ref()
+                                            .and_then(|g| g.get_signature(func_name))
+                                    })
+                                    .is_some_and(|sig| {
+                                        crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                                            sig, i,
+                                        )
+                                    })
+                        }
+                    };
                     if (!has_ownership_collision || callee_wants_mut_arg)
                         && callee_wants_mut_arg
                         && !coerced.starts_with("&mut ")
@@ -455,6 +483,42 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.current_function_params,
                             &gen.inferred_mut_borrowed_params,
                         );
+                    }
+                    // Owned callee formals (codegen refresh): strip post-IR `&` / `&mut`
+                    // that stale MutBorrowed stubs re-applied (LedgerKit create_export_job).
+                    if let Some(sig) = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                        signature.clone(),
+                        gen.signature_registry.get_signature(func_name).cloned(),
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(func_name).cloned()),
+                        func_name.rsplit("::").next().and_then(|simple| {
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(simple).cloned())
+                                .or_else(|| gen.signature_registry.get_signature(simple).cloned())
+                        }),
+                    ]) {
+                        let pidx = sig.arg_param_index(i);
+                        let shared_ref = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            &sig, pidx,
+                        ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, pidx);
+                        if !shared_ref
+                            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                &sig, pidx,
+                            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                &sig, pidx,
+                            ))
+                        {
+                            if coerced.starts_with("&mut ")
+                                || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
+                            {
+                                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &coerced,
+                                )
+                                .to_string();
+                            }
+                        }
                     }
                     if coerced.starts_with("&mut ") {
                         if let Some(sig) = signature.as_ref().or_else(|| {
@@ -658,9 +722,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     }
                     if let Some(ref sig) = post_ir_borrow_sig {
                         let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-                        let enforce_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                            gen.signature_registry.get_signature(func_name).cloned(),
-                            gen.signature_registry.get_signature(simple).cloned(),
+                        let pidx = sig.arg_param_index(i);
+                        // Prefer defining-module refresh with shared-ref slots over importer
+                        // stubs that recorded `emitted_rust_ref_params = Some([false, …])`.
+                        let mut enforce_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                             gen.global_signature_registry
                                 .as_ref()
                                 .and_then(|g| g.get_signature(func_name).cloned()),
@@ -668,16 +733,46 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .as_ref()
                                 .and_then(|g| g.get_signature(simple).cloned()),
                             Some(sig.clone()),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.signature_registry.get_signature(simple).cloned(),
                         ])
+                        .unwrap_or_else(|| sig.clone());
+                        enforce_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                            Some(enforce_sig),
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(func_name))
+                                .or_else(|| {
+                                    gen.global_signature_registry
+                                        .as_ref()
+                                        .and_then(|g| g.get_signature(simple))
+                                }),
+                            pidx,
+                        )
                         .unwrap_or_else(|| sig.clone());
                         let pidx = enforce_sig.arg_param_index(i);
                         // Don't let a stale analyzer stub strip IR's confirmed `&item`
                         // after collision-aware IR already lowered the arg (bug_e0308).
-                        if !(coerced.starts_with('&')
-                            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        // Also keep `&` when *any* registry view emits shared-ref for this slot.
+                        let keep_shared_ref = coerced.starts_with('&')
+                            && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                                 &enforce_sig, pidx,
-                            ))
-                        {
+                            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                &enforce_sig, pidx,
+                            ) || gen
+                                .global_signature_registry
+                                .as_ref()
+                                .and_then(|g| {
+                                    g.get_signature(func_name)
+                                        .or_else(|| g.get_signature(simple))
+                                })
+                                .is_some_and(|gs| {
+                                    let gp = gs.arg_param_index(i);
+                                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                        gs, gp,
+                                    )
+                                }));
+                        if !keep_shared_ref {
                             gen.enforce_call_site_ownership_contract(
                                 &mut coerced,
                                 arg,
@@ -707,34 +802,58 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
-                    let callee_wants_mut = gen
-                        .function_emitted_mut_arg_indices
-                        .get(func_name)
-                        .or_else(|| {
-                            func_name
-                                .rsplit("::")
-                                .next()
-                                .and_then(|simple| gen.function_emitted_mut_arg_indices.get(simple))
-                        })
-                        .is_some_and(|indices| indices.contains(&i))
-                        || post_ir_borrow_sig.as_ref().is_some_and(|sig| {
-                            crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
-                                sig, i,
-                            )
-                        })
-                        || gen
-                            .signature_registry
-                            .get_signature(func_name)
-                            .or_else(|| {
+                    let callee_wants_mut = {
+                        let refreshed = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                            post_ir_borrow_sig.clone(),
+                            signature.clone(),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(func_name).cloned()),
+                            func_name.rsplit("::").next().and_then(|simple| {
                                 gen.global_signature_registry
                                     .as_ref()
-                                    .and_then(|g| g.get_signature(func_name))
-                            })
-                            .is_some_and(|sig| {
-                                crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
-                                    sig, i,
-                                )
-                            });
+                                    .and_then(|g| g.get_signature(simple).cloned())
+                                    .or_else(|| gen.signature_registry.get_signature(simple).cloned())
+                            }),
+                        ]);
+                        let owned_formal = refreshed.as_ref().is_some_and(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, pidx,
+                            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+                        });
+                        if owned_formal {
+                            false
+                        } else {
+                            gen.function_emitted_mut_arg_indices
+                                .get(func_name)
+                                .or_else(|| {
+                                    func_name.rsplit("::").next().and_then(|simple| {
+                                        gen.function_emitted_mut_arg_indices.get(simple)
+                                    })
+                                })
+                                .is_some_and(|indices| indices.contains(&i))
+                                || post_ir_borrow_sig.as_ref().is_some_and(|sig| {
+                                    crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                                        sig, i,
+                                    )
+                                })
+                                || gen
+                                    .signature_registry
+                                    .get_signature(func_name)
+                                    .or_else(|| {
+                                        gen.global_signature_registry
+                                            .as_ref()
+                                            .and_then(|g| g.get_signature(func_name))
+                                    })
+                                    .is_some_and(|sig| {
+                                        crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                                            sig, i,
+                                        )
+                                    })
+                        }
+                    };
                     if callee_wants_mut
                         && !coerced.starts_with("&mut ")
                         && crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(
@@ -747,6 +866,43 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.current_function_params,
                             &gen.inferred_mut_borrowed_params,
                         );
+                    }
+                    // Final owned-contract peel after late mut-arg re-application.
+                    // Never peel confirmed `&str` / shared-ref formals (LedgerKit opt_or).
+                    if let Some(sig) = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                        post_ir_borrow_sig.clone(),
+                        signature.clone(),
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(func_name).cloned()),
+                        gen.signature_registry.get_signature(func_name).cloned(),
+                        func_name.rsplit("::").next().and_then(|simple| {
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(simple).cloned())
+                                .or_else(|| gen.signature_registry.get_signature(simple).cloned())
+                        }),
+                    ]) {
+                        let pidx = sig.arg_param_index(i);
+                        let shared_ref = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            &sig, pidx,
+                        ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, pidx);
+                        if !shared_ref
+                            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                &sig, pidx,
+                            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                &sig, pidx,
+                            ))
+                        {
+                            if coerced.starts_with("&mut ")
+                                || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
+                            {
+                                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &coerced,
+                                )
+                                .to_string();
+                            }
+                        }
                     }
                     if let Expression::Identifier { name, .. } = arg {
                         if gen.in_user_written_closure && gen.user_closure_params.contains(name) {
@@ -869,24 +1025,84 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
+                    // Final owned peel immediately before IR early-return.
+                    // Prefer *any* candidate that confirms owned (defining-module refresh), not
+                    // merely the first `emitted_rust_ref_params` with a text `&str` slot —
+                    // stale importer stubs can win `pick_codegen_refreshed` via unrelated `true`
+                    // flags while param 0 still carries MutableReference (LedgerKit AppDeps).
+                    // But never peel when *any* candidate confirms a shared-ref formal for this
+                    // slot (LedgerKit `opt_or(..., &_temp)` / `&str` formals).
+                    {
+                        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
+                        let owned_candidates = [
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(func_name)),
+                            gen.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(simple)),
+                            gen.signature_registry.get_signature(func_name),
+                            gen.signature_registry.get_signature(simple),
+                            post_ir_borrow_sig.as_ref(),
+                            signature.as_ref(),
+                        ];
+                        let keep_shared_ref = owned_candidates.iter().flatten().any(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                sig, pidx,
+                            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                sig, pidx,
+                            )
+                        });
+                        let peel_owned = !keep_shared_ref
+                            && owned_candidates.iter().flatten().any(|sig| {
+                                let pidx = sig.arg_param_index(i);
+                                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    sig, pidx,
+                                ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                    sig, pidx,
+                                )
+                            });
+                        if peel_owned
+                            && (coerced.starts_with("&mut ")
+                                || (coerced.starts_with('&') && !coerced.starts_with("&mut ")))
+                        {
+                            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &coerced,
+                            )
+                            .to_string();
+                        }
+                    }
                     return vec![coerced];
                 }
-                let callee_sig = signature.as_ref().or_else(|| {
-                    gen.signature_registry.get_signature(func_name).or_else(|| {
+                let callee_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    signature.clone(),
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(func_name).cloned()),
+                    gen.signature_registry.get_signature(func_name).cloned(),
+                    func_name.rsplit("::").next().and_then(|simple| {
                         gen.global_signature_registry
                             .as_ref()
-                            .and_then(|g| g.get_signature(func_name))
-                    })
-                });
-                if let Some(sig) = callee_sig {
-                    let needs_mut = matches!(
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            sig, i,
-                        ),
-                        OwnershipMode::MutBorrowed,
-                    ) || sig.param_types.get(sig.arg_param_index(i)).is_some_and(|t| {
-                        matches!(t, Type::MutableReference(_))
-                    });
+                            .and_then(|g| g.get_signature(simple).cloned())
+                            .or_else(|| gen.signature_registry.get_signature(simple).cloned())
+                    }),
+                ]);
+                if let Some(sig) = callee_sig.as_ref() {
+                    let pidx = sig.arg_param_index(i);
+                    let owned_formal =
+                        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            sig, pidx,
+                        ) || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx);
+                    let needs_mut = !owned_formal
+                        && (matches!(
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                sig, i,
+                            ),
+                            OwnershipMode::MutBorrowed,
+                        ) || sig.param_types.get(pidx).is_some_and(|t| {
+                            matches!(t, Type::MutableReference(_))
+                        }));
                     if !has_ownership_collision
                         && needs_mut
                         && crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(arg)
@@ -1636,12 +1852,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 })
                                 .unwrap_or(false);
 
-                            // TDD FIX (Bug #16): Don't add & to temp variables!
-                            // Temp variables (like _temp0) hold OWNED values from format!()
-                            // format!() returns String, not &str, so _temp0 is String
-                            // If we add &, we get &String when we need String
+                            // Temp variables hold owned `format!()` values. Skip auto-borrow
+                            // only when the formal is owned String — `&str` formals need `&_temp`.
                             let is_temp_variable = arg_str.starts_with("_temp")
                                 && arg_str.chars().skip(5).all(|c| c.is_numeric());
+                            let temp_needs_shared_borrow = is_temp_variable
+                                && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    sig,
+                                    sig.arg_param_index(i),
+                                );
 
                             // Strip .clone() when destination wants Borrowed — pass &field, not &field.clone()
                             crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
@@ -1673,7 +1892,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 && !is_param_already_ref
                                 && !is_copy_scalar
                                 && !is_copy_literal
-                                && !is_temp_variable
+                                && (!is_temp_variable || temp_needs_shared_borrow)
                             {
                                 crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
                                     .apply(&mut arg_str);
@@ -2252,31 +2471,55 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
-            let sig_for_final_mut = signature
-                .as_ref()
-                .cloned()
-                .or_else(|| gen.signature_registry.get_signature(func_name).cloned())
-                .or_else(|| {
-                    gen.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(func_name).cloned())
-                });
-            let callee_wants_mut_arg = gen
-                .function_emitted_mut_arg_indices
-                .get(func_name)
-                .or_else(|| {
-                    func_name
-                        .rsplit("::")
-                        .next()
-                        .and_then(|simple| gen.function_emitted_mut_arg_indices.get(simple))
-                })
-                .is_some_and(|indices| indices.contains(&i))
-                || sig_for_final_mut.as_ref().is_some_and(|sig| {
-                    crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
-                        sig, i,
-                    )
-                });
-            if (!has_ownership_collision || callee_wants_mut_arg)
+            let simple_fn = func_name.rsplit("::").next().unwrap_or(func_name);
+            let owned_formal = [
+                gen.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(func_name)),
+                gen.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple_fn)),
+                gen.signature_registry.get_signature(func_name),
+                gen.signature_registry.get_signature(simple_fn),
+                signature.as_ref(),
+            ]
+            .iter()
+            .flatten()
+            .any(|sig| {
+                let pidx = sig.arg_param_index(i);
+                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+                    || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+            });
+            let sig_for_final_mut = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                gen.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(func_name).cloned()),
+                gen.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple_fn).cloned()),
+                signature.as_ref().cloned(),
+                gen.signature_registry.get_signature(func_name).cloned(),
+            ]);
+            let callee_wants_mut_arg = !owned_formal
+                && (gen
+                    .function_emitted_mut_arg_indices
+                    .get(func_name)
+                    .or_else(|| {
+                        gen.function_emitted_mut_arg_indices.get(simple_fn)
+                    })
+                    .is_some_and(|indices| indices.contains(&i))
+                    || sig_for_final_mut.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                            sig, i,
+                        )
+                    }));
+            if owned_formal
+                && (arg_str.starts_with("&mut ")
+                    || (arg_str.starts_with('&') && !arg_str.starts_with("&mut ")))
+            {
+                arg_str = crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str)
+                    .to_string();
+            } else if (!has_ownership_collision || callee_wants_mut_arg)
                 && callee_wants_mut_arg
                 && !arg_str.starts_with("&mut ")
                 && crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(arg)
@@ -2290,7 +2533,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             } else if !has_ownership_collision {
                 if let Some(ref sig) = sig_for_final_mut {
                 let pidx = sig.arg_param_index(i);
-                let needs_mut_borrow = matches!(
+                let needs_mut_borrow = !owned_formal
+                    && (matches!(
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, i,
                     ),
@@ -2304,7 +2548,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     Some(OwnershipMode::MutBorrowed)
                 ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, pidx,
-                ));
+                )));
                 if needs_mut_borrow
                     && !arg_str.starts_with("&mut ")
                     && crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(arg)
