@@ -635,6 +635,16 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
     if param_is_mut_ref || formal_is_explicit_mut_ref {
         return false;
     }
+    // Shared-ref / runtime-scanner Borrowed contracts (json::get `&Value`,
+    // subprocess::spawn `&[String]`) must not be treated as owned just because
+    // `emitted_rust_ref_params[i] == false` (that flag means "not shared `&T`",
+    // and is also recorded for true `&mut T` / scanner-borrowed formals).
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Borrowed)
+    ) {
+        return false;
+    }
     let analyzer_mut = matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::MutBorrowed)

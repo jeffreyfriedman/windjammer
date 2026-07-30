@@ -197,33 +197,26 @@ impl<'ast> CodeGenerator<'ast> {
 
         if use_additive {
             let mut acc = self.generate_expression(&parts[0]);
-            for p in parts.iter().skip(1) {
-                let rhs = self.generate_expression(p);
-                let rhs_is_string = string_analysis::expression_produces_string(p)
-                    || self.infer_expression_type(p).as_ref().is_some_and(|ty| {
-                        matches!(ty, Type::String)
-                            || matches!(
-                                ty,
-                                Type::Custom(n) if n == "string" || n == "String"
-                            )
-                    });
-                acc = if rhs_is_string {
-                    // Rust: `String + &str` — left must be owned String, right &str.
-                    // When the accumulator is already `&binding`, upgrade to `.clone() + &rhs`.
-                    if acc.starts_with('&') && !acc.starts_with("&mut ") {
-                        let owned = acc.trim_start_matches('&');
-                        if rhs.starts_with('&') {
-                            format!("{owned}.clone() + {rhs}")
-                        } else {
-                            format!("{owned}.clone() + &{rhs}")
-                        }
-                    } else if rhs.starts_with('&') {
-                        format!("{acc} + {rhs}")
+            for _part in parts.iter().skip(1) {
+                let rhs = self.generate_expression(_part);
+                // Additive chain is `String + &str + &str…`. Literals that stay as
+                // `"…" ` are already `&str`; literals coerced to `String::from("…")`
+                // still need `&`. Locals (`label_html`) always need `&`.
+                let rhs_already_str_ref = rhs.starts_with('&')
+                    || (rhs.starts_with('"')
+                        && !rhs.contains("String::")
+                        && !rhs.contains(".to_string()"));
+                acc = if acc.starts_with('&') && !acc.starts_with("&mut ") {
+                    let owned = acc.trim_start_matches('&');
+                    if rhs_already_str_ref {
+                        format!("{owned}.clone() + {rhs}")
                     } else {
-                        format!("{acc} + &{rhs}")
+                        format!("{owned}.clone() + &{rhs}")
                     }
-                } else {
+                } else if rhs_already_str_ref {
                     format!("{acc} + {rhs}")
+                } else {
+                    format!("{acc} + &{rhs}")
                 };
             }
             return acc;
