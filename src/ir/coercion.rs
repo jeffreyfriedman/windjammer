@@ -342,12 +342,44 @@ fn needs_numeric_cast(actual: &BaseType, expected: &BaseType) -> bool {
     if actual == expected {
         return false;
     }
+    // Polymorphic / unresolved numerics adapt at the call site (literals, inference).
+    if matches!(actual, BaseType::Inferred) || matches!(expected, BaseType::Inferred) {
+        return false;
+    }
     // f32 and f64 are compatible without explicit cast when expr already has suffix.
     if is_float_base(actual) && is_float_base(expected) {
         return false;
     }
+    // Rust `usize` (IR: U64 from `.len()` / `capacity`) into a signed WJ formal
+    // (`int` → I64). Do NOT cast all integer pairs — that fights existing
+    // index/`as usize` lowering (Vec::remove) and emits bogus `as u32`/`as u64`.
+    if is_unsigned_integer_base(actual) && is_signed_integer_base(expected) {
+        return true;
+    }
     is_integer_base(actual) && is_float_base(expected)
         || is_float_base(actual) && is_integer_base(expected)
+}
+
+fn is_signed_integer_base(base: &BaseType) -> bool {
+    matches!(
+        base,
+        BaseType::I8
+            | BaseType::I16
+            | BaseType::I32
+            | BaseType::I64
+            | BaseType::I128
+    )
+}
+
+fn is_unsigned_integer_base(base: &BaseType) -> bool {
+    matches!(
+        base,
+        BaseType::U8
+            | BaseType::U16
+            | BaseType::U32
+            | BaseType::U64
+            | BaseType::U128
+    )
 }
 
 #[cfg(test)]
@@ -386,10 +418,10 @@ mod tests {
     }
 
     #[test]
-    fn owned_custom_struct_to_ref_param_is_identity_auto_borrow() {
+    fn owned_custom_struct_to_ref_param_needs_borrow() {
         let actual = owned(BaseType::Custom("Key".into()));
         let expected = borrowed(BaseType::Custom("Key".into()));
-        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Borrow);
     }
 
     #[test]
@@ -471,5 +503,23 @@ mod tests {
             compute_coercion(&actual, &expected),
             CoercionKind::NumericCast(BaseType::F64)
         );
+    }
+
+    #[test]
+    fn usize_shaped_u64_to_wj_int_needs_i64_cast() {
+        // `.len()` / `capacity` lower as usize; IR maps usize → U64 today.
+        let actual = copy(BaseType::U64);
+        let expected = owned(BaseType::I64);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::NumericCast(BaseType::I64)
+        );
+    }
+
+    #[test]
+    fn inferred_literal_to_i64_is_identity() {
+        let actual = copy(BaseType::Inferred);
+        let expected = owned(BaseType::I64);
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
     }
 }
