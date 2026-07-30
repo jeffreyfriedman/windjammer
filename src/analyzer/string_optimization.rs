@@ -901,7 +901,13 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Return {
                 value: Some(expr), ..
-            } => self.expr_is_param_or_ref_to_param(param_name, expr),
+            } => {
+                // Identity return (`return message`) or owned forward (`return error_json(message)`).
+                self.expr_is_param_or_ref_to_param(param_name, expr)
+                    || self.expr_forwards_param_as_owned_pass_through(
+                        param_name, expr, registry, func,
+                    )
+            }
             Statement::Expression { expr, .. } => {
                 self.expr_forwards_param_as_owned_pass_through(param_name, expr, registry, func)
             }
@@ -971,7 +977,9 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Call { function, arguments, .. } => arguments.iter().any(|(_, arg)| {
                 if !self.expr_is_param_or_ref_to_param(param_name, arg) {
-                    return false;
+                    return self.expr_forwards_param_as_owned_pass_through(
+                        param_name, arg, registry, func,
+                    );
                 }
                 if self.call_expr_is_string_runtime(function) {
                     return false;
@@ -981,13 +989,41 @@ impl<'ast> Analyzer<'ast> {
                         return false;
                     }
                     if let Some(sig) = registry.get_signature(name) {
-                        return sig.param_ownership.iter().any(|o| {
-                            matches!(o, super::OwnershipMode::Owned)
-                        });
+                        let pidx = arguments
+                            .iter()
+                            .position(|(_, a)| self.expr_is_param_or_ref_to_param(param_name, a))
+                            .unwrap_or(0);
+                        return matches!(
+                            sig.param_ownership.get(pidx),
+                            Some(super::OwnershipMode::Owned)
+                        );
                     }
+                    // Same-module callee not registered yet — do not guess Owned.
+                    // Guessing Owned blocks Phase-2 `&str`/`&String` demotion for
+                    // readonly / passthrough formals (string_literal / phase2 tests).
+                    return false;
                 }
                 false
             }),
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, value)| {
+                self.expr_forwards_param_as_owned_pass_through(param_name, value, registry, func)
+            }),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                elements.iter().any(|elem| {
+                    self.expr_forwards_param_as_owned_pass_through(param_name, elem, registry, func)
+                })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_forwards_param_as_owned_pass_through(param_name, left, registry, func)
+                    || self.expr_forwards_param_as_owned_pass_through(param_name, right, registry, func)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expr_forwards_param_as_owned_pass_through(param_name, operand, registry, func)
+            }
             Expression::Block { statements, .. } => statements.iter().any(|s| {
                 self.statement_forwards_param_as_owned_pass_through(param_name, s, registry, func)
             }),

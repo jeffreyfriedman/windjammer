@@ -118,7 +118,19 @@ pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
 }
 
 /// Convert a `DependencySpec` into a Cargo.toml dependency line.
+///
+/// Relative `path` entries are resolved against `base_dir` (the directory containing
+/// `wj.toml` / source `Cargo.toml`) and emitted as absolute paths so they remain valid
+/// when the generated manifest lives in `gen/` rather than the crate root.
 pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::DependencySpec) -> String {
+    dep_spec_to_cargo_line_with_base(name, spec, None)
+}
+
+pub(crate) fn dep_spec_to_cargo_line_with_base(
+    name: &str,
+    spec: &crate::config::DependencySpec,
+    base_dir: Option<&Path>,
+) -> String {
     match spec {
         crate::config::DependencySpec::Simple(version) => {
             format!("{} = \"{}\"", name, version)
@@ -140,7 +152,8 @@ pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::Dependenc
                 parts.push(format!("features = [{}]", feat_str.join(", ")));
             }
             if let Some(p) = path {
-                parts.push(format!("path = \"{}\"", p));
+                let resolved = resolve_dep_path_for_gen_manifest(p, base_dir);
+                parts.push(format!("path = \"{}\"", resolved));
             }
             if let Some(g) = git {
                 parts.push(format!("git = \"{}\"", g));
@@ -151,6 +164,20 @@ pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::Dependenc
             format!("{} = {{ {} }}", name, parts.join(", "))
         }
     }
+}
+
+/// Rewrite a path-dep string so it is valid from a generated `gen/Cargo.toml`.
+fn resolve_dep_path_for_gen_manifest(path_str: &str, base_dir: Option<&Path>) -> String {
+    let p = Path::new(path_str);
+    if p.is_absolute() {
+        return sanitize_path_for_toml(p);
+    }
+    let Some(base) = base_dir else {
+        return path_str.to_string();
+    };
+    let joined = base.join(p);
+    let abs = joined.canonicalize().unwrap_or(joined);
+    sanitize_path_for_toml(&abs)
 }
 
 /// Read source project's Cargo.toml and propagate dependencies that aren't already present.
@@ -179,6 +206,7 @@ pub(crate) fn propagate_source_cargo_deps(
         Some(p) => p,
         None => return Vec::new(),
     };
+    let cargo_dir = cargo_path.parent().unwrap_or(source_dir);
 
     let content = match fs::read_to_string(cargo_path) {
         Ok(c) => c,
@@ -218,11 +246,30 @@ pub(crate) fn propagate_source_cargo_deps(
             .any(|d| d.starts_with(dep_name) || d.starts_with(&dep_name.replace('-', "_")));
 
         if !already_present {
-            propagated.push(trimmed.to_string());
+            propagated.push(rewrite_propagated_dep_line(trimmed, cargo_dir));
         }
     }
 
     propagated
+}
+
+/// Absolute-ize `path = "..."` in a propagated Cargo.toml dependency line.
+fn rewrite_propagated_dep_line(line: &str, cargo_dir: &Path) -> String {
+    let Some(path_start) = line.find("path = \"") else {
+        return line.to_string();
+    };
+    let value_start = path_start + "path = \"".len();
+    let Some(rel_end) = line[value_start..].find('"') else {
+        return line.to_string();
+    };
+    let rel = &line[value_start..value_start + rel_end];
+    let resolved = resolve_dep_path_for_gen_manifest(rel, Some(cargo_dir));
+    format!(
+        "{}{}{}",
+        &line[..value_start],
+        resolved,
+        &line[value_start + rel_end..]
+    )
 }
 
 /// Scan generated .rs files for `use <crate>::...` imports and resolve crate paths.
@@ -286,6 +333,19 @@ pub(crate) fn detect_external_crate_deps(output_dir: &Path, source_dir: &Path) -
         }
     }
     deps
+}
+
+/// Resolve the on-disk directory for an external crate (folder with `Cargo.toml`).
+pub(crate) fn resolve_crate_dir(
+    crate_name: &str,
+    source_dir: &Path,
+    output_dir: &Path,
+) -> Option<PathBuf> {
+    let line = resolve_crate_path(crate_name, source_dir, output_dir)?;
+    let marker = "path = \"";
+    let start = line.find(marker)? + marker.len();
+    let end = start + line[start..].find('"')?;
+    Some(PathBuf::from(&line[start..end]))
 }
 
 pub(crate) fn walk_rs_files(dir: &Path) -> Result<Vec<PathBuf>> {
