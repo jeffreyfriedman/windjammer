@@ -16,12 +16,9 @@
 //!
 //! ## Suite state (Jul 29 PM, wj 0.50.0+)
 //!
-//! **Dogfooding:** 42 tests pass; **WDB-066..068 (5 tests) fail** until Phase 1 lib + tests green.
+//! **Dogfooding:** 47/47 pass (Jul 30, wj 0.50.0 f95b9c32). Phase 1 compiler blockers cleared.
 //!
-//! **WDB-066..068** — last Phase 1 blockers (Jul 29):
-//! - `TxnManager::put/delete`: callee `MemoryEngine` expects `&Key` but delegation emits `key.clone()`
-//! - `WalSegment::append_put` in cross-crate tests: vec literal + helper return must borrow for `&Vec<u8>`
-//! - `wdb-embedded` blocked on wdb-txn until above fixed
+//! **WDB-066..068** — Phase 1 e2e regressions (Jul 29–30); all passing after f95b9c32.
 //!
 //! Recently fixed (must stay passing): WDB-061..065 substrate/sim, WDB-047/049 wal/substrate, WDB-050 vec literals.
 //! Closed-issue regressions: WDB-044, WDB-045, WDB-048. Guard tests: WDB-019, WDB-039, WDB-042, WDB-046 (owned-only).
