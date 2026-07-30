@@ -134,6 +134,123 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// True when a field/index of `name` is an operand of arithmetic/`+` (string concat).
+    /// Distinguishes `deps.tag + ":"` (owned composition) from `value.data.len()` (readonly).
+    pub(crate) fn param_projected_field_consumed_in_arithmetic(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Let { value, .. }
+                | Statement::Expression { expr: value, .. }
+                | Statement::Return {
+                    value: Some(value), ..
+                }
+                | Statement::Assignment { value, .. } => {
+                    if self.expr_projected_field_consumed_in_arithmetic(name, value) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.expr_projected_field_consumed_in_arithmetic(name, condition)
+                        || self.param_projected_field_consumed_in_arithmetic(name, then_block)
+                        || else_block.as_ref().is_some_and(|b| {
+                            self.param_projected_field_consumed_in_arithmetic(name, b)
+                        })
+                    {
+                        return true;
+                    }
+                }
+                Statement::While {
+                    condition, body, ..
+                } => {
+                    if self.expr_projected_field_consumed_in_arithmetic(name, condition)
+                        || self.param_projected_field_consumed_in_arithmetic(name, body)
+                    {
+                        return true;
+                    }
+                }
+                Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                    if self.param_projected_field_consumed_in_arithmetic(name, body) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_projected_field_consumed_in_arithmetic(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Binary {
+                op, left, right, ..
+            } => {
+                use crate::parser::ast::operators::BinaryOp;
+                // Only `+` (string concat of projected fields). Numeric Sub/Mul/Div on
+                // Copy fields (`a.x - b.x`) must not force owned parent formals.
+                if matches!(op, BinaryOp::Add)
+                    && (self.expr_is_param_field_or_index_value(name, left)
+                        || self.expr_is_param_field_or_index_value(name, right))
+                {
+                    return true;
+                }
+                self.expr_projected_field_consumed_in_arithmetic(name, left)
+                    || self.expr_projected_field_consumed_in_arithmetic(name, right)
+            }
+            Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
+                self.expr_projected_field_consumed_in_arithmetic(name, operand)
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_projected_field_consumed_in_arithmetic(name, arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expr_projected_field_consumed_in_arithmetic(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_projected_field_consumed_in_arithmetic(name, arg))
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expr_projected_field_consumed_in_arithmetic(name, v)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| self.expr_projected_field_consumed_in_arithmetic(name, e)),
+            Expression::Block { statements, .. } => {
+                self.param_projected_field_consumed_in_arithmetic(name, statements)
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_is_param_field_or_index_value(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                if self.expr_is_identifier(object, name) {
+                    return true;
+                }
+                // Nested `param.a.b` as a binary operand still consumes projected data.
+                matches!(
+                    &**object,
+                    Expression::FieldAccess { object: inner, .. }
+                        | Expression::Index { object: inner, .. }
+                        if self.expr_is_identifier(inner, name)
+                            || self.expr_is_param_field_or_index_value(name, object)
+                )
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn is_used_in_binary_op(
         &self,
         name: &str,
