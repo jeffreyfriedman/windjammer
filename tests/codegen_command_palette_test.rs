@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (DownstreamApp F2): CommandPalette item compose must codegen.
+//! FAILING REPRO (dogfood): CommandPalette item compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
