@@ -1031,21 +1031,40 @@ impl<'ast> Analyzer<'ast> {
                     bad_use,
                 );
             }
-            Expression::Binary { left, right, .. } => {
-                self.check_field_only_param_use_expr(
-                    param_name,
-                    left,
-                    in_field_chain,
-                    any_use,
-                    bad_use,
-                );
-                self.check_field_only_param_use_expr(
-                    param_name,
-                    right,
-                    in_field_chain,
-                    any_use,
-                    bad_use,
-                );
+            Expression::Binary { left, right, op, .. } => {
+                // String concat (`+`) of `param.field` consumes projected non-Copy data
+                // (`deps.tag + ":"` → keep owned AppDeps). Numeric ops on Copy fields
+                // (`a.x - b.x`) stay readonly field-chain usage → borrowed Body.
+                use crate::parser::ast::operators::BinaryOp;
+                if matches!(op, BinaryOp::Add) {
+                    self.check_field_only_binary_operand(
+                        param_name,
+                        left,
+                        any_use,
+                        bad_use,
+                    );
+                    self.check_field_only_binary_operand(
+                        param_name,
+                        right,
+                        any_use,
+                        bad_use,
+                    );
+                } else {
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        left,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                    self.check_field_only_param_use_expr(
+                        param_name,
+                        right,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
+                }
             }
             Expression::Tuple { elements, .. } => {
                 for e in elements {
@@ -1070,6 +1089,47 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Binary operands that read `param.field` (not `param.field.method()`) consume the
+    /// projected value — composition helpers like `deps.tag + ":"` must keep owned formals.
+    fn check_field_only_binary_operand(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        any_use: &mut bool,
+        bad_use: &mut bool,
+    ) {
+        if *bad_use {
+            return;
+        }
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. }
+                if self.expr_is_identifier(object, param_name)
+                    || Self::field_chain_mentions_param(object, param_name) =>
+            {
+                *any_use = true;
+                *bad_use = true;
+            }
+            _ => {
+                self.check_field_only_param_use_expr(param_name, expr, false, any_use, bad_use);
+            }
+        }
+    }
+
+    fn field_chain_mentions_param(expr: &Expression, name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name: n, .. } => n == name,
+            Expression::FieldAccess { object, .. }
+            | Expression::Index { object, .. }
+            | Expression::Unary { operand: object, .. }
+            | Expression::TryOp { expr: object, .. }
+            | Expression::Await { expr: object, .. }
+            | Expression::Cast { expr: object, .. } => {
+                Self::field_chain_mentions_param(object, name)
+            }
+            _ => false,
         }
     }
 

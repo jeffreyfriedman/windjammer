@@ -15,8 +15,27 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use super::cache_management::write_if_changed;
-use super::dependency_resolution::{find_dependency_metadata_roots, find_wj_files};
+use super::dependency_resolution::{
+    discover_wj_import_dependency_metadata, discover_wj_toml_path_dependency_metadata,
+    find_dependency_metadata_roots, find_wj_files,
+};
 use super::salsa_library_build::build_library;
+
+/// Merge CLI `--metadata` with auto-discovered path-dep and import-based `metadata.json`
+/// roots. Explicit CLI entries win when both define the same crate key.
+fn merge_external_metadata_paths(
+    build_path: &Path,
+    external_metadata: &[(&str, &Path)],
+) -> HashMap<String, PathBuf> {
+    let mut external_paths = discover_wj_toml_path_dependency_metadata(build_path);
+    for (k, v) in discover_wj_import_dependency_metadata(build_path) {
+        external_paths.entry(k).or_insert(v);
+    }
+    for (name, p) in external_metadata {
+        external_paths.insert(name.replace('-', "_"), (*p).to_path_buf());
+    }
+    external_paths
+}
 
 /// Check if a Type is Copy in single-file context (overrides stale metadata Copy).
 fn is_type_copy_for_single_file_build(ty: &Type, analyzer: &Analyzer) -> bool {
@@ -69,10 +88,7 @@ pub fn build_project_ext(
     }
     std::fs::create_dir_all(output)?;
 
-    let external_paths: HashMap<String, PathBuf> = external_metadata
-        .iter()
-        .map(|(name, p)| (name.replace('-', "_"), (*p).to_path_buf()))
-        .collect();
+    let external_paths = merge_external_metadata_paths(path, external_metadata);
 
     let mut crate_metadata = CrateMetadata::new();
 

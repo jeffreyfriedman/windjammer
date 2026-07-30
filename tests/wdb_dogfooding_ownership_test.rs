@@ -14,23 +14,26 @@
 //!
 //! Run: `cargo test --release --test all wdb_dogfooding`
 //!
-//! ## Suite state (Jul 25 PM, wj 0.50.0+)
+//! ## Suite state (Jul 29 PM, wj 0.50.0+)
 //!
-//! **Dogfooding:** 34 wal tests pass; **WDB-061..065(b) fail** until substrate + sim `cargo build` green.
+//! **Dogfooding:** 42 tests pass; **WDB-066..068 (5 tests) fail** until Phase 1 lib + tests green.
 //!
-//! **WDB-061..065** — Phase 1 blockers after wdb-wal unblocked:
-//! - `PatchPart::apply_put` / `Transaction::record_*`: owned struct fields from borrowed params
-//! - `MemoryEngine::seed_write`: `value` used after move in `value_tag` + `value_i64`
-//! - `LsmEngine::apply_writes`: cross-crate `append_put` borrow for local `Vec<u8>` vars
-//! - `SimNetwork::send`: owned `NodeId` fields in `QueuedMessage` from borrowed params
+//! **WDB-066..068** — last Phase 1 blockers (Jul 29):
+//! - `TxnManager::put/delete`: callee `MemoryEngine` expects `&Key` but delegation emits `key.clone()`
+//! - `WalSegment::append_put` in cross-crate tests: vec literal + helper return must borrow for `&Vec<u8>`
+//! - `wdb-embedded` blocked on wdb-txn until above fixed
 //!
-//! Recently fixed (must stay passing): WDB-047 full store layout, WDB-050 vec literals, WDB-049 FFI/replay.
-//! Closed-issue regressions: WDB-044, WDB-045, WDB-048. Guard tests: WDB-019, WDB-039, WDB-042.
+//! Recently fixed (must stay passing): WDB-061..065 substrate/sim, WDB-047/049 wal/substrate, WDB-050 vec literals.
+//! Closed-issue regressions: WDB-044, WDB-045, WDB-048. Guard tests: WDB-019, WDB-039, WDB-042, WDB-046 (owned-only).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // ── WDB-041: user-type get(key: Key) passes owned helper-return Key ──────────
 
@@ -989,7 +992,8 @@ impl MemoryEngine {
     }
 
     pub fn get(self, key: Key) -> Option<Value> {
-        let _ = key.bytes.len()
+        let bytes = key.bytes
+        let _ = bytes.len()
         None
     }
 
@@ -1107,7 +1111,8 @@ impl MemoryEngine {
     }
 
     pub fn get(self, key: Key) -> Option<Value> {
-        let _ = key.bytes.len()
+        let bytes = key.bytes
+        let _ = bytes.len()
         None
     }
 }
@@ -4542,4 +4547,249 @@ impl SimNetwork {
             "must not shorthand-init owned NodeId from &NodeId (network.rs:56). Got:\n{rs}"
         );
     }
+}
+
+// ── WindjammerDB e2e helpers (monorepo sibling) ─────────────────────────────
+
+fn windjammerdb_crates_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../windjammerdb/crates")
+}
+
+fn require_windjammerdb_crate(name: &str) -> PathBuf {
+    let path = windjammerdb_crates_root().join(name);
+    assert!(
+        path.is_dir(),
+        "windjammerdb crate {name} not found at {}",
+        path.display()
+    );
+    path
+}
+
+fn wj_build_windjammerdb_crate(name: &str) {
+    let crate_root = require_windjammerdb_crate(name);
+    // Invalidate incremental stamp so a newer `wj` always re-transpiles — otherwise
+    // parallel e2e tests can keep pre-fix `gen/*.rs` when source fingerprints match.
+    let _ = fs::remove_file(crate_root.join("gen/.wj-compiler-stamp"));
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args(["build", "src", "-o", "gen", "--no-cargo"])
+        .current_dir(&crate_root)
+        .output()
+        .unwrap_or_else(|e| panic!("spawn wj build {name}: {e}"));
+    assert!(
+        output.status.success(),
+        "wj build {name} failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn cargo_check_windjammerdb_gen(name: &str, with_tests: bool) {
+    let gen = require_windjammerdb_crate(name).join("gen");
+    let mut cmd = Command::new("cargo");
+    cmd.arg("check").arg("--quiet").current_dir(&gen);
+    if with_tests {
+        cmd.arg("--tests");
+    }
+    let output = cmd
+        .output()
+        .unwrap_or_else(|e| panic!("spawn cargo check {name}: {e}"));
+    assert!(
+        output.status.success(),
+        "cargo check {name} failed:\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn build_wal_engine_library(tmp: &Path) -> PathBuf {
+    let wal_src = tmp.join("wal_src");
+    let wal_gen = tmp.join("wal_gen");
+    let wal_dir = wal_src.join("wal");
+    fs::create_dir_all(&wal_dir).expect("mkdir wal_src");
+    fs::write(
+        wal_dir.join("mod.wj"),
+        "pub mod record\npub mod segment\n",
+    )
+    .unwrap();
+    fs::write(
+        wal_dir.join("record.wj"),
+        r#"
+pub struct Lsn {
+    pub value: u64,
+}
+
+pub struct WalRecord {
+    pub lsn: Lsn,
+    pub key: Vec<u8>,
+    pub value: Vec<u8>,
+}
+
+impl WalRecord {
+    pub fn put(lsn: Lsn, key: Vec<u8>, value: Vec<u8>) -> WalRecord {
+        WalRecord { lsn: lsn, key: key, value: value }
+    }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        wal_dir.join("segment.wj"),
+        r#"
+use crate::wal::record::WalRecord
+use crate::wal::record::Lsn
+
+pub struct WalSegment {
+    pub bytes: Vec<u8>,
+    pub next_lsn: Lsn,
+}
+
+impl WalSegment {
+    pub fn with_header() -> WalSegment {
+        WalSegment {
+            bytes: Vec::new(),
+            next_lsn: Lsn { value: 1 },
+        }
+    }
+
+    pub fn append_put(self, key: Vec<u8>, value: Vec<u8>) -> Lsn {
+        let lsn = self.next_lsn
+        let _record = WalRecord::put(lsn, key, value)
+        lsn
+    }
+
+    pub fn replay(self) -> Vec<WalRecord> {
+        Vec::new()
+    }
+}
+"#,
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            wal_src.to_str().unwrap(),
+            "--output",
+            wal_gen.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+            "--module-file",
+        ])
+        .output()
+        .expect("wal library build");
+    assert!(
+        output.status.success(),
+        "wal library build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    wal_gen
+}
+
+// ── WDB-066: TxnManager put/delete — borrow &Key at cross-crate delegation ───────────────
+//
+// Real wdb-txn gen/txn_manager.rs:42,46 emits key.clone() for MemoryEngine::put/delete(&Key).
+// In-project MultiFileTest fixtures do not reproduce this; use windjammerdb gen + cargo check.
+
+#[test]
+fn wdb_txn_manager_windjammerdb_gen_put_delete_no_key_clone() {
+    wj_build_windjammerdb_crate("wdb-substrate");
+    wj_build_windjammerdb_crate("wdb-txn");
+    let rs_path = require_windjammerdb_crate("wdb-txn").join("gen/txn_manager.rs");
+    let rs = fs::read_to_string(&rs_path)
+        .unwrap_or_else(|e| panic!("read {}: {e}", rs_path.display()));
+    for line in rs.lines() {
+        if line.contains("engine.put(") {
+            assert!(
+                !line.contains("key.clone()"),
+                "put must pass &Key through, not key.clone() (txn_manager.rs:42). Line: {line}\nFull:\n{rs}"
+            );
+        }
+        if line.contains("engine.delete(") {
+            assert!(
+                !line.contains("key.clone()"),
+                "delete must pass &Key through, not key.clone() (txn_manager.rs:46). Line: {line}\nFull:\n{rs}"
+            );
+        }
+    }
+}
+
+#[test]
+fn wdb_txn_manager_windjammerdb_cargo_check() {
+    wj_build_windjammerdb_crate("wdb-substrate");
+    wj_build_windjammerdb_crate("wdb-txn");
+    cargo_check_windjammerdb_gen("wdb-txn", false);
+}
+
+// ── WDB-067: WalSegment append_put — cross-crate vec literal/helper borrow ───────────────
+//
+// wdb-wal in-crate tests emit append_put(&vec![...]); wdb-substrate lsm_test.rs:130 emits
+// append_put(vec![5], encode_int64(99)) when WalSegment comes from cross-crate metadata.
+
+#[test]
+fn wdb_wal_segment_cross_crate_append_put_borrows_vec_literal() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let wal_gen = build_wal_engine_library(tmp.path());
+    let substrate_src = tmp.path().join("substrate_src");
+    fs::create_dir_all(&substrate_src).expect("mkdir substrate_src");
+    fs::write(
+        substrate_src.join("lsm_test.wj"),
+        r#"
+use wal::wal::segment::WalSegment
+
+fn encode_int64(v: i64) -> Vec<u8> {
+    vec![v as u8]
+}
+
+pub fn test_store_rebuild_from_segment() {
+    let mut seg = WalSegment::with_header()
+    seg.append_put(vec![5], encode_int64(99))
+    let _ = seg.replay()
+}
+"#,
+    )
+    .unwrap();
+    let substrate_gen = tmp.path().join("substrate_gen");
+    let metadata = format!("wal={}", wal_gen.join("metadata.json").display());
+    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            substrate_src.join("lsm_test.wj").to_str().unwrap(),
+            "--output",
+            substrate_gen.to_str().unwrap(),
+            "--no-cargo",
+            "--metadata",
+            &metadata,
+        ])
+        .output()
+        .expect("substrate lsm_test build");
+    assert!(
+        output.status.success(),
+        "lsm_test build failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rs = fs::read_to_string(substrate_gen.join("lsm_test.rs")).expect("lsm_test.rs");
+    for line in rs.lines() {
+        if line.contains("append_put(") {
+            assert!(
+                line.contains("&vec![5]")
+                    || line.contains("& vec![5]")
+                    || (line.contains("&") && line.contains("encode_int64")),
+                "cross-crate append_put must borrow vec literal and helper return (lsm_test.rs:130). Line: {line}\nFull:\n{rs}"
+            );
+        }
+    }
+}
+
+#[test]
+fn wdb_substrate_lsm_test_windjammerdb_cargo_check() {
+    wj_build_windjammerdb_crate("wdb-wal");
+    wj_build_windjammerdb_crate("wdb-substrate");
+    cargo_check_windjammerdb_gen("wdb-substrate", true);
+}
+
+#[test]
+fn wdb_embedded_windjammerdb_cargo_check() {
+    wj_build_windjammerdb_crate("wdb-wal");
+    wj_build_windjammerdb_crate("wdb-substrate");
+    wj_build_windjammerdb_crate("wdb-txn");
+    wj_build_windjammerdb_crate("wdb-embedded");
+    cargo_check_windjammerdb_gen("wdb-embedded", true);
 }

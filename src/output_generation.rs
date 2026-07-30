@@ -134,6 +134,13 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
         let result = generator.generate_program(program, analyzed);
 
+        if is_multi_file_project {
+            generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
+            module_compiler
+                .global_signatures
+                .merge(&generator.signature_registry);
+        }
+
         let source_map_path = output_file_path.with_extension("rs.map");
         if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
             eprintln!("Warning: Failed to save source map: {}", e);
@@ -229,6 +236,13 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
 
     let result = generator.generate_program(program, analyzed);
+
+    if is_multi_file_project {
+        generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
+        module_compiler
+            .global_signatures
+            .merge(&generator.signature_registry);
+    }
 
     let source_map_path = output_file_path.with_extension("rs.map");
     if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {

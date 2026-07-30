@@ -3,7 +3,7 @@
 //! TDD FIX (Bug #2): Detect test files and generate [[bin]]/[[test]] targets.
 //! Used by compiler for single-file builds (wj CLI uses this path).
 
-mod dependency_management;
+pub(crate) mod dependency_management;
 mod feature_management;
 mod toml_generation;
 

@@ -1265,22 +1265,38 @@ pub(crate) fn build_library_multipass(
     profile_phase("Step 4B: Analysis + codegen (sequential)", step4b_start);
 
     let post_codegen_start = Instant::now();
-    // Emit metadata.json — refresh ONLY locally-defined function signatures from the
-    // converged registry. Dumping the full merged registry (engine + game) creates
-    // circular 11MB metadata pollution on the next build.
-    if library && (!crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty()) {
-        let local_keys: Vec<String> = crate_metadata.functions.keys().cloned().collect();
+    // Emit metadata.json for cross-crate call-site ownership. Path dependents discover
+    // this via wj.toml (`discover_wj_toml_path_dependency_metadata`). Always write on
+    // multipass builds — not only `--library` — so `wj build src -o gen` still publishes
+    // converged formals (`emitted_rust_ref_params`) for downstream crates.
+    {
+        let mut local_keys: Vec<String> = crate_metadata.functions.keys().cloned().collect();
+        // Incremental / empty-skeleton builds may leave crate_metadata empty after a
+        // deleted metadata.json — recover local method keys from the post-codegen registry.
+        if local_keys.is_empty() {
+            for name in final_global_registry.signatures.keys() {
+                if let Some(struct_name) = crate::metadata::struct_name_from_method_key(name) {
+                    if local_struct_names.contains(struct_name) {
+                        local_keys.push(name.clone());
+                    }
+                } else if !name.contains("::") {
+                    local_keys.push(name.clone());
+                }
+            }
+            local_keys.sort();
+            local_keys.dedup();
+        }
         for name in local_keys {
-            let sig = local_converged_sigs
-                .get(&name)
+            // Prefer post-codegen `final_global_registry` (has `emitted_rust_ref_params`
+            // after formal demotion) over pre-codegen `local_converged_sigs`.
+            let sig = resolve_converged_local_signature(final_global_registry.as_ref(), &name)
+                .cloned()
+                .or_else(|| local_converged_sigs.get(&name).cloned())
                 .or_else(|| {
                     local_converged_sigs
                         .iter()
                         .find(|(k, _)| k.ends_with(&format!("::{name}")))
-                        .map(|(_, v)| v)
-                })
-                .or_else(|| {
-                    resolve_converged_local_signature(final_global_registry.as_ref(), &name)
+                        .map(|(_, v)| v.clone())
                 });
             if let Some(sig) = sig {
                 let (is_associated, parent_type) = if let Some(struct_name) =
@@ -1292,13 +1308,15 @@ pub(crate) fn build_library_multipass(
                 };
                 crate_metadata.functions.insert(
                     name,
-                    metadata_function_sig_from_analyzer(sig, is_associated, parent_type),
+                    metadata_function_sig_from_analyzer(&sig, is_associated, parent_type),
                 );
             }
         }
         crate_metadata.copy_structs = global_copy_structs.iter().cloned().collect::<Vec<_>>();
         crate_metadata.copy_structs.sort();
-        super::write_crate_metadata_json(output, &crate_metadata)?;
+        if !crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty() {
+            super::write_crate_metadata_json(output, &crate_metadata)?;
+        }
     }
 
     // Generate mod.rs, Cargo.toml, stale checks only when files were actually

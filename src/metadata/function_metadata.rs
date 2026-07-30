@@ -44,6 +44,12 @@ pub struct FunctionSignature {
     #[serde(default)]
     pub param_ownership: Vec<String>,
 
+    /// Per-param flags: `true` when codegen emitted a shared-ref Rust formal (`&T` / `&str`).
+    /// Cross-crate call sites use this to borrow even when `param_ownership` stayed Owned
+    /// (e.g. store-only `Vec<u8>` → `&Vec<u8>`).
+    #[serde(default)]
+    pub emitted_rust_ref_params: Option<Vec<bool>>,
+
     /// True when the signature includes a `self` receiver (matches analyzer `has_self_receiver`)
     #[serde(default)]
     pub has_self_receiver: bool,
@@ -82,6 +88,7 @@ pub fn metadata_function_sig_from_analyzer(
             .iter()
             .map(|o| format!("{:?}", o))
             .collect(),
+        emitted_rust_ref_params: sig.emitted_rust_ref_params.clone(),
         has_self_receiver: sig.has_self_receiver,
         is_extern: sig.is_extern,
     }
@@ -155,7 +162,7 @@ pub fn try_analyzer_signature_from_metadata(
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: meta_sig.has_self_receiver,
         is_extern: meta_sig.is_extern,
-        emitted_rust_ref_params: None,
+        emitted_rust_ref_params: meta_sig.emitted_rust_ref_params.clone(),
         field_extract_params: None,
             forwarding_borrow_params: None,
     })

@@ -22,6 +22,45 @@ mod test_utils;
 ///
 /// Fix: Add recursive scanning in `is_stored` to detect enum variant constructors
 /// that consume the parameter.
+/// WDB-embedded: `match Value::Text(label) { ... }` must keep `label` Owned.
+/// Match scrutinees were invisible to enum-variant consumption tracking, so
+/// codegen demoted to `&String` and call sites produced `&&str` (E0308).
+#[test]
+fn test_enum_variant_in_match_scrutinee_keeps_owned() {
+    let source = r#"
+pub enum Value {
+    Text(string),
+    Null,
+}
+
+fn owned_string(label: string) -> string {
+    match Value::Text(label) {
+        Value::Text(s) => s,
+        _ => "",
+    }
+}
+
+fn call_it(name: string) -> string {
+    owned_string(name)
+}
+"#;
+
+    let generated = test_utils::compile_single(source);
+    println!("Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("fn owned_string(label: String)"),
+        "Param moved into enum variant match scrutinee must stay Owned String. Got:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("fn owned_string(label: &String)")
+            && !generated.contains("fn owned_string(label: &str)"),
+        "Must not demote match-scrutinee enum consumer to borrowed formal. Got:\n{}",
+        generated
+    );
+}
+
 #[test]
 fn test_enum_variant_constructor_consumes_param() {
     let source = r#"

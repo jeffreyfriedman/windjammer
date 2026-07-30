@@ -78,20 +78,13 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
             return false;
         }
     }
-    // Plain WJ `string` formals: trust body/codegen convergence to `&str` + Borrowed
-    // (metadata often omits `emitted_rust_ref_params`). Stale `Reference(str)` with
-    // *Owned* ownership still falls through to false below.
+    // Plain WJ `string` formals require `emitted_rust_ref_params` for free functions —
+    // stale analyzer `Reference(str)` + Borrowed alone must not force call-site `&`
+    // (circular-dep / multipass owned formals). Methods and externs may trust
+    // registry `&str` contracts without emission flags.
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
     ) {
-        if sig.param_types.get(param_idx).is_some_and(|t| {
-            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-        }) && matches!(
-            sig.param_ownership.get(param_idx),
-            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-        ) {
-            return true;
-        }
         if sig.is_extern
             && sig.param_types.get(param_idx).is_some_and(|t| {
                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
@@ -128,8 +121,9 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
         return true;
     }
     // Bare WJ Custom formals (`other: Lsn`, `key: Key`) emit owned Rust unless codegen
-    // recorded shared-ref (`emitted_rust_ref_params[idx] == true`). Stale `Reference(T)`
-    // in formal_param_types / param_types must not force call-site `&` (WDB-060).
+    // recorded shared-ref (`emitted_rust_ref_params[idx] == true`) OR analyzer converged
+    // Borrowed + `Reference(T)` for a non-Copy type (`MemoryEngine::put(key: &Key)`).
+    // Stale `Reference(T)` on Copy aggregates must not force call-site `&` (WDB-060).
     if let Some(formal) = sig.formal_param_type(param_idx) {
         let bare = match formal {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -144,6 +138,23 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
                 .copied()
                 != Some(true)
         {
+            let is_copy_aggregate = (crate::codegen::rust::type_analysis::is_copy_type(bare)
+                || matches!(
+                    bare,
+                    Type::Custom(name)
+                        if crate::type_classification::is_known_copy_aggregate(name)
+                ))
+                && !crate::type_classification::is_copy_pass_by_value_formal(bare);
+            let analyzer_converged_borrow = matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            ) && sig.param_types.get(param_idx).is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            });
+            // Non-Copy Custom with body-converged `&T` (Key, Value, …) — trust borrow.
+            if analyzer_converged_borrow && !is_copy_aggregate {
+                return true;
+            }
             return false;
         }
         // Copy aggregates (`other: Lsn`) always emit owned formals; stale Reference wrap
@@ -200,8 +211,9 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
             {
                 return false;
             }
-            // Stale `Reference(Custom)` is not proof of emitted `&T` unless codegen
-            // confirmed shared-ref emission (WDB-060 `Lsn::is_at_or_before`).
+            // Stale `Reference(Custom)` is not proof of emitted `&T` for Copy aggregates
+            // (WDB-060 `Lsn::is_at_or_before`). Non-Copy Custom with Borrowed ownership
+            // (`MemoryEngine::put`) does emit `&T` even without emitted_rust_ref_params.
             if matches!(inner, Type::Custom(_))
                 && sig
                     .emitted_rust_ref_params
@@ -210,7 +222,20 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
                     .copied()
                     != Some(true)
             {
-                return false;
+                let is_copy_aggregate = (crate::codegen::rust::type_analysis::is_copy_type(inner)
+                    || matches!(
+                        inner,
+                        Type::Custom(name)
+                            if crate::type_classification::is_known_copy_aggregate(name)
+                    ))
+                    && !crate::type_classification::is_copy_pass_by_value_formal(inner);
+                let analyzer_borrows = matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                );
+                if is_copy_aggregate || !analyzer_borrows {
+                    return false;
+                }
             }
             true
         }

@@ -310,6 +310,16 @@ impl AutoCloneAnalysis {
             return false;
         };
         let param_idx = sig.arg_param_index(arg_index);
+        Self::sig_arg_is_field_extract_shared_borrow(sig, param_idx)
+    }
+
+    /// Field-extract demotes Move→Read only for shared-ref formals. Owned WJ
+    /// formals that match/project (`value_tag(value: Value)`) still move — callers
+    /// must `.clone()` on reuse (WDB-063).
+    fn sig_arg_is_field_extract_shared_borrow(
+        sig: &crate::analyzer::FunctionSignature,
+        param_idx: usize,
+    ) -> bool {
         let field_extract = sig
             .field_extract_params
             .as_ref()
@@ -319,9 +329,6 @@ impl AutoCloneAnalysis {
         if !field_extract {
             return false;
         }
-        // Field-extract demotes Move→Read only for shared-ref formals. Owned WJ
-        // formals that match/project (`value_tag(value: Value)`) still move — callers
-        // must `.clone()` on reuse (WDB-063).
         match sig
             .emitted_rust_ref_params
             .as_ref()
@@ -334,8 +341,6 @@ impl AutoCloneAnalysis {
         }
         // Bare WJ source formals (`value: Value`) still move — even when analyzer marks
         // Borrowed from match/field reads. Only explicit `&T` formals field-extract as Read.
-        // Do not fall back to converged `param_types` (may be `Reference(T)` while the WJ
-        // source formal stayed bare owned).
         if !sig.formal_param_types.is_empty() {
             sig.formal_param_types.get(param_idx).is_some_and(|t| {
                 matches!(
@@ -346,6 +351,97 @@ impl AutoCloneAnalysis {
         } else {
             false
         }
+    }
+
+    /// True when a method formal at `param_idx` is emitted / declared as shared borrow.
+    fn sig_arg_is_shared_borrow_formal(
+        sig: &crate::analyzer::FunctionSignature,
+        param_idx: usize,
+    ) -> bool {
+        if Self::sig_arg_is_field_extract_shared_borrow(sig, param_idx) {
+            return true;
+        }
+        match sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+        {
+            Some(true) => return true,
+            Some(false) => return false,
+            None => {}
+        }
+        if !sig.formal_param_types.is_empty() {
+            if sig.formal_param_types.get(param_idx).is_some_and(|t| {
+                matches!(
+                    t,
+                    crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)
+                )
+            }) {
+                return true;
+            }
+            // Bare WJ owned formal (`txn: Txn`) — move even if analyzer marked Borrowed.
+            if sig.formal_param_types.get(param_idx).is_some() {
+                return false;
+            }
+        }
+        matches!(
+            sig.param_ownership.get(param_idx),
+            Some(
+                crate::analyzer::OwnershipMode::Borrowed
+                    | crate::analyzer::OwnershipMode::MutBorrowed
+            )
+        )
+    }
+
+    /// Method-call argument usage: prefer Move unless every matching signature agrees
+    /// the formal is a shared borrow. Homonyms like `HashMap::get` (borrowed key) and
+    /// `StorageEngine::get` (owned `Txn`) must not let the map-key name win — missing
+    /// `.clone()` on owned reuse is E0382.
+    fn method_call_arg_usage_kind(
+        method: &str,
+        arg_index: usize,
+        arg_count: usize,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> UsageKind {
+        let Some(registry) = registry else {
+            return UsageKind::Move;
+        };
+
+        let mut saw_candidate = false;
+        let mut any_owned_move = false;
+        let mut all_shared_borrow = true;
+
+        for (key, sig) in registry.all_signatures_for_suffix_search() {
+            let simple = key.rsplit("::").next().unwrap_or(key.as_str());
+            if simple != method {
+                continue;
+            }
+            let user_args = if sig.has_self_receiver {
+                sig.param_ownership.len().saturating_sub(1)
+            } else {
+                sig.param_ownership.len()
+            };
+            if user_args != arg_count {
+                continue;
+            }
+            saw_candidate = true;
+            let pidx = sig.arg_param_index(arg_index);
+            if Self::sig_arg_is_shared_borrow_formal(sig, pidx) {
+                continue;
+            }
+            any_owned_move = true;
+            all_shared_borrow = false;
+        }
+
+        if any_owned_move {
+            return UsageKind::Move;
+        }
+        if saw_candidate && all_shared_borrow {
+            return UsageKind::Read;
+        }
+        // No conclusive signature — default Move (safe for owned Custom reuse).
+        UsageKind::Move
     }
 
     /// Collect usages from an expression
@@ -417,15 +513,15 @@ impl AutoCloneAnalysis {
                 }
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
                 for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
-                    // HashMap/BTreeMap lookups borrow keys (`&Q`); do not treat as moves.
-                    let arg_kind =
-                        if crate::analyzer::stdlib_method_traits::is_map_key_method(method)
-                            && i == 0
-                        {
-                            UsageKind::Read
-                        } else {
-                            UsageKind::Move
-                        };
+                    // Signature-driven: owned formals move (need `.clone()` on reuse).
+                    // Do NOT treat every method named `get`/`remove` as a HashMap key borrow —
+                    // trait methods like `StorageEngine::get(txn: Txn, key)` take owned args.
+                    let arg_kind = Self::method_call_arg_usage_kind(
+                        method,
+                        i,
+                        arguments.len(),
+                        registry,
+                    );
                     Self::collect_usages_from_expression(arg_expr, idx, arg_kind, in_loop, map, registry);
                 }
             }
@@ -1428,6 +1524,177 @@ mod tests {
         assert!(
             analysis.needs_clone("value", 0).is_some(),
             "seed_write without registry must still clone; sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn trait_owned_get_arg_not_treated_as_map_key_borrow() {
+        // `StorageEngine::get(txn: Txn, key)` must not inherit HashMap::get's map-key
+        // Read heuristic — first call moves `txn`, second needs `.clone()`.
+        let mut registry = crate::analyzer::SignatureRegistry::new();
+        // Homonym: stdlib-style borrowed map key.
+        registry.add_function(
+            "HashMap::get".to_string(),
+            crate::analyzer::FunctionSignature {
+                name: "get".to_string(),
+                param_types: vec![
+                    crate::parser::Type::Reference(Box::new(crate::parser::Type::Custom(
+                        "HashMap".to_string(),
+                    ))),
+                    crate::parser::Type::Reference(Box::new(crate::parser::Type::String)),
+                ],
+                formal_param_types: vec![
+                    crate::parser::Type::Custom("HashMap".to_string()),
+                    crate::parser::Type::String,
+                ],
+                param_ownership: vec![
+                    crate::analyzer::OwnershipMode::Borrowed,
+                    crate::analyzer::OwnershipMode::Borrowed,
+                ],
+                return_type: None,
+                return_ownership: crate::analyzer::OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![true, true]),
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        registry.add_function(
+            "StorageEngine::get".to_string(),
+            crate::analyzer::FunctionSignature {
+                name: "get".to_string(),
+                param_types: vec![
+                    crate::parser::Type::Reference(Box::new(crate::parser::Type::Custom(
+                        "StorageEngine".to_string(),
+                    ))),
+                    crate::parser::Type::Custom("Txn".to_string()),
+                    crate::parser::Type::String,
+                ],
+                formal_param_types: vec![
+                    crate::parser::Type::Custom("StorageEngine".to_string()),
+                    crate::parser::Type::Custom("Txn".to_string()),
+                    crate::parser::Type::String,
+                ],
+                param_ownership: vec![
+                    crate::analyzer::OwnershipMode::Borrowed,
+                    crate::analyzer::OwnershipMode::Owned,
+                    crate::analyzer::OwnershipMode::Owned,
+                ],
+                return_type: None,
+                return_ownership: crate::analyzer::OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![true, false, false]),
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+
+        let func = FunctionDecl {
+            name: "read_twice".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![
+                Parameter {
+                    name: "engine".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("MemoryEngine".to_string()),
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+                Parameter {
+                    name: "txn".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Txn".to_string()),
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+            ],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("a".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "engine".to_string(),
+                            location: None,
+                        }),
+                        method: "get".to_string(),
+                        arguments: vec![
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "txn".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                None,
+                                test_alloc_expr(Expression::Literal {
+                                    value: Literal::String("a".to_string()),
+                                    location: None,
+                                }),
+                            ),
+                        ],
+                        type_args: None,
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("b".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "engine".to_string(),
+                            location: None,
+                        }),
+                        method: "get".to_string(),
+                        arguments: vec![
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "txn".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                None,
+                                test_alloc_expr(Expression::Literal {
+                                    value: Literal::String("b".to_string()),
+                                    location: None,
+                                }),
+                            ),
+                        ],
+                        type_args: None,
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function_with_registry(&func, Some(&registry));
+        assert!(
+            analysis.needs_clone("txn", 0).is_some(),
+            "owned trait get arg must clone on reuse despite HashMap::get homonym; sites={:?}",
             analysis.clone_sites
         );
     }

@@ -395,6 +395,27 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
                     }
+                    if self.stmt_has_enum_variant_consuming(name, stmt) {
+                        return true;
+                    }
+                }
+                // Match scrutinee / arm bodies may construct consuming enum variants
+                // (`match Value::Text(label) { ... }` → label stays Owned).
+                Statement::Match { value, arms, .. } => {
+                    if self.expression_stores_identifier(name, value, registry) {
+                        return true;
+                    }
+                    if self.expr_has_enum_variant_consuming(name, value) {
+                        return true;
+                    }
+                    for arm in arms {
+                        if self.expression_stores_identifier(name, arm.body, registry) {
+                            return true;
+                        }
+                        if self.expr_has_enum_variant_consuming(name, arm.body) {
+                            return true;
+                        }
+                    }
                 }
                 // Recursively check loop bodies
                 Statement::While { body, .. } | Statement::For { body, .. } => {
@@ -560,6 +581,33 @@ impl<'ast> Analyzer<'ast> {
             Statement::Assignment { value, .. } => {
                 self.expr_has_enum_variant_consuming(name, value)
             }
+            // `match Value::Text(label) { ... }` — variant construction in the scrutinee
+            // consumes the param (wdb-embedded `owned_string`).
+            Statement::Match { value, arms, .. } => {
+                if self.expr_has_enum_variant_consuming(name, value) {
+                    return true;
+                }
+                arms.iter()
+                    .any(|arm| self.expr_has_enum_variant_consuming(name, arm.body))
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_has_enum_variant_consuming(name, condition)
+                    || then_block
+                        .iter()
+                        .any(|s| self.stmt_has_enum_variant_consuming(name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_has_enum_variant_consuming(name, s))
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_has_enum_variant_consuming(name, s)),
             _ => false,
         }
     }

@@ -233,6 +233,7 @@ fn metadata_import_populates_formal_param_types_from_params() {
         is_associated: true,
         parent_type: Some("QuestManager".into()),
         param_ownership: vec!["Borrowed".into(), "Borrowed".into()],
+        emitted_rust_ref_params: None,
         has_self_receiver: true,
         is_extern: false,
     };

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::dependency_management::{
-    dep_spec_to_cargo_line, detect_external_crate_deps, find_windjammer_runtime_path,
+    dep_spec_to_cargo_line_with_base, detect_external_crate_deps, find_windjammer_runtime_path,
     path_to_toml_string, propagate_source_cargo_deps, walk_rs_files,
 };
 use super::feature_management::{wasm_output_needs_runtime, WEB_SYS_CARGO_FEATURES};
@@ -43,13 +43,20 @@ fn detect_runtime_features(output_dir: &Path) -> Vec<&'static str> {
 }
 
 /// Search for `wj.toml` starting from `source_dir` and walking up parents.
+/// Returns `(config, directory containing wj.toml)` when found.
 pub(crate) fn find_wj_config(source_dir: &Path) -> crate::config::WjConfig {
+    find_wj_config_with_dir(source_dir).0
+}
+
+pub(crate) fn find_wj_config_with_dir(
+    source_dir: &Path,
+) -> (crate::config::WjConfig, Option<PathBuf>) {
     let mut dir = source_dir;
     loop {
         let candidate = dir.join("wj.toml");
         if candidate.exists() {
             if let Ok(cfg) = crate::config::WjConfig::load_from_file(&candidate) {
-                return cfg;
+                return (cfg, Some(dir.to_path_buf()));
             }
         }
         match dir.parent() {
@@ -57,7 +64,7 @@ pub(crate) fn find_wj_config(source_dir: &Path) -> crate::config::WjConfig {
             _ => break,
         }
     }
-    crate::config::WjConfig::default()
+    (crate::config::WjConfig::default(), None)
 }
 
 pub(crate) fn write_cargo_toml(
@@ -65,7 +72,7 @@ pub(crate) fn write_cargo_toml(
     source_dir: &Path,
     lib_or_bin_section: &str,
 ) -> Result<()> {
-    let wj_config = find_wj_config(source_dir);
+    let (wj_config, wj_dir) = find_wj_config_with_dir(source_dir);
 
     let runtime_path = find_windjammer_runtime_path();
     let runtime_path_str = path_to_toml_string(&runtime_path);
@@ -108,7 +115,11 @@ pub(crate) fn write_cargo_toml(
         .collect();
     for (name, spec) in &wj_config.dependencies {
         if !existing_dep_names.contains(name) {
-            deps.push(dep_spec_to_cargo_line(name, spec));
+            deps.push(dep_spec_to_cargo_line_with_base(
+                name,
+                spec,
+                wj_dir.as_deref(),
+            ));
         }
     }
 
@@ -150,7 +161,7 @@ pub(crate) fn write_cargo_toml(
         let lines: Vec<String> = wj_config
             .dev_dependencies
             .iter()
-            .map(|(name, spec)| dep_spec_to_cargo_line(name, spec))
+            .map(|(name, spec)| dep_spec_to_cargo_line_with_base(name, spec, wj_dir.as_deref()))
             .collect();
         format!("[dev-dependencies]\n{}\n\n", lines.join("\n"))
     };

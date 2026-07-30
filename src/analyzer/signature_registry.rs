@@ -7,6 +7,21 @@ use crate::parser::Type;
 
 use super::OwnershipMode;
 
+/// True when `a` and `b` differ only by shared/mut ref wrapping of the same inner type
+/// (codegen ownership demotion of one function, not a cross-module overload).
+fn param_types_are_ownership_refinement(a: &Type, b: &Type) -> bool {
+    if a == b {
+        return true;
+    }
+    fn peel(t: &Type) -> Type {
+        match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => (**inner).clone(),
+            other => other.clone(),
+        }
+    }
+    peel(a) == peel(b)
+}
+
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
     pub name: String,
@@ -190,8 +205,21 @@ impl SignatureRegistry {
                 // intentionally shadowed by user-defined constructors — not
                 // ambiguous collisions.
                 let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
-                if !stub_like {
+                // Same-function codegen refresh: wrapping `T` ↔ `Reference(T)` /
+                // `MutableReference(T)` is ownership demotion, not a namespace
+                // collision. Marking `check` / `process` as type collisions here
+                // strips call-site `&` for demoted formals (bug_e0308).
+                let ownership_refinement = existing.param_types.len() == sig.param_types.len()
+                    && existing
+                        .param_types
+                        .iter()
+                        .zip(sig.param_types.iter())
+                        .all(|(a, b)| param_types_are_ownership_refinement(a, b));
+                if !stub_like && !ownership_refinement {
                     self.type_collision_keys.insert(name.clone());
+                } else if ownership_refinement {
+                    // Prior Owned→Reference refresh may have flagged this key; clear it.
+                    self.type_collision_keys.remove(&name);
                 }
             }
             // Note: ownership changes within a single registry (same file/pass)

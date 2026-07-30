@@ -655,6 +655,8 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
 /// Append `.as_str()` to a match scrutinee when the match contains string literal
 /// patterns. Skips if the expression is already `&str` (a borrowed param or a
 /// param typed as `string`/`str`/`&str`).
+/// Append `.as_str()` when matching an owned `String` against string-literal patterns.
+/// Phase-2 / borrowed `&str` formals (tracked in `borrowed_params`) stay bare.
 pub fn maybe_append_as_str_for_match(
     value_str: &str,
     borrowed_params: &std::collections::HashSet<String>,
@@ -663,15 +665,23 @@ pub fn maybe_append_as_str_for_match(
     if value_str.ends_with(".as_str()") {
         return value_str.to_string();
     }
-    let is_already_str_ref = borrowed_params.contains(value_str)
-        || function_params.iter().any(|p| {
-            p.name == value_str
-                && (matches!(p.type_, Type::String)
-                    || matches!(p.type_, Type::Custom(ref n) if n == "str" || n == "string" || n == "&str"))
-        });
-    if is_already_str_ref {
+    // Already a string slice binding — `match name { "x" => ... }` is valid.
+    if borrowed_params.contains(value_str) {
+        return value_str.to_string();
+    }
+    let param_is_str_slice = function_params.iter().any(|p| {
+        p.name == value_str
+            && (matches!(p.type_, Type::Custom(ref n) if n == "str" || n == "&str")
+                || matches!(
+                    p.type_,
+                    Type::Reference(ref inner)
+                        if matches!(&**inner, Type::Custom(n) if n == "str")
+                ))
+    });
+    if param_is_str_slice {
         value_str.to_string()
     } else {
+        // Owned `String` / WJ `string` formals need `.as_str()` for `&str` patterns.
         format!("{}.as_str()", value_str)
     }
 }

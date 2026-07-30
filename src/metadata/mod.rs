@@ -343,6 +343,7 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                         is_associated: false,
                         parent_type: None,
                         param_ownership: default_skeleton_param_ownership_from_types(&param_types),
+                        emitted_rust_ref_params: None,
                         has_self_receiver: false,
                         is_extern: decl.is_extern,
                     },
@@ -376,6 +377,7 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                             param_ownership: default_skeleton_param_ownership_from_types(
                                 &param_types,
                             ),
+                            emitted_rust_ref_params: None,
                             has_self_receiver: false,
                             is_extern: false,
                         },
