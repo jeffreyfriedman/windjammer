@@ -975,6 +975,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 analyzed.inferred_ownership.get(&param.name),
                                 Some(OwnershipMode::MutBorrowed)
                             ) && !analyzed.returned_parameters.contains(&param.name)
+                                && !self.param_passes_to_wj_owned_sibling_call(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && !self.param_only_forwards_to_emitted_owned_callees(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
                             {
                                 ownership_mode = OwnershipMode::MutBorrowed;
                             } else if analyzed.mutated_parameters.contains(&param.name)
@@ -1014,6 +1024,21 @@ impl<'ast> CodeGenerator<'ast> {
                                 } else {
                                     ownership_mode = OwnershipMode::Owned;
                                 }
+                            }
+
+                            if matches!(ownership_mode, OwnershipMode::MutBorrowed)
+                                && (self.param_passes_to_wj_owned_sibling_call(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ) || self.param_only_forwards_to_emitted_owned_callees(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ))
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
                             if self.param_used_in_if_with_condition_and_branches(
@@ -1602,26 +1627,72 @@ impl<'ast> CodeGenerator<'ast> {
                                     };
                                     self.type_to_rust(emit_ty)
                                 }
-                                OwnershipMode::MutBorrowed if self.is_type_copy(formal_type) => {
-                                    format!("&mut {}", self.type_to_rust(formal_type))
-                                }
                                 OwnershipMode::MutBorrowed => {
                                     // Explicit `mut param: T` that only mutates via callees
                                     // (no local field writes): keep owned so call sites emit
                                     // `&mut param` from callee MutBorrowed metadata
                                     // (`bug_cross_crate_mut_borrow_module_fn_test`).
+                                    // Field-mutated / owned-forwarding bare Customs keep owned
+                                    // `mut T` (LedgerKit AppDeps) — not `&mut T`.
                                     // Plain `param: T` (no mut) still demotes to `&mut T`
-                                    // (`fill_hull` / no-double-mut case).
-                                    if param.is_mutable
-                                        && !analyzed.field_mutated_parameters.contains(&param.name)
-                                        && !matches!(
-                                            &param.type_,
+                                    // (`fill_hull` / AssetLoader / no-double-mut case).
+                                    //
+                                    // Copy aggregates follow the same owned-forwarding rule:
+                                    // empty/`Copy` facades must not force `&mut T` when the
+                                    // callee emits owned `T` (create→post).
+                                    let bare_wj = !matches!(
+                                        &param.type_,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    );
+                                    let prefer_owned_mut = bare_wj
+                                        && ((param.is_mutable
+                                            && !analyzed
+                                                .field_mutated_parameters
+                                                .contains(&param.name))
+                                            || analyzed
+                                                .field_mutated_parameters
+                                                .contains(&param.name)
+                                            || self.param_only_forwards_to_emitted_owned_callees(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            )
+                                            || self.param_passes_to_wj_owned_sibling_call(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            )
+                                            // AppDeps-style facades: MutBorrowed only via
+                                            // `deps.port.method(...)` must emit owned `mut T`,
+                                            // not `&mut T` (LedgerKit post / create_export_job).
+                                            || self.param_is_owned_mut_field_method_facade(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            ));
+                                    if prefer_owned_mut {
+                                        // Analyzer may leave `formal_type` as
+                                        // `MutableReference(T)` while WJ source is bare `T`.
+                                        // Prefer the bare AST type so we emit `mut T` /
+                                        // `T`, not `&mut T` (LedgerKit create→post AppDeps).
+                                        let emit_ty = if matches!(
+                                            formal_type,
                                             Type::Reference(_) | Type::MutableReference(_)
-                                        )
-                                    {
-                                        self.type_to_rust(formal_type)
+                                        ) {
+                                            &param.type_
+                                        } else {
+                                            formal_type
+                                        };
+                                        self.type_to_rust(emit_ty)
                                     } else {
-                                        format!("&mut {}", self.type_to_rust(formal_type))
+                                        // Peel so we never emit nested `&mut &mut T`.
+                                        let inner = match formal_type {
+                                            Type::Reference(t) | Type::MutableReference(t) => {
+                                                t.as_ref()
+                                            }
+                                            other => other,
+                                        };
+                                        format!("&mut {}", self.type_to_rust(inner))
                                     }
                                 }
                                 OwnershipMode::Borrowed if self.is_type_copy(formal_type) => {
@@ -1643,6 +1714,16 @@ impl<'ast> CodeGenerator<'ast> {
                                         // `get(&key)` double-ref on an already-borrowed formal.
                                         if self.collection_key_owned_params.contains(&param.name)
                                             || self.is_collection_key_owned_param(param, func)
+                                            || self.param_passes_to_wj_owned_sibling_call(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            )
+                                            || self.param_only_forwards_to_emitted_owned_callees(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            )
                                         {
                                             self.type_to_rust(formal_type)
                                         } else if param

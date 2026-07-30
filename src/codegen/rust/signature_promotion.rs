@@ -622,16 +622,35 @@ pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) ->
 
 /// Single argument emits as owned non-text in generated Rust (not `&T` / `&mut T`).
 pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usize) -> bool {
-    // `&mut T` formals: `emitted_rust_ref_params` is often `false` (flag means shared `&T`
-    // only), but call sites must still pass `&mut` — not owned / `.clone()`.
-    if matches!(
-        sig.param_ownership.get(param_idx),
-        Some(OwnershipMode::MutBorrowed)
-    ) || sig
+    // True `&mut T` formals must keep mut-borrow at call sites. Distinguishing that from
+    // owned `mut T` bindings (field mutation on bare Custom / AppDeps): the latter records
+    // `emitted_rust_ref_params[idx] == false` and keeps a bare formal / param type.
+    let param_is_mut_ref = sig
         .param_types
         .get(param_idx)
-        .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-    {
+        .is_some_and(|t| matches!(t, Type::MutableReference(_)));
+    let formal_is_explicit_mut_ref = sig
+        .formal_param_type(param_idx)
+        .is_some_and(|t| matches!(t, Type::MutableReference(_)));
+    if param_is_mut_ref || formal_is_explicit_mut_ref {
+        return false;
+    }
+    let analyzer_mut = matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::MutBorrowed)
+    );
+    if analyzer_mut {
+        // Owned `mut deps: AppDeps` after field mutation — codegen refresh says not `&T`.
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(false)
+        {
+            return !param_type_is_borrowed_text(sig, param_idx);
+        }
+        // No emission record yet: do not claim owned (preserve true `&mut` call sites).
         return false;
     }
 
@@ -864,7 +883,7 @@ pub(crate) fn emitted_owned_beats_stale_global_borrow(
 
 /// Codegen-refreshed `emitted_rust_ref_params` beats same-key analysis-only metadata
 /// (cross-file `ComponentRegistry::register` → `&str` call sites in a later module).
-fn codegen_refreshed_beats_analysis_only(
+pub(crate) fn codegen_refreshed_beats_analysis_only(
     preferred: &FunctionSignature,
     other: &FunctionSignature,
 ) -> bool {
@@ -901,6 +920,25 @@ where
         }
     }
     refresh_without_shared_ref.or(first)
+}
+
+/// True when `preferred` recorded at least one shared-ref formal and `other` did not.
+///
+/// Importer stubs often keep `emitted_rust_ref_params = Some([false, …])` while the
+/// defining module refreshed `&str` slots to `true` — prefer the defining refresh.
+pub(crate) fn shared_ref_emission_beats(
+    preferred: &FunctionSignature,
+    other: &FunctionSignature,
+) -> bool {
+    let pref_has = preferred
+        .emitted_rust_ref_params
+        .as_ref()
+        .is_some_and(|f| f.iter().any(|&x| x));
+    let other_has = other
+        .emitted_rust_ref_params
+        .as_ref()
+        .is_some_and(|f| f.iter().any(|&x| x));
+    pref_has && !other_has
 }
 
 /// Prefer a defining-module refresh that demoted a WJ `string` formal to `&str` over a

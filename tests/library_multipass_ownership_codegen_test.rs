@@ -3960,14 +3960,37 @@ pub fn build_grid() {
     );
 
     let map = test.compile().expect("compile");
+    let ops = map.get("voxel/grid_ops.rs").expect("grid_ops.rs");
     let rs = map.get("voxel/build.rs").expect("build.rs");
 
+    // Mutating free-fn params may emit either `&mut T` or owned `mut T` (prefer_owned_mut /
+    // field-method facade). Call sites must match the emitted contract — never clone.
+    let owned_mut_formal = ops.contains("touch_grid(mut grid: VoxelGrid")
+        || ops.contains("fn touch_grid(mut grid: VoxelGrid");
+    let mut_ref_formal = ops.contains("touch_grid(grid: &mut VoxelGrid")
+        || ops.contains("fn touch_grid(grid: &mut VoxelGrid");
     assert!(
-        rs.contains("touch_grid(&mut grid,") || rs.contains("touch_grid( &mut grid,"),
-        "mut-borrow grid param must pass &mut grid, not owned clone. Got:\n{rs}"
+        owned_mut_formal || mut_ref_formal,
+        "touch_grid must emit &mut or owned mut VoxelGrid. Got:\n{ops}"
     );
+
+    if mut_ref_formal {
+        assert!(
+            rs.contains("touch_grid(&mut grid,") || rs.contains("touch_grid( &mut grid,"),
+            "mut-borrow grid param must pass &mut grid. Got:\n{rs}"
+        );
+    } else {
+        assert!(
+            rs.contains("touch_grid(grid,") || rs.contains("touch_grid( grid,"),
+            "owned mut grid formal must pass owned grid. Got:\n{rs}"
+        );
+        assert!(
+            !rs.contains("touch_grid(&mut grid") && !rs.contains("touch_grid(&grid"),
+            "owned mut formal must not add &/&mut at call site. Got:\n{rs}"
+        );
+    }
     assert!(
         !rs.contains("touch_grid(grid.clone()"),
-        "must not clone grid for &mut VoxelGrid param. Got:\n{rs}"
+        "must not clone grid for mut VoxelGrid param. Got:\n{rs}"
     );
 }

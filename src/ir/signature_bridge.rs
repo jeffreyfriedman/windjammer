@@ -80,11 +80,32 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::MutBorrowed)
     ) {
-        if let Some(formal) = sig.formal_param_type(param_idx) {
-            return safety_type_from_parser_type(
-                &Type::MutableReference(Box::new(formal.clone())),
-                Some(OwnershipMode::MutBorrowed),
-            );
+        // Analyzer MutBorrowed covers both true `&mut T` and owned `mut T` bindings
+        // (field mutation on bare Custom). Prefer codegen emission / owned contract.
+        let emits_owned_mut_binding = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            sig, param_idx,
+        ) || (sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(false)
+            && !sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+            && !sig
+                .formal_param_type(param_idx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_))));
+        if !emits_owned_mut_binding {
+            if let Some(formal) = sig.formal_param_type(param_idx) {
+                return safety_type_from_parser_type(
+                    &Type::MutableReference(Box::new(formal.clone())),
+                    Some(OwnershipMode::MutBorrowed),
+                );
+            }
+        } else if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
+            return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
         }
     }
 
@@ -1045,6 +1066,53 @@ mod tests {
         };
         let expected = safety_type_from_signature_param(&sig, 0);
         assert!(matches!(expected.ownership, OwnedType::Owned));
+    }
+
+    #[test]
+    fn mut_borrowed_bare_custom_with_owned_emission_stays_owned() {
+        // LedgerKit: create_export_job mutates deps fields → MutBorrowed analysis, but
+        // codegen emits `mut deps: AppDeps` (owned). Call sites must pass by value.
+        let sig = FunctionSignature {
+            name: "create_export_job".into(),
+            formal_param_types: vec![Type::Custom("AppDeps".into())],
+            param_types: vec![Type::Custom("AppDeps".into())],
+            param_ownership: vec![OwnershipMode::MutBorrowed],
+            return_type: Some(Type::Custom("ExportJobView".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 0);
+        assert!(
+            matches!(expected.ownership, OwnedType::Owned),
+            "owned mut binding must not force MutRef at call sites"
+        );
+    }
+
+    #[test]
+    fn mut_borrowed_explicit_mut_ref_stays_mut_ref() {
+        let sig = FunctionSignature {
+            name: "update".into(),
+            formal_param_types: vec![Type::MutableReference(Box::new(Type::Custom(
+                "PlayerState".into(),
+            )))],
+            param_types: vec![Type::MutableReference(Box::new(Type::Custom(
+                "PlayerState".into(),
+            )))],
+            param_ownership: vec![OwnershipMode::MutBorrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 0);
+        assert!(matches!(expected.ownership, OwnedType::MutRef(_)));
     }
 
     #[test]
