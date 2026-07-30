@@ -170,5 +170,13 @@ fn resolve_import(
         }
         return module_to_index.get(&base).copied();
     }
-    module_to_index.get(import_path).copied()
+    // `use squad::Squad` depends on module `squad`, not a fictitious `squad::Squad` path.
+    let mut resolved = import_path.to_vec();
+    while !resolved.is_empty() {
+        if let Some(&idx) = module_to_index.get(&resolved) {
+            return Some(idx);
+        }
+        resolved.pop();
+    }
+    None
 }

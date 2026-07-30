@@ -52,6 +52,51 @@ fn test_dependency_graph_transitive_dependents() {
 }
 
 #[test]
+fn test_dependency_graph_type_import_depends_on_defining_module() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let squad = src.join("squad.wj");
+    let caller = src.join("caller.wj");
+    fs::write(
+        &squad,
+        r#"pub struct Squad { id: string }
+impl Squad {
+    pub fn new(id: string) -> Squad { Squad { id: id } }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        &caller,
+        r#"use squad::Squad
+pub fn make_squad(id: string) -> Squad { Squad::new(id) }
+"#,
+    )
+    .unwrap();
+
+    let sources = vec![
+        (caller.clone(), fs::read_to_string(&caller).unwrap()),
+        (squad.clone(), fs::read_to_string(&squad).unwrap()),
+    ];
+    let mut programs = Vec::new();
+    for (file, source) in &sources {
+        let (_, program) = parse_file(file, source);
+        programs.push(program);
+    }
+
+    let graph = DependencyGraph::build(&sources, &programs, &src);
+    let sorted = graph.sort_indices_for_codegen(&[0, 1]);
+    assert_eq!(
+        sorted,
+        vec![1, 0],
+        "defining module squad must codegen before importer caller; got {:?}",
+        sorted
+    );
+}
+
+#[test]
 fn test_compute_reanalysis_set_all_dirty_without_meta() {
     let dir = TempDir::new().unwrap();
     let src = dir.path().join("src");

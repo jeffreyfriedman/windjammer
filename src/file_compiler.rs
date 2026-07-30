@@ -319,7 +319,9 @@ impl ModuleCompiler {
         generator.set_copy_types_registry(self.copy_structs_registry.clone());
         let rust_code = generator.generate_program(&program, &analyzed);
 
-        // THEN merge into global for future files' cross-module lookups
+        generator.apply_self_receiver_upgrades(&mut self.global_signatures);
+        self.global_signatures.merge(&generator.signature_registry);
+        // Keep analyzer stubs for keys codegen did not refresh.
         self.global_signatures.merge(&signatures);
 
         // Extract module name from path

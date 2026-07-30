@@ -303,9 +303,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if trace {
                     eprintln!(
-                        "[wj-sig] call-site {method} arg#{}: mc_resolve ({:?})",
+                        "[wj-sig] call-site {method} arg#{}: mc_resolve (types={:?} own={:?} name={})",
                         arguments.len(),
-                        sig.param_types
+                        sig.param_types,
+                        sig.param_ownership,
+                        sig.name
                     );
                 }
                 return Some(finalize_call_site_signature(sig.clone()));

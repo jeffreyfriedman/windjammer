@@ -1136,9 +1136,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 usage
             }
-            Expression::Binary { left, right, .. } => self
-                .expression_param_projection_usage(left, param_name)
-                .merge(self.expression_param_projection_usage(right, param_name)),
+            Expression::Binary { left, right, op, .. } => {
+                let is_add = matches!(op, crate::parser::BinaryOp::Add);
+                self.expression_binary_operand_projection_usage(left, param_name, is_add)
+                    .merge(self.expression_binary_operand_projection_usage(
+                        right,
+                        param_name,
+                        is_add,
+                    ))
+            }
             Expression::Unary { operand, .. } => {
                 self.expression_param_projection_usage(operand, param_name)
             }
@@ -1199,6 +1205,36 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => self.expression_param_projection_usage(expr, param_name),
         }
+    }
+
+    /// Binary operands: a bare `param.field` fed into `+` (string concat) escapes as an
+    /// owned value — not readonly projection demotion. Numeric ops on Copy fields stay
+    /// FieldOrIndexOnly via the normal projection walk (`a.x - b.x` → `&Body`).
+    fn expression_binary_operand_projection_usage(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        is_add: bool,
+    ) -> ProjectionUsage {
+        if is_add {
+            match expr {
+                Expression::FieldAccess { object, .. } | Expression::Index { object, .. }
+                    if matches!(
+                        object,
+                        Expression::Identifier { name, .. } if name == param_name
+                    ) =>
+                {
+                    return ProjectionUsage::BareOrOther;
+                }
+                Expression::FieldAccess { object, .. } | Expression::Index { object, .. }
+                    if Self::expression_mentions_identifier(object, param_name) =>
+                {
+                    return ProjectionUsage::BareOrOther;
+                }
+                _ => {}
+            }
+        }
+        self.expression_param_projection_usage(expr, param_name)
     }
 
     /// Promote owned params to borrowed when the body only forwards them to borrowing callees.
@@ -1613,6 +1649,8 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
                     && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
                     && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
+                    // Enum/struct payload stores keep Owned — never demote to `&String`+clone.
+                    && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                 {
                     ownership = crate::analyzer::OwnershipMode::Borrowed;
                 }
@@ -3296,11 +3334,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::Call { arguments, function, .. } => {
                 if let Some(callee_name) = self.callee_name_from_call_function(function) {
-                    for (i, (_, arg)) in arguments.iter().enumerate() {
-                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                            && self.free_call_arg_expects_borrow(&callee_name, i)
-                        {
-                            return true;
+                    let is_enum_variant =
+                        crate::analyzer::Analyzer::looks_like_enum_variant_constructor(&callee_name)
+                            || matches!(
+                                callee_name.as_str(),
+                                "Some" | "None" | "Ok" | "Err"
+                            );
+                    if !is_enum_variant {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                                && self.free_call_arg_expects_borrow(&callee_name, i)
+                            {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -3832,9 +3878,26 @@ impl<'ast> CodeGenerator<'ast> {
             | Statement::Async { body, .. } => {
                 self.param_stored_in_owned_payload(body.as_slice(), param_name)
             }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expression_moves_param_into_owned_payload(&arm.body, param_name)
-            }),
+            Statement::Match { value, arms, .. } => {
+                // Scrutinee may construct consuming enum payloads:
+                // `match Value::Text(label) { ... }` (wdb-embedded `owned_string`).
+                // Bare `match name { "lit" => ... }` only borrows for pattern matching —
+                // do not treat a top-level identifier scrutinee as a payload store.
+                let scrutinee_stores = match value {
+                    Expression::Call { .. }
+                    | Expression::MethodCall { .. }
+                    | Expression::StructLiteral { .. }
+                    | Expression::Tuple { .. }
+                    | Expression::Array { .. } => {
+                        self.expression_moves_param_into_owned_payload(value, param_name)
+                    }
+                    _ => false,
+                };
+                scrutinee_stores
+                    || arms.iter().any(|arm| {
+                        self.expression_moves_param_into_owned_payload(&arm.body, param_name)
+                    })
+            }
             Statement::Defer { statement, .. } => {
                 self.statement_moves_param_into_owned_payload(statement, param_name)
             }
@@ -5016,6 +5079,34 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 false
             }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if !matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    {
+                        if self.expression_passes_to_wj_owned_sibling_call(arg, param_name, func)
+                        {
+                            return true;
+                        }
+                        continue;
+                    }
+                    if self.free_call_callee_emits_owned_arg(function, i, func) {
+                        return true;
+                    }
+                }
+                self.expression_passes_to_wj_owned_sibling_call(function, param_name, func)
+            }
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, value)| {
+                self.expression_passes_to_wj_owned_sibling_call(value, param_name, func)
+            }),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                elements.iter().any(|elem| {
+                    self.expression_passes_to_wj_owned_sibling_call(elem, param_name, func)
+                })
+            }
             Expression::Binary { left, right, .. } => {
                 self.expression_passes_to_wj_owned_sibling_call(left, param_name, func)
                     || self.expression_passes_to_wj_owned_sibling_call(right, param_name, func)
@@ -5030,6 +5121,59 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Free-function / associated-fn call: argument `i` expects an owned WJ formal.
+    fn free_call_callee_emits_owned_arg(
+        &self,
+        function: &Expression<'ast>,
+        arg_index: usize,
+        _func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let sig = match function {
+            Expression::Identifier { name, .. } => self
+                .get_signature_with_global(name)
+                .cloned()
+                .or_else(|| self.signature_registry.get_signature(name).cloned()),
+            Expression::FieldAccess { object, field, .. } => {
+                // `Module::helper(arg)` / `Type::assoc(arg)`
+                let type_or_module = match &**object {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    _ => None,
+                };
+                type_or_module.and_then(|receiver| {
+                    let key = format!("{receiver}::{field}");
+                    self.get_signature_with_global(&key)
+                        .cloned()
+                        .or_else(|| self.signature_registry.get_signature(&key).cloned())
+                        .or_else(|| self.signature_registry.lookup_method(&key).cloned())
+                })
+            }
+            _ => None,
+        };
+        let Some(sig) = sig else {
+            return false;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(true)
+        {
+            return false;
+        }
+        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
+            || (matches!(
+                sig.param_ownership.get(pidx),
+                Some(crate::analyzer::OwnershipMode::Owned)
+            ) && sig
+                .formal_param_type(pidx)
+                .or_else(|| sig.param_types.get(pidx))
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                }))
+    }
+
     fn method_call_arg_expects_borrow(
         &self,
         object: &Expression<'ast>,
@@ -5037,6 +5181,15 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // PascalCase method on a type path is an enum variant constructor (`Value::Text`) —
+        // payload args are moved, not borrowed.
+        if method
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
+        {
+            return false;
+        }
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
             // WJ AST owned non-copy formals are not borrowing callees for delegation
@@ -5232,7 +5385,19 @@ impl<'ast> CodeGenerator<'ast> {
             && !func.body.is_empty()
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
             && !self.is_type_copy(&param.type_)
-            && !any_forward_ref_keep_owned;
+            && !any_forward_ref_keep_owned
+            // Store/impl method forwards only (`self.apply_put(key, …)`). Free-function
+            // composition helpers (`handle(deps)` → `create_export_job(deps)`) must keep
+            // owned Custom formals — not demote to `&AppDeps` + `.clone()`.
+            && (self.param_passed_to_self_or_field_receiver_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) || self.param_passed_to_owned_self_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ));
         // Exclusive non-self owned forward to a local receiver (`latest.has_key(key)`):
         // emit `&T` + clone so outer forward-ref callers can borrow. Self-sibling wrappers
         // (`has_key` → `self.get`) still hit `to_owned_sibling` but must keep owned formals.
@@ -6342,6 +6507,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 || matches!(&**inner, Type::Custom(n) if n == "string")
                     )
                 });
+            // Registry `Reference(String)` means a genuine `&String` formal (Phase-2
+            // passthrough to `Vec::contains` / `@string_ref`). Prefer that over `&str`
+            // so wrappers like `check_item(item_id)` keep `&String` when `has` needs it.
+            // Call-site `&&str` mismatches are fixed by borrow lowering, not by demoting
+            // the formal here.
             if registry_string_ref {
                 return "&String".to_string();
             }

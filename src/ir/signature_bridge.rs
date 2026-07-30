@@ -366,7 +366,8 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 && !is_bare_map_type(bare)
             {
                 if matches!(bare, Type::Custom(_)) {
-                    // Bare Custom: shared-ref only when codegen confirmed `&T` (keys_equal).
+                    // Bare Custom: shared-ref when codegen confirmed `&T`, or analyzer
+                    // converged Borrowed + Reference(T) for non-Copy (`MemoryEngine::put`).
                     // Owned Copy aggregates (`other: Lsn`) must not inherit stale Borrowed (WDB-060).
                     if sig
                         .emitted_rust_ref_params

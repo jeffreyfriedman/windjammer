@@ -137,6 +137,139 @@ pub(crate) fn build_type_defining_modules_for_library_with_programs(
     Ok(map)
 }
 
+/// Resolve `gen/` (or crate-root) directories that contain `metadata.json` for each
+/// `wj.toml` path dependency under `build_path`'s project.
+///
+/// Keys use Rust crate naming (`wdb-substrate` → `wdb_substrate`) so they match
+/// `--metadata` / `external_paths` conventions. Explicit CLI `--metadata` entries
+/// should override these when merged.
+pub(crate) fn discover_wj_toml_path_dependency_metadata(
+    build_path: &Path,
+) -> HashMap<String, PathBuf> {
+    let mut out = HashMap::new();
+    let search_from = if build_path.is_file() {
+        build_path.parent().unwrap_or(build_path)
+    } else {
+        build_path
+    };
+    let Some(project_root) = crate::metadata::find_project_root(search_from) else {
+        return out;
+    };
+    let wj_toml = project_root.join("wj.toml");
+    let Ok(config) = crate::config::WjConfig::load_from_file(&wj_toml) else {
+        return out;
+    };
+
+    for (name, spec) in config.dependencies.iter().chain(config.dev_dependencies.iter()) {
+        let path_str = match spec {
+            crate::config::DependencySpec::Detailed {
+                path: Some(p), ..
+            } => p.as_str(),
+            _ => continue,
+        };
+        let dep_root = if Path::new(path_str).is_absolute() {
+            PathBuf::from(path_str)
+        } else {
+            project_root.join(path_str)
+        };
+        let key = name.replace('-', "_");
+        // Prefer library gen/ output (post-codegen ownership + emitted_rust_ref_params).
+        let candidates = [
+            dep_root.join("gen"),
+            dep_root.clone(),
+            dep_root.join("src"),
+        ];
+        for candidate in candidates {
+            let meta_file = if candidate.is_file()
+                && candidate
+                    .file_name()
+                    .is_some_and(|n| n == "metadata.json")
+            {
+                candidate.clone()
+            } else {
+                candidate.join("metadata.json")
+            };
+            if meta_file.is_file() {
+                let root = meta_file
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or(candidate);
+                out.insert(key, root);
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// Discover `metadata.json` roots for crates imported via `use crate_name::...` in `.wj`
+/// sources — covers deps present in generated Cargo.toml but missing from `wj.toml`
+/// (e.g. `wdb-substrate` → `wdb_wal` via `use wdb_wal::WalSegment`).
+pub(crate) fn discover_wj_import_dependency_metadata(
+    build_path: &Path,
+) -> HashMap<String, PathBuf> {
+    let mut out = HashMap::new();
+    let src_root = if build_path.is_file() {
+        build_path.parent().unwrap_or(build_path).to_path_buf()
+    } else {
+        build_path.to_path_buf()
+    };
+    let Ok(wj_files) = find_wj_files(&src_root) else {
+        return out;
+    };
+    let project_root = crate::metadata::find_project_root(&src_root)
+        .unwrap_or_else(|| src_root.clone());
+    let output_hint = project_root.join("gen");
+
+    let builtin = [
+        "std", "core", "alloc", "crate", "self", "super", "windjammer_runtime", "serde",
+    ];
+
+    for file in &wj_files {
+        let Ok(content) = std::fs::read_to_string(file) else {
+            continue;
+        };
+        for line in content.lines() {
+            let trimmed = line.trim();
+            let Some(rest) = trimmed.strip_prefix("use ") else {
+                continue;
+            };
+            let Some(crate_name) = rest.split("::").next() else {
+                continue;
+            };
+            let crate_name = crate_name.trim();
+            if crate_name.is_empty()
+                || builtin.contains(&crate_name)
+                || !crate_name
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_lowercase())
+            {
+                continue;
+            }
+            let key = crate_name.replace('-', "_");
+            if out.contains_key(&key) {
+                continue;
+            }
+            let Some(crate_dir) = crate::cargo_toml::dependency_management::resolve_crate_dir(
+                crate_name,
+                &src_root,
+                &output_hint,
+            ) else {
+                continue;
+            };
+            for candidate in [crate_dir.join("gen"), crate_dir.clone()] {
+                let meta = candidate.join("metadata.json");
+                if meta.is_file() {
+                    out.insert(key.clone(), candidate);
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Find dependency metadata roots for cross-crate inference.
 ///
 /// Merge order matters: non-`engine` metadata is loaded first, then `engine` last so
@@ -245,6 +378,50 @@ pub(crate) fn find_wj_files(path: &Path) -> Result<Vec<PathBuf>> {
     }
     files.sort();
     Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn discover_path_dep_metadata_prefers_gen_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("consumer");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(
+            root.join("wj.toml"),
+            r#"
+[package]
+name = "consumer"
+version = "0.1.0"
+
+[dependencies]
+dep-crate = { path = "../dep_crate" }
+"#,
+        )
+        .unwrap();
+        let dep = tmp.path().join("dep_crate");
+        fs::create_dir_all(dep.join("gen")).unwrap();
+        fs::write(
+            dep.join("gen/metadata.json"),
+            r#"{"structs":{},"functions":{},"copy_structs":[],"version":"0"}"#,
+        )
+        .unwrap();
+        fs::write(
+            dep.join("metadata.json"),
+            r#"{"structs":{},"functions":{},"copy_structs":[],"version":"0"}"#,
+        )
+        .unwrap();
+
+        let found = discover_wj_toml_path_dependency_metadata(&root.join("src"));
+        assert_eq!(
+            found.get("dep_crate").map(|p| p.file_name().unwrap()),
+            Some(std::ffi::OsStr::new("gen")),
+            "expected gen/ metadata root, got {found:?}"
+        );
+    }
 }
 
 fn find_wj_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {

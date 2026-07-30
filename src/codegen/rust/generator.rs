@@ -802,6 +802,20 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     Some(finalize(l.clone()))
                 }
+                // Caller-file stubs can carry `emitted_rust_ref_params = [false, …]` while
+                // the defining module's global refresh recorded `[false, true]` for unused
+                // string formals (`Squad::new` leader_id → `&str`). Merge global refresh
+                // instead of blindly preferring the importer's all-false stub.
+                (Some(l), Some(g))
+                    if l.emitted_rust_ref_params.is_some()
+                        && g.emitted_rust_ref_params.is_some() =>
+                {
+                    let mut merged = l.clone();
+                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                        &mut merged, g,
+                    );
+                    Some(finalize(merged))
+                }
                 (Some(l), _) => Some(finalize(l.clone())),
                 (None, Some(g)) => Some(finalize(g.clone())),
                 (None, None) => None,

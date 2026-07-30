@@ -100,32 +100,6 @@ fn apply_owned_string_literal_coercion<'ast>(
         !crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
             func_name,
         );
-    let sig = gen
-        .signature_registry
-        .get_signature(func_name)
-        .or_else(|| {
-            if allow_simple_fallback {
-                gen.signature_registry.get_signature(simple_name)
-            } else {
-                None
-            }
-        })
-        .or_else(|| {
-            gen.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(func_name))
-        })
-        .or_else(|| {
-            if allow_simple_fallback {
-                gen.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.get_signature(simple_name))
-            } else {
-                None
-            }
-        })
-        .cloned()
-        .or_else(|| signature.clone());
 
     for (i, arg_str) in args.iter_mut().enumerate() {
         let Some((_, arg_expr)) = arguments.get(i) else {
@@ -146,6 +120,49 @@ fn apply_owned_string_literal_coercion<'ast>(
             .is_some_and(crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str)
         {
             continue;
+        }
+        // Prefer defining-module refreshed `&str` over stale analyzer stubs.
+        let mut sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+            gen.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(func_name).cloned()),
+            if allow_simple_fallback {
+                gen.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple_name).cloned())
+            } else {
+                None
+            },
+            gen.signature_registry.get_signature(func_name).cloned(),
+            if allow_simple_fallback {
+                gen.signature_registry.get_signature(simple_name).cloned()
+            } else {
+                None
+            },
+            signature.clone(),
+        ]);
+        let pidx = sig.as_ref().map(|s| s.arg_param_index(i)).unwrap_or(i);
+        for challenger in [
+            gen.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(func_name)),
+            if allow_simple_fallback {
+                gen.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple_name))
+            } else {
+                None
+            },
+            gen.signature_registry.get_signature(func_name),
+            if allow_simple_fallback {
+                gen.signature_registry.get_signature(simple_name)
+            } else {
+                None
+            },
+        ] {
+            sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                sig, challenger, pidx,
+            );
         }
         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
             sig.as_ref(),

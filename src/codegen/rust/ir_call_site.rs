@@ -558,8 +558,66 @@ impl<'ast> CodeGenerator<'ast> {
         let receiver_is_set = receiver_type_name
             .is_some_and(crate::codegen::rust::stdlib_method_traits::is_set_type_name);
 
-        let param_idx = sig.arg_param_index(arg_index);
+        // Refresh free-fn signatures from the codegen registry before expected-type /
+        // coercion decisions — analyzer stubs often still say bare `string`+Owned while
+        // the defining-fn refresh recorded `&str` (`process("hello")` must stay bare).
+        if receiver_type_name.is_none() {
+            let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+            if let Some(refreshed) =
+                crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    self.signature_registry.get_signature(callee_name).cloned(),
+                    self.signature_registry.get_signature(simple).cloned(),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(callee_name).cloned()),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple).cloned()),
+                    Some(sig.clone()),
+                ])
+            {
+                let ridx = refreshed.arg_param_index(arg_index);
+                if refreshed.emitted_rust_ref_params.is_some()
+                    || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        &refreshed, ridx,
+                    )
+                    || refreshed.param_types.get(ridx).is_some_and(|t| {
+                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                    })
+                {
+                    sig = refreshed;
+                }
+            }
+        }
+
+        // Final associated-call refresh: importer stubs may carry all-false
+        // `emitted_rust_ref_params` while the defining module published `[false, true]`.
+        if let Some(rt) = receiver_type_name {
+            if let Some(resolved) = self.resolve_method_function_signature(
+                rt,
+                method_simple,
+                user_arg_count.unwrap_or(arg_index + 1),
+            ) {
+                sig = resolved;
+            }
+        }
+
+        let mut param_idx = sig.arg_param_index(arg_index);
         let mut expected = safety_type_from_signature_param(&sig, param_idx);
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && (callee_name == "process" || callee_name.ends_with("::process"))
+        {
+            eprintln!(
+                "WJ_DEBUG_PROCESS_EXPECTED emitted={:?} param_ty={:?} expected_own={:?} \
+                 callee_emits={}",
+                sig.emitted_rust_ref_params,
+                sig.param_types.get(param_idx),
+                expected.ownership,
+                crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                ),
+            );
+        }
         if collecting_ref_vec {
             if let Some(rt) = self.current_function_return_type.as_ref() {
                 let elem_ref: Option<&Type> = match rt {
@@ -743,6 +801,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
+        if matches!(kind, CoercionKind::ToOwnedString)
+            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &sig, param_idx,
+            )
+        {
+            kind = CoercionKind::Identity;
+        }
         if matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow) {
             if let Expression::Identifier { name, .. } = arg_expr {
                 let caller_copy_aggregate = self.current_function_params.iter().any(|p| {
@@ -1479,6 +1544,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Plain WJ `string` formals emit owned `String` even when multipass left stale
         // `Borrowed` ownership (cross-file analysis before defining-module codegen).
         // Trust formal type + shared-ref emission, not ownership alone.
+        // (Signature already refreshed from registry above before `expected`.)
         if matches!(
             arg_expr,
             Expression::Literal {
@@ -1597,10 +1663,115 @@ impl<'ast> CodeGenerator<'ast> {
             coerced = coerced[1..].to_string();
         }
         if collision_blocks_autoborrow {
-            while coerced.starts_with('&') && !coerced.starts_with("&mut ") {
-                coerced = coerced[1..].to_string();
+            // Prefer codegen-refreshed registry entry — analyzer call-site stubs often
+            // lack `emitted_rust_ref_params` while the defining-fn refresh has them
+            // (`check(item: &Item)` after `fn check` body emission).
+            let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+            if let Some(refreshed) =
+                crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    self.signature_registry.get_signature(callee_name).cloned(),
+                    self.signature_registry.get_signature(simple).cloned(),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(callee_name).cloned()),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple).cloned()),
+                    Some(sig.clone()),
+                ])
+            {
+                let ridx = refreshed.arg_param_index(arg_index);
+                if refreshed.emitted_rust_ref_params.is_some()
+                    || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        &refreshed, ridx,
+                    )
+                {
+                    sig = refreshed;
+                    param_idx = ridx;
+                }
             }
-            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+            let emits_shared =
+                crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                );
+            if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some() {
+                eprintln!(
+                    "WJ_DEBUG_COLLISION_BORROW callee={callee_name} arg={arg_index} \
+                     param_idx={param_idx} emits_shared={emits_shared} \
+                     emitted={:?} ownership={:?} param_ty={:?} coerced={coerced}",
+                    sig.emitted_rust_ref_params,
+                    sig.param_ownership.get(param_idx),
+                    sig.param_types.get(param_idx),
+                );
+            }
+            if !emits_shared {
+                // Homonym collisions (`check`, `process`, …) strip unsafe auto-borrow
+                // when the callee contract is ambiguous across modules.
+                while coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                    coerced = coerced[1..].to_string();
+                }
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+                if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                    coerced = stripped.to_string();
+                }
+            } else {
+                let is_text_shared = crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    &sig, param_idx,
+                ) || sig.param_types.get(param_idx).is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                        || matches!(
+                            t,
+                            Type::Reference(inner)
+                                if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                        )
+                });
+                if is_text_shared {
+                    // Confirmed `&str`/`&String` under collision: keep `&`, drop owned
+                    // literal coercion (string_literal_no_conversion / WDB-048).
+                    if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                        coerced = stripped.to_string();
+                    }
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+                }
+                // Confirmed shared-ref Custom (`item: &Item`): ensure `&` survives
+                // collision even when earlier IR/should_borrow skipped the prefix.
+                if !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                    && matches!(
+                        arg_expr,
+                        Expression::Identifier { .. } | Expression::FieldAccess { .. }
+                    )
+                {
+                    let arg_already_rust_ref = matches!(
+                        arg_expr,
+                        Expression::Identifier { name, .. }
+                            if self.identifier_already_ref(name)
+                                || self.str_ref_optimized_params.contains(name.as_str())
+                                || self.inferred_borrowed_params.contains(name)
+                    );
+                    if !arg_already_rust_ref {
+                        // Drop owned-move artifacts introduced under stale collision
+                        // stripping (`item.clone()` / `"lit".to_string()`).
+                        if coerced.ends_with(".clone()") {
+                            crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                                &mut coerced,
+                            );
+                        }
+                        if coerced.ends_with(".to_string()") && is_text_shared {
+                            if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                                coerced = stripped.to_string();
+                            }
+                        }
+                        if !coerced.starts_with('&') {
+                            coerced = format!("&{coerced}");
+                        }
+                        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some() {
+                            eprintln!(
+                                "WJ_DEBUG_COLLISION_BORROW after_force_ref coerced={coerced}"
+                            );
+                        }
+                    }
+                }
+            }
         }
         // Final IR ownership contract: strip spurious `&` when callee emits owned formals
         // (WDB-056 keys_equal(Vec<u8>, Vec<u8>)), or add borrow when expected.
@@ -1612,6 +1783,13 @@ impl<'ast> CodeGenerator<'ast> {
             callee_name,
             arg_index,
         );
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && (callee_name == "check" || callee_name.ends_with("::check") || callee_name == "process")
+        {
+            eprintln!(
+                "WJ_DEBUG_COLLISION_BORROW after_enforce callee={callee_name} coerced={coerced}"
+            );
+        }
         // WDB-060: Copy-aggregate caller bindings (`through: Lsn`) must pass by value into
         // owned callees. Stale analyzer `Reference(Lsn)` / prefer_global Borrow must not
         // leave `&through` / `(&through)` when codegen did not confirm a shared-ref formal.
@@ -1758,6 +1936,24 @@ impl<'ast> CodeGenerator<'ast> {
             &sig,
             arg_index,
         );
+        if coerced.ends_with(".to_string()")
+            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &sig, param_idx,
+            )
+        {
+            if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                coerced = stripped.to_string();
+            }
+        }
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && (callee_name == "check"
+                || callee_name.ends_with("::check")
+                || callee_name == "process")
+        {
+            eprintln!(
+                "WJ_DEBUG_COLLISION_BORROW final callee={callee_name} coerced={coerced}"
+            );
+        }
         Some(coerced)
     }
 

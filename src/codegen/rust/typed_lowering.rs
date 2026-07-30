@@ -339,15 +339,33 @@ pub fn correct_legacy_output(
     // Correction 1: Strip spurious & on Copy-type formals (except collection keys).
     // The legacy pipeline sometimes adds & via auto-borrow heuristics even when
     // the formal type is a Copy type that should be passed by value.
+    //
+    // Never strip when:
+    // - codegen confirmed shared-ref (`emitted_rust_ref_params`)
+    // - analyzer/param_types already encode `Reference(T)` / Borrowed
+    // Otherwise `check(item: &Item)` loses `&` when `Item` is briefly misclassified
+    // as Copy before field analysis settles (bug_e0308).
     if is_formal_copy
         && !is_collection_key
         && arg_str.starts_with('&')
         && !arg_str.starts_with("&mut ")
         && effective == OwnershipMode::Owned
     {
+        let param_is_ref = sig.param_types.get(param_idx).is_some_and(|t| {
+            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        });
+        let ownership_borrows = matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        );
         if formal_type.is_some_and(|t| {
             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        }) {
+        }) && !param_is_ref
+            && !ownership_borrows
+            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                sig, param_idx,
+            )
+        {
             *arg_str = arg_str[1..].to_string();
             return true;
         }
@@ -404,10 +422,20 @@ pub fn correct_legacy_output(
         }
     }
 
-    // Correction 4: Add .to_string() when callee expects owned String but arg is &str literal.
-    // Only if the legacy pipeline hasn't already converted it (String::from, .to_string(), etc.)
+    // Correction 4: Add .to_string() when callee expects owned String but arg is a
+    // string literal. Skip when the callee emits `&str`/`&String`, or when
+    // `param_types` already encodes a text borrow — stale Owned `effective` must
+    // not re-introduce `"lit".to_string()` into `&str` formals.
     if effective == OwnershipMode::Owned
         && !arg_str.starts_with('&')
+        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            sig, param_idx,
+        )
+        && !sig.param_types.get(param_idx).is_some_and(|t| {
+            string_utilities::param_is_rust_str_ref(t)
+                || string_utilities::param_is_rust_string_ref(t)
+                || matches!(t, Type::Reference(_))
+        })
     {
         let is_string_lit =
             crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr);

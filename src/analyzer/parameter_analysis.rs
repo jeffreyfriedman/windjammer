@@ -379,6 +379,15 @@ impl<'ast> Analyzer<'ast> {
             }
             return Ok(OwnershipMode::Owned);
         }
+        // Non-Copy Custom whose projected fields are consumed in arithmetic/concat
+        // (e.g. `deps.tag + ":"`) must stay Owned — composition helpers move the
+        // binding; demoting to `&AppDeps` breaks call sites that still pass owned.
+        if !self.is_copy_type(param_type)
+            && matches!(param_type, Type::Custom(_))
+            && self.param_projected_field_consumed_in_arithmetic(param_name, body)
+        {
+            return Ok(OwnershipMode::Owned);
+        }
         Ok(OwnershipMode::Borrowed)
     }
 
@@ -688,6 +697,22 @@ impl<'ast> Analyzer<'ast> {
                     && body
                         .iter()
                         .all(|s| self.stmt_param_only_borrowed(param_name, s, false))
+            }
+            Statement::Match { value, arms, .. } => {
+                // Consuming enum construction in the scrutinee is not borrow-only.
+                if self.expr_has_enum_variant_consuming(param_name, value) {
+                    return false;
+                }
+                // `match name { "lit" => ... }` borrows the scrutinee for pattern matching
+                // (Phase-2 / &str). Do not treat a bare identifier subject as a move.
+                let value_ok = match value {
+                    Expression::Identifier { name, .. } if name == param_name => true,
+                    _ => self.expr_param_only_borrowed(param_name, value, false),
+                };
+                value_ok
+                    && arms.iter().all(|arm| {
+                        self.expr_param_only_borrowed(param_name, arm.body, false)
+                    })
             }
             _ => true,
         }

@@ -98,8 +98,26 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
             // MutBorrowed is a genuine inference from mutation analysis, not a stale
             // stub artifact — never treat it as stale.
             OwnershipMode::MutBorrowed => false,
-            // Method args after `self` marked Owned with bare struct type are engine stubs.
-            OwnershipMode::Owned => sig.has_self_receiver && idx > 0 && bare_non_copy,
+            // Method args after `self` marked Owned with bare struct type *look like*
+            // unrefined engine stubs — but only when the whole signature is still
+            // all-Owned. Mixed Borrowed+Owned is real (MemoryEngine::put: `&Key` +
+            // owned `Value` consumed by `value_i64`). Filtering those out makes call
+            // sites fall back to Owned stubs and emit `key.clone()` into `&Key`.
+            OwnershipMode::Owned => {
+                if !(sig.has_self_receiver && idx > 0 && bare_non_copy) {
+                    return false;
+                }
+                let has_converged_borrow = sig.param_ownership.iter().enumerate().any(|(i, o)| {
+                    if sig.has_self_receiver && i == 0 {
+                        return false;
+                    }
+                    matches!(
+                        o,
+                        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                    )
+                });
+                !has_converged_borrow
+            }
         }
     })
 }
@@ -862,18 +880,27 @@ where
     I: IntoIterator<Item = Option<FunctionSignature>>,
 {
     let mut first = None;
+    let mut refresh_without_shared_ref = None;
     for cand in candidates {
         let Some(sig) = cand else {
             continue;
         };
-        if sig.emitted_rust_ref_params.is_some() {
-            return Some(sig);
+        if let Some(ref flags) = sig.emitted_rust_ref_params {
+            // Prefer defining-module refresh that confirmed at least one `&str`/`&T`
+            // slot over importer stubs with all-false emission flags.
+            if flags.iter().any(|&f| f) {
+                return Some(sig);
+            }
+            if refresh_without_shared_ref.is_none() {
+                refresh_without_shared_ref = Some(sig);
+            }
+            continue;
         }
         if first.is_none() {
             first = Some(sig);
         }
     }
-    first
+    refresh_without_shared_ref.or(first)
 }
 
 /// Prefer a defining-module refresh that demoted a WJ `string` formal to `&str` over a
