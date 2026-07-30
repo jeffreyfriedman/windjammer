@@ -139,11 +139,53 @@ fn collect_imported_modules(items: &[Item<'_>]) -> Vec<Vec<String>> {
     paths
 }
 
+/// Normalize a `use` path for module-level dependency resolution.
+///
+/// The parser keeps braced imports as a single segment
+/// (`"crate::analytics::{A, B}"`). Dependency edges must target the defining
+/// *module* (`["analytics"]`), not the brace list.
+fn normalize_import_path_for_module_resolve(import_path: &[String]) -> Vec<String> {
+    if import_path.is_empty() {
+        return Vec::new();
+    }
+    if import_path.len() == 1 && import_path[0].contains("::{") {
+        let module_part = import_path[0]
+            .split("::{")
+            .next()
+            .unwrap_or(import_path[0].as_str());
+        return module_part
+            .split("::")
+            .filter(|p| !p.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+    }
+    let mut out = Vec::with_capacity(import_path.len());
+    for seg in import_path {
+        if seg.starts_with('{') {
+            break;
+        }
+        if let Some(idx) = seg.find("::{") {
+            let head = &seg[..idx];
+            if !head.is_empty() {
+                out.push(head.to_string());
+            }
+            break;
+        }
+        out.push(seg.clone());
+    }
+    if out.is_empty() {
+        import_path.to_vec()
+    } else {
+        out
+    }
+}
+
 fn resolve_import(
     current_module: &[String],
     import_path: &[String],
     module_to_index: &HashMap<Vec<String>, usize>,
 ) -> Option<usize> {
+    let import_path = normalize_import_path_for_module_resolve(import_path);
     if import_path.is_empty() {
         return None;
     }
@@ -171,7 +213,7 @@ fn resolve_import(
         return module_to_index.get(&base).copied();
     }
     // `use squad::Squad` depends on module `squad`, not a fictitious `squad::Squad` path.
-    let mut resolved = import_path.to_vec();
+    let mut resolved = import_path;
     while !resolved.is_empty() {
         if let Some(&idx) = module_to_index.get(&resolved) {
             return Some(idx);

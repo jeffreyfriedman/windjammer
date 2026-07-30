@@ -97,6 +97,55 @@ pub fn make_squad(id: string) -> Squad { Squad::new(id) }
 }
 
 #[test]
+fn test_dependency_graph_braced_crate_import_depends_on_defining_module() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let analytics = src.join("analytics.wj");
+    let routes = src.join("routes.wj");
+    fs::write(
+        &analytics,
+        r#"pub struct AppDeps { n: int }
+pub fn create_export_job(mut deps: AppDeps) -> int {
+    deps.n = deps.n + 1
+    deps.n
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        &routes,
+        r#"use crate::analytics::{create_export_job, AppDeps}
+pub fn handler(deps: AppDeps) -> int {
+    create_export_job(deps)
+}
+"#,
+    )
+    .unwrap();
+
+    // Importer listed first so index order alone would put routes before analytics.
+    let sources = vec![
+        (routes.clone(), fs::read_to_string(&routes).unwrap()),
+        (analytics.clone(), fs::read_to_string(&analytics).unwrap()),
+    ];
+    let mut programs = Vec::new();
+    for (file, source) in &sources {
+        let (_, program) = parse_file(file, source);
+        programs.push(program);
+    }
+
+    let graph = DependencyGraph::build(&sources, &programs, &src);
+    let sorted = graph.sort_indices_for_codegen(&[0, 1]);
+    assert_eq!(
+        sorted,
+        vec![1, 0],
+        "braced `use crate::analytics::{{…}}` must depend on analytics; got {:?}",
+        sorted
+    );
+}
+
+#[test]
 fn test_compute_reanalysis_set_all_dirty_without_meta() {
     let dir = TempDir::new().unwrap();
     let src = dir.path().join("src");
