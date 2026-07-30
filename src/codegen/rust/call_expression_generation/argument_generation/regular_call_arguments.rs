@@ -509,6 +509,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
                                 &sig, pidx,
                             ))
+                            && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                &gen.signature_registry,
+                                func_name,
+                                Some(&sig),
+                                i,
+                            )
                         {
                             if coerced.starts_with("&mut ")
                                 || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
@@ -893,6 +899,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
                                 &sig, pidx,
                             ))
+                            && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                &gen.signature_registry,
+                                func_name,
+                                Some(&sig),
+                                i,
+                            )
                         {
                             if coerced.starts_with("&mut ")
                                 || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
@@ -1062,7 +1074,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
                                     sig, pidx,
                                 )
-                            });
+                            })
+                            // Runtime-scanner borrow (json::get, subprocess::spawn) must
+                            // survive even when a layered WJ stub claims owned.
+                            && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                &gen.signature_registry,
+                                func_name,
+                                post_ir_borrow_sig.as_ref().or(signature.as_ref()),
+                                i,
+                            );
                         if peel_owned
                             && (coerced.starts_with("&mut ")
                                 || (coerced.starts_with('&') && !coerced.starts_with("&mut ")))

@@ -120,9 +120,17 @@ pub fn build(mut grid: Grid) {
 
     let generated = fs::read_to_string(game_gen.join("game.rs")).expect("game.rs");
 
+    // Call site must not clone for a mut-borrow callee. Either pattern is valid:
+    // - owned `mut grid: Grid` + `touch_grid(&mut grid, …)` (explicit WJ `mut`)
+    // - promoted `grid: &mut Grid` + `touch_grid(grid, …)` (reborrow, no double `&mut`)
+    let call_site_ok = generated.contains("touch_grid(&mut grid,")
+        || generated.contains("touch_grid( &mut grid,")
+        || (generated.contains("fn build(grid: &mut Grid")
+            && (generated.contains("touch_grid(grid,")
+                || generated.contains("touch_grid( grid,")));
     assert!(
-        generated.contains("touch_grid(&mut grid,") || generated.contains("touch_grid( &mut grid,"),
-        "cross-crate module fn must pass &mut grid from engine metadata. Generated:\n{generated}"
+        call_site_ok,
+        "cross-crate module fn must pass &mut grid from engine metadata (or reborrow &mut formal). Generated:\n{generated}"
     );
     assert!(
         !generated.contains("touch_grid(grid.clone()"),

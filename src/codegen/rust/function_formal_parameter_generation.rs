@@ -1628,48 +1628,27 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.type_to_rust(emit_ty)
                                 }
                                 OwnershipMode::MutBorrowed => {
-                                    // Explicit `mut param: T` that only mutates via callees
-                                    // (no local field writes): keep owned so call sites emit
-                                    // `&mut param` from callee MutBorrowed metadata
-                                    // (`bug_cross_crate_mut_borrow_module_fn_test`).
-                                    // Field-mutated / owned-forwarding bare Customs keep owned
-                                    // `mut T` (LedgerKit AppDeps) — not `&mut T`.
-                                    // Plain `param: T` (no mut) still demotes to `&mut T`
-                                    // (`fill_hull` / AssetLoader / no-double-mut case).
-                                    //
-                                    // Copy aggregates follow the same owned-forwarding rule:
-                                    // empty/`Copy` facades must not force `&mut T` when the
-                                    // callee emits owned `T` (create→post).
+                                    // Prefer owned `mut T` for owned sibling / forward-only
+                                    // bodies, and for AppDeps-style `&self` port facades.
+                                    // Nested `&mut self` field methods stay `&mut T`.
                                     let bare_wj = !matches!(
                                         &param.type_,
                                         Type::Reference(_) | Type::MutableReference(_)
                                     );
                                     let prefer_owned_mut = bare_wj
-                                        && ((param.is_mutable
-                                            && !analyzed
-                                                .field_mutated_parameters
-                                                .contains(&param.name))
-                                            || analyzed
-                                                .field_mutated_parameters
-                                                .contains(&param.name)
-                                            || self.param_only_forwards_to_emitted_owned_callees(
-                                                func.body.as_slice(),
-                                                &param.name,
-                                                func,
-                                            )
-                                            || self.param_passes_to_wj_owned_sibling_call(
-                                                func.body.as_slice(),
-                                                &param.name,
-                                                func,
-                                            )
-                                            // AppDeps-style facades: MutBorrowed only via
-                                            // `deps.port.method(...)` must emit owned `mut T`,
-                                            // not `&mut T` (LedgerKit post / create_export_job).
-                                            || self.param_is_owned_mut_field_method_facade(
-                                                func.body.as_slice(),
-                                                &param.name,
-                                                func,
-                                            ));
+                                        && (self.param_only_forwards_to_emitted_owned_callees(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        ) || self.param_passes_to_wj_owned_sibling_call(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        ) || self.param_is_owned_mut_field_method_facade(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        ));
                                     if prefer_owned_mut {
                                         // Analyzer may leave `formal_type` as
                                         // `MutableReference(T)` while WJ source is bare `T`.
