@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit postgres adapters — E0308):
+//! FAILING REPRO (dogfood):
 //!
 //! `std::db` / `windjammer_runtime::db::Connection::query` takes `params: Vec<String>`
 //! by value. Codegen emits `&vec![...]` at call sites →
@@ -58,6 +58,6 @@ fn main() {
 
     assert!(
         !rs.contains("&vec!["),
-        "Connection::query params are Vec<String> by value (runtime); must not emit &vec![...] (LedgerKit postgres adapters). Got:\n{rs}"
+        "Connection::query params are Vec<String> by value (runtime); must not emit &vec![...] (dogfood). Got:\n{rs}"
     );
 }

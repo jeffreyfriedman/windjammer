@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! REGRESSION (LedgerKit R2.3): BankMatchRow Match button must codegen.
+//! REGRESSION (dogfood): BankMatchRow Match button must codegen.
 //! FAILING REPRO: `&'static str` raw-string JS helper (hand-patched in windjammer-ui today).
 
 #[path = "common/test_utils.rs"]

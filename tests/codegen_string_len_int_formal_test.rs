@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! REGRESSION (LedgerKit mcp_protocol.wj — E0308):
+//! REGRESSION (dogfood):
 //!
 //! `string.len()` is codegen'd as `usize`, but helpers taking WJ `int` expect `i64`.
 //! `int_to_dec(raw.len())` → expected `i64`, found `usize`.

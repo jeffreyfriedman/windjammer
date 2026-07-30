@@ -14,7 +14,7 @@
 //!
 //! Delegating Copy params to `infer_parameter_ownership` must not default them to
 //! Borrowed — that generates `&i64` / `&AppDeps` and breaks comparisons, unary ops,
-//! and call sites that pass Copy values by value (financial-management-platform).
+//! and call sites that pass Copy values by value (downstream application).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

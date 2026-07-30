@@ -485,7 +485,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         );
                     }
                     // Owned callee formals (codegen refresh): strip post-IR `&` / `&mut`
-                    // that stale MutBorrowed stubs re-applied (LedgerKit create_export_job).
+                    // that stale MutBorrowed stubs re-applied (dogfood).
                     if let Some(sig) = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                         signature.clone(),
                         gen.signature_registry.get_signature(func_name).cloned(),
@@ -874,7 +874,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         );
                     }
                     // Final owned-contract peel after late mut-arg re-application.
-                    // Never peel confirmed `&str` / shared-ref formals (LedgerKit opt_or).
+                    // Never peel confirmed `&str` / shared-ref formals (dogfood).
                     if let Some(sig) = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                         post_ir_borrow_sig.clone(),
                         signature.clone(),
@@ -1041,9 +1041,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     // Prefer *any* candidate that confirms owned (defining-module refresh), not
                     // merely the first `emitted_rust_ref_params` with a text `&str` slot —
                     // stale importer stubs can win `pick_codegen_refreshed` via unrelated `true`
-                    // flags while param 0 still carries MutableReference (LedgerKit AppDeps).
+                    // flags while param 0 still carries MutableReference (dogfood).
                     // But never peel when *any* candidate confirms a shared-ref formal for this
-                    // slot (LedgerKit `opt_or(..., &_temp)` / `&str` formals).
+                    // slot (dogfood)` / `&str` formals).
                     {
                         let simple = func_name.rsplit("::").next().unwrap_or(func_name);
                         let owned_candidates = [

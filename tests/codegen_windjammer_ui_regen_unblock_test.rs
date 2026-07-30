@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Regen-unblock contract for windjammer-ui (LedgerKit D5 / TECH_DEBT).
+//! Regen-unblock contract for windjammer-ui (dogfood).
 //!
 //! Hand mirrors + `SKIP_WJ_REGEN=1` exist because regenerated components historically
 //! dropped `*_runtime_js`, required forbidden `.clone()` (W0005), or failed multipass
@@ -21,7 +21,7 @@
 //! - PASS: simple owned `String + String` chains
 //! - PASS: library compose WriteCheckForm→CurrencyInput + cargo-check
 //! - FAIL: CurrencyInput-style long HTML concat (`label_html` / `extra` miss `&`
-//!   in `a + b + c…` chains) — blocks drop-in regen of render-heavy components
+//! in `a + b + c…` chains) — blocks drop-in regen of render-heavy components
 //!
 //! When all tests here are green, selective regen of AuthFetch / WriteCheckForm /
 //! CurrencyInput can replace hand mirrors; full-tree regen still needs TECH_DEBT #1–#7.

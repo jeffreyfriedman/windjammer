@@ -101,7 +101,7 @@ impl<'ast> CodeGenerator<'ast> {
                     analyzed.inferred_ownership.get(&param.name),
                     Some(OwnershipMode::Borrowed)
                 ) || analyzed.str_ref_optimizable_params.contains(&param.name);
-                
+
                 let field_proj_readonly = self.param_only_used_via_field_or_index_projection(
                     func.body.as_slice(),
                     &param.name,
@@ -1653,7 +1653,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         // Analyzer may leave `formal_type` as
                                         // `MutableReference(T)` while WJ source is bare `T`.
                                         // Prefer the bare AST type so we emit `mut T` /
-                                        // `T`, not `&mut T` (LedgerKit create→post AppDeps).
+                                        // `T`, not `&mut T` (dogfood).
                                         let emit_ty = if matches!(
                                             formal_type,
                                             Type::Reference(_) | Type::MutableReference(_)

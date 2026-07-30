@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R1.1): BusinessWorkspace bank slot must codegen.
+//! FAILING REPRO (dogfood): BusinessWorkspace bank slot must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

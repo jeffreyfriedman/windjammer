@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit F1): ShellNav with active link must codegen.
+//! FAILING REPRO (dogfood): ShellNav with active link must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

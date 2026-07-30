@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit hybrid shell): ReactiveApp.mount_target("#main")
+//! FAILING REPRO (dogfood): ReactiveApp.mount_target("#main")
 //! must chain and preserve the selector so WASM remounts do not wipe chrome.
 
 #[path = "common/test_utils.rs"]

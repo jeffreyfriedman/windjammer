@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit routes → create_export_job — E0308 WJ0003):
+//! FAILING REPRO (dogfood):
 //!
 //! Callee mutates owned `deps: AppDeps` fields (analyzer MutBorrowed) but emits
 //! `mut deps: AppDeps` (owned). Multipass call sites that reuse `deps` must pass

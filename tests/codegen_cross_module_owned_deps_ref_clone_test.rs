@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit routes.wj → composition — E0308):
+//! FAILING REPRO (dogfood):
 //!
 //! Cross-module: composition keeps `deps: AppDeps` owned, but routes multipass
 //! emits `create_export_job(&deps.clone(), …)` → expected AppDeps, found &AppDeps.
@@ -102,6 +102,6 @@ fn main() {
     assert!(
         !routes.contains("create_export_job(&deps.clone()")
             && !routes.contains("create_export_job(&deps,"),
-        "routes must pass owned deps.clone(), not &deps.clone() (LedgerKit routes). Got:\n{routes}"
+        "routes must pass owned deps.clone(), not &deps.clone() (dogfood). Got:\n{routes}"
     );
 }

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit 1.5.3): bool field accesses must not be auto-borrowed
+//! FAILING REPRO (dogfood): bool field accesses must not be auto-borrowed
 //! into `bool` helper parameters (`&bool` vs `bool`).
 //! Workaround in product code: bind `let balanced = summary.balanced` then pass `balanced`.
 

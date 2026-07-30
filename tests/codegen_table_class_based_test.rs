@@ -11,7 +11,7 @@
 ))]
 
 //! FAILING REPRO (dogfood): Table render must use themeable classes, not
-//! hardcoded `padding: 12px` inline styles that fight LedgerKit density tokens.
+//! hardcoded `padding: 12px` inline styles that fight density tokens.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

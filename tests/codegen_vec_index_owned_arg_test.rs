@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit row helpers — E0507 / E0308):
+//! FAILING REPRO (dogfood):
 //!
 //! `row_string(rows[0], …)` where the formal is owned `Row` must either clone
 //! the indexed element (`rows[0].clone()`) or consistently take `&Row` — not

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit dogfood): DataTable.scrollable(true) must compile and
+//! FAILING REPRO (dogfood): DataTable.scrollable(true) must compile and
 //! emit `lk-table-scroll` so sticky/zebra density CSS can wrap finance tables.
 
 #[path = "common/test_utils.rs"]

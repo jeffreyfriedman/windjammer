@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (windjammer-ui StatusChip → Badge): exact LedgerKit dogfood pattern.
+//! FAILING REPRO (windjammer-ui StatusChip → Badge): exact dogfood pattern.
 //!
 //! Hand patch symptom: generated StatusChip did `Badge::new(&status)` (E0308 expected
 //! String, found &String) or reused owned `status` after `variant_for(status)`.

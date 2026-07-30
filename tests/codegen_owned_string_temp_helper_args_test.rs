@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit tags-on-write-check): `x + ""` temps must not be
+//! FAILING REPRO (dogfood): `x + ""` temps must not be
 //! auto-borrowed into owned `string` helper parameters when the call is nested
 //! in `Vec::push` (`&String` vs `String`).
 //! Workaround in product code: push struct literals instead of helper results.

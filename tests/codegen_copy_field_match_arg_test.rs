@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit routes.wj auth gate):
+//! FAILING REPRO (dogfood):
 //!
 //! `Err(failure) => Err(json_cors_error(failure.status, failure.message + ""))`
 //! was emitting `json_cors_error(*failure.status, …)` → rustc E0614

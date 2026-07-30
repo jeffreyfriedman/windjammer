@@ -434,7 +434,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
                         // Body-converged MutBorrowed must not demote forwarders to `&mut T`
-                        // when the callee emits owned `mut deps: AppDeps` (LedgerKit journal).
+                        // when the callee emits owned `mut deps: AppDeps` (dogfood).
                         if !self.param_passes_to_wj_owned_sibling_call(
                             func.body.as_slice(),
                             &param.name,
@@ -562,9 +562,9 @@ impl<'ast> CodeGenerator<'ast> {
         // TODO: Re-enable with smarter conversion at return sites
         self.smallvec_optimizations.clear();
         // for opt in &analyzed.smallvec_optimizations {
-        //     self.smallvec_optimizations
-        //         .insert(opt.variable.clone(), opt.clone());
-        //     self.needs_smallvec_import = true; // Mark that we need the smallvec crate
+        // self.smallvec_optimizations
+        // .insert(opt.variable.clone(), opt.clone());
+        // self.needs_smallvec_import = true; // Mark that we need the smallvec crate
         // }
 
         // PHASE 9 OPTIMIZATION: Load Cow optimizations for this function
@@ -850,7 +850,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Exceptions:
             // - `Vec` params used only for readonly `.len()` / `[i]` (indexing over-owns)
             // - Custom/enum params used only via field projection (`value.data.len()`) so
-            //   asymmetric facades converge `&Value` before callers emit (apply_patch_put).
+            // asymmetric facades converge `&Value` before callers emit (apply_patch_put).
             // - WJ `string` params only discarded (`let _ = path`) → `&str`.
             if matches!(
                 analyzed.inferred_ownership.get(&param.name),
@@ -1323,7 +1323,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// MutBorrowed solely via nested field methods (`deps.port.append(...)`), not via
-    /// passing the whole param to a `&mut T` formal. Emit owned `mut T` (LedgerKit AppDeps).
+    /// passing the whole param to a `&mut T` formal. Emit owned `mut T` (dogfood).
     pub(in crate::codegen::rust) fn param_is_owned_mut_field_method_facade(
         &self,
         body: &[&'ast Statement<'ast>],

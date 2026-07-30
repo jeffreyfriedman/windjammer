@@ -10,14 +10,14 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit ports vs adapters — E0053):
+//! FAILING REPRO (dogfood):
 //!
 //! Trait methods declare owned `string` / custom structs, but impl methods are
 //! sometimes codegen'd as `&String` / `&T` while the trait stays owned. Rustc:
-//!   expected signature `fn(..., String, ...)`
-//!   found signature    `fn(..., &String, ...)`
+//! expected signature `fn(..., String, ...)`
+//! found signature `fn(..., &String, ...)`
 //!
-//! Seen on LedgerKit: `TokenIssuer::issue_scoped_token`, `ToolGatewayPort::log_invocation`,
+//! Seen on: `TokenIssuer::issue_scoped_token`, `ToolGatewayPort::log_invocation`,
 //! `JournalEntryWriter::post`, `DomainEventWriter::append`.
 
 #[path = "common/test_utils.rs"]

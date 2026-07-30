@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit tool_invoke.wj — E0308):
+//! FAILING REPRO (dogfood):
 //!
 //! Handlers demote `tenant_slug: string` → `tenant_slug: &str`, while call sites
 //! build `let _temp0 = format!(…); fetch_*(deps.clone(), _temp0, …)` and pass

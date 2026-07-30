@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Multipass TDD for LedgerKit-class bugs:
+//! Multipass TDD for downstream-app bugs:
 //! - Bug A: `string` formals demoted to `&str` must auto-borrow owned String / format temps at call sites.
 //! - Bug B: forwarding to owned Custom callee must emit owned formal, not `&mut`.
 
@@ -68,7 +68,7 @@ pub fn with_msg(msg: string) -> ServerResponse {
     let routes = map.get("routes.rs").expect("routes.rs");
 
     // Forwarding to owned `error_json(message)` should keep owned String; otherwise
-    // demote to &str and borrow at every call site (LedgerKit).
+    // demote to &str and borrow at every call site (dogfood).
     let owned_formal = http.contains("message: String");
     let str_formal = http.contains("message: &str") || http.contains("message: & String");
     assert!(
@@ -226,7 +226,7 @@ pub struct Writer {
 }
 
 impl Writer {
-    // LedgerKit ports: &self methods on fields of AppDeps — callee stays owned AppDeps.
+    // ports: &self methods on fields of AppDeps — callee stays owned AppDeps.
     fn append(self, line: string) -> string {
         self.tag + ":" + line
     }

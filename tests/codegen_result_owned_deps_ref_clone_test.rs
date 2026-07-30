@@ -10,10 +10,10 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit routes Result/? → `&deps.clone()` — E0308):
+//! FAILING REPRO (dogfood)` — E0308):
 //!
 //! Platform emits:
-//!   `match { let _temp0 = format!(…); create_export_job(&deps.clone(), &_temp0, …) }`
+//! `match { let _temp0 = format!(…); create_export_job(&deps.clone(), &_temp0, …) }`
 //! while composition keeps `deps: AppDeps` owned.
 //!
 //! The `?` / Result path wraps the call in `match { … }` on routes (~8 of ~17
@@ -110,6 +110,6 @@ fn main() {
         !routes.contains("&deps.clone()")
             && !routes.contains("create_export_job(&deps")
             && !routes.contains("post_journal_entry(&deps"),
-        "Result/? call sites must not emit &deps.clone() (LedgerKit routes). Got:\n{routes}"
+        "Result/? call sites must not emit &deps.clone() (dogfood). Got:\n{routes}"
     );
 }
