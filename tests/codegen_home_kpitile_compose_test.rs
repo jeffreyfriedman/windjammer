@@ -10,14 +10,14 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (DownstreamApp dogfood): compose KpiTile/KpiGrid in app Windjammer
+//! FAILING REPRO (dogfood): compose KpiTile/KpiGrid in app Windjammer
 //! the same way downstream-screens Home does.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn downstreamapp_home_should_compose_kpitile_grid() {
+fn home_should_compose_kpitile_grid() {
     let source = r##"
 pub struct KpiTile { label: string, value_html: string }
 pub struct KpiGrid { tiles: Vec<string> }
