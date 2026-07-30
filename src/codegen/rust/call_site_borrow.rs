@@ -388,23 +388,34 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
         }
         plain_string_formal_passes_owned_at_call_site(sig, pidx)
     };
-    if check(call_sig, param_idx) {
-        // Still allow global codegen refresh to veto the skip.
-        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        let global_emits_ref = global.is_some_and(|g| {
+    // Any codegen-confirmed shared-ref formal must keep the borrow prefix.
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    let any_emits_shared_ref = |sig: &FunctionSignature| {
+        let pidx = sig.arg_param_index(arg_index);
+        callee_emits_shared_rust_ref_param(sig, pidx)
+    };
+    if any_emits_shared_ref(call_sig)
+        || global.is_some_and(|g| {
             g.get_signature(callee_name)
                 .or_else(|| g.get_signature(simple))
-                .is_some_and(|rs| {
-                    let pidx = rs.arg_param_index(arg_index);
-                    callee_emits_shared_rust_ref_param(rs, pidx)
-                })
-        });
-        if global_emits_ref {
-            return false;
-        }
+                .is_some_and(any_emits_shared_ref)
+        })
+        || registry
+            .get_signature(callee_name)
+            .or_else(|| registry.get_signature(simple))
+            .is_some_and(any_emits_shared_ref)
+    {
+        return false;
+    }
+    if check(call_sig, param_idx) {
         return true;
     }
-    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    // call_sig inconclusive (no emission flags): only then consult other registries for
+    // owned-string skip. Never let a stale all-false local refresh override a Borrowed
+    // call_sig when no registry confirmed shared-ref above.
+    if call_sig.emitted_rust_ref_params.is_some() {
+        return false;
+    }
     registry
         .get_signature(callee_name)
         .or_else(|| registry.get_signature(simple))
@@ -481,6 +492,19 @@ pub fn expression_supports_shared_borrow_at_call_site(
         Expression::Call { .. } | Expression::MethodCall { .. }
     ) && !expression_is_copy_literal(arg_expr)
     {
+        return true;
+    }
+    // String concat / format temps: AST may still be Binary while emit text is
+    // `_tempN` or `format!(...)` — both produce owned String borrowable as `&str`.
+    if arg_str.starts_with("_temp")
+        && arg_str
+            .chars()
+            .skip(5)
+            .all(|c| c.is_ascii_digit())
+    {
+        return true;
+    }
+    if arg_str.contains("format!(") || matches!(arg_expr, Expression::Binary { .. }) {
         return true;
     }
     // Owned String producers (`i32.to_string()`, etc.) passed to `&str` formals.
