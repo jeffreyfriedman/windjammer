@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R2.2): WriteCheckForm expense account select must codegen.
+//! FAILING REPRO (dogfood): WriteCheckForm expense account select must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

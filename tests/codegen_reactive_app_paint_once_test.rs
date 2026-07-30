@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit Home pilot): ReactiveApp.mount_target("#main").paint_once()
+//! FAILING REPRO (dogfood): ReactiveApp.mount_target("#main").paint_once()
 //! must codegen so hybrid shell can remount Home without stacking RAF loops.
 
 #[path = "common/test_utils.rs"]

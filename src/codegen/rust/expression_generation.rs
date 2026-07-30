@@ -528,7 +528,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Only identifiers need an explicit `*`. Field access of a Copy field through `&Struct`
     /// already yields the Copy value in Rust (`failure.status` is `i64`, not `&i64`) — emitting
-    /// `*failure.status` causes E0614 (LedgerKit `json_cors_error(failure.status, …)`).
+    /// `*failure.status` causes E0614 (dogfood)`).
     pub(in crate::codegen::rust) fn peel_copy_ref_match_binding_for_value(
         &self,
         expr: &Expression<'ast>,

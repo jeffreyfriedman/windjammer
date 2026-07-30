@@ -183,8 +183,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         } else {
             (false, coerced.as_str())
         };
-        // Owned / force-owned formals: strip both `&T` and `&mut T` (LedgerKit AppDeps —
-        // call sites must not keep `&mut deps` / `&deps.clone()` into `mut deps: AppDeps`).
+        // Owned / force-owned formals: strip both `&T` and `&mut T` (dogfood)` into `mut deps: AppDeps`).
         if is_ref {
             let inner = inner
                 .strip_prefix('(')

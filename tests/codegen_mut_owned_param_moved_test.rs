@@ -10,19 +10,19 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit E3.9.3 MCP reverse / tool_invoke):
+//! FAILING REPRO (dogfood):
 //!
 //! Owned composition deps params (`deps: AppDeps`) are sometimes codegen'd as
 //! `deps: &mut AppDeps` when the body:
-//!   - calls a consuming field method after a temporary / `.len()` check, or
-//!   - is declared `mut deps: AppDeps` and later moved into an owned-param helper.
+//! - calls a consuming field method after a temporary / `.len()` check, or
+//! - is declared `mut deps: AppDeps` and later moved into an owned-param helper.
 //!
-//! Observed in LedgerKit:
-//!   - `void_journal_entry(deps: AppDeps)` stays owned
-//!   - `reverse_journal_entry(deps: AppDeps)` becomes `&mut AppDeps`
-//!   - `post_journal_entry(deps: AppDeps)` becomes `&mut AppDeps`
-//!   - `invoke_mcp_tool(mut deps: AppDeps)` became `&mut AppDeps`, then broke
-//!     call sites that still pass owned `AppDeps` and helpers that still take owned.
+//! Observed in:
+//! - `void_journal_entry(deps: AppDeps)` stays owned
+//! - `reverse_journal_entry(deps: AppDeps)` becomes `&mut AppDeps`
+//! - `post_journal_entry(deps: AppDeps)` becomes `&mut AppDeps`
+//! - `invoke_mcp_tool(mut deps: AppDeps)` became `&mut AppDeps`, then broke
+//! call sites that still pass owned `AppDeps` and helpers that still take owned.
 //!
 //! Platform workaround: drop `mut` on invoke and rebind locals before by-value calls.
 //! Expected (green): preserve owned `AppDeps` in the signature (emit `mut deps: AppDeps`

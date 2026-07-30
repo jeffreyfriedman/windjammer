@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R1.2): AccountRail with balances must codegen.
+//! FAILING REPRO (dogfood): AccountRail with balances must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

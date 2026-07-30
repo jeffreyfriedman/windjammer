@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R0+): CheckbookRegister row compose must codegen.
+//! FAILING REPRO (dogfood): CheckbookRegister row compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

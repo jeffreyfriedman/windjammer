@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R1.3): WriteCheckForm compose must codegen.
+//! FAILING REPRO (dogfood): WriteCheckForm compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

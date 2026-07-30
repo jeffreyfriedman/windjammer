@@ -126,7 +126,7 @@ pub(crate) fn has_ownership_collision_for_call(
 /// 1. **Exact key** — `registry.get_signature(func_name)`
 /// 2. **Receiver-qualified** — `"{receiver_type}::{method}"` (and base-type variant)
 /// 3. **Identifier-as-qualifier** — for `Foo::bar()` parsed as `Call(FieldAccess)`,
-///    try `"{identifier}::{method}"` when identifier differs from receiver_type
+/// try `"{identifier}::{method}"` when identifier differs from receiver_type
 /// 4. **Module alias** — resolve alias, retry with resolved qualifier
 /// 5. **Progressive qualification** — for `a::b::c`, try `b::c`, then `c` qualified
 /// 6. **Arg-count-validated suffix** — `find_signature_by_name_and_arg_count`
@@ -723,7 +723,7 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
 
     // Emitted Rust formal is owned (`deps: AppDeps` / `mut deps: AppDeps`) — call sites
     // must pass by value even when analyzer still marks MutBorrowed (Copy aggregates after
-    // `.len()` + field method; LedgerKit reverse_journal_entry / codegen_mut_owned_param_moved).
+    // `.len()` + field method; reverse_journal_entry / codegen_mut_owned_param_moved).
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         return OwnershipMode::Owned;
     }
@@ -2082,7 +2082,7 @@ pub fn parse_field(line: string) -> string {
 
         let source = r#"
     use std::collections::HashMap
-    
+
     pub fn test(mut map: HashMap<string, int>, key: string) -> bool {
         map.insert(key, 42);
         return map.contains_key("test")

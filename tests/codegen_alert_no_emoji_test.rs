@@ -12,7 +12,7 @@
 
 //! FAILING REPRO (product/visual): Alert must not emit emoji marks in HTML.
 //!
-//! LedgerKit / calm fintech UI rejects emoji in chrome. Codegen historically emitted
+//! / calm fintech UI rejects emoji in chrome. Codegen historically emitted
 //! ❌⚠️ℹ️✅ in Alert::render. Desired: text marks ("Error", "Warning", …).
 
 #[path = "common/test_utils.rs"]

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R2): AuthFetch path must accept account query for register scope.
+//! FAILING REPRO (dogfood): AuthFetch path must accept account query for register scope.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

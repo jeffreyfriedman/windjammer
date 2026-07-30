@@ -242,7 +242,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     // Exceptions:
     // - `emitted_rust_ref_params == Some(true)` → shared-ref formal was actually emitted
     // - analyzer Borrowed + `Reference(Vec)` with no owned-emission contract → trust borrow
-    //   (cross-crate readonly `upload_svo(svo: Vec)` → `&Vec` at call sites)
+    // (cross-crate readonly `upload_svo(svo: Vec)` → `&Vec` at call sites)
     if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
         if is_bare_vec_type(bare) || is_bare_map_type(bare) {
             let ref_emission = sig
@@ -1070,7 +1070,7 @@ mod tests {
 
     #[test]
     fn mut_borrowed_bare_custom_with_owned_emission_stays_owned() {
-        // LedgerKit: create_export_job mutates deps fields → MutBorrowed analysis, but
+        // create_export_job mutates deps fields → MutBorrowed analysis, but
         // codegen emits `mut deps: AppDeps` (owned). Call sites must pass by value.
         let sig = FunctionSignature {
             name: "create_export_job".into(),

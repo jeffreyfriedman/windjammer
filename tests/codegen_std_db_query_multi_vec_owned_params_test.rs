@@ -10,12 +10,12 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit postgres_* adapters — E0308, ~22 errors):
+//! FAILING REPRO (dogfood):
 //!
 //! Platform pattern:
-//!   `conn.query(insert_sql(), vec![slug + "", seq + "", event + "", ...])`
+//! `conn.query(insert_sql(), vec![slug + "", seq + "", event + "", ...])`
 //! Codegen emits:
-//!   `conn.query(&insert_sql(), &vec![format!(...), format!(...), ...])`
+//! `conn.query(&insert_sql(), &vec![format!(...), format!(...), ...])`
 //! while `windjammer_runtime::db::Connection::query` expects `params: Vec<String>`.
 //!
 //! Simple `vec![tenant_slug]` often stays owned; multi-element `string + ""` temps
@@ -73,6 +73,6 @@ fn main() {
 
     assert!(
         !rs.contains("&vec!["),
-        "multi-element query params must stay owned Vec (LedgerKit postgres outbox). Got:\n{rs}"
+        "multi-element query params must stay owned Vec (dogfood). Got:\n{rs}"
     );
 }

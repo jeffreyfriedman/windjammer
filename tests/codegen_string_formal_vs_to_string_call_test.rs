@@ -10,10 +10,10 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit routes.wj / http_json.wj — E0308):
+//! FAILING REPRO (dogfood):
 //!
 //! WJ declares `json_cors_error(status: int, message: string)` but codegen
-//! demotes the formal to `message: &str` while LedgerKit-style call sites
+//! demotes the formal to `message: &str` while downstream-style call sites
 //! (`"…".to_string()` / `"…" + ""`) still pass `String` → rustc E0308.
 //!
 //! Formal and call site must agree on owned `String` (matching WJ `string`).

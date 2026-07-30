@@ -802,7 +802,7 @@ impl<'ast> CodeGenerator<'ast> {
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
         // `rows[i]` cannot move a non-Copy element into an owned formal (E0507).
-        // Reuse-based auto-clone misses single-use index sites (LedgerKit row helpers).
+        // Reuse-based auto-clone misses single-use index sites (dogfood).
         if matches!(arg_expr, Expression::Index { .. })
             && matches!(expected.ownership, OwnedType::Owned)
             && !prepared_arg.ends_with(".clone()")
@@ -1282,8 +1282,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Final owned-contract enforcement after registry re-borrow (LedgerKit AppDeps:
-        // `create_export_job(&deps.clone(), …)` while formal emits owned `mut deps: AppDeps`).
+        // Final owned-contract enforcement after registry re-borrow (dogfood), …)` while formal emits owned `mut deps: AppDeps`).
         // Never strip when this slot is a confirmed shared-ref formal (`&str` / `&T`).
         if !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
             && (crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit R2.6): CheckbookRegister Amount+Balance columns must codegen.
+//! FAILING REPRO (dogfood): CheckbookRegister Amount+Balance columns must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

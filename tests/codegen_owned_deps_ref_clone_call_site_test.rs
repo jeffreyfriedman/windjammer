@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! REGRESSION (LedgerKit routes.wj multipass — E0308):
+//! REGRESSION (dogfood):
 //!
 //! When owned `deps: AppDeps` is reused across branches/calls in one function,
 //! codegen inserts `deps.clone()` but wraps it as `&deps.clone()` while the
@@ -53,6 +53,6 @@ fn main() {
     assert!(
         !generated.contains("create_export_job(&deps.clone()")
             && !generated.contains("create_export_job(&deps,"),
-        "reused owned deps must clone by value, not &deps.clone() (LedgerKit routes). Got:\n{generated}"
+        "reused owned deps must clone by value, not &deps.clone() (dogfood). Got:\n{generated}"
     );
 }

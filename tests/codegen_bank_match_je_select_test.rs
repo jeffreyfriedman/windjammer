@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! REGRESSION (LedgerKit R2.4): BankMatchRow JE <select> compose must codegen.
+//! REGRESSION (dogfood): BankMatchRow JE <select> compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

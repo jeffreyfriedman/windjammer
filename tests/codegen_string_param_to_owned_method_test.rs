@@ -10,14 +10,14 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit dogfood): `string` fn params must codegen as owned
+//! FAILING REPRO (dogfood): `string` fn params must codegen as owned
 //! `String` (or auto `.to_string()` at call sites) when passed into methods that
 //! take `String` — not bare `&str`.
 //!
 //! Seen in finance-screens Home:
-//!   pub fn render_kpi_grid(cash_html: string, ...) {
-//!     KpiTile::new(...).value_html(cash_html)  // value_html expects String
-//!   }
+//! pub fn render_kpi_grid(cash_html: string, ...) {
+//! KpiTile::new(...).value_html(cash_html) // value_html expects String
+//! }
 //! Codegen emitted `cash_html: &str` + `.value_html(cash_html)` → E0308.
 
 #[path = "common/test_utils.rs"]

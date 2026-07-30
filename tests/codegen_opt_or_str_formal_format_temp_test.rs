@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit mcp_args_decode.wj under multipass — E0308):
+//! FAILING REPRO (dogfood):
 //!
 //! Platform emits `opt_or(payload.as_of, _temp0)` while formal is `fallback: &str`.
 //! Single-file often borrows (`&_temp0`); full multipass still drops the `&`
@@ -124,7 +124,7 @@ pub fn defaults() -> McpReadArgs {
         }
         assert!(
             !unborrowed,
-            "multipass: &str fallback requires &_temp (LedgerKit mcp_args_decode). Got:\n{decode}"
+            "multipass: &str fallback requires &_temp (dogfood). Got:\n{decode}"
         );
     } else {
         assert!(

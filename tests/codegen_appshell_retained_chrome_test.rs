@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit ADR-001): AppShell retained chrome compose must codegen.
+//! FAILING REPRO (dogfood): AppShell retained chrome compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -41,7 +41,7 @@ impl AppShell {
 }
 
 fn main() {
-    println!("{}", AppShell::new().brand("LedgerKit".to_string()).main_html("<p>x</p>".to_string()).render())
+    println!("{}", AppShell::new().brand("DemoApp".to_string()).main_html("<p>x</p>".to_string()).render())
 }
 "#;
 

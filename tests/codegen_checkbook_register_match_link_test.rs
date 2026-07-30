@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO / REGRESSION (LedgerKit R2.5): unmatched CheckbookRow emits register→match link.
+//! FAILING REPRO / REGRESSION (dogfood): unmatched CheckbookRow emits register→match link.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

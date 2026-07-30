@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit Home dogfood): KpiTile.value_html + KpiGrid.tile
+//! FAILING REPRO (dogfood): KpiTile.value_html + KpiGrid.tile
 //! chaining must codegen without &String / ownership errors and emit wj-kpi-* classes.
 
 #[path = "common/test_utils.rs"]
