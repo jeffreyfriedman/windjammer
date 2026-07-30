@@ -1364,17 +1364,20 @@ impl<'ast> CodeGenerator<'ast> {
                 usage
             }
             Statement::Assignment { target, value, .. } => {
-                // Direct / nested field writes on the param are handled by field_mutated
-                // prefer_owned_mut; treat bare assignment roots as disallowed here only when
-                // the whole param is the target.
+                // Direct / nested field *writes* on the param require `&mut T` demotion.
+                // Only `deps.port.method(...)` MethodCall receivers are owned-mut facades.
                 let target_usage = match target {
                     Expression::Identifier { name, .. } if name == param_name => {
                         OwnedMutFacadeUsage::Disallowed
                     }
-                    Expression::FieldAccess { object, .. }
-                        if Self::expr_is_param_field_chain(object, param_name) =>
+                    Expression::FieldAccess { object, .. } | Expression::Index { object, .. }
+                        if Self::expr_is_param_field_chain(object, param_name)
+                            || matches!(
+                                **object,
+                                Expression::Identifier { ref name, .. } if name == param_name
+                            ) =>
                     {
-                        OwnedMutFacadeUsage::FieldMethodReceiver
+                        OwnedMutFacadeUsage::Disallowed
                     }
                     _ => OwnedMutFacadeUsage::None,
                 };
@@ -1440,9 +1443,21 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } if name == param_name => {
                 OwnedMutFacadeUsage::Disallowed
             }
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 let recv = if Self::expr_is_param_field_chain(object, param_name) {
-                    OwnedMutFacadeUsage::FieldMethodReceiver
+                    // `&self` methods on nested ports (`deps.writer.append`) keep an
+                    // owned AppDeps bag. `&mut self` field methods (`outer.inner.set`,
+                    // `grid.data.push`) require `&mut` on the parent.
+                    if self.nested_field_method_uses_shared_self(object, method, arguments.len()) {
+                        OwnedMutFacadeUsage::FieldMethodReceiver
+                    } else {
+                        OwnedMutFacadeUsage::Disallowed
+                    }
                 } else if matches!(
                     **object,
                     Expression::Identifier { ref name, .. } if name == param_name
@@ -1464,16 +1479,9 @@ impl<'ast> CodeGenerator<'ast> {
                 usage
             }
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
-                if Self::expr_is_param_field_chain(object, param_name)
-                    || matches!(
-                        **object,
-                        Expression::Identifier { ref name, .. } if name == param_name
-                    )
-                {
-                    OwnedMutFacadeUsage::FieldMethodReceiver
-                } else {
-                    self.expression_owned_mut_facade_usage(object, param_name)
-                }
+                // Field/index *reads* are not owned-mut facades — only MethodCall
+                // receivers on `param.field` count (handled above).
+                self.expression_owned_mut_facade_usage(object, param_name)
             }
             Expression::Binary { left, right, .. } => self
                 .expression_owned_mut_facade_usage(left, param_name)
@@ -1501,11 +1509,73 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when `object.method` resolves to a shared-`self` (`&self`) receiver.
+    ///
+    /// Used to distinguish AppDeps port calls (`deps.writer.append` → `&self`) from
+    /// mutating nested data (`outer.inner.set` / `grid.data.push` → `&mut self`).
+    fn nested_field_method_uses_shared_self(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        _arg_count: usize,
+    ) -> bool {
+        let receiver_ty = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object));
+        let Some(rt) = receiver_ty else {
+            // No receiver type yet: keep owned-bag preference during early multipass.
+            return true;
+        };
+        let qualified = format!("{rt}::{method}");
+        let leaf = rt.rsplit("::").next().unwrap_or(rt.as_str());
+        let leaf_qualified = format!("{leaf}::{method}");
+        let base = rt.split('<').next().unwrap_or(rt.as_str());
+        let base_qualified = format!("{base}::{method}");
+        for key in [&qualified, &leaf_qualified, &base_qualified] {
+            if let Some(sig) = self
+                .get_signature_with_global(key)
+                .or_else(|| self.signature_registry.get_signature(key))
+            {
+                if sig.has_self_receiver {
+                    return !matches!(
+                        sig.param_ownership.first(),
+                        Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                    );
+                }
+                return true;
+            }
+        }
+        // Stdlib method table (Vec::push, etc.) — `to_function_signature` always inserts
+        // MutBorrowed for self, which is correct for mutating stdlib methods.
+        if let Some(ms) = self.lookup_method_signature(&rt, method) {
+            if ms.has_self_receiver {
+                let sig = ms.to_function_signature();
+                return !matches!(
+                    sig.param_ownership.first(),
+                    Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                );
+            }
+        }
+        true
+    }
+
+    /// True for `param.field` / `param.field.nested` / `param[i]` — not bare `param`.
+    /// Bare identifiers must not count as field chains (otherwise `items.push` is treated
+    /// as an AppDeps-style owned-mut facade and demotes `&mut Vec` → `mut Vec`).
     fn expr_is_param_field_chain(expr: &Expression<'ast>, param_name: &str) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::expr_rooted_at_param(object, param_name)
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_rooted_at_param(expr: &Expression<'ast>, param_name: &str) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
-                Self::expr_is_param_field_chain(object, param_name)
+                Self::expr_rooted_at_param(object, param_name)
             }
             _ => false,
         }
@@ -3504,6 +3574,18 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             }
             Expression::Call { arguments, function, .. } => {
+                let call_arg_count = arguments.len();
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        if let Some(sig) =
+                            self.resolve_free_call_signature(function, Some(call_arg_count))
+                        {
+                            if self.signature_param_expects_mut_borrow(&sig, i) {
+                                return true;
+                            }
+                        }
+                    }
+                }
                 self.expression_passes_param_to_mut_borrowing_callee(function, param_name, func)
                     || arguments.iter().any(|(_, arg)| {
                         self.expression_passes_param_to_mut_borrowing_callee(arg, param_name, func)
@@ -4497,16 +4579,16 @@ impl<'ast> CodeGenerator<'ast> {
         }) {
             return false;
         }
-        // Codegen-confirmed owned formal (`Some(false)`).
+        // Codegen recorded an emission flag. `emitted_rust_ref_params[i] == false` means
+        // "not a shared `&T`" — that includes both owned `mut T` and true `&mut T`.
+        // `emitted_owned_arg_contract` distinguishes those via `param_types` /
+        // MutableReference (Cache::clear(grid: &mut VoxelGrid)).
         if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
             flags.get(pidx).copied() == Some(false)
         }) {
-            return sig
-                .formal_param_type(pidx)
-                .is_some_and(|t| {
-                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        && !type_analysis::is_copy_type(t)
-                });
+            return crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, pidx,
+            );
         }
         // No codegen refresh yet: do NOT use `emitted_owned_arg_contract`'s bare-Custom
         // heuristic (treats every `Key` as owned). Trust analyzer borrow / Reference wrap
@@ -7001,13 +7083,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(crate::analyzer::OwnershipMode::Owned)
             );
             let emitted_owned = callee_keeps_wj_owned
-                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-                || sig
-                    .emitted_rust_ref_params
-                    .as_ref()
-                    .and_then(|flags| flags.get(pidx))
-                    .copied()
-                    == Some(false);
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx);
             if forwarding || !emitted_owned {
                 all_emitted_owned = false;
             }
@@ -7220,6 +7296,11 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(|t| matches!(t, Type::MutableReference(_)))
         {
             return true;
+        }
+        // Owned `mut T` AppDeps formals also analyze as MutBorrowed — they are not
+        // `&mut T` call-site contracts.
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return false;
         }
         matches!(
             crate::codegen::rust::call_signature_resolution::effective_param_ownership(
