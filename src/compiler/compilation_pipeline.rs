@@ -307,14 +307,28 @@ pub fn build_project_ext(
                     }
                 })
                 .collect();
-            let local_keys: Vec<String> = crate_metadata
-                .functions
-                .keys()
-                .filter(|name| signature_targets_local_struct(name, &local_struct_names))
-                .cloned()
-                .collect();
+            // Prefer post-codegen signatures (have `emitted_rust_ref_params` after
+            // formal demotion) — mirrors library_multipass metadata export.
+            let post_codegen = &codegen.signature_registry;
+            let mut local_keys: Vec<String> = crate_metadata.functions.keys().cloned().collect();
+            if local_keys.is_empty() {
+                for (name, _) in post_codegen.all_signatures() {
+                    if let Some(struct_name) = struct_name_from_method_key(name) {
+                        if local_struct_names.contains(struct_name) {
+                            local_keys.push(name.clone());
+                        }
+                    } else if !name.contains("::") {
+                        local_keys.push(name.clone());
+                    }
+                }
+                local_keys.sort();
+                local_keys.dedup();
+            }
             for name in local_keys {
-                if let Some(sig) = registry.get_signature(&name) {
+                let sig = post_codegen
+                    .get_signature(&name)
+                    .or_else(|| registry.get_signature(&name));
+                if let Some(sig) = sig {
                     let (is_associated, parent_type) =
                         if let Some(struct_name) = struct_name_from_method_key(&name) {
                             (true, Some(struct_name.to_string()))
