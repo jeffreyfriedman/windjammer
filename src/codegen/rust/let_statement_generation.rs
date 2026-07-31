@@ -373,7 +373,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis.needs_clone_anywhere(name) && !value_str.ends_with(".clone()") {
+                        if analysis
+                            .needs_clone(name, self.current_statement_idx)
+                            .is_some()
+                            && !value_str.ends_with(".clone()")
+                        {
                             value_str = self.maybe_auto_clone(name, &value_str);
                             if !value_str.ends_with(".clone()") {
                                 value_str = format!("{}.clone()", value_str);
@@ -465,11 +469,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // E0507: `let x = self.field` through `&self`/`&mut self`:
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)
                 //   other non-Copy → .clone()
-                self.apply_self_field_move_fix(value, &mut value_str);
+                self.apply_self_field_move_fix(value, &mut value_str, var_name);
 
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis.needs_clone_anywhere(name) && !value_str.ends_with(".clone()") {
+                        if analysis
+                            .needs_clone(name, self.current_statement_idx)
+                            .is_some()
+                            && !value_str.ends_with(".clone()")
+                        {
                             value_str = self.maybe_auto_clone(name, &value_str);
                             if !value_str.ends_with(".clone()") {
                                 value_str = format!("{}.clone()", value_str);
@@ -633,11 +641,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // E0507: `let x = self.field` through `&self`/`&mut self`:
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)
                 //   other non-Copy → .clone()
-                self.apply_self_field_move_fix(value, &mut value_str);
+                self.apply_self_field_move_fix(value, &mut value_str, var_name);
 
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis.needs_clone_anywhere(name) && !value_str.ends_with(".clone()") {
+                        if analysis
+                            .needs_clone(name, self.current_statement_idx)
+                            .is_some()
+                            && !value_str.ends_with(".clone()")
+                        {
                             value_str = self.maybe_auto_clone(name, &value_str);
                             if !value_str.ends_with(".clone()") {
                                 value_str = format!("{}.clone()", value_str);

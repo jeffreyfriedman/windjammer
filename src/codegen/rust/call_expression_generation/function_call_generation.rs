@@ -902,6 +902,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     fn extract_format_like_arg(
         arg_str: &str,
+        arg_index: usize,
+        sig: Option<&crate::analyzer::FunctionSignature>,
         temp_decls: &mut String,
         temp_counter: &mut i32,
     ) -> Option<String> {
@@ -920,11 +922,12 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         let temp_name = format!("_temp{}", temp_counter);
         *temp_counter += 1;
         temp_decls.push_str(&format!("let {} = {}; ", temp_name, format_expr));
-        let pass_expr = if has_borrow_prefix {
-            format!("&{}", temp_name)
-        } else {
-            temp_name
-        };
+        let pass_expr = crate::codegen::rust::call_site_borrow::format_temp_arg_pass_expr(
+            sig,
+            arg_index,
+            &temp_name,
+            has_borrow_prefix,
+        );
         Some(if was_ffi {
             format!("windjammer_runtime::ffi::string_to_ffi({})", pass_expr)
         } else {
@@ -949,10 +952,15 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         let mut temp_counter = 0i32;
         let fixed_args: Vec<String> = args
             .iter()
-            .map(|arg_str| {
-                if let Some(fixed) =
-                    extract_format_like_arg(arg_str, &mut temp_decls, &mut temp_counter)
-                {
+            .enumerate()
+            .map(|(arg_idx, arg_str)| {
+                if let Some(fixed) = extract_format_like_arg(
+                    arg_str,
+                    arg_idx,
+                    signature.as_ref(),
+                    &mut temp_decls,
+                    &mut temp_counter,
+                ) {
                     fixed
                 } else {
                     arg_str.clone()

@@ -98,7 +98,7 @@ impl AutoCloneAnalysis {
         // Partial-move detection: if a field path like "s.item" is moved,
         // and the root variable "s" has later uses, the field access must
         // be cloned to avoid a partial move error (E0382).
-        analysis.detect_partial_moves(&usage_map);
+        analysis.detect_partial_moves(&usage_map, &func.body);
 
         analysis
     }
@@ -750,7 +750,11 @@ impl AutoCloneAnalysis {
     /// Detect partial moves: field accesses like `s.item` where `s` is used later.
     /// When `s.item` is moved (e.g., passed to a function taking ownership) and `s`
     /// itself is used afterwards, `s.item` must be cloned to avoid E0382.
-    fn detect_partial_moves(&mut self, usage_map: &HashMap<String, Vec<Usage>>) {
+    fn detect_partial_moves(
+        &mut self,
+        usage_map: &HashMap<String, Vec<Usage>>,
+        statements: &[&Statement],
+    ) {
         let field_paths: Vec<String> = usage_map
             .keys()
             .filter(|k| k.contains('.') && !k.contains('('))
@@ -788,6 +792,17 @@ impl AutoCloneAnalysis {
                 // reference (E0507) — clone even when `self` is not used again later.
                 // Example: `let lo = self.start.bytes; let hi = self.end.bytes` must
                 // clone both, not only the first field when `self` is reused.
+                // Exception: extract-assign writeback `let mut x = self.f; …; self.f = x`
+                // (WDB-042) — bare move, no clone.
+                if root == "self"
+                    && Self::self_field_has_extract_writeback(
+                        statements,
+                        path,
+                        field_move.statement_idx,
+                    )
+                {
+                    continue;
+                }
                 if root == "self" || root_used_later || field_used_later {
                     self.clone_sites.insert(
                         (path.clone(), field_move.statement_idx),
@@ -795,6 +810,112 @@ impl AutoCloneAnalysis {
                     );
                 }
             }
+        }
+    }
+
+    /// `let mut x = self.field; …; self.field = x` — extract then writeback.
+    fn self_field_has_extract_writeback(
+        statements: &[&Statement],
+        field_path: &str,
+        _extract_stmt_idx: usize,
+    ) -> bool {
+        Self::find_extract_writeback_in_stmts(statements, field_path)
+    }
+
+    fn find_extract_writeback_in_stmts(statements: &[&Statement], field_path: &str) -> bool {
+        for (i, stmt) in statements.iter().enumerate() {
+            if let Statement::Let {
+                pattern: Pattern::Identifier(binding),
+                value,
+                ..
+            } = stmt
+            {
+                if Self::expr_is_field_path(value, field_path) {
+                    for later in statements.iter().skip(i + 1) {
+                        if Self::stmt_assigns_binding_to_field_path(later, binding, field_path) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            match stmt {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if Self::find_extract_writeback_in_stmts(then_block, field_path) {
+                        return true;
+                    }
+                    if let Some(eb) = else_block {
+                        if Self::find_extract_writeback_in_stmts(eb, field_path) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::For { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if Self::find_extract_writeback_in_stmts(body, field_path) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_is_field_path(expr: &Expression, field_path: &str) -> bool {
+        Self::field_access_path(expr).as_deref() == Some(field_path)
+    }
+
+    fn field_access_path(expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                let obj = Self::field_access_path(object)?;
+                Some(format!("{obj}.{field}"))
+            }
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            _ => None,
+        }
+    }
+
+    fn stmt_assigns_binding_to_field_path(
+        stmt: &Statement,
+        binding: &str,
+        field_path: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op: None,
+                ..
+            } => {
+                matches!(value, Expression::Identifier { name, .. } if name == binding)
+                    && Self::expr_is_field_path(target, field_path)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| Self::stmt_assigns_binding_to_field_path(s, binding, field_path))
+                    || else_block.as_ref().is_some_and(|eb| {
+                        eb.iter().any(|s| {
+                            Self::stmt_assigns_binding_to_field_path(s, binding, field_path)
+                        })
+                    })
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| Self::stmt_assigns_binding_to_field_path(s, binding, field_path)),
+            _ => false,
         }
     }
 

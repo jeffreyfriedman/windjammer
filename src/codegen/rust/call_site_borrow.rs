@@ -922,6 +922,64 @@ pub fn apply_call_site_borrow(decision: &CallSiteBorrowDecision, arg_str: &mut S
     }
 }
 
+/// How to pass a hoisted `format!` / write!-block temp at a call site.
+///
+/// Signature-driven: shared-ref formals get `&_tempN`; owned string formals get `_tempN`.
+/// Used by both free-function and method format-temp hoisting (DRY).
+pub(crate) fn format_temp_arg_pass_expr(
+    sig: Option<&FunctionSignature>,
+    arg_index: usize,
+    temp_name: &str,
+    had_borrow_prefix: bool,
+) -> String {
+    if had_borrow_prefix {
+        return format!("&{temp_name}");
+    }
+    let Some(sig) = sig else {
+        return temp_name.to_string();
+    };
+    let param_idx = sig.arg_param_index(arg_index);
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return temp_name.to_string();
+    }
+    if callee_emits_shared_rust_ref_param(sig, param_idx) {
+        return format!("&{temp_name}");
+    }
+    if sig.param_type_for_arg(arg_index).is_some_and(|t| {
+        string_utilities::param_is_rust_str_ref(t)
+    }) {
+        return format!("&{temp_name}");
+    }
+    let wants_owned_string = matches!(
+        effective_param_ownership_for_arg(sig, arg_index),
+        OwnershipMode::Owned
+    ) && sig.formal_param_type(param_idx).is_some_and(|t| {
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            && types::is_windjammer_text_type(t)
+    });
+    if wants_owned_string {
+        return temp_name.to_string();
+    }
+    // Plain WJ text formal with Borrowed ownership → shared ref at call site.
+    if matches!(
+        effective_param_ownership_for_arg(sig, arg_index),
+        OwnershipMode::Borrowed
+    ) && sig.formal_param_type(param_idx).is_some_and(|t| {
+        types::is_windjammer_text_type(t)
+    }) {
+        return format!("&{temp_name}");
+    }
+    // Converged plain text formal without owned emission → prefer borrow (readonly demotion).
+    if sig.formal_param_type(param_idx).is_some_and(|t| {
+        types::is_windjammer_text_type(t)
+            && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    }) && !plain_string_formal_passes_owned_at_call_site(sig, param_idx)
+    {
+        return format!("&{temp_name}");
+    }
+    temp_name.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
