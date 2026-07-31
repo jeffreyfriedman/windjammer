@@ -2081,19 +2081,17 @@ impl<'ast> CodeGenerator<'ast> {
             let Some(ref analysis) = self.auto_clone_analysis else {
                 return arg_str.to_string();
             };
+            // Statement-local reuse only — `needs_clone_anywhere` falsely clones
+            // discard-only / single-use owned args reused across calls (WDB-AUTHZ-9).
             let needs = match arg_expr {
-                Expression::Identifier { name, .. } => {
-                    analysis
-                        .needs_clone(name, self.current_statement_idx)
-                        .is_some()
-                        || analysis.needs_clone_anywhere(name)
-                }
+                Expression::Identifier { name, .. } => analysis
+                    .needs_clone(name, self.current_statement_idx)
+                    .is_some(),
                 Expression::FieldAccess { .. } | Expression::Index { .. } => {
                     Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
                         analysis
                             .needs_clone(&path, self.current_statement_idx)
                             .is_some()
-                            || analysis.needs_clone_anywhere(&path)
                     })
                 }
                 _ => false,
@@ -2129,19 +2127,16 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(ref analysis) = self.auto_clone_analysis else {
             return arg_str.to_string();
         };
+        // Statement-local reuse only (matches method-arg policy in arguments.rs).
         let needs = match arg_expr {
-            Expression::Identifier { name, .. } => {
-                analysis
-                    .needs_clone(name, self.current_statement_idx)
-                    .is_some()
-                    || analysis.needs_clone_anywhere(name)
-            }
+            Expression::Identifier { name, .. } => analysis
+                .needs_clone(name, self.current_statement_idx)
+                .is_some(),
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
                     analysis
                         .needs_clone(&path, self.current_statement_idx)
                         .is_some()
-                        || analysis.needs_clone_anywhere(&path)
                 })
             }
             _ => false,
@@ -2939,7 +2934,6 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let needs = self.auto_clone_analysis.as_ref().is_some_and(|a| {
             a.needs_clone(&path, self.current_statement_idx).is_some()
-                || a.needs_clone_anywhere(&path)
         });
         if needs {
             // Only scalar Copy (i64/bool/…) skip clone; Copy aggregates/enums still need

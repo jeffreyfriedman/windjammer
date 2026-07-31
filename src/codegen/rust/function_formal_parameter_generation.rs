@@ -889,6 +889,50 @@ impl<'ast> CodeGenerator<'ast> {
                             &param.name,
                             func,
                         );
+                        // Bare tuple-discard (`let _ = (a, b)`) → shared `&T` so callers
+                        // reuse without `.clone()` (WDB-AUTHZ-9). Field-projection discards
+                        // and owned-Key engine facades (key.bytes lookups) keep owned formals.
+                        // Do not use `struct_is_owned_engine_key_facade` here — its early
+                        // fallback falsely matches any 2-method impl with a Custom param
+                        // (TupleStore::has_tuple).
+                        let discard_as_shared_borrow = self
+                            .param_only_used_as_bare_id_in_discarding_tuple(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            )
+                            && !analyzed.field_extract_parameters.contains(&param.name)
+                            && !payload_forces_owned
+                            && !force_owned_collection_key
+                            && !self.current_struct_name.as_ref().is_some_and(|sn| {
+                                self.struct_has_owned_key_field_lookup.contains(sn)
+                            })
+                            // Bare discard intentionally demotes Owned formals — do not
+                            // consult `param_must_not_demote_to_shared_borrow` (Owned hint).
+                            && !matches!(
+                                self.get_param_ownership(&param.name, analyzed),
+                                Some(OwnershipMode::MutBorrowed)
+                            )
+                            && !(analyzed.mutated_parameters.contains(&param.name)
+                                && !analyzed.returned_parameters.contains(&param.name))
+                            && !matches!(
+                                &param.type_,
+                                Type::Reference(_) | Type::MutableReference(_)
+                            );
+                        if discard_as_shared_borrow {
+                            let type_str =
+                                self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                            self.emitted_rust_ref_formals.insert(param.name.clone());
+                            self.inferred_borrowed_params.insert(param.name.clone());
+                            self.inferred_mut_borrowed_params.remove(&param.name);
+                            if type_str == "&str"
+                                || type_str.starts_with("&'a str")
+                                || type_str.ends_with(" str")
+                            {
+                                self.str_ref_optimized_params.insert(param.name.clone());
+                            }
+                            return format!("{}: {}", param.name, type_str);
+                        }
                         let analyzer_owned_value_param = matches!(
                             analyzed.inferred_ownership.get(&param.name),
                             Some(OwnershipMode::Owned)
@@ -1297,8 +1341,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
 
+                            // Tuple-discard with field projection keeps owned engine Key
+                            // formals; bare-id discards already returned as `&T` above.
                             if ownership_mode != OwnershipMode::Owned
                                 && self.param_only_used_in_discarding_let_binding(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && !self.param_only_used_as_bare_id_in_discarding_tuple(
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
@@ -1358,7 +1409,13 @@ impl<'ast> CodeGenerator<'ast> {
                             // must not overwrite (WDB MemoryEngine::put / seed_write).
                             // Exception: Vec readonly tuple discards still demote to `&Vec`
                             // (`append_put` / `let _ = (key.len(), value.len())`).
+                            // Field-projection tuple-discards keep owned; bare-id discards
+                            // demote via early shared-borrow return (WDB-AUTHZ-9).
                             let discard_keep_owned = self.param_only_used_in_discarding_let_binding(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) && !self.param_only_used_as_bare_id_in_discarding_tuple(
                                 func.body.as_slice(),
                                 &param.name,
                                 func,

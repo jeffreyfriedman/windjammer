@@ -1241,63 +1241,29 @@ impl<'ast> CodeGenerator<'ast> {
                         let sig_for_format = resolved_signature
                             .as_ref()
                             .or(method_signature.as_ref());
-                        let param_wants_owned_string = sig_for_format
-                            .map(|sig| {
-                                let idx = sig.arg_param_index(arg_idx);
-                                let effective =
-                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
-                                        sig,
-                                        arg_idx,
-                                        receiver_type_name.as_deref(),
-                                    );
-                                (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                    sig, idx,
-                                ) || matches!(effective, OwnershipMode::Owned))
-                                    && sig.formal_param_type(idx).is_some_and(|t| {
-                                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                            && crate::codegen::rust::types::is_windjammer_text_type(t)
-                                    })
-                            })
-                            .unwrap_or(false)
-                            || self.mc_method_param_expects_owned_string_from_global(
+                        // Global registry may mark owned String when local sig is incomplete.
+                        if !has_borrow_prefix
+                            && self.mc_method_param_expects_owned_string_from_global(
                                 object,
                                 method,
                                 arg_idx,
                                 arguments.len(),
-                            );
-                        let param_wants_str_ref = sig_for_format
-                            .map(|sig| {
+                            )
+                            && !sig_for_format.is_some_and(|sig| {
                                 let pi = sig.arg_param_index(arg_idx);
-                                sig.param_type_for_arg(arg_idx).is_some_and(|t| {
-                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                                }) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                                     sig, pi,
-                                ) || matches!(
-                                    crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                                        sig, pi,
-                                    ),
-                                    OwnershipMode::Borrowed,
-                                ) && sig.formal_param_type(pi).is_some_and(|t| {
-                                    crate::codegen::rust::types::is_windjammer_text_type(t)
-                                })
+                                )
                             })
-                            .unwrap_or(false);
-                        // When the method expects &str, add & to pass borrowed temp.
-                        // Owned String params take the temp directly.
-                        if has_borrow_prefix || param_wants_str_ref {
-                            format!("&{}", temp_name)
-                        } else if param_wants_owned_string {
+                        {
                             temp_name
-                        } else if sig_for_format.is_some_and(|sig| {
-                            let idx = sig.arg_param_index(arg_idx);
-                            sig.formal_param_type(idx).is_some_and(|t| {
-                                crate::codegen::rust::types::is_windjammer_text_type(t)
-                                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                            })
-                        }) {
-                            format!("&{}", temp_name)
                         } else {
-                            temp_name
+                            crate::codegen::rust::call_site_borrow::format_temp_arg_pass_expr(
+                                sig_for_format,
+                                arg_idx,
+                                &temp_name,
+                                has_borrow_prefix,
+                            )
                         }
                     } else {
                         arg_str.clone()

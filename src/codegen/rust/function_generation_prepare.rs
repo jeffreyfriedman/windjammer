@@ -3932,6 +3932,41 @@ impl<'ast> CodeGenerator<'ast> {
         found_in_tuple_discard
     }
 
+    /// Like [`Self::param_only_used_in_discarding_let_binding`], but every mention must
+    /// be a bare identifier in the discard tuple (`let _ = (subject, object)`), not a
+    /// field projection (`let _ = (key.bytes.len(), value)`). Bare discards demote to
+    /// shared `&T` at call sites (WDB-AUTHZ-9); field-projection discards keep owned
+    /// engine Key contracts (WDB MemoryEngine::put).
+    pub(in crate::codegen::rust) fn param_only_used_as_bare_id_in_discarding_tuple(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_only_used_in_discarding_let_binding(body, param_name, func) {
+            return false;
+        }
+        for stmt in body {
+            if let Statement::Let { pattern, value, .. } = stmt {
+                if Self::is_discarding_let_pattern(pattern) {
+                    if let Expression::Tuple { elements, .. } = value {
+                        for elem in elements {
+                            if Self::expression_mentions_identifier(elem, param_name)
+                                && !matches!(
+                                    elem,
+                                    Expression::Identifier { name, .. } if name == param_name
+                                )
+                            {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        true
+    }
+
     /// True when every mention of `param_name` is inside any discarding `let _ = …`
     /// (tuple or simple). Used to demote discarded WJ `string` formals to `&str`.
     pub(in crate::codegen::rust) fn param_only_used_in_simple_or_tuple_discard(

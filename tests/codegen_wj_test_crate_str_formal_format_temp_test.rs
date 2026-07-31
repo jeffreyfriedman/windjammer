@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO (LedgerKit dogfood / E3.9.3 unblock):
+//! FAILING REPRO (`wj test` crate / E3.9.3 unblock):
 //!
 //! `wj test` compiles `@test` files into a separate `windjammer-tests` crate
 //! against the library. Library `string` formals often demote to `&str`, while
@@ -19,11 +19,10 @@
 //! without `&` → E0308 (`expected &str, found String`).
 //!
 //! Same harness also keeps `HashMap<String, String>` by value while tests pass
-//! `&query` (request_context `as_of_from_query(&query)`).
+//! `&query` (request-context style `as_of_from_query(&query)`).
 //!
 //! In-library multipass string assertions can be green while `wj test` still fails —
-//! this cargo-backed harness is the contract that unblocks platform `make test`
-//! (currently 6 errors: bank_reconciliation_test + request_context_test).
+//! this cargo-backed harness is the contract that unblocks downstream `make test`.
 
 use std::fs;
 use std::path::PathBuf;
@@ -38,12 +37,12 @@ fn wj_test_crate_format_temps_must_match_demoted_str_formals() {
     fs::write(
         root.join("Cargo.toml"),
         r#"[package]
-name = "ledgerkit-probe"
+name = "probe"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "ledgerkit_probe"
+name = "probe"
 path = "src/lib.rs"
 
 [workspace]
@@ -54,7 +53,7 @@ path = "src/lib.rs"
     let src = root.join("src");
     fs::create_dir_all(&src).unwrap();
     // Demotion trigger: formals only observed via .len() / sink → `&str` in lib.
-    // Call sites in tests still use `"x" + ""` owned format temps (LedgerKit idiom).
+    // Call sites in tests still use `"x" + ""` owned format temps.
     fs::write(
         src.join("domain.wj"),
         r#"
@@ -179,7 +178,87 @@ fn as_of_borrows_query_map() {
 
     assert!(
         output.status.success(),
-        "wj test crate must rustc against demoted &str formals + HashMap borrow \
-         (LedgerKit bank_reconciliation / request_context). out:\n{combined}"
+        "wj test crate must rustc against demoted &str formals + HashMap borrow. out:\n{combined}"
+    );
+}
+
+/// Isolated HashMap formal vs `&query` call site (request_context_test).
+#[test]
+fn wj_test_crate_hashmap_formal_must_accept_borrowed_query() {
+    let tmp = tempdir().expect("tempdir");
+    let root = tmp.path();
+
+    fs::write(
+        root.join("Cargo.toml"),
+        r#"[package]
+name = "query-probe"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "query_probe"
+path = "src/lib.rs"
+
+[workspace]
+"#,
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(
+        src.join("domain.wj"),
+        r#"
+use std::collections::HashMap
+
+pub fn as_of_from_query(query: HashMap<string, string>) -> int {
+    let _ = query
+    1
+}
+
+pub fn query_with(key: string, value: string) -> HashMap<string, string> {
+    let mut m = HashMap::new()
+    m.insert(key + "", value + "")
+    m
+}
+"#,
+    )
+    .unwrap();
+    fs::write(src.join("mod.wj"), "pub mod domain\n").unwrap();
+
+    let tests = root.join("tests");
+    fs::create_dir_all(&tests).unwrap();
+    fs::write(
+        tests.join("query_test.wj"),
+        r#"
+use std::test
+use crate::domain::{as_of_from_query, query_with}
+
+@test
+fn as_of_borrows_query_map() {
+    let query = query_with("as_of" + "", "2026-12-31" + "")
+    let n = as_of_from_query(&query)
+    assert_eq(n, 1)
+}
+"#,
+    )
+    .unwrap();
+
+    let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
+    let output = Command::new(&wj)
+        .current_dir(root)
+        .args(["test", "tests", "--nocapture"])
+        .output()
+        .expect("run wj test");
+
+    let combined = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        output.status.success(),
+        "owned HashMap formal + &query call site must rustc (demote or clone). out:\n{combined}"
     );
 }

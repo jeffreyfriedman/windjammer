@@ -360,11 +360,13 @@ impl<'ast> CodeGenerator<'ast> {
     /// Patterns recognized:
     /// - `let prev = self.field; self.field = None`  → `let prev = self.field.take()`
     /// - `let prev = self.field; self.field = Some(v)` → `let prev = self.field.replace(v)`
+    /// - `let mut x = self.field; …; self.field = x` (writeback on `&mut self`) → bare move
     /// - Other non-Copy behind &self/&mut self → `.clone()`
     pub(in crate::codegen::rust) fn apply_self_field_move_fix(
         &mut self,
         value: &Expression<'ast>,
         value_str: &mut String,
+        binding_name: Option<&str>,
     ) {
         if !matches!(value, Expression::FieldAccess { .. }) {
             return;
@@ -409,8 +411,115 @@ impl<'ast> CodeGenerator<'ast> {
                     *value_str = format!("{}.take()", value_str);
                 }
             }
+        } else if self_is_mut
+            && binding_name.is_some_and(|b| {
+                self.block_writes_back_field_to_binding(
+                    &self.extract_field_access_path_string(value),
+                    b,
+                )
+            })
+        {
+            // Extract-assign writeback behind `&mut self`: cannot bare-move (E0507).
+            // Prefer `mem::take` when the field type derives/implements Default
+            // (WDB-042 `SimNetwork`); otherwise `.clone()` (engines without Default).
+            if value_str.ends_with(".clone()") {
+                value_str.truncate(value_str.len() - ".clone()".len());
+            }
+            if self.type_supports_mem_take(&ty) {
+                let base = value_str.trim_start_matches('&').trim();
+                *value_str = format!("std::mem::take(&mut {base})");
+            } else if !value_str.ends_with(".clone()") {
+                *value_str = format!("{}.clone()", value_str);
+            }
         } else if !value_str.ends_with(".clone()") {
             *value_str = format!("{}.clone()", value_str);
+        }
+    }
+
+    /// True when `ty` is safe for `std::mem::take` (Default in std or auto-derived).
+    fn type_supports_mem_take(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Int
+            | Type::Int32
+            | Type::Uint
+            | Type::Float
+            | Type::Bool
+            | Type::String => true,
+            Type::Vec(_) | Type::Option(_) => true,
+            Type::Tuple(elems) => elems.iter().all(|t| self.type_supports_mem_take(t)),
+            Type::Parameterized(base, args)
+                if matches!(base.as_str(), "Vec" | "Option" | "Box" | "HashMap" | "HashSet") =>
+            {
+                args.iter().all(|a| self.type_supports_mem_take(a))
+            }
+            Type::Custom(name)
+                if crate::type_classification::is_copy_primitive(name) || name == "String" =>
+            {
+                true
+            }
+            Type::Custom(name) => {
+                let Some(fields) = self.lookup_struct_field_types(name) else {
+                    return false;
+                };
+                !fields.is_empty() && fields.values().all(|ft| self.type_supports_mem_take(ft))
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.type_supports_mem_take(inner)
+            }
+            _ => false,
+        }
+    }
+
+    /// True when a later assignment in the current function body writes `binding` back to `field_path`.
+    fn block_writes_back_field_to_binding(&self, field_path: &str, binding: &str) -> bool {
+        let start = self.current_block_local_idx.saturating_add(1);
+        for stmt in self.current_function_body.iter().skip(start) {
+            if self.statement_writes_binding_to_field(stmt, field_path, binding) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_writes_binding_to_field(
+        &self,
+        stmt: &Statement<'ast>,
+        field_path: &str,
+        binding: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op: None,
+                ..
+            } => {
+                let target_path = self.extract_field_access_path_string(target);
+                matches!(
+                    value,
+                    Expression::Identifier { name, .. } if name == binding
+                ) && target_path == field_path
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.statement_writes_binding_to_field(s, field_path, binding))
+                    || else_block.as_ref().is_some_and(|eb| {
+                        eb.iter()
+                            .any(|s| self.statement_writes_binding_to_field(s, field_path, binding))
+                    })
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.statement_writes_binding_to_field(s, field_path, binding)),
+            // Match arms are expressions; writeback typically lives in loop/if bodies.
+            _ => false,
         }
     }
 

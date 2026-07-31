@@ -63,7 +63,7 @@ pub(in crate::metadata) fn infer_copy_from_metadata_structs(
 /// Check if a serialized Type string represents a Copy type.
 fn is_copy_type_string(s: &str, copy_set: &HashSet<String>) -> bool {
     match s {
-        "Bool" | "Int32" | "Float" => true,
+        "Bool" | "Int" | "Int32" | "Uint" | "Float" => true,
         s if s.starts_with("Custom(\"") && s.ends_with("\")") => {
             let name = &s[8..s.len() - 2];
             matches!(
@@ -118,10 +118,13 @@ impl ModuleMetadata {
             "Custom(\"i32\")" => Some(Type::Custom("i32".to_string())),
             "Custom(\"u32\")" => Some(Type::Custom("u32".to_string())),
             "Custom(\"Self\")" => Some(Type::Custom("Self".to_string())),
+            "Int" => Some(Type::Int),
             "Int32" => Some(Type::Int32),
+            "Uint" => Some(Type::Uint),
             "Float" => Some(Type::Float),
             "Bool" => Some(Type::Bool),
             "String" => Some(Type::String),
+            "Infer" => Some(Type::Infer),
             "string" | "Custom(\"string\")" => Some(Type::String),
             s if s.starts_with("Array(") && s.ends_with(')') => {
                 // Array(Custom("f32"), 16) or Array(InnerType, N)
@@ -146,6 +149,47 @@ impl ModuleMetadata {
                 let inner = &s[7..s.len() - 1];
                 Self::deserialize_type(inner).map(|t| Type::Option(Box::new(t)))
             }
+            s if s.starts_with("Result(") && s.ends_with(')') => {
+                let inner = &s[7..s.len() - 1];
+                split_debug_type_list(inner).and_then(|parts| {
+                    if parts.len() != 2 {
+                        return None;
+                    }
+                    Some(Type::Result(
+                        Box::new(Self::deserialize_type(&parts[0])?),
+                        Box::new(Self::deserialize_type(&parts[1])?),
+                    ))
+                })
+            }
+            s if s.starts_with("Tuple(") && s.ends_with(')') => {
+                let inner = &s[6..s.len() - 1];
+                // Debug: Tuple([T1, T2, ...])
+                let inner = inner
+                    .strip_prefix('[')
+                    .and_then(|r| r.strip_suffix(']'))
+                    .unwrap_or(inner);
+                let parts = split_debug_type_list(inner)?;
+                let mut types = Vec::with_capacity(parts.len());
+                for p in parts {
+                    types.push(Self::deserialize_type(&p)?);
+                }
+                Some(Type::Tuple(types))
+            }
+            s if s.starts_with("Parameterized(") && s.ends_with(')') => {
+                // Parameterized("HashMap", [String, String])
+                let inner = &s["Parameterized(".len()..s.len() - 1];
+                let (name, args_str) = split_parameterized_debug(inner)?;
+                let arg_parts = split_debug_type_list(args_str)?;
+                let mut args = Vec::with_capacity(arg_parts.len());
+                for p in arg_parts {
+                    args.push(Self::deserialize_type(&p)?);
+                }
+                Some(Type::Parameterized(name, args))
+            }
+            s if s.starts_with("Generic(\"") && s.ends_with("\")") => {
+                let name = &s["Generic(\"".len()..s.len() - 2];
+                Some(Type::Generic(name.to_string()))
+            }
             s if s.starts_with("Reference(") && s.ends_with(')') => {
                 let inner = &s[10..s.len() - 1];
                 Self::deserialize_type(inner).map(|t| Type::Reference(Box::new(t)))
@@ -163,4 +207,48 @@ impl ModuleMetadata {
             _ => None,
         }
     }
+}
+
+/// Split `Parameterized("Name", [T1, T2])` inner into `(Name, "T1, T2")`.
+fn split_parameterized_debug(inner: &str) -> Option<(String, &str)> {
+    let rest = inner.strip_prefix('"')?;
+    let name_end = rest.find('"')?;
+    let name = rest[..name_end].to_string();
+    let after_name = rest[name_end + 1..].trim_start();
+    let after_comma = after_name.strip_prefix(',')?.trim_start();
+    let args = after_comma
+        .strip_prefix('[')?
+        .strip_suffix(']')?;
+    Some((name, args))
+}
+
+/// Split a Debug type-list like `String, Int` or `Parameterized("HashMap", [String, String]), Int`
+/// respecting nested parentheses/brackets.
+fn split_debug_type_list(s: &str) -> Option<Vec<String>> {
+    if s.trim().is_empty() {
+        return Some(Vec::new());
+    }
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    let chars: Vec<char> = s.chars().collect();
+    for (i, ch) in chars.iter().enumerate() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(chars[start..i].iter().collect::<String>().trim().to_string());
+                start = i + 1;
+            }
+            _ => {}
+        }
+        if depth < 0 {
+            return None;
+        }
+    }
+    if depth != 0 {
+        return None;
+    }
+    parts.push(chars[start..].iter().collect::<String>().trim().to_string());
+    Some(parts)
 }
