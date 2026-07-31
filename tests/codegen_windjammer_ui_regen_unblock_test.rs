@@ -16,15 +16,9 @@
 //! dropped `*_runtime_js`, required forbidden `.clone()` (W0005), or failed multipass
 //! compose / string-concat borrow consistency.
 //!
-//! Status on clean tip `5ade3f99` (2026-07-30):
-//! - PASS: `&'static str` raw-string `*_runtime_js` helpers
-//! - PASS: simple owned `String + String` chains
-//! - PASS: library compose WriteCheckForm→CurrencyInput + cargo-check
-//! - FAIL: CurrencyInput-style long HTML concat (`label_html` / `extra` miss `&`
-//! in `a + b + c…` chains) — blocks drop-in regen of render-heavy components
-//!
-//! When all tests here are green, selective regen of AuthFetch / WriteCheckForm /
-//! CurrencyInput can replace hand mirrors; full-tree regen still needs TECH_DEBT #1–#7.
+//! Status on tip (2026-07-30 evening): **5/5 PASS** — D5 trio selective regen is SOT.
+//! Full-tree regen still needs TECH_DEBT #1–#7; keep `SKIP_WJ_REGEN=1` for whole-crate builds.
+//! Regen helper: `windjammer-ui/scripts/regen-d5-trio.sh`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
