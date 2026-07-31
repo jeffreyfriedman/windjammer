@@ -803,6 +803,22 @@ impl<'ast> CodeGenerator<'ast> {
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
         }
+        // Cross-crate return types / ascriptions may emit `HashMap<...>` without a local
+        // `use std::collections::HashMap` in the .wj source — detect from generated body.
+        if !self.needs_hashmap_import
+            && (body.contains("HashMap<") || body.contains("HashMap::"))
+            && !imports.contains("std::collections::HashMap")
+            && !imports.contains("HashMap")
+        {
+            self.needs_hashmap_import = true;
+        }
+        if !self.needs_hashset_import
+            && (body.contains("HashSet<") || body.contains("HashSet::"))
+            && !imports.contains("std::collections::HashSet")
+            && !imports.contains("HashSet")
+        {
+            self.needs_hashset_import = true;
+        }
         if self.needs_hashmap_import && !imports.contains("std::collections::HashMap") {
             implicit_imports.push_str("use std::collections::HashMap;\n");
         }

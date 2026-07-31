@@ -2707,7 +2707,6 @@ impl<'ast> CodeGenerator<'ast> {
 
         let dominated = self.auto_clone_analysis.as_ref().is_some_and(|a| {
             a.needs_clone(name, self.current_statement_idx).is_some()
-                || a.needs_clone_anywhere(name)
         });
 
         if !dominated

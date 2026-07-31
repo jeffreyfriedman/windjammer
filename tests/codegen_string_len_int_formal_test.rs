@@ -48,4 +48,10 @@ fn main() {
             || generated.contains("let len: i64 = "),
         "string.len() (usize) must not feed i64 formal bare (E0308). Got:\n{generated}"
     );
+    let check = test_utils::verify_rust_compiles(&generated);
+    assert!(
+        check.is_ok(),
+        "Content-Length framing must rustc (MCP unlock). stderr={:?}\nGot:\n{generated}",
+        check.err()
+    );
 }

@@ -822,6 +822,10 @@ pub(crate) fn generate_test_harness(
             .push(test);
     }
 
+    // Compile the library first so test codegen can load `emitted_rust_ref_params`
+    // from metadata.json (otherwise format! temps miss `&` for demoted `&str` formals).
+    let library_dependency = detect_and_compile_library(project_root, output_dir)?;
+
     // Compile each test file using the existing infrastructure
     for (file, file_tests) in &tests_by_file {
         // Skip if filter doesn't match
@@ -831,8 +835,20 @@ pub(crate) fn generate_test_harness(
             }
         }
 
-        // Compile the file to Rust
-        build_project(file, output_dir, CompilationTarget::Rust, false)?;
+        // Compile the file to Rust — pass library metadata when available.
+        if let Some((lib_crate_name, _, lib_output_dir)) = &library_dependency {
+            let meta = [(lib_crate_name.as_str(), lib_output_dir.as_path())];
+            build_project_ext(
+                file,
+                output_dir,
+                CompilationTarget::Rust,
+                false,
+                false,
+                &meta,
+            )?;
+        } else {
+            build_project(file, output_dir, CompilationTarget::Rust, false)?;
+        }
 
         // Read the generated Rust code
         let output_file = output_dir.join(format!(
@@ -868,9 +884,6 @@ pub(crate) fn generate_test_harness(
         // Write back
         fs::write(&output_file, rust_code)?;
     }
-
-    // Detect and compile the library if it exists
-    let library_dependency = detect_and_compile_library(project_root, output_dir)?;
 
     // Tests compiled above still contain `use crate::...`; point them at the library crate.
     if let Some((lib_crate_name, _, _)) = &library_dependency {
