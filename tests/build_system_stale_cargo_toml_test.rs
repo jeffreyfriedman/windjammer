@@ -113,10 +113,10 @@ opt-level = 3
     )
     .unwrap();
 
-    // Also plant a stale .rs file (simulates leftover from previous build)
+    // Also plant a stale binary entry (simulates leftover from a previous HTML-emit step)
     fs::write(
         build_dir.join("stale_binary.rs"),
-        "// This is a stale file from a previous build\nfn stale() {}\n",
+        "// Leftover [[bin]] from a previous build — must not become pub mod\nfn main() {}\n",
     )
     .unwrap();
 
@@ -158,6 +158,15 @@ opt-level = 3
     assert!(
         !cargo_toml_content.contains("stale_binary"),
         "Cargo.toml should NOT contain stale [[bin]] target from previous build"
+    );
+
+    // Orphan build/*.rs must not become library modules either.
+    let lib = fs::read_to_string(build_dir.join("lib.rs"))
+        .or_else(|_| fs::read_to_string(build_dir.join("mod.rs")))
+        .expect("lib.rs or mod.rs");
+    assert!(
+        !lib.contains("pub mod stale_binary"),
+        "orphan build/stale_binary.rs must not be merged into the lib:\n{lib}"
     );
 }
 
