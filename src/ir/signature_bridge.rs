@@ -104,6 +104,16 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                     Some(OwnershipMode::MutBorrowed),
                 );
             }
+            // Analyzer stubs often omit formal_param_types. If param_types already
+            // encodes `&mut T`, still report MutRef so FieldAccess call sites keep
+            // `&mut self.field` (fill_grid / apply_rotation). Otherwise fall through
+            // so bare Custom + MutBorrowed can resolve as owned-mut bindings (AppDeps).
+            if let Some(Type::MutableReference(inner)) = sig.param_types.get(param_idx) {
+                return safety_type_from_parser_type(
+                    &Type::MutableReference(inner.clone()),
+                    Some(OwnershipMode::MutBorrowed),
+                );
+            }
         } else if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
             return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
         }
@@ -618,6 +628,22 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                     ))
                     && !crate::type_classification::is_copy_pass_by_value_formal(bare);
                 if is_copy_aggregate
+                    && sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(param_idx))
+                        .copied()
+                        != Some(true)
+                {
+                    return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+                }
+            }
+            // Bare non-text Custom without shared-ref emission: owned Rust formal
+            // (field-extract keep-owned / recursive ReBAC `policy: Policy`). Stale
+            // analyzer Borrowed must not become Ref → `&policy` at call sites.
+            if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
+                if matches!(bare, Type::Custom(_))
+                    && !is_plain_windjammer_string_type(bare)
                     && sig
                         .emitted_rust_ref_params
                         .as_ref()

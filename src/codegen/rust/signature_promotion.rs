@@ -635,10 +635,31 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
     if param_is_mut_ref || formal_is_explicit_mut_ref {
         return false;
     }
-    // Shared-ref / runtime-scanner Borrowed contracts (json::get `&Value`,
-    // subprocess::spawn `&[String]`) must not be treated as owned just because
-    // `emitted_rust_ref_params[i] == false` (that flag means "not shared `&T`",
-    // and is also recorded for true `&mut T` / scanner-borrowed formals).
+    // Codegen-confirmed emission beats stale analyzer ownership. `false` means the
+    // Rust formal is not shared `&T` (owned `T` or `&mut T`). Owned wins here for
+    // Copy aggregates kept pass-by-value despite field-read Borrowed analysis
+    // (`BatchHandle` / WDB-060). True `&mut T` already returned above via
+    // MutableReference. Scanner-borrowed formals that emit `&T` record `true`.
+    if let Some(ref flags) = sig.emitted_rust_ref_params {
+        if flags.get(param_idx).copied().unwrap_or(false) {
+            return false;
+        }
+        if flags.get(param_idx).copied() == Some(false) {
+            // `false` means "not shared `&T`" — owned `T` *or* `&mut T`. MutBorrowed
+            // without a MutableReference wrap must not claim owned (call sites need
+            // `&mut self.field` before formal emission syncs MutableReference).
+            if matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::MutBorrowed)
+            ) {
+                return false;
+            }
+            return !param_type_is_borrowed_text(sig, param_idx);
+        }
+    }
+
+    // Shared-ref / runtime-scanner Borrowed contracts without an owned-emission
+    // record must not be treated as owned (json::get `&Value`, etc.).
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
@@ -650,29 +671,8 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         Some(OwnershipMode::MutBorrowed)
     );
     if analyzer_mut {
-        // Owned `mut deps: AppDeps` after field mutation — codegen refresh says not `&T`.
-        if sig
-            .emitted_rust_ref_params
-            .as_ref()
-            .and_then(|flags| flags.get(param_idx))
-            .copied()
-            == Some(false)
-        {
-            return !param_type_is_borrowed_text(sig, param_idx);
-        }
         // No emission record yet: do not claim owned (preserve true `&mut` call sites).
         return false;
-    }
-
-    if let Some(ref flags) = sig.emitted_rust_ref_params {
-        if flags.get(param_idx).copied().unwrap_or(false) {
-            return false;
-        }
-        if flags.get(param_idx).copied() == Some(false) {
-            // Codegen refresh recorded an owned Rust formal; `formal_param_types` may
-            // still be stale `Reference(T)` from body-converged analysis.
-            return !param_type_is_borrowed_text(sig, param_idx);
-        }
     }
 
     // Copy aggregates always emit owned formals — formal generation strips spurious `&T`
@@ -904,6 +904,10 @@ pub(crate) fn codegen_refreshed_beats_analysis_only(
 ///
 /// Cross-module free calls (`replay_all(self.path)`) must see the defining module's
 /// refreshed `&str` formal rather than a caller-side declaration stub.
+///
+/// When several candidates only have all-false emission flags, prefer the one that
+/// records owned emission (`emitted_owned_arg_contract` / Owned ownership) so a stale
+/// global Borrowed stub cannot beat a same-module Owned refresh (ReBAC `policy: Policy`).
 pub(crate) fn pick_codegen_refreshed_signature<I>(candidates: I) -> Option<FunctionSignature>
 where
     I: IntoIterator<Item = Option<FunctionSignature>>,
@@ -920,8 +924,26 @@ where
             if flags.iter().any(|&f| f) {
                 return Some(sig);
             }
-            if refresh_without_shared_ref.is_none() {
-                refresh_without_shared_ref = Some(sig);
+            let owned_better = |candidate: &FunctionSignature, incumbent: &FunctionSignature| {
+                method_registry_reflects_emitted_owned(candidate)
+                    && !method_registry_reflects_emitted_owned(incumbent)
+                    || candidate
+                        .param_ownership
+                        .iter()
+                        .filter(|o| matches!(o, OwnershipMode::Owned))
+                        .count()
+                        > incumbent
+                            .param_ownership
+                            .iter()
+                            .filter(|o| matches!(o, OwnershipMode::Owned))
+                            .count()
+            };
+            match refresh_without_shared_ref {
+                None => refresh_without_shared_ref = Some(sig),
+                Some(ref incumbent) if owned_better(&sig, incumbent) => {
+                    refresh_without_shared_ref = Some(sig);
+                }
+                Some(_) => {}
             }
             continue;
         }

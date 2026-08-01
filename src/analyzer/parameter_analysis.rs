@@ -352,12 +352,14 @@ impl<'ast> Analyzer<'ast> {
             // Codegen distinguishes &str vs &String via str_ref_optimized_params.
             return Ok(OwnershipMode::Borrowed);
         }
-        // Copy aggregates used only via readonly field chains (e.g. `through.value`) emit
-        // `&Lsn` formals; IR and call-site coercion stay aligned (WDB-053).
+        // Copy aggregates used only via readonly field chains (e.g. `handle.id`,
+        // `through.value`) stay Owned. Formal generation keeps pass-by-value for
+        // Copy aggregates (WDB-060); demoting to Borrowed here made cross-module
+        // call sites emit `&handle` into owned `BatchHandle` formals (wdb-types).
         if self.is_copy_type(param_type)
             && self.is_field_access_only_param_usage(param_name, body)
         {
-            return Ok(OwnershipMode::Borrowed);
+            return Ok(OwnershipMode::Owned);
         }
         // Copy types default to Owned unless passthrough to a mutating callee needs &mut.
         if self.is_copy_type(param_type) {
