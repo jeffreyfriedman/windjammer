@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO (`wj test` crate / E3.9.3 unblock):
+//! REGRESSION (`wj test` crate / E3.9.3): library `&str` formals vs format temps + HashMap.
 //!
 //! `wj test` compiles `@test` files into a separate `windjammer-tests` crate
 //! against the library. Library `string` formals often demote to `&str`, while
@@ -211,9 +211,11 @@ path = "src/lib.rs"
         r#"
 use std::collections::HashMap
 
-pub fn as_of_from_query(query: HashMap<string, string>) -> int {
-    let _ = query
-    1
+pub fn as_of_from_query(query: HashMap<string, string>) -> Option<string> {
+    match query.get("as_of") {
+        Some(v) => Some(v + ""),
+        None => None,
+    }
 }
 
 pub fn query_with(key: string, value: string) -> HashMap<string, string> {
@@ -237,8 +239,10 @@ use crate::domain::{as_of_from_query, query_with}
 @test
 fn as_of_borrows_query_map() {
     let query = query_with("as_of" + "", "2026-12-31" + "")
-    let n = as_of_from_query(&query)
-    assert_eq(n, 1)
+    match as_of_from_query(&query) {
+        Some(value) => assert_eq(value, "2026-12-31"),
+        None => assert(false),
+    }
 }
 "#,
     )
