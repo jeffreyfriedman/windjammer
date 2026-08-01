@@ -96,18 +96,12 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
         {
             return true;
         }
-        // Registry/stdlib &str on plain `string` method formals (e.g. TextBuffer::append_slice).
-        if sig.has_self_receiver
-            && sig.param_types.get(param_idx).is_some_and(|t| {
-                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-            })
-            && matches!(
-                sig.param_ownership.get(param_idx),
-                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-            )
-        {
-            return true;
-        }
+        // User methods with bare WJ `string` formals stay owned unless codegen recorded
+        // shared-ref emission (`emitted_rust_ref_params[idx] == true`). Analyzer Borrowed +
+        // stale `Reference(str)` must not force `&field` into owned trait formals
+        // (`authenticate(email: string, password: string)`).
+        // Stdlib/`&str` contracts are represented without a bare WJ formal in
+        // `formal_param_types`, or with an explicit emission flag — handled above/below.
         return false;
     }
     // Registry/stdlib &str contracts (e.g. String::push_str) — param_types Reference(str)

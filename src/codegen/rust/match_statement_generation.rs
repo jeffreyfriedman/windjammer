@@ -54,7 +54,11 @@ impl<'ast> CodeGenerator<'ast> {
 
             if arm0_is_true && arm1_is_false {
                 let value_str = self.generate_expression(value);
-                let pattern_str = self.generate_pattern(&arms[0].pattern);
+                let scrutinee_ty = self.infer_expression_type(value);
+                let pattern_str = self.generate_pattern_with_scrutinee(
+                    &arms[0].pattern,
+                    scrutinee_ty.as_ref(),
+                );
                 let mut output = self.indent();
                 output.push_str(&format!("matches!({}, {})\n", value_str, pattern_str));
                 return output;
@@ -62,7 +66,11 @@ impl<'ast> CodeGenerator<'ast> {
 
             if arm0_is_false && arm1_is_true {
                 let value_str = self.generate_expression(value);
-                let pattern_str = self.generate_pattern(&arms[0].pattern);
+                let scrutinee_ty = self.infer_expression_type(value);
+                let pattern_str = self.generate_pattern_with_scrutinee(
+                    &arms[0].pattern,
+                    scrutinee_ty.as_ref(),
+                );
                 let mut output = self.indent();
                 output.push_str(&format!("!matches!({}, {})\n", value_str, pattern_str));
                 return output;
@@ -273,7 +281,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let mut output = self.indent();
                 output.push_str("if let ");
-                output.push_str(&self.generate_pattern(&upgraded_pattern));
+                let if_let_scrutinee_ty = self.infer_expression_type(value);
+                output.push_str(&self.generate_pattern_with_scrutinee(
+                    &upgraded_pattern,
+                    if_let_scrutinee_ty.as_ref(),
+                ));
 
                 if let Some(guard) = &main_arm.guard {
                     output.push_str(" if ");
@@ -466,6 +478,8 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             self.generate_expression(value)
         };
+
+        let match_scrutinee_ty = self.infer_expression_type(value);
 
         // `Option<&T>` with `T: Copy` (e.g. HashMap::get) → `.copied()` so arm bindings
         // are owned `T` (`Some(v) => v` matches `None => 0.0` without `*v`).
@@ -742,7 +756,10 @@ impl<'ast> CodeGenerator<'ast> {
             );
 
             output.push_str(&self.indent());
-            output.push_str(&self.generate_pattern(&upgraded_pattern));
+            output.push_str(&self.generate_pattern_with_scrutinee(
+                &upgraded_pattern,
+                match_scrutinee_ty.as_ref(),
+            ));
 
             if let Some(guard) = &arm.guard {
                 output.push_str(" if ");

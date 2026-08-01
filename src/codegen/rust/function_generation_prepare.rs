@@ -2493,6 +2493,20 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when `expr` is a field/index chain rooted at `param_name`
+    /// (`request.email`, `row.columns[i]`).
+    fn expr_is_field_or_index_of_param(expr: &Expression<'_>, param_name: &str) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                match &**object {
+                    Expression::Identifier { name, .. } => name == param_name,
+                    other => Self::expr_is_field_or_index_of_param(other, param_name),
+                }
+            }
+            _ => false,
+        }
+    }
+
     fn expression_has_owning_method_use(
         &self,
         expr: &Expression<'ast>,
@@ -2507,7 +2521,11 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                    let arg_is_param_or_field = matches!(
+                        arg,
+                        Expression::Identifier { name, .. } if name == param_name
+                    ) || Self::expr_is_field_or_index_of_param(arg, param_name);
+                    if arg_is_param_or_field {
                         if self.method_call_arg_expects_borrow(object, method, i, func) {
                             continue;
                         }
@@ -2527,6 +2545,26 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             }
             Expression::Call { function, arguments, .. } => {
+                let call_arg_count = arguments.len();
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    let arg_is_param_or_field = matches!(
+                        arg,
+                        Expression::Identifier { name, .. } if name == param_name
+                    ) || Self::expr_is_field_or_index_of_param(arg, param_name);
+                    if arg_is_param_or_field {
+                        if let Some(sig) =
+                            self.resolve_free_call_signature(function, Some(call_arg_count))
+                        {
+                            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                &sig, i,
+                            ) || crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                &sig, i,
+                            ) {
+                                return true;
+                            }
+                        }
+                    }
+                }
                 self.expression_has_owning_method_use(function, param_name, func)
                     || arguments.iter().any(|(_, arg)| {
                         self.expression_has_owning_method_use(arg, param_name, func)
@@ -7342,7 +7380,9 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        || Self::expr_is_field_or_index_of_param(arg, param_name)
+                    {
                         if let Some(sig) =
                             self.method_call_signature_for_arg(object, method, i, func)
                         {
@@ -7358,7 +7398,9 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Call { function, arguments, .. } => {
                 let call_arg_count = arguments.len();
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        || Self::expr_is_field_or_index_of_param(arg, param_name)
+                    {
                         if let Some(sig) =
                             self.resolve_free_call_signature(function, Some(call_arg_count))
                         {

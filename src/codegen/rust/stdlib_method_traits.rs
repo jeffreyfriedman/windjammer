@@ -503,6 +503,21 @@ pub fn method_returns_iterator(method: &str) -> bool {
     )
 }
 
+/// Iterators whose elements are produced by value (not `&T`), e.g. `str::chars` → `char`.
+/// These must not mark loop bindings as borrowed refs (avoids `*c` / E0614 on `char`).
+pub fn method_yields_owned_iterator_elements(method: &str) -> bool {
+    matches!(method, "chars" | "bytes")
+}
+
+/// Element type for by-value string/byte iterators (`chars` → `char`, `bytes` → `u8`).
+pub fn owned_iterator_element_type(method: &str) -> Option<Type> {
+    match method {
+        "chars" => Some(Type::Custom("char".to_string())),
+        "bytes" => Some(Type::Custom("u8".to_string())),
+        _ => None,
+    }
+}
+
 pub fn is_map_key_method(method: &str) -> bool {
     matches!(
         method,

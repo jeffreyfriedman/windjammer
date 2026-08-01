@@ -68,21 +68,38 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let loop_element_type = self
-            .infer_expression_type(iterable)
-            .and_then(|t| Self::extract_iterator_element_type(&t));
+        let owned_iter_elem = match iterable {
+            Expression::MethodCall { method, .. } => {
+                crate::codegen::rust::stdlib_method_traits::owned_iterator_element_type(method)
+            }
+            _ => None,
+        };
+        let loop_element_type = owned_iter_elem.or_else(|| {
+            self.infer_expression_type(iterable)
+                .and_then(|t| Self::extract_iterator_element_type(&t))
+        });
         let copy_element_by_value = loop_element_type
             .as_ref()
             .is_some_and(|e| self.is_type_copy(e));
+        let by_value_owned_iter = matches!(
+            iterable,
+            Expression::MethodCall { method, .. }
+                if crate::codegen::rust::stdlib_method_traits::method_yields_owned_iterator_elements(
+                    method,
+                )
+        );
 
         // Copy elements from an owned collection: consume by value (`for byte in vec`) so
         // `Vec::push(byte)` type-checks without `*byte` (WDB-006).
         let direct_id_iterable = matches!(iterable, Expression::Identifier { .. });
-        if copy_element_by_value {
+        if copy_element_by_value || by_value_owned_iter {
             if let Expression::Identifier { name, .. } = iterable {
                 if !self.for_loop_borrow_needed.contains(name) {
                     needs_borrow = false;
                 }
+            }
+            if by_value_owned_iter {
+                needs_borrow = false;
             }
         }
 
@@ -111,18 +128,38 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(" in ");
 
         let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
+        if by_value_owned_iter {
+            is_borrowed_iterator = false;
+        }
 
         if copy_element_by_value && is_borrowed_iterator && direct_id_iterable {
             if let Expression::Identifier { name, .. } = iterable {
-                if !self.for_loop_borrow_needed.contains(name) {
+                // Owned `Vec<Copy>` can iterate by value. Match-bound / param `&Vec`
+                // must keep borrowed status so `.copied()` can own Copy elements (WDB-072).
+                let binding_is_ref = self.borrowed_iterator_vars.contains(name)
+                    || self.local_var_types.get(name).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    })
+                    || self.inferred_borrowed_params.contains(name);
+                if !self.for_loop_borrow_needed.contains(name) && !binding_is_ref {
                     is_borrowed_iterator = false;
                 }
             }
         }
 
+        // Borrowed local/`match`-bound `&Vec<Copy>` (`conditions: &Vec<_>`): iterate by
+        // value via `.iter().copied()` so bindings are owned `T` (WDB-072).
+        // Field paths (`self.items`) keep the traditional `&self.items` form — Copy
+        // element auto-deref at use sites is covered by borrowed_iterator_vars.
+        let use_copied_for_copy_elems = copy_element_by_value
+            && is_borrowed_iterator
+            && !by_value_owned_iter
+            && !needs_mut_borrow
+            && matches!(iterable, Expression::Identifier { .. });
+
         if needs_mut_borrow {
             output.push_str("&mut ");
-        } else if needs_borrow {
+        } else if needs_borrow && !use_copied_for_copy_elems {
             output.push('&');
         }
 
@@ -167,6 +204,17 @@ impl<'ast> CodeGenerator<'ast> {
             // Owned collection snapshot — iterate by value, not `&self.field`.
             is_borrowed_iterator = false;
         }
+        if use_copied_for_copy_elems {
+            // `&Vec<T>` / `conditions: &Vec<_>` → `.iter().copied()` yields owned Copy `T`.
+            if iter_expr.starts_with('&') {
+                let peeled = iter_expr.trim_start_matches('&').trim_start_matches("mut ").trim();
+                iter_expr = format!("{}.iter().copied()", peeled);
+            } else {
+                iter_expr = format!("{}.iter().copied()", iter_expr);
+            }
+            is_borrowed_iterator = false;
+            needs_borrow = false;
+        }
         output.push_str(&iter_expr);
         output.push_str(" {\n");
 
@@ -180,10 +228,12 @@ impl<'ast> CodeGenerator<'ast> {
         // `needs_borrow` can stay true after `copy_element_by_value` clears
         // `is_borrowed_iterator`; any `&iterable` loop must track borrowed bindings.
         // Also detect when `generate_expression` already emitted a leading `&`.
-        let tracks_borrowed_loop_var = needs_borrow
-            || is_borrowed_iterator
-            || needs_mut_borrow
-            || iter_expr.starts_with('&');
+        let tracks_borrowed_loop_var = !use_copied_for_copy_elems
+            && !by_value_owned_iter
+            && (needs_borrow
+                || is_borrowed_iterator
+                || needs_mut_borrow
+                || iter_expr.starts_with('&'));
         if tracks_borrowed_loop_var {
             let enumerate_index_var = Self::extract_enumerate_index_var(iterable, pattern);
             let mut all_bindings = std::collections::HashSet::new();
@@ -216,7 +266,38 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // TDD FIX: Track types for ALL bound variables (simple and tuple patterns)
-        if let Some(iterable_type) = self.infer_expression_type(iterable) {
+        if let Some(elem_type) = loop_element_type.clone() {
+            let elem_type = if tracks_borrowed_loop_var
+                && !matches!(
+                    elem_type,
+                    Type::Reference(_) | Type::MutableReference(_)
+                ) {
+                Type::Reference(Box::new(elem_type))
+            } else {
+                elem_type
+            };
+            match pattern {
+                Pattern::Identifier(var) => {
+                    self.local_var_types.insert(var.clone(), elem_type);
+                }
+                Pattern::Tuple(patterns) => {
+                    // elem_type should be Tuple with matching arity
+                    if let Type::Tuple(tuple_types) = &elem_type {
+                        for (pat, ty) in patterns.iter().zip(tuple_types.iter()) {
+                            if let Pattern::Identifier(var) = pat {
+                                self.local_var_types.insert(var.clone(), ty.clone());
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    // For other patterns, use the old loop_var approach
+                    if let Some(var) = &loop_var {
+                        self.local_var_types.insert(var.clone(), elem_type);
+                    }
+                }
+            }
+        } else if let Some(iterable_type) = self.infer_expression_type(iterable) {
             if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
                 let elem_type = if tracks_borrowed_loop_var
                     && !matches!(
@@ -232,7 +313,6 @@ impl<'ast> CodeGenerator<'ast> {
                         self.local_var_types.insert(var.clone(), elem_type);
                     }
                     Pattern::Tuple(patterns) => {
-                        // elem_type should be Tuple with matching arity
                         if let Type::Tuple(tuple_types) = &elem_type {
                             for (pat, ty) in patterns.iter().zip(tuple_types.iter()) {
                                 if let Pattern::Identifier(var) = pat {
@@ -242,7 +322,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     _ => {
-                        // For other patterns, use the old loop_var approach
                         if let Some(var) = &loop_var {
                             self.local_var_types.insert(var.clone(), elem_type);
                         }

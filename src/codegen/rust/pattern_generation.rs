@@ -64,58 +64,152 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn generate_pattern(&self, pattern: &Pattern) -> String {
+        self.generate_pattern_with_scrutinee(pattern, None)
+    }
+
+    /// Qualify bare unit/variant patterns against the match scrutinee enum type
+    /// (`Home` → `Route::Home`) so rustc does not treat them as bindings (E0170).
+    pub(crate) fn generate_pattern_with_scrutinee(
+        &self,
+        pattern: &Pattern,
+        scrutinee_ty: Option<&Type>,
+    ) -> String {
         use crate::parser::EnumPatternBinding;
         match pattern {
             Pattern::Wildcard => "_".to_string(),
-            Pattern::Identifier(name) => name.clone(),
+            Pattern::Identifier(name) => {
+                self.qualify_enum_variant_path(name, scrutinee_ty)
+            }
             Pattern::MutBinding(name) => format!("mut {}", name),
-            Pattern::Reference(inner) => format!("&{}", self.generate_pattern(inner)),
+            Pattern::Reference(inner) => {
+                format!("&{}", self.generate_pattern_with_scrutinee(inner, scrutinee_ty))
+            }
             Pattern::Ref(name) => format!("ref {}", name),
             Pattern::RefMut(name) => format!("ref mut {}", name),
-            Pattern::EnumVariant(name, binding) => match binding {
-                EnumPatternBinding::Single(b) => format!("{}({})", name, b),
-                EnumPatternBinding::Wildcard => format!("{}(_)", name),
-                EnumPatternBinding::None => name.clone(),
-                EnumPatternBinding::Tuple(patterns) => {
-                    let rust_patterns: Vec<String> =
-                        patterns.iter().map(|p| self.generate_pattern(p)).collect();
-                    format!("{}({})", name, rust_patterns.join(", "))
-                }
-                EnumPatternBinding::Struct(fields, has_wildcard) => {
-                    if fields.is_empty() {
-                        format!("{} {{ .. }}", name)
-                    } else {
-                        let field_strs: Vec<String> = fields
+            Pattern::EnumVariant(name, binding) => {
+                let qualified = self.qualify_enum_variant_path(name, scrutinee_ty);
+                match binding {
+                    EnumPatternBinding::Single(b) => format!("{}({})", qualified, b),
+                    EnumPatternBinding::Wildcard => format!("{}(_)", qualified),
+                    EnumPatternBinding::None => qualified,
+                    EnumPatternBinding::Tuple(patterns) => {
+                        let rust_patterns: Vec<String> = patterns
                             .iter()
-                            .map(|(n, pat)| {
-                                if let Pattern::Identifier(binding) = pat {
-                                    if binding == n {
-                                        return n.clone();
-                                    }
-                                }
-                                format!("{}: {}", n, self.generate_pattern(pat))
-                            })
+                            .map(|p| self.generate_pattern_with_scrutinee(p, None))
                             .collect();
-                        if *has_wildcard {
-                            format!("{} {{ {}, .. }}", name, field_strs.join(", "))
+                        format!("{}({})", qualified, rust_patterns.join(", "))
+                    }
+                    EnumPatternBinding::Struct(fields, has_wildcard) => {
+                        if fields.is_empty() {
+                            format!("{} {{ .. }}", qualified)
                         } else {
-                            format!("{} {{ {} }}", name, field_strs.join(", "))
+                            let field_strs: Vec<String> = fields
+                                .iter()
+                                .map(|(n, pat)| {
+                                    if let Pattern::Identifier(binding) = pat {
+                                        if binding == n {
+                                            return n.clone();
+                                        }
+                                    }
+                                    format!(
+                                        "{}: {}",
+                                        n,
+                                        self.generate_pattern_with_scrutinee(pat, None)
+                                    )
+                                })
+                                .collect();
+                            if *has_wildcard {
+                                format!("{} {{ {}, .. }}", qualified, field_strs.join(", "))
+                            } else {
+                                format!("{} {{ {} }}", qualified, field_strs.join(", "))
+                            }
                         }
                     }
                 }
-            },
+            }
             Pattern::Literal(lit) => self.generate_literal(lit),
             Pattern::Tuple(patterns) => {
-                let pattern_strs: Vec<String> =
-                    patterns.iter().map(|p| self.generate_pattern(p)).collect();
+                let pattern_strs: Vec<String> = patterns
+                    .iter()
+                    .map(|p| self.generate_pattern_with_scrutinee(p, None))
+                    .collect();
                 format!("({})", pattern_strs.join(", "))
             }
             Pattern::Or(patterns) => {
-                let pattern_strs: Vec<String> =
-                    patterns.iter().map(|p| self.generate_pattern(p)).collect();
+                let pattern_strs: Vec<String> = patterns
+                    .iter()
+                    .map(|p| self.generate_pattern_with_scrutinee(p, scrutinee_ty))
+                    .collect();
                 pattern_strs.join(" | ")
             }
         }
+    }
+
+    /// When `variant` is an unqualified enum variant matching `scrutinee_ty`, emit `Enum::Variant`.
+    fn qualify_enum_variant_path(&self, variant: &str, scrutinee_ty: Option<&Type>) -> String {
+        if variant.contains("::") {
+            return variant.to_string();
+        }
+        // Only PascalCase identifiers are candidate unit/enum variants (not bindings).
+        // SCREAMING_SNAKE consts (`TAG_NULL`) are not enum variants — leave unqualified.
+        let mut chars = variant.chars();
+        let Some(first) = chars.next() else {
+            return variant.to_string();
+        };
+        if !first.is_ascii_uppercase() {
+            return variant.to_string();
+        }
+        if variant.contains('_') && variant.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
+            return variant.to_string();
+        }
+        let Some(ty) = scrutinee_ty else {
+            return variant.to_string();
+        };
+        let inner = match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        // Option/Result std paths stay unqualified (`Some`, `Ok`, `Err`, `None`).
+        if matches!(inner, Type::Option(_) | Type::Result(_, _))
+            || matches!(
+                inner,
+                Type::Custom(n)
+                    if n == "Option"
+                        || n == "Result"
+                        || n.ends_with("::Option")
+                        || n.ends_with("::Result")
+            )
+        {
+            return variant.to_string();
+        }
+        let Some(key) = self.enum_pattern_registry_key(variant, inner) else {
+            return variant.to_string();
+        };
+        // Only rewrite when this is a known user enum variant — never invent
+        // `u8::TAG_NULL` / primitive associated paths for const patterns.
+        if self.enum_variant_types.contains_key(&key)
+            || self.enum_variant_struct_fields.contains_key(&key)
+        {
+            return key;
+        }
+        let enum_name = match inner {
+            Type::Custom(n) => n.as_str(),
+            Type::Parameterized(n, _) => n.as_str(),
+            _ => return variant.to_string(),
+        };
+        let prefix = format!("{enum_name}::");
+        let known_enum = self
+            .enum_variant_types
+            .keys()
+            .any(|k| k.starts_with(&prefix))
+            || self
+                .enum_variant_struct_fields
+                .keys()
+                .any(|k| k.starts_with(&prefix));
+        if known_enum {
+            return key;
+        }
+        variant.to_string()
     }
 
     pub(super) fn extract_pattern_bindings(

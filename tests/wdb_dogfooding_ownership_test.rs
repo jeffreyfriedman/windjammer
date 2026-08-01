@@ -4784,6 +4784,9 @@ fn wdb_substrate_lsm_test_windjammerdb_cargo_check() {
 
 #[test]
 fn wdb_embedded_windjammerdb_cargo_check() {
+    // Types is a path dependency of embedded; rebuild first so stale `gen/` from an
+    // older `wj` cannot poison cargo check (const match arms, ownership formals).
+    wj_build_windjammerdb_crate("wdb-types");
     wj_build_windjammerdb_crate("wdb-wal");
     wj_build_windjammerdb_crate("wdb-substrate");
     wj_build_windjammerdb_crate("wdb-txn");
@@ -4897,4 +4900,28 @@ fn wdb_reducer_windjammerdb_cargo_check() {
     wj_build_windjammerdb_crate("wdb-circuit");
     wj_build_windjammerdb_crate("wdb-reducer");
     cargo_check_windjammerdb_gen("wdb-reducer", false);
+}
+
+// ── WDB-072 dogfooding: commit_granularity enum match in for-loop ────────────
+
+#[test]
+fn wdb_types_commit_granularity_cargo_check() {
+    wj_build_windjammerdb_crate("wdb-types");
+    cargo_check_windjammerdb_gen("wdb-types", true);
+}
+
+// ── WDB-073 dogfooding: document_layer encode row_id spurious deref (regression) ─
+
+#[test]
+fn wdb_layers_document_encode_row_id_no_spurious_deref() {
+    wj_build_windjammerdb_crate("wdb-layers");
+    let rs_path = require_windjammerdb_crate("wdb-layers")
+        .join("gen/document/document_layer.rs");
+    let rs = fs::read_to_string(&rs_path).unwrap_or_else(|e| {
+        panic!("read {}: {e}", rs_path.display())
+    });
+    assert!(
+        !rs.contains("*row.row_id") && !rs.contains("* row.row_id"),
+        "document_layer encode must not spurious-deref Copy row_id (regression guard).\nGot:\n{rs}"
+    );
 }

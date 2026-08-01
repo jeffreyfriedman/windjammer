@@ -559,3 +559,319 @@ pub fn lookup() -> bool {
         "owned helper-return Key must pass to get without clone. Got:\n{rs}"
     );
 }
+
+// ── WDB-072: enum variant fields in for-loop match are borrowed refs ─────────
+//
+// windjammerdb dogfooding: commit_granularity.wj FlushTrigger::should_flush
+// `for condition in conditions { match condition { RowCount { threshold } => row_count >= threshold }`
+// rustc: expected `u64`, found `&u64` on threshold comparisons.
+
+#[test]
+fn wdb_enum_match_for_loop_borrowed_variant_fields() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "flush.wj",
+        r#"
+pub enum FlushCondition {
+    RowCount { threshold: u64 },
+    IdleMs { threshold: u64 },
+}
+
+pub enum FlushTrigger {
+    Any { conditions: Vec<FlushCondition> },
+    Explicit,
+}
+
+impl FlushTrigger {
+    pub fn should_flush(self, row_count: u64, idle_ms: u64) -> bool {
+        match self {
+            FlushTrigger::Explicit => false,
+            FlushTrigger::Any { conditions } => {
+                for condition in conditions {
+                    match condition {
+                        FlushCondition::RowCount { threshold } => {
+                            if row_count >= threshold {
+                                return true
+                            }
+                        }
+                        FlushCondition::IdleMs { threshold } => {
+                            if idle_ms >= threshold {
+                                return true
+                            }
+                        }
+                    }
+                }
+                false
+            }
+        }
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::flush::FlushCondition
+use crate::flush::FlushTrigger
+
+pub fn run() -> bool {
+    let mut conditions = Vec::new()
+    conditions.push(FlushCondition::RowCount { threshold: 10 })
+    FlushTrigger::Any { conditions: conditions }.should_flush(11, 0)
+}
+"#,
+    );
+
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-073: Copy struct field via borrowed row in for-loop — spurious deref ─
+//
+// windjammerdb dogfooding: document_layer.wj encode(row) in multipass crate build
+// Generated Rust: `self.field_key(*row.row_id, ...)` → E0614 on i64.
+
+#[test]
+fn wdb_copy_field_via_borrowed_struct_no_spurious_deref() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "data_model_layer.wj",
+        r#"
+pub struct ColumnCell {
+    pub ordinal: u32,
+    pub value: u32,
+}
+
+pub struct LogicalRow {
+    pub row_id: i64,
+    pub columns: Vec<ColumnCell>,
+}
+
+pub struct LayerCircuitRef {
+    pub table_id: u32,
+    pub source_node_id: u32,
+}
+"#,
+    );
+    test.add_file(
+        "document_layer.wj",
+        r#"
+use crate::data_model_layer::ColumnCell
+use crate::data_model_layer::LogicalRow
+use crate::data_model_layer::LayerCircuitRef
+
+pub struct DocumentLayer {
+    pub collection_id: u32,
+}
+
+impl DocumentLayer {
+    pub fn new(collection_id: u32) -> DocumentLayer {
+        DocumentLayer { collection_id: collection_id }
+    }
+
+    pub fn encode(self, row: LogicalRow) -> u32 {
+        let mut out_len = 0
+        for cell in row.columns {
+            let _ = self.field_key(row.row_id, cell.ordinal)
+            out_len = out_len + 1
+        }
+        out_len
+    }
+
+    pub fn circuit_source(self) -> LayerCircuitRef {
+        LayerCircuitRef {
+            table_id: self.collection_id,
+            source_node_id: 2,
+        }
+    }
+
+    fn field_key(self, doc_id: i64, field_ordinal: u32) -> i64 {
+        doc_id + field_ordinal as i64
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::data_model_layer::ColumnCell
+use crate::data_model_layer::LogicalRow
+use crate::document_layer::DocumentLayer
+
+pub fn run() -> i64 {
+    let row = LogicalRow {
+        row_id: 42,
+        columns: vec![ColumnCell { ordinal: 1, value: 7 }],
+    }
+    DocumentLayer::new(3).encode(row) as i64
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("document_layer.rs").expect("document_layer.rs");
+    assert!(
+        !rs.contains("*row.row_id") && !rs.contains("* row.row_id"),
+        "multipass encode must not spurious-deref Copy row_id field. Got:\n{rs}"
+    );
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-074: method returning tuple — `.0`/`.1` field access ────────────────
+//
+// windjammerdb dogfooding: trace_ingestion.wj complete_trace() → outcome.1.kept
+
+#[test]
+fn wdb_tuple_return_dot_access_compiles() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "trace.wj",
+        r#"
+pub struct TraceOutcome {
+    pub kept: bool,
+    pub span_count: u32,
+}
+
+pub struct TraceBuffer {
+    pub spans: u32,
+}
+
+impl TraceBuffer {
+    pub fn new() -> TraceBuffer {
+        TraceBuffer { spans: 0 }
+    }
+
+    pub fn ingest(self) -> TraceBuffer {
+        TraceBuffer { spans: self.spans + 1 }
+    }
+
+    pub fn complete(self) -> (TraceBuffer, TraceOutcome) {
+        let outcome = TraceOutcome {
+            kept: self.spans > 0,
+            span_count: self.spans,
+        }
+        (TraceBuffer { spans: 0 }, outcome)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::trace::TraceBuffer
+
+pub fn run() -> bool {
+    let mut buffer = TraceBuffer::new()
+    buffer = buffer.ingest()
+    let outcome = buffer.complete()
+    outcome.1.kept && outcome.0.spans == 0
+}
+"#,
+    );
+
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-075: cross-crate Key::new(encode_key(parts)) owned Vec passthrough ─
+//
+// windjammerdb dogfooding: layer crates call wdb_types::Key::new(encode_key(parts)).
+
+#[test]
+fn wdb_cross_crate_key_new_encode_key_owned_vec() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "key.wj",
+        r#"
+pub struct Key {
+    pub bytes: Vec<u8>,
+}
+
+impl Key {
+    pub fn new(bytes: Vec<u8>) -> Key {
+        Key { bytes: bytes }
+    }
+}
+
+pub fn encode_key(parts: Vec<u8>) -> Vec<u8> {
+    parts
+}
+"#,
+    );
+    test.add_file(
+        "encode.wj",
+        r#"
+use crate::key::Key
+use crate::key::encode_key
+
+pub fn row_key(table_id: u32, row_id: i64) -> Key {
+    let mut parts = Vec::new()
+    parts.push(table_id as u8)
+    parts.push(row_id as u8)
+    Key::new(encode_key(parts))
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::encode::row_key
+
+pub fn run() -> u32 {
+    row_key(1, 2).bytes.len() as u32
+}
+"#,
+    );
+
+    test.assert_compiles_without_error();
+}
+
+// ── WDB-076: same-crate string wrapper — owned literal to extern fn ────────
+//
+// windjammerdb dogfooding: mcp_adapter.wj mcp_build_tool_result("wdb_query", count)
+
+#[test]
+fn wdb_same_crate_string_wrapper_owned_literal() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "rpc.wj",
+        r#"
+extern fn build_result_ffi(tool_name: string, row_count: u64) -> string
+
+pub fn build_result(tool_name: string, row_count: u64) -> string {
+    build_result_ffi(tool_name, row_count)
+}
+"#,
+    );
+    test.add_file(
+        "adapter.wj",
+        r#"
+use crate::rpc::build_result
+
+pub struct QueryResult {
+    pub row_count: u32,
+}
+
+pub struct Adapter {
+    pub name: string,
+}
+
+impl Adapter {
+    pub fn encode(self, result: QueryResult) -> string {
+        build_result("wdb_query", result.row_count as u64)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::adapter::Adapter
+use crate::adapter::QueryResult
+
+pub fn run() -> string {
+    Adapter { name: "windjammerdb" }.encode(QueryResult { row_count: 3 })
+}
+"#,
+    );
+
+    test.assert_compiles_without_error();
+}

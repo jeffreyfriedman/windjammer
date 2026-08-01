@@ -82,6 +82,12 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             }
             Expression::MethodCall { method, .. } => {
+                // `chars()` / `bytes()` yield owned Copy elements — not `&T`.
+                if crate::codegen::rust::stdlib_method_traits::method_yields_owned_iterator_elements(
+                    method,
+                ) {
+                    return false;
+                }
                 crate::codegen::rust::stdlib_method_traits::method_returns_iterator(method)
             }
             _ => false,
