@@ -40,6 +40,19 @@ fn mod_declared_in(content: &str, name: &str) -> bool {
 /// When `mod.wj` exists, stub-merge must not re-add stale `.rs` files for modules no longer
 /// declared in `mod.wj` (the compiler already regenerated `mod.rs` without them). Hand-written
 /// `foo.rs` without `foo.wj` is still merged when `mod.wj` exists but omits `foo` (legacy FFI pattern).
+///
+/// Crate binaries (`fn main`) left in the output dir by post-build steps must never be merged —
+/// they are `[[bin]]` targets, not library modules (avoids rustc E0433 / WJ0006).
+fn is_crate_binary_rs(path: &Path) -> bool {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    content.lines().any(|line| {
+        let t = line.trim();
+        t.starts_with("fn main(") || t.starts_with("pub fn main(")
+    })
+}
+
 fn should_merge_extra_module(name: &str, sibling_source_dir: Option<&Path>) -> bool {
     let Some(sdir) = sibling_source_dir else {
         return true;
@@ -320,6 +333,10 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                                     if module_name.contains('.') {
                                         continue;
                                     }
+                                    // Post-build [[bin]] leftovers (fn main) are not lib modules.
+                                    if is_crate_binary_rs(&path) {
+                                        continue;
+                                    }
                                     if !mod_declared_in(&content, module_name)
                                         && should_merge_extra_module(
                                             module_name,
@@ -420,6 +437,10 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                         }
                         // Skip filenames with dots (e.g. "vnode.stable.rs") — invalid Rust module names.
                         if module_name.contains('.') {
+                            continue;
+                        }
+                        // Post-build [[bin]] leftovers (fn main) are not lib modules.
+                        if is_crate_binary_rs(&path) {
                             continue;
                         }
                         modules.push(module_name.to_string());
