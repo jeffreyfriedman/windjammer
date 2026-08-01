@@ -122,21 +122,37 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
     }
     // Bare WJ Custom formals (`other: Lsn`, `key: Key`) emit owned Rust unless codegen
     // recorded shared-ref (`emitted_rust_ref_params[idx] == true`) OR analyzer converged
-    // Borrowed + `Reference(T)` for a non-Copy type (`MemoryEngine::put(key: &Key)`).
+    // Borrowed + `Reference(T)` for a non-Copy type (`MemoryEngine::put(key: &Key)` /
+    // `QuestManager::is_quest_active(quest_id: &QuestId)`).
     // Stale `Reference(T)` on Copy aggregates must not force call-site `&` (WDB-060).
+    //
+    // When codegen recorded owned emission (`emitted_rust_ref_params[idx] == false`) or
+    // ownership is Owned, bare Custom is owned even if `param_types` still has a stale
+    // `Reference(T)` (ReBAC `policy: Policy` after keep-owned refresh).
     if let Some(formal) = sig.formal_param_type(param_idx) {
+        let emits_shared_flag = sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied();
+        if matches!(formal, Type::Custom(_))
+            && !crate::codegen::rust::types::is_windjammer_text_type(formal)
+            && (emits_shared_flag == Some(false)
+                || matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Owned)
+                ))
+            && emits_shared_flag != Some(true)
+        {
+            return false;
+        }
         let bare = match formal {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
             other => other,
         };
         if matches!(bare, Type::Custom(_))
             && !crate::codegen::rust::types::is_windjammer_text_type(bare)
-            && sig
-                .emitted_rust_ref_params
-                .as_ref()
-                .and_then(|flags| flags.get(param_idx))
-                .copied()
-                != Some(true)
+            && emits_shared_flag != Some(true)
         {
             let is_copy_aggregate = (crate::codegen::rust::type_analysis::is_copy_type(bare)
                 || matches!(
@@ -151,7 +167,7 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
             ) && sig.param_types.get(param_idx).is_some_and(|t| {
                 matches!(t, Type::Reference(_) | Type::MutableReference(_))
             });
-            // Non-Copy Custom with body-converged `&T` (Key, Value, …) — trust borrow.
+            // Non-Copy Custom with body-converged `&T` (Key, Value, QuestId, …) — trust borrow.
             if analyzer_converged_borrow && !is_copy_aggregate {
                 return true;
             }
@@ -630,6 +646,34 @@ pub fn should_borrow_at_call_site_with_copy_check(
         return CallSiteBorrowDecision::default();
     }
 
+    // Registry-aware Copy aggregates (caller sets `formal_type_is_copy` from
+    // `CodeGenerator::is_type_copy` on the bare pointee) emit owned Rust formals
+    // even when analyzer left Borrowed/`Reference(T)` from field-only reads
+    // (`BatchHandle` / WDB-060 `Lsn`). Apply before registry-wrap borrow so
+    // cross-module call sites do not emit `&handle` into an owned formal.
+    // Explicit `emitted_rust_ref_params[idx] == true` still forces shared borrow.
+    // True `&mut T` / MutBorrowed Copy formals (`apply_rotation(t: &mut Transform)`)
+    // must still get `&mut` at call sites — do not early-return those.
+    if formal_type_is_copy && !is_collection_key {
+        let emitted_shared = sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(true);
+        let expects_mut = matches!(effective, OwnershipMode::MutBorrowed)
+            || sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+            || sig
+                .formal_param_type(param_idx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)));
+        if !emitted_shared && !expects_mut {
+            return CallSiteBorrowDecision::default();
+        }
+    }
+
     // Already allocated an owned String from a literal — never wrap in `&`
     // (`&"lit".to_string()`). Owned formals want the allocation bare; `&str`
     // formals should have kept the bare literal instead.
@@ -704,11 +748,6 @@ pub fn should_borrow_at_call_site_with_copy_check(
             strip_clone: arg_str.ends_with(".clone()"),
             ..Default::default()
         };
-    }
-
-    // Copy formal types: pass by value, don't borrow (unless collection key lookup).
-    if formal_type_is_copy && !is_collection_key {
-        return CallSiteBorrowDecision::default();
     }
 
     // Plain owned `string` formals pass by value until codegen confirms an emitted `&str` formal.
