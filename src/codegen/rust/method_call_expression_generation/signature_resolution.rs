@@ -72,16 +72,11 @@ impl<'ast> CodeGenerator<'ast> {
             let from_method_registry = self.lookup_method_signature(tn, method).and_then(|ms| {
                 let mut sig = ms.to_function_signature();
                 let qualified = format!("{tn}::{method}");
-                if let Some(reg) = self
-                    .signature_registry
-                    .get_signature(&qualified)
-                    .or_else(|| self.get_signature_with_global(&qualified))
-                {
+                if let Some(reg) = self.get_signature_with_global(&qualified) {
                     if reg.emitted_rust_ref_params.is_some() {
-                        sig.emitted_rust_ref_params = reg.emitted_rust_ref_params.clone();
-                        sig.param_types = reg.param_types.clone();
-                        sig.param_ownership = reg.param_ownership.clone();
-                        sig.formal_param_types = reg.formal_param_types.clone();
+                        crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                            &mut sig, reg,
+                        );
                     }
                 }
                 if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(

@@ -13,6 +13,23 @@ use crate::ir::target_encodings::{apply_coercion, Target};
 use crate::parser::{Expression, Literal, Statement, Type};
 
 impl<'ast> CodeGenerator<'ast> {
+    fn refreshed_call_site_sig_for_arg<'a>(
+        &self,
+        registry: &'a SignatureRegistry,
+        callee_name: &str,
+        arg_index: usize,
+        sig: &crate::analyzer::FunctionSignature,
+    ) -> crate::analyzer::FunctionSignature {
+        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+            Some(sig.clone()),
+            callee_name,
+            arg_index,
+            self.global_signature_registry.as_deref(),
+            registry,
+        )
+        .unwrap_or_else(|| sig.clone())
+    }
+
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
     pub(crate) fn apply_ir_call_site_coercion(
         &self,
@@ -591,15 +608,25 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Final associated-call refresh: importer stubs may carry all-false
-        // `emitted_rust_ref_params` while the defining module published `[false, true]`.
-        if let Some(rt) = receiver_type_name {
-            if let Some(resolved) = self.resolve_method_function_signature(
-                rt,
-                method_simple,
-                user_arg_count.unwrap_or(arg_index + 1),
-            ) {
-                sig = resolved;
-            }
+        // `emitted_rust_ref_params` while the defining module published `[true]`.
+        if let Some(refreshed) =
+            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                if let Some(rt) = receiver_type_name {
+                    self.resolve_method_function_signature(
+                        rt,
+                        method_simple,
+                        user_arg_count.unwrap_or(arg_index + 1),
+                    )
+                } else {
+                    None
+                },
+                callee_name,
+                arg_index,
+                self.global_signature_registry.as_deref(),
+                registry,
+            )
+        {
+            sig = refreshed;
         }
 
         let mut param_idx = sig.arg_param_index(arg_index);
@@ -1219,17 +1246,25 @@ impl<'ast> CodeGenerator<'ast> {
                 user_arg_count,
                 Some(&sig),
             );
-        if !expects_mut_here
-            && (crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
-                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    &sig, param_idx,
+        if !expects_mut_here {
+            let peel_sig =
+                self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, &sig);
+            let peel_pidx = peel_sig.arg_param_index(arg_index);
+            if !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &peel_sig, peel_pidx,
+            ) && !self.ir_sig_arg_expects_shared_borrow(&peel_sig, arg_index)
+                && (crate::ir::signature_bridge::call_site_expects_owned_pass(
+                    &peel_sig, peel_pidx,
+                ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &peel_sig, peel_pidx,
                 ))
-        {
-            if coerced.starts_with("&mut ")
-                || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
             {
-                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
-                    .to_string();
+                if coerced.starts_with("&mut ")
+                    || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
+                {
+                    coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                        .to_string();
+                }
             }
         } else if !expects_mut_here
             && matches!(
@@ -1320,11 +1355,17 @@ impl<'ast> CodeGenerator<'ast> {
         ) || sig.param_types.get(param_idx).is_some_and(|t| {
             matches!(t, Type::MutableReference(_))
         });
+        let peel_sig =
+            self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, &sig);
+        let peel_pidx = peel_sig.arg_param_index(arg_index);
         if !expects_mut
-            && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
-            && (crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
+            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &peel_sig, peel_pidx,
+            )
+            && !self.ir_sig_arg_expects_shared_borrow(&peel_sig, arg_index)
+            && (crate::ir::signature_bridge::call_site_expects_owned_pass(&peel_sig, peel_pidx)
                 || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    &sig, param_idx,
+                    &peel_sig, peel_pidx,
                 ))
         {
             if coerced.starts_with("&mut ")
@@ -2488,48 +2529,64 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         for rt in &receiver_types {
-            if let Some(sig) =
-                self.resolve_method_function_signature(rt, method, arg_count)
+            let qualified = format!("{rt}::{method}");
+            let initial = self.resolve_method_function_signature(rt, method, arg_count);
+            let Some(sig) =
+                crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                    initial,
+                    &qualified,
+                    arg_index,
+                    self.global_signature_registry.as_deref(),
+                    &self.signature_registry,
+                )
+            else {
+                continue;
+            };
+            let pidx = sig.arg_param_index(arg_index);
+            // Emitted owned formals win over stale MutBorrowed/Borrowed metadata.
+            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, pidx,
+            ) {
+                if coerced.starts_with('&') {
+                    *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                        coerced,
+                    );
+                }
+                return;
+            }
+            let wants_mut = sig.param_types.get(pidx).is_some_and(|t| {
+                matches!(t, Type::MutableReference(_))
+            }) || matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                    &sig, arg_index,
+                ),
+                crate::analyzer::OwnershipMode::MutBorrowed
+            );
+            if wants_mut {
+                // String literals are never `&mut` lvalues.
+                if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                {
+                    return;
+                }
+                if coerced.starts_with("&mut ") {
+                    return;
+                }
+                if coerced.starts_with('&') {
+                    *coerced = format!(
+                        "&mut {}",
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                    );
+                } else {
+                    *coerced = format!("&mut {coerced}");
+                }
+                return;
+            }
+            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &sig, pidx,
+            ) && !coerced.starts_with('&')
             {
-                let pidx = sig.arg_param_index(arg_index);
-                // Emitted owned formals win over stale MutBorrowed/Borrowed metadata.
-                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    &sig, pidx,
-                ) {
-                    if coerced.starts_with('&') {
-                        *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
-                            coerced,
-                        );
-                    }
-                    return;
-                }
-                let wants_mut = sig.param_types.get(pidx).is_some_and(|t| {
-                    matches!(t, Type::MutableReference(_))
-                }) || matches!(
-                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                        &sig, arg_index,
-                    ),
-                    crate::analyzer::OwnershipMode::MutBorrowed
-                );
-                if wants_mut {
-                    // String literals are never `&mut` lvalues.
-                    if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
-                    {
-                        return;
-                    }
-                    if coerced.starts_with("&mut ") {
-                        return;
-                    }
-                    if coerced.starts_with('&') {
-                        *coerced = format!(
-                            "&mut {}",
-                            crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-                        );
-                    } else {
-                        *coerced = format!("&mut {coerced}");
-                    }
-                    return;
-                }
+                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(coerced);
+                return;
             }
         }
         if coerced.starts_with('&') {

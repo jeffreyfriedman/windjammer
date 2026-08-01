@@ -339,16 +339,40 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
 
     let count = arg_count.unwrap_or(arg_index + 1);
     if let (Some(rt), Some(method)) = (receiver_type, method) {
+        let qualified = format!("{rt}::{method}");
         if let Some(resolved) = gen.resolve_method_function_signature(rt, method, count) {
-            if callee_arg_expects_shared_vec_ref(&resolved, arg_index) {
-                return format!("&{coerced}");
+            if let Some(refreshed) =
+                crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                    Some(resolved),
+                    &qualified,
+                    arg_index,
+                    gen.global_signature_registry.as_deref(),
+                    &gen.signature_registry,
+                )
+            {
+                if callee_arg_expects_shared_vec_ref(&refreshed, arg_index) {
+                    return format!("&{coerced}");
+                }
             }
         }
-        let qualified = format!("{rt}::{method}");
         if let Some(global) = gen.get_signature_with_global(&qualified) {
             if callee_arg_expects_shared_vec_ref(global, arg_index) {
                 return format!("&{coerced}");
             }
+        }
+    }
+
+    if let Some(refreshed) =
+        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+            Some(sig.clone()),
+            sig.name.as_str(),
+            arg_index,
+            gen.global_signature_registry.as_deref(),
+            &gen.signature_registry,
+        )
+    {
+        if callee_arg_expects_shared_vec_ref(&refreshed, arg_index) {
+            return format!("&{coerced}");
         }
     }
 
