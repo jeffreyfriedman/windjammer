@@ -743,7 +743,12 @@ impl<'ast> CodeGenerator<'ast> {
             let trimmed = line.trim();
             trimmed.ends_with("::*;") && !trimmed.starts_with("//")
         });
-        let will_inject_super_glob = self.is_module && !has_explicit_glob_imports;
+        // Parent `pub use a::*; pub use b::*;` makes `use super::*` pull an ambiguous
+        // namespace (`deny(ambiguous_glob_imports)` under wasm). Prefer precise sibling
+        // imports via `format_auto_super_type_imports` instead of a blanket glob.
+        let parent_multi_glob = self.parent_module_has_multiple_glob_reexports();
+        let will_inject_super_glob =
+            self.is_module && !has_explicit_glob_imports && !parent_multi_glob;
         let auto_super_type_imports = if will_inject_super_glob {
             String::new()
         } else {
@@ -847,7 +852,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .parent()
                 .map(|d| d.join("Cargo.toml").exists())
                 .unwrap_or(false);
-        if self.is_module && !has_explicit_glob_imports && !is_lib_root {
+        if self.is_module && !has_explicit_glob_imports && !is_lib_root && !parent_multi_glob {
             implicit_imports.push_str("#[allow(unused_imports)]\nuse super::*;\n");
         }
 
@@ -940,5 +945,35 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
 
         output
+    }
+
+    /// True when the parent `mod.wj` (or crate-root `mod.wj`) has two or more
+    /// `pub use …::*` glob re-exports. Children that then inject `use super::*`
+    /// inherit an ambiguous namespace and fail under `deny(ambiguous_glob_imports)`.
+    fn parent_module_has_multiple_glob_reexports(&self) -> bool {
+        let parent_mod_wj = self
+            .current_wj_file
+            .parent()
+            .map(|dir| dir.join("mod.wj"))
+            .filter(|p| p.is_file())
+            .or_else(|| {
+                self.library_source_root
+                    .as_ref()
+                    .map(|root| root.join("mod.wj"))
+                    .filter(|p| p.is_file())
+            });
+        let Some(path) = parent_mod_wj else {
+            return false;
+        };
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            return false;
+        };
+        let glob_reexports = content.lines().filter(|line| {
+            let t = line.trim();
+            !t.starts_with("//")
+                && (t.starts_with("pub use ") || t.starts_with("use "))
+                && (t.contains("::*") || t.ends_with("::*"))
+        });
+        glob_reexports.count() >= 2
     }
 }
