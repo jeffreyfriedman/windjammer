@@ -10,14 +10,11 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! REGRESSION (dogfood platform api-check — 22× E0308):
 //!
-//! `std::db` / `windjammer_runtime::db::Connection::query` takes `params: Vec<String>`
-//! by value. Codegen emits `&vec![...]` at call sites →
-//! `expected Vec<String>, found &Vec<String>` (22× on platform `make test`).
-//!
-//! WJ `std/db.wj` declares owned `Vec<string>`; runtime Rust keeps owned `Vec<String>`.
-//! Call sites must pass owned vec literals, not auto-borrowed `&vec![...]`.
+//! `conn.query(sql, vec![...])?` must pass owned `Vec<String>` to
+//! `windjammer_runtime::db::Connection::query`. Unused stub formals in
+//! `std/db.wj` must not converge to Borrowed and emit `&vec![...]`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -59,5 +56,41 @@ fn main() {
     assert!(
         !rs.contains("&vec!["),
         "Connection::query params are Vec<String> by value (runtime); must not emit &vec![...] (dogfood). Got:\n{rs}"
+    );
+}
+
+#[test]
+fn std_db_query_try_op_vec_params_must_not_auto_borrow() {
+    use std::fs;
+    use tempfile::TempDir;
+    use windjammer::compiler::build_project;
+    use windjammer::CompilationTarget;
+
+    let source = r#"
+use std::db
+
+fn insert_sql() -> string {
+    "select 1" + ""
+}
+
+pub fn create_row(name: string) -> Result<int, string> {
+    let conn = db.connect("sqlite::memory:" + "")?
+    let rows = conn.query(insert_sql(), vec!["demo" + "", name + ""])?
+    Ok(rows.len())
+}
+
+fn main() {}
+"#;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let wj = tmp.path().join("db_try_vec.wj");
+    fs::write(&wj, source).unwrap();
+    let out = tmp.path().join("build");
+    build_project(&wj, &out, CompilationTarget::Rust, false).expect("compile");
+    let rs = fs::read_to_string(out.join("db_try_vec.rs")).unwrap_or_default();
+
+    assert!(
+        !rs.contains("&vec!["),
+        "TryOp query params must stay owned Vec (dogfood). Got:\n{rs}"
     );
 }

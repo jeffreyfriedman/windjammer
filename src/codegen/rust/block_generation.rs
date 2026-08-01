@@ -393,6 +393,16 @@ impl<'ast> CodeGenerator<'ast> {
         // In that case, fall through to normal block generation which will generate `if let` via Statement::Match handler
         if stmts.len() == 1 {
             if let Statement::Match { value, arms, .. } = &stmts[0] {
+                // Align with auto_clone Expression::Block indexing: nested Match is
+                // collected at `block_counter = enclosing_stmt_idx + 1` while the parent
+                // counter is not advanced. Outer `generate_block` already set
+                // `auto_clone_counter = enclosing_idx + 1`, so Match must use that index
+                // for clone sites (scrutinee struct literals / moves). Skipping this
+                // desyncs `needs_clone` and causes E0382 (move in match scrutinee, clone
+                // on the following statement that shares the analysis index).
+                let saved_stmt_idx = self.current_statement_idx;
+                self.current_statement_idx = self.auto_clone_counter;
+
                 // Check if this is an if-let pattern that should be generated as `if let`
                 let is_if_let_pattern = arms.len() == 2
                     && matches!(arms[1].pattern, Pattern::Wildcard)
@@ -409,6 +419,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.indent_level -= 1;
                     output.push_str(&self.indent());
                     output.push('}');
+                    self.current_statement_idx = saved_stmt_idx;
                     self.in_unsafe_block = old_in_unsafe;
                     return output;
                 }
@@ -651,6 +662,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 output.push_str(&self.indent());
                 output.push('}');
+                self.current_statement_idx = saved_stmt_idx;
                 self.in_unsafe_block = old_in_unsafe;
                 return output;
             }

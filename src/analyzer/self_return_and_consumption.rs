@@ -1285,6 +1285,10 @@ impl<'ast> Analyzer<'ast> {
                     || self.expression_uses_identifier(name, end)
             }
             Expression::TryOp { expr, .. } => self.expression_uses_identifier(name, expr),
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|arg| self.expression_uses_identifier(name, arg)),
+            Expression::Await { expr, .. } => self.expression_uses_identifier(name, expr),
             _ => false,
         }
     }
