@@ -81,6 +81,8 @@ pub fn run() {
     );
 
     let map = test.compile().expect("compile");
+    let seg = map.get("wal/segment.rs").expect("wal/segment.rs");
+    eprintln!("SEGMENT:\n{seg}");
     let rs = map.get("wal/writer.rs").expect("wal/writer.rs");
     assert!(
         rs.contains("from_bytes(&snapshot)")
@@ -313,12 +315,17 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let rs = map.get("wal/segment.rs").expect("wal/segment.rs");
+    let put_call = rs.contains("WalRecord::put(");
+    let borrows_key = rs.contains("&key") || rs.contains("& key");
+    let forwards_ref_key = rs.contains("key: &Vec") && rs.contains(", key,") || rs.contains(", key)");
     assert!(
-        rs.contains("WalRecord::put(") && (rs.contains("&key") || rs.contains("& key")),
+        put_call && (borrows_key || forwards_ref_key),
         "WDB-049d: append_put must borrow key at WalRecord::put call. Got:\n{rs}"
     );
+    let borrows_value = rs.contains("&value") || rs.contains("& value");
+    let forwards_ref_value = rs.contains("value: &Vec") && (rs.contains(", value)") || rs.contains(", value,"));
     assert!(
-        rs.contains("WalRecord::put(") && (rs.contains("&value") || rs.contains("& value")),
+        put_call && (borrows_value || forwards_ref_value),
         "WDB-049d: append_put must borrow value at WalRecord::put call. Got:\n{rs}"
     );
 }
@@ -393,8 +400,11 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let rs = map.get("wal/segment.rs").expect("wal/segment.rs");
+    let delete_call = rs.contains("WalRecord::delete(");
+    let borrows_key = rs.contains("&key") || rs.contains("& key");
+    let forwards_ref_key = rs.contains("key: &Vec") && (rs.contains(", key)") || rs.contains(", key,"));
     assert!(
-        rs.contains("WalRecord::delete(") && (rs.contains("&key") || rs.contains("& key")),
+        delete_call && (borrows_key || forwards_ref_key),
         "WDB-049e: append_delete must borrow key at WalRecord::delete call. Got:\n{rs}"
     );
 }

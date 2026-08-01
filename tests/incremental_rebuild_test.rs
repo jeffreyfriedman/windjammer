@@ -97,6 +97,58 @@ pub fn make_squad(id: string) -> Squad { Squad::new(id) }
 }
 
 #[test]
+fn test_dependency_graph_super_import_depends_on_sibling_module() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let table = src.join("table.wj");
+    let datatable = src.join("datatable.wj");
+    fs::write(
+        &table,
+        r#"pub struct Table { n: int }
+impl Table {
+    pub fn bump(self) -> Table { self }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        &datatable,
+        r#"use super::table::Table
+pub struct DataTable { table: Table }
+impl DataTable {
+    pub fn bump(self) -> DataTable {
+        self.table = self.table.bump()
+        self
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    // Importer listed first so index order alone would put datatable before table.
+    let sources = vec![
+        (datatable.clone(), fs::read_to_string(&datatable).unwrap()),
+        (table.clone(), fs::read_to_string(&table).unwrap()),
+    ];
+    let mut programs = Vec::new();
+    for (file, source) in &sources {
+        let (_, program) = parse_file(file, source);
+        programs.push(program);
+    }
+
+    let graph = DependencyGraph::build(&sources, &programs, &src);
+    let sorted = graph.sort_indices_for_codegen(&[0, 1]);
+    assert_eq!(
+        sorted,
+        vec![1, 0],
+        "table must codegen before datatable importer via super::table; got {:?}",
+        sorted
+    );
+}
+
+#[test]
 fn test_dependency_graph_braced_crate_import_depends_on_defining_module() {
     let dir = TempDir::new().unwrap();
     let src = dir.path().join("src");

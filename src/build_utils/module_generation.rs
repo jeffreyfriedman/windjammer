@@ -29,6 +29,15 @@ fn pub_mod_names_from_mod_wj(content: &str) -> HashSet<String> {
     names
 }
 
+/// Cargo/layout directory names that must never become `pub mod` entries in generated output.
+/// Leftover `gen/src/` or `build/src/` trees must not split type identity (`foo::Bar` vs `src::foo::Bar`).
+fn is_reserved_cargo_layout_dir(name: &str) -> bool {
+    matches!(
+        name,
+        "src" | "target" | "examples" | "benches" | "tests" | "build" | ".git"
+    )
+}
+
 fn mod_declared_in(content: &str, name: &str) -> bool {
     let pub_mod = format!("pub mod {};", name);
     let plain = format!("mod {};", name);
@@ -53,7 +62,14 @@ fn is_crate_binary_rs(path: &Path) -> bool {
     })
 }
 
-fn should_merge_extra_module(name: &str, sibling_source_dir: Option<&Path>) -> bool {
+fn should_merge_extra_module(
+    name: &str,
+    sibling_source_dir: Option<&Path>,
+    output_dir: &Path,
+) -> bool {
+    if is_crate_root_handwritten_module(output_dir, name) {
+        return false;
+    }
     let Some(sdir) = sibling_source_dir else {
         return true;
     };
@@ -87,6 +103,33 @@ fn should_merge_extra_module(name: &str, sibling_source_dir: Option<&Path>) -> b
         return false;
     }
     true
+}
+
+/// Hand-written module declared in crate-root `lib.rs` and living beside the transpile output
+/// (e.g. `wdb-types/ffi/` + `lib.rs` with `mod ffi; include!("gen/mod.rs")`). Must not be
+/// re-declared inside `gen/mod.rs` or rustc reports E0428 duplicate definitions.
+fn is_crate_root_handwritten_module(output_dir: &Path, name: &str) -> bool {
+    let Some(crate_root) = output_dir.parent() else {
+        return false;
+    };
+    let lib_rs = crate_root.join("lib.rs");
+    let Ok(lib_content) = std::fs::read_to_string(&lib_rs) else {
+        return false;
+    };
+    if !lib_content.contains("include!(") || !mod_declared_in(&lib_content, name) {
+        return false;
+    }
+    // Module must live at crate root as hand-written Rust (no `.wj` source).
+    let src_dir = crate_root.join("src");
+    if src_dir.join(format!("{name}.wj")).exists() {
+        return false;
+    }
+    if crate_root.join(format!("{name}.wj")).exists() {
+        return false;
+    }
+    let module_dir = crate_root.join(name);
+    let module_rs = crate_root.join(format!("{name}.rs"));
+    (module_dir.is_dir() && module_dir.join("mod.rs").exists()) || module_rs.is_file()
 }
 
 /// Generate mod.rs file with pub mod declarations and re-exports.
@@ -236,7 +279,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
             p.is_dir()
                 && p.file_name()
                     .and_then(|n| n.to_str())
-                    .map(|n| n != "target" && n != ".git")
+                    .map(|n| !is_reserved_cargo_layout_dir(n))
                     .unwrap_or(true)
         })
         .collect();
@@ -313,9 +356,10 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     let path = entry.path();
                     if path.is_dir() {
                         if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
-                            if path.join("mod.rs").exists()
+                            if !is_reserved_cargo_layout_dir(dir_name)
+                                && path.join("mod.rs").exists()
                                 && !mod_declared_in(&content, dir_name)
-                                && should_merge_extra_module(dir_name, sibling_src.as_deref())
+                                && should_merge_extra_module(dir_name, sibling_src.as_deref(), output_dir)
                             {
                                 extra_modules.push(dir_name.to_string());
                             }
@@ -341,6 +385,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                                         && should_merge_extra_module(
                                             module_name,
                                             sibling_src.as_deref(),
+                                            output_dir,
                                         )
                                     {
                                         extra_modules.push(module_name.to_string());
@@ -475,8 +520,13 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
             }
         } else if path.is_dir() {
             if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                if is_reserved_cargo_layout_dir(dir_name) {
+                    continue;
+                }
                 let mod_rs_path = path.join("mod.rs");
-                if mod_rs_path.exists() {
+                if mod_rs_path.exists()
+                    && should_merge_extra_module(dir_name, sibling_src.as_deref(), output_dir)
+                {
                     modules.push(dir_name.to_string());
                 }
             }
@@ -493,7 +543,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     // When mod.wj declares explicit modules, filter out stale .rs files for modules
     // that are no longer declared. Without this, a removed module (e.g. `beta`) stays
     // in mod.rs because its .rs file persists from the previous build.
-    modules.retain(|m| should_merge_extra_module(m, sibling_src.as_deref()));
+    modules.retain(|m| should_merge_extra_module(m, sibling_src.as_deref(), output_dir));
 
     if modules.is_empty() {
         return Ok(());

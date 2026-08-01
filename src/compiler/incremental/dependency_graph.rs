@@ -203,14 +203,28 @@ fn resolve_import(
     }
     if import_path[0] == "super" {
         let mut base = current_module.to_vec();
+        // Leading `super::` ascends one module; segments after `import_path[0]` are
+        // siblings/cousins under that parent (`datatable` + `super::table` → `table`).
+        if !base.is_empty() {
+            base.pop();
+        }
         for segment in &import_path[1..] {
             if segment == "super" {
-                base.pop();
+                if !base.is_empty() {
+                    base.pop();
+                }
             } else {
                 base.push(segment.clone());
             }
         }
-        return module_to_index.get(&base).copied();
+        let mut resolved = base;
+        while !resolved.is_empty() {
+            if let Some(&idx) = module_to_index.get(&resolved) {
+                return Some(idx);
+            }
+            resolved.pop();
+        }
+        return None;
     }
     // `use squad::Squad` depends on module `squad`, not a fictitious `squad::Squad` path.
     let mut resolved = import_path;

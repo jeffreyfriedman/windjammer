@@ -973,9 +973,27 @@ pub(crate) fn shared_ref_emission_beats(
     pref_has && !other_has
 }
 
-/// Prefer a defining-module refresh that demoted a WJ `string` formal to `&str` over a
-/// stale early `emitted_rust_ref_params = Some([false, …])` (WDB-049 `replay_to_lsn`).
-pub(crate) fn prefer_shared_text_ref_signature(
+fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usize) -> bool {
+    sig.formal_param_type(param_idx)
+        .or_else(|| sig.param_types.get(param_idx))
+        .is_some_and(|t| {
+            let bare = match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            matches!(bare, Type::Vec(_))
+                || matches!(bare, Type::Parameterized(name, _) if name == "Vec")
+                || matches!(
+                    bare,
+                    Type::Parameterized(name, _)
+                        if name == "HashMap" || name == "Map" || name == "BTreeMap"
+                )
+        })
+}
+
+/// Prefer defining-module refresh with shared-ref emission (`&str`, `&Vec`, …) over a
+/// stale call-site stub lacking `emitted_rust_ref_params` confirmation (WDB-049).
+pub(crate) fn prefer_shared_ref_signature(
     preferred: Option<FunctionSignature>,
     challenger: Option<&FunctionSignature>,
     param_idx: usize,
@@ -995,13 +1013,60 @@ pub(crate) fn prefer_shared_text_ref_signature(
     {
         return Some(pref);
     }
-    // Only upgrade stale owned WJ `string` formals — never non-text owned contracts.
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
+        return Some(pref);
+    }
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         &pref, param_idx,
-    ) {
+    ) || bare_formal_is_vec_or_map(&pref, param_idx)
+    {
         return Some(challenger.clone());
     }
     Some(pref)
+}
+
+/// Prefer a defining-module refresh that demoted a WJ `string` formal to `&str` over a
+/// stale early `emitted_rust_ref_params = Some([false, …])` (WDB-049 `replay_to_lsn`).
+pub(crate) fn prefer_shared_text_ref_signature(
+    preferred: Option<FunctionSignature>,
+    challenger: Option<&FunctionSignature>,
+    param_idx: usize,
+) -> Option<FunctionSignature> {
+    prefer_shared_ref_signature(preferred, challenger, param_idx)
+}
+
+/// Merge defining-module codegen refresh into a resolved call signature for borrow lowering.
+///
+/// Associated calls (`WalSegment::from_bytes`) and free calls both need the defining
+/// module's `emitted_rust_ref_params` — not just the caller's import stub.
+pub(crate) fn refresh_call_site_signature_for_arg(
+    initial: Option<FunctionSignature>,
+    callee_name: &str,
+    arg_index: usize,
+    global: Option<&crate::analyzer::SignatureRegistry>,
+    local: &crate::analyzer::SignatureRegistry,
+) -> Option<FunctionSignature> {
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    let pidx = initial
+        .as_ref()
+        .map(|s| s.arg_param_index(arg_index))
+        .unwrap_or(arg_index);
+    let mut refreshed = pick_codegen_refreshed_signature([
+        global.and_then(|g| g.get_signature(callee_name).cloned()),
+        global.and_then(|g| g.get_signature(simple).cloned()),
+        local.get_signature(callee_name).cloned(),
+        local.get_signature(simple).cloned(),
+        initial.clone(),
+    ]);
+    for challenger in [
+        global.and_then(|g| g.get_signature(callee_name)),
+        global.and_then(|g| g.get_signature(simple)),
+        local.get_signature(callee_name),
+        local.get_signature(simple),
+    ] {
+        refreshed = prefer_shared_ref_signature(refreshed, challenger, pidx);
+    }
+    refreshed.or(initial)
 }
 
 /// Prefer converged global signatures over per-file declaration stubs at call sites.

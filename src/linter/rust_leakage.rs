@@ -250,7 +250,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0005".to_string(),
                         category: LintCategory::Style,
-                        level: LintLevel::Error,
+                        level: LintLevel::Warning,
                         message: "explicit .clone() call".to_string(),
                         location: loc,
                         help: Some(

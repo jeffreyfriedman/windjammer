@@ -1092,9 +1092,11 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
         }
 
-        // E0308: Borrowed Windjammer `string` parameters lower to `&str`. `.clone()` on `&str`
-        // is still `&str`, but users mean an owned copy → emit `.to_string()`.
+        // Explicit `.clone()` in WJ source is Rust leakage (W0005). Strip it and emit the
+        // receiver; auto-clone on move+reuse still runs elsewhere in codegen.
         if method == "clone" && arguments.is_empty() {
+            // Borrowed Windjammer `string` parameters lower to `&str`. `.clone()` on `&str`
+            // is still `&str`, but users mean an owned copy → emit `.to_string()`.
             if let Expression::Identifier { name, .. } = object {
                 if self.inferred_borrowed_params.contains(name.as_str())
                     && self
@@ -1108,20 +1110,8 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}.to_string()", obj_str);
                 }
             }
+            return obj_str;
         }
-
-        // PHASE 2 OPTIMIZATION: Eliminate unnecessary .clone() calls
-        // DISABLED: This optimization was too aggressive and removed needed clones
-        // TODO: Make this more conservative - only remove clone when we can prove
-        // the value is Copy or when it's the last use
-        // if method == "clone" && arguments.is_empty() {
-        //     if let Expression::Identifier { name: ref var_name, location: None } = **object {
-        //         if self.clone_optimizations.contains(var_name) {
-        //             // Skip the .clone(), just return the variable (or borrow if needed)
-        //             return obj_str;
-        //         }
-        //     }
-        // }
 
         // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods
         // DISABLED: Too aggressive - needs type checking to determine if parameter expects VNode
