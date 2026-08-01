@@ -4784,6 +4784,9 @@ fn db_substrate_lsm_test_db-project_cargo_check() {
 
 #[test]
 fn db_embedded_db-project_cargo_check() {
+    // Types is a path dependency of embedded; rebuild first so stale `gen/` from an
+    // older `wj` cannot poison cargo check (const match arms, ownership formals).
+    wj_build_db-project_crate("db-types");
     wj_build_db-project_crate("db-wal");
     wj_build_db-project_crate("db-substrate");
     wj_build_db-project_crate("db-txn");
@@ -4897,4 +4900,28 @@ fn db_reducer_db-project_cargo_check() {
     wj_build_db-project_crate("db-circuit");
     wj_build_db-project_crate("db-reducer");
     cargo_check_db-project_gen("db-reducer", false);
+}
+
+// ── DB-072 dogfooding: commit_granularity enum match in for-loop ────────────
+
+#[test]
+fn db_types_commit_granularity_cargo_check() {
+    wj_build_db-project_crate("db-types");
+    cargo_check_db-project_gen("db-types", true);
+}
+
+// ── DB-073 dogfooding: document_layer encode row_id spurious deref (regression) ─
+
+#[test]
+fn db_layers_document_encode_row_id_no_spurious_deref() {
+    wj_build_db-project_crate("db-layers");
+    let rs_path = require_db-project_crate("db-layers")
+        .join("gen/document/document_layer.rs");
+    let rs = fs::read_to_string(&rs_path).unwrap_or_else(|e| {
+        panic!("read {}: {e}", rs_path.display())
+    });
+    assert!(
+        !rs.contains("*row.row_id") && !rs.contains("* row.row_id"),
+        "document_layer encode must not spurious-deref Copy row_id (regression guard).\nGot:\n{rs}"
+    );
 }

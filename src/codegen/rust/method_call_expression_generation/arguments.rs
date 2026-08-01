@@ -2133,6 +2133,41 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // Stdlib Pattern / `&str` search methods (`find`, `contains`, …): owned
+                // `String` needles need `&needle` for rustc's `Pattern` bound. Prefer
+                // registry `&str` contracts; fall back to stdlib trait classification.
+                if !borrow_decision.add_ref
+                    && !arg_str.starts_with('&')
+                    && !arg_already_rust_ref
+                    && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
+                        arg_to_generate,
+                    )
+                    && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(
+                        arg_to_generate,
+                    )
+                {
+                    let expects_str_ref = call_site_sig.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                            sig, i,
+                        )
+                    }) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+                        method,
+                        receiver_type_name,
+                        &self.signature_registry,
+                        i,
+                    ) || (crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(
+                        method,
+                    ) && call_site_sig.as_ref().is_none_or(|sig| {
+                        !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            sig,
+                            sig.arg_param_index(i),
+                        )
+                    }));
+                    if expects_str_ref {
+                        borrow_decision.add_ref = true;
+                    }
+                }
+
                 if borrow_decision.strip_clone {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut arg_str);
                     // Owned-path may have added `.to_string()` before we knew callee takes &str.
@@ -2166,7 +2201,10 @@ impl<'ast> CodeGenerator<'ast> {
                     && (matches!(arg_to_generate, Expression::Identifier { name, .. }
                         if self.match_arm_bindings.contains(name.as_str()))
                         || !matches!(effective_ownership, Some(OwnershipMode::Owned))
-                        || is_collection_key_arg)
+                        || is_collection_key_arg
+                        || crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(
+                            method,
+                        ))
                 {
                     crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
                         .apply(&mut arg_str);
