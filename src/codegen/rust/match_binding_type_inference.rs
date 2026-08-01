@@ -27,7 +27,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn enum_pattern_registry_key(
+    pub(in crate::codegen::rust) fn enum_pattern_registry_key(
         &self,
         variant_name: &str,
         enum_container: &Type,

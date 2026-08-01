@@ -454,6 +454,17 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_index,
                 user_arg_count,
             );
+            // Unresolved stdlib Pattern methods (`String::find`) still need `&needle`
+            // for rustc's `Pattern` bound when the needle is an owned `String`.
+            if !finished.starts_with('&')
+                && crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(
+                    method_simple,
+                )
+                && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
+                && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+            {
+                finished = crate::ir::target_encodings::rust_shared_borrow(&finished);
+            }
             // Unresolved callee still needs multi-use clones (WDB-063 seed_write).
             finished = self.maybe_auto_clone_call_arg(
                 arg_expr,
@@ -739,14 +750,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        if matches!(
-            arg_expr,
-            Expression::Literal {
-                value: Literal::String(_),
-                ..
-            }
-        ) && crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(method_simple)
+        if crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(method_simple)
+            && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
         {
+            // `str::find` / `contains` / … take `Pattern` (`&str`, `char`, …).
+            // String literals are already `&str`; owned `String` needles need `&`.
             expected.base = BaseType::String;
             expected.ownership = OwnedType::Ref(Region::fresh(9));
         } else if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(

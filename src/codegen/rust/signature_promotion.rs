@@ -1016,11 +1016,24 @@ pub(crate) fn prefer_shared_ref_signature(
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
         return Some(pref);
     }
+    // Prefer a defining-module demotion to `&str`/`&Vec` only when codegen recorded
+    // shared-ref emission. Analyzer Borrowed + `&str` on a plain WJ `string` formal
+    // (trait methods like `authenticate(email: string)`) must not beat the owned AST
+    // contract — otherwise call sites emit `&field` into owned `String` formals.
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         &pref, param_idx,
     ) || bare_formal_is_vec_or_map(&pref, param_idx)
     {
-        return Some(challenger.clone());
+        let challenger_codegen_shared = challenger
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(true);
+        if challenger_codegen_shared {
+            return Some(challenger.clone());
+        }
+        return Some(pref);
     }
     Some(pref)
 }
