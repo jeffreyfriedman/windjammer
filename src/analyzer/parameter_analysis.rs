@@ -388,6 +388,21 @@ impl<'ast> Analyzer<'ast> {
         {
             return Ok(OwnershipMode::Owned);
         }
+        // Completely unused Vec formals keep source Owned. Stub / FFI contracts
+        // (`std/db.wj` `params: Vec<string>` → runtime `Vec<String>`) must not demote
+        // to Borrowed solely because the body is `Err("not implemented")` — that made
+        // call sites emit `&vec![...]` (E0308). Broader unused non-text stays Borrowed
+        // so readonly field/format uses still demote (`object: &SceneObject`).
+        if matches!(param_type, Type::Vec(_))
+            || matches!(param_type, Type::Parameterized(name, _) if name == "Vec")
+        {
+            if !body
+                .iter()
+                .any(|stmt| self.statement_uses_identifier(param_name, stmt))
+            {
+                return Ok(OwnershipMode::Owned);
+            }
+        }
         Ok(OwnershipMode::Borrowed)
     }
 

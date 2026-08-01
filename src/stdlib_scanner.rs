@@ -53,15 +53,89 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
         return Ok(());
     }
 
-    // Simple regex-based parsing of public functions
-    // Look for patterns like: pub fn function_name(param: &mut Type, ...)
+    // Track `impl Type { ... }` so methods register as both `module::fn` and `Type::fn`
+    // (call sites resolve `Connection::query`, not only `db::query`).
+    let mut current_impl: Option<String> = None;
+    let mut brace_depth: i32 = 0;
+    let mut impl_depth: Option<i32> = None;
+
     for line in content.lines() {
-        if let Some(sig) = parse_function_signature(line, module_name) {
-            registry.add_function(sig.name.clone(), sig);
+        let trimmed = line.trim();
+        if let Some(type_name) = parse_impl_type_name(trimmed) {
+            current_impl = Some(type_name);
+            // Depth after this line's braces is assigned below; mark entry depth.
+            impl_depth = Some(brace_depth);
+        }
+
+        let opens = line.chars().filter(|&c| c == '{').count() as i32;
+        let closes = line.chars().filter(|&c| c == '}').count() as i32;
+        brace_depth += opens - closes;
+        if let Some(start) = impl_depth {
+            if brace_depth <= start {
+                current_impl = None;
+                impl_depth = None;
+            }
+        }
+
+        if let Some(sig) = parse_function_signature(trimmed, module_name) {
+            let method_name = sig
+                .name
+                .rsplit_once("::")
+                .map(|(_, m)| m.to_string())
+                .unwrap_or_else(|| sig.name.clone());
+            registry.add_function(sig.name.clone(), sig.clone());
+            if let Some(ref ty) = current_impl {
+                let mut typed = sig;
+                typed.name = format!("{ty}::{method_name}");
+                registry.add_function(typed.name.clone(), typed);
+            }
         }
     }
 
     Ok(())
+}
+
+/// `impl Connection` / `impl Connection {` / `impl<'a> Connection` → `Connection`.
+fn parse_impl_type_name(trimmed: &str) -> Option<String> {
+    let rest = trimmed.strip_prefix("impl")?;
+    let rest = rest.trim_start();
+    // Skip lifetime/type generics on the impl itself: `impl<'a> Foo`
+    let after_generics = if rest.starts_with('<') {
+        let mut depth = 0;
+        let mut end = None;
+        for (i, c) in rest.char_indices() {
+            match c {
+                '<' => depth += 1,
+                '>' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        &rest[end? + 1..]
+    } else {
+        rest
+    };
+    let after_generics = after_generics.trim_start();
+    // Skip `impl Trait for Type` — register under the concrete type after `for`.
+    let type_part = if let Some(idx) = after_generics.find(" for ") {
+        after_generics[idx + 5..].trim_start()
+    } else {
+        after_generics
+    };
+    let name = type_part
+        .split(|c: char| c == '<' || c == '{' || c.is_whitespace())
+        .next()
+        .unwrap_or("")
+        .trim();
+    if name.is_empty() || !name.chars().next().is_some_and(|c| c.is_uppercase()) {
+        return None;
+    }
+    Some(name.to_string())
 }
 
 fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignature> {
@@ -77,6 +151,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
 
     // Parse parameter ownership
     let param_ownership = parse_parameters(&params_str);
+    let has_self_receiver = first_param_is_self_receiver(&params_str);
 
     // Build full name with module prefix
     let full_name = format!("{}::{}", module, func_name);
@@ -88,12 +163,23 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         param_ownership,
         return_type: None,                      // TODO: Extract from Rust AST
         return_ownership: OwnershipMode::Owned, // Default
-        has_self_receiver: false,               // Stdlib functions aren't extern
+        has_self_receiver,
         is_extern: false,
         emitted_rust_ref_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     })
+}
+
+fn first_param_is_self_receiver(params_str: &str) -> bool {
+    let first = params_str.split(',').next().unwrap_or("").trim();
+    matches!(
+        first,
+        "self" | "&self" | "&mut self" | "mut self"
+    ) || first.starts_with("self:")
+        || first.starts_with("&self")
+        || first.starts_with("&mut self")
+        || first.starts_with("mut self:")
 }
 
 /// Strip `name<'a>` / `name<T>` generics and extract the parameter list.
@@ -334,5 +420,36 @@ mod tests {
 
         assert_eq!(sig.param_ownership.len(), 1);
         assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
+        assert!(!sig.has_self_receiver);
+    }
+
+    #[test]
+    fn connection_query_marks_self_receiver_so_vec_params_stay_owned() {
+        let line =
+            "pub fn query(&self, sql: impl AsRef<str>, params: Vec<String>) -> Result<Vec<Row>, String> {";
+        let sig = parse_function_signature(line, "db").unwrap();
+
+        assert!(sig.has_self_receiver);
+        assert_eq!(sig.param_ownership.len(), 3);
+        assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed); // &self
+        assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed); // AsRef<str>
+        assert_eq!(sig.param_ownership[2], OwnershipMode::Owned); // Vec<String>
+        // User arg 1 (params) must map to Owned — not sql's Borrowed (off-by-one without self).
+        assert_eq!(
+            sig.param_ownership[sig.arg_param_index(1)],
+            OwnershipMode::Owned
+        );
+    }
+
+    #[test]
+    fn parse_impl_type_name_extracts_connection() {
+        assert_eq!(
+            parse_impl_type_name("impl Connection {"),
+            Some("Connection".into())
+        );
+        assert_eq!(
+            parse_impl_type_name("impl<'a> Connection {"),
+            Some("Connection".into())
+        );
     }
 }
