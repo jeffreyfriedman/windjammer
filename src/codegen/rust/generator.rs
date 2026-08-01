@@ -2428,6 +2428,12 @@ impl<'ast> CodeGenerator<'ast> {
             if !self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition) {
                 continue;
             }
+            // Only rewrite when a callee in this condition expects a shared `&T` for
+            // this binding. Blind `policy,` → `&policy,` breaks owned recursive calls
+            // (ReBAC `resolve_check(policy: Policy)` inside `if`).
+            if !self.expr_call_expects_shared_borrow_for_param(condition, &param.name) {
+                continue;
+            }
             let bare = format!("({})", param.name);
             let borrowed = format!("(&{})", param.name);
             if cond_str.contains(&bare) && !cond_str.contains(&borrowed) {
@@ -2440,6 +2446,106 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         cond_str
+    }
+
+    /// True when some call/method in `expr` takes `param_name` into a shared-ref formal.
+    fn expr_call_expects_shared_borrow_for_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let func_name = match &**function {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    Expression::FieldAccess { field, .. } => Some(field.as_str()),
+                    _ => None,
+                };
+                if let Some(fname) = func_name {
+                    let simple = fname.rsplit("::").next().unwrap_or(fname);
+                    let sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                        self.signature_registry.get_signature(fname).cloned(),
+                        self.signature_registry.get_signature(simple).cloned(),
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(fname).cloned()),
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(simple).cloned()),
+                    ]);
+                    if let Some(sig) = sig.as_ref() {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                            {
+                                let pidx = sig.arg_param_index(i);
+                                if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    sig, pidx,
+                                ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                    sig, pidx,
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                arguments.iter().any(|(_, arg)| {
+                    self.expr_call_expects_shared_borrow_for_param(arg, param_name)
+                }) || self.expr_call_expects_shared_borrow_for_param(function, param_name)
+            }
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                let recv_ty = self.infer_expression_type(object).and_then(|t| match t {
+                    Type::Custom(name) => Some(name),
+                    Type::Reference(inner) | Type::MutableReference(inner) => match *inner {
+                        Type::Custom(name) => Some(name),
+                        _ => None,
+                    },
+                    _ => None,
+                });
+                if let Some(rt) = recv_ty.as_deref() {
+                    if let Some(sig) =
+                        self.resolve_method_function_signature(rt, method, arguments.len())
+                    {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                            {
+                                let pidx = sig.arg_param_index(i);
+                                if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    &sig, pidx,
+                                ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                    &sig, pidx,
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                arguments.iter().any(|(_, arg)| {
+                    self.expr_call_expects_shared_borrow_for_param(arg, param_name)
+                }) || self.expr_call_expects_shared_borrow_for_param(object, param_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_call_expects_shared_borrow_for_param(left, param_name)
+                    || self.expr_call_expects_shared_borrow_for_param(right, param_name)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_call_expects_shared_borrow_for_param(operand, param_name)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_call_expects_shared_borrow_for_param(object, param_name)
+            }
+            _ => false,
+        }
     }
 
     /// True when the named caller formal is a Copy pass-by-value type (`f32`, `i32`, …).

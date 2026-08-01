@@ -1333,9 +1333,19 @@ impl<'ast> CodeGenerator<'ast> {
         if self.param_passed_to_mut_borrowing_callee(body, param_name, func) {
             return false;
         }
+        // Copy aggregates with nested `&mut self` field methods may keep owned when the
+        // function returns a value computed from the local copy (`bump_counter` → i64).
+        // Unit-returning mutators (`modify_nested` / `outer.inner.set`) still need `&mut`
+        // so the caller's value is updated.
+        let copy_nested_mut_keeps_owned = self.param_name_is_copy_aggregate(param_name)
+            && func.return_type.as_ref().is_some_and(|t| {
+                !matches!(t, Type::Custom(n) if n == "()" || n == "unit")
+                    && !matches!(t, Type::Tuple(elems) if elems.is_empty())
+            });
         let mut saw_field_method = false;
         for stmt in body {
-            match self.statement_owned_mut_facade_usage(stmt, param_name) {
+            match self.statement_owned_mut_facade_usage(stmt, param_name, copy_nested_mut_keeps_owned)
+            {
                 OwnedMutFacadeUsage::None => {}
                 OwnedMutFacadeUsage::FieldMethodReceiver => saw_field_method = true,
                 OwnedMutFacadeUsage::Disallowed => return false,
@@ -1348,17 +1358,26 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         stmt: &Statement<'ast>,
         param_name: &str,
+        copy_nested_mut_keeps_owned: bool,
     ) -> OwnedMutFacadeUsage {
         match stmt {
             Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
-                self.expression_owned_mut_facade_usage(expr, param_name)
+                self.expression_owned_mut_facade_usage(expr, param_name, copy_nested_mut_keeps_owned)
             }
             Statement::Return { .. } => OwnedMutFacadeUsage::None,
             Statement::Let { value, else_block, .. } => {
-                let mut usage = self.expression_owned_mut_facade_usage(value, param_name);
+                let mut usage = self.expression_owned_mut_facade_usage(
+                    value,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                );
                 if let Some(b) = else_block {
                     for s in b {
-                        usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                        usage = usage.merge(self.statement_owned_mut_facade_usage(
+                            s,
+                            param_name,
+                            copy_nested_mut_keeps_owned,
+                        ));
                     }
                 }
                 usage
@@ -1381,7 +1400,11 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => OwnedMutFacadeUsage::None,
                 };
-                target_usage.merge(self.expression_owned_mut_facade_usage(value, param_name))
+                target_usage.merge(self.expression_owned_mut_facade_usage(
+                    value,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                ))
             }
             Statement::If {
                 condition,
@@ -1389,28 +1412,56 @@ impl<'ast> CodeGenerator<'ast> {
                 else_block,
                 ..
             } => {
-                let mut usage = self.expression_owned_mut_facade_usage(condition, param_name);
+                let mut usage = self.expression_owned_mut_facade_usage(
+                    condition,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                );
                 for s in then_block {
-                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(
+                        s,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 if let Some(b) = else_block {
                     for s in b {
-                        usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                        usage = usage.merge(self.statement_owned_mut_facade_usage(
+                            s,
+                            param_name,
+                            copy_nested_mut_keeps_owned,
+                        ));
                     }
                 }
                 usage
             }
             Statement::While { body, condition, .. } => {
-                let mut usage = self.expression_owned_mut_facade_usage(condition, param_name);
+                let mut usage = self.expression_owned_mut_facade_usage(
+                    condition,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                );
                 for s in body {
-                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(
+                        s,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 usage
             }
             Statement::For { body, iterable, .. } => {
-                let mut usage = self.expression_owned_mut_facade_usage(iterable, param_name);
+                let mut usage = self.expression_owned_mut_facade_usage(
+                    iterable,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                );
                 for s in body {
-                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(
+                        s,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 usage
             }
@@ -1419,14 +1470,26 @@ impl<'ast> CodeGenerator<'ast> {
             | Statement::Async { body, .. } => {
                 let mut usage = OwnedMutFacadeUsage::None;
                 for s in body {
-                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(
+                        s,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 usage
             }
             Statement::Match { value, arms, .. } => {
-                let mut usage = self.expression_owned_mut_facade_usage(value, param_name);
+                let mut usage = self.expression_owned_mut_facade_usage(
+                    value,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                );
                 for arm in arms {
-                    usage = usage.merge(self.expression_owned_mut_facade_usage(&arm.body, param_name));
+                    usage = usage.merge(self.expression_owned_mut_facade_usage(
+                        &arm.body,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 usage
             }
@@ -1438,6 +1501,7 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
         param_name: &str,
+        copy_nested_mut_keeps_owned: bool,
     ) -> OwnedMutFacadeUsage {
         match expr {
             Expression::Identifier { name, .. } if name == param_name => {
@@ -1451,9 +1515,13 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 let recv = if Self::expr_is_param_field_chain(object, param_name) {
                     // `&self` methods on nested ports (`deps.writer.append`) keep an
-                    // owned AppDeps bag. `&mut self` field methods (`outer.inner.set`,
-                    // `grid.data.push`) require `&mut` on the parent.
-                    if self.nested_field_method_uses_shared_self(object, method, arguments.len()) {
+                    // owned AppDeps bag. `&mut self` field methods on *non-Copy* parents
+                    // (`outer.inner.set`, `grid.data.push`) require `&mut` on the parent.
+                    // Copy aggregates with a non-unit return (`Deps.counter.increment` → i64)
+                    // keep owned `mut Deps`; unit mutators still demote to `&mut`.
+                    if self.nested_field_method_uses_shared_self(object, method, arguments.len())
+                        || copy_nested_mut_keeps_owned
+                    {
                         OwnedMutFacadeUsage::FieldMethodReceiver
                     } else {
                         OwnedMutFacadeUsage::Disallowed
@@ -1462,51 +1530,97 @@ impl<'ast> CodeGenerator<'ast> {
                     **object,
                     Expression::Identifier { ref name, .. } if name == param_name
                 ) {
-                    // Direct `param.method()` — keep `&mut T` demotion for data structs.
+                    // Direct `param.method()` — keep `&mut T` demotion for data structs
+                    // (including Copy: `grid.set` / `player.use_energy` → `&mut Grid`).
                     OwnedMutFacadeUsage::Disallowed
                 } else {
-                    self.expression_owned_mut_facade_usage(object, param_name)
+                    self.expression_owned_mut_facade_usage(
+                        object,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    )
                 };
                 arguments.iter().fold(recv, |acc, (_, arg)| {
-                    acc.merge(self.expression_owned_mut_facade_usage(arg, param_name))
+                    acc.merge(self.expression_owned_mut_facade_usage(
+                        arg,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ))
                 })
             }
             Expression::Call { function, arguments, .. } => {
-                let mut usage = self.expression_owned_mut_facade_usage(function, param_name);
+                let mut usage = self.expression_owned_mut_facade_usage(
+                    function,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                );
                 for (_, arg) in arguments {
-                    usage = usage.merge(self.expression_owned_mut_facade_usage(arg, param_name));
+                    usage = usage.merge(self.expression_owned_mut_facade_usage(
+                        arg,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 usage
             }
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 // Field/index *reads* are not owned-mut facades — only MethodCall
                 // receivers on `param.field` count (handled above).
-                self.expression_owned_mut_facade_usage(object, param_name)
+                self.expression_owned_mut_facade_usage(object, param_name, copy_nested_mut_keeps_owned)
             }
             Expression::Binary { left, right, .. } => self
-                .expression_owned_mut_facade_usage(left, param_name)
-                .merge(self.expression_owned_mut_facade_usage(right, param_name)),
-            Expression::Unary { operand, .. } => {
-                self.expression_owned_mut_facade_usage(operand, param_name)
-            }
+                .expression_owned_mut_facade_usage(left, param_name, copy_nested_mut_keeps_owned)
+                .merge(self.expression_owned_mut_facade_usage(
+                    right,
+                    param_name,
+                    copy_nested_mut_keeps_owned,
+                )),
+            Expression::Unary { operand, .. } => self.expression_owned_mut_facade_usage(
+                operand,
+                param_name,
+                copy_nested_mut_keeps_owned,
+            ),
             Expression::StructLiteral { fields, .. } => fields.iter().fold(
                 OwnedMutFacadeUsage::None,
-                |acc, (_, v)| acc.merge(self.expression_owned_mut_facade_usage(v, param_name)),
+                |acc, (_, v)| {
+                    acc.merge(self.expression_owned_mut_facade_usage(
+                        v,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ))
+                },
             ),
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                 elements.iter().fold(OwnedMutFacadeUsage::None, |acc, e| {
-                    acc.merge(self.expression_owned_mut_facade_usage(e, param_name))
+                    acc.merge(self.expression_owned_mut_facade_usage(
+                        e,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ))
                 })
             }
             Expression::Block { statements, .. } => {
                 let mut usage = OwnedMutFacadeUsage::None;
                 for s in statements {
-                    usage = usage.merge(self.statement_owned_mut_facade_usage(s, param_name));
+                    usage = usage.merge(self.statement_owned_mut_facade_usage(
+                        s,
+                        param_name,
+                        copy_nested_mut_keeps_owned,
+                    ));
                 }
                 usage
             }
             _ => OwnedMutFacadeUsage::None,
         }
+    }
+
+    /// True when the named current-function param is a Copy aggregate (pass-by-value).
+    fn param_name_is_copy_aggregate(&self, param_name: &str) -> bool {
+        self.current_function_params.iter().any(|p| {
+            p.name == param_name
+                && self.is_type_copy(&p.type_)
+                && !crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+        })
     }
 
     /// True when `object.method` resolves to a shared-`self` (`&self`) receiver.
@@ -5434,6 +5548,14 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 let call_arg_count = arguments.len();
+                // Recursive / same-fn calls must not keep-owned via sibling detection —
+                // that freezes Owned formals while field-read analysis still drives
+                // call-site `&policy` (ReBAC resolve_check).
+                let is_recursive_self = match &**function {
+                    Expression::Identifier { name, .. } => name == &func.name,
+                    Expression::FieldAccess { field, .. } => field == &func.name,
+                    _ => false,
+                };
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if !matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                     {
@@ -5441,6 +5563,9 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             return true;
                         }
+                        continue;
+                    }
+                    if is_recursive_self {
                         continue;
                     }
                     if self.free_call_callee_emits_owned_arg_with_call_count(
@@ -7870,6 +7995,8 @@ impl<'ast> CodeGenerator<'ast> {
             // Prefer the emitted formal string over stale inference:
             // `&T` beats MutBorrowed inference; `&mut T` beats shared-ref bookkeeping
             // (`emitted_rust_ref_formals` includes both `&` and `&mut` formals).
+            // Stale `emitted_rust_ref_formals` alone must NOT force Borrowed when the
+            // emitted string is bare owned (`policy: Policy` after field-extract keep-owned).
             if emitted_mut {
                 if !matches!(updated.param_types[reg_idx], Type::MutableReference(_)) {
                     updated.param_types[reg_idx] =
@@ -7879,10 +8006,14 @@ impl<'ast> CodeGenerator<'ast> {
                     updated.param_ownership[reg_idx] =
                         crate::analyzer::OwnershipMode::MutBorrowed;
                 }
-            } else if emitted_shared
-                || (self.emitted_rust_ref_formals.contains(&param.name)
-                    && !self.inferred_mut_borrowed_params.contains(&param.name))
-            {
+                while updated.formal_param_types.len() <= reg_idx {
+                    updated.formal_param_types.push(param.type_.clone());
+                }
+                if reg_idx < updated.formal_param_types.len() {
+                    updated.formal_param_types[reg_idx] =
+                        Type::MutableReference(Box::new(param.type_.clone()));
+                }
+            } else if emitted_shared {
                 let emitted_formal = emitted_param_strings
                     .get(emitted_idx.saturating_sub(1))
                     .map(|s| s.as_str())
@@ -7905,14 +8036,23 @@ impl<'ast> CodeGenerator<'ast> {
                 if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     || !matches!(updated.param_types[reg_idx], Type::Reference(_))
                 {
-                    updated.param_types[reg_idx] = shared_ty;
+                    updated.param_types[reg_idx] = shared_ty.clone();
                 }
                 if reg_idx < updated.param_ownership.len() {
                     updated.param_ownership[reg_idx] =
                         crate::analyzer::OwnershipMode::Borrowed;
                 }
+                while updated.formal_param_types.len() <= reg_idx {
+                    updated.formal_param_types.push(param.type_.clone());
+                }
+                if reg_idx < updated.formal_param_types.len() {
+                    updated.formal_param_types[reg_idx] = shared_ty;
+                }
             } else if self.inferred_mut_borrowed_params.contains(&param.name)
                 && self.emitted_rust_ref_formals.contains(&param.name)
+                && emitted_param_strings.get(emitted_idx.saturating_sub(1)).is_some_and(|s| {
+                    s.contains(": &mut ") || s.contains(": &'a mut ")
+                })
             {
                 // Only keep MutBorrowed registry metadata when the emitted formal is `&mut T`.
                 // Owned Copy aggregates (`mut deps: AppDeps`) clear inferred_mut before sync;
@@ -7925,32 +8065,18 @@ impl<'ast> CodeGenerator<'ast> {
                     updated.param_ownership[reg_idx] =
                         crate::analyzer::OwnershipMode::MutBorrowed;
                 }
-            } else if self.emitted_rust_ref_formals.contains(&param.name) {
-                if !matches!(updated.param_types[reg_idx], Type::Reference(_)) {
-                    updated.param_types[reg_idx] = Type::Reference(Box::new(param.type_.clone()));
-                }
-                if reg_idx < updated.param_ownership.len() {
-                    updated.param_ownership[reg_idx] =
-                        crate::analyzer::OwnershipMode::Borrowed;
-                }
-            } else if matches!(
-                updated.param_types[reg_idx],
-                Type::Reference(_) | Type::MutableReference(_)
-            ) && !self.emitted_rust_ref_formals.contains(&param.name)
-            {
-                // Owned emitted formal: clear stale shared/mut-ref analyzer metadata so
-                // call sites pass by value (`mut deps: AppDeps`, not `&mut deps`).
+            } else {
+                // Bare owned emission wins over analyzer Borrowed / stale
+                // `emitted_rust_ref_formals` from field-proj that later keep-owned.
                 updated.param_types[reg_idx] = param.type_.clone();
                 if reg_idx < updated.param_ownership.len() {
                     updated.param_ownership[reg_idx] = crate::analyzer::OwnershipMode::Owned;
                 }
-            } else if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                updated, reg_idx,
-            ) && !self.emitted_rust_ref_formals.contains(&param.name)
-            {
-                updated.param_types[reg_idx] = param.type_.clone();
-                if reg_idx < updated.param_ownership.len() {
-                    updated.param_ownership[reg_idx] = crate::analyzer::OwnershipMode::Owned;
+                while updated.formal_param_types.len() <= reg_idx {
+                    updated.formal_param_types.push(param.type_.clone());
+                }
+                if reg_idx < updated.formal_param_types.len() {
+                    updated.formal_param_types[reg_idx] = param.type_.clone();
                 }
             }
             user_param_idx += 1;
@@ -7979,12 +8105,10 @@ impl<'ast> CodeGenerator<'ast> {
                         && !s.starts_with("&mut self")
                         && !s.starts_with("&'a mut self")
                 });
-                // Prefer the emitted formal string (including `&str`) over bookkeeping sets —
-                // `str_ref_optimized` alone must also mark shared-ref for cross-file call sites.
-                emitted[reg_idx] = emitted_shared
-                    || ((self.emitted_rust_ref_formals.contains(&param.name)
-                        || self.str_ref_optimized_params.contains(&param.name))
-                        && !self.inferred_mut_borrowed_params.contains(&param.name));
+                // Trust the emitted formal string. Stale `emitted_rust_ref_formals` /
+                // `str_ref_optimized` must not mark shared-ref when the string is owned
+                // (`policy: Policy` after field-extract keep-owned → ReBAC `&policy`).
+                emitted[reg_idx] = emitted_shared;
             }
             if emitted_idx < emitted_param_strings.len() {
                 emitted_idx += 1;
