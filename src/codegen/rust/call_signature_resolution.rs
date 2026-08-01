@@ -515,12 +515,25 @@ pub fn resolve_method_for_call_site(
         });
 
     pick_best_resolved_signature(local_filtered, global_filtered).map(|mut resolved| {
+        let qualified = format!("{receiver_type}::{method}");
         if resolved.sig.emitted_rust_ref_params.is_none() {
             if let Some(alt) = &codegen_refresh_source {
                 crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
                     &mut resolved.sig,
                     &alt.sig,
                 );
+            } else if let Some(g) = global {
+                // Defining-module refresh may only sit on the exact qualified key when
+                // suffix/homonym resolution picked a stale body-converged borrow stub
+                // (windjammer-ui DataTable → Table owned column/row forward).
+                if let Some(refreshed) = g.get_signature(&qualified) {
+                    if refreshed.emitted_rust_ref_params.is_some() {
+                        crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                            &mut resolved.sig,
+                            refreshed,
+                        );
+                    }
+                }
             }
         }
         if let Some(g) = global {
@@ -1277,6 +1290,20 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
             other => other.clone(),
         });
         let Some(formal) = owned_formal else {
+            // Sparse metadata (library multipass export): emitted-owned still peels stale
+            // body-converged `Reference(T)` wraps on the param slot.
+            if let Some(t) = sig.param_types.get(idx) {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
+                    other => other.clone(),
+                };
+                if idx < sig.param_types.len() {
+                    sig.param_types[idx] = bare;
+                }
+                if idx < sig.param_ownership.len() {
+                    sig.param_ownership[idx] = OwnershipMode::Owned;
+                }
+            }
             continue;
         };
         if idx < sig.param_types.len() {

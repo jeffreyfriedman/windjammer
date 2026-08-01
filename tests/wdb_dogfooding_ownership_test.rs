@@ -4790,3 +4790,111 @@ fn wdb_embedded_windjammerdb_cargo_check() {
     wj_build_windjammerdb_crate("wdb-embedded");
     cargo_check_windjammerdb_gen("wdb-embedded", true);
 }
+
+// ── WDB-071: cross-crate owned struct param — call site must auto-borrow ─────
+//
+// wdb-reducer reducer_host.wj calls apply_zset_to_circuit(circuit, zset) with owned
+// Circuit; bridge emits `circuit: &Circuit` but call site omits `&circuit`.
+
+#[test]
+fn wdb_cross_crate_owned_struct_call_site_auto_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "circuit/circuit.wj",
+        r#"
+pub struct Circuit {
+    pub tick: u64,
+}
+
+pub struct CircuitDelta {
+    pub tick: u64,
+}
+
+impl Circuit {
+    pub fn new() -> Circuit {
+        Circuit { tick: 0 }
+    }
+
+    pub fn apply_delta(self, delta: CircuitDelta) -> (Circuit, CircuitDelta) {
+        (self, delta)
+    }
+}
+"#,
+    );
+    test.add_file("circuit/mod.wj", "pub mod circuit;\n");
+    test.add_file(
+        "bridge/zset_bridge.wj",
+        r#"
+use crate::circuit::circuit::Circuit
+use crate::circuit::circuit::CircuitDelta
+
+pub struct ZSetDelta {
+    pub rows: u32,
+}
+
+pub fn apply_zset_to_circuit(circuit: Circuit, zset: ZSetDelta) -> (Circuit, CircuitDelta) {
+    let delta = CircuitDelta { tick: zset.rows as u64 }
+    circuit.apply_delta(delta)
+}
+"#,
+    );
+    test.add_file("bridge/mod.wj", "pub mod zset_bridge;\n");
+    test.add_file(
+        "host/reducer_host.wj",
+        r#"
+use crate::bridge::zset_bridge::ZSetDelta
+use crate::bridge::zset_bridge::apply_zset_to_circuit
+use crate::circuit::circuit::Circuit
+
+pub fn run_pipeline(circuit: Circuit, zset: ZSetDelta) -> Circuit {
+    let applied = apply_zset_to_circuit(circuit, zset)
+    applied.0
+}
+"#,
+    );
+    test.add_file("host/mod.wj", "pub mod reducer_host;\n");
+    test.add_file(
+        "main.wj",
+        r#"
+use crate::host::reducer_host::run_pipeline
+use crate::bridge::zset_bridge::ZSetDelta
+use crate::circuit::circuit::Circuit
+
+pub fn main() {
+    let _ = run_pipeline(Circuit::new(), ZSetDelta { rows: 1 })
+}
+"#,
+    );
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("host/reducer_host.rs").expect("host/reducer_host.rs");
+    let bridge = map
+        .get("bridge/zset_bridge.rs")
+        .expect("bridge/zset_bridge.rs");
+    let callee_owned = bridge.contains("apply_zset_to_circuit(circuit: Circuit")
+        || bridge.contains("apply_zset_to_circuit(mut circuit: Circuit");
+    let callee_borrowed = bridge.contains("apply_zset_to_circuit(circuit: &Circuit")
+        || bridge.contains("apply_zset_to_circuit(circuit: & Circuit");
+    assert!(
+        rs.contains("apply_zset_to_circuit(&circuit")
+            || rs.contains("apply_zset_to_circuit(circuit.clone()")
+            || (callee_owned
+                && rs.contains("apply_zset_to_circuit(circuit,")
+                && !callee_borrowed),
+        "cross-crate call with owned Circuit must borrow or pass owned consistently.\n\
+         host:\n{rs}\nbridge:\n{bridge}"
+    );
+    assert!(
+        !rs.contains("apply_zset_to_circuit(circuit, &zset)")
+            || rs.contains("apply_zset_to_circuit(&circuit"),
+        "must not pass owned Circuit where callee expects &Circuit without borrow. Got:\n{rs}"
+    );
+}
+
+#[test]
+fn wdb_reducer_windjammerdb_cargo_check() {
+    wj_build_windjammerdb_crate("wdb-types");
+    wj_build_windjammerdb_crate("wdb-circuit");
+    wj_build_windjammerdb_crate("wdb-reducer");
+    cargo_check_windjammerdb_gen("wdb-reducer", false);
+}

@@ -846,6 +846,39 @@ impl<'ast> CodeGenerator<'ast> {
                 &recv_ty,
             );
         }
+        // Importer stubs often lack `emitted_rust_ref_params` while the defining module
+        // published `[true]` for `&Vec` / `&str` formals (WDB-049 `from_bytes`).
+        if let Some(g) = global_only {
+            if g.emitted_rust_ref_params
+                .as_ref()
+                .is_some_and(|flags| flags.iter().any(|&f| f))
+            {
+                crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                    &mut resolved, g,
+                );
+            } else {
+                for pidx in 0..g.param_ownership.len() {
+                    if let Some(upgraded) =
+                        crate::codegen::rust::signature_promotion::prefer_shared_ref_signature(
+                            Some(resolved.clone()),
+                            Some(g),
+                            pidx,
+                        )
+                    {
+                        resolved = upgraded;
+                    }
+                }
+            }
+        }
+        if let Some(refreshed) =
+            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                global_only.cloned(),
+                Some(resolved.clone()),
+                local.cloned(),
+            ])
+        {
+            resolved = refreshed;
+        }
         Some(resolved)
     }
 

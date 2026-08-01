@@ -62,7 +62,7 @@ pub fn discover_nested_modules(root_path: &Path) -> Result<ModuleTree> {
 }
 
 /// Recursively discover modules in a directory
-fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Module>> {
+fn discover_modules_recursive(dir_path: &Path, is_root: bool) -> Result<Vec<Module>> {
     let mut modules = Vec::new();
     let mut subdirs = Vec::new();
     let mut wj_files = Vec::new();
@@ -77,8 +77,12 @@ fn discover_modules_recursive(dir_path: &Path, _is_root: bool) -> Result<Vec<Mod
         let name = file_name.to_string_lossy();
 
         if path.is_dir() {
-            // Skip common directories
+            // Skip common build/cache directories
             if name.starts_with('.') || name == "target" || name == "build" {
+                continue;
+            }
+            // Nested Cargo layout dirs (e.g. leftover `gen/src/`) are not WJ modules.
+            if !is_root && matches!(name.as_ref(), "src" | "examples" | "benches" | "tests") {
                 continue;
             }
             subdirs.push((name.to_string(), path));
