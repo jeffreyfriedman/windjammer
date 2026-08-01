@@ -142,3 +142,32 @@ pub struct ApiToken {
     assert!(!mod_rs.contains("decoy_module"), "mod.rs polluted:\n{mod_rs}");
     assert!(!mod_rs.contains("another_decoy"), "mod.rs polluted:\n{mod_rs}");
 }
+
+/// Leftover `gen/src/` (or `build/src/`) must not become `pub mod src` in generated mod.rs.
+#[test]
+fn test_leftover_src_subdir_not_declared_as_module() {
+    let temp = TempDir::new().expect("tempdir");
+    let out = temp.path().join("gen");
+    std::fs::create_dir_all(out.join("columnar_batch")).unwrap();
+    std::fs::write(
+        out.join("columnar_batch/mod.rs"),
+        "pub struct BatchHandle;\n",
+    )
+    .unwrap();
+    std::fs::write(out.join("columnar_batch.rs"), "pub struct BatchHandle;\n").unwrap();
+    // Stale nested Cargo-style tree from an old build layout
+    std::fs::create_dir_all(out.join("src")).unwrap();
+    std::fs::write(out.join("src/mod.rs"), "// stale nested src\n").unwrap();
+
+    windjammer::generate_mod_file(&out).expect("generate_mod_file");
+
+    let mod_rs = std::fs::read_to_string(out.join("mod.rs")).expect("mod.rs");
+    assert!(
+        !mod_rs.contains("pub mod src"),
+        "leftover gen/src/ must not become a module. Got:\n{mod_rs}"
+    );
+    assert!(
+        mod_rs.contains("pub mod columnar_batch"),
+        "real modules must still be declared. Got:\n{mod_rs}"
+    );
+}
