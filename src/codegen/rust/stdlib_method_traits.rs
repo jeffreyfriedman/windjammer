@@ -187,7 +187,113 @@ pub fn method_returns_iterator_qualified(
 ) -> bool {
     let sig =
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Iterator")))
+    sig.is_some_and(|s| {
+        return_type_is(s, |ty| {
+            matches!(ty, Type::Custom(n) if n == "Iterator")
+                || matches!(ty, Type::Parameterized(base, _) if base == "Iterator")
+        })
+    })
+}
+
+/// Whether calling this method yields something usable as a `for` iterable.
+///
+/// Covers explicit `Iterator` / `Iterator<item>` returns and consuming adapters
+/// whose meta return is `Self` with owned `self` (e.g. `into_iter`).
+pub fn method_returns_iterable_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if method_returns_iterator_qualified(method, receiver_type, registry) {
+        return true;
+    }
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
+    sig.is_some_and(|s| {
+        s.has_self_receiver
+            && matches!(s.param_ownership.first(), Some(OwnershipMode::Owned))
+            && return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Self"))
+    })
+}
+
+/// Whether an `Option` adapter should lower as `.as_ref().method(...)` under `&self`.
+///
+/// WJ stdlib_meta declares these with borrowed `Option` receivers; Rust's by-value
+/// `Option::map` / `and_then` / `or_else` still need the `as_ref` desugar.
+pub fn option_adapter_needs_as_ref(method: &str, registry: &SignatureRegistry) -> bool {
+    let Some(sig) = lookup_sig(method, Some("Option"), registry) else {
+        return false;
+    };
+    if !sig.has_self_receiver {
+        return false;
+    }
+    let borrowed_option_self = matches!(
+        sig.param_ownership.first(),
+        Some(OwnershipMode::Borrowed)
+    ) && sig.param_types.first().is_some_and(|t| {
+        matches!(
+            t,
+            Type::Reference(inner)
+                if matches!(
+                    inner.as_ref(),
+                    Type::Custom(n) if n == "Option" || n.starts_with("Option<")
+                ) || matches!(inner.as_ref(), Type::Option(_))
+        )
+    });
+    borrowed_option_self && sig.param_types.get(1).is_some_and(is_closure_type)
+}
+
+/// Item type from `Iterator<T>` return metadata (`Parameterized("Iterator", [T])`).
+pub fn iterator_item_type_from_sig(sig: &FunctionSignature) -> Option<Type> {
+    match sig.return_type.as_ref()? {
+        Type::Parameterized(base, params) if base == "Iterator" && params.len() == 1 => {
+            Some(params[0].clone())
+        }
+        _ => None,
+    }
+}
+
+/// Whether an iterator method yields owned Copy elements (e.g. `chars` → `char`).
+/// Driven by `Iterator<item>` return metadata — not method-name lists.
+pub fn method_yields_owned_iterator_elements_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    owned_iterator_element_type_qualified(method, receiver_type, registry).is_some_and(|t| {
+        crate::codegen::rust::type_analysis_pure::is_copy_type(&t)
+            && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    })
+}
+
+/// Element type for by-value string iterators from registry (`chars` → `char`).
+pub fn owned_iterator_element_type_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> Option<Type> {
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry))?;
+    let item = iterator_item_type_from_sig(sig)?;
+    // Owned Copy items (char, u8) — not `&str` / `&String` from split/lines.
+    if matches!(&item, Type::Reference(_) | Type::MutableReference(_)) {
+        return None;
+    }
+    if crate::codegen::rust::type_analysis_pure::is_copy_type(&item) {
+        Some(item)
+    } else {
+        None
+    }
+}
+
+/// Whether a method argument is a Rust `Pattern`/`&str` slot (from resolved signature).
+pub fn method_arg_is_string_pattern_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+    arg_index: usize,
+) -> bool {
+    method_arg_expects_rust_str_ref_qualified(method, receiver_type, registry, arg_index)
 }
 
 /// Is this method type-preserving (return type == `Self`)?
@@ -455,69 +561,8 @@ pub fn method_mutates_receiver(method: &str) -> bool {
     )
 }
 
-/// String methods whose pattern/delimiter args lower to `&str` in Rust (not owned `String`).
-pub fn is_string_pattern_method(method: &str) -> bool {
-    matches!(
-        method,
-        "replace"
-            | "replacen"
-            | "split"
-            | "splitn"
-            | "rsplit"
-            | "split_whitespace"
-            | "contains"
-            | "starts_with"
-            | "ends_with"
-            | "find"
-            | "rfind"
-            | "match_indices"
-            | "strip_prefix"
-            | "strip_suffix"
-            | "trim"
-            | "trim_start"
-            | "trim_end"
-    )
-}
-
-pub fn method_returns_iterator(method: &str) -> bool {
-    matches!(
-        method,
-        "iter"
-            | "iter_mut"
-            | "into_iter"
-            | "keys"
-            | "values"
-            | "values_mut"
-            | "drain"
-            | "lines"
-            | "chars"
-            | "bytes"
-            | "split"
-            | "split_whitespace"
-            | "enumerate"
-            | "windows"
-            | "chunks"
-            | "match_indices"
-            | "rsplit"
-            | "splitn"
-    )
-}
-
-/// Iterators whose elements are produced by value (not `&T`), e.g. `str::chars` → `char`.
-/// These must not mark loop bindings as borrowed refs (avoids `*c` / E0614 on `char`).
-pub fn method_yields_owned_iterator_elements(method: &str) -> bool {
-    matches!(method, "chars" | "bytes")
-}
-
-/// Element type for by-value string/byte iterators (`chars` → `char`, `bytes` → `u8`).
-pub fn owned_iterator_element_type(method: &str) -> Option<Type> {
-    match method {
-        "chars" => Some(Type::Custom("char".to_string())),
-        "bytes" => Some(Type::Custom("u8".to_string())),
-        _ => None,
-    }
-}
-
+/// HashMap/BTreeMap key methods — name classification for stdlib trait identity only.
+/// Ownership decisions must still go through [`method_is_map_key_qualified`] / signatures.
 pub fn is_map_key_method(method: &str) -> bool {
     matches!(
         method,
@@ -855,4 +900,40 @@ pub fn runtime_std_call_arg_needs_auto_borrow(
 
     runtime_std_module_uses_asref_str(module)
         && inferred_type.is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+}
+
+#[cfg(test)]
+mod pattern_registry_tests {
+    use super::*;
+    use crate::analyzer::SignatureRegistry;
+
+    #[test]
+    fn string_find_and_chars_driven_by_stdlib_meta() {
+        let reg = SignatureRegistry::new();
+        assert!(
+            reg.get_signature("String::find").is_some(),
+            "stdlib_meta/string.wj.meta must load into SignatureRegistry"
+        );
+        assert!(method_arg_expects_rust_str_ref_qualified(
+            "find",
+            Some("String"),
+            &reg,
+            0
+        ));
+        assert!(method_returns_iterator_qualified(
+            "chars",
+            Some("String"),
+            &reg
+        ));
+        assert!(method_yields_owned_iterator_elements_qualified(
+            "chars",
+            Some("String"),
+            &reg
+        ));
+        assert!(method_returns_iterable_qualified(
+            "iter",
+            Some("Vec"),
+            &reg
+        ));
+    }
 }

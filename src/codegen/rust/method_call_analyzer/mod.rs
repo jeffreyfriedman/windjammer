@@ -95,6 +95,7 @@ impl MethodCallAnalyzer {
         >,
         match_arm_bindings: &HashSet<String>,
         str_ref_optimized_params: &HashSet<String>,
+        signature_registry: Option<&crate::analyzer::SignatureRegistry>,
     ) -> bool {
         let is_string_literal = matches!(
             arg,
@@ -356,6 +357,8 @@ impl MethodCallAnalyzer {
             arg_count,
             receiver_type_name,
             local_var_types,
+            signature_registry,
+            param_idx,
         )
     }
 }

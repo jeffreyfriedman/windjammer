@@ -219,8 +219,6 @@ const STORAGE: &[&str] = &[
     "push_back",
 ];
 
-const SLICE_SEARCH: &[&str] = &["contains", "binary_search"];
-
 const TYPE_PRESERVING: &[&str] = &["clone", "to_owned", "to_vec", "into_iter"];
 
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
@@ -324,10 +322,6 @@ pub(crate) fn decompose_collection_key_lookup<'ast>(
 
 pub fn is_storage_method(method: &str) -> bool {
     STORAGE.contains(&method)
-}
-
-pub fn is_slice_search_method(method: &str) -> bool {
-    SLICE_SEARCH.contains(&method)
 }
 
 // ── SignatureRegistry helpers ────────────────────────────────────────────
