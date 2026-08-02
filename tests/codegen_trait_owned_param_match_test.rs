@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Trait methods declare owned `string` / custom structs, but impl methods are
 //! sometimes codegen'd as `&String` / `&T` while the trait stays owned. Rustc:

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): multi-string helper args must not be auto-borrowed.
+//! Gate (dogfood): multi-string helper args must not be auto-borrowed.
 //! Documents why seed match uses inline BankLineView construction instead of helpers.
 
 #[path = "common/test_utils.rs"]

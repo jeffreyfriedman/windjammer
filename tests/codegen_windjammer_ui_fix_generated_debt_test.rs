@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPROS for windjammer-ui TECH_DEBT.md bugs that historically required
+//! Gates for windjammer-ui TECH_DEBT.md bugs that historically required
 //! post-processing / hand patches before a pure-Windjammer regenerate is safe.
 //!
 //! Mapping (TECH_DEBT.md):

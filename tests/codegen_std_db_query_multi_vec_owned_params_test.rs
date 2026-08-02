@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Platform pattern:
 //! `conn.query(insert_sql(), vec![slug + "", seq + "", event + "", ...])`

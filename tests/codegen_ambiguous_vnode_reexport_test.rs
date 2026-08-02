@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (web-run warning): ambiguous glob re-exports.
+//! Gate (web-run warning): ambiguous glob re-exports.
 //!
 //! windjammer-ui `components/generated/mod.rs` historically did:
 //!   pub use vnode::*;

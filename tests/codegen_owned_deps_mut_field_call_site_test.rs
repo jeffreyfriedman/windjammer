@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Callee mutates owned `deps: AppDeps` fields (analyzer MutBorrowed) but emits
 //! `mut deps: AppDeps` (owned). Multipass call sites that reuse `deps` must pass

@@ -138,31 +138,15 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // TDD FIX: Option::unwrap() move error prevention
-        // TDD FIX: AUTO-CLONE Option::unwrap() on borrowed fields
-        // When calling .unwrap() on a borrowed Option field, we must clone before unwrap:
-        //   node.children.unwrap() where node is &Node → ERROR: cannot move from &Option
-        //   node.children.clone().unwrap() → ✅ OK
-        // THE WINDJAMMER WAY: Users write .unwrap() naturally, compiler handles ownership
-        if matches!(method, "unwrap" | "first" | "last") {
-            // Check if object is a field access (node.children) that needs clone
-            let needs_clone = if let Expression::FieldAccess {
-                object: field_obj, ..
-            } = object
-            {
-                // Is this accessing a field on a borrowed parameter?
-                if let Expression::Identifier { ref name, .. } = **field_obj {
-                    // Check if the identifier is an inferred borrowed parameter
-                    self.inferred_borrowed_params.contains(name)
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            if needs_clone && !obj_str.contains(".clone()") {
-                obj_str = format!("{}.clone()", obj_str);
-            }
+        // When calling .unwrap() / .first() / .last() on a borrowed param's field
+        // (`node.children.unwrap()` where node is &Node), lower via `.as_ref()` so we
+        // do not move out of `&Option<T>`.
+        if matches!(method, "unwrap" | "first" | "last")
+            && self.expression_traces_to_inferred_borrowed_param(object)
+            && !obj_str.contains(".as_ref()")
+            && !obj_str.contains(".clone()")
+        {
+            obj_str = format!("{}.as_ref()", obj_str);
         }
 
         // E0507: borrowed `self.field` adapters that Rust implements by-value on `Option`
@@ -220,6 +204,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         obj_str
+    }
+
+    /// True when `expr` is a bare borrowed param or a field/index chain rooted at one.
+    fn expression_traces_to_inferred_borrowed_param(&self, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => self.inferred_borrowed_params.contains(name),
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                self.expression_traces_to_inferred_borrowed_param(object)
+            }
+            _ => false,
+        }
     }
 
     /// Extract the trait name from `Box<dyn Trait>`, `dyn Trait`, or `TraitObject("Trait")`.

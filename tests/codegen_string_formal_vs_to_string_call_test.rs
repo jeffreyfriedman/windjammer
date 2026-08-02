@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! WJ declares `json_cors_error(status: int, message: string)` but codegen
 //! demotes the formal to `message: &str` while downstream-style call sites

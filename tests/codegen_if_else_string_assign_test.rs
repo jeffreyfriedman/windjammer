@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (web-run warning): mut string initialized then always reassigned.
+//! Gate (web-run warning): mut string initialized then always reassigned.
 //!
 //! Windjammer-ui MoneyDisplay `format_cents` currently codegen's to:
 //!   let mut rem_s = "".to_string();

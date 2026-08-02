@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): VNode.raw_html trusted fragments for #main paint.
+//! Gate (dogfood): VNode.raw_html trusted fragments for #main paint.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Handlers demote `tenant_slug: string` → `tenant_slug: &str`, while call sites
 //! build `let _temp0 = format!(…); fetch_*(deps.clone(), _temp0, …)` and pass
@@ -35,7 +35,7 @@ pub fn fetch_accounts(deps: AppDeps, tenant_slug: string) -> string {
     deps.tag + ":" + tenant_slug
 }
 
-pub fn fetch_trial_balance(deps: AppDeps, tenant_slug: string, as_of: string) -> string {
+pub fn fetch_report(deps: AppDeps, tenant_slug: string, as_of: string) -> string {
     deps.tag + ":" + tenant_slug + ":" + as_of
 }
 "#,
@@ -43,13 +43,13 @@ pub fn fetch_trial_balance(deps: AppDeps, tenant_slug: string, as_of: string) ->
         (
             "tool_invoke.wj",
             r#"
-use handlers::{AppDeps, fetch_accounts, fetch_trial_balance}
+use handlers::{AppDeps, fetch_accounts, fetch_report}
 
 pub fn invoke(deps: AppDeps, slug: string, as_of: string, which: int) -> string {
     if which == 1 {
         return fetch_accounts(deps, slug + "")
     }
-    fetch_trial_balance(deps, slug + "", as_of + "")
+    fetch_report(deps, slug + "", as_of + "")
 }
 "#,
         ),
@@ -79,12 +79,12 @@ fn main() {
             && (invoke.contains("&_temp")
                 || invoke.contains("fetch_accounts(deps.clone(), &")
                 || invoke.contains("fetch_accounts(deps, &"));
-        let tb_ok = !invoke.contains("fetch_trial_balance(")
+        let report_ok = !invoke.contains("fetch_report(")
             || invoke.contains("&_temp")
-            || invoke.contains("fetch_trial_balance(deps.clone(), &")
-            || invoke.contains("fetch_trial_balance(deps, &");
+            || invoke.contains("fetch_report(deps.clone(), &")
+            || invoke.contains("fetch_report(deps, &");
         assert!(
-            accounts_ok && tb_ok,
+            accounts_ok && report_ok,
             "&str formals require &_temp at call sites (tool_invoke). handlers:\n{handlers}\ninvoke:\n{invoke}"
         );
     } else {

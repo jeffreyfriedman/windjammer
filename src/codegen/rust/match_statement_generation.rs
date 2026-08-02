@@ -396,6 +396,23 @@ impl<'ast> CodeGenerator<'ast> {
                             body_str = rewritten;
                         }
                     }
+                    {
+                        let target = match &self.current_function_return_type {
+                            Some(Type::Int) => Some("int"),
+                            Some(Type::Custom(name)) if name == "i64" || name == "int" => {
+                                Some("int")
+                            }
+                            Some(Type::Custom(name)) if name == "i32" => Some("i32"),
+                            _ => None,
+                        };
+                        if let Some(t) = target {
+                            self.maybe_cast_usize_to_int_target(
+                                &mut body_str,
+                                main_arm.body,
+                                Some(t),
+                            );
+                        }
+                    }
                     output.push_str(&self.indent());
                     output.push_str(&body_str);
                     output.push_str(";\n");
@@ -899,6 +916,18 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let mut arm_str = self.generate_expression(arm.body);
             self.in_void_block = old_void_block;
+
+            {
+                let target = match &self.current_function_return_type {
+                    Some(Type::Int) => Some("int"),
+                    Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+                    Some(Type::Custom(name)) if name == "i32" => Some("i32"),
+                    _ => None,
+                };
+                if let Some(t) = target {
+                    self.maybe_cast_usize_to_int_target(&mut arm_str, arm.body, Some(t));
+                }
+            }
 
             self.in_match_arm_needing_string = old_in_match_arm;
 

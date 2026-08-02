@@ -10,14 +10,14 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): DataTable.scrollable(true) must compile and
-//! emit `lk-table-scroll` so sticky/zebra density CSS can wrap finance tables.
+//! Gate (dogfood): DataTable.scrollable(true) must compile and
+//! emit `wj-table-scroll` so sticky/zebra density CSS can wrap scrollable tables.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn datatable_scrollable_should_emit_lk_table_scroll() {
+fn datatable_scrollable_should_emit_wj_table_scroll() {
     let source = r#"
 pub struct DataTable {
     scrollable: bool,
@@ -34,7 +34,7 @@ impl DataTable {
     }
     pub fn render(self) -> string {
         if self.scrollable {
-            format!("<div class='lk-table-scroll'>{}</div>", self.body)
+            format!("<div class='wj-table-scroll'>{}</div>", self.body)
         } else {
             self.body
         }
@@ -48,12 +48,12 @@ fn main() {
 "#;
 
     let result = test_utils::compile_single(source);
-    let ok = result.contains("lk-table-scroll")
+    let ok = result.contains("wj-table-scroll")
         && result.contains("scrollable")
         && !result.contains("error[E");
     assert!(
         ok,
-        "DataTable.scrollable(true) should codegen a lk-table-scroll wrapper. Got:\n{}",
+        "DataTable.scrollable(true) should codegen a wj-table-scroll wrapper. Got:\n{}",
         result
     );
 }

@@ -39,7 +39,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
     (result.status.success(), generated, combined)
 }
 
-/// FMP: `query.get(key)` on `std::collections::HashMap` must emit `&key`, not `key` or `&&key`.
+/// app: `query.get(key)` on `std::collections::HashMap` must emit `&key`, not `key` or `&&key`.
 #[test]
 fn test_std_collections_hashmap_get_borrows_owned_key() {
     let source = r#"
@@ -65,7 +65,7 @@ fn query_get_owned(query: std::collections::HashMap<string, string>, key: string
     );
 }
 
-/// FMP route helpers: owned `string` formals pass by value at call sites.
+/// app route helpers: owned `string` formals pass by value at call sites.
 #[test]
 fn test_module_helper_owned_string_call_no_spurious_borrow() {
     let source = r#"

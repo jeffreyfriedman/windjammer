@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): AuthFetch button compose must codegen.
+//! Gate (dogfood): AuthFetch button compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

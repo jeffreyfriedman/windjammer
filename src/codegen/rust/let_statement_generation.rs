@@ -336,7 +336,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                self.collect_target_type = Some(t.clone());
+                if crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t) {
+                    self.collect_target_type = Some(t.clone());
+                }
 
                 // Auto-convert &str to String if type is String
                 let mut value_str = self.generate_expression(value);
@@ -470,6 +472,7 @@ impl<'ast> CodeGenerator<'ast> {
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)
                 //   other non-Copy → .clone()
                 self.apply_self_field_move_fix(value, &mut value_str, var_name);
+                self.apply_owned_param_field_extract_clone(value, &mut value_str);
 
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
@@ -525,7 +528,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                self.collect_target_type = Some(t.clone());
+                if crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t) {
+                    self.collect_target_type = Some(t.clone());
+                }
 
                 // Auto-convert &str to String if type is String
                 let mut value_str = self.generate_expression(value);
@@ -642,6 +647,7 @@ impl<'ast> CodeGenerator<'ast> {
                 //   Option<T> behind &mut self → .take() (moves value, leaves None)
                 //   other non-Copy → .clone()
                 self.apply_self_field_move_fix(value, &mut value_str, var_name);
+                self.apply_owned_param_field_extract_clone(value, &mut value_str);
 
                 if let Expression::Identifier { name, .. } = value {
                     if let Some(ref analysis) = self.auto_clone_analysis {
@@ -682,6 +688,7 @@ impl<'ast> CodeGenerator<'ast> {
         // This enables auto-casting in comparisons with i32
         if let Some(name) = var_name {
             let is_usize = self.expression_produces_usize(value)
+                || self.infer_expression_type_is_usize(value)
                 || matches!(type_, Some(Type::Custom(s)) if s == "usize");
             if is_usize {
                 self.usize_variables.insert(name.to_string());

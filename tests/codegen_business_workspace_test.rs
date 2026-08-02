@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): BusinessWorkspace bank slot must codegen.
+//! Gate (dogfood): BusinessWorkspace bank slot must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

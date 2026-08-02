@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Trait methods declare owned `string` / custom structs. Call sites must pass
 //! owned values (or `.clone()`), not `&arg` / `&arg.to_string()` mismatches.

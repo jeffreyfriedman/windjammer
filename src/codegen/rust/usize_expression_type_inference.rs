@@ -144,6 +144,18 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Field access: self.field_name or obj.field_name (including nested)
             Expression::FieldAccess { object, field, .. } => {
+                if field == "0" {
+                    if let Expression::Identifier { name, .. } = &**object {
+                        if self.usize_variables.contains(name)
+                            || self
+                                .local_var_types
+                                .get(name.as_str())
+                                .is_some_and(|t| matches!(t, Type::Tuple(_)))
+                        {
+                            return true;
+                        }
+                    }
+                }
                 // Check if accessing a usize field on self (fast path)
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
                     if obj_name == "self" && self.in_impl_block {
@@ -246,6 +258,41 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         target_type: Option<&str>,
     ) {
+        if let Some(t) = target_type {
+            if matches!(t, "int" | "i64" | "i32") {
+                if let Expression::Call {
+                    function,
+                    arguments,
+                    ..
+                } = expr
+                {
+                    if arguments.len() == 1 {
+                        let is_some = matches!(
+                            &**function,
+                            Expression::Identifier { name, .. }
+                                if name == "Some" || name.ends_with("::Some")
+                        );
+                        if is_some {
+                            let (_, inner) = &arguments[0];
+                            if self.expression_produces_usize(inner) {
+                                if expr_str.starts_with("Some(") && expr_str.ends_with(')') {
+                                    let inner_part =
+                                        expr_str[5..expr_str.len().saturating_sub(1)].trim();
+                                    let base = inner_part
+                                        .strip_suffix(".clone()")
+                                        .unwrap_or(inner_part)
+                                        .trim();
+                                    let cast_suffix = if t == "i32" { " as i32" } else { " as i64" };
+                                    *expr_str = format!("Some({}{})", base, cast_suffix);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if !self.expression_produces_usize(expr) {
             return;
         }
@@ -270,6 +317,42 @@ impl<'ast> CodeGenerator<'ast> {
         idx_str: &mut String,
         index: &Expression<'ast>,
     ) {
+        // Non-negative integer literals infer as usize in index context — no cast needed.
+        if let Expression::Literal {
+            value: Literal::Int(n),
+            ..
+        } = index
+        {
+            if *n >= 0 {
+                return;
+            }
+        }
+        // Already a usize index form — never double-cast (`0_usize as usize`).
+        if idx_str.contains(" as usize")
+            || idx_str.ends_with("_usize")
+            || self.infer_expression_type_is_usize(index)
+            || self.expression_produces_usize(index)
+        {
+            return;
+        }
+        if let Expression::Identifier { name, .. } = index {
+            if self.usize_variables.contains(name) {
+                return;
+            }
+        }
+        if let Some(ty) = self.infer_expression_type(index) {
+            let needs_usize_cast = matches!(ty, Type::Int)
+                || matches!(ty, Type::Custom(name) if name == "int" || name == "i64" || name == "i32");
+            if needs_usize_cast {
+                let needs_parens = matches!(index, Expression::Binary { .. });
+                if needs_parens {
+                    *idx_str = format!("({}) as usize", idx_str);
+                } else {
+                    *idx_str = format!("{} as usize", idx_str);
+                }
+                return;
+            }
+        }
         if idx_str.ends_with("as i64)") || idx_str.ends_with("as int)") {
             let base = idx_str
                 .trim_end_matches("as i64)")
@@ -284,7 +367,15 @@ impl<'ast> CodeGenerator<'ast> {
                 .trim_end_matches("as int")
                 .trim();
             *idx_str = format!("{} as usize", base);
-        } else if !idx_str.contains(" as ") && !self.expression_produces_usize(index) {
+        } else if !idx_str.contains(" as ") {
+            if self.infer_expression_type_is_usize(index) {
+                return;
+            }
+            if let Expression::Identifier { name, .. } = index {
+                if self.usize_variables.contains(name) {
+                    return;
+                }
+            }
             let needs_cast = match index {
                 Expression::Identifier { name, .. } => !self.usize_variables.contains(name),
                 Expression::Literal {
