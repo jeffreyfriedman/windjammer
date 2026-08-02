@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! `Err(failure) => Err(json_cors_error(failure.status, failure.message + ""))`
 //! was emitting `json_cors_error(*failure.status, …)` → rustc E0614

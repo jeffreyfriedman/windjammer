@@ -315,7 +315,7 @@ impl AutoCloneAnalysis {
 
     /// Field-extract demotes Move→Read only for shared-ref formals. Owned WJ
     /// formals that match/project (`value_tag(value: Value)`) still move — callers
-    /// must `.clone()` on reuse (WDB-063).
+    /// must `.clone()` on reuse (regression-063).
     fn sig_arg_is_field_extract_shared_borrow(
         sig: &crate::analyzer::FunctionSignature,
         param_idx: usize,
@@ -793,7 +793,7 @@ impl AutoCloneAnalysis {
                 // Example: `let lo = self.start.bytes; let hi = self.end.bytes` must
                 // clone both, not only the first field when `self` is reused.
                 // Exception: extract-assign writeback `let mut x = self.f; …; self.f = x`
-                // (WDB-042) — bare move, no clone.
+                // (regression-042) — bare move, no clone.
                 if root == "self"
                     && Self::self_field_has_extract_writeback(
                         statements,
@@ -1110,7 +1110,7 @@ mod tests {
 
     #[test]
     fn test_owned_field_extract_value_param_still_needs_clone_on_reuse() {
-        // WDB-063: value_tag(value: Value) match-projects but emits owned Value —
+        // regression-063: value_tag(value: Value) match-projects but emits owned Value —
         // field_extract must not demote Move→Read; first call needs .clone().
         let mut registry = crate::analyzer::SignatureRegistry::new();
         let mut sig = crate::analyzer::FunctionSignature {

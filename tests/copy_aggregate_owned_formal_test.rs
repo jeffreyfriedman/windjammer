@@ -4,7 +4,7 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 #[test]
-fn wdb_lsn_is_at_or_before_no_borrow_through() {
+fn dogfood_lsn_is_at_or_before_no_borrow_through() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal_layout.wj",

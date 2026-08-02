@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO / REGRESSION (dogfood): unmatched CheckbookRow emits register→match link.
+//! Gate / REGRESSION (dogfood): unmatched CheckbookRow emits register→match link.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

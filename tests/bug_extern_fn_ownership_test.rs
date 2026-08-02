@@ -108,3 +108,37 @@ pub fn draw_text(label: string, x: f32, y: f32) {
         generated
     );
 }
+
+/// TDD test: bare string literal to extern fn must not get outer `.to_string()` on FfiString wrap.
+///
+/// Bug (regression): `ping_ffi("GET /query?fresh=1")` codegen produced
+/// `string_to_ffi("GET /query?fresh=1".to_string()).to_string()` — E0308 (expected FfiString, found String).
+///
+/// Root Cause: `apply_owned_string_literal_coercion` runs after extern `string_to_ffi` wrapping and
+/// appends `.to_string()` because the arg no longer ends with `.to_string()` (it ends with `)`).
+///
+/// Fix: (separate session) skip owned literal coercion when arg contains `string_to_ffi(` or callee is extern.
+#[test]
+fn test_extern_fn_string_literal_no_outer_to_string_on_ffi_wrap() {
+    let source = r#"
+extern fn ping_ffi(payload: string) -> i32
+
+pub fn validates() -> bool {
+    ping_ffi("GET /query?fresh=1") == 200
+}
+"#;
+
+    let generated = test_utils::compile_single(source);
+    println!("Generated:\n{}", generated);
+
+    assert!(
+        generated.contains("string_to_ffi(\"GET /query?fresh=1\".to_string())"),
+        "extern fn string literal should use string_to_ffi wrap. Got:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("string_to_ffi(\"GET /query?fresh=1\".to_string()).to_string()"),
+        "must NOT add outer .to_string() on string_to_ffi result. Got:\n{}",
+        generated
+    );
+}

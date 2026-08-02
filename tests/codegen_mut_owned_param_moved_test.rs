@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Owned composition deps params (`deps: AppDeps`) are sometimes codegen'd as
 //! `deps: &mut AppDeps` when the body:

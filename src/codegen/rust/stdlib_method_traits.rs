@@ -10,6 +10,28 @@ use crate::parser::{Expression, Type};
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+/// Receiver type names to try for stdlib `Type::method` registry lookup.
+///
+/// Windjammer `string`/`str`/`&str` receivers lower to Rust `&str` at call sites,
+/// but stdlib metadata registers text methods on `String` (e.g. `String::find`).
+pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<String> {
+    let base = receiver_type.split('<').next().unwrap_or(receiver_type);
+    let leaf = base.rsplit("::").next().unwrap_or(base);
+    let mut out = Vec::new();
+    let mut push = |s: &str| {
+        if !s.is_empty() && !out.iter().any(|x| x == s) {
+            out.push(s.to_string());
+        }
+    };
+    push(receiver_type);
+    push(base);
+    push(leaf);
+    if matches!(leaf, "str" | "string" | "String") {
+        push("String");
+    }
+    out
+}
+
 /// Attempt a type-qualified signature lookup, trying multiple receiver type
 /// representations (e.g. `Vec`, `Vec<T>`, bare generic base).
 fn lookup_sig<'a>(
@@ -18,9 +40,7 @@ fn lookup_sig<'a>(
     registry: &'a SignatureRegistry,
 ) -> Option<&'a FunctionSignature> {
     if let Some(ty) = receiver_type {
-        let base = ty.split('<').next().unwrap_or(ty);
-        let short = base.rsplit("::").next().unwrap_or(base);
-        for candidate in [base, short, ty] {
+        for candidate in stdlib_receiver_lookup_candidates(ty) {
             let qualified = format!("{candidate}::{method}");
             if let Some(sig) = registry.get_signature(&qualified) {
                 return Some(sig);
@@ -393,6 +413,30 @@ pub fn method_arg_expects_rust_str_ref_from_sig(
     sig.param_types
         .get(idx)
         .is_some_and(is_str_reference)
+}
+
+/// Whether a method argument expects a shared borrow of element/key type (`&T`, not `&str`).
+pub fn method_arg_expects_borrowed_reference_from_sig(
+    sig: &FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    let idx = sig.arg_param_index(arg_index);
+    matches!(sig.param_ownership.get(idx), Some(OwnershipMode::Borrowed))
+        && sig.param_types.get(idx).is_some_and(|t| {
+            matches!(t, Type::Reference(_)) && !is_str_reference(t)
+        })
+}
+
+/// Whether a method argument expects a shared borrow (from resolved signature + registry).
+pub fn method_arg_expects_borrowed_reference_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+    arg_index: usize,
+) -> bool {
+    let sig =
+        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
+    sig.is_some_and(|s| method_arg_expects_borrowed_reference_from_sig(s, arg_index))
 }
 
 /// Is this a HashMap/BTreeMap key method whose first arg is a key reference?

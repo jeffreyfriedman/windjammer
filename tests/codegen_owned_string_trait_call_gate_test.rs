@@ -10,15 +10,15 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (ledgerkit tip break after ownership-refresh call-site fix):
+//! Gate — owned `string` trait call sites after ownership refresh.
 //!
 //! Trait methods take owned `string`. Call sites that pass:
 //! - struct field access (`request.email` / `request.password`)
 //! - format/concat temps (`tenant_slug + ""`)
 //! must emit owned values that rustc accepts (clone when behind `&`, never bare `&field`).
 //!
-//! Tip after `honor defining-module ownership refresh` (2026-08-01):
-//! - may rewrite `login(..., request: LoginRequest)` → `request: &LoginRequest`
+//! Known tip failure modes:
+//! - rewrite `login(..., request: LoginRequest)` → `request: &LoginRequest`
 //! - then emit `authenticate(request.email, request.password.clone())` → E0507 move of email
 //! - historically also emitted `&request.password` / `close_period(&...)` → E0308
 
@@ -29,7 +29,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-fn write_finance_owned_string_trait_project(src: &std::path::Path) {
+fn write_owned_string_trait_project(src: &std::path::Path) {
     fs::create_dir_all(src).unwrap();
     fs::write(
         src.join("ports.wj"),
@@ -96,7 +96,6 @@ pub struct AppDeps {
 }
 
 pub fn login(deps: AppDeps, request: LoginRequest) -> Result<string, string> {
-    // Mirror ledgerkit composition/login.wj call shape.
     let user = match deps.credential_authenticator.authenticate(request.email, request.password) {
         Ok(u) => u,
         Err(e) => return Err(e),
@@ -105,7 +104,7 @@ pub fn login(deps: AppDeps, request: LoginRequest) -> Result<string, string> {
 }
 
 pub fn close(deps: AppDeps, tenant_slug: string, period_id: string) -> Result<(), string> {
-    // Mirror ledgerkit routes.wj close_period call shape (format concat temps).
+    // format/concat temps into owned string formals
     deps.period_lock.close_period(
         format!("{}{}", tenant_slug, ""),
         format!("{}{}", period_id, ""),
@@ -123,12 +122,12 @@ pub fn close(deps: AppDeps, tenant_slug: string, period_id: string) -> Result<()
 }
 
 #[test]
-fn finance_trait_owned_string_field_and_concat_must_cargo_check() {
+fn trait_owned_string_field_and_concat_must_cargo_check() {
     let tmp = TempDir::new().unwrap();
     let src = tmp.path().join("src");
     let out = tmp.path().join("out");
     fs::create_dir_all(&out).unwrap();
-    write_finance_owned_string_trait_project(&src);
+    write_owned_string_trait_project(&src);
 
     let wj = env!("CARGO_BIN_EXE_wj");
     let status = Command::new(wj)
@@ -154,16 +153,13 @@ fn finance_trait_owned_string_field_and_concat_must_cargo_check() {
         !login_rs.contains("close_period(&"),
         "close_period must not borrow owned format/concat temps. Got:\n{login_rs}"
     );
-    // Tip also rewrites `request: LoginRequest` → `&LoginRequest` then inconsistently
-    // clones email while borrowing password — cargo check below catches E0308/E0507.
 
-    // Emit a tiny Cargo project and cargo check — the product break is rustc E0308.
     let crate_dir = tmp.path().join("crate");
     fs::create_dir_all(crate_dir.join("src")).unwrap();
     fs::write(
         crate_dir.join("Cargo.toml"),
         r#"[package]
-name = "finance_owned_string_gate"
+name = "owned_string_trait_gate"
 version = "0.0.0"
 edition = "2021"
 

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): owned Vec helper args must not force callers to pre-reduce.
+//! Gate (dogfood): owned Vec helper args must not force callers to pre-reduce.
 //! Documents why bank recon domain takes register aggregates instead of Vec<BankLineView>.
 
 #[path = "common/test_utils.rs"]

@@ -65,7 +65,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !local_emitted_mut
             && !has_preregistered_local_callee
             // Global defining-module refresh also counts — String→&str multipass must not
-            // force the non-IR path that strips `&` (WDB-049 replay_to_lsn).
+            // force the non-IR path that strips `&` (regression-049 replay_to_lsn).
             && !self
                 .global_signature_registry
                 .as_ref()
@@ -122,7 +122,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Never skip auto-clone when the callee emits owned formals: analyzer/global
-        // stubs may still say Borrowed (`&Vec`) while codegen emits `Vec` (WDB-056/059).
+        // stubs may still say Borrowed (`&Vec`) while codegen emits `Vec` (regression-056/059).
         let emits_owned_formal = self.ir_callee_arg_emits_owned_contract(
             registry,
             callee_name,
@@ -163,7 +163,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.maybe_auto_clone(name, arg_str)
             }
             // Field paths (`record.key`) moved into owned formals + reused in loops
-            // need `.clone()`; identifier-only auto-clone misses them (WDB-059).
+            // need `.clone()`; identifier-only auto-clone misses them (regression-059).
             Expression::FieldAccess { .. } | Expression::Index { .. }
                 if !skip_auto_clone_for_borrow && !skip_auto_clone_for_field_extract =>
             {
@@ -224,7 +224,7 @@ impl<'ast> CodeGenerator<'ast> {
             let from_reg = registry.get_signature(callee_name).cloned();
             let from_local = local_sig.cloned();
             // Prefer defining-module / global refresh first so cross-module free calls
-            // see `&str` (WDB-049 `replay_to_lsn`) over stale local owned stubs.
+            // see `&str` (regression-049 `replay_to_lsn`) over stale local owned stubs.
             crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
                 [from_global, from_global_simple, from_reg, from_local],
             )
@@ -295,7 +295,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let local_idx = local.arg_param_index(arg_index);
                     let method_idx = method_sig.arg_param_index(arg_index);
                     // Keep local owned / Copy-aggregate contracts over stale method Ref wraps
-                    // (WDB-060 `other: Lsn` must not become `&through` via method_ref prefer).
+                    // (regression-060 `other: Lsn` must not become `&through` via method_ref prefer).
                     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         local, local_idx,
                     ) {
@@ -376,7 +376,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && sig.as_ref().is_none_or(|local_sig| {
                     let idx = local_sig.arg_param_index(arg_index);
                     // Never replace codegen-owned / Copy-aggregate formals with a stale
-                    // global Borrowed wrap (WDB-060 `is_at_or_before(&through)` vs `other: Lsn`).
+                    // global Borrowed wrap (regression-060 `is_at_or_before(&through)` vs `other: Lsn`).
                     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         local_sig, idx,
                     ) {
@@ -468,7 +468,7 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 finished = crate::ir::target_encodings::rust_shared_borrow(&finished);
             }
-            // Unresolved callee still needs multi-use clones (WDB-063 seed_write).
+            // Unresolved callee still needs multi-use clones (regression-063 seed_write).
             finished = self.maybe_auto_clone_call_arg(
                 arg_expr,
                 &finished,
@@ -507,7 +507,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Fallback: per-caller registry snapshots can predate defining-module
             // convergence; trust the merged global entry when it expects shared borrow.
-            // Never downgrade codegen-owned Copy-aggregate locals (WDB-060
+            // Never downgrade codegen-owned Copy-aggregate locals (regression-060
             // `is_at_or_before(&through)` vs emitted `other: Lsn`). Non-Copy owned
             // formals (Key::has_key) may still need global convergence for clone paths.
             if let Some(global) = self.global_signature_registry.as_deref() {
@@ -551,7 +551,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Method callees: always attempt defining-module codegen refresh merge so
         // `emitted_rust_ref_params` / owned Copy-aggregate formals beat stale analyzer
-        // `Reference(Lsn)` stubs (`&through` into `other: Lsn`, WDB-060). No-op when the
+        // `Reference(Lsn)` stubs (`&through` into `other: Lsn`, regression-060). No-op when the
         // registry lacks refresh metadata.
         if let Some(rt) = receiver_type_name {
             let qualified = format!("{rt}::{method_simple}");
@@ -792,7 +792,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             expected.ownership = OwnedType::Owned;
         }
-        // Registry-aware Copy aggregate → owned callee formal (WDB-060 `through: Lsn`).
+        // Registry-aware Copy aggregate → owned callee formal (regression-060 `through: Lsn`).
         if let Expression::Identifier { name, .. } = arg_expr {
             let caller_copy_aggregate = self.current_function_params.iter().any(|p| {
                 p.name == *name
@@ -1293,7 +1293,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Belt-and-suspenders: owned Copy aggregates pass by value at call sites.
         // Use registry-aware `is_type_copy` (Lsn, PartId, …) — pure analysis only knows
-        // primitives and would miss user Copy aggregates (WDB-060 `is_at_or_before`).
+        // primitives and would miss user Copy aggregates (regression-060 `is_at_or_before`).
         // Do not strip `&mut` when the callee emits `&mut T` (Copy + MutBorrowed PlayerState).
         if coerced.starts_with("&mut ") || (coerced.starts_with('&') && !coerced.starts_with("&mut "))
         {
@@ -1317,7 +1317,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Method-registry / global converged signatures must win over stale call-site
-        // metadata (wdb `engine.put` delegation, forward refs to later impl methods).
+        // metadata (dogfood `engine.put` delegation, forward refs to later impl methods).
         self.apply_registry_borrow_to_call_arg(
             &mut coerced,
             arg_expr,
@@ -1328,7 +1328,7 @@ impl<'ast> CodeGenerator<'ast> {
         );
 
         // `apply_registry_borrow_to_call_arg` may re-apply stale `&` from global stubs;
-        // Copy-aggregate caller→callee (`through: Lsn` → `other: Lsn`) must stay by-value (WDB-060).
+        // Copy-aggregate caller→callee (`through: Lsn` → `other: Lsn`) must stay by-value (regression-060).
         if let Expression::Identifier { name, .. } = arg_expr {
             let callee_copy_aggregate = sig
                 .formal_param_type(param_idx)
@@ -1605,7 +1605,7 @@ impl<'ast> CodeGenerator<'ast> {
                         && !coerced.ends_with(".to_owned()")
                         && !match arg_expr {
                             // Only scalar Copy (i64/bool/…) skips clone; Copy aggregates/enums
-                            // still need `.clone()` on multi-use owned moves (WDB-063 Value).
+                            // still need `.clone()` on multi-use owned moves (regression-063 Value).
                             Expression::Identifier { name, .. } => {
                                 self.binding_is_copy_pass_by_value_scalar(name)
                             }
@@ -1630,7 +1630,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let _ = pidx;
         // Strip redundant `.clone()` only for scalar Copy formals (i64/bool/…).
-        // Copy aggregates/enums (Value, Lsn) still need multi-use clones (WDB-063).
+        // Copy aggregates/enums (Value, Lsn) still need multi-use clones (regression-063).
         if coerced.ends_with(".clone()") {
             let formal_ty = sig
                 .formal_param_type(param_idx)
@@ -1855,9 +1855,6 @@ impl<'ast> CodeGenerator<'ast> {
                     coerced = coerced[1..].to_string();
                 }
                 crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
-                if let Some(stripped) = coerced.strip_suffix(".to_string()") {
-                    coerced = stripped.to_string();
-                }
             } else {
                 let is_text_shared = crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                     &sig, param_idx,
@@ -1871,7 +1868,7 @@ impl<'ast> CodeGenerator<'ast> {
                 });
                 if is_text_shared {
                     // Confirmed `&str`/`&String` under collision: keep `&`, drop owned
-                    // literal coercion (string_literal_no_conversion / WDB-048).
+                    // literal coercion (string_literal_no_conversion / regression-048).
                     if let Some(stripped) = coerced.strip_suffix(".to_string()") {
                         coerced = stripped.to_string();
                     }
@@ -1918,7 +1915,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // Final IR ownership contract: strip spurious `&` when callee emits owned formals
-        // (WDB-056 keys_equal(Vec<u8>, Vec<u8>)), or add borrow when expected.
+        // (regression-056 keys_equal(Vec<u8>, Vec<u8>)), or add borrow when expected.
         self.enforce_call_site_ownership_contract(
             &mut coerced,
             arg_expr,
@@ -1934,7 +1931,7 @@ impl<'ast> CodeGenerator<'ast> {
                 "WJ_DEBUG_COLLISION_BORROW after_enforce callee={callee_name} coerced={coerced}"
             );
         }
-        // WDB-060: Copy-aggregate caller bindings (`through: Lsn`) must pass by value into
+        // regression-060: Copy-aggregate caller bindings (`through: Lsn`) must pass by value into
         // owned callees. Stale analyzer `Reference(Lsn)` / prefer_global Borrow must not
         // leave `&through` / `(&through)` when codegen did not confirm a shared-ref formal.
         if let Expression::Identifier { name, .. } = arg_expr {
@@ -2025,7 +2022,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // After borrow stripping / collision clone-stripping: restore `.clone()` when
-        // auto-clone analysis says this binding/path is moved and reused (WDB-059).
+        // auto-clone analysis says this binding/path is moved and reused (regression-059).
         coerced = self.ensure_owned_move_clone_for_reuse(
             arg_expr,
             &coerced,
@@ -2099,7 +2096,7 @@ impl<'ast> CodeGenerator<'ast> {
             );
         }
         // `&str` / `&String` caller bindings → owned `String` formals need `.to_string()`
-        // (wdb-types `batch_column_i64(name: &str)` → `ArrowBatch::column_i64(name: String)`).
+        // (types-crate `batch_column_i64(name: &str)` → `ArrowBatch::column_i64(name: String)`).
         if let Expression::Identifier { name, .. } = arg_expr {
             let caller_is_str_slice = self.str_ref_optimized_params.contains(name.as_str())
                 || (self.emitted_rust_ref_formals.contains(name)
@@ -2147,7 +2144,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// When a binding/path is moved and reused, and the final argument is passed by
-    /// value (no leading `&`), ensure `.clone()` is present (WDB-059).
+    /// value (no leading `&`), ensure `.clone()` is present (regression-059).
     fn ensure_owned_move_clone_for_reuse(
         &self,
         arg_expr: &Expression<'ast>,
@@ -2212,13 +2209,13 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
         // When reuse requires clone but a stale shared-borrow prefix was applied
-        // (`&value` into owned `value: Value`), strip `&` and clone (WDB-063).
+        // (`&value` into owned `value: Value`), strip `&` and clone (regression-063).
         if arg_str.starts_with('&') {
             let Some(ref analysis) = self.auto_clone_analysis else {
                 return arg_str.to_string();
             };
             // Statement-local reuse only — `needs_clone_anywhere` falsely clones
-            // discard-only / single-use owned args reused across calls (WDB-AUTHZ-9).
+            // discard-only / single-use owned args reused across calls (authz-reuse regression).
             let needs = match arg_expr {
                 Expression::Identifier { name, .. } => analysis
                     .needs_clone(name, self.current_statement_idx)
@@ -2429,7 +2426,7 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::analyzer::OwnershipMode::MutBorrowed,
             );
         // Registry-aware Copy aggregates (Lsn, …) always emit owned formals — strip over-borrow
-        // even when `emitted_owned_arg_contract` lacks pure-analysis Copy knowledge (WDB-060).
+        // even when `emitted_owned_arg_contract` lacks pure-analysis Copy knowledge (regression-060).
         // Stale `Reference(Lsn)` in formal_param_types must not block this: formal generation
         // strips Copy-aggregate `&T` while analyzer metadata may still wrap the type.
         // Never treat true `&mut T` / MutBorrowed slots as owned Copy (apply_rotation /
@@ -2456,11 +2453,11 @@ impl<'ast> CodeGenerator<'ast> {
             ) || copy_aggregate_owned)
             && !runtime_std_borrow
             // Never strip `&` for text formals the callee emits as `&str` / shared ref
-            // (WDB-049 `replay_to_lsn(&self.path)`).
+            // (regression-049 `replay_to_lsn(&self.path)`).
             && !emits_shared_ref;
-        // Owned emission wins over stale analyzer/IR Ref expectations (WDB-060
+        // Owned emission wins over stale analyzer/IR Ref expectations (regression-060
         // `is_at_or_before(&through)` → `other: Lsn`). Strip before shared-borrow path.
-        // Do not strip `.clone()` — Copy aggregates still need multi-use clones (WDB seed_write).
+        // Do not strip `.clone()` — Copy aggregates still need multi-use clones (dogfood seed_write).
         // Also peel parenthesized unary refs from expression codegen: `(&through)`.
         if force_owned {
             let mut s = coerced.trim().to_string();
@@ -3119,7 +3116,7 @@ impl<'ast> CodeGenerator<'ast> {
         });
         if needs {
             // Only scalar Copy (i64/bool/…) skip clone; Copy aggregates/enums still need
-            // `.clone()` on multi-use owned moves (WDB-063 Value).
+            // `.clone()` on multi-use owned moves (regression-063 Value).
             let skip = match arg_expr {
                 Expression::Identifier { name, .. } => {
                     self.binding_is_copy_pass_by_value_scalar(name)
@@ -3290,6 +3287,24 @@ impl<'ast> CodeGenerator<'ast> {
         let pidx = sig.arg_param_index(arg_index);
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return false;
+        }
+        // Stale analyzer `MutableReference` on owned Copy aggregate formals (trait
+        // `set_camera(camera: CameraData)`) must not force `&mut` at call sites when
+        // defining-module emission kept an owned formal (no `function_emitted_mut_arg_indices` slot).
+        if sig.formal_param_type(pidx).is_some_and(|formal| {
+            !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                && self.is_type_copy(formal)
+                && !crate::type_classification::is_copy_pass_by_value_formal(formal)
+        }) {
+            let simple = sig.name.rsplit("::").next().unwrap_or(sig.name.as_str());
+            let defining_module_emits_mut = self
+                .function_emitted_mut_arg_indices
+                .get(&sig.name)
+                .or_else(|| self.function_emitted_mut_arg_indices.get(simple))
+                .is_some_and(|indices| indices.contains(&arg_index));
+            if !defining_module_emits_mut {
+                return false;
+            }
         }
         sig.param_types.get(pidx).is_some_and(|t| matches!(t, Type::MutableReference(_)))
             || matches!(

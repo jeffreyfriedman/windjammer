@@ -112,6 +112,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                 ..
             }
         ) || arg_str.ends_with(".to_string()")
+            || arg_str.contains("string_to_ffi(")
         {
             continue;
         }
@@ -259,7 +260,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // when the function return type provides the element type.
     // Skip when suppress_collection_turbofish is set (let binding already has type ascription).
     // Skip in call-argument position: the callee's parameter type is the source of truth
-    // (WDB-060: `decode_records(Vec::new())` must not become `Vec::<WalRecord>::new()`).
+    // (regression-060: `decode_records(Vec::new())` must not become `Vec::<WalRecord>::new()`).
     if arguments.is_empty()
         && !gen.suppress_collection_turbofish
         && !gen.in_call_argument_generation

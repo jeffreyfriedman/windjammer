@@ -518,7 +518,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Preregister free-function formals BEFORE impl blocks so methods that call
         // later free fns (e.g. WalWriter::replay_all_records → replay_all) see converged
-        // `&str` / borrowed contracts instead of stale owned stubs (WDB-057/058/060).
+        // `&str` / borrowed contracts instead of stale owned stubs (regression-057/058/060).
         for analyzed_func in analyzed.iter().filter(|af| {
             !impl_methods.contains(&af.decl.name) && !af.decl.is_extern
         }) {

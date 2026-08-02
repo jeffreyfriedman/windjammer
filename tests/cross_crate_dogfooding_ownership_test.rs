@@ -10,18 +10,17 @@
     feature = "integration_tests",
 ))]
 
-//! WDB dogfooding regressions from WINDJAMMERDB_ISSUES.md
+//! Cross-crate dogfooding ownership regressions.
 //!
-//! Run: `cargo test --release --test all wdb_dogfooding`
+//! Run: `cargo test --release --test all dogfood_`
 //!
 //! ## Suite state (Jul 29 PM, wj 0.50.0+)
 //!
 //! **Dogfooding:** 47/47 pass (Jul 30, wj 0.50.0 f95b9c32). Phase 1 compiler blockers cleared.
 //!
-//! **WDB-066..068** — Phase 1 e2e regressions (Jul 29–30); all passing after f95b9c32.
-//!
-//! Recently fixed (must stay passing): WDB-061..065 substrate/sim, WDB-047/049 wal/substrate, WDB-050 vec literals.
-//! Closed-issue regressions: WDB-044, WDB-045, WDB-048. Guard tests: WDB-019, WDB-039, WDB-042, WDB-046 (owned-only).
+//! Phase 1 e2e regressions (Jul 29–30); all passing after f95b9c32.
+//! Recently fixed substrate/sim, wal/substrate, and vec-literal guards must stay passing.
+//! Closed-issue and owned-only guard tests remain covered below.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -32,10 +31,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-// ── WDB-041: user-type get(key: Key) passes owned helper-return Key ──────────
+// ── regression: user-type get(key: Key) passes owned helper-return Key ──────────
 
 #[test]
-fn wdb_cross_crate_key_get_owned_helper_return() {
+fn dogfood_cross_crate_key_get_owned_helper_return() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -103,10 +102,10 @@ pub fn lookup() -> bool {
     );
 }
 
-// ── WDB-040: cross-crate string literal → owned String ─────────────────────
+// ── regression: cross-crate string literal → owned String ─────────────────────
 
 #[test]
-fn wdb_cross_crate_string_literal_owned() {
+fn dogfood_cross_crate_string_literal_owned() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "catalog/table.wj",
@@ -174,10 +173,10 @@ pub fn main() {
     );
 }
 
-// ── WDB-039: free-fn Key params — vec index field symmetric coercion ─────────
+// ── regression: free-fn Key params — vec index field symmetric coercion ─────────
 
 #[test]
-fn wdb_vec_index_key_compare_owned_params() {
+fn dogfood_vec_index_key_compare_owned_params() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -236,10 +235,10 @@ pub fn check() -> bool {
     );
 }
 
-// ── WDB-042: mutating method on self.field must not clone receiver ─────────
+// ── regression: mutating method on self.field must not clone receiver ─────────
 
 #[test]
-fn wdb_self_field_mutating_method_no_clone() {
+fn dogfood_self_field_mutating_method_no_clone() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim/network.wj",
@@ -308,10 +307,10 @@ pub fn run() -> int {
     );
 }
 
-// ── WDB-040: cross-crate string variable → owned String ────────────────────
+// ── regression: cross-crate string variable → owned String ────────────────────
 
 #[test]
-fn wdb_cross_crate_string_variable_owned() {
+fn dogfood_cross_crate_string_variable_owned() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "catalog/table.wj",
@@ -368,10 +367,10 @@ pub fn main() {
     );
 }
 
-// ── WDB-037: cross-crate LwwRegister::merge passes owned struct args ─────────
+// ── regression: cross-crate LwwRegister::merge passes owned struct args ─────────
 
 #[test]
-fn wdb_cross_crate_merge_owned_struct_args() {
+fn dogfood_cross_crate_merge_owned_struct_args() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "crdt/register.wj",
@@ -427,10 +426,10 @@ pub fn run() -> int {
     );
 }
 
-// ── WDB: MemoryEngine::get delegation must pass &Key, not key.clone() ───────
+// ── dogfood: MemoryEngine::get delegation must pass &Key, not key.clone() ───────
 
 #[test]
-fn wdb_engine_get_delegation_passes_borrowed_key() {
+fn dogfood_engine_get_delegation_passes_borrowed_key() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -509,7 +508,7 @@ pub fn lookup() -> int {
 }
 
 #[test]
-fn wdb_engine_put_delegation_passes_borrowed_key() {
+fn dogfood_engine_put_delegation_passes_borrowed_key() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -601,7 +600,7 @@ pub fn write_key() {
 }
 
 #[test]
-fn wdb_forward_ref_owned_key_borrows_at_later_method() {
+fn dogfood_forward_ref_owned_key_borrows_at_later_method() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -675,10 +674,10 @@ pub fn run() {
     }
 }
 
-// ── WDB-046/047: forward-ref guard — outer owned Key must not become &Key at patch calls ─
+// ── regression/047: forward-ref guard — outer owned Key must not become &Key at patch calls ─
 
 #[test]
-fn wdb_store_has_key_forward_ref_borrows_owned_key() {
+fn dogfood_store_has_key_forward_ref_borrows_owned_key() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -790,13 +789,13 @@ pub fn run() {
     );
 }
 
-// ── WDB-044: free-fn `copy_key_bytes(key: Key)` — owned param, no spurious &Key formal ──
+// ── regression: free-fn `copy_key_bytes(key: Key)` — owned param, no spurious &Key formal ──
 //
-// Dogfooding: wdb-substrate/memory_engine.wj put/delete paths call copy_key_bytes(key)
+// Dogfooding: engine-crate/memory_engine.wj put/delete paths call copy_key_bytes(key)
 // after other uses of key in the same function.
 
 #[test]
-fn wdb_copy_key_bytes_owned_helper_in_put() {
+fn dogfood_copy_key_bytes_owned_helper_in_put() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -881,10 +880,10 @@ pub fn write() {
     );
 }
 
-// ── WDB-045: free-fn `encode_message(msg: SimMessage)` — owned struct param ─────────
+// ── regression: free-fn `encode_message(msg: SimMessage)` — owned struct param ─────────
 
 #[test]
-fn wdb_encode_message_owned_free_fn_in_send() {
+fn dogfood_encode_message_owned_free_fn_in_send() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim/message.wj",
@@ -953,10 +952,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-046: TxnManager delegation — owned Key param must not become &Key at engine.get ─
+// ── regression: TxnManager delegation — owned Key param must not become &Key at engine.get ─
 
 #[test]
-fn wdb_txn_manager_delegates_owned_key_to_engine() {
+fn dogfood_txn_manager_delegates_owned_key_to_engine() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -1068,10 +1067,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-019: cross-crate Value — put expects owned Value at delegation site ───────────
+// ── regression: cross-crate Value — put expects owned Value at delegation site ───────────
 
 #[test]
-fn wdb_cross_crate_value_put_owned_delegation() {
+fn dogfood_cross_crate_value_put_owned_delegation() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -1172,10 +1171,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-039 (full path): keys_equal_key in LSM get — vec field + helper, no byte-move ─
+// ── regression (full path): keys_equal_key in LSM get — vec field + helper, no byte-move ─
 
 #[test]
-fn wdb_keys_equal_key_in_store_get_path() {
+fn dogfood_keys_equal_key_in_store_get_path() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -1246,10 +1245,10 @@ pub fn lookup() -> Option<i64> {
     );
 }
 
-// ── WDB-042 (harness layout): while self.network.poll() in drain_network ─────────────
+// ── regression (harness layout): while self.network.poll() in drain_network ─────────────
 
 #[test]
-fn wdb_harness_drain_network_while_poll_no_field_clone() {
+fn dogfood_harness_drain_network_while_poll_no_field_clone() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim/clock.wj",
@@ -1339,10 +1338,10 @@ pub fn run() -> int {
     );
 }
 
-// ── WDB-047: LsmStore apply_patch_* — asymmetric coercion after key_in_latest_base guard ─
+// ── regression: LsmStore apply_patch_* — asymmetric coercion after key_in_latest_base guard ─
 
 #[test]
-fn wdb_lsm_store_apply_patch_asymmetric_coercion() {
+fn dogfood_lsm_store_apply_patch_asymmetric_coercion() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -1468,7 +1467,7 @@ pub fn run() {
     let rs = map.get("substrate/store.rs").expect("substrate/store.rs");
     assert!(
         rs.contains("pub fn put_value(") && rs.contains("key: Key") && rs.contains("value: Value"),
-        "put_value must keep owned Key and owned Value outer formals (wdb-substrate store.wj layout). Got:\n{rs}"
+        "put_value must keep owned Key and owned Value outer formals (engine-crate store.wj layout). Got:\n{rs}"
     );
     assert!(
         rs.contains("self.apply_patch_put(")
@@ -1488,10 +1487,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-048: string literal at user fn temp_path(name: string) — no .to_string() ────────
+// ── regression: string literal at user fn temp_path(name: string) — no .to_string() ────────
 
 #[test]
-fn wdb_temp_path_string_literal_no_to_string() {
+fn dogfood_temp_path_string_literal_no_to_string() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "substrate/paths.wj",
@@ -1536,10 +1535,10 @@ pub fn main() {
     );
 }
 
-// ── WDB-019 (seed_write path): cross-crate Value without take_value re-box ───────────────
+// ── regression (seed_write path): cross-crate Value without take_value re-box ───────────────
 
 #[test]
-fn wdb_txn_seed_write_without_take_value_rebox() {
+fn dogfood_txn_seed_write_without_take_value_rebox() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -1649,10 +1648,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-039 (LSM BasePart path): keys_equal_key at vec-index — no byte-move shim ─────────
+// ── regression (LSM BasePart path): keys_equal_key at vec-index — no byte-move shim ─────────
 
 #[test]
-fn wdb_lsm_base_part_get_without_byte_move_shim() {
+fn dogfood_lsm_base_part_get_without_byte_move_shim() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -1739,10 +1738,10 @@ pub fn lookup() -> bool {
     );
 }
 
-// ── WDB-042 (real harness loop): loop+match poll without network field extract ───────────
+// ── regression (real harness loop): loop+match poll without network field extract ───────────
 
 #[test]
-fn wdb_harness_loop_match_without_network_extract() {
+fn dogfood_harness_loop_match_without_network_extract() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim/clock.wj",
@@ -1841,10 +1840,10 @@ pub fn run() -> int {
     );
 }
 
-// ── WDB-049: WAL FFI Vec return + path field — borrow at callee sites ────────────────────
+// ── regression: WAL FFI Vec return + path field — borrow at callee sites ────────────────────
 
 #[test]
-fn wdb_wal_ffi_snapshot_and_path_borrow_at_call_sites() {
+fn dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/ffi.wj",
@@ -1990,10 +1989,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-047 (full layout): wdb-substrate store.wj — enum Value + PatchPart + delete_key path ─
+// ── regression (full layout): engine-crate store.wj — enum Value + PatchPart + delete_key path ─
 
 #[test]
-fn wdb_substrate_full_store_patch_part_enum_value_layout() {
+fn dogfood_substrate_full_store_patch_part_enum_value_layout() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/part_id.wj",
@@ -2342,7 +2341,7 @@ pub fn run() {
     let rs = map.get("substrate/store.rs").expect("substrate/store.rs");
     assert!(
         rs.contains("pub fn put_value(") && rs.contains("key: Key") && rs.contains("value: Value"),
-        "put_value must keep owned Key and owned Value outer formals (wdb-substrate store.wj). Got:\n{rs}"
+        "put_value must keep owned Key and owned Value outer formals (engine-crate store.wj). Got:\n{rs}"
     );
     assert!(
         rs.contains("self.apply_patch_put(")
@@ -2362,10 +2361,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-050: WalSegment append_put/append_delete — vec literal borrow at call site ───────
+// ── regression: WalSegment append_put/append_delete — vec literal borrow at call site ───────
 
 #[test]
-fn wdb_wal_segment_vec_literal_borrow_at_append() {
+fn dogfood_wal_segment_vec_literal_borrow_at_append() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -2527,10 +2526,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-051: WalRecord::put — owned Lsn field from owned Lsn param ───────────────────────
+// ── regression: WalRecord::put — owned Lsn field from owned Lsn param ───────────────────────
 
 #[test]
-fn wdb_wal_record_put_owned_lsn_in_struct_init() {
+fn dogfood_wal_record_put_owned_lsn_in_struct_init() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -2640,10 +2639,10 @@ pub fn run() {
     }
 }
 
-// ── WDB-052: WalSegment::replay — borrow bytes field behind inferred &self ─────────────
+// ── regression: WalSegment::replay — borrow bytes field behind inferred &self ─────────────
 
 #[test]
-fn wdb_wal_segment_replay_borrows_bytes_field() {
+fn dogfood_wal_segment_replay_borrows_bytes_field() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -2777,7 +2776,7 @@ pub fn run() {
     let rs = map.get("wal/segment.rs").expect("wal/segment.rs");
     assert!(
         rs.contains("pub fn replay(&self)"),
-        "read-only replay must infer &self (matches wdb-wal segment.wj). Got:\n{rs}"
+        "read-only replay must infer &self (matches wal-crate segment.wj). Got:\n{rs}"
     );
     for line in rs.lines() {
         if line.contains("decode_records(self.bytes)")
@@ -2791,10 +2790,10 @@ pub fn run() {
     }
 }
 
-// ── WDB-053: WalWriter::replay_through — borrow Lsn at replay_to_lsn call ────────────────
+// ── regression: WalWriter::replay_through — borrow Lsn at replay_to_lsn call ────────────────
 
 #[test]
-fn wdb_wal_replay_to_lsn_borrows_through_lsn() {
+fn dogfood_wal_replay_to_lsn_borrows_through_lsn() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -2881,10 +2880,10 @@ pub fn run() {
     }
 }
 
-// ── WDB-056: RecoveredMap upsert — keys_equal readonly Vec params (borrowed formals OK) ─
+// ── regression: RecoveredMap upsert — keys_equal readonly Vec params (borrowed formals OK) ─
 
 #[test]
-fn wdb_wal_recovered_map_keys_equal_owned_vec_params() {
+fn dogfood_wal_recovered_map_keys_equal_owned_vec_params() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/record.wj",
@@ -3020,10 +3019,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-054: LsmEngine::recover — seed_write(key, …) not &key after Key::new ────────────
+// ── regression: LsmEngine::recover — seed_write(key, …) not &key after Key::new ────────────
 
 #[test]
-fn wdb_lsm_engine_recover_seed_write_owned_key() {
+fn dogfood_lsm_engine_recover_seed_write_owned_key() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -3199,10 +3198,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-055: LsmEngine::put — engine.put(key, value) after using key in pending push ─────
+// ── regression: LsmEngine::put — engine.put(key, value) after using key in pending push ─────
 
 #[test]
-fn wdb_lsm_engine_put_owned_key_after_pending_push() {
+fn dogfood_lsm_engine_put_owned_key_after_pending_push() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -3313,10 +3312,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-057: WalWriter replay_all_records else branch — &str not String at replay_all ───
+// ── regression: WalWriter replay_all_records else branch — &str not String at replay_all ───
 
 #[test]
-fn wdb_wal_writer_replay_all_records_branch_borrows_path() {
+fn dogfood_wal_writer_replay_all_records_branch_borrows_path() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -3417,7 +3416,7 @@ pub fn run() {
     let rs = map.get("wal/wal.rs").expect("wal/wal.rs");
     assert!(
         rs.contains("pub fn replay_all(path: &str)") || rs.contains("pub fn replay_all(path: & str)"),
-        "replay_all must lower string formal to &str (matches wdb-wal gen). Got:\n{rs}"
+        "replay_all must lower string formal to &str (matches wal-crate gen). Got:\n{rs}"
     );
     assert!(
         rs.contains("replay_all(&self.path)")
@@ -3431,10 +3430,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-058: WalWriter replay_through + replay_to_lsn body is_at_or_before ─────────────
+// ── regression: WalWriter replay_through + replay_to_lsn body is_at_or_before ─────────────
 
 #[test]
-fn wdb_wal_replay_to_lsn_call_and_body_copy_lsn() {
+fn dogfood_wal_replay_to_lsn_call_and_body_copy_lsn() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -3550,10 +3549,10 @@ pub fn run() {
     }
 }
 
-// ── WDB-059: RecoveredMap delete loop — keys_equal must not move ekey before out.push ──
+// ── regression: RecoveredMap delete loop — keys_equal must not move ekey before out.push ──
 
 #[test]
-fn wdb_wal_keys_equal_delete_loop_no_use_after_move() {
+fn dogfood_wal_keys_equal_delete_loop_no_use_after_move() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/record.wj",
@@ -3666,10 +3665,10 @@ pub fn run() {
     );
 }
 
-// ── WDB-060: flat wal layout — cargo check (rustc) mirrors wdb-wal replay + recovered map ─
+// ── regression: flat wal layout — cargo check (rustc) mirrors wal-crate replay + recovered map ─
 
 #[test]
-fn wdb_wal_replay_and_recovered_map_rustc_check() {
+fn dogfood_wal_replay_and_recovered_map_rustc_check() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal_layout.wj",
@@ -3852,10 +3851,10 @@ pub fn run() {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-061: PatchPart::apply_put — owned PatchEntry fields from borrowed params ─────────
+// ── regression: PatchPart::apply_put — owned PatchEntry fields from borrowed params ─────────
 
 #[test]
-fn wdb_patch_part_apply_put_owned_struct_fields_from_borrowed_params() {
+fn dogfood_patch_part_apply_put_owned_struct_fields_from_borrowed_params() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "patch_part_layout.wj",
@@ -3919,10 +3918,10 @@ pub fn run() {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-062: Transaction record_read/write — owned entry fields from borrowed params ─────
+// ── regression: Transaction record_read/write — owned entry fields from borrowed params ─────
 
 #[test]
-fn wdb_transaction_record_sets_owned_struct_fields_from_borrowed_params() {
+fn dogfood_transaction_record_sets_owned_struct_fields_from_borrowed_params() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "transaction_layout.wj",
@@ -3999,10 +3998,10 @@ pub fn run() {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-063: MemoryEngine::seed_write — no double-move of Value across helpers ───────────
+// ── regression: MemoryEngine::seed_write — no double-move of Value across helpers ───────────
 
 #[test]
-fn wdb_memory_engine_seed_write_no_double_move_value() {
+fn dogfood_memory_engine_seed_write_no_double_move_value() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "memory_engine_layout.wj",
@@ -4066,10 +4065,10 @@ pub fn run() {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-064: LsmEngine apply_writes — borrow Vec locals at cross-crate append_put ────────
+// ── regression: LsmEngine apply_writes — borrow Vec locals at cross-crate append_put ────────
 
 #[test]
-fn wdb_lsm_engine_apply_writes_append_put_borrows_vec_locals() {
+fn dogfood_lsm_engine_apply_writes_append_put_borrows_vec_locals() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "lsm_apply_layout.wj",
@@ -4166,10 +4165,10 @@ pub fn run() {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-065: SimNetwork send — owned NodeId fields in QueuedMessage struct init ──────────
+// ── regression: SimNetwork send — owned NodeId fields in QueuedMessage struct init ──────────
 
 #[test]
-fn wdb_sim_network_queued_message_owned_node_id_fields() {
+fn dogfood_sim_network_queued_message_owned_node_id_fields() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim_network_layout.wj",
@@ -4281,10 +4280,10 @@ pub fn run() {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-063b: memory_engine seed_write — catch double-move pattern in emitted Rust ───────
+// ── regression: memory_engine seed_write — catch double-move pattern in emitted Rust ───────
 
 #[test]
-fn wdb_memory_engine_seed_write_emitted_rust_no_double_move() {
+fn dogfood_memory_engine_seed_write_emitted_rust_no_double_move() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "memory_engine_layout.wj",
@@ -4338,15 +4337,15 @@ fn value_i64(value: Value) -> i64 {
     if rs.contains("value_tag(value)") && rs.contains("value_i64(value") {
         assert!(
             rs.contains("value.clone()"),
-            "value_tag + value_i64 on same binding must clone — wdb-substrate memory_engine.rs:37-38. Got:\n{rs}"
+            "value_tag + value_i64 on same binding must clone — engine-crate memory_engine.rs:37-38. Got:\n{rs}"
         );
     }
 }
 
-// ── WDB-064b: cross-module lsm_engine → wal append_put borrow in emitted Rust ───────────
+// ── regression: cross-module lsm_engine → wal append_put borrow in emitted Rust ───────────
 
 #[test]
-fn wdb_lsm_engine_apply_writes_emitted_rust_borrows_append_put() {
+fn dogfood_lsm_engine_apply_writes_emitted_rust_borrows_append_put() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/wal.wj",
@@ -4454,10 +4453,10 @@ impl LsmEngine {
     }
 }
 
-// ── WDB-065b: sim network — emitted Rust must not shorthand &NodeId into owned fields ───
+// ── regression: sim network — emitted Rust must not shorthand &NodeId into owned fields ───
 
 #[test]
-fn wdb_sim_network_emitted_rust_owned_node_id_struct_fields() {
+fn dogfood_sim_network_emitted_rust_owned_node_id_struct_fields() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim/network.wj",
@@ -4546,24 +4545,29 @@ impl SimNetwork {
     }
 }
 
-// ── WindjammerDB e2e helpers (monorepo sibling) ─────────────────────────────
+// ── Optional external dogfood e2e helpers ─────────────────────────────────────
+// Set WJ_DOGFOOD_CRATES_DIR to a directory of sibling crates to enable these gates.
+// When unset, e2e tests below return early (in-tree MultiFileTest coverage still runs).
 
-fn windjammerdb_crates_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../windjammerdb/crates")
+fn dogfood_crates_root() -> Option<PathBuf> {
+    std::env::var_os("WJ_DOGFOOD_CRATES_DIR").map(PathBuf::from)
 }
 
-fn require_windjammerdb_crate(name: &str) -> PathBuf {
-    let path = windjammerdb_crates_root().join(name);
+fn require_dogfood_crate(name: &str) -> Option<PathBuf> {
+    let root = dogfood_crates_root()?;
+    let path = root.join(name);
     assert!(
         path.is_dir(),
-        "windjammerdb crate {name} not found at {}",
+        "dogfood crate {name} not found at {}",
         path.display()
     );
-    path
+    Some(path)
 }
 
-fn wj_build_windjammerdb_crate(name: &str) {
-    let crate_root = require_windjammerdb_crate(name);
+fn wj_build_dogfood_crate(name: &str) -> bool {
+    let Some(crate_root) = require_dogfood_crate(name) else {
+        return false;
+    };
     // Invalidate incremental stamp so a newer `wj` always re-transpiles — otherwise
     // parallel e2e tests can keep pre-fix `gen/*.rs` when source fingerprints match.
     let _ = fs::remove_file(crate_root.join("gen/.wj-compiler-stamp"));
@@ -4578,10 +4582,14 @@ fn wj_build_windjammerdb_crate(name: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    true
 }
 
-fn cargo_check_windjammerdb_gen(name: &str, with_tests: bool) {
-    let gen = require_windjammerdb_crate(name).join("gen");
+fn cargo_check_dogfood_gen(name: &str, with_tests: bool) -> bool {
+    let Some(crate_root) = require_dogfood_crate(name) else {
+        return false;
+    };
+    let gen = crate_root.join("gen");
     let mut cmd = Command::new("cargo");
     cmd.arg("check").arg("--quiet").current_dir(&gen);
     if with_tests {
@@ -4595,6 +4603,7 @@ fn cargo_check_windjammerdb_gen(name: &str, with_tests: bool) {
         "cargo check {name} failed:\nstderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    true
 }
 
 fn build_wal_engine_library(tmp: &Path) -> PathBuf {
@@ -4680,16 +4689,20 @@ impl WalSegment {
     wal_gen
 }
 
-// ── WDB-066: TxnManager put/delete — borrow &Key at cross-crate delegation ───────────────
+// ── regression: TxnManager put/delete — borrow &Key at cross-crate delegation ───────────────
 //
-// Real wdb-txn gen/txn_manager.rs:42,46 emits key.clone() for MemoryEngine::put/delete(&Key).
-// In-project MultiFileTest fixtures do not reproduce this; use windjammerdb gen + cargo check.
+// Real txn-crate gen/txn_manager.rs:42,46 emits key.clone() for MemoryEngine::put/delete(&Key).
+// In-project MultiFileTest fixtures do not reproduce this; use optional WJ_DOGFOOD_CRATES_DIR e2e + cargo check.
 
 #[test]
-fn wdb_txn_manager_windjammerdb_gen_put_delete_no_key_clone() {
-    wj_build_windjammerdb_crate("wdb-substrate");
-    wj_build_windjammerdb_crate("wdb-txn");
-    let rs_path = require_windjammerdb_crate("wdb-txn").join("gen/txn_manager.rs");
+fn dogfood_txn_manager_e2e_gen_put_delete_no_key_clone() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    wj_build_dogfood_crate("engine-crate");
+    wj_build_dogfood_crate("txn-crate");
+    let Some(txn) = require_dogfood_crate("txn-crate") else { return; };
+    let rs_path = txn.join("gen/txn_manager.rs");
     let rs = fs::read_to_string(&rs_path)
         .unwrap_or_else(|e| panic!("read {}: {e}", rs_path.display()));
     for line in rs.lines() {
@@ -4709,19 +4722,22 @@ fn wdb_txn_manager_windjammerdb_gen_put_delete_no_key_clone() {
 }
 
 #[test]
-fn wdb_txn_manager_windjammerdb_cargo_check() {
-    wj_build_windjammerdb_crate("wdb-substrate");
-    wj_build_windjammerdb_crate("wdb-txn");
-    cargo_check_windjammerdb_gen("wdb-txn", false);
+fn dogfood_txn_manager_e2e_cargo_check() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    wj_build_dogfood_crate("engine-crate");
+    wj_build_dogfood_crate("txn-crate");
+    cargo_check_dogfood_gen("txn-crate", false);
 }
 
-// ── WDB-067: WalSegment append_put — cross-crate vec literal/helper borrow ───────────────
+// ── regression: WalSegment append_put — cross-crate vec literal/helper borrow ───────────────
 //
-// wdb-wal in-crate tests emit append_put(&vec![...]); wdb-substrate lsm_test.rs:130 emits
+// wal-crate in-crate tests emit append_put(&vec![...]); engine-crate lsm_test.rs:130 emits
 // append_put(vec![5], encode_int64(99)) when WalSegment comes from cross-crate metadata.
 
 #[test]
-fn wdb_wal_segment_cross_crate_append_put_borrows_vec_literal() {
+fn dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let wal_gen = build_wal_engine_library(tmp.path());
     let substrate_src = tmp.path().join("substrate_src");
@@ -4776,31 +4792,37 @@ pub fn test_store_rebuild_from_segment() {
 }
 
 #[test]
-fn wdb_substrate_lsm_test_windjammerdb_cargo_check() {
-    wj_build_windjammerdb_crate("wdb-wal");
-    wj_build_windjammerdb_crate("wdb-substrate");
-    cargo_check_windjammerdb_gen("wdb-substrate", true);
+fn dogfood_engine_lsm_test_e2e_cargo_check() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    wj_build_dogfood_crate("wal-crate");
+    wj_build_dogfood_crate("engine-crate");
+    cargo_check_dogfood_gen("engine-crate", true);
 }
 
 #[test]
-fn wdb_embedded_windjammerdb_cargo_check() {
+fn dogfood_embedded_e2e_cargo_check() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
     // Types is a path dependency of embedded; rebuild first so stale `gen/` from an
     // older `wj` cannot poison cargo check (const match arms, ownership formals).
-    wj_build_windjammerdb_crate("wdb-types");
-    wj_build_windjammerdb_crate("wdb-wal");
-    wj_build_windjammerdb_crate("wdb-substrate");
-    wj_build_windjammerdb_crate("wdb-txn");
-    wj_build_windjammerdb_crate("wdb-embedded");
-    cargo_check_windjammerdb_gen("wdb-embedded", true);
+    wj_build_dogfood_crate("types-crate");
+    wj_build_dogfood_crate("wal-crate");
+    wj_build_dogfood_crate("engine-crate");
+    wj_build_dogfood_crate("txn-crate");
+    wj_build_dogfood_crate("embedded-crate");
+    cargo_check_dogfood_gen("embedded-crate", true);
 }
 
-// ── WDB-071: cross-crate owned struct param — call site must auto-borrow ─────
+// ── regression: cross-crate owned struct param — call site must auto-borrow ─────
 //
-// wdb-reducer reducer_host.wj calls apply_zset_to_circuit(circuit, zset) with owned
+// reducer-crate reducer_host.wj calls apply_zset_to_circuit(circuit, zset) with owned
 // Circuit; bridge emits `circuit: &Circuit` but call site omits `&circuit`.
 
 #[test]
-fn wdb_cross_crate_owned_struct_call_site_auto_borrow() {
+fn dogfood_cross_crate_owned_struct_call_site_auto_borrow() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "circuit/circuit.wj",
@@ -4895,28 +4917,37 @@ pub fn main() {
 }
 
 #[test]
-fn wdb_reducer_windjammerdb_cargo_check() {
-    wj_build_windjammerdb_crate("wdb-types");
-    wj_build_windjammerdb_crate("wdb-circuit");
-    wj_build_windjammerdb_crate("wdb-reducer");
-    cargo_check_windjammerdb_gen("wdb-reducer", false);
+fn dogfood_reducer_e2e_cargo_check() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    wj_build_dogfood_crate("types-crate");
+    wj_build_dogfood_crate("circuit-crate");
+    wj_build_dogfood_crate("reducer-crate");
+    cargo_check_dogfood_gen("reducer-crate", false);
 }
 
-// ── WDB-072 dogfooding: commit_granularity enum match in for-loop ────────────
+// ── regression dogfooding: commit_granularity enum match in for-loop ────────────
 
 #[test]
-fn wdb_types_commit_granularity_cargo_check() {
-    wj_build_windjammerdb_crate("wdb-types");
-    cargo_check_windjammerdb_gen("wdb-types", true);
+fn dogfood_types_commit_granularity_cargo_check() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    wj_build_dogfood_crate("types-crate");
+    cargo_check_dogfood_gen("types-crate", true);
 }
 
-// ── WDB-073 dogfooding: document_layer encode row_id spurious deref (regression) ─
+// ── regression dogfooding: document_layer encode row_id spurious deref (regression) ─
 
 #[test]
-fn wdb_layers_document_encode_row_id_no_spurious_deref() {
-    wj_build_windjammerdb_crate("wdb-layers");
-    let rs_path = require_windjammerdb_crate("wdb-layers")
-        .join("gen/document/document_layer.rs");
+fn dogfood_layers_document_encode_row_id_no_spurious_deref() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    wj_build_dogfood_crate("layers-crate");
+    let Some(layers) = require_dogfood_crate("layers-crate") else { return; };
+    let rs_path = layers.join("gen/document/document_layer.rs");
     let rs = fs::read_to_string(&rs_path).unwrap_or_else(|e| {
         panic!("read {}: {e}", rs_path.display())
     });

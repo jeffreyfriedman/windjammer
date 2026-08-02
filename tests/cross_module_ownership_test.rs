@@ -7,7 +7,7 @@
     feature = "integration_tests",
 )))]
 
-//! TDD: Cross-module struct ownership inference for FMP-style architectures.
+//! TDD: Cross-module struct ownership inference for app-style architectures.
 //!
 //! Pattern: A composition root struct (Config) is passed to handler functions
 //! that only read from it via field access. The analyzer should infer Borrowed
@@ -140,7 +140,7 @@ pub fn login(deps: AppDeps, token: string) -> Result<string, string> {
 
     std::fs::write(
         dir.path().join("wj.toml"),
-        "[package]\nname = \"test_fmp_own\"\nversion = \"0.1.0\"\n",
+        "[package]\nname = \"test_app_own\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
 

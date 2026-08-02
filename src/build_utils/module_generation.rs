@@ -106,7 +106,7 @@ fn should_merge_extra_module(
 }
 
 /// Hand-written module declared in crate-root `lib.rs` and living beside the transpile output
-/// (e.g. `wdb-types/ffi/` + `lib.rs` with `mod ffi; include!("gen/mod.rs")`). Must not be
+/// (e.g. `types-crate/ffi/` + `lib.rs` with `mod ffi; include!("gen/mod.rs")`). Must not be
 /// re-declared inside `gen/mod.rs` or rustc reports E0428 duplicate definitions.
 fn is_crate_root_handwritten_module(output_dir: &Path, name: &str) -> bool {
     let Some(crate_root) = output_dir.parent() else {

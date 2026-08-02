@@ -1,32 +1,28 @@
-//! WDB-049: Auto-borrow owned values at callee sites when formal is inferred `&T`.
-//!
-//! **Status:** ❌ OPEN — blocks `wdb-wal` lib build (5× E0308), cascades to substrate/embedded/txn.
+//! Auto-borrow owned values at call sites when the callee formal is inferred `&T`.
 //!
 //! **Run:**
 //! ```bash
-//! cd windjammer && unset CARGO_TARGET_DIR && cargo test --release --test all wdb_049
+//! cd windjammer && unset CARGO_TARGET_DIR && cargo test --release --test all path_bytes_
 //! ```
 //!
 //! **Fix target:** `windjammer/src/codegen/rust/` — call-site borrow insertion when resolved
 //! callee signature has `param_ownership[i] == Borrowed` but argument is owned (field access,
 //! FFI return, or parameter forward).
 //!
-//! **Do NOT** add `.wj` workarounds in windjammerdb. All five tests below must pass, then:
-//! `cargo check` in `windjammerdb/crates/wdb-wal/gen` must succeed with 0 errors.
+//! Also covered in `cross_crate_dogfooding_ownership_test.rs`
+//! (`dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites`, etc.).
 //!
-//! Also covered in `wdb_dogfooding_ownership_test.rs` (`wdb_wal_ffi_snapshot_and_path_borrow_at_call_sites`, etc.).
-//!
-//! **Tests:** 049a–049f (codegen borrow assertions), 049g (flat layout rustc check), 049h (windjammerdb wdb-wal e2e).
+//! Optional e2e: set `WJ_DOGFOOD_CRATES_DIR` to enable external crate cargo-check gates.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-// ── WDB-049a: FFI Vec return → &Vec formal at struct ctor ─────────────────────────────
+// ── gate-a: FFI Vec return → &Vec formal at struct ctor ─────────────────────────────
 
 #[test]
-fn wdb_049_ffi_vec_return_borrowed_at_from_bytes() {
+fn path_bytes_ffi_vec_return_borrowed_at_from_bytes() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/ffi.wj",
@@ -87,18 +83,18 @@ pub fn run() {
     assert!(
         rs.contains("from_bytes(&snapshot)")
             || rs.contains("from_bytes(& snapshot)"),
-        "WDB-049a: FFI Vec snapshot must borrow at from_bytes(&Vec) call site. Got:\n{rs}"
+        "gate-a: FFI Vec snapshot must borrow at from_bytes(&Vec) call site. Got:\n{rs}"
     );
     assert!(
         !rs.contains("from_bytes(snapshot)") || rs.contains("&snapshot"),
-        "WDB-049a: must not move owned snapshot into &Vec formal. Got:\n{rs}"
+        "gate-a: must not move owned snapshot into &Vec formal. Got:\n{rs}"
     );
 }
 
-// ── WDB-049b: self.path string field → &str formal at free fn call ─────────────────────
+// ── gate-b: self.path string field → &str formal at free fn call ─────────────────────
 
 #[test]
-fn wdb_049_path_field_borrowed_at_replay_all() {
+fn path_bytes_path_field_borrowed_at_replay_all() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/record.wj",
@@ -155,18 +151,18 @@ pub fn run() {
         rs.contains("replay_all(&self.path)")
             || rs.contains("replay_all(self.path.as_str())")
             || rs.contains("replay_all(& self.path)"),
-        "WDB-049b: self.path must borrow as &str for replay_all(path: &str). Got:\n{rs}"
+        "gate-b: self.path must borrow as &str for replay_all(path: &str). Got:\n{rs}"
     );
     assert!(
         !rs.contains("replay_all(self.path.clone())"),
-        "WDB-049b: must not clone String for &str formal. Got:\n{rs}"
+        "gate-b: must not clone String for &str formal. Got:\n{rs}"
     );
 }
 
-// ── WDB-049c: self.path + Copy Lsn at replay_to_lsn ────────────────────────────────────
+// ── gate-c: self.path + Copy Lsn at replay_to_lsn ────────────────────────────────────
 
 #[test]
-fn wdb_049_path_field_borrowed_at_replay_to_lsn() {
+fn path_bytes_path_field_borrowed_at_replay_to_lsn() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -236,18 +232,18 @@ pub fn run() {
         rs.contains("replay_to_lsn(&self.path")
             || rs.contains("replay_to_lsn(self.path.as_str()")
             || rs.contains("replay_to_lsn(& self.path"),
-        "WDB-049c: self.path must borrow as &str for replay_to_lsn(path: &str). Got:\n{rs}"
+        "gate-c: self.path must borrow as &str for replay_to_lsn(path: &str). Got:\n{rs}"
     );
     assert!(
         !rs.contains("replay_to_lsn(self.path.clone()"),
-        "WDB-049c: must not clone String for replay_to_lsn. Got:\n{rs}"
+        "gate-c: must not clone String for replay_to_lsn. Got:\n{rs}"
     );
 }
 
-// ── WDB-049d: append_put params → &Vec at WalRecord::put ───────────────────────────────
+// ── gate-d: append_put params → &Vec at WalRecord::put ───────────────────────────────
 
 #[test]
-fn wdb_049_segment_append_put_borrows_key_value_params() {
+fn path_bytes_segment_append_put_borrows_key_value_params() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -320,20 +316,20 @@ pub fn run() {
     let forwards_ref_key = rs.contains("key: &Vec") && rs.contains(", key,") || rs.contains(", key)");
     assert!(
         put_call && (borrows_key || forwards_ref_key),
-        "WDB-049d: append_put must borrow key at WalRecord::put call. Got:\n{rs}"
+        "gate-d: append_put must borrow key at WalRecord::put call. Got:\n{rs}"
     );
     let borrows_value = rs.contains("&value") || rs.contains("& value");
     let forwards_ref_value = rs.contains("value: &Vec") && (rs.contains(", value)") || rs.contains(", value,"));
     assert!(
         put_call && (borrows_value || forwards_ref_value),
-        "WDB-049d: append_put must borrow value at WalRecord::put call. Got:\n{rs}"
+        "gate-d: append_put must borrow value at WalRecord::put call. Got:\n{rs}"
     );
 }
 
-// ── WDB-049e: append_delete param → &Vec at WalRecord::delete ─────────────────────────
+// ── gate-e: append_delete param → &Vec at WalRecord::delete ─────────────────────────
 
 #[test]
-fn wdb_049_segment_append_delete_borrows_key_param() {
+fn path_bytes_segment_append_delete_borrows_key_param() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/lsn.wj",
@@ -405,14 +401,14 @@ pub fn run() {
     let forwards_ref_key = rs.contains("key: &Vec") && (rs.contains(", key)") || rs.contains(", key,"));
     assert!(
         delete_call && (borrows_key || forwards_ref_key),
-        "WDB-049e: append_delete must borrow key at WalRecord::delete call. Got:\n{rs}"
+        "gate-e: append_delete must borrow key at WalRecord::delete call. Got:\n{rs}"
     );
 }
 
-// ── WDB-049f: replay borrows self.bytes field at decode_records ────────────────────────
+// ── gate-f: replay borrows self.bytes field at decode_records ────────────────────────
 
 #[test]
-fn wdb_049_segment_replay_borrows_bytes_field() {
+fn path_bytes_segment_replay_borrows_bytes_field() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal/record.wj",
@@ -462,14 +458,14 @@ pub fn run() {
     assert!(
         rs.contains("decode_records(&self.bytes)")
             || rs.contains("decode_records(& self.bytes)"),
-        "WDB-049f: replay must borrow self.bytes at decode_records(&Vec) call. Got:\n{rs}"
+        "gate-f: replay must borrow self.bytes at decode_records(&Vec) call. Got:\n{rs}"
     );
 }
 
-// ── WDB-049g: full wdb-wal layout — rustc cargo check (integration gate) ───────────────
+// ── gate-g: full wal-crate layout — rustc cargo check (integration gate) ───────────────
 
 #[test]
-fn wdb_049_wal_layout_rustc_cargo_check() {
+fn path_bytes_wal_layout_rustc_cargo_check() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "wal_layout.wj",
@@ -627,24 +623,28 @@ pub fn run() {
 "#,
     );
 
-    // Gate: generated Rust must compile under rustc (mirrors wdb-wal/gen).
+    // Gate: generated Rust must compile under rustc (mirrors wal-crate/gen).
     test.assert_compiles_without_error();
 }
 
-// ── WDB-049h: real windjammerdb wdb-wal gen — cargo check (e2e gate) ─────────────────
+// ── gate-h: optional external dogfood wal crate — cargo check (e2e) ─────────
+// Enabled only when WJ_DOGFOOD_CRATES_DIR points at a crates directory.
 
-fn windjammerdb_crates_root() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../windjammerdb/crates")
+fn dogfood_crates_root() -> Option<std::path::PathBuf> {
+    std::env::var_os("WJ_DOGFOOD_CRATES_DIR").map(std::path::PathBuf::from)
 }
 
-fn wj_build_windjammerdb_crate(name: &str) {
+fn wj_build_dogfood_crate(name: &str) -> bool {
     use std::fs;
     use std::process::Command;
 
-    let crate_root = windjammerdb_crates_root().join(name);
+    let Some(root) = dogfood_crates_root() else {
+        return false;
+    };
+    let crate_root = root.join(name);
     assert!(
         crate_root.is_dir(),
-        "windjammerdb crate {name} not found at {}",
+        "dogfood crate {name} not found at {}",
         crate_root.display()
     );
     let _ = fs::remove_file(crate_root.join("gen/.wj-compiler-stamp"));
@@ -659,12 +659,16 @@ fn wj_build_windjammerdb_crate(name: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    true
 }
 
-fn cargo_check_windjammerdb_gen(name: &str) {
+fn cargo_check_dogfood_gen(name: &str) -> bool {
     use std::process::Command;
 
-    let gen = windjammerdb_crates_root().join(name).join("gen");
+    let Some(root) = dogfood_crates_root() else {
+        return false;
+    };
+    let gen = root.join(name).join("gen");
     let output = Command::new("cargo")
         .args(["check", "--quiet"])
         .current_dir(&gen)
@@ -672,13 +676,17 @@ fn cargo_check_windjammerdb_gen(name: &str) {
         .unwrap_or_else(|e| panic!("spawn cargo check {name}: {e}"));
     assert!(
         output.status.success(),
-        "WDB-049h: cargo check {name}/gen failed:\nstderr:\n{}",
+        "gate-h: cargo check {name}/gen failed:\nstderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    true
 }
 
 #[test]
-fn wdb_049_windjammerdb_wal_cargo_check() {
-    wj_build_windjammerdb_crate("wdb-wal");
-    cargo_check_windjammerdb_gen("wdb-wal");
+fn path_bytes_dogfood_wal_cargo_check() {
+    if dogfood_crates_root().is_none() {
+        return;
+    }
+    assert!(wj_build_dogfood_crate("wal-crate"));
+    assert!(cargo_check_dogfood_gen("wal-crate"));
 }

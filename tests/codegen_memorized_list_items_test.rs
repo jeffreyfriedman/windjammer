@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): MemorizedList with seeded items must codegen.
+//! Gate (dogfood): MemorizedList with seeded items must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

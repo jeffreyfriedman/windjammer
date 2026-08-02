@@ -160,6 +160,12 @@ impl<'ast> Analyzer<'ast> {
         // Smart inference is OFF for explicit type annotations.
         // (Future: Could add #[optimize] annotation for user-requested optimization)
 
+        // 2.5 Field/index move: `let x = param.field` moves the field out — keep Owned
+        // (`MemoryEngine::get` → `let bytes = key.bytes`, not `&Key`).
+        if self.param_has_field_or_index_move_binding(param_name, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored_requiring_owned(param_name, param_type, body, registry) {
             return Ok(OwnershipMode::Owned);
@@ -354,8 +360,8 @@ impl<'ast> Analyzer<'ast> {
         }
         // Copy aggregates used only via readonly field chains (e.g. `handle.id`,
         // `through.value`) stay Owned. Formal generation keeps pass-by-value for
-        // Copy aggregates (WDB-060); demoting to Borrowed here made cross-module
-        // call sites emit `&handle` into owned `BatchHandle` formals (wdb-types).
+        // Copy aggregates (regression-060); demoting to Borrowed here made cross-module
+        // call sites emit `&handle` into owned `BatchHandle` formals (types-crate).
         if self.is_copy_type(param_type)
             && self.is_field_access_only_param_usage(param_name, body)
         {

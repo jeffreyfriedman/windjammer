@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Cross-module: composition keeps `deps: AppDeps` owned, but routes multipass
 //! emits `create_export_job(&deps.clone(), …)` → expected AppDeps, found &AppDeps.

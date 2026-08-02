@@ -447,7 +447,7 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str;
         }
         // Owned/`string` formal metadata must not block FieldAccess borrow when codegen
-        // confirmed the callee emits `&str` / shared ref (WDB-049 `replay_all(self.path)`).
+        // confirmed the callee emits `&str` / shared ref (regression-049 `replay_all(self.path)`).
         let callee_confirmed_shared_ref = method_signature.as_ref().is_some_and(|sig| {
             crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 sig, sig_param_idx,
@@ -766,6 +766,10 @@ impl<'ast> CodeGenerator<'ast> {
                 format!("{}_{}", i, suffix)
             }
             Literal::Int(i) => {
+                // Index positions infer `usize` from context — bare literals avoid `_usize`.
+                if self.in_index_context {
+                    return crate::codegen::rust::literals::generate_literal(lit);
+                }
                 use crate::type_inference::IntType;
                 let inferred = if let Some(ni) = &self.numeric_inference {
                     ni.get_int_type(expr)

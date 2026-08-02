@@ -760,7 +760,7 @@ impl SignatureRegistry {
     /// is an Owned→Borrowed or Owned→MutBorrowed refinement on a non-text type
     /// String/`string` ↔ `&str` / `Reference(string)` is a single-function codegen
     /// text-formal refinement (discard-only `path: string` → `path: &str`), not a
-    /// cross-module type collision (WDB-049).
+    /// cross-module type collision (regression-049).
     fn is_text_formal_type_refinement(a: &FunctionSignature, b: &FunctionSignature) -> bool {
         if a.param_types.len() != b.param_types.len() {
             return false;
@@ -888,7 +888,7 @@ impl SignatureRegistry {
                 if existing.param_types != sig.param_types {
                     let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
                     // String ↔ `&str` / `Reference(string)` is a codegen text-formal
-                    // refinement (WDB-049), not a cross-module type collision.
+                    // refinement (regression-049), not a cross-module type collision.
                     let text_formal_refinement = Self::is_text_formal_type_refinement(existing, sig)
                         || Self::is_text_formal_type_refinement(sig, existing);
                     if !stub_like && !text_formal_refinement {

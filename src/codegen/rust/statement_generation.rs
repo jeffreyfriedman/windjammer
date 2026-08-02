@@ -362,6 +362,40 @@ impl<'ast> CodeGenerator<'ast> {
     /// - `let prev = self.field; self.field = Some(v)` → `let prev = self.field.replace(v)`
     /// - `let mut x = self.field; …; self.field = x` (writeback on `&mut self`) → bare move
     /// - Other non-Copy behind &self/&mut self → `.clone()`
+    ///
+    /// `let name = item.name` through an owned non-Copy param → `.clone()` (E0507).
+    pub(in crate::codegen::rust) fn apply_owned_param_field_extract_clone(
+        &self,
+        value: &Expression<'ast>,
+        value_str: &mut String,
+    ) {
+        if !matches!(value, Expression::FieldAccess { .. }) {
+            return;
+        }
+        let Some(root) = self.root_identifier_of_field_or_index_chain(value) else {
+            return;
+        };
+        if root == "self" {
+            return;
+        }
+        let is_owned_param = self.current_function_params.iter().any(|p| {
+            p.name == root
+                && !self.inferred_borrowed_params.contains(&p.name)
+                && !self.inferred_mut_borrowed_params.contains(&p.name)
+                && !matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
+        });
+        if !is_owned_param {
+            return;
+        }
+        let Some(ty) = self.infer_expression_type(value) else {
+            return;
+        };
+        if self.is_type_copy(&ty) || value_str.ends_with(".clone()") {
+            return;
+        }
+        *value_str = format!("{}.clone()", value_str);
+    }
+
     pub(in crate::codegen::rust) fn apply_self_field_move_fix(
         &mut self,
         value: &Expression<'ast>,
@@ -421,7 +455,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             // Extract-assign writeback behind `&mut self`: cannot bare-move (E0507).
             // Prefer `mem::take` when the field type derives/implements Default
-            // (WDB-042 `SimNetwork`); otherwise `.clone()` (engines without Default).
+            // (regression-042 `SimNetwork`); otherwise `.clone()` (engines without Default).
             if value_str.ends_with(".clone()") {
                 value_str.truncate(value_str.len() - ".clone()".len());
             }
@@ -1160,11 +1194,25 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.usize_variables.contains(name) {
                     return Some("usize".to_string());
                 }
+                if let Some(ty) = self.local_var_types.get(name) {
+                    return Self::assignment_cast_target_for_type(ty);
+                }
                 return None;
             }
             _ => {}
         }
         None
+    }
+
+    fn assignment_cast_target_for_type(ty: &Type) -> Option<String> {
+        match ty {
+            Type::Int => Some("int".to_string()),
+            Type::Custom(name) if name == "int" || name == "i64" => Some("int".to_string()),
+            Type::Custom(name) if name == "i32" => Some("i32".to_string()),
+            Type::Custom(name) if name == "usize" => Some("usize".to_string()),
+            Type::Option(inner) => Self::assignment_cast_target_for_type(inner),
+            _ => None,
+        }
     }
 
     pub(in crate::codegen::rust) fn returns_option_owned_type(&self) -> bool {

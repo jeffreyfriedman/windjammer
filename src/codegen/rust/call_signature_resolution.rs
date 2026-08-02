@@ -525,7 +525,7 @@ pub fn resolve_method_for_call_site(
             } else if let Some(g) = global {
                 // Defining-module refresh may only sit on the exact qualified key when
                 // suffix/homonym resolution picked a stale body-converged borrow stub
-                // (windjammer-ui DataTable → Table owned column/row forward).
+                // (builder `Column` → `Table` owned column/row forward).
                 if let Some(refreshed) = g.get_signature(&qualified) {
                     if refreshed.emitted_rust_ref_params.is_some() {
                         crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
@@ -997,7 +997,7 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                             // Copy scalars and Copy aggregates that emit `&mut T`
                             // (`player: &mut PlayerState`) need MutBorrowed at call sites.
                             // Only demote to owned when codegen recorded an owned formal
-                            // (AppDeps / WDB-060) via emitted_owned_arg_contract.
+                            // (AppDeps / regression-060) via emitted_owned_arg_contract.
                             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 sig, param_idx,
                             ) {
@@ -1527,7 +1527,7 @@ mod tests {
     #[test]
     fn normalize_preserves_body_converged_borrow_for_instance_methods() {
         let mut sig = FunctionSignature {
-            name: "PostgresTrialBalanceReader::trial_balance_lines".into(),
+            name: "DbReportReader::report_lines".into(),
             param_types: vec![
                 Type::Custom("Self".into()),
                 Type::Reference(Box::new(Type::Custom("str".into()))),
@@ -1536,7 +1536,7 @@ mod tests {
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             return_type: Some(Type::Parameterized(
                 "Vec".into(),
-                vec![Type::Custom("TrialBalanceLine".into())],
+                vec![Type::Custom("ReportLine".into())],
             )),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: true,

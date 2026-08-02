@@ -10,33 +10,18 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPROS — LedgerKit `packages/finance-ui` Rust → pure Windjammer.
+//! Gates — enum match qualification, `chars()` loops, JSON field helpers.
 //!
-//! Goal: eliminate hand-written Rust under
-//! `financial-management-platform/packages/finance-ui/` (routes, read_models,
-//! pages, books_mode, …). Host glue (`apps/web` wasm_bindgen, `apps/desktop`
-//! wry) stays Rust; everything else should be `.wj`.
+//! Each gate `cargo check`s emitted Rust:
 //!
-//! Empirically red on tip `wj` (2026-08-01) — each gate `cargo check`s emitted Rust:
+//! 1. **Enum match arms** — idiomatic WJ `match route { Home => …, Money if … => … }`
+//!    must emit `Route::Home` / `Route::Money` (not bare bindings → rustc E0170).
 //!
-//! 1. **Enum match arms** (`routes.rs` / `pages.rs` `body_for_prefs`):
-//!    idiomatic WJ `match route { Home => …, Money if mode == … => … }` emits
-//!    bare `Home` / `Money` bindings → rustc **E0170** (`bindings_with_variant_name`).
-//!    Must emit `Route::Home` / `Route::Money` (or equivalent).
+//! 2. **`chars()` loops** — `for c in s.chars() { if c == '{' … }` must not emit
+//!    `if *c == '{'` (loop var is already `char` → E0614).
 //!
-//! 2. **`chars()` loops** (`read_models.rs` `json_object_slices`):
-//!    `for c in s.chars() { if c == '{' … }` emits `if *c == '{'` → **E0614**.
-//!    Loop var is already `char`; must not star-deref.
-//!
-//! 3. **JSON field helper** (`read_models.rs` `json_string_field` / parsers):
-//!    owned `string` key formal demotes to `&String`, call sites pass
-//!    `"role".to_string()` → **E0308**; `find(owned)` fails **Pattern**.
-//!    Formals should be `&str`/`String` consistently; `find` needs `&str`/`&`.
-//!
-//! Related (already filed): `codegen_finance_owned_string_trait_call_gate_test`
-//! (backend login/close_period owned-string borrow).
-//!
-//! Out of scope (keep Rust hosts): `wasm_bindgen` / `Closure` / `wry` / `tao`.
+//! 3. **JSON field helper** — owned `string` key formal + `find` / call sites with
+//!    `"role".to_string()` must typecheck (`&str`/`String` consistently).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -72,7 +57,6 @@ fn wj_build_and_cargo_check(source: &str) -> (bool, String, String) {
     }
 
     let rs = fs::read_to_string(out.join("t.rs")).unwrap_or_else(|_| {
-        // CLI may name output after stem differently across tip versions.
         fs::read_dir(&out)
             .into_iter()
             .flatten()
@@ -93,12 +77,12 @@ fn wj_build_and_cargo_check(source: &str) -> (bool, String, String) {
     fs::write(
         crate_dir.join("Cargo.toml"),
         r#"[package]
-name = "ledgerkit_finance_ui_gate"
+name = "enum_match_chars_json_gate"
 version = "0.0.0"
 edition = "2021"
 
 [[bin]]
-name = "ledgerkit_finance_ui_gate"
+name = "enum_match_chars_json_gate"
 path = "src/main.rs"
 "#,
     )
@@ -121,16 +105,15 @@ path = "src/main.rs"
     )
 }
 
-/// Mirror `packages/finance-ui/src/pages.rs` `body_for_prefs` + `routes.rs` enums.
 #[test]
-fn ledgerkit_enum_match_arms_must_qualify_variants() {
+fn enum_match_arms_must_qualify_variants() {
     let source = r#"
 enum Route { Home, Money, Unknown }
-enum BooksMode { Workspace, Business }
+enum Mode { Workspace, Business }
 
-pub fn body_for(route: Route, mode: BooksMode) -> string {
+pub fn body_for(route: Route, mode: Mode) -> string {
     match route {
-        Money if mode == BooksMode::Business => "<div data-wj-business-workspace></div>".to_string(),
+        Money if mode == Mode::Business => "<div data-mode-business></div>".to_string(),
         Money => "<div class=\"hub-panel\"></div>".to_string(),
         Home => "<div class=\"home-hero\"></div>".to_string(),
         Unknown => "<p class=\"err\">Unknown</p>".to_string(),
@@ -146,7 +129,7 @@ pub fn title(route: Route) -> string {
 }
 
 fn main() {
-    println!("{}", body_for(Route::Money, BooksMode::Business))
+    println!("{}", body_for(Route::Money, Mode::Business))
     println!("{}", title(Route::Home))
 }
 "#;
@@ -158,13 +141,12 @@ fn main() {
     );
     assert!(
         ok,
-        "LedgerKit Route/BooksMode match must cargo check (qualify Route::Variant). stderr=\n{stderr}\ngenerated=\n{generated}"
+        "enum match must cargo check (qualify Route::Variant). stderr=\n{stderr}\ngenerated=\n{generated}"
     );
 }
 
-/// Mirror `packages/finance-ui/src/read_models.rs` `json_object_slices` brace walk.
 #[test]
-fn ledgerkit_chars_for_loop_must_not_star_deref_char() {
+fn chars_for_loop_must_not_star_deref_char() {
     let source = r#"
 pub fn count_objects(array_json: string) -> int {
     let mut depth = 0
@@ -195,13 +177,12 @@ fn main() {
     );
     assert!(
         ok,
-        "json_object_slices-style chars() loop must cargo check. stderr=\n{stderr}\ngenerated=\n{generated}"
+        "chars() loop must cargo check. stderr=\n{stderr}\ngenerated=\n{generated}"
     );
 }
 
-/// Mirror `packages/finance-ui/src/read_models.rs` `json_string_field` + party parse.
 #[test]
-fn ledgerkit_json_string_field_helper_must_cargo_check() {
+fn json_string_field_helper_must_cargo_check() {
     let source = r#"
 pub fn json_string_field(obj: string, key: string) -> Option<string> {
     let needle = "\"".to_string() + key + "\""
@@ -227,17 +208,17 @@ pub fn role_hint(obj: string) -> string {
     }
 }
 
-pub struct PartyRow {
+pub struct Row {
     pub name: string,
 }
 
-pub fn parse_parties(json: string) -> Vec<PartyRow> {
+pub fn parse_rows(json: string) -> Vec<Row> {
     let slices = vec![json]
-    let mut out: Vec<PartyRow> = Vec::new()
+    let mut out: Vec<Row> = Vec::new()
     for obj in slices {
         match json_string_field(obj, "display_name".to_string()) {
             Some(name) => {
-                out.push(PartyRow { name: name })
+                out.push(Row { name: name })
             },
             None => {},
         }
@@ -247,13 +228,13 @@ pub fn parse_parties(json: string) -> Vec<PartyRow> {
 
 fn main() {
     println!("{}", role_hint("{\"role\":\"vendor\"}".to_string()))
-    println!("{}", parse_parties("{\"display_name\":\"Acme\"}".to_string()).len())
+    println!("{}", parse_rows("{\"display_name\":\"Acme\"}".to_string()).len())
 }
 "#;
 
     let (ok, generated, stderr) = wj_build_and_cargo_check(source);
     assert!(
         ok,
-        "json_string_field + parse_parties must cargo check (owned keys / find Pattern / Option). stderr=\n{stderr}\ngenerated=\n{generated}"
+        "json_string_field + parse_rows must cargo check (owned keys / find Pattern / Option). stderr=\n{stderr}\ngenerated=\n{generated}"
     );
 }

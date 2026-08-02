@@ -150,7 +150,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                         OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                     ) {
                         // Codegen recorded owned emission (`other: Lsn`) — beats stale
-                        // body-converged Borrowed even for bool-returning helpers (WDB-060).
+                        // body-converged Borrowed even for bool-returning helpers (regression-060).
                         if sig
                             .emitted_rust_ref_params
                             .as_ref()
@@ -344,7 +344,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         };
     }
 
-    // Copy aggregates: converged `Reference(T)` borrows at call sites (WDB-053 `&through`)
+    // Copy aggregates: converged `Reference(T)` borrows at call sites (regression-053 `&through`)
     // only when codegen did NOT emit an owned formal. Owned Copy aggregates (Lsn) pass by
     // value — over-borrow (`&through` into `other: Lsn`) must not be forced here.
     if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
@@ -362,7 +362,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         }
     }
 
-    // Converged readonly formals emit shared borrows at call sites (WDB-049 path field/text).
+    // Converged readonly formals emit shared borrows at call sites (regression-049 path field/text).
     let effective_own =
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, param_idx);
     if matches!(effective_own, OwnershipMode::Borrowed)
@@ -399,7 +399,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 if matches!(bare, Type::Custom(_)) {
                     // Bare Custom: shared-ref when codegen confirmed `&T`, or analyzer
                     // converged Borrowed + Reference(T) for non-Copy (`MemoryEngine::put`).
-                    // Owned Copy aggregates (`other: Lsn`) must not inherit stale Borrowed (WDB-060).
+                    // Owned Copy aggregates (`other: Lsn`) must not inherit stale Borrowed (regression-060).
                     if sig
                         .emitted_rust_ref_params
                         .as_ref()
@@ -437,7 +437,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         }
     }
 
-    // Copy aggregates with converged borrow ownership emit `&T` at call sites (WDB-053)
+    // Copy aggregates with converged borrow ownership emit `&T` at call sites (regression-053)
     // unless codegen recorded an owned Rust formal (Lsn / Copy aggregates stay by-value).
     if matches!(effective_own, OwnershipMode::Borrowed)
         && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
@@ -566,7 +566,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                         exec_mode: None,
                     };
                 }
-                // Readonly free-fn string APIs borrow as &str at call sites (WDB-049 replay_all).
+                // Readonly free-fn string APIs borrow as &str at call sites (regression-049 replay_all).
                 return SafetyType {
                     base: BaseType::String,
                     ownership: OwnedType::Ref(Region::fresh(3)),
@@ -604,7 +604,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 }
             }
             // Stale `Reference(T)` in param_types must not beat codegen-owned bare formals
-            // when refresh recorded shared-ref was NOT emitted (WDB-060 `through: Lsn`).
+            // when refresh recorded shared-ref was NOT emitted (regression-060 `through: Lsn`).
             if sig
                 .emitted_rust_ref_params
                 .as_ref()

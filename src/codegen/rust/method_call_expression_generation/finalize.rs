@@ -322,18 +322,22 @@ impl<'ast> CodeGenerator<'ast> {
                                     e,
                                 )
                             });
+                            let defining_module_emits_mut =
+                                receiver_type_name.as_deref().map_or(false, |rt| {
+                                    let qualified = format!("{rt}::{method}");
+                                    self.function_emitted_mut_arg_indices
+                                        .get(&qualified)
+                                        .or_else(|| self.function_emitted_mut_arg_indices.get(method))
+                                        .is_some_and(|indices| indices.contains(&i))
+                                });
                             if is_collection_key || !can_mut {
                                 apply_borrow(&mut arg_str);
                                 arg_str
                             } else if callee_formal_is_copy
-                                && callee_arg_emits_owned
-                                && !matches!(ownership, OwnershipMode::MutBorrowed)
+                                && (callee_arg_emits_owned || !defining_module_emits_mut)
                             {
-                                // Owned Copy aggregates (`mut deps: AppDeps`) pass by value.
-                                // Cross-file `function_emitted_mut_arg_indices` may upgrade
-                                // local `ownership` to MutBorrowed while the looked-up sig still
-                                // claims an owned Copy contract — honor the upgrade (`&mut
-                                // self.player` into `player: &mut PlayerState`).
+                                // Owned Copy aggregates pass by value. Defining-module `&mut T`
+                                // emission (`Ability::activate`) still uses `&mut self.player`.
                                 return arg_str;
                             } else if let Some(Expression::Identifier { name, .. }) = arg_expr {
                                 if self.identifier_already_mut_ref(name) {
@@ -586,7 +590,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                         &p.type_,
                                                     )
                                             });
-                                        // WDB-060: do not re-borrow Copy aggregates /
+                                        // regression: do not re-borrow Copy aggregates /
                                         // owned-emitted formals from stale Reference(T).
                                         if !owned_contract
                                             && !caller_copy_aggregate
@@ -603,7 +607,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    // WDB-060: peel stale `&` on Copy-aggregate owned passes (`&through` → `through`).
+                    // regression: peel stale `&` on Copy-aggregate owned passes (`&through` → `through`).
                     if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                         if let (Some(rt), Some((_, arg_expr))) =
                             (receiver_type_name.as_deref(), arguments.get(i))
@@ -680,7 +684,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                 bare,
                                             )
                                     });
-                                // WDB-060: Copy aggregates / owned emission beat stale Borrowed.
+                                // regression: Copy aggregates / owned emission beat stale Borrowed.
                                 if caller_copy_aggregate || owned_contract {
                                     // skip re-borrow
                                 } else {
@@ -934,9 +938,16 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(target_ty) = &self.collect_target_type {
                 format!("::<{}>", self.type_to_rust(target_ty))
             } else if let Some(ret_ty) = &self.current_function_return_type {
-                format!("::<{}>", self.type_to_rust(ret_ty))
+                if crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(
+                    ret_ty,
+                ) {
+                    format!("::<{}>", self.type_to_rust(ret_ty))
+                } else {
+                    // Untyped `split().collect()` etc. — never use String/Option return type.
+                    "::<Vec<_>>".to_string()
+                }
             } else {
-                String::new()
+                "::<Vec<_>>".to_string()
             }
         } else {
             String::new()
@@ -947,9 +958,35 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("{}{}({})", obj_str, turbofish, args.join(", "));
         }
 
-        // Special case: substring(start, end) -> &text[start..end]
+        // Special case: substring(start, end) -> text[start..end] (or owned String in match arms)
         if method == "substring" && args.len() == 2 {
-            return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
+            let mut start_str = args[0].clone();
+            let mut end_str = args[1].clone();
+            if let Some((_, start_expr)) = arguments.first() {
+                self.maybe_cast_index_to_usize(&mut start_str, start_expr);
+            }
+            if let Some((_, end_expr)) = arguments.get(1) {
+                self.maybe_cast_index_to_usize(&mut end_str, end_expr);
+            }
+            let slice_inner = format!("{}[{}..{}]", obj_str, start_str, end_str);
+            let needs_owned = self.in_match_arm_needing_string
+                || self.coerce_string_literals_to_owned
+                || self.in_owned_value_context
+                || self.in_call_argument_generation
+                || (self.in_expression_context
+                    && crate::codegen::rust::string_utilities::return_type_expects_owned_string(
+                        &self.current_function_return_type,
+                    ));
+            if needs_owned {
+                return format!("({slice_inner}).to_string()");
+            }
+            // Chained receiver (`substring(..).trim()`): emit bare slice so precedence
+            // yields `(text[s..e]).trim()`, not `&(text[s..e].trim())`.
+            if self.in_field_access_object {
+                return slice_inner;
+            }
+            // Standalone / `let` binding: bare `[s..e]` is unsized — emit `&str`.
+            return format!("&{slice_inner}");
         }
 
         // Signature-driven: owned String-producing args at `&str` formals need a borrow.

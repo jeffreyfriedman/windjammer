@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): CheckbookRegister Amount+Balance columns must codegen.
+//! Gate (dogfood): CheckbookRegister Amount+Balance columns must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -45,7 +45,7 @@ impl CheckbookRegister {
     pub fn render(self) -> string {
         let mut body = "".to_string()
         for r in self.rows {
-            body = body + "<tr class=\"wj-checkbook-row\"><td>" + r.payee + "</td><td class=\"lk-num\">" + r.amount_html + "</td><td class=\"lk-num\">" + r.balance_html + "</td></tr>"
+            body = body + "<tr class=\"wj-checkbook-row\"><td>" + r.payee + "</td><td class=\"wj-num\">" + r.amount_html + "</td><td class=\"wj-num\">" + r.balance_html + "</td></tr>"
         }
         "<div class=\"wj-checkbook-register\"><th>Amount</th><th>Balance</th>".to_string() + body + "</div>"
     }

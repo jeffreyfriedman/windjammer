@@ -25,7 +25,7 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-/// Reproduces the FMP pattern: a routing function passes a Copy deps struct
+/// Reproduces the dogfood pattern: a routing function passes a Copy deps struct
 /// to both read-only handlers (expect owned) and write handlers (inferred &mut).
 /// The caller gets &mut deps, but non-mutating call sites need owned.
 ///

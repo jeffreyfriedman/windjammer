@@ -91,7 +91,7 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
                     (&actual.base, &expected.base),
                     (BaseType::Custom(_), BaseType::Custom(_))
                 ) {
-                    // Owned Custom → `&T` formal: emit explicit `&` (WDB-039 keys_equal,
+                    // Owned Custom → `&T` formal: emit explicit `&` (regression-039 keys_equal,
                     // Copy map/set keys). Rust auto-ref alone leaves bare locals that fail
                     // dogfooding assertions and asymmetric clone lowering.
                     CoercionKind::Borrow
@@ -156,6 +156,15 @@ fn strip_rust_ref_expr(expr: &str) -> &str {
         .trim()
 }
 
+/// `text[s..e]` / `&text[s..e]` are `str` subslices — owned `String` formals need `.to_string()`.
+fn owned_coercion_for_str_subslice(inner: &str) -> String {
+    if inner.contains('[') && inner.contains("..") {
+        format!("({inner}).to_string()")
+    } else {
+        format!("{inner}.clone()")
+    }
+}
+
 pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     coerced: &mut String,
     actual: &SafetyType,
@@ -199,7 +208,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 // `&mut place` is already an lvalue; owned formals take the place by value.
                 *coerced = inner.to_string();
             } else {
-                *coerced = format!("{inner}.clone()");
+                *coerced = owned_coercion_for_str_subslice(inner);
             }
             return;
         }
@@ -265,7 +274,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     }
                 } else if !coerced.ends_with(".clone()") {
                     let base = strip_rust_ref_expr(coerced);
-                    *coerced = format!("{base}.clone()");
+                    *coerced = owned_coercion_for_str_subslice(base);
                 }
             }
             CoercionKind::Clone => {
@@ -274,7 +283,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                     && !coerced.ends_with(".to_owned()")
                 {
                     let base = strip_rust_ref_expr(coerced);
-                    *coerced = format!("{base}.clone()");
+                    *coerced = owned_coercion_for_str_subslice(base);
                 }
             }
             _ => {}
