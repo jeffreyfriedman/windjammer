@@ -13,6 +13,8 @@ impl MethodCallAnalyzer {
         arg_count: usize,
         receiver_type_name: Option<&str>,
         local_var_types: Option<&std::collections::HashMap<String, Type>>,
+        signature_registry: Option<&crate::analyzer::SignatureRegistry>,
+        param_idx: usize,
     ) -> bool {
         let usize_variables = ctx.usize_variables;
         let current_function_params = ctx.current_function_params;
@@ -117,10 +119,24 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        if super::super::stdlib_method_traits::is_string_pattern_method(method)
-            || crate::analyzer::stdlib_method_traits::is_slice_search_method(method)
-        {
-            return true;
+        // Signature-driven `&str` Pattern slots and slice-search borrows — no method-name lists.
+        if let Some(registry) = signature_registry {
+            let recv = receiver_type_name.or(Some("String"));
+            if super::super::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+                method,
+                recv,
+                registry,
+                param_idx,
+            ) {
+                return true;
+            }
+            if crate::analyzer::stdlib_method_traits::method_is_slice_search_qualified(
+                method,
+                receiver_type_name,
+                registry,
+            ) {
+                return true;
+            }
         }
 
         false

@@ -2152,17 +2152,10 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     }) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
                         method,
-                        receiver_type_name,
+                        receiver_type_name.or(Some("String")),
                         &self.signature_registry,
                         i,
-                    ) || (crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(
-                        method,
-                    ) && call_site_sig.as_ref().is_none_or(|sig| {
-                        !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                            sig,
-                            sig.arg_param_index(i),
-                        )
-                    }));
+                    );
                     if expects_str_ref {
                         borrow_decision.add_ref = true;
                     }
@@ -2195,6 +2188,17 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     });
 
+                let arg_expects_pattern_str = call_site_sig.as_ref().is_some_and(|sig| {
+                    crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                        sig, i,
+                    )
+                }) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+                    method,
+                    receiver_type_name.or(Some("String")),
+                    &self.signature_registry,
+                    i,
+                );
+
                 if borrow_decision.add_ref
                     && (!is_temp_variable || temp_needs_shared_borrow)
                     && !arg_str.starts_with('&')
@@ -2202,9 +2206,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if self.match_arm_bindings.contains(name.as_str()))
                         || !matches!(effective_ownership, Some(OwnershipMode::Owned))
                         || is_collection_key_arg
-                        || crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(
-                            method,
-                        ))
+                        || arg_expects_pattern_str)
                 {
                     crate::codegen::rust::rust_coercion_rules::Coercion::Borrow
                         .apply(&mut arg_str);
@@ -2374,6 +2376,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(&self.method_signatures_by_type),
                         &self.match_arm_bindings,
                         &self.str_ref_optimized_params,
+                        Some(&self.signature_registry),
                     );
                     if should_ref {
                         let sig_owns_string_param = method_signature

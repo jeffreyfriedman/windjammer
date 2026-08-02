@@ -159,20 +159,44 @@ impl<'ast> Analyzer<'ast> {
         if Self::is_language_level_method_payload_store(method) {
             return true;
         }
-        let sig = receiver_type
-            .map(|ty| {
-                let base = ty.split('<').next().unwrap_or(ty);
-                registry.get_signature(&format!("{}::{}", base, method))
-            })
-            .flatten()
-            .or_else(|| registry.get_signature(method))
-            .or_else(|| registry.lookup_method(method))
-            .or_else(|| registry.find_signature_by_name_and_arg_count(method, arg_count));
+        // Require a receiver-qualified (or unambiguous) signature. Bare
+        // `lookup_method("remove")` can return `Vec::remove` while the call is
+        // `HashMap::remove`, falsely treating borrowed keys as owned stores.
+        let sig = Self::resolve_method_signature_for_storage(
+            method,
+            receiver_type,
+            arg_count,
+            registry,
+        );
         let Some(sig) = sig else {
             return false;
         };
         matches!(sig.param_ownership_for_arg(arg_index), Some(OwnershipMode::Owned))
             && Self::formal_stores_into_composite_return(sig, arg_index)
+    }
+
+    fn resolve_method_signature_for_storage<'a>(
+        method: &str,
+        receiver_type: Option<&str>,
+        arg_count: usize,
+        registry: &'a SignatureRegistry,
+    ) -> Option<&'a FunctionSignature> {
+        if let Some(ty) = receiver_type {
+            let base = ty.split('<').next().unwrap_or(ty);
+            let short = base.rsplit("::").next().unwrap_or(base);
+            for candidate in [base, short] {
+                if let Some(sig) = registry.get_signature(&format!("{candidate}::{method}")) {
+                    return Some(sig);
+                }
+            }
+        }
+        let _ = arg_count;
+        // Never use first-homonym fallbacks (`lookup_method` /
+        // `find_signature_by_name_and_arg_count`) — `remove`/`contains`/`get`
+        // mean different ownership on Vec vs HashMap vs Option.
+        registry
+            .get_signature(method)
+            .or_else(|| registry.find_unique_signature_ending_with(method))
     }
 
     fn receiver_type_name_for_storage(object: &Expression) -> Option<String> {

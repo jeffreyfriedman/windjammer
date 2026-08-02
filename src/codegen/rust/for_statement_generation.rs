@@ -69,8 +69,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let owned_iter_elem = match iterable {
-            Expression::MethodCall { method, .. } => {
-                crate::codegen::rust::stdlib_method_traits::owned_iterator_element_type(method)
+            Expression::MethodCall {
+                object, method, ..
+            } => {
+                let receiver = self
+                    .mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object));
+                crate::codegen::rust::stdlib_method_traits::owned_iterator_element_type_qualified(
+                    method,
+                    receiver.as_deref(),
+                    &self.signature_registry,
+                )
             }
             _ => None,
         };
@@ -83,10 +92,20 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(|e| self.is_type_copy(e));
         let by_value_owned_iter = matches!(
             iterable,
-            Expression::MethodCall { method, .. }
-                if crate::codegen::rust::stdlib_method_traits::method_yields_owned_iterator_elements(
+            Expression::MethodCall {
+                object,
+                method,
+                ..
+            } if {
+                let receiver = self
+                    .mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object));
+                crate::codegen::rust::stdlib_method_traits::method_yields_owned_iterator_elements_qualified(
                     method,
+                    receiver.as_deref(),
+                    &self.signature_registry,
                 )
+            }
         );
 
         // Copy elements from an owned collection: consume by value (`for byte in vec`) so
