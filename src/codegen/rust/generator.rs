@@ -188,7 +188,7 @@ pub struct CodeGenerator<'ast> {
         std::collections::HashMap<String, std::collections::HashSet<usize>>,
     /// Arg indices recorded while emitting the current function's `&mut T` formals.
     pub(crate) current_fn_emitted_mut_arg_indices: std::collections::HashSet<usize>,
-    /// Params that keep owned Rust formals but borrow at select call sites (wdb `put_value`).
+    /// Params that keep owned Rust formals but borrow at select call sites (dogfood `put_value`).
     pub(crate) current_fn_mixed_forwarder_params: std::collections::HashSet<String>,
     /// Params that borrow at self/sibling calls inside if conditions (forward-ref guard).
     pub(crate) current_fn_forward_ref_if_params: std::collections::HashSet<String>,
@@ -222,6 +222,8 @@ pub struct CodeGenerator<'ast> {
     // auto-clone since Rust allows field access on &T returned by Vec indexing.
     // e.g., players[i].score → no clone needed, just accesses the field through the ref.
     pub(crate) in_field_access_object: bool,
+    /// While generating an array/Vec index expression — Rust infers literal `usize`.
+    pub(crate) in_index_context: bool,
     // BORROW CONTEXT: When generating the operand of & or &mut, suppress Vec index
     // auto-clone since we want a reference to the original, not a reference to a clone.
     // e.g., &self.items[i] → reference to element, NOT &self.items[i].clone()
@@ -537,6 +539,7 @@ impl<'ast> CodeGenerator<'ast> {
             in_explicit_clone_call: false,
             suppress_borrowed_clone: false,
             in_field_access_object: false,
+            in_index_context: false,
             in_call_argument_generation: false,
             in_borrow_context: false,
             in_if_condition: false,
@@ -847,7 +850,7 @@ impl<'ast> CodeGenerator<'ast> {
             );
         }
         // Importer stubs often lack `emitted_rust_ref_params` while the defining module
-        // published `[true]` for `&Vec` / `&str` formals (WDB-049 `from_bytes`).
+        // published `[true]` for `&Vec` / `&str` formals (regression-049 `from_bytes`).
         if let Some(g) = global_only {
             if g.emitted_rust_ref_params
                 .as_ref()
@@ -1099,6 +1102,10 @@ impl<'ast> CodeGenerator<'ast> {
             (
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
                 Some(OwnershipMode::Owned),
+            ) => analyzer,
+            (
+                Some(OwnershipMode::Owned),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
             ) => analyzer,
             _ => ir.or(analyzer),
         }
@@ -2080,7 +2087,7 @@ impl<'ast> CodeGenerator<'ast> {
         let param_idx = sig.arg_param_index(arg_index);
         // Match `auto_clone::callee_arg_field_extracts`: field-extract demotes Move→Read
         // only for shared-ref formals. Owned WJ formals that match/project
-        // (`value_tag(value: Value)`) still move — callers must `.clone()` on reuse (WDB-063).
+        // (`value_tag(value: Value)`) still move — callers must `.clone()` on reuse (regression-063).
         let field_extract = sig
             .field_extract_params
             .as_ref()
@@ -2204,7 +2211,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Copy / owned-pass formals must stay by-value (`search.update(dt)` not `&dt`).
             // Forward-ref borrowing in `if` is only for non-Copy values that would move.
             // Copy aggregates (`through: Lsn`) are not scalar pass-by-value but still
-            // must not gain `&through` into owned formals (WDB-060).
+            // must not gain `&through` into owned formals (regression-060).
             let caller_copy_aggregate = self.current_function_params.iter().any(|p| {
                 p.name == *name
                     && self.is_type_copy(&p.type_)
@@ -2212,7 +2219,6 @@ impl<'ast> CodeGenerator<'ast> {
             });
             if self.caller_param_is_copy_pass_by_value(name)
                 || caller_copy_aggregate
-                || callee_wants_owned
             {
                 return;
             }
@@ -2268,7 +2274,7 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if self.in_if_condition && is_forward_ref {
-            if self.caller_param_is_copy_pass_by_value(name) || callee_wants_owned {
+            if self.caller_param_is_copy_pass_by_value(name) {
                 return;
             }
             if coerced.ends_with(".clone()") {
@@ -2322,7 +2328,7 @@ impl<'ast> CodeGenerator<'ast> {
             // The forward-ref heuristic exists to avoid moving non-Copy formals; Copy
             // and callee-owned contracts must remain by-value (`update(dt)` not `&dt`).
             // Copy aggregates (`through: Lsn`) are not `is_copy_pass_by_value_formal`
-            // but still pass by value into owned formals (WDB-060).
+            // but still pass by value into owned formals (regression-060).
             let caller_copy_aggregate = self.current_function_params.iter().any(|p| {
                 p.name == *name
                     && self.is_type_copy(&p.type_)
@@ -2330,11 +2336,16 @@ impl<'ast> CodeGenerator<'ast> {
             });
             if self.caller_param_is_copy_pass_by_value(name)
                 || caller_copy_aggregate
-                || callee_wants_owned
             {
                 return;
             }
-            if !callee_wants_shared_borrow {
+            if !callee_wants_shared_borrow
+                && !self.current_fn_forward_ref_if_params.contains(name)
+                && !self.param_used_in_if_with_condition_and_branches(
+                    &self.current_function_body.iter().copied().collect::<Vec<_>>(),
+                    name,
+                )
+            {
                 return;
             }
             if !coerced.starts_with('&') {
@@ -2448,7 +2459,7 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             // Copy scalars and Copy aggregates (Lsn, …) pass by value at call sites —
-            // do not rewrite to `(&param)` in if conditions (WDB-060).
+            // do not rewrite to `(&param)` in if conditions (regression-060).
             if self.is_type_copy(&param.type_) {
                 continue;
             }
@@ -2857,7 +2868,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Borrowed *emitted* formals (`&T`) don't move — skip clone. Owned formals that
         // the analyzer still marks Borrowed (Copy aggregates / match-project callees)
-        // still move at owned call sites and need `.clone()` on reuse (WDB-063 Value).
+        // still move at owned call sites and need `.clone()` on reuse (regression-063 Value).
         if (self.inferred_borrowed_params.contains(name)
             || self.inferred_mut_borrowed_params.contains(name))
             && (self.emitted_rust_ref_formals.contains(name)
@@ -2883,7 +2894,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Only scalar Copy formals (i64/bool/…) skip clone. Copy aggregates/enums
-        // (Value, Lsn, …) still need `.clone()` for multi-use owned moves (WDB-063).
+        // (Value, Lsn, …) still need `.clone()` for multi-use owned moves (regression-063).
         if self.binding_is_copy_pass_by_value_scalar(name) {
             return arg_str.to_string();
         }

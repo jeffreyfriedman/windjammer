@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): CheckbookRegister row compose must codegen.
+//! Gate (dogfood): CheckbookRegister row compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

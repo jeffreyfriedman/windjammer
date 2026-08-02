@@ -143,6 +143,33 @@ pub fn param_is_owned_string_type(param_type: &Type) -> bool {
         || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
 }
 
+/// True when the resolved signature expects an owned string at this argument index.
+pub fn call_site_param_expects_owned_string(
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    let idx = sig.arg_param_index(arg_index);
+    if sig
+        .formal_param_types
+        .get(idx)
+        .is_some_and(param_is_owned_string_type)
+    {
+        return true;
+    }
+    if sig.param_types.get(idx).is_some_and(param_is_owned_string_type) {
+        return true;
+    }
+    if let Some(flags) = &sig.emitted_rust_ref_params {
+        if flags.get(idx) == Some(&false) {
+            return sig
+                .param_types
+                .get(idx)
+                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+        }
+    }
+    false
+}
+
 /// Parameter type is `&String` — a reference to an owned String.
 /// Distinct from `&str` (`param_is_rust_str_ref`). String literals passed to
 /// `&String` params need `&"literal".to_string()` conversion.
@@ -589,6 +616,12 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         if !already_owned_string_expr(arg_str) {
             *arg_str = coerce_expr_to_owned_string(arg_str);
         }
+    } else if sig
+        .is_some_and(|s| call_site_param_expects_owned_string(s, arg_index))
+    {
+        if !already_owned_string_expr(arg_str) {
+            *arg_str = coerce_expr_to_owned_string(arg_str);
+        }
     } else {
         // &String param: string literal → &"lit".to_string()
         let is_string_ref_param = sig
@@ -605,13 +638,26 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
             return;
         }
 
-        if arg_str.ends_with(".to_string()") {
-            *arg_str = arg_str[..arg_str.len() - 12].to_string();
-        } else if arg_str.ends_with(".into()") {
-            *arg_str = arg_str[..arg_str.len() - 7].to_string();
-        }
-        if arg_str.starts_with('&') {
-            *arg_str = arg_str.trim_start_matches('&').to_string();
+        let strip_to_string = sig
+            .and_then(|s| {
+                let idx = s.arg_param_index(arg_index);
+                Some(
+                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        s, idx,
+                    ) || s.param_types.get(idx).is_some_and(param_is_rust_str_ref),
+                )
+            })
+            .unwrap_or(false);
+
+        if strip_to_string {
+            if arg_str.ends_with(".to_string()") {
+                *arg_str = arg_str[..arg_str.len() - 12].to_string();
+            } else if arg_str.ends_with(".into()") {
+                *arg_str = arg_str[..arg_str.len() - 7].to_string();
+            }
+            if arg_str.starts_with('&') {
+                *arg_str = arg_str.trim_start_matches('&').to_string();
+            }
         }
     }
 }

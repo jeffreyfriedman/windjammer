@@ -757,6 +757,28 @@ impl<'ast> Analyzer<'ast> {
         matches!(expr, Expression::Identifier { name: id, .. } if id == name)
     }
 
+    /// True when `expr` is `param.field` or a nested field chain rooted at `param`.
+    fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
+                    || Self::expr_is_field_move_from_param(param_name, object)
+            }
+            _ => false,
+        }
+    }
+
+    /// True when `expr` is `param.field`, `param[i]`, or a nested chain rooted at `param`.
+    fn expr_is_field_or_index_rooted_at_param(param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
+                    || Self::expr_is_field_or_index_rooted_at_param(param_name, object)
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn extract_function_name(&self, expr: &Expression) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
@@ -806,6 +828,45 @@ impl<'ast> Analyzer<'ast> {
         any_use && !bad_use
     }
 
+    /// True when a `let` binding moves a field/index off `param` (`let bytes = key.bytes`).
+    pub(crate) fn param_has_field_or_index_move_binding(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_has_field_or_index_move_binding(param_name, stmt))
+    }
+
+    fn stmt_has_field_or_index_move_binding(&self, param_name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => {
+                Self::expr_is_field_move_from_param(param_name, value)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_has_field_or_index_move_binding(param_name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_has_field_or_index_move_binding(param_name, s))
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                body.iter()
+                    .any(|s| self.stmt_has_field_or_index_move_binding(param_name, s))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                Self::expr_is_field_move_from_param(param_name, &arm.body)
+            }),
+            _ => false,
+        }
+    }
+
     fn check_field_only_param_use_stmt(
         &self,
         param_name: &str,
@@ -818,8 +879,22 @@ impl<'ast> Analyzer<'ast> {
             return;
         }
         match stmt {
+            Statement::Let { value: expr, .. } => {
+                // `let x = param.field` moves the field — not readonly projection.
+                if Self::expr_is_field_move_from_param(param_name, expr) {
+                    *any_use = true;
+                    *bad_use = true;
+                    return;
+                }
+                self.check_field_only_param_use_expr(
+                    param_name,
+                    expr,
+                    in_field_chain,
+                    any_use,
+                    bad_use,
+                );
+            }
             Statement::Expression { expr, .. }
-            | Statement::Let { value: expr, .. }
             | Statement::Return {
                 value: Some(expr), ..
             } => {

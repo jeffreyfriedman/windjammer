@@ -140,7 +140,7 @@ pub(crate) fn build_type_defining_modules_for_library_with_programs(
 /// Resolve `gen/` (or crate-root) directories that contain `metadata.json` for each
 /// `wj.toml` path dependency under `build_path`'s project.
 ///
-/// Keys use Rust crate naming (`wdb-substrate` → `wdb_substrate`) so they match
+/// Keys use Rust crate naming (`substrate-crate` → `substrate_crate`) so they match
 /// `--metadata` / `external_paths` conventions. Explicit CLI `--metadata` entries
 /// should override these when merged.
 pub(crate) fn discover_wj_toml_path_dependency_metadata(
@@ -204,7 +204,7 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
 
 /// Discover `metadata.json` roots for crates imported via `use crate_name::...` in `.wj`
 /// sources — covers deps present in generated Cargo.toml but missing from `wj.toml`
-/// (e.g. `wdb-substrate` → `wdb_wal` via `use wdb_wal::WalSegment`).
+/// (e.g. `substrate-crate` → `wal_crate` via `use wal_crate::WalSegment`).
 pub(crate) fn discover_wj_import_dependency_metadata(
     build_path: &Path,
 ) -> HashMap<String, PathBuf> {

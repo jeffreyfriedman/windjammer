@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): AppShell retained chrome compose must codegen.
+//! Gate (dogfood): AppShell retained chrome compose must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

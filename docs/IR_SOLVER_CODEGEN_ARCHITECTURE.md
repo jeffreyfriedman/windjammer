@@ -11,7 +11,7 @@ Legacy codegen resolves call-site coercions through a fragile stack of heuristic
 - Sequential add-then-strip-then-re-add phases in Rust argument emitters
 - Post-hoc `correct_legacy_output` patches
 
-This causes ping-pong fixes (FMP E0308s, engine multipass regressions) and does not scale across backends.
+This causes ping-pong fixes (dogfood E0308s, engine multipass regressions) and does not scale across backends.
 
 ## Design Principle
 
@@ -152,7 +152,7 @@ For every coercion rule or constraint change:
 | 1 | Expression IR, call-site constraints, solver write-back, analyzer on all backends |
 | 2 | Shared `coercion.rs` + `target_encodings` emit |
 | 3 | Parallel backend cutover (Rust, Go, JS, WASM) |
-| 4 | Multipass IR merge, FMP + breach-protocol dogfooding |
+| 4 | Multipass IR merge, dogfood + breach-protocol dogfooding |
 | 5 | Delete legacy heuristics (`call_site_borrow`, `correct_legacy_output`) |
 
 ## Related Documentation
@@ -169,5 +169,5 @@ For every coercion rule or constraint change:
 - Zero heuristic method-name lists for ownership/coercion
 - All backends run `IrPipeline` and use `encode_call_argument`
 - `cargo test --release --test all` green; conformance 26/26 green
-- FMP + breach-protocol ownership E0308 errors eliminated
+- dogfood + breach-protocol ownership E0308 errors eliminated
 - Legacy `call_site_borrow` / `correct_legacy_output` deleted

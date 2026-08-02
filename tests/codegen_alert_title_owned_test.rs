@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (windjammer-ui Alert): `title` takes owned `string` in source,
+//! Gate (windjammer-ui Alert): `title` takes owned `string` in source,
 //! but codegen historically emitted `title(&String)`, forcing awkward temps.
 //! Desired: owned `String` (or `&str`) so `.title("Today".to_string())` works.
 

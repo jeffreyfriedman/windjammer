@@ -83,10 +83,20 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         };
-        let loop_element_type = owned_iter_elem.or_else(|| {
-            self.infer_expression_type(iterable)
-                .and_then(|t| Self::extract_iterator_element_type(&t))
-        });
+        let loop_element_type = if matches!(
+            iterable,
+            Expression::MethodCall { method, .. } if method == "char_indices"
+        ) {
+            Some(Type::Tuple(vec![
+                Type::Custom("usize".to_string()),
+                Type::Custom("char".to_string()),
+            ]))
+        } else {
+            owned_iter_elem.or_else(|| {
+                self.infer_expression_type(iterable)
+                    .and_then(|t| Self::extract_iterator_element_type(&t))
+            })
+        };
         let copy_element_by_value = loop_element_type
             .as_ref()
             .is_some_and(|e| self.is_type_copy(e));
@@ -109,7 +119,7 @@ impl<'ast> CodeGenerator<'ast> {
         );
 
         // Copy elements from an owned collection: consume by value (`for byte in vec`) so
-        // `Vec::push(byte)` type-checks without `*byte` (WDB-006).
+        // `Vec::push(byte)` type-checks without `*byte` (regression-006).
         let direct_id_iterable = matches!(iterable, Expression::Identifier { .. });
         if copy_element_by_value || by_value_owned_iter {
             if let Expression::Identifier { name, .. } = iterable {
@@ -154,7 +164,7 @@ impl<'ast> CodeGenerator<'ast> {
         if copy_element_by_value && is_borrowed_iterator && direct_id_iterable {
             if let Expression::Identifier { name, .. } = iterable {
                 // Owned `Vec<Copy>` can iterate by value. Match-bound / param `&Vec`
-                // must keep borrowed status so `.copied()` can own Copy elements (WDB-072).
+                // must keep borrowed status so `.copied()` can own Copy elements (regression-072).
                 let binding_is_ref = self.borrowed_iterator_vars.contains(name)
                     || self.local_var_types.get(name).is_some_and(|t| {
                         matches!(t, Type::Reference(_) | Type::MutableReference(_))
@@ -167,7 +177,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Borrowed local/`match`-bound `&Vec<Copy>` (`conditions: &Vec<_>`): iterate by
-        // value via `.iter().copied()` so bindings are owned `T` (WDB-072).
+        // value via `.iter().copied()` so bindings are owned `T` (regression-072).
         // Field paths (`self.items`) keep the traditional `&self.items` form — Copy
         // element auto-deref at use sites is covered by borrowed_iterator_vars.
         let use_copied_for_copy_elems = copy_element_by_value
@@ -284,6 +294,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        if let Some(idx_var) = Self::extract_char_indices_index_var(iterable, pattern) {
+            self.usize_variables.insert(idx_var);
+        }
+        if let Some(idx_var) = Self::extract_enumerate_index_var(iterable, pattern) {
+            self.usize_variables.insert(idx_var);
+        }
+
         // TDD FIX: Track types for ALL bound variables (simple and tuple patterns)
         if let Some(elem_type) = loop_element_type.clone() {
             let elem_type = if tracks_borrowed_loop_var
@@ -387,6 +404,27 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&self.indent());
         output.push_str("}\n");
         output
+    }
+
+    /// If the iterable is `.char_indices()` and the pattern is a tuple, return
+    /// the first binding name (the byte index), which is always `usize`.
+    fn extract_char_indices_index_var(
+        iterable: &Expression<'ast>,
+        pattern: &Pattern<'ast>,
+    ) -> Option<String> {
+        let is_char_indices = matches!(
+            iterable,
+            Expression::MethodCall { method, .. } if method == "char_indices"
+        );
+        if !is_char_indices {
+            return None;
+        }
+        if let Pattern::Tuple(elements) = pattern {
+            if let Some(Pattern::Identifier(name)) = elements.first() {
+                return Some(name.clone());
+            }
+        }
+        None
     }
 
     /// If the iterable is `.enumerate()` and the pattern is a tuple, return

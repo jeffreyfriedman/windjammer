@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO: arithmetic in format args for SplitPanel right pane flex.
+//! Gate: arithmetic in format args for SplitPanel right pane flex.
 //!
 //! Desired: `let right_flex = 100 - self.initial_size` then interpolate,
 //! not inline `100 - self.initial_size` that may mis-codegen for Copy i32 fields.

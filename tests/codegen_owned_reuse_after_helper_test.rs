@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (StatusChip pattern): owned string used after pass-by-value helper.
+//! Gate (StatusChip pattern): owned string used after pass-by-value helper.
 //!
 //! Source:
 //!   let status = self.status

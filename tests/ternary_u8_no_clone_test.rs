@@ -7,7 +7,7 @@
     feature = "integration_tests",
 )))]
 
-// WDB-005: if/else u8 branches inside vec! must not emit .clone() on Copy literals.
+// regression-005: if/else u8 branches inside vec! must not emit .clone() on Copy literals.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

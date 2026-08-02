@@ -22,7 +22,7 @@ mod test_utils;
 ///
 /// Fix: Add recursive scanning in `is_stored` to detect enum variant constructors
 /// that consume the parameter.
-/// WDB-embedded: `match Value::Text(label) { ... }` must keep `label` Owned.
+/// dogfood-embedded: `match Value::Text(label) { ... }` must keep `label` Owned.
 /// Match scrutinees were invisible to enum-variant consumption tracking, so
 /// codegen demoted to `&String` and call sites produced `&&str` (E0308).
 #[test]

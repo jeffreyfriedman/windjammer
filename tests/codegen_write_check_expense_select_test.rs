@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): WriteCheckForm expense account select must codegen.
+//! Gate (dogfood): WriteCheckForm expense account select must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

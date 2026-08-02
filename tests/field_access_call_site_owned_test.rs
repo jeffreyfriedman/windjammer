@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! Regression: `reader.trial_balance_lines(demo_tenant().slug)` must not become
+//! Regression: `reader.report_lines(demo_tenant().slug)` must not become
 //! `&demo_tenant().slug.clone()` when the trait method expects owned `String`.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -36,20 +36,20 @@ pub fn demo_tenant() -> Tenant {
     test.add_file(
         "ports/readers.wj",
         r#"
-trait TrialBalanceReader {
-    fn trial_balance_lines(self, tenant_slug: string) -> Vec<int>
+trait ReportReader {
+    fn report_lines(self, tenant_slug: string) -> Vec<int>
 }
 "#,
     );
     test.add_file(
         "adapters/seed.wj",
         r#"
-use ports::readers::TrialBalanceReader
+use ports::readers::ReportReader
 
 pub struct SeedReader {}
 
-impl TrialBalanceReader for SeedReader {
-    fn trial_balance_lines(self, tenant_slug: string) -> Vec<int> {
+impl ReportReader for SeedReader {
+    fn report_lines(self, tenant_slug: string) -> Vec<int> {
         if tenant_slug == "demo" {
             vec![1]
         } else {
@@ -65,12 +65,12 @@ impl TrialBalanceReader for SeedReader {
 use std::test
 use domain::tenant::demo_tenant
 use adapters::seed::SeedReader
-use ports::readers::TrialBalanceReader
+use ports::readers::ReportReader
 
 @test
-fn postgres_trial_balance_reader_without_database_url_returns_empty() {
+fn seed_report_reader_returns_empty_for_unknown_slug() {
     let reader = SeedReader {}
-    assert_eq(reader.trial_balance_lines(demo_tenant().slug).len(), 0)
+    assert_eq(reader.report_lines(demo_tenant().slug).len(), 0)
 }
 "#,
     );
@@ -99,7 +99,7 @@ pub mod tests {
         .get("tests/stub_test.rs")
         .expect("tests/stub_test.rs");
     assert!(
-        !rs.contains("trial_balance_lines(&"),
+        !rs.contains("report_lines(&"),
         "owned String trait param must not get borrow prefix at call site. Got:\n{rs}"
     );
 }

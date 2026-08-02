@@ -194,7 +194,13 @@ impl Parser {
                 Token::Ident(name) => {
                     let n = name.clone();
                     self.advance();
-                    n
+                    if self.current_token() == &Token::Colon {
+                        self.advance();
+                        let ty = self.parse_type()?;
+                        format!("{}: {}", n, self.type_to_string(&ty))
+                    } else {
+                        n
+                    }
                 }
                 Token::Underscore => {
                     self.advance();

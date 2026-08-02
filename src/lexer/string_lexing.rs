@@ -20,6 +20,8 @@ impl Lexer {
                         'r' => '\r',
                         '\\' => '\\',
                         '"' => '"',
+                        '`' => '`',
+                        '$' => '$',
                         _ => escaped,
                     };
                     current_literal.push(unescaped);
@@ -31,6 +33,13 @@ impl Lexer {
                 self.advance();
                 self.advance();
             } else if ch == '$' && self.peek(1) == Some('{') {
+                // `${"` in source is a literal dollar-brace, not interpolation.
+                if self.peek(2) == Some('"') {
+                    current_literal.push('$');
+                    current_literal.push('{');
+                    self.advance();
+                    self.advance();
+                } else {
                 // Found interpolation: ${expr}
                 has_interpolation = true;
 
@@ -67,6 +76,7 @@ impl Lexer {
                 }
 
                 parts.push(StringPart::Expression(expr));
+                }
             } else {
                 current_literal.push(ch);
                 self.advance();

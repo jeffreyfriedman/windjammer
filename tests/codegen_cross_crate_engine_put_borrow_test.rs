@@ -11,7 +11,7 @@
 ))]
 
 //! Cross-crate MemoryEngine::put(&Key) must not emit key.clone() at TxnManager call sites.
-//! Mirrors windjammerdb: owned Value consume + borrowed Key + take_value forward.
+//! Mirrors external dogfood crates: owned Value consume + borrowed Key + take_value forward.
 
 use std::fs;
 use std::process::Command;

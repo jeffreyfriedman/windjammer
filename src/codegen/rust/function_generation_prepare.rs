@@ -124,6 +124,13 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Track function return type for string literal conversion
         self.current_function_return_type = func.return_type.clone();
+        // Propagate collection return type to `.collect()` turbofish when RHS lacks annotation.
+        // Never use String/Option/etc. — those are not collect targets.
+        self.collect_target_type = func
+            .return_type
+            .as_ref()
+            .filter(|t| crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t))
+            .cloned();
 
         // Track method return types for usize inference in comparisons
         // When in an impl block, record the return type so expression_produces_usize
@@ -215,6 +222,13 @@ impl<'ast> CodeGenerator<'ast> {
             self.func_is_pure_forwarding_delegate(func);
         for (param_name, ownership) in self.get_all_param_ownership(analyzed) {
             if param_name != "self" {
+                if let Some(param) = func.parameters.iter().find(|p| p.name == param_name) {
+                    // Single-arg forwards into owned non-copy callees on `self` / `self.field`
+                    // (`DataTable::column` → `Table::column(col)`) must not inherit stale Borrowed.
+                    if self.param_single_arg_owned_self_or_field_forward(param, func) {
+                        continue;
+                    }
+                }
                 if func.parameters.iter().any(|p| {
                     p.name == param_name
                         && self.current_struct_name.as_ref().is_some_and(|sn| {
@@ -320,6 +334,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Registry converged Owned overrides stale borrow hints (Copy Vec3 field reads).
+        // Declaration-stub Owned → body-converged Borrowed is a refinement for non-text
+        // types (readonly `Vec<f32>`, readonly `Key` projection) — do not strip.
         for (idx, param) in func.parameters.iter().enumerate() {
             if param.name == "self" {
                 continue;
@@ -329,6 +345,12 @@ impl<'ast> CodeGenerator<'ast> {
                 .and_then(|sig| sig.param_ownership.get(idx))
                 == Some(&crate::analyzer::OwnershipMode::Owned)
             {
+                if analyzed.inferred_ownership.get(&param.name)
+                    == Some(&crate::analyzer::OwnershipMode::Borrowed)
+                    && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                {
+                    continue;
+                }
                 self.inferred_borrowed_params.remove(&param.name);
                 self.inferred_mut_borrowed_params.remove(&param.name);
             }
@@ -622,7 +644,7 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
                 // Copy aggregates (`through: Lsn`) pass by value — stale IR Borrowed from
-                // readonly field reads must not demote caller params to `&through` (WDB-060).
+                // readonly field reads must not demote caller params to `&through` (regression-060).
                 if func.parameters.iter().any(|p| {
                     p.name == *param_name
                         && self.is_type_copy(&p.type_)
@@ -632,6 +654,17 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if !matches!(ownership, crate::analyzer::OwnershipMode::Borrowed) {
                     continue;
+                }
+                if let Some(param) = func.parameters.iter().find(|p| p.name == *param_name) {
+                    if self.param_is_single_arg_call_only_delegate(param, func)
+                        && self.param_passed_to_owned_non_copy_method_arg(
+                            func.body.as_slice(),
+                            param_name,
+                            func,
+                        )
+                    {
+                        continue;
+                    }
                 }
                 if self.collection_key_owned_params.contains(param_name) {
                     continue;
@@ -660,12 +693,41 @@ impl<'ast> CodeGenerator<'ast> {
                 self.inferred_borrowed_params.insert(param_name.clone());
                 self.inferred_mut_borrowed_params.remove(param_name);
             }
+            for (param_name, ownership) in &analyzed.inferred_ownership {
+                if param_name == "self" {
+                    continue;
+                }
+                if !matches!(ownership, crate::analyzer::OwnershipMode::MutBorrowed) {
+                    continue;
+                }
+                if func.parameters.iter().any(|p| {
+                    p.name == *param_name
+                        && self.is_type_copy(&p.type_)
+                        && !crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+                }) {
+                    continue;
+                }
+                if self
+                    .current_struct_name
+                    .as_ref()
+                    .is_some_and(|sn| {
+                        func.parameters.iter().any(|p| {
+                            p.name == *param_name
+                                && self.struct_is_owned_engine_key_facade(sn, p)
+                        })
+                    })
+                {
+                    continue;
+                }
+                self.inferred_mut_borrowed_params.insert(param_name.clone());
+                self.inferred_borrowed_params.remove(param_name);
+            }
         }
     }
 
     /// Text map/set key params prefer `&str` when body-only lookup usage converges
     /// to Borrowed / str_ref. Owned `String` is reserved for explicit
-    /// `collection_key_owned_params` marks (payload stores / WDB keep-owned facades).
+    /// `collection_key_owned_params` marks (payload stores / dogfood keep-owned facades).
     ///
     /// Non-text keys (`QuestId`, `Key`, …) must **not** force owned formals — body-only
     /// lookup usage converges to `&T` (and must beat stale engine metadata `Owned`).
@@ -726,16 +788,13 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
-            if self.param_has_owning_method_use(func.body.as_slice(), &param.name, func) {
-                continue;
-            }
             if self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name) {
                 continue;
             }
             if unused.contains(&param.name)
                 || self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                 // Store-only `Vec<u8>` constructors (`from_bytes`) emit `&Vec` and clone at
-                // the struct field — callers can borrow (WDB-049). Other Vec element types
+                // the struct field — callers can borrow (regression-049). Other Vec element types
                 // (e.g. `Vec<String>` field assignment) keep Owned formals.
                 || (Self::param_type_is_byte_vec(&param.type_)
                     && (self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
@@ -765,7 +824,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Params forwarded to both borrowing and owning callees keep owned formals (wdb `Key`).
+    /// Params forwarded to both borrowing and owning callees keep owned formals (dogfood `Key`).
     fn strip_borrow_inference_for_owning_param_uses(&mut self, func: &FunctionDecl<'ast>) {
         for param in &func.parameters {
             if param.name == "self" || self.is_type_copy(&param.type_) {
@@ -816,10 +875,23 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" || self.is_type_copy(&param.type_) {
                 continue;
             }
+            if self.param_multiparam_store_keeps_owned_key_formal(param, func) {
+                self.inferred_borrowed_params.remove(&param.name);
+                self.inferred_mut_borrowed_params.remove(&param.name);
+                continue;
+            }
             if matches!(
                 &param.type_,
                 Type::Reference(_) | Type::MutableReference(_)
             ) {
+                continue;
+            }
+            // Field moves (`let bytes = key.bytes`) need owned formals — do not promote.
+            if self.param_has_field_or_index_move_binding(
+                func.body.as_slice(),
+                &param.name,
+            ) {
+                self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
             if self.inferred_borrowed_params.contains(&param.name)
@@ -869,7 +941,8 @@ impl<'ast> CodeGenerator<'ast> {
                 ) && !self.param_stored_in_owned_payload(
                     func.body.as_slice(),
                     &param.name,
-                ) && !(analyzed.mutated_parameters.contains(&param.name)
+                ) && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
+                    && !(analyzed.mutated_parameters.contains(&param.name)
                     && !analyzed.returned_parameters.contains(&param.name))
                     && !matches!(
                         analyzed.inferred_ownership.get(&param.name),
@@ -935,7 +1008,13 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
-            if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name) {
+            if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                && !self.param_has_field_or_index_move_binding(
+                    func.body.as_slice(),
+                    &param.name,
+                )
+                && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
+            {
                 self.inferred_borrowed_params.insert(param.name.clone());
             }
         }
@@ -959,7 +1038,7 @@ impl<'ast> CodeGenerator<'ast> {
             )
     }
 
-    /// Read-only use including `let _ = param.field` discard bindings (wdb apply_patch_put value).
+    /// Read-only use including `let _ = param.field` discard bindings (dogfood apply_patch_put value).
     pub(in crate::codegen::rust) fn param_has_readonly_expression_use(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -992,6 +1071,50 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Distinguishes `let _ = value.data.len()` (field projection → may borrow) from
     /// `let _ = (key, value)` (bare move into tuple → keep owned).
+    /// Store APIs (`put(key, value)`) keep owned `Key` when a sibling param is consumed
+    /// in the body even though `key` only appears in field projections (`key.bytes.len()`).
+    pub(in crate::codegen::rust) fn param_multiparam_store_keeps_owned_key_formal(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if param.name == "self" || self.is_type_copy(&param.type_) {
+            return false;
+        }
+        if self.count_non_self_params(func) < 2 {
+            return false;
+        }
+        if !self.param_only_used_via_field_or_index_projection(func.body.as_slice(), &param.name)
+        {
+            return false;
+        }
+        // Readonly field-projection operands demote when a sibling stores/moves
+        // (`apply_patch_put` value beside `patch_keys.push(key)`).
+        if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+            && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
+            && func.parameters.iter().any(|other| {
+                other.name != param.name
+                    && other.name != "self"
+                    && self.param_stored_in_owned_payload(func.body.as_slice(), &other.name)
+            })
+        {
+            return false;
+        }
+        func.parameters.iter().any(|other| {
+            if other.name == param.name || other.name == "self" {
+                return false;
+            }
+            if self.is_type_copy(&other.type_) {
+                return false;
+            }
+            !self.param_only_used_via_field_or_index_projection(
+                func.body.as_slice(),
+                &other.name,
+            ) || self.param_stored_in_owned_payload(func.body.as_slice(), &other.name)
+                || self.param_has_field_or_index_move_binding(func.body.as_slice(), &other.name)
+        })
+    }
+
     pub(in crate::codegen::rust) fn param_only_used_via_field_or_index_projection(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -1294,7 +1417,17 @@ impl<'ast> CodeGenerator<'ast> {
                 self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
-            if self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
+            if self.param_single_arg_owned_self_or_field_forward(param, func) {
+                self.inferred_borrowed_params.remove(&param.name);
+                continue;
+            }
+            if self.param_should_emit_borrowed_delegation_formal(param, func) {
+                self.inferred_borrowed_params.insert(param.name.clone());
+                if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                }
+            } else if self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
+                && !self.param_single_arg_owned_self_or_field_forward(param, func)
                 && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
                 && !self.param_only_forwarded_to_qualified_collection_key_callee(
                     func.body.as_slice(),
@@ -2012,12 +2145,12 @@ impl<'ast> CodeGenerator<'ast> {
                     ownership = crate::analyzer::OwnershipMode::MutBorrowed;
                 }
 
-                // Store/lookup facades keep owned non-Copy custom formals (WDB-046),
+                // Store/lookup facades keep owned non-Copy custom formals (regression-046),
                 // except single-arg non-self owned forwards (`latest.has_key(key)` → `&Key` + clone).
                 let keep_owned_facade = self.param_keeps_owned_engine_key_facade(impl_type, param, func);
 
                 // Emitted Rust formals follow body-inferred ownership; IR param_types can
-                // lag as Owned for non-Copy user types (e.g. wdb `Key` → `&Key` at call sites).
+                // lag as Owned for non-Copy user types (e.g. dogfood `Key` → `&Key` at call sites).
                 if let Some(analyzed_own) = analyzed.inferred_ownership.get(&param.name) {
                     if matches!(
                         analyzed_own,
@@ -2129,6 +2262,19 @@ impl<'ast> CodeGenerator<'ast> {
             })
             .collect();
 
+        let string_ref_string_formal_params: Vec<bool> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .map(|p| {
+                self.param_passed_to_slice_search_string_elem(
+                    func.body.as_slice(),
+                    &p.name,
+                    func,
+                )
+            })
+            .collect();
+
         let signature = crate::codegen::rust::generator::MethodSignature {
             receiver_type: impl_type.to_string(),
             method_name: func.name.clone(),
@@ -2139,6 +2285,7 @@ impl<'ast> CodeGenerator<'ast> {
             has_self_receiver,
             forwarding_borrow_params,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: Some(string_ref_string_formal_params),
         };
 
         self.register_method_signature(signature);
@@ -2344,7 +2491,7 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.param_used_as_read_operand(body.as_slice(), param_name)
             }
             Statement::For { body, iterable, .. } => {
-                // `for x in items` consumes `items` — not a readonly operand (WDB-006).
+                // `for x in items` consumes `items` — not a readonly operand (regression-006).
                 let iterable_consumes = matches!(
                     iterable,
                     Expression::Identifier { name, .. } if name == param_name
@@ -2591,7 +2738,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// `if f(param) { ... param ... } else { ... param ... }` — owned outer formal (wdb put_value).
+    /// `if f(param) { ... param ... } else { ... param ... }` — owned outer formal (dogfood put_value).
     pub(in crate::codegen::rust) fn param_used_in_if_with_condition_and_branches(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -3078,7 +3225,7 @@ impl<'ast> CodeGenerator<'ast> {
         key_uses > 0 && other_direct_uses == 0
     }
 
-    /// FMP/wdb: module helpers on qualified `std::collections::HashMap` keep owned `String` keys.
+    /// dogfood: module helpers on qualified `std::collections::HashMap` keep owned `String` keys.
     pub(in crate::codegen::rust) fn param_only_forwarded_to_qualified_collection_key_callee(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -4087,8 +4234,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// Like [`Self::param_only_used_in_discarding_let_binding`], but every mention must
     /// be a bare identifier in the discard tuple (`let _ = (subject, object)`), not a
     /// field projection (`let _ = (key.bytes.len(), value)`). Bare discards demote to
-    /// shared `&T` at call sites (WDB-AUTHZ-9); field-projection discards keep owned
-    /// engine Key contracts (WDB MemoryEngine::put).
+    /// shared `&T` at call sites (authz-reuse regression); field-projection discards keep owned
+    /// engine Key contracts (dogfood MemoryEngine::put).
     pub(in crate::codegen::rust) fn param_only_used_as_bare_id_in_discarding_tuple(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -4329,7 +4476,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 // `let _ = path` / `let _ = (path, n)` discards — not an owned payload store.
                 // Treating discard as payload forced WJ `string` formals to stay `String`
-                // (WDB-049 `replay_all(path)` must emit `&str`).
+                // (regression-049 `replay_all(path)` must emit `&str`).
                 let value_is_payload = !Self::is_discarding_let_pattern(pattern)
                     && self.expression_moves_param_into_owned_payload(value, param_name);
                 value_is_payload
@@ -4375,7 +4522,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Statement::Match { value, arms, .. } => {
                 // Scrutinee may construct consuming enum payloads:
-                // `match Value::Text(label) { ... }` (wdb-embedded `owned_string`).
+                // `match Value::Text(label) { ... }` (embedded-crate `owned_string`).
                 // Bare `match name { "lit" => ... }` only borrows for pattern matching —
                 // do not treat a top-level identifier scrutinee as a payload store.
                 let scrutinee_stores = match value {
@@ -4626,7 +4773,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MacroInvocation { name, args, .. } => {
                 // Formatting macros only borrow (`format!`, `println!`, …) — not owned
                 // payload stores. Treating them as stores forced WJ `string` formals to
-                // stay `String` and call sites to emit `"lit".to_string()` (WDB-048).
+                // stay `String` and call sites to emit `"lit".to_string()` (regression-048).
                 let borrows_only = matches!(
                     name.as_str(),
                     "format"
@@ -4706,100 +4853,41 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        let Some(rt) = (if let Expression::Identifier { name, .. } = object {
-            if name == "self" && self.in_impl_block {
-                self.current_struct_name.clone()
-            } else {
-                self.infer_local_binding_type_name(func.body.as_slice(), name)
-                    .or_else(|| self.infer_type_name(object))
-            }
-        } else {
-            self.mc_infer_method_receiver_type_name(object)
-                .or_else(|| self.infer_type_name(object))
-        }) else {
-            return false;
-        };
-        let qualified = format!("{rt}::{method}");
-        let registry_sig = self
-            .signature_registry
-            .get_signature(&qualified)
-            .or_else(|| self.get_signature_with_global(&qualified));
-        let mut sig = if let Some(ms) = self.lookup_method_signature(&rt, method) {
-            let mut sig = ms.to_function_signature();
-            if let Some(reg) = registry_sig {
-                // Always merge analyzer-converged ownership / Reference wraps.
-                // Method-index stubs keep AST Owned until the callee is codegen'd;
-                // without this, static `Type::method` forwards look owned and block
-                // promote (`FpsCamera::update` → `collides`/`depenetrate`).
-                Self::merge_registry_sig_into_method_sig(&mut sig, reg);
-            }
-            sig
-        } else if let Some(reg) = registry_sig {
-            reg.clone()
-        } else {
-            // AST fallback when the callee signature is not yet in the registry
-            // (cross-module `PatchPart::apply_put` while generating `apply_patch_put`).
-            return self
-                .struct_method_ast_formal_param_types
-                .get(&rt)
-                .and_then(|methods| methods.get(method))
-                .and_then(|formals| formals.get(arg_index))
-                .is_some_and(|t| {
-                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        && !self.is_type_copy(t)
-                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
-                });
-        };
-        let pidx = sig.arg_param_index(arg_index);
-        if sig
-            .forwarding_borrow_params
-            .as_ref()
-            .and_then(|flags| flags.get(pidx))
-            .copied()
-            .unwrap_or(false)
-        {
-            return false;
+        // AST / formal_param_types owned wins over stale emitted_rust_ref_params from an
+        // earlier preregister pass (`Column` → `Table::column(col)` builder gate).
+        if self.method_call_arg_formal_is_owned_non_copy(object, method, arg_index, func) {
+            return true;
         }
-        // Codegen-confirmed shared-ref formal → not an owned sibling.
-        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-            flags.get(pidx).copied().unwrap_or(false)
-        }) {
-            return false;
-        }
-        // Codegen recorded an emission flag. `emitted_rust_ref_params[i] == false` means
-        // "not a shared `&T`" — that includes both owned `mut T` and true `&mut T`.
-        // `emitted_owned_arg_contract` distinguishes those via `param_types` /
-        // MutableReference (Cache::clear(grid: &mut VoxelGrid)).
-        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-            flags.get(pidx).copied() == Some(false)
-        }) {
-            return crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+        if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
+            let pidx = sig.arg_param_index(arg_index);
+            if sig
+                .forwarding_borrow_params
+                .as_ref()
+                .and_then(|flags| flags.get(pidx))
+                .copied()
+                .unwrap_or(false)
+            {
+                return false;
+            }
+            if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+                flags.get(pidx).copied().unwrap_or(false)
+            }) {
+                return false;
+            }
+            if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
+                flags.get(pidx).copied() == Some(false)
+            }) {
+                return crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, pidx,
+                );
+            }
+            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &sig, pidx,
-            );
+            ) {
+                return false;
+            }
         }
-        // No codegen refresh yet: do NOT use `emitted_owned_arg_contract`'s bare-Custom
-        // heuristic (treats every `Key` as owned). Trust analyzer borrow / Reference wrap
-        // so `MemoryEngine::get(key.bytes.len())` demotes callers (WDB-046).
-        if matches!(
-            sig.param_ownership.get(pidx),
-            Some(crate::analyzer::OwnershipMode::Borrowed)
-                | Some(crate::analyzer::OwnershipMode::MutBorrowed)
-        ) || sig.param_types.get(pidx).is_some_and(|t| {
-            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        }) {
-            return false;
-        }
-        matches!(
-            sig.param_ownership.get(pidx),
-            Some(crate::analyzer::OwnershipMode::Owned) | None
-        ) && sig
-            .formal_param_types
-            .get(pidx)
-            .or_else(|| sig.formal_param_type(pidx))
-            .is_some_and(|t| {
-                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    && !type_analysis::is_copy_type(t)
-            })
+        false
     }
 
     /// True when `param_name` is passed to a method on a receiver other than `self` / `self.field`.
@@ -5515,6 +5603,11 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
+            // Builder wrappers: `self.table = self.table.column(col)` forwards `col` into
+            // an owned callee formal — must not demote to `&TableColumn` (component library).
+            Statement::Assignment { value, .. } => {
+                self.expression_passes_to_wj_owned_sibling_call(value, param_name, func)
+            }
             _ => false,
         }
     }
@@ -5547,7 +5640,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Locals like `patch.apply_delete(key)` and `self.hot.put_value(key)` must
                 // keep the param owned when the *emitted* callee contract is owned. Do not use
                 // same-impl AST name lookup for non-self receivers — `self.engine.get(key)`
-                // would falsely match `Self::get` and block borrow demotion (WDB-046).
+                // would falsely match `Self::get` and block borrow demotion (regression-046).
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if !matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                     {
@@ -5588,7 +5681,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let call_arg_count = arguments.len();
                 // Recursive / same-fn calls must not keep-owned via sibling detection —
                 // that freezes Owned formals while field-read analysis still drives
-                // call-site `&policy` (ReBAC resolve_check).
+                // call-site `&policy` (dogfood recursive resolve_check).
                 let is_recursive_self = match &**function {
                     Expression::Identifier { name, .. } => name == &func.name,
                     Expression::FieldAccess { field, .. } => field == &func.name,
@@ -5744,6 +5837,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
+            if self.method_call_callee_emits_owned_arg(object, method, arg_index, func) {
+                return false;
+            }
             // WJ AST owned non-copy formals are not borrowing callees for delegation
             // decisions unless ownership is Borrowed/MutBorrowed (analyzer) or codegen
             // already recorded an emitted `&T` formal. Same-impl static methods like
@@ -5753,19 +5849,35 @@ impl<'ast> CodeGenerator<'ast> {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && !type_analysis::is_copy_type(t)
             }) {
-                if matches!(
-                    sig.param_ownership.get(pidx),
-                    Some(
-                        crate::analyzer::OwnershipMode::Borrowed
-                            | crate::analyzer::OwnershipMode::MutBorrowed
-                    )
-                ) || sig
+                let emitted_ref = sig
                     .emitted_rust_ref_params
                     .as_ref()
                     .and_then(|flags| flags.get(pidx))
-                    .copied()
-                    == Some(true)
+                    .copied();
+                let param_types_ref = sig.param_types.get(pidx).is_some_and(|t| {
+                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                });
+                if emitted_ref == Some(true)
+                    || (param_types_ref
+                        && matches!(
+                            sig.param_ownership.get(pidx),
+                            Some(
+                                crate::analyzer::OwnershipMode::Borrowed
+                                    | crate::analyzer::OwnershipMode::MutBorrowed
+                            )
+                        ))
                 {
+                    return true;
+                }
+                if emitted_ref == Some(false)
+                    || matches!(
+                        sig.param_ownership.get(pidx),
+                        Some(crate::analyzer::OwnershipMode::Owned)
+                    )
+                {
+                    return false;
+                }
+                if self.signature_param_expects_borrow(&sig, arg_index) {
                     return true;
                 }
                 return false;
@@ -5794,8 +5906,35 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        self.method_call_signature_for_arg(object, method, arg_index, func)
+        if self
+            .method_call_signature_for_arg(object, method, arg_index, func)
             .is_some_and(|sig| self.signature_param_expects_mut_borrow(&sig, arg_index))
+        {
+            return true;
+        }
+        // Cross-file fallback: defining module recorded `&mut T` before sig merge converges.
+        let receiver_type = if let Expression::Identifier { name, .. } = object {
+            if name == "self" && self.in_impl_block {
+                self.current_struct_name.clone()
+            } else {
+                self.infer_local_binding_type_name(func.body.as_slice(), name)
+                    .or_else(|| self.infer_type_name(object))
+            }
+        } else {
+            self.mc_infer_method_receiver_type_name(object)
+                .or_else(|| self.infer_type_name(object))
+        };
+        if let Some(rt) = receiver_type {
+            let qualified = format!("{rt}::{method}");
+            if self
+                .function_emitted_mut_arg_indices
+                .get(qualified.as_str())
+                .is_some_and(|set| set.contains(&arg_index))
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Fallback when receiver type inference fails (e.g. `latest.has_key(key)` after vec index).
@@ -5810,7 +5949,7 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// Multi-method store/lookup facades keep owned non-Copy custom formals (WDB-046).
+    /// Multi-method store/lookup facades keep owned non-Copy custom formals (regression-046).
     ///
     /// Signature-driven: if this impl declares the same owned non-Copy custom type on
     /// ≥2 methods' formals, callers borrow at the outer edge and callees keep owned.
@@ -6032,18 +6171,18 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     ) && !to_owned_method
-                        && !self.param_passed_to_self_or_field_receiver_method_arg(
+                        && (!self.param_passed_to_self_or_field_receiver_method_arg(
                             func.body.as_slice(),
                             &param.name,
                             func,
-                        ))
+                        ) || self.func_is_pure_forwarding_delegate(func)))
             };
         result
     }
 
     /// True when `param_name` is passed to a method argument that emits owned non-copy
     /// (e.g. `local.merge(remote)` with `merge(other: LwwRegister)`).
-    fn param_passed_to_owned_non_copy_method_arg(
+    pub(in crate::codegen::rust) fn param_passed_to_owned_non_copy_method_arg(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,
@@ -6063,6 +6202,9 @@ impl<'ast> CodeGenerator<'ast> {
         match stmt {
             Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
                 self.expression_passes_param_to_owned_non_copy_method_arg(expr, param_name, func)
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_passes_param_to_owned_non_copy_method_arg(value, param_name, func)
             }
             Statement::If {
                 condition,
@@ -6291,6 +6433,37 @@ impl<'ast> CodeGenerator<'ast> {
         param.name != "self"
             && self.count_non_self_params(func) == 1
             && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
+    }
+
+    /// Single-arg forward on `self` / `self.field` — keep owned unless pure delegate to borrow.
+    pub(in crate::codegen::rust) fn param_single_arg_owned_self_or_field_forward(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_is_single_arg_call_only_delegate(param, func) {
+            return false;
+        }
+        if self.is_type_copy(&param.type_)
+            || crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+        {
+            return false;
+        }
+        if !self.param_passed_to_self_or_field_receiver_method_arg(
+            func.body.as_slice(),
+            &param.name,
+            func,
+        ) {
+            return false;
+        }
+        if self.func_is_pure_forwarding_delegate(func) {
+            return self.param_passed_to_owned_non_copy_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            );
+        }
+        true
     }
 
     pub(in crate::codegen::rust) fn param_type_is_vec_container(ty: &Type) -> bool {
@@ -6619,6 +6792,57 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => false,
             }
         })
+    }
+
+    /// True when a `let` binding moves a field off `param` (`let bytes = key.bytes`).
+    pub(in crate::codegen::rust) fn param_has_field_or_index_move_binding(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_has_field_move_binding(stmt, param_name))
+    }
+
+    fn stmt_has_field_move_binding(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Let { value, .. } => Self::expr_is_field_move_from_param(param_name, value),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_has_field_move_binding(s, param_name))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_has_field_move_binding(s, param_name))
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                body.iter()
+                    .any(|s| self.stmt_has_field_move_binding(s, param_name))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                Self::expr_is_field_move_from_param(param_name, &arm.body)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expr_is_field_move_from_param(param_name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } => {
+                matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
+                    || Self::expr_is_field_move_from_param(param_name, object)
+            }
+            _ => false,
+        }
     }
 
     /// True when the body assigns through a field/index of `param_name` (`p.x = …`, `p[i] = …`).
@@ -7035,6 +7259,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Vec::contains / binary_search need &T (= &String for Vec<String>).
             if self.param_passed_to_slice_search_string_elem(func.body.as_slice(), &param.name, func)
+                || self.param_passed_to_string_ref_formal_callee(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
             {
                 return "&String".to_string();
             }
@@ -7059,13 +7288,19 @@ impl<'ast> CodeGenerator<'ast> {
                                 || matches!(&**inner, Type::Custom(n) if n == "string")
                     )
                 });
-            // Registry `Reference(String)` means a genuine `&String` formal (Phase-2
-            // passthrough to `Vec::contains` / `@string_ref`). Prefer that over `&str`
-            // so wrappers like `check_item(item_id)` keep `&String` when `has` needs it.
-            // Call-site `&&str` mismatches are fixed by borrow lowering, not by demoting
-            // the formal here.
+            // Stale multipass `Reference(String)` must not force `&String` unless the
+            // parameter genuinely needs `&String` (@string_ref / Vec::contains search).
             if registry_string_ref {
-                return "&String".to_string();
+                if param.decorators.iter().any(|d| d.name == "string_ref")
+                    || self.param_passed_to_slice_search_string_elem(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    return "&String".to_string();
+                }
+                return "&str".to_string();
             }
             if self.str_ref_optimized_params.contains(&param.name) || registry_str_ref {
                 return "&str".to_string();
@@ -7073,6 +7308,168 @@ impl<'ast> CodeGenerator<'ast> {
             return "&str".to_string();
         }
         format!("&{}", self.type_to_rust(&param.type_))
+    }
+
+    /// True when `param_name` is forwarded to a callee whose resolved signature emits `&String`.
+    pub(in crate::codegen::rust) fn param_passed_to_string_ref_formal_callee(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.statement_passes_param_to_string_ref_formal_callee(stmt, param_name, func)
+        })
+    }
+
+    fn statement_passes_param_to_string_ref_formal_callee(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                self.expression_passes_param_to_string_ref_formal_callee(expr, param_name, func)
+            }
+            Statement::Return { .. } => false,
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                self.expression_passes_param_to_string_ref_formal_callee(condition, param_name, func)
+                    || self.param_passed_to_string_ref_formal_callee(
+                        then_block.as_slice(),
+                        param_name,
+                        func,
+                    )
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_to_string_ref_formal_callee(b.as_slice(), param_name, func)
+                    })
+            }
+            Statement::While { body, condition, .. } => {
+                self.expression_passes_param_to_string_ref_formal_callee(condition, param_name, func)
+                    || self.param_passed_to_string_ref_formal_callee(body.as_slice(), param_name, func)
+            }
+            Statement::Loop { body, .. } => {
+                self.param_passed_to_string_ref_formal_callee(body.as_slice(), param_name, func)
+            }
+            Statement::For { body, .. } => {
+                self.param_passed_to_string_ref_formal_callee(body.as_slice(), param_name, func)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_passes_param_to_string_ref_formal_callee(value, param_name, func)
+                    || arms.iter().any(|arm| {
+                        self.expression_passes_param_to_string_ref_formal_callee(
+                            &arm.body,
+                            param_name,
+                            func,
+                        )
+                    })
+            }
+            Statement::Defer { statement, .. } => {
+                self.statement_passes_param_to_string_ref_formal_callee(statement, param_name, func)
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_passes_param_to_string_ref_formal_callee(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        && self.callee_arg_expects_string_ref_formal(object, method, i, func)
+                    {
+                        return true;
+                    }
+                }
+                self.expression_passes_param_to_string_ref_formal_callee(object, param_name, func)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_passes_param_to_string_ref_formal_callee(a, param_name, func)
+                    })
+            }
+            Expression::Call { arguments, function, .. } => {
+                self.expression_passes_param_to_string_ref_formal_callee(function, param_name, func)
+                    || arguments.iter().any(|(_, a)| {
+                        self.expression_passes_param_to_string_ref_formal_callee(a, param_name, func)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_param_to_string_ref_formal_callee(left, param_name, func)
+                    || self.expression_passes_param_to_string_ref_formal_callee(right, param_name, func)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::FieldAccess { object: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. } => {
+                self.expression_passes_param_to_string_ref_formal_callee(operand, param_name, func)
+            }
+            Expression::Block { statements, .. } => {
+                self.param_passed_to_string_ref_formal_callee(statements.as_slice(), param_name, func)
+            }
+            _ => false,
+        }
+    }
+
+    fn callee_arg_expects_string_ref_formal(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_index: usize,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let receiver_type = if let Expression::Identifier { name, .. } = object {
+            if name == "self" && self.in_impl_block {
+                self.current_struct_name.clone()
+            } else {
+                self.infer_local_binding_type_name(func.body.as_slice(), name)
+                    .or_else(|| self.infer_type_name(object))
+            }
+        } else {
+            self.mc_infer_method_receiver_type_name(object)
+                .or_else(|| self.infer_type_name(object))
+        };
+        if let Some(rt) = receiver_type {
+            if self
+                .lookup_method_signature(&rt, method)
+                .and_then(|ms| ms.string_ref_string_formal_params.as_ref())
+                .and_then(|flags| flags.get(arg_index))
+                .copied()
+                .unwrap_or(false)
+            {
+                return true;
+            }
+        }
+        let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) else {
+            return false;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if self.method_call_callee_emits_owned_arg(object, method, arg_index, func) {
+            return false;
+        }
+        sig.param_types.get(pidx).is_some_and(|ty| {
+            matches!(ty, Type::Reference(inner) if {
+                matches!(&**inner, Type::String)
+                    || matches!(&**inner, Type::Custom(n) if n == "string" || n == "String")
+            })
+        }) && matches!(
+            sig.param_ownership.get(pidx),
+            Some(crate::analyzer::OwnershipMode::Borrowed)
+        )
     }
 
     /// True when `param_name` is passed to `Vec`/`slice` search (`contains` / `binary_search`)
@@ -7287,8 +7684,9 @@ impl<'ast> CodeGenerator<'ast> {
                 sig.param_ownership.get(pidx),
                 Some(crate::analyzer::OwnershipMode::Owned)
             );
-            let emitted_owned = callee_keeps_wj_owned
-                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx);
+            let emitted_owned = (callee_keeps_wj_owned
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx))
+                && !crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx);
             if forwarding || !emitted_owned {
                 all_emitted_owned = false;
             }
@@ -7365,6 +7763,9 @@ impl<'ast> CodeGenerator<'ast> {
                         visit,
                     );
                 }
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_for_each_param_call_argument_site(value, param_name, func, visit);
             }
             _ => {}
         }
@@ -7482,12 +7883,20 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return true;
         }
-        matches!(
-            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                sig, pidx,
-            ),
-            crate::analyzer::OwnershipMode::Borrowed
-        )
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(true)
+        {
+            return true;
+        }
+        sig.forwarding_borrow_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            .unwrap_or(false)
     }
 
     fn signature_param_expects_mut_borrow(
@@ -7503,6 +7912,15 @@ impl<'ast> CodeGenerator<'ast> {
             .formal_param_types
             .get(pidx)
             .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+        {
+            return true;
+        }
+        // Cross-file: defining module recorded emitted `&mut T` for this user-arg slot.
+        // Indices are user-param positions (excluding `self`), matching call-site `arg_index`.
+        if self
+            .function_emitted_mut_arg_indices
+            .get(sig.name.as_str())
+            .is_some_and(|set| set.contains(&arg_index))
         {
             return true;
         }
@@ -7546,31 +7964,99 @@ impl<'ast> CodeGenerator<'ast> {
             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
                 return true;
             }
+            // WJ AST owned non-Copy formals beat stale analyzer `Reference(T)` + Borrowed
+            // when codegen has not recorded shared-ref emission (multipass builder wrappers:
+            // `Column` → `Table::column(col)`). Never claim owned over callee
+            // `&mut T` convergence (`Cache::clear(grid: &mut Grid)`).
+            let codegen_confirmed_shared_ref = sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(pidx))
+                .copied()
+                == Some(true);
+            if !codegen_confirmed_shared_ref {
+                if sig.param_types.get(pidx).is_some_and(|t| {
+                    matches!(t, Type::MutableReference(_))
+                }) || matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(OwnershipMode::MutBorrowed)
+                ) {
+                    return false;
+                }
+                let stale_shared_ref_only = sig
+                    .param_types
+                    .get(pidx)
+                    .is_some_and(|t| matches!(t, Type::Reference(_)))
+                    && matches!(
+                        sig.param_ownership.get(pidx),
+                        Some(OwnershipMode::Borrowed)
+                    );
+                if stale_shared_ref_only {
+                    // Converged readonly (`key.bytes.len()`): Borrowed + Reference(T) is the
+                    // target contract, not stale metadata. Claiming owned here blocks delegation
+                    // formal demotion (LsmEngine → MemoryEngine::get) before callee codegen runs.
+                    return false;
+                }
+            }
+            // Analyzer-owned consumption on bare AST formals beats stale Reference(T)
+            // (`Table::column(col)` builder gate).
+            if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Owned))
+                && sig.formal_param_type(pidx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !self.is_type_copy(t)
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                })
+            {
+                return true;
+            }
             if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(&sig, pidx)
             {
                 return false;
             }
-            let converged_ref = sig.param_types.get(pidx).is_some_and(|t| {
+            let param_types_ref = sig.param_types.get(pidx).is_some_and(|t| {
                 matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            }) || matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                    &sig, pidx,
-                ),
-                crate::analyzer::OwnershipMode::Borrowed | crate::analyzer::OwnershipMode::MutBorrowed
-            );
+            });
+            let emitted_shared_ref = sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(pidx))
+                .copied()
+                == Some(true);
+            // Codegen-confirmed ref formals only — stale analyzer Borrowed on bare
+            // Custom must not beat owned AST formals (TableColumn builder gate).
+            let converged_ref = param_types_ref || emitted_shared_ref;
+            if converged_ref {
+                return false;
+            }
             // Bare WJ owned non-Copy formals still move at store APIs even when analyzer
             // left Borrowed/`Reference(T)` from sibling readonly methods. Prefer the AST
             // formal over stale convergence so multiparam store forwards demote correctly
-            // (WDB-047 `apply_patch_put` → `apply_put(key, …)`).
+            // (regression-047 `apply_patch_put` → `apply_put(key, …)`).
+            // Converged readonly: Borrowed + Reference(T) without owned consumption.
+            if matches!(
+                sig.param_ownership.get(pidx),
+                Some(OwnershipMode::Borrowed)
+            ) && sig.param_types.get(pidx).is_some_and(|t| matches!(t, Type::Reference(_)))
+            {
+                return false;
+            }
+            // Analyzer-owned consumption beats stale Reference(T) on bare AST formals
+            // (`Table::column(col)` builder gate).
+            if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Owned))
+                && sig.formal_param_type(pidx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !self.is_type_copy(t)
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                })
+            {
+                return true;
+            }
             if sig.formal_param_type(pidx).is_some_and(|t| {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && !self.is_type_copy(t)
                     && !crate::codegen::rust::types::is_windjammer_text_type(t)
             }) {
                 return true;
-            }
-            if converged_ref {
-                return false;
             }
             if sig.formal_param_type(pidx).is_some_and(|t| {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
@@ -7726,6 +8212,20 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let qualified = format!("{impl_type}::{}", func.name);
 
+        let string_ref_flags: Vec<bool> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .map(|p| {
+                self.param_passed_to_slice_search_string_elem(
+                    func.body.as_slice(),
+                    &p.name,
+                    func,
+                ) || (self.emitted_rust_ref_formals.contains(&p.name)
+                    && !self.str_ref_optimized_params.contains(&p.name))
+            })
+            .collect();
+
         if let Some(methods) = self.method_signatures_by_type.get_mut(&impl_type) {
             if let Some(sig) = methods.get_mut(func.name.as_str()) {
                 let mut param_idx = 0;
@@ -7758,7 +8258,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     } else {
                         // Emitted owned Rust formal (including Copy aggregates whose
-                        // analyzer ownership stayed Borrowed from field reads — WDB-060
+                        // analyzer ownership stayed Borrowed from field reads — regression-060
                         // `other: Lsn`). Align registry so call sites strip `&through`.
                         if matches!(sig.param_types[param_idx], Type::Reference(_)) {
                             sig.param_types[param_idx] = param.type_.clone();
@@ -7800,6 +8300,7 @@ impl<'ast> CodeGenerator<'ast> {
                     user_param_idx += 1;
                 }
                 sig.emitted_rust_ref_params = Some(ms_emitted);
+                sig.string_ref_string_formal_params = Some(string_ref_flags);
             }
         }
 
@@ -7889,8 +8390,9 @@ impl<'ast> CodeGenerator<'ast> {
             };
             if reg_idx < emitted.len() {
                 // Owned WJ formals that emit `&mut T` in Rust are not shared-ref slots.
-                let emits_shared_ref = self.emitted_rust_ref_formals.contains(&param.name)
-                    || self.str_ref_optimized_params.contains(&param.name);
+                // Trust only codegen-confirmed `emitted_rust_ref_formals` — stale
+                // `str_ref_optimized_params` must not mark owned `String` formals shared.
+                let emits_shared_ref = self.emitted_rust_ref_formals.contains(&param.name);
                 emitted[reg_idx] =
                     emits_shared_ref && !self.inferred_mut_borrowed_params.contains(&param.name);
             }
@@ -8073,7 +8575,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || emitted_formal.ends_with(": &str"))
                 {
                     // Emit `&str` in the registry (not `Reference(string)`) so call-site
-                    // text finalize recognizes the formal (WDB-049 replay_to_lsn).
+                    // text finalize recognizes the formal (regression-049 replay_to_lsn).
                     Type::Reference(Box::new(Type::Custom("str".into())))
                 } else if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
                     // `&String` (Phase 2 Vec::contains / @string_ref) — not bare `string`.
@@ -8156,7 +8658,7 @@ impl<'ast> CodeGenerator<'ast> {
                 });
                 // Trust the emitted formal string. Stale `emitted_rust_ref_formals` /
                 // `str_ref_optimized` must not mark shared-ref when the string is owned
-                // (`policy: Policy` after field-extract keep-owned → ReBAC `&policy`).
+                // (`policy: Policy` after field-extract keep-owned → recursive `&policy`).
                 emitted[reg_idx] = emitted_shared;
             }
             if emitted_idx < emitted_param_strings.len() {

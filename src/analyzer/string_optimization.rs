@@ -1272,7 +1272,7 @@ impl<'ast> Analyzer<'ast> {
         key_uses > 0 && other_uses == 0
     }
 
-    /// FMP/wdb route helpers: owned `String` keys for qualified `std::collections::HashMap` lookups.
+    /// dogfood route helpers: owned `String` keys for qualified `std::collections::HashMap` lookups.
     fn param_only_used_as_qualified_map_get_key(
         &self,
         param_name: &str,

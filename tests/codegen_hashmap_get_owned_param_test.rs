@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (for compiler session):
+//! Gate (for compiler session):
 //! When a function takes `HashMap` by value but the body only calls `.get()`,
 //! codegen emits `fn f(query: &HashMap<...>)` while call sites still pass owned
 //! `HashMap`, causing E0308. Platform workaround: iterate by value instead of `.get()`.

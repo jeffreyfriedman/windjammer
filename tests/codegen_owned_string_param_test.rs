@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO: owned String literals / temps must not be passed as `&String`.
+//! Gate: owned String literals / temps must not be passed as `&String`.
 //!
 //! Seen in windjammer-ui generated Spacer helpers:
 //!   Spacer::vertical(&"4px".to_string())  // E0308 expected String, found &String

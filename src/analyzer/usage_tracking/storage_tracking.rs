@@ -606,7 +606,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_has_enum_variant_consuming(name, value)
             }
             // `match Value::Text(label) { ... }` — variant construction in the scrutinee
-            // consumes the param (wdb-embedded `owned_string`).
+            // consumes the param (embedded-crate `owned_string`).
             Statement::Match { value, arms, .. } => {
                 if self.expr_has_enum_variant_consuming(name, value) {
                     return true;

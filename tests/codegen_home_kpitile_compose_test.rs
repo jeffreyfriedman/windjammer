@@ -10,8 +10,8 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): compose KpiTile/KpiGrid in app Windjammer
-//! the same way finance-screens Home does.
+//! Gate (dogfood): compose KpiTile/KpiGrid in app Windjammer
+//! the same way a dashboard Home screen does.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

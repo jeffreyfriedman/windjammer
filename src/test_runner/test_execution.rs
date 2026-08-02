@@ -1006,10 +1006,10 @@ mod rewrite_import_tests {
 
     #[test]
     fn rewrites_use_crate_paths_to_library_crate() {
-        let input = "use crate::domain::account::Account;\nuse crate::application::reports::build_trial_balance_report;";
+        let input = "use crate::domain::item::Item;\nuse crate::application::reports::build_summary_report;";
         let out = rewrite_test_crate_imports(input, "foobar_api");
-        assert!(out.contains("use foobar_api::domain::account::Account;"));
-        assert!(out.contains("use foobar_api::application::reports::build_trial_balance_report;"));
+        assert!(out.contains("use foobar_api::domain::item::Item;"));
+        assert!(out.contains("use foobar_api::application::reports::build_summary_report;"));
         assert!(!out.contains("use crate::"));
     }
 

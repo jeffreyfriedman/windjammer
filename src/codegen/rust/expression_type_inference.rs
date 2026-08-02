@@ -137,6 +137,11 @@ impl<'ast> CodeGenerator<'ast> {
                                         .map(|p| p.type_.clone())
                                 });
                         if let Some(var_type) = var_type {
+                            if let Some(elem_ty) =
+                                Self::tuple_field_type_from_var_type(&var_type, field)
+                            {
+                                return Some(elem_ty);
+                            }
                             let type_name = match &var_type {
                                 Type::Custom(n) => n.as_str(),
                                 // Handle references: &Recipe → Recipe, &mut Recipe → Recipe
@@ -186,6 +191,11 @@ impl<'ast> CodeGenerator<'ast> {
                     // Nested field access: self.config.max_size, obj.inner.field, etc.
                     // Recursively resolve the object's type, then look up the field
                     if let Some(obj_type) = self.infer_expression_type(object) {
+                        if let Some(elem_ty) =
+                            Self::tuple_field_type_from_var_type(&obj_type, field)
+                        {
+                            return Some(elem_ty);
+                        }
                         let type_name = match &obj_type {
                             Type::Custom(n) => n.as_str(),
                             // Handle references: &Config → Config
@@ -537,6 +547,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
+    }
+
+    /// Tuple destructuring via numeric fields: `i_c.0` when `i_c: (usize, char)`.
+    fn tuple_field_type_from_var_type(var_type: &Type, field: &str) -> Option<Type> {
+        let tuple = match Self::peel_references(var_type) {
+            Type::Tuple(elems) => elems,
+            _ => return None,
+        };
+        let idx = field.parse::<usize>().ok()?;
+        tuple.get(idx).cloned()
     }
 
     /// Strip `&T` / `&mut T` wrappers to get the underlying owned type.

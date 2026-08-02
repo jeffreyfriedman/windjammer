@@ -316,7 +316,18 @@ impl<'ast> Analyzer<'ast> {
                             func,
                         )?
                     } else {
-                        OwnershipMode::Owned
+                        // Body-driven inference for all other params (readonly Vec via `.len()` /
+                        // `[i]`, passthrough wrappers, consuming moves). Forcing Owned here
+                        // skipped inference and broke read-only `data: Vec<f32>` → `&Vec<f32>`.
+                        self.infer_parameter_ownership(
+                            &param.name,
+                            &param.type_,
+                            &func.body,
+                            &func.return_type,
+                            registry,
+                            &func.name,
+                            func,
+                        )?
                     }
                 }
                 OwnershipHint::Mut => {
@@ -1371,7 +1382,7 @@ impl<'ast> Analyzer<'ast> {
         };
         // Extern FFI non-text parameters are owned at the C boundary (`Vec<u8>`, structs, etc.).
         // Empty extern declarations have no body — inference may mark them Borrowed and wrap
-        // param_types in Reference(T), which breaks call-site move/clone (WDB-043).
+        // param_types in Reference(T), which breaks call-site move/clone (regression-043).
         if func.decl.is_extern {
             for (idx, ty) in formal_param_types.iter().enumerate() {
                 if has_self_receiver && idx == 0 {

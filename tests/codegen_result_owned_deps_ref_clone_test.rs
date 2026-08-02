@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood)` — E0308):
+//! Gate (dogfood)` — E0308):
 //!
 //! Platform emits:
 //! `match { let _temp0 = format!(…); create_export_job(&deps.clone(), &_temp0, …) }`

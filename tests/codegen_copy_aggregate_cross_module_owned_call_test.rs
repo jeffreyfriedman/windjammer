@@ -13,7 +13,7 @@
 //! Cross-module Copy aggregate (`BatchHandle { id: u64 }`) with field-only body
 //! usage must keep owned formals and owned call sites.
 //!
-//! Dogfood (wdb-types `batch_release` → `arrow_batch_release`):
+//! Dogfood (types-crate `batch_release` → `arrow_batch_release`):
 //! formal emits `handle: BatchHandle` but call site was `arrow_batch_release(&handle)`.
 
 #[path = "common/test_utils.rs"]
@@ -82,7 +82,7 @@ pub fn batch_release(data: Data) {
     );
     assert!(
         !batch.contains("arrow_batch_release(&handle)"),
-        "batch_release must pass owned handle, not &handle (wdb-types dogfood). Got:\n{batch}"
+        "batch_release must pass owned handle, not &handle (types-crate dogfood). Got:\n{batch}"
     );
     assert!(
         batch.contains("arrow_batch_release(handle)"),

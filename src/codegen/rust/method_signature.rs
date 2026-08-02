@@ -25,6 +25,8 @@ pub struct MethodSignature {
     pub forwarding_borrow_params: Vec<bool>,
     /// Codegen-converged Rust ref formals per user param (excluding `self`).
     pub emitted_rust_ref_params: Option<Vec<bool>>,
+    /// Callee param needs `&String` (Vec<String>::contains / binary_search), not `&str`.
+    pub string_ref_string_formal_params: Option<Vec<bool>>,
 }
 
 impl MethodSignature {
@@ -83,6 +85,7 @@ impl MethodSignature {
             has_self_receiver,
             forwarding_borrow_params: Vec::new(),
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
         }
     }
 }
@@ -95,8 +98,8 @@ mod tests {
     #[test]
     fn to_function_signature_aligns_formal_param_types_with_self_receiver() {
         let ms = MethodSignature {
-            receiver_type: "PostgresTrialBalanceReader".into(),
-            method_name: "trial_balance_lines".into(),
+            receiver_type: "DbReportReader".into(),
+            method_name: "report_lines".into(),
             param_types: vec![Type::Reference(Box::new(Type::Custom("str".into())))],
             formal_param_types: vec![Type::String],
             param_ownership: vec![OwnershipMode::Owned],
@@ -104,6 +107,7 @@ mod tests {
             has_self_receiver: true,
             forwarding_borrow_params: Vec::new(),
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
         };
         let sig = ms.to_function_signature();
         assert_eq!(

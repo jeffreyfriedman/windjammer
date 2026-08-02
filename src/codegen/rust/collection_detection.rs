@@ -11,6 +11,21 @@
 use super::CodeGenerator;
 use crate::parser::*;
 
+/// Whether a type is a valid `.collect()` turbofish target (Vec, HashSet, etc.).
+/// Non-collection return types like `String` or `Option<String>` must not drive collect inference.
+pub(crate) fn type_is_collect_turbofish_target(ty: &Type) -> bool {
+    match ty {
+        Type::Vec(_) => true,
+        Type::Parameterized(base, _) => {
+            matches!(
+                base.as_str(),
+                "Vec" | "HashSet" | "HashMap" | "BTreeMap" | "BTreeSet"
+            )
+        }
+        _ => false,
+    }
+}
+
 impl CodeGenerator<'_> {
     /// Check if a program references a collection type (HashMap or HashSet)
     /// by walking the AST properly -- not by searching debug text which

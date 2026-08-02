@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! `row_string(rows[0], …)` where the formal is owned `Row` must either clone
 //! the indexed element (`rows[0].clone()`) or consistently take `&Row` — not

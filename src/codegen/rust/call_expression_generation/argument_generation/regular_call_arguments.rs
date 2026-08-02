@@ -199,7 +199,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         ) && gen.field_access_root_is_behind_reference(arg)
                         {
                             // Even when extern metadata omits Owned, never move non-Copy
-                            // fields out from behind `&T` (WDB-043 / E0507).
+                            // fields out from behind `&T` (regression-043 / E0507).
                             let is_copy = gen
                                 .infer_expression_type(arg)
                                 .as_ref()
@@ -214,7 +214,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     Expression::FieldAccess { .. } | Expression::Index { .. }
                 ) {
                     // Extern call without resolved signature: still clone non-Copy
-                    // field/index moves from behind references (WDB-043).
+                    // field/index moves from behind references (regression-043).
                     if gen.field_access_root_is_behind_reference(arg) {
                         let is_copy = gen
                             .infer_expression_type(arg)
@@ -329,7 +329,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     })
                             };
                             // Do not re-borrow after IR when this fn emitted an owned formal
-                            // for a recursive same-fn arg (ReBAC resolve_check / policy).
+                            // for a recursive same-fn arg (dogfood resolve_check / policy).
                             let skip_post_ir_recursive_owned = matches!(
                                 arg,
                                 Expression::Identifier { name, .. }
@@ -508,7 +508,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     // Owned callee formals (codegen refresh): strip post-IR `&` / `&mut`
                     // that stale MutBorrowed stubs re-applied (dogfood).
                     // Prefer registry refresh over the analyzer call-site stub so
-                    // same-fn recursive Owned formals win (ReBAC `policy: Policy`).
+                    // same-fn recursive Owned formals win (dogfood `policy: Policy`).
                     if let Some(sig) =
                         crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
                             post_ir_borrow_sig.clone().or_else(|| signature.clone()),
@@ -692,6 +692,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 sig_for_lit, challenger, lit_pidx,
                             );
                         }
+                        let registry_expects_owned_string = [func_name, simple]
+                            .iter()
+                            .filter_map(|name| gen.signature_registry.get_signature(name))
+                            .any(|s| {
+                                crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                    s, i,
+                                )
+                            });
                         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             sig_for_lit.as_ref(),
                             i,
@@ -702,7 +710,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
                             Some(&gen.enum_variant_types),
                             func_name.split("::").next(),
-                        ) {
+                        ) || registry_expects_owned_string
+                            || sig_for_lit.as_ref().is_some_and(|s| {
+                            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                s, i,
+                            )
+                        }) {
                             coerced = format!(
                                 "{}.to_string()",
                                 coerced.trim_start_matches('&')
@@ -1024,7 +1037,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     }
                     // IR early-return skips the non-IR finalize path — still align text
-                    // FieldAccess args with codegen-refreshed `&str` formals (WDB-049
+                    // FieldAccess args with codegen-refreshed `&str` formals (regression-049
                     // `replay_to_lsn(self.path)` vs `replay_all(&self.path)`).
                     // Run even under type-collision (String→&str refresh homonym): collision
                     // must not block text FieldAccess borrow for confirmed `&str` formals.
@@ -1032,7 +1045,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         let simple = func_name.rsplit("::").next().unwrap_or(func_name);
                         // Prefer defining-module / global refresh before call-site stubs so
                         // cross-file `replay_to_lsn(path: &str)` beats a stale local
-                        // `emitted_rust_ref_params = Some([false, …])` (WDB-049).
+                        // `emitted_rust_ref_params = Some([false, …])` (regression-049).
                         let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                             gen.global_signature_registry
                                 .as_ref()
@@ -1094,7 +1107,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 false,
                             );
                             // Belt-and-suspenders: confirmed `&str` formal + owned String
-                            // FieldAccess must borrow (WDB-049 replay_to_lsn(self.path)).
+                            // FieldAccess must borrow (regression-049 replay_to_lsn(self.path)).
                             if !coerced.starts_with('&')
                                 && text_sig.as_ref().is_some_and(|sig| {
                                     crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
@@ -1122,7 +1135,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     // Prefer *any* candidate that confirms owned (defining-module refresh).
                     // Stale analyzer stubs may still report `call_site_expects_shared_borrow`
                     // from field-read Borrowed metadata — do not let that block peeling when
-                    // another candidate has an owned emission contract (ReBAC `policy: Policy`).
+                    // another candidate has an owned emission contract (dogfood `policy: Policy`).
                     {
                         let simple = func_name.rsplit("::").next().unwrap_or(func_name);
                         let refreshed_sig =
@@ -1201,7 +1214,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 )
                             });
                         // Owned emission wins over a stale Borrowed stub among layered
-                        // candidates (ReBAC `policy: Policy`). Never peel `&mut` when any
+                        // candidates (dogfood `policy: Policy`). Never peel `&mut` when any
                         // candidate expects mut-borrow (fill_grid(grid: &mut VoxelGrid)).
                         if peel_owned && !any_expects_mut && !confirmed_shared_ref {
                             if coerced.starts_with("&mut ") {
@@ -1222,7 +1235,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     }
                     // Same-function recursive call: if this fn emitted an owned formal for the
                     // binding, strip stale `&` even when registry metadata still says Borrowed
-                    // (ReBAC resolve_check / field-read keep-owned mismatch).
+                    // (dogfood resolve_check / field-read keep-owned mismatch).
                     if let Expression::Identifier { name, .. } = arg {
                         let recursive = gen
                             .current_function_name
@@ -1518,7 +1531,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. }) {
                 // Type collision (e.g. String→&str refresh) must not block text FieldAccess
-                // borrows for confirmed `&str` formals (WDB-049 replay_to_lsn).
+                // borrows for confirmed `&str` formals (regression-049 replay_to_lsn).
                 let simple = func_name.rsplit("::").next().unwrap_or(func_name);
                 let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                     gen.global_signature_registry
@@ -2938,7 +2951,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             } else {
                 // Even without an ownership collision, strip literal `.to_string()` when the
-                // defining module refreshed a plain `string` formal to `&str` (WDB-048).
+                // defining module refreshed a plain `string` formal to `&str` (regression-048).
                 let simple = func_name.rsplit("::").next().unwrap_or(func_name);
                 let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                     gen.global_signature_registry
@@ -2970,8 +2983,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     );
                 }
                 if text_sig.as_ref().is_some_and(|s| {
+                    let idx = s.arg_param_index(i);
                     crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                        s, s.arg_param_index(i),
+                        s, idx,
+                    ) && !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                        s, i,
                     )
                 }) {
                     if let Some(stripped) = arg_str.strip_suffix(".to_string()") {

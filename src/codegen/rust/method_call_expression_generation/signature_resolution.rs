@@ -204,7 +204,8 @@ impl<'ast> CodeGenerator<'ast> {
             finalize_call_site_signature, has_stale_owned_non_copy_params, validate_arg_count,
         };
         use crate::codegen::rust::signature_promotion::{
-            converged_has_reference_params_over_bare, prefer_converged_over_stub,
+            converged_has_reference_params_over_bare, pick_codegen_refreshed_signature,
+            prefer_converged_over_stub,
         };
 
         let is_usable = |sig: &FunctionSignature| {
@@ -325,8 +326,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if let Some(sig) = mc_resolved {
-            return Some(finalize_call_site_signature(sig));
+        if let Some(ref sig) = mc_resolved {
+            if is_usable(sig) {
+                return Some(finalize_call_site_signature(sig.clone()));
+            }
         }
 
         receiver_type_name
@@ -344,6 +347,7 @@ impl<'ast> CodeGenerator<'ast> {
                 receiver_type_name.as_ref().and_then(|tn| {
                     self.lookup_method_signature_on_receiver_type(tn, method, arguments.len())
                         .map(finalize_call_site_signature)
+                        .filter(|sig| is_usable(sig))
                 })
             })
             .or_else(|| {
@@ -352,6 +356,31 @@ impl<'ast> CodeGenerator<'ast> {
                     .filter(|sig| is_usable(sig))
                     .cloned()
                     .map(finalize_call_site_signature)
+            })
+            .or_else(|| {
+                receiver_type_name.as_ref().and_then(|tn| {
+                    let qualified = format!("{tn}::{method}");
+                    pick_codegen_refreshed_signature([
+                        self.global_signature_registry()
+                            .and_then(|g| g.get_signature(&qualified).cloned()),
+                        self.signature_registry.get_signature(&qualified).cloned(),
+                        global_upgraded.clone(),
+                        mc_resolved.clone(),
+                        resolved_from_mc.as_ref().cloned(),
+                    ])
+                    .filter(|s| validate_arg_count(s, arguments.len()))
+                    .map(|sig| {
+                        if trace {
+                            eprintln!(
+                                "[wj-sig] call-site {method} arg#{}: pick_codegen_refreshed ({:?} own={:?})",
+                                arguments.len(),
+                                sig.param_types,
+                                sig.param_ownership,
+                            );
+                        }
+                        finalize_call_site_signature(sig)
+                    })
+                })
             })
     }
 }

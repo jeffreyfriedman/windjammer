@@ -7,26 +7,26 @@
     feature = "integration_tests",
 )))]
 
-//! Failing regressions for **remaining windjammerdb compiler workarounds**.
+//! Failing regressions for **remaining compiler workarounds**.
 //!
-//! Each test mirrors a shim documented in `windjammerdb/docs/WINDJAMMERDB_ISSUES.md`.
-//! Fix in `windjammer/` → revert shim in windjammerdb → test passes.
+//! Each test mirrors a shim documented in `dogfood workaround notes`.
+//! Fix in `windjammer/` → revert the corresponding shim → test passes.
 //!
-//! Run: `cargo test --release --test all wdb_workaround_regression`
+//! Run: `cargo test --release --test all ownership_workaround_regression`
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-// ── WDB-AUTHZ-9: RebacTupleStore method returning (Self, T) ─────────────────
+// ── authz regression: RebacTupleStore method returning (Self, T) ─────────────────
 //
-// windjammerdb workaround: `store_has_tuple` / `store_list_subjects` free fns
+// dogfood workaround: `store_has_tuple` / `store_list_subjects` free fns
 // (rebac_tuple_store.wj) because `has_tuple` → `(RebacTupleStore, bool)` on impl
 // breaks ownership codegen at recursive resolver call sites.
 
 #[test]
-fn wdb_authz_owned_store_method_returns_self_and_bool() {
+fn dogfood_authz_owned_store_method_returns_self_and_bool() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "authz/subject.wj",
@@ -137,13 +137,13 @@ pub fn run() -> bool {
     }
 }
 
-// ── WDB-042 (exact layout): harness drain_network extract-assign ─────────────
+// ── regression (exact layout): harness drain_network extract-assign ─────────────
 //
-// windjammerdb workaround: `let mut net = self.network` in harness.wj drain_network.
+// dogfood workaround: `let mut net = self.network` in harness.wj drain_network.
 // Generated harness.rs still emits `self.network.clone().poll()` — extract does not help.
 
 #[test]
-fn wdb_harness_exact_drain_network_extract_no_clone() {
+fn dogfood_harness_exact_drain_network_extract_no_clone() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "sim/clock.wj",
@@ -273,7 +273,7 @@ pub fn run() -> int {
     let rs = map.get("sim/harness.rs").expect("sim/harness.rs");
     assert!(
         !rs.contains("network.clone()") && !rs.contains("self.network.clone()"),
-        "drain_network must not clone network field (WDB-042). Got:\n{rs}"
+        "drain_network must not clone network field (regression). Got:\n{rs}"
     );
     assert!(
         !rs.contains("let mut net = self.network") || rs.contains("net.poll("),
@@ -281,13 +281,13 @@ pub fn run() -> int {
     );
 }
 
-// ── WDB-047 (delete path): apply_patch_delete must not re-box key via copy ───
+// ── regression (delete path): apply_patch_delete must not re-box key via copy ───
 //
-// windjammerdb workaround: `Key::new(copy_key_bytes(key))` in store.wj apply_patch_delete
+// dogfood workaround: `Key::new(copy_key_bytes(key))` in store.wj apply_patch_delete
 // when base_parts exist (patch path).
 
 #[test]
-fn wdb_lsm_apply_patch_delete_passes_owned_key_directly() {
+fn dogfood_lsm_apply_patch_delete_passes_owned_key_directly() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -477,12 +477,12 @@ pub fn run() {
     );
 }
 
-// ── WDB-030/041: BTreeIndex should expose `get`, not renamed `lookup` ────────
+// ── regression/041: BTreeIndex should expose `get`, not renamed `lookup` ────────
 //
-// windjammerdb workaround: method renamed `lookup` because `get` triggered borrow bugs.
+// dogfood workaround: method renamed `lookup` because `get` triggered borrow bugs.
 
 #[test]
-fn wdb_btree_index_get_method_name_and_owned_key() {
+fn dogfood_btree_index_get_method_name_and_owned_key() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "types/key.wj",
@@ -560,14 +560,14 @@ pub fn lookup() -> bool {
     );
 }
 
-// ── WDB-072: enum variant fields in for-loop match are borrowed refs ─────────
+// ── regression: enum variant fields in for-loop match are borrowed refs ─────────
 //
-// windjammerdb dogfooding: commit_granularity.wj FlushTrigger::should_flush
+// Dogfood regression: commit_granularity.wj FlushTrigger::should_flush
 // `for condition in conditions { match condition { RowCount { threshold } => row_count >= threshold }`
 // rustc: expected `u64`, found `&u64` on threshold comparisons.
 
 #[test]
-fn wdb_enum_match_for_loop_borrowed_variant_fields() {
+fn dogfood_enum_match_for_loop_borrowed_variant_fields() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "flush.wj",
@@ -625,13 +625,13 @@ pub fn run() -> bool {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-073: Copy struct field via borrowed row in for-loop — spurious deref ─
+// ── regression: Copy struct field via borrowed row in for-loop — spurious deref ─
 //
-// windjammerdb dogfooding: document_layer.wj encode(row) in multipass crate build
+// Dogfood regression: document_layer.wj encode(row) in multipass crate build
 // Generated Rust: `self.field_key(*row.row_id, ...)` → E0614 on i64.
 
 #[test]
-fn wdb_copy_field_via_borrowed_struct_no_spurious_deref() {
+fn dogfood_copy_field_via_borrowed_struct_no_spurious_deref() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "data_model_layer.wj",
@@ -716,12 +716,12 @@ pub fn run() -> i64 {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-074: method returning tuple — `.0`/`.1` field access ────────────────
+// ── regression: method returning tuple — `.0`/`.1` field access ────────────────
 //
-// windjammerdb dogfooding: trace_ingestion.wj complete_trace() → outcome.1.kept
+// Dogfood regression: trace_ingestion.wj complete_trace() → outcome.1.kept
 
 #[test]
-fn wdb_tuple_return_dot_access_compiles() {
+fn dogfood_tuple_return_dot_access_compiles() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "trace.wj",
@@ -771,12 +771,12 @@ pub fn run() -> bool {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-075: cross-crate Key::new(encode_key(parts)) owned Vec passthrough ─
+// ── regression: cross-crate Key::new(encode_key(parts)) owned Vec passthrough ─
 //
-// windjammerdb dogfooding: layer crates call wdb_types::Key::new(encode_key(parts)).
+// Dogfood regression: layer crates call types_crate::Key::new(encode_key(parts)).
 
 #[test]
-fn wdb_cross_crate_key_new_encode_key_owned_vec() {
+fn dogfood_cross_crate_key_new_encode_key_owned_vec() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "key.wj",
@@ -824,12 +824,12 @@ pub fn run() -> u32 {
     test.assert_compiles_without_error();
 }
 
-// ── WDB-076: same-crate string wrapper — owned literal to extern fn ────────
+// ── regression: same-crate string wrapper — owned literal to extern fn ────────
 //
-// windjammerdb dogfooding: mcp_adapter.wj mcp_build_tool_result("wdb_query", count)
+// Dogfood regression: mcp_adapter.wj mcp_build_tool_result("dogfood_query", count)
 
 #[test]
-fn wdb_same_crate_string_wrapper_owned_literal() {
+fn dogfood_same_crate_string_wrapper_owned_literal() {
     let mut test = MultiFileTest::new();
     test.add_file(
         "rpc.wj",
@@ -856,7 +856,7 @@ pub struct Adapter {
 
 impl Adapter {
     pub fn encode(self, result: QueryResult) -> string {
-        build_result("wdb_query", result.row_count as u64)
+        build_result("dogfood_query", result.row_count as u64)
     }
 }
 "#,
@@ -868,7 +868,7 @@ use crate::adapter::Adapter
 use crate::adapter::QueryResult
 
 pub fn run() -> string {
-    Adapter { name: "windjammerdb" }.encode(QueryResult { row_count: 3 })
+    Adapter { name: "external dogfood" }.encode(QueryResult { row_count: 3 })
 }
 "#,
     );

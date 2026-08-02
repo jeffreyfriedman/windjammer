@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Dogfood (wdb-types): Pure demotes `name` to `&str`; Arrow keeps owned `String`
+//! Dogfood (types-crate): Pure demotes `name` to `&str`; Arrow keeps owned `String`
 //! because `name` is stored. Match-arm call must `.to_string()`.
 
 #[path = "common/test_utils.rs"]

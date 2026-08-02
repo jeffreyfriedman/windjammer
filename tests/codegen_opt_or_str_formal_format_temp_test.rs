@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Platform emits `opt_or(payload.as_of, _temp0)` while formal is `fallback: &str`.
 //! Single-file often borrows (`&_temp0`); full multipass still drops the `&`

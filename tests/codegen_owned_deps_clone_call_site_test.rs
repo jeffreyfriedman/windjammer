@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood):
+//! Gate (dogfood):
 //!
 //! Helpers take owned `deps: AppDeps`, but codegen demotes formals to `&AppDeps`
 //! / `&mut AppDeps` and/or call sites pass `&deps` / `&deps.clone()` → E0308

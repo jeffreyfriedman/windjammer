@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! ReBAC-style recursive resolve (mirrors wdb-authz rebac_resolver) + Vec membership:
+//! ReBAC-style recursive resolve (mirrors authz-crate rebac_resolver) + Vec membership:
 //! - recursive resolve_check must not pass `&policy` into owned `Policy`
 //! - Vec reused after contains-check must borrow or clone (no move-then-push E0382)
 

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): ShellNav with active link must codegen.
+//! Gate (dogfood): ShellNav with active link must codegen.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

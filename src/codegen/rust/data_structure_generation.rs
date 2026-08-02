@@ -759,13 +759,29 @@ impl<'ast> CodeGenerator<'ast> {
             ..
         } = index
         {
-            let start_str = self.generate_expression(start);
-            let end_str = self.generate_expression(end);
+            let prev_index_ctx = self.in_index_context;
+            self.in_index_context = true;
+            let mut start_str = self.generate_expression(start);
+            let mut end_str = self.generate_expression(end);
+            self.in_index_context = prev_index_ctx;
+            self.maybe_cast_index_to_usize(&mut start_str, start);
+            self.maybe_cast_index_to_usize(&mut end_str, end);
             let range_op = if *inclusive { "..=" } else { ".." };
-            return format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
+            let range_expr = format!("{}[{}{}{}]", obj_str, start_str, range_op, end_str);
+            let obj_is_text = self
+                .infer_expression_type(object)
+                .as_ref()
+                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+            if (self.in_owned_value_context || self.in_struct_literal_field) && obj_is_text {
+                return format!("{}.to_string()", range_expr);
+            }
+            return range_expr;
         }
 
+        let prev_index_ctx = self.in_index_context;
+        self.in_index_context = true;
         let mut idx_str = self.generate_expression(index);
+        self.in_index_context = prev_index_ctx;
 
         // Match/if-let on `.as_ref()` binds `&usize` etc.; array indexing needs owned index.
         if let Some(ty) = self.infer_expression_type(index) {
