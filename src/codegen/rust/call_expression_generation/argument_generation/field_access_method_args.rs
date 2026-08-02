@@ -352,6 +352,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     Some(&gen.method_signatures_by_type),
                                     &gen.match_arm_bindings,
                                     &gen.str_ref_optimized_params,
+                                    Some(&gen.signature_registry),
                                 );
                             if should_ref {
                                 arg_str = format!("&{}", arg_str);
@@ -756,6 +757,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     Some(&gen.method_signatures_by_type),
                     &gen.match_arm_bindings,
                     &gen.str_ref_optimized_params,
+                    Some(&gen.signature_registry),
                 );
             if should_ref {
                 arg_str = format!("&{}", arg_str);

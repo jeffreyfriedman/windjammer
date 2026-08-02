@@ -454,11 +454,14 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_index,
                 user_arg_count,
             );
-            // Unresolved stdlib Pattern methods (`String::find`) still need `&needle`
-            // for rustc's `Pattern` bound when the needle is an owned `String`.
+            // Unresolved stdlib Pattern/`&str` methods still need `&needle` when the
+            // registry knows the formal is `&str` (e.g. `String::find` in stdlib_meta).
             if !finished.starts_with('&')
-                && crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(
+                && crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
                     method_simple,
+                    receiver_type_name.or(Some("String")),
+                    registry,
+                    arg_index,
                 )
                 && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
@@ -750,8 +753,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        if crate::codegen::rust::stdlib_method_traits::is_string_pattern_method(method_simple)
-            && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
+        if crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+            &sig,
+            arg_index,
+        ) && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
         {
             // `str::find` / `contains` / … take `Pattern` (`&str`, `char`, …).
             // String literals are already `&str`; owned `String` needles need `&`.

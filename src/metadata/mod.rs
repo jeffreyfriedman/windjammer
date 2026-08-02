@@ -39,6 +39,9 @@ pub struct ModuleMetadata {
     pub structs: HashMap<String, HashMap<String, String>>, // String = serialized Type
 
     /// Trait implementations: trait_name → methods
+    ///
+    /// `stdlib_meta/*.wj.meta` omits this field; default keeps those files loadable.
+    #[serde(default)]
     pub trait_impls: HashMap<String, Vec<String>>,
 
     /// Structs that implement Copy (enables cross-file Copy detection)
@@ -50,7 +53,8 @@ pub struct ModuleMetadata {
     #[serde(default)]
     pub non_copy_structs: Vec<String>,
 
-    /// Version for compatibility checking
+    /// Version for compatibility checking (`stdlib_meta` may omit this).
+    #[serde(default)]
     pub version: String,
 
     /// Content + compiler fingerprint for incremental analysis cache validation.

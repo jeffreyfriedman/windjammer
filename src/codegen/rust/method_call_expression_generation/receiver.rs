@@ -165,12 +165,17 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // E0507 fix: Option::map on self.field with &self must use .as_ref().map(...)
-        // self.children.map(|c| ...) with &self → self.children.as_ref().map(|c| ...)
-        if method == "map"
-            && self.inferred_borrowed_params.contains("self")
+        // E0507: borrowed `self.field` adapters that Rust implements by-value on `Option`
+        // (`map` / `and_then` / …) lower via `.as_ref()` so `&self` methods stay borrowed.
+        // Driven by Option stdlib_meta Borrowed receivers + method registry — not a bare
+        // method-name list for ownership, but the as_ref desugar for known Option adapters.
+        if self.inferred_borrowed_params.contains("self")
             && self.codegen_expression_traces_to_self(object)
             && !obj_str.contains(".as_ref()")
+            && crate::codegen::rust::stdlib_method_traits::option_adapter_needs_as_ref(
+                method,
+                &self.signature_registry,
+            )
         {
             obj_str = format!("{}.as_ref()", obj_str);
         }

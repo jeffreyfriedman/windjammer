@@ -456,6 +456,9 @@ impl SignatureRegistry {
 
     /// Fallback lookup: find a signature whose key ends with `::name`.
     /// Uses the method index for O(1) lookup instead of scanning all entries.
+    ///
+    /// Prefer [`Self::find_unique_signature_ending_with`] when the result drives
+    /// ownership/storage decisions — the first hit among homonyms is unsafe.
     pub fn find_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
         if let Some(keys) = self.method_index.get(suffix) {
             for key in keys {
@@ -467,6 +470,29 @@ impl SignatureRegistry {
         self.global_fallback
             .as_ref()
             .and_then(|g| g.find_signature_ending_with(suffix))
+    }
+
+    /// Like [`Self::find_signature_ending_with`], but only when exactly one
+    /// `{Type}::{suffix}` is registered (locally or via global fallback).
+    pub fn find_unique_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
+        let local = self
+            .method_index
+            .get(suffix)
+            .map(|keys| {
+                keys.iter()
+                    .filter_map(|k| self.signatures.get(k).map(|sig| (k.as_str(), sig)))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if local.len() == 1 {
+            return Some(local[0].1);
+        }
+        if !local.is_empty() {
+            return None;
+        }
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.find_unique_signature_ending_with(suffix))
     }
 
     /// Find a signature matching the simple name with a specific argument count.

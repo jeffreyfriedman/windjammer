@@ -59,27 +59,27 @@
       "has_self_receiver": true
     },
     "Option::map": {
-      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "params": ["Reference(Custom(\"Option\"))", "Custom(\"Fn\")"],
       "return_type": "Option(Custom(\"U\"))",
       "is_associated": true,
       "parent_type": "Option",
-      "param_ownership": ["Owned", "Owned"],
+      "param_ownership": ["Borrowed", "Owned"],
       "has_self_receiver": true
     },
     "Option::and_then": {
-      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "params": ["Reference(Custom(\"Option\"))", "Custom(\"Fn\")"],
       "return_type": "Option(Custom(\"U\"))",
       "is_associated": true,
       "parent_type": "Option",
-      "param_ownership": ["Owned", "Owned"],
+      "param_ownership": ["Borrowed", "Owned"],
       "has_self_receiver": true
     },
     "Option::or_else": {
-      "params": ["Custom(\"Option\")", "Custom(\"Fn\")"],
+      "params": ["Reference(Custom(\"Option\"))", "Custom(\"Fn\")"],
       "return_type": "Option(Custom(\"T\"))",
       "is_associated": true,
       "parent_type": "Option",
-      "param_ownership": ["Owned", "Owned"],
+      "param_ownership": ["Borrowed", "Owned"],
       "has_self_receiver": true
     },
     "Option::ok_or": {

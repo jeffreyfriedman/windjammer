@@ -254,3 +254,17 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
     );
     assert!(sig.has_self_receiver);
 }
+
+
+#[test]
+fn stdlib_meta_string_file_deserializes_without_trait_impls_or_version() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("stdlib_meta/string.wj.meta");
+    let text = std::fs::read_to_string(&path).expect("read string.wj.meta");
+    let meta: crate::metadata::ModuleMetadata =
+        serde_json::from_str(&text).expect("stdlib_meta/string.wj.meta must deserialize");
+    assert!(
+        meta.functions.contains_key("String::find"),
+        "String::find must be present for Pattern/&str call-site borrowing"
+    );
+    assert!(meta.functions.contains_key("String::chars"));
+}
