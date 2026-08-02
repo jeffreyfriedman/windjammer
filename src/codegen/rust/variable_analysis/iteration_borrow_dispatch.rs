@@ -81,14 +81,27 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
-            Expression::MethodCall { method, .. } => {
-                // `chars()` / `bytes()` yield owned Copy elements — not `&T`.
-                if crate::codegen::rust::stdlib_method_traits::method_yields_owned_iterator_elements(
+            Expression::MethodCall {
+                object,
+                method,
+                ..
+            } => {
+                let receiver = self
+                    .mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object));
+                // Owned Copy items (`chars` → char) are not borrowed loop bindings.
+                if crate::codegen::rust::stdlib_method_traits::method_yields_owned_iterator_elements_qualified(
                     method,
+                    receiver.as_deref(),
+                    &self.signature_registry,
                 ) {
                     return false;
                 }
-                crate::codegen::rust::stdlib_method_traits::method_returns_iterator(method)
+                crate::codegen::rust::stdlib_method_traits::method_returns_iterable_qualified(
+                    method,
+                    receiver.as_deref(),
+                    &self.signature_registry,
+                )
             }
             _ => false,
         }

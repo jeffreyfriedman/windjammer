@@ -277,25 +277,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Iterator methods: return the collection type so
                 // extract_iterator_element_type can extract the element type.
-                // This enables type inference for loop variables:
-                //   for brick in self.bricks.iter_mut() → brick: Brick
-                if matches!(
-                    method.as_str(),
-                    "iter"
-                        | "iter_mut"
-                        | "into_iter"
-                        | "keys"
-                        | "values"
-                        | "values_mut"
-                        | "drain"
-                        | "lines"
-                        | "chars"
-                        | "bytes"
-                        | "split"
-                        | "split_whitespace"
-                        | "enumerate"
-                ) {
-                    if let Some(obj_type) = self.infer_expression_type(object) {
+                // Driven by registry return metadata (`Iterator` / `Iterator<item>`).
+                if let Some(obj_type) = self.infer_expression_type(object) {
+                    let receiver = Self::type_to_name(&obj_type);
+                    if crate::codegen::rust::stdlib_method_traits::method_returns_iterable_qualified(
+                        method,
+                        receiver.as_deref(),
+                        &self.signature_registry,
+                    ) {
                         return Some(obj_type);
                     }
                 }

@@ -316,7 +316,12 @@ impl<'ast> Analyzer<'ast> {
                         // No extra conservative block needed for self methods.
                         let _ = is_self_method;
 
-                        if super::stdlib_method_traits::is_slice_search_method(method) && idx == 0 {
+                        if super::stdlib_method_traits::method_is_slice_search_qualified(
+                            method,
+                            None,
+                            registry,
+                        ) && idx == 0
+                        {
                             return true;
                         }
 

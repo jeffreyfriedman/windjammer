@@ -7153,8 +7153,15 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                let receiver = self
+                    .mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object));
                 let is_slice_search =
-                    crate::analyzer::stdlib_method_traits::is_slice_search_method(method);
+                    crate::analyzer::stdlib_method_traits::method_is_slice_search_qualified(
+                        method,
+                        receiver.as_deref(),
+                        &self.signature_registry,
+                    );
                 if is_slice_search {
                     let arg0_is_param = arguments.first().is_some_and(|(_, a)| {
                         matches!(a, Expression::Identifier { name, .. } if name == param_name)
