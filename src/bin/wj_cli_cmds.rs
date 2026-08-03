@@ -98,6 +98,7 @@ pub fn run(cli: Cli) -> Result<()> {
             use_build_dir,
             use_project_cargo,
             no_runtime_copy,
+            copy_runtime,
             runtime_path,
             no_generate_cargo_toml,
         } => {
@@ -113,6 +114,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 use_build_dir,
                 use_project_cargo,
                 no_runtime_copy,
+                copy_runtime,
                 runtime_path,
                 no_generate_cargo_toml,
             })?;

@@ -148,6 +148,70 @@ impl<'ast> Analyzer<'ast> {
             && Self::formal_stores_into_composite_return(sig, arg_index)
     }
 
+    /// Owned argument is stored into the callee's return composite.
+    fn signature_arg_stores_owned_payload(sig: &FunctionSignature, arg_index: usize) -> bool {
+        matches!(
+            sig.param_ownership_for_arg(arg_index),
+            Some(OwnershipMode::Owned)
+        ) && Self::formal_stores_into_composite_return(sig, arg_index)
+    }
+
+    /// `Vec`/`HashMap`/… `&mut self` methods that take owned values store into the receiver.
+    /// User methods like `Squad::send_message` must not match — only collection receivers.
+    fn signature_stores_into_collection_receiver(
+        sig: &FunctionSignature,
+        arg_index: usize,
+        receiver_type: Option<&str>,
+        qualified_key: Option<&str>,
+    ) -> bool {
+        if !matches!(
+            sig.param_ownership_for_arg(arg_index),
+            Some(OwnershipMode::Owned)
+        ) {
+            return false;
+        }
+        if !(sig.has_self_receiver
+            && matches!(
+                sig.param_ownership.first(),
+                Some(OwnershipMode::MutBorrowed)
+            ))
+        {
+            return false;
+        }
+        let type_name = receiver_type
+            .map(|ty| {
+                let base = ty.split('<').next().unwrap_or(ty);
+                base.rsplit("::").next().unwrap_or(base)
+            })
+            .or_else(|| {
+                qualified_key.and_then(|k| {
+                    k.rsplit_once("::")
+                        .map(|(ty, _)| ty.rsplit("::").next().unwrap_or(ty))
+                })
+            });
+        type_name.is_some_and(Self::is_collection_receiver_type)
+    }
+
+    fn is_collection_receiver_type(name: &str) -> bool {
+        matches!(
+            name,
+            "Vec"
+                | "VecDeque"
+                | "LinkedList"
+                | "HashMap"
+                | "BTreeMap"
+                | "HashSet"
+                | "BTreeSet"
+                | "BinaryHeap"
+                | "IndexMap"
+                | "IndexSet"
+                | "Map"
+                | "Set"
+                | "String"
+                | "string"
+        )
+    }
+
     /// True when method-call argument `arg_index` is stored into an owned formal (signature-driven).
     pub(crate) fn method_call_argument_stores_owned_payload(
         method: &str,
@@ -159,20 +223,25 @@ impl<'ast> Analyzer<'ast> {
         if Self::is_language_level_method_payload_store(method) {
             return true;
         }
-        // Require a receiver-qualified (or unambiguous) signature. Bare
-        // `lookup_method("remove")` can return `Vec::remove` while the call is
-        // `HashMap::remove`, falsely treating borrowed keys as owned stores.
-        let sig = Self::resolve_method_signature_for_storage(
-            method,
-            receiver_type,
-            arg_count,
-            registry,
-        );
-        let Some(sig) = sig else {
-            return false;
-        };
-        matches!(sig.param_ownership_for_arg(arg_index), Some(OwnershipMode::Owned))
-            && Self::formal_stores_into_composite_return(sig, arg_index)
+        if let Some(sig) =
+            Self::resolve_method_signature_for_storage(method, receiver_type, arg_count, registry)
+        {
+            let key = receiver_type.map(|ty| {
+                let base = ty.split('<').next().unwrap_or(ty);
+                let short = base.rsplit("::").next().unwrap_or(base);
+                format!("{short}::{method}")
+            });
+            return Self::signature_arg_stores_owned_payload(sig, arg_index)
+                || Self::signature_stores_into_collection_receiver(
+                    sig,
+                    arg_index,
+                    receiver_type,
+                    key.as_deref(),
+                );
+        }
+        // Multiple receivers share the method name: only accept when every
+        // candidate agrees the arg is an owned store into a collection / return.
+        Self::consensus_collection_owned_store(method, arg_count, arg_index, registry)
     }
 
     fn resolve_method_signature_for_storage<'a>(
@@ -191,12 +260,56 @@ impl<'ast> Analyzer<'ast> {
             }
         }
         let _ = arg_count;
-        // Never use first-homonym fallbacks (`lookup_method` /
-        // `find_signature_by_name_and_arg_count`) — `remove`/`contains`/`get`
-        // mean different ownership on Vec vs HashMap vs Option.
         registry
             .get_signature(method)
             .or_else(|| registry.find_unique_signature_ending_with(method))
+    }
+
+    fn consensus_collection_owned_store(
+        method: &str,
+        arg_count: usize,
+        arg_index: usize,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        let Some(keys) = registry.method_keys_for(method) else {
+            return false;
+        };
+        let mut any_collection_store = false;
+        let mut any_borrowed_arg = false;
+        let mut saw = false;
+        for key in keys {
+            let Some(sig) = registry.get_signature(key) else {
+                continue;
+            };
+            let sig_args = if sig.has_self_receiver {
+                sig.param_ownership.len().saturating_sub(1)
+            } else {
+                sig.param_ownership.len()
+            };
+            if arg_count > 0 && sig_args != arg_count {
+                continue;
+            }
+            saw = true;
+            if matches!(
+                sig.param_ownership_for_arg(arg_index),
+                Some(OwnershipMode::Borrowed)
+            ) {
+                any_borrowed_arg = true;
+            }
+            if Self::signature_arg_stores_owned_payload(sig, arg_index)
+                || Self::signature_stores_into_collection_receiver(
+                    sig,
+                    arg_index,
+                    None,
+                    Some(key.as_str()),
+                )
+            {
+                any_collection_store = true;
+            }
+        }
+        // Homonyms like Vec::push / String::push both store owned; reject only when
+        // some candidate treats the same slot as a borrowed lookup (e.g. remove).
+        saw && any_collection_store && !any_borrowed_arg
     }
 
     fn receiver_type_name_for_storage(object: &Expression) -> Option<String> {
@@ -299,83 +412,18 @@ impl<'ast> Analyzer<'ast> {
                     if self.expression_stores_identifier(name, expr, registry) {
                         return true;
                     }
-                    if let Expression::MethodCall {
-                        object,
-                        method,
-                        arguments,
-                        ..
-                    } = expr
-                    {
-                    let is_storage_method =
-                        super::super::stdlib_method_traits::is_storage_method(method);
-
-                    if is_storage_method {
-                        // Check for storage method calls on ANY object:
-                        // - self.field.push(param)
-                        // - self.field.push((param, other))  ← tuple wrapping
-                        // - self.field.push(Enum::Variant(param))  ← enum wrapping
-                        // - local_var.push(param)
-                        let is_on_field_or_var =
-                            matches!(&**object, Expression::FieldAccess { .. })
-                                || matches!(&**object, Expression::Identifier { .. });
-
-                        if is_on_field_or_var {
-                            for (_label, arg) in arguments {
-                                if self.expression_stores_identifier(name, arg, registry) {
-                                    return true;
-                                }
-                            }
-                        }
-
-                        // TDD FIX: Also check for method calls on LOCAL struct fields: local_var.field.push(param)
-                        // e.g., choice.conditions.push(condition) where choice is a local variable
-                        if let Expression::FieldAccess {
-                            object: field_obj, ..
-                        } = &**object
-                        {
-                            // Check if it's a local variable (not self)
-                            if matches!(&**field_obj, Expression::Identifier { name: id, .. } if id != "self")
-                            {
-                                for (_label, arg) in arguments {
-                                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
-                                    {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Also check for method calls on local variables: props.push(Property { name, ... })
-                    // The parameter might be used in a struct literal passed as an argument
-                    for (_label, arg) in arguments {
-                        if let Expression::StructLiteral { fields, .. } = arg {
-                            for (_field_name, field_expr) in fields {
-                                if self.expression_uses_identifier(name, field_expr) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-
-                    // Check for push/insert with a constructor call: vec.push(Node::new(param, ...))
-                    // The parameter is being stored if passed to a constructor that stores it
-                    if is_storage_method {
+                    // Struct literals in method args may bind the param by field without
+                    // going through a composite-return factory signature.
+                    if let Expression::MethodCall { arguments, .. } = expr {
                         for (_label, arg) in arguments {
-                            if let Expression::Call {
-                                arguments: call_args,
-                                ..
-                            } = arg
-                            {
-                                for (_call_label, call_arg) in call_args {
-                                    if matches!(call_arg, Expression::Identifier { name: id, .. } if id == name)
-                                    {
+                            if let Expression::StructLiteral { fields, .. } = arg {
+                                for (_field_name, field_expr) in fields {
+                                    if self.expression_uses_identifier(name, field_expr) {
                                         return true;
                                     }
                                 }
                             }
                         }
-                    }
                     }
                 }
                 Statement::Assignment {

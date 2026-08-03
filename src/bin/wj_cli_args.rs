@@ -206,9 +206,14 @@ pub enum Commands {
         #[arg(long)]
         use_project_cargo: bool,
 
-        /// Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp)
+        /// Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp).
+        /// Also the default when `wj.toml` declares a path dep on `windjammer-runtime`.
         #[arg(long)]
         no_runtime_copy: bool,
+
+        /// Force copying windjammer-runtime into the temp tree (overrides path-dep inference)
+        #[arg(long)]
+        copy_runtime: bool,
 
         /// Explicit path to windjammer-runtime (with `--no-runtime-copy`)
         #[arg(long, value_name = "PATH")]
