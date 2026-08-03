@@ -422,20 +422,11 @@ pub fn string_literal_needs_owned_coercion_with_enum(
         return false;
     }
 
-    // Runtime `strings::*` / String search APIs: pattern args are `&str` in Rust (arg 1+).
-    if let Some(m) = method {
-        if arg_index >= 1
-            && matches!(
-                m,
-                "starts_with" | "ends_with" | "contains" | "replace" | "replacen" | "split"
-            )
-        {
-            return false;
-        }
-    }
-
-    if let Some(m) = method {
-        if crate::codegen::rust::stdlib_method_traits::is_map_key_method(m) && arg_index == 0 {
+    // Prefer signature: Pattern/`&str` formals stay bare (no method-name lists).
+    if let Some(s) = sig {
+        if crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+            s, arg_index,
+        ) {
             return false;
         }
     }
@@ -446,11 +437,8 @@ pub fn string_literal_needs_owned_coercion_with_enum(
                 return true;
             }
         }
-        // TEMPORARY: Cross-crate constructor fallback when no signature is available.
-        // TODO: Remove once all constructors are reliably in the global registry.
-        if matches!(method, Some("new" | "from")) && receiver_type.is_some() {
-            return true;
-        }
+        // No signature and no enum-factory evidence — emit as-is (registry must supply
+        // constructor / search formals; do not guess from method names like `new`/`from`).
         return false;
     };
 

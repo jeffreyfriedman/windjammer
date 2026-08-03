@@ -21,7 +21,10 @@ pub struct TestRunOptions {
     /// Merge `[dependencies]` from the project root `Cargo.toml` into the test library crate.
     pub use_project_cargo: bool,
     /// Do not copy `windjammer-runtime` into the temp tree; use a Cargo path dependency.
+    /// Also inferred when `wj.toml` declares a path dep on `windjammer-runtime`.
     pub no_runtime_copy: bool,
+    /// Force recursive copy of `windjammer-runtime` into the temp tree (overrides inference).
+    pub copy_runtime: bool,
     /// Explicit path to `windjammer-runtime` (overrides discovery).
     pub runtime_path: Option<PathBuf>,
     /// Skip auto-generated Cargo.toml for the library compile (same as `wj build --no-generate-cargo-toml`).
@@ -42,6 +45,7 @@ impl Default for TestRunOptions {
             use_build_dir: None,
             use_project_cargo: false,
             no_runtime_copy: false,
+            copy_runtime: false,
             runtime_path: None,
             no_generate_cargo_toml: false,
         }

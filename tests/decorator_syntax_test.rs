@@ -204,6 +204,10 @@ fn test_test_with_setup_teardown() {
     assert!(output.contains("with_setup_teardown"));
     assert!(output.contains("setup_db"));
     assert!(output.contains("teardown_db"));
+    assert!(
+        output.contains("use windjammer_runtime::setup_teardown::with_setup_teardown"),
+        "must auto-import setup_teardown:\n{output}"
+    );
 }
 
 #[test]

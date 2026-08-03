@@ -715,6 +715,13 @@ impl<'ast> CodeGenerator<'ast> {
             has_test_decorator || has_test_prefix
         });
 
+        // `@test(setup=..., teardown=...)` emits `with_setup_teardown(...)` — auto-import it.
+        let needs_setup_teardown = analyzed.iter().any(|af| {
+            af.decl.decorators.iter().any(|d| {
+                d.name == "test" && !d.arguments.is_empty()
+            })
+        });
+
         // Check for property testing decorators and collect max parameter count
         let mut max_property_test_params = 0;
         for analyzed_func in analyzed {
@@ -864,6 +871,11 @@ impl<'ast> CodeGenerator<'ast> {
         // NOTE: Uses AST analysis, not filename (prevents false positives like "hashmap_test.wj")
         if has_test_functions {
             implicit_imports.push_str("use windjammer_runtime::test::*;\n");
+        }
+
+        if needs_setup_teardown {
+            implicit_imports
+                .push_str("use windjammer_runtime::setup_teardown::with_setup_teardown;\n");
         }
 
         // Add property testing imports if needed
