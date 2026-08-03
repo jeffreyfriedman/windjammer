@@ -1683,14 +1683,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     gen.auto_clone_analysis.as_ref(),
                 );
                 if param_wants_owned_string && !arg_str.ends_with(".to_string()") {
-                    let is_text_arg = is_string_const
-                        || gen.str_ref_optimized_params.contains(name)
-                        || gen.inferred_borrowed_params.contains(name)
+                    // Never `.to_string()` on bindings that already lower as `&str`.
+                    let is_owned_text_arg = is_string_const
                         || gen.current_function_params.iter().any(|p| {
                             p.name == *name
                                 && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                                && !gen.str_ref_optimized_params.contains(name)
+                                && !gen.inferred_borrowed_params.contains(name)
                         });
-                    if is_text_arg {
+                    if is_owned_text_arg {
                         arg_str = format!("{}.to_string()", arg_str);
                     }
                 }
@@ -2257,6 +2258,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 if !(gen.in_user_written_closure
                                     && gen.user_closure_params.contains(name))
                                 {
+                                    let pidx = sig.arg_param_index(i);
+                                    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                        sig, pidx,
+                                    ) {
+                                        if !arg_str.starts_with('&')
+                                            && !arg_str.starts_with("&mut ")
+                                        {
+                                            arg_str = format!("&{arg_str}");
+                                        }
+                                        return vec![arg_str];
+                                    }
                                     arg_str = gen.maybe_auto_clone(name, &arg_str);
                                 }
 
@@ -2993,6 +3005,26 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
                         arg_str = stripped.to_string();
                     }
+                }
+            }
+
+            // Runtime std (`strings`, `json`, …) uses AsRef<str> — literals stay &str.
+            if func_name
+                .split("::")
+                .next()
+                .is_some_and(
+                    crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                )
+                && matches!(
+                    arg,
+                    Expression::Literal {
+                        value: Literal::String(_),
+                        ..
+                    }
+                )
+            {
+                if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
+                    arg_str = stripped.to_string();
                 }
             }
 

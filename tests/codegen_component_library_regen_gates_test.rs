@@ -119,7 +119,7 @@ impl Table {
     }
 }
 impl Renderable for Table {
-    fn render(self) -> string { "t".to_string() }
+    fn render(self) -> string { "t" }
 }
 "#,
     )
@@ -143,7 +143,7 @@ impl Renderable for DataTable {
 }
 
 pub fn sample() -> string {
-    DataTable::new().column(TableColumn::new("Name".to_string())).render()
+    DataTable::new().column(TableColumn::new("Name")).render()
 }
 "#,
     )
@@ -188,7 +188,7 @@ fn library_build_with_explicit_clone_must_exit_zero_after_codegen() {
     fs::create_dir_all(&src).unwrap();
     fs::create_dir_all(&out).unwrap();
     fs::write(src.join("mod.wj"), "pub mod clean\npub mod leaky\n").unwrap();
-    fs::write(src.join("clean.wj"), "pub fn ok() -> string { \"ok\".to_string() }\n").unwrap();
+    fs::write(src.join("clean.wj"), "pub fn ok() -> string { \"ok\" }\n").unwrap();
     fs::write(
         src.join("leaky.wj"),
         "pub fn twice(s: string) -> string { s.clone() + s }\n",
@@ -245,11 +245,11 @@ use super::badge::Badge
 pub struct PeriodBadge { state: string, label: string }
 impl PeriodBadge {
     pub fn new(state: string) -> PeriodBadge {
-        PeriodBadge { state: state, label: "".to_string() }
+        PeriodBadge { state: state, label: "" }
     }
 }
 fn state_class(state: string) -> string {
-    if state == "open" { "open".to_string() } else { "other".to_string() }
+    if state == "open" { "open" } else { "other" }
 }
 impl Renderable for PeriodBadge {
     fn render(self) -> string {
@@ -301,7 +301,7 @@ fn string_field_reuse_after_helper_must_cargo_check() {
 pub struct Rating { value: int, color: string }
 impl Rating {
     pub fn new(value: int) -> Rating {
-        Rating { value: value, color: "gold".to_string() }
+        Rating { value: value, color: "gold" }
     }
     pub fn color(self, color: string) -> Rating {
         self.color = color
@@ -309,7 +309,7 @@ impl Rating {
     }
 }
 fn display_text(color: string) -> string {
-    "color:".to_string() + color
+    "color:" + color
 }
 pub fn render_rating(r: Rating) -> string {
     let color = r.color
@@ -374,7 +374,7 @@ fn multipass_string_formal_into_owned_builder_must_cargo_check() {
         r#"
 pub struct Tile { html: string }
 impl Tile {
-    pub fn new() -> Tile { Tile { html: "".to_string() } }
+    pub fn new() -> Tile { Tile { html: "" } }
     pub fn value_html(self, html: string) -> Tile {
         self.html = html
         self

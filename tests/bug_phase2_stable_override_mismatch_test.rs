@@ -68,7 +68,7 @@ impl Node {
 
 pub fn build_node() -> Node {
     let node = Node::new()
-        .add_class("my-class".to_string())
+        .add_class("my-class")
     node
 }
 "#;

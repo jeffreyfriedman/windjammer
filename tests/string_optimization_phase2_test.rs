@@ -75,17 +75,17 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 1 BASELINE: Should generate &String (Vec<String>::contains needs it)
+    // Phase 2: &str is idiomatic for Vec<String>::contains (Borrow trait).
     assert!(
-        generated.contains("fn has_item(items: &Vec<String>, id: &String)"),
-        "Expected &String parameter (Vec<String>::contains). Generated:\n{}",
+        generated.contains("fn has_item(items: &Vec<String>, id: &str)"),
+        "Expected &str parameter for contains lookup. Generated:\n{}",
         generated
     );
 
-    // String literal must be converted to &String
+    // String literal passes directly as &str
     assert!(
-        generated.contains(r#"has_item(&items, &"foo".to_string())"#),
-        "Expected converted string literal. Generated:\n{}",
+        generated.contains(r#"has_item(&items, "foo")"#),
+        "Expected bare string literal at contains call site. Generated:\n{}",
         generated
     );
 }
@@ -119,20 +119,18 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 2 PASSTHROUGH: check_item should use &String (calls has which needs &String).
-    // inv may be `Inventory` or `&Inventory` depending on self/borrow inference.
+    // Phase 2 passthrough: &str forwards cleanly to &str callee.
     assert!(
-        generated.contains("item_id: &String")
-            && (generated.contains("fn check_item(inv: &Inventory, item_id: &String)")
-                || generated.contains("fn check_item(inv: Inventory, item_id: &String)")),
-        "Expected &String on item_id and passthrough to has (need &String). Generated:\n{}",
+        generated.contains("item_id: &str")
+            && (generated.contains("fn check_item(inv: &Inventory, item_id: &str)")
+                || generated.contains("fn check_item(inv: Inventory, item_id: &str)")),
+        "Expected &str on item_id passthrough to has. Generated:\n{}",
         generated
     );
 
-    // Inventory::has should use &String (calls Vec<String>::contains)
     assert!(
-        generated.contains("fn has(&self, id: &String)"),
-        "Expected &String parameter (Vec<String>::contains). Generated:\n{}",
+        generated.contains("fn has(&self, id: &str)"),
+        "Expected &str parameter for Vec::contains. Generated:\n{}",
         generated
     );
 }
@@ -161,12 +159,10 @@ fn main() {
 
     println!("Generated:\n{}", generated);
 
-    // PHASE 2 MIXED OPTIMIZATION:
-    // - search: &String (passed to Vec<String>::contains)
-    // - msg: &str (only passed to println, no Vec methods)
+    // Phase 2 mixed: search borrows for contains; msg stays &str for println.
     assert!(
-        generated.contains("fn process(items: &Vec<String>, search: &String, msg: &str)"),
-        "Expected mixed optimization: search=&String, msg=&str. Generated:\n{}",
+        generated.contains("fn process(items: &Vec<String>, search: &str, msg: &str)"),
+        "Expected search=&str and msg=&str. Generated:\n{}",
         generated
     );
 }

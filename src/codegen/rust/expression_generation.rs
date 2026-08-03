@@ -217,15 +217,58 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let obj_str = self.generate_expression_immut(object);
 
-                // TDD FIX: For stdlib methods like HashMap::insert that expect owned String,
-                // convert &str parameters to String automatically
-                let args_str = arguments
+                let receiver_type_name = self
+                    .mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object));
+                let method_signature =
+                    self.mc_resolve_method_call_signature(object, method, arguments);
+                let receiver_is_text = receiver_type_name.as_deref().is_some_and(|rt| {
+                    rt == "String"
+                        || rt == "string"
+                        || rt == "str"
+                        || rt.ends_with("::String")
+                        || rt.ends_with("::str")
+                }) || matches!(
+                    object,
+                    Expression::Identifier { name, .. }
+                        if self.local_var_types.get(name).is_some_and(|t| {
+                            crate::codegen::rust::types::is_windjammer_text_type(t)
+                        }) || self.str_ref_optimized_params.contains(name)
+                            || self.emitted_rust_ref_formals.contains(name)
+                            || self.inferred_borrowed_params.contains(name.as_str())
+                            || self.current_function_params.iter().any(|p| {
+                                p.name == *name
+                                    && crate::codegen::rust::types::is_windjammer_text_type(
+                                        &p.type_,
+                                    )
+                            })
+                ) || self
+                    .infer_expression_type(object)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+
+                let mut args: Vec<String> = arguments
                     .iter()
                     .map(|(_label, arg)| self.generate_expression_immut(arg))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                    .collect();
+                for (i, arg_str) in args.iter_mut().enumerate() {
+                    let (_, arg_expr) = &arguments[i];
+                    if crate::codegen::rust::string_utilities::method_call_arg_expects_pattern_str(
+                        method,
+                        i,
+                        method_signature.as_ref(),
+                        receiver_type_name.as_deref(),
+                        receiver_is_text,
+                        &self.signature_registry,
+                    ) {
+                        crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                            arg_expr,
+                            arg_str,
+                        );
+                    }
+                }
 
-                format!("{}.{}({})", obj_str, method, args_str)
+                format!("{}.{}({})", obj_str, method, args.join(", "))
             }
             Expression::Call {
                 function,
@@ -690,7 +733,9 @@ impl<'ast> CodeGenerator<'ast> {
                 type_args,
                 arguments,
                 ..
-            } => self.generate_method_call_expression(object, method, type_args, arguments),
+            } => {
+                self.generate_method_call_expression(object, method, type_args, arguments)
+            }
             Expression::FieldAccess { object, field, .. } => {
                 self.generate_field_access(object, field, expr_to_generate)
             }

@@ -125,7 +125,7 @@ impl Offer {
         match self.cost {
             Cost::Gold(amount) => format!("Costs {} gold", amount),
             Cost::Item(item_id, qty) => format!("Costs {} x{}", item_id, qty),
-            Cost::Free => "Free".to_string()
+            Cost::Free => "Free"
         }
     }
 }

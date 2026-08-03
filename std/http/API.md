@@ -154,6 +154,11 @@ enum HttpMethod {
     OPTIONS,
 }
 
+impl HttpMethod {
+    fn as_str(self) -> string
+    fn from_str(s: string) -> Option<HttpMethod>
+}
+
 struct Headers {
     items: HashMap<string, string>,
 }

@@ -7,7 +7,7 @@
 use std::subprocess
 
 fn test_echo() {
-    let args = vec!["hello".to_string()]
+    let args = vec!["hello"]
     match subprocess::spawn("echo", args) {
         Ok(handle) => {
             match subprocess::read_line(handle) {

@@ -15,6 +15,8 @@ use super::{codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
+        if stmts.len() == 1 {
+        }
         let mut output = String::new();
         let len = stmts.len();
         let saved_body = self.current_function_body.clone();
@@ -393,6 +395,10 @@ impl<'ast> CodeGenerator<'ast> {
         // In that case, fall through to normal block generation which will generate `if let` via Statement::Match handler
         if stmts.len() == 1 {
             if let Statement::Match { value, arms, .. } = &stmts[0] {
+                if let Expression::MethodCall { method, .. } = value {
+                    if method == "find" {
+                    }
+                }
                 // Align with auto_clone Expression::Block indexing: nested Match is
                 // collected at `block_counter = enclosing_stmt_idx + 1` while the parent
                 // counter is not advanced. Outer `generate_block` already set
@@ -439,7 +445,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // CRITICAL: Check if matching on self.field to avoid partial move
                 let needs_clone_for_match = self.match_needs_clone_for_self_field(value, arms);
 
-                let value_str = self.generate_expression(value);
+                let value_str = {
+                    if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
+                        if let Expression::MethodCall { method, .. } = value {
+                            if method == "find" {
+                            }
+                        }
+                    }
+                    self.generate_expression(value)
+                };
 
                 // E0507 fix: when matching on a field of a borrowed
                 // parameter, add & prefix to prevent move-out errors.

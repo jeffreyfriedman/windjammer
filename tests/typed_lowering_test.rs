@@ -119,7 +119,7 @@ impl Registry {
 
 fn main() {
     let mut reg = Registry { names: Vec::new() }
-    reg.register("test".to_string())
+    reg.register("test")
 }
 "#);
 
@@ -140,7 +140,7 @@ struct Material {
 
 impl Material {
     pub fn new() -> Material {
-        return Material { name: "default".to_string() }
+        return Material { name: "default" }
     }
 
     pub fn set_name(self, name: string) {

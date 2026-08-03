@@ -56,7 +56,8 @@ impl<'ast> CodeGenerator<'ast> {
             );
 
         let mut needs_borrow = self.should_borrow_for_iteration(iterable)
-            || self.self_field_iterable_needs_borrow(iterable, body);
+            || self.self_field_iterable_needs_borrow(iterable, body)
+            || self.field_iterable_needs_borrow_when_owner_used_in_body(iterable, body);
         if is_self_field_on_mut_self {
             if needs_mut {
                 // `for mut x in self.field` on &mut self: borrow mutably, never move the field.
@@ -121,10 +122,40 @@ impl<'ast> CodeGenerator<'ast> {
         // Copy elements from an owned collection: consume by value (`for byte in vec`) so
         // `Vec::push(byte)` type-checks without `*byte` (regression-006).
         let direct_id_iterable = matches!(iterable, Expression::Identifier { .. });
+        let direct_field_iterable = matches!(iterable, Expression::FieldAccess { .. });
         if copy_element_by_value || by_value_owned_iter {
             if let Expression::Identifier { name, .. } = iterable {
                 if !self.for_loop_borrow_needed.contains(name) {
                     needs_borrow = false;
+                }
+            } else if direct_field_iterable && copy_element_by_value {
+                // HashSet<i64> field on owned struct: iterate Copy elements by value,
+                // unless the field owner is reused in the loop body (`for post in graph.posts`
+                // while calling helpers with `graph`) — then borrow the collection.
+                // `&self.field` / `&self.a.b` on borrowed self must keep `&`, not `.iter().copied()`.
+                let self_is_borrowed = self.inferred_borrowed_params.contains("self")
+                    || self.inferred_mut_borrowed_params.contains("self");
+                if self.codegen_expression_traces_to_self(iterable) && self_is_borrowed {
+                    // Preserve needs_borrow for &self.* iteration.
+                } else if !self.field_iterable_needs_borrow_when_owner_used_in_body(iterable, body)
+                {
+                    // Indexed field (`pass_defs[pi].dependencies`) must stay borrowed even
+                    // for Copy elements — moving the subscript temporary is E0507.
+                    let indexed_field = matches!(
+                        iterable,
+                        Expression::FieldAccess { object, .. }
+                            if matches!(&**object, Expression::Index { .. })
+                    );
+                    let owner_is_borrowed_param = matches!(
+                        iterable,
+                        Expression::FieldAccess { object, .. }
+                            if matches!(&**object, Expression::Identifier { name, .. }
+                                if self.inferred_borrowed_params.contains(name)
+                                    || self.inferred_mut_borrowed_params.contains(name))
+                    );
+                    if !indexed_field && !owner_is_borrowed_param {
+                        needs_borrow = false;
+                    }
                 }
             }
             if by_value_owned_iter {

@@ -173,21 +173,6 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         let method_simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        if matches!(
-            arg_expr,
-            Expression::Literal {
-                value: Literal::String(_),
-                ..
-            }
-        ) && arg_index == 0
-            && crate::analyzer::stdlib_method_traits::is_storage_method(method_simple)
-            && !prepared_arg.ends_with(".to_string()")
-        {
-            return Some(format!(
-                "{}.to_string()",
-                prepared_arg.trim_start_matches('&')
-            ));
-        }
 
         // Module-qualified free calls (`draw::draw_text`): without an exact-key
         // signature for this module path, do not coerce string literals. Simple-name
@@ -464,9 +449,16 @@ impl<'ast> CodeGenerator<'ast> {
                     arg_index,
                 )
                 && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
-                && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
             {
-                finished = crate::ir::target_encodings::rust_shared_borrow(&finished);
+                crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                    arg_expr,
+                    &mut finished,
+                );
+                if !finished.starts_with('&')
+                    && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                {
+                    finished = crate::ir::target_encodings::rust_shared_borrow(&finished);
+                }
             }
             // Unresolved callee still needs multi-use clones (regression-063 seed_write).
             finished = self.maybe_auto_clone_call_arg(
@@ -584,8 +576,6 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(prepared_arg);
         }
 
-        let receiver_is_map = receiver_type_name
-            .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_type_name);
         let receiver_is_set = receiver_type_name
             .is_some_and(crate::codegen::rust::stdlib_method_traits::is_set_type_name);
 
@@ -782,10 +772,9 @@ impl<'ast> CodeGenerator<'ast> {
             if !arg_already_borrowed {
                 expected.ownership = OwnedType::Ref(Region::fresh(6));
             }
-        } else if arg_index == 0
-            && crate::analyzer::stdlib_method_traits::is_storage_method(method_simple)
-            && (receiver_is_map || receiver_is_set)
-            && matches!(expected.base, BaseType::String | BaseType::Custom(_))
+        } else if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+            &sig, arg_index,
+        ) && matches!(expected.base, BaseType::String | BaseType::Custom(_))
             && !crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
                 callee_module,
             )
@@ -1409,25 +1398,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Storage methods (HashMap.insert, etc.) need owned String keys from literals.
-        if matches!(
-            arg_expr,
-            Expression::Literal {
-                value: Literal::String(_),
-                ..
-            }
-        ) && arg_index == 0
-            && crate::analyzer::stdlib_method_traits::is_storage_method(method_simple)
-            && !crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                callee_module,
-            )
-            && !coerced.ends_with(".to_string()")
-        {
-            return Some(format!(
-                "{}.to_string()",
-                coerced.trim_start_matches('&')
-            ));
-        }
         let mut coerced = self.finish_runtime_std_call_arg(
             callee_name,
             arg_index,
@@ -1687,29 +1657,20 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Plain WJ `string` formals emit owned `String` even when multipass left stale
         // `Borrowed` ownership (cross-file analysis before defining-module codegen).
-        // Trust formal type + shared-ref emission, not ownership alone.
-        // (Signature already refreshed from registry above before `expected`.)
+        // Signature-driven only — no method-name heuristics.
         if matches!(
             arg_expr,
             Expression::Literal {
                 value: Literal::String(_),
                 ..
             }
-        ) && !crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-            callee_module,
-        )
-            && !self.inline_module_qualified_call(callee_name)
+        ) && !self.inline_module_qualified_call(callee_name)
             && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
-            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                &sig, param_idx,
+            && crate::codegen::rust::string_utilities::string_literal_needs_to_string(
+                &sig,
+                arg_index,
+                Some(callee_module),
             )
-            && !sig.param_types.get(param_idx).is_some_and(|t| {
-                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-            })
-            && sig.formal_param_type(param_idx).is_some_and(|t| {
-                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    && crate::codegen::rust::types::is_windjammer_text_type(t)
-            })
             && !coerced.ends_with(".to_string()")
         {
             return Some(format!(
@@ -2077,6 +2038,12 @@ impl<'ast> CodeGenerator<'ast> {
             &sig,
             arg_index,
         );
+        coerced = self.normalize_borrowed_iter_elem_for_owned_copy_scalar(
+            arg_expr,
+            &coerced,
+            &sig,
+            arg_index,
+        );
         if coerced.ends_with(".to_string()")
             && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
@@ -2139,6 +2106,24 @@ impl<'ast> CodeGenerator<'ast> {
                 coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
                     .to_string();
             }
+        }
+        let expects_str_ref = crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+            &sig, arg_index,
+        ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            &sig, param_idx,
+        ) || receiver_type_name.is_some_and(|rt| {
+            crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+                method_simple,
+                Some(rt),
+                registry,
+                arg_index,
+            )
+        });
+        if expects_str_ref {
+            crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                arg_expr,
+                &mut coerced,
+            );
         }
         Some(coerced)
     }
@@ -2275,17 +2260,35 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         };
         if needs {
+            if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx) {
+                if arg_str.starts_with('&') {
+                    return arg_str.to_string();
+                }
+                return format!(
+                    "&{}",
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
+                );
+            }
             // Scalar Copy formals (i64/bool/…) need no clone; Copy aggregates/enums still do.
             let skip_clone = match arg_expr {
                 Expression::Identifier { name, .. } => {
                     self.binding_is_copy_pass_by_value_scalar(name)
+                        || self
+                            .current_function_params
+                            .iter()
+                            .find(|p| p.name == *name)
+                            .is_some_and(|p| self.is_type_copy(&p.type_))
+                        || self
+                            .local_var_types
+                            .get(name)
+                            .is_some_and(|t| self.is_type_copy(t))
                 }
                 _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
                     let bare = match &t {
                         Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
                         other => other,
                     };
-                    crate::type_classification::is_copy_pass_by_value_formal(bare)
+                    self.is_type_copy(bare)
                 }),
             };
             if skip_clone {

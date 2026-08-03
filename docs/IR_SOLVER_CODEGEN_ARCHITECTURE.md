@@ -118,7 +118,7 @@ Go and JavaScript backends run the same Analyzer + IrPipeline as Rust (parallel 
 | `call_sites` | Call-site argument coercions | `WJ_IR_CUTOVER_DISABLE_CALL_SITES=1` |
 | `locals` | Local variable types | `WJ_IR_CUTOVER_DISABLE_LOCALS=1` |
 
-Existing flags default **on**. New flags (`call_sites`, `locals`) default **off** until IR call-site lowering is validated.
+All production flags default **on** via `IrCutoverConfig::from_env()` (disable individually with the env vars above). The `Default` impl keeps flags **off** for unit tests that construct a bare `CodeGenerator` without env cutover.
 
 ## Shadow Validation
 

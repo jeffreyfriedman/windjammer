@@ -60,7 +60,7 @@ impl GameState {
 
 pub fn main() {
     let mut state = GameState { flags: Vec::new() }
-    state.set_flag("test".to_string(), true)
+    state.set_flag("test", true)
 }
 "#;
 
@@ -100,7 +100,7 @@ impl GameState {
 
 pub fn main() {
     let state = GameState { flags: Vec::new() }
-    let result = state.has_flag("test".to_string())
+    let result = state.has_flag("test")
 }
 "#;
 

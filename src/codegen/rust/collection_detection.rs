@@ -9,6 +9,7 @@
 //! imports are needed in the generated Rust code.
 
 use super::CodeGenerator;
+use crate::analyzer::FunctionSignature;
 use crate::parser::*;
 
 /// Whether a type is a valid `.collect()` turbofish target (Vec, HashSet, etc.).
@@ -24,6 +25,52 @@ pub(crate) fn type_is_collect_turbofish_target(ty: &Type) -> bool {
         }
         _ => false,
     }
+}
+
+/// Element type collected into `Vec<T>`, `HashSet<T>`, etc.
+pub(crate) fn collect_target_element_type(ty: &Type) -> Option<Type> {
+    match ty {
+        Type::Vec(inner) => Some(inner.as_ref().clone()),
+        Type::Parameterized(base, args) if base == "Vec" && args.len() == 1 => {
+            Some(args[0].clone())
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn peel_type_reference(ty: &Type) -> &Type {
+    match ty {
+        Type::Reference(inner) | Type::MutableReference(inner) => peel_type_reference(inner),
+        other => other,
+    }
+}
+
+fn types_equivalent_for_collect(a: &Type, b: &Type) -> bool {
+    peel_type_reference(a) == peel_type_reference(b)
+}
+
+fn iterator_item_needs_owned_adapter(iter_item: &Type, target_elem: &Type) -> bool {
+    matches!(
+        iter_item,
+        Type::Reference(_) | Type::MutableReference(_)
+    ) && !matches!(
+        target_elem,
+        Type::Reference(_) | Type::MutableReference(_)
+    ) && types_equivalent_for_collect(iter_item, target_elem)
+}
+
+/// Borrowed text iterator items (`&str`, `&String`) collected into `Vec<string>` need `Vec<_>`,
+/// not `collect::<Vec<String>>()`, when the consumer can coerce per element (e.g. a for-loop).
+fn iterator_collect_should_use_inferred_vec(
+    iter_item: &Type,
+    target_elem: &Type,
+) -> bool {
+    matches!(
+        iter_item,
+        Type::Reference(_) | Type::MutableReference(_)
+    ) && crate::codegen::rust::types::is_windjammer_text_type(target_elem)
+        && crate::codegen::rust::types::is_windjammer_text_type(peel_type_reference(iter_item))
+        && !types_equivalent_for_collect(iter_item, target_elem)
 }
 
 impl CodeGenerator<'_> {
@@ -301,5 +348,211 @@ impl CodeGenerator<'_> {
                 .any(|e| Self::expr_references_collection(e, type_name)),
             Expression::Literal { .. } => false,
         }
+    }
+
+    /// Infer `Iterator::Item` at a `.collect()` receiver from registry metadata and receiver types.
+    pub(in crate::codegen::rust) fn infer_iterator_item_type_at_expr(
+        &self,
+        expr: &Expression,
+    ) -> Option<Type> {
+        match expr {
+            Expression::MethodCall { object, method, .. } => {
+                if method == "into_iter" {
+                    let recv_ty = self.infer_expression_type(object)?;
+                    return match recv_ty {
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            Self::extract_iterator_element_type(&inner)
+                                .map(|elem| Type::Reference(Box::new(elem)))
+                        }
+                        other => Self::extract_iterator_element_type(&other),
+                    };
+                }
+
+                if let Some(item) = self
+                    .lookup_method_function_signature_for_iterator_item(object, method)
+                    .and_then(|sig| {
+                        crate::codegen::rust::stdlib_method_traits::iterator_item_type_from_sig(
+                            &sig,
+                        )
+                    })
+                {
+                    return Some(item);
+                }
+
+                if crate::codegen::rust::stdlib_method_traits::method_returns_iterator_qualified(
+                    method,
+                    self.mc_infer_method_receiver_type_name(object)
+                        .or_else(|| self.infer_type_name(object))
+                        .as_deref(),
+                    &self.signature_registry,
+                ) || crate::codegen::rust::stdlib_method_traits::is_closure_taking_method(method)
+                {
+                    return self.infer_iterator_item_type_at_expr(object);
+                }
+
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn lookup_method_function_signature_for_iterator_item(
+        &self,
+        object: &Expression,
+        method: &str,
+    ) -> Option<FunctionSignature> {
+        let receiver = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object))?;
+        let qualified = format!("{receiver}::{method}");
+        self.get_signature_with_global(&qualified)
+            .cloned()
+            .or_else(|| self.signature_registry.get_signature(&qualified).cloned())
+            .or_else(|| {
+                let base = receiver.split('<').next().unwrap_or(&receiver);
+                if base == receiver {
+                    None
+                } else {
+                    let q = format!("{base}::{method}");
+                    self.get_signature_with_global(&q)
+                        .cloned()
+                        .or_else(|| self.signature_registry.get_signature(&q).cloned())
+                }
+            })
+    }
+
+    /// Type-directed `.collect()` lowering: adapter suffix (`.copied()`, etc.) and turbofish.
+    pub(in crate::codegen::rust) fn compute_collect_lowering(
+        &self,
+        collect_receiver: &Expression,
+    ) -> (String, String) {
+        let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver);
+        let target_ty = self
+            .collect_target_type
+            .as_ref()
+            .or_else(|| {
+                self.current_function_return_type
+                    .as_ref()
+                    .filter(|t| type_is_collect_turbofish_target(t))
+            });
+        let target_elem = target_ty
+            .as_ref()
+            .and_then(|t| collect_target_element_type(t));
+
+        let (adapter, turbofish) = match (iter_item.as_ref(), target_elem.as_ref()) {
+            (Some(iter), Some(target))
+                if iterator_collect_should_use_inferred_vec(iter, target) =>
+            {
+                (String::new(), "::<Vec<_>>".to_string())
+            }
+            (Some(iter), Some(target)) if iterator_item_needs_owned_adapter(iter, target) => {
+                let adapter = if crate::codegen::rust::type_analysis_pure::is_copy_type(
+                    peel_type_reference(iter),
+                ) {
+                    ".copied()".to_string()
+                } else if crate::codegen::rust::types::is_windjammer_text_type(
+                    peel_type_reference(iter),
+                ) {
+                    ".map(|s| s.to_string())".to_string()
+                } else {
+                    ".cloned()".to_string()
+                };
+                let turbofish = target_ty
+                    .map(|t| format!("::<{}>", self.type_to_rust(t)))
+                    .unwrap_or_else(|| "::<Vec<_>>".to_string());
+                (adapter, turbofish)
+            }
+            (Some(iter), Some(target)) if types_equivalent_for_collect(iter, target) => {
+                let turbofish = target_ty
+                    .map(|t| format!("::<{}>", self.type_to_rust(t)))
+                    .unwrap_or_else(|| "::<Vec<_>>".to_string());
+                (String::new(), turbofish)
+            }
+            _ => (
+                String::new(),
+                target_ty
+                    .map(|t| format!("::<{}>", self.type_to_rust(t)))
+                    .unwrap_or_else(|| "::<Vec<_>>".to_string()),
+            ),
+        };
+
+        (adapter, turbofish)
+    }
+
+    /// When `find`/`find_map`-style adapters yield `Option<&T>` from a borrowed
+    /// iterator but the enclosing expression needs `Option<T>`, append `.cloned()`.
+    /// Driven by inferred iterator item type vs owned option payload — not method name.
+    pub(in crate::codegen::rust) fn find_needs_cloned_for_owned_return(
+        &self,
+        find_receiver_chain: &Expression,
+    ) -> bool {
+        // Only iterator chains (…into_iter()/iter()/filter()/map()) — never plain
+        // string/text receivers (`s.find(pattern)` returns `Option<usize>`).
+        if !Self::expr_is_iterator_adapter_chain(find_receiver_chain) {
+            return false;
+        }
+        let Some(Type::Option(inner)) = self.current_function_return_type.as_ref() else {
+            return false;
+        };
+        if matches!(
+            inner.as_ref(),
+            Type::Reference(_) | Type::MutableReference(_)
+        ) {
+            return false;
+        }
+        let Some(iter_item) = self.infer_iterator_item_type_at_expr(find_receiver_chain) else {
+            return false;
+        };
+        matches!(
+            iter_item,
+            Type::Reference(_) | Type::MutableReference(_)
+        ) && types_equivalent_for_collect(&iter_item, inner)
+    }
+
+    fn expr_is_iterator_adapter_chain(expr: &Expression) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                let has_closure_arg = arguments
+                    .iter()
+                    .any(|(_, a)| matches!(a, Expression::Closure { .. }));
+                // Language-level iterator producers / adapters (not ownership heuristics).
+                let is_iter_producer = matches!(
+                    method.as_str(),
+                    "into_iter" | "iter" | "iter_mut" | "copied" | "cloned"
+                );
+                has_closure_arg || is_iter_producer || Self::expr_is_iterator_adapter_chain(object)
+            }
+            _ => false,
+        }
+    }
+
+    /// Element type when `into_iter()` is invoked on a borrowed collection parameter/local.
+    pub(in crate::codegen::rust) fn infer_borrowed_collection_element_type(
+        &self,
+        object: &Expression,
+    ) -> Option<Type> {
+        let recv_ty = self.infer_expression_type(object)?;
+        let is_borrowed = matches!(
+            recv_ty,
+            Type::Reference(_) | Type::MutableReference(_)
+        ) || matches!(
+            object,
+            Expression::Identifier { name, .. }
+                if self.inferred_borrowed_params.contains(name)
+                    || self.inferred_mut_borrowed_params.contains(name)
+        );
+        if !is_borrowed {
+            return None;
+        }
+        let container = match &recv_ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        Self::extract_iterator_element_type(container)
     }
 }

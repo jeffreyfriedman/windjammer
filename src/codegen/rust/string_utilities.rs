@@ -149,17 +149,27 @@ pub fn call_site_param_expects_owned_string(
     arg_index: usize,
 ) -> bool {
     let idx = sig.arg_param_index(arg_index);
-    if sig
-        .formal_param_types
-        .get(idx)
-        .is_some_and(param_is_owned_string_type)
-    {
-        return true;
+    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx) {
+        return false;
+    }
+    if sig.param_types.get(idx).is_some_and(|t| {
+        param_is_rust_str_ref(t) || param_is_rust_string_ref(t)
+    }) {
+        return false;
+    }
+    if matches!(
+        crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+        crate::analyzer::OwnershipMode::Borrowed
+    ) {
+        return false;
     }
     if sig.param_types.get(idx).is_some_and(param_is_owned_string_type) {
         return true;
     }
     if let Some(flags) = &sig.emitted_rust_ref_params {
+        if flags.get(idx) == Some(&true) {
+            return false;
+        }
         if flags.get(idx) == Some(&false) {
             return sig
                 .param_types
@@ -167,7 +177,11 @@ pub fn call_site_param_expects_owned_string(
                 .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
         }
     }
-    false
+    // Plain WJ `string` formals may emit `&str` — do not trust formal_param_types alone.
+    sig.formal_param_types
+        .get(idx)
+        .is_some_and(param_is_owned_string_type)
+        && sig.param_types.get(idx).is_some_and(param_is_owned_string_type)
 }
 
 /// Parameter type is `&String` — a reference to an owned String.
@@ -238,6 +252,82 @@ pub fn callee_borrows_string_param(
     )
 }
 
+/// At `&str` / `Pattern` formals, normalize owned `String` producers for rustc.
+///
+/// - `"lit".to_string()` → `"lit"` (literal is already `&str`)
+/// - other `….to_string()` / `….to_owned()` → `&….to_string()` (borrow for `Pattern`)
+pub fn normalize_owned_string_producer_for_str_ref_param(
+    arg_expr: &crate::parser::Expression,
+    arg_str: &mut String,
+) {
+    if arg_str.starts_with('&') {
+        return;
+    }
+    if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
+        if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
+            *arg_str = stripped.to_string();
+        } else if let Some(stripped) = arg_str.strip_suffix(".to_owned()") {
+            *arg_str = stripped.to_string();
+        }
+        while arg_str.starts_with('&') {
+            *arg_str = arg_str[1..].to_string();
+        }
+        return;
+    }
+    if arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()") {
+        *arg_str = format!("&{arg_str}");
+    }
+}
+
+/// Whether a method call argument expects `&str` / Rust `Pattern` (resolved sig + registry).
+pub fn method_call_arg_expects_pattern_str(
+    method: &str,
+    arg_index: usize,
+    resolved_sig: Option<&crate::analyzer::FunctionSignature>,
+    receiver_type_name: Option<&str>,
+    receiver_is_text: bool,
+    registry: &crate::analyzer::SignatureRegistry,
+) -> bool {
+    if let Some(sig) = resolved_sig {
+        if crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+            sig, arg_index,
+        ) {
+            return true;
+        }
+    }
+    // stdlib_meta registers text search methods on `String` even when the receiver
+    // lowers to `&str` (`string`/`str` formals). Always consult those registry keys
+    // — not only when `receiver_is_text` — so stale local signatures cannot block
+    // Pattern/`&str` normalization (e.g. `s.find(":".to_string())` in match scrutinees).
+    let mut receivers: Vec<String> = Vec::new();
+    let mut push = |rt: &str| {
+        if !rt.is_empty() && !receivers.iter().any(|existing| existing == rt) {
+            receivers.push(rt.to_string());
+        }
+    };
+    if let Some(rt) = receiver_type_name {
+        push(rt);
+        for candidate in
+            crate::codegen::rust::stdlib_method_traits::stdlib_receiver_lookup_candidates(rt)
+        {
+            push(&candidate);
+        }
+    }
+    if receiver_is_text || receiver_type_name.is_none() {
+        push("String");
+        push("str");
+        push("string");
+    }
+    receivers.iter().any(|rt| {
+        crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+            method,
+            Some(rt.as_str()),
+            registry,
+            arg_index,
+        )
+    })
+}
+
 /// Types whose read-only methods converge string keys to `&str`.
 /// Prefer [`crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified`].
 pub fn is_readonly_string_key_method(
@@ -287,6 +377,25 @@ pub fn enum_factory_string_param_needs_owned(
         }
     }
     false
+}
+
+/// Signature-driven: a string literal at `arg_index` needs `.to_string()`.
+///
+/// Uses resolved ownership + param type only — never method-name heuristics.
+/// Returns false when the param is borrowed, `&str`, or the signature is absent.
+pub fn string_literal_needs_to_string(
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
+    runtime_module: Option<&str>,
+) -> bool {
+    string_literal_needs_owned_coercion_with_enum(
+        Some(sig),
+        arg_index,
+        None,
+        None,
+        None,
+        runtime_module,
+    )
 }
 
 /// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
@@ -969,5 +1078,43 @@ mod tests {
             ),
             "static impl new(&str) must not use blind new→owned heuristic"
         );
+    }
+
+    #[test]
+    fn normalize_string_literal_to_string_for_str_ref_param_strips_suffix() {
+        use crate::parser::{Expression, Literal};
+        use crate::test_utils::test_alloc_expr;
+        let arg = test_alloc_expr(Expression::MethodCall {
+            object: test_alloc_expr(Expression::Literal {
+                value: Literal::String(":".into()),
+                location: None,
+            }),
+            method: "to_string".into(),
+            type_args: None,
+            arguments: vec![],
+            location: None,
+        });
+        let mut arg_str = "\":\".to_string()".to_string();
+        normalize_owned_string_producer_for_str_ref_param(arg, &mut arg_str);
+        assert_eq!(arg_str, "\":\"");
+    }
+
+    #[test]
+    fn normalize_non_literal_to_string_for_str_ref_param_borrows() {
+        use crate::parser::Expression;
+        use crate::test_utils::test_alloc_expr;
+        let arg = test_alloc_expr(Expression::MethodCall {
+            object: test_alloc_expr(Expression::Identifier {
+                name: "needle".into(),
+                location: None,
+            }),
+            method: "to_string".into(),
+            type_args: None,
+            arguments: vec![],
+            location: None,
+        });
+        let mut arg_str = "needle.to_string()".to_string();
+        normalize_owned_string_producer_for_str_ref_param(arg, &mut arg_str);
+        assert_eq!(arg_str, "&needle.to_string()");
     }
 }

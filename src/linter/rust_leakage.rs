@@ -6,6 +6,7 @@
 use crate::error::SourceLocation;
 use crate::linter::{LintCategory, LintCollector, LintDiagnostic, LintLevel};
 use crate::parser::ast::core::{Expression, FunctionDecl, Item, Parameter, Program, Statement};
+use crate::parser::Literal;
 use crate::parser::ast::operators::UnaryOp;
 use crate::parser::ast::types::Type;
 use crate::parser::ast::OwnershipHint;
@@ -263,6 +264,37 @@ impl<'ast> RustLeakageLinter<'ast> {
                         suggestion: Some(
                             "remove .clone() and let the compiler handle it".to_string(),
                         ),
+                    });
+                }
+
+                // W0006: `"…".to_string()` — string literals are already `string`.
+                if method == "to_string"
+                    && arguments.is_empty()
+                    && matches!(
+                        &**object,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    )
+                {
+                    let loc = to_source_location(location.clone(), &self.default_file);
+                    self.collector.add(LintDiagnostic {
+                        lint_name: "W0006".to_string(),
+                        category: LintCategory::Style,
+                        level: LintLevel::Error,
+                        message: "string literal `.to_string()` is forbidden Rust leakage"
+                            .to_string(),
+                        location: loc,
+                        help: Some(
+                            "prefer bare string literal — codegen emits `String::from(\"…\")`"
+                                .to_string(),
+                        ),
+                        note: Some(
+                            "Windjammer string literals are already `string`; `.to_string()` is a Rustism"
+                                .to_string(),
+                        ),
+                        suggestion: Some("remove `.to_string()`".to_string()),
                     });
                 }
 

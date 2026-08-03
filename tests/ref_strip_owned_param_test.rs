@@ -185,7 +185,7 @@ impl Inspector {
 }
 
 fn main() {
-    let inspector = Inspector { name: "test".to_string() }
+    let inspector = Inspector { name: "test" }
     let transform = Transform { position: Vec3 { x: 1.0, y: 2.0, z: 3.0 } }
     let result = inspector.inspect(transform)
 }

@@ -1,0 +1,25 @@
+// Repro (Phase 18 / graph_bfs_engine): HashMap<i64, T> get/contains_key must accept i64 keys.
+use std::collections::HashMap
+
+pub fn map_has_vertex(map: HashMap<i64, i64>, vertex: i64) -> bool {
+    map.contains_key(vertex)
+}
+
+pub fn map_get_distance(map: HashMap<i64, i64>, vertex: i64) -> i64 {
+    if let Some(d) = map.get(vertex) {
+        return d
+    }
+    -1
+}
+
+pub fn test_hashmap_i64_contains_key_and_get() {
+    let mut map = HashMap::new()
+    map.insert(10, 0)
+    map.insert(20, 1)
+    if !map_has_vertex(map, 10) {
+        assert(false, "HashMap<i64> contains_key with i64 key")
+    }
+    if map_get_distance(map, 20) != 1 {
+        assert(false, "HashMap<i64> get with i64 key")
+    }
+}

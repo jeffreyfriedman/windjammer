@@ -61,7 +61,7 @@ impl GameState {
 
 pub fn main() {
     let state = GameState { custom_flags: Vec::new() }
-    let result = state.check_flag("test".to_string())
+    let result = state.check_flag("test")
 }
 "#;
 

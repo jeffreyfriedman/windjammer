@@ -18,6 +18,9 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
+        if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {
+        }
+        let mut obj_str = obj_str;
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);
         let receiver_type_name = self
@@ -931,27 +934,20 @@ impl<'ast> CodeGenerator<'ast> {
         self.assignment_float_target_type = prev_float_target;
 
         // Generate turbofish if present, or infer for collect() from return type
+        let mut collect_adapter = String::new();
         let turbofish = if let Some(types) = type_args {
             let type_strs: Vec<String> = types.iter().map(|t| self.type_to_rust(t)).collect();
             format!("::<{}>", type_strs.join(", "))
         } else if method == "collect" {
-            if let Some(target_ty) = &self.collect_target_type {
-                format!("::<{}>", self.type_to_rust(target_ty))
-            } else if let Some(ret_ty) = &self.current_function_return_type {
-                if crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(
-                    ret_ty,
-                ) {
-                    format!("::<{}>", self.type_to_rust(ret_ty))
-                } else {
-                    // Untyped `split().collect()` etc. — never use String/Option return type.
-                    "::<Vec<_>>".to_string()
-                }
-            } else {
-                "::<Vec<_>>".to_string()
-            }
+            let (adapter, turbo) = self.compute_collect_lowering(object);
+            collect_adapter = adapter;
+            turbo
         } else {
             String::new()
         };
+        if !collect_adapter.is_empty() {
+            obj_str.push_str(&collect_adapter);
+        }
 
         // Special case: empty method name means turbofish on a function call (func::<T>())
         if method.is_empty() {
@@ -989,72 +985,36 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("&{slice_inner}");
         }
 
-        // Signature-driven: owned String-producing args at `&str` formals need a borrow.
-        // Prefer `&expr.to_string()` so source `.to_string()` remains visible (TDD).
-        if args.len() == 1 {
-            let receiver_is_string = receiver_type_name.as_deref().is_some_and(|rt| {
-                rt == "String" || rt == "string" || rt.ends_with("::String")
-            }) || matches!(
-                object,
-                Expression::Identifier { name, .. }
-                    if self.local_var_types.get(name).is_some_and(|t| {
-                        matches!(t, Type::String)
-                            || matches!(t, Type::Custom(n) if n == "String" || n == "string")
+        // Signature-driven: owned String-producing args at `&str` / Pattern formals need
+        // a borrow (or bare literal). Prefer `&expr.to_string()` so source `.to_string()`
+        // remains visible (TDD). Text receivers include `&str` formals — registry keys are
+        // still `String::method` in stdlib_meta.
+        let receiver_is_text = receiver_type_name.as_deref().is_some_and(|rt| {
+            rt == "String"
+                || rt == "string"
+                || rt == "str"
+                || rt.ends_with("::String")
+                || rt.ends_with("::str")
+        }) || matches!(
+            object,
+            Expression::Identifier { name, .. }
+                if self.local_var_types.get(name).is_some_and(|t| {
+                    crate::codegen::rust::types::is_windjammer_text_type(t)
+                }) || self.str_ref_optimized_params.contains(name)
+                    || self.emitted_rust_ref_formals.contains(name)
+                    || (self.inferred_borrowed_params.contains(name.as_str())
+                        && self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        }))
+                    || self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                     })
-            );
-            let param_wants_str_ref = resolved_signature
-                .as_ref()
-                .and_then(|sig| sig.param_type_for_arg(0))
-                .is_some_and(|t| {
-                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                })
-                || receiver_type_name.as_deref().is_some_and(|rt| {
-                    self.lookup_method_signature(rt, method)
-                        .and_then(|ms| ms.param_types.first())
-                        .is_some_and(|t| {
-                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                        })
-                })
-                || (receiver_is_string
-                    && self
-                        .lookup_method_signature("String", method)
-                        .and_then(|ms| ms.param_types.first())
-                        .is_some_and(|t| {
-                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                        }));
-            if param_wants_str_ref {
-                if let Some((_label, arg)) = arguments.first() {
-                    // `"lit".to_string()` at a &str param is already satisfied by the literal.
-                    if let Expression::MethodCall {
-                        object,
-                        method: m,
-                        ..
-                    } = arg
-                    {
-                        if m == "to_string" {
-                            if let Expression::Literal {
-                                value: Literal::String(_),
-                                ..
-                            } = **object
-                            {
-                                let lit = args[0].trim_start_matches('&');
-                                let bare = lit.strip_suffix(".to_string()").unwrap_or(lit);
-                                return format!("{}.{}({})", obj_str, method, bare);
-                            }
-                            // Prefer `&expr.to_string()` (coerces to &str); keeps `.to_string()`
-                            // visible for non-string→String conversions (TDD: to_string_push_str).
-                            if !args[0].starts_with('&') {
-                                return format!("{}.{}(&{})", obj_str, method, args[0]);
-                            }
-                        }
-                    }
-                    // Generated arg may already be `….to_string()` even if AST shape differs.
-                    if args[0].ends_with(".to_string()") && !args[0].starts_with('&') {
-                        return format!("{}.{}(&{})", obj_str, method, args[0]);
-                    }
-                }
-            }
-        }
+        ) || self
+            .infer_expression_type(object)
+            .as_ref()
+            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
 
         // Determine separator: :: for static/module calls, . for instance methods
         // - Type/Module (starts with uppercase): use ::
@@ -1162,6 +1122,30 @@ impl<'ast> CodeGenerator<'ast> {
             };
             self.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
         }
+        for (i, arg_str) in processed_args.iter_mut().enumerate() {
+            let Some((_, arg_expr)) = arguments.get(i) else {
+                continue;
+            };
+            let expects_pattern =
+                crate::codegen::rust::string_utilities::method_call_arg_expects_pattern_str(
+                    method,
+                    i,
+                    resolved_signature.as_ref().or(method_signature.as_ref()),
+                    receiver_type_name.as_deref(),
+                    receiver_is_text,
+                    &self.signature_registry,
+                );
+            if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {
+            }
+            if expects_pattern {
+                crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                    arg_expr,
+                    arg_str,
+                );
+                if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {
+                }
+            }
+        }
         if let Some(ref rt) = receiver_type_name {
             let qualified = format!("{rt}::{method}");
             for (i, arg_str) in processed_args.iter_mut().enumerate() {
@@ -1217,6 +1201,26 @@ impl<'ast> CodeGenerator<'ast> {
         // WINDJAMMER STDLIB → RUST TRANSLATION
         // Some Windjammer methods don't exist in Rust and need translation.
         //
+        // `into_iter()` on a borrowed `&Vec<T>` yields `&T`; use `.iter().copied()` /
+        // `.iter().cloned()` so downstream `filter`/`find`/`collect` see owned items.
+        if method == "into_iter" && arguments.is_empty() {
+            if let Some(elem_ty) = self.infer_borrowed_collection_element_type(object) {
+                let prev_field_access = self.in_field_access_object;
+                self.in_field_access_object = true;
+                let mut recv_str = self.generate_expression(object);
+                self.in_field_access_object = prev_field_access;
+                if recv_str.starts_with("&mut ") {
+                    recv_str = recv_str["&mut ".len()..].to_string();
+                } else if recv_str.starts_with('&') {
+                    recv_str = recv_str[1..].to_string();
+                }
+                if self.is_type_copy(&elem_ty) {
+                    return format!("{recv_str}.iter().copied()");
+                }
+                return format!("{recv_str}.iter().cloned()");
+            }
+        }
+
         // reversed() → into_iter().rev().collect::<Vec<_>>()
         if method == "reversed" && processed_args.is_empty() {
             return format!("{}.into_iter().rev().collect::<Vec<_>>()", obj_str);
@@ -1329,6 +1333,13 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             base_expr
         };
+
+        // Iterator adapters yielding `Option<&T>` when the function needs `Option<T>`.
+        // Gated by iterator-chain detection + type equivalence (not method-name lists).
+        if self.find_needs_cloned_for_owned_return(object) && !base_expr.ends_with(".cloned()")
+        {
+            return format!("{}.cloned()", base_expr);
+        }
 
         base_expr
     }

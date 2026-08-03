@@ -7,6 +7,47 @@
 use std::collections::HashMap
 
 //===============================================
+// HTTP METHOD
+//===============================================
+
+pub enum HttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+}
+
+impl HttpMethod {
+    pub fn as_str(self) -> string {
+        match self {
+            HttpMethod::GET => "GET",
+            HttpMethod::POST => "POST",
+            HttpMethod::PUT => "PUT",
+            HttpMethod::DELETE => "DELETE",
+            HttpMethod::PATCH => "PATCH",
+            HttpMethod::HEAD => "HEAD",
+            HttpMethod::OPTIONS => "OPTIONS",
+        }
+    }
+
+    pub fn from_str(s: string) -> Option<HttpMethod> {
+        match s {
+            "GET" | "get" | "Get" => Some(HttpMethod::GET),
+            "POST" | "post" | "Post" => Some(HttpMethod::POST),
+            "PUT" | "put" | "Put" => Some(HttpMethod::PUT),
+            "DELETE" | "delete" | "Delete" => Some(HttpMethod::DELETE),
+            "PATCH" | "patch" | "Patch" => Some(HttpMethod::PATCH),
+            "HEAD" | "head" | "Head" => Some(HttpMethod::HEAD),
+            "OPTIONS" | "options" | "Options" => Some(HttpMethod::OPTIONS),
+            _ => None,
+        }
+    }
+}
+
+//===============================================
 // CLIENT TYPES
 //===============================================
 
@@ -184,7 +225,7 @@ impl Headers {
 //===============================================
 
 struct Request {
-    method: string,
+    method: HttpMethod,
     path: string,
     // Private: Wraps axum::extract::Request
 }
@@ -262,8 +303,8 @@ impl Router {
 // Request - Extract Data from Requests
 
 impl Request {
-    fn method(self) -> string {
-        // Wraps: request.method().as_str()
+    fn method(self) -> HttpMethod {
+        // Wraps: request.method() → HttpMethod
         self.method
     }
     
@@ -451,7 +492,7 @@ impl ServerResponse {
 // Implementation: windjammer_runtime::http (axum + tokio block_on, hidden from users)
 
 struct ServerRequest {
-    method: string,
+    method: HttpMethod,
     path: string,
     query: HashMap<string, string>,
     headers: Vec<(string, string)>,

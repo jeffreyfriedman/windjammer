@@ -46,7 +46,7 @@ fn main() {
     // RUST_LOG=warn cargo run     - Show warnings and errors only
     
     println!("Initializing logger with 'debug' level...")
-    log.init_with_level("debug")
+    log.init_with_level(LogLevel::Debug)
     println!()
     
     // Different log levels

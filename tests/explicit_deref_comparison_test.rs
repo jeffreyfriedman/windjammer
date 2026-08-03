@@ -53,7 +53,7 @@ pub fn check_flag(flag_id: string) -> bool {
 }
 
 pub fn main() {
-    let test_flag = "test".to_string()
+    let test_flag = "test"
     let result = check_flag(test_flag)
 }
 "#;
@@ -77,7 +77,7 @@ pub fn get_custom_flag(flag_id: string) -> bool {
 }
 
 pub fn main() {
-    let test_flag = "test".to_string()
+    let test_flag = "test"
     let result = get_custom_flag(test_flag)
 }
 "#;

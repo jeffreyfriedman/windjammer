@@ -36,7 +36,7 @@ mod test_utils;
 fn test_string_literal_assignment() {
     let code = r#"
 pub fn greeting() -> string {
-    let s = "hello".to_string()
+    let s = "hello"
     s
 }
 "#;

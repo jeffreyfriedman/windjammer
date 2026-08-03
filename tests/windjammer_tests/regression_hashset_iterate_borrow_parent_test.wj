@@ -1,0 +1,29 @@
+// Repro (Phase 16 / LSQB Q4–Q7): iterate HashSet field while calling helper that borrows parent struct.
+// Pattern: for post in graph.posts { count += helper(graph, post) }
+use std::collections::HashSet
+
+struct MessageGraph {
+    posts: HashSet<i64>,
+}
+
+fn message_has_likers(graph: MessageGraph, message: i64) -> bool {
+    graph.posts.contains(message)
+}
+
+fn count_posts_with_self_borrow(graph: MessageGraph) -> i64 {
+    let mut count = 0
+    for post in graph.posts {
+        if message_has_likers(graph, post) {
+            count = count + 1
+        }
+    }
+    count as i64
+}
+
+pub fn test_hashset_iterate_while_borrowing_parent_struct() {
+    let mut graph = MessageGraph { posts: HashSet::new() }
+    graph.posts.insert(10)
+    graph.posts.insert(20)
+    graph.posts.insert(30)
+    assert_eq(count_posts_with_self_borrow(graph), 3)
+}

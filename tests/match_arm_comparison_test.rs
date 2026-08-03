@@ -203,7 +203,7 @@ pub fn can_afford(inventory: Inventory, cost: Cost) -> bool {
 
 pub fn main() {
     let inventory = Inventory { items: Vec::new() }
-    let cost = Cost::Item("sword".to_string(), 1)
+    let cost = Cost::Item("sword", 1)
     let result = can_afford(inventory, cost)
 }
 "#;
