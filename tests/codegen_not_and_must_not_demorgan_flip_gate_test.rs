@@ -10,11 +10,11 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO — `!row.flag && row.n != 0` must not become `!(row.flag && row.n != 0)`.
+//! FAILING REPRO — inside `for` loops, `!row.flag && row.n != 0` must not become
+//! `!(row.flag && row.n != 0)`.
 //!
-//! Plain locals (`!balanced && n != 0`) may codegen correctly, but field-access form
-//! `!row.balanced && row.discrepancy != 0` has been observed as De Morgan–wrong
-//! `!(row.balanced && row.discrepancy != 0)`.
+//! Standalone functions may keep `!row.flag && …` correctly; the same condition
+//! inside a `for row in rows` body has been observed as De Morgan–wrong.
 //!
 //! Language-only; no product/repo names.
 
@@ -23,7 +23,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-fn codegen_not_and_field_access_must_not_demorgan_flip() {
+fn codegen_not_and_in_for_loop_must_not_demorgan_flip() {
     let tmp = TempDir::new().unwrap();
     let src = tmp.path().join("t.wj");
     let out = tmp.path().join("out");
@@ -36,16 +36,21 @@ pub struct Row {
     pub discrepancy: int,
 }
 
-pub fn label(row: Row) -> string {
-    if !row.balanced && row.discrepancy != 0 {
-        "off"
-    } else {
-        "ok"
+pub fn labels(rows: Vec<Row>) -> string {
+    let mut out = ""
+    for row in rows {
+        let part = if !row.balanced && row.discrepancy != 0 {
+            "off"
+        } else {
+            "ok"
+        }
+        out = "${out}${part}"
     }
+    out
 }
 
 fn main() {
-    let _ = label(Row { balanced: true, discrepancy: 0 })
+    let _ = labels(Vec::new())
 }
 "#,
     )
@@ -89,12 +94,12 @@ fn main() {
         !rs.contains("!(row.balanced &&")
             && !rs.contains("!(row.balanced&&")
             && !rs.contains("!( row.balanced &&"),
-        "must not De Morgan-flip `!row.balanced && …` into `!(row.balanced && …)`. Got:\n{rs}"
+        "must not De Morgan-flip `!row.balanced && …` into `!(row.balanced && …)` inside for-loop. Got:\n{rs}"
     );
     assert!(
         rs.contains("!row.balanced &&")
             || rs.contains("!row.balanced&&")
             || (rs.contains("if !row.balanced") && rs.contains("discrepancy")),
-        "expected `!row.balanced && …` (or nested equivalent). Got:\n{rs}"
+        "expected `!row.balanced && …` (or nested equivalent) inside for-loop. Got:\n{rs}"
     );
 }
