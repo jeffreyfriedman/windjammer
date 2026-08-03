@@ -101,7 +101,7 @@ pub use rust_integration_tests::sync_rust_integration_tests;
 #[cfg(feature = "cli")]
 pub use build_utils::{generate_mod_file, strip_main_functions};
 #[cfg(feature = "cli")]
-pub use test_runner::run_tests;
+pub use test_runner::{run_tests, run_tests_with_options, TestRunOptions};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum CompilationTarget {
