@@ -9,6 +9,32 @@ use super::path_utilities::{is_submodule_output_dir, source_dir_for_output};
 
 use crate::test_module_gate::is_test_module;
 
+/// Post-transpile steps shared by `wj build --library` and `wj test --module-file`.
+///
+/// Generates scoped `mod.rs` when requested and strips `main()` for library crates.
+pub fn apply_library_build_post_steps(
+    input_path: &Path,
+    output_dir: &Path,
+    library: bool,
+    module_file: bool,
+) -> Result<()> {
+    let multipass_handled_mod = input_path.is_dir() && library;
+    if module_file && !multipass_handled_mod {
+        if let Some((out_root, src_root)) = mod_file_layout_for_build(input_path, output_dir) {
+            generate_mod_file_with_layout(
+                output_dir,
+                Some((out_root.as_path(), src_root.as_path())),
+            )?;
+        } else {
+            generate_mod_file(output_dir)?;
+        }
+    }
+    if library {
+        super::file_operations::strip_main_functions(output_dir)?;
+    }
+    Ok(())
+}
+
 /// Parse `pub mod name;` lines from mod.wj (subset of module_system parsing; keeps build_utils free of `module_system`).
 fn pub_mod_names_from_mod_wj(content: &str) -> HashSet<String> {
     let mut names = HashSet::new();

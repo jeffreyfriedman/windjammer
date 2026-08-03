@@ -13,7 +13,9 @@ mod test_discovery;
 pub mod test_execution;
 mod test_reporting;
 mod util;
+mod options;
 
+pub use options::TestRunOptions;
 pub use test_execution::rewrite_test_crate_imports;
 pub use util::{copy_dir_recursive, path_to_toml_string};
 
@@ -24,6 +26,12 @@ pub fn run_tests(
     parallel: bool,
     json: bool,
 ) -> Result<()> {
+    run_tests_with_options(TestRunOptions::from_legacy(
+        path, filter, nocapture, parallel, json,
+    ))
+}
+
+pub fn run_tests_with_options(opts: TestRunOptions) -> Result<()> {
     use colored::*;
     use std::fs;
     use std::process::Command;
@@ -36,14 +44,17 @@ pub fn run_tests(
     let start_time = Instant::now();
 
     // Determine test directory
-    let test_dir = path.unwrap_or_else(|| Path::new("."));
+    let test_dir = opts
+        .path
+        .as_deref()
+        .unwrap_or_else(|| Path::new("."));
 
     if !test_dir.exists() {
         anyhow::bail!("Test path does not exist: {:?}", test_dir);
     }
 
     // Discover test files
-    if !json {
+    if !opts.json {
         println!();
         println!(
             "{}",
@@ -66,7 +77,7 @@ pub fn run_tests(
     let test_files = discover_test_files(test_dir)?;
 
     if test_files.is_empty() {
-        if json {
+        if opts.json {
             println!("{{\"error\": \"No test files found\", \"files\": [], \"tests\": []}}");
         } else {
             println!();
@@ -74,17 +85,21 @@ pub fn run_tests(
             println!();
             println!("  {} Test files should:", "ℹ".blue());
             println!(
-                "    • Be named {}  or {}",
-                "*_test.wj".yellow(),
-                "test_*.wj".yellow()
+                "    • Live under {} with names like {}",
+                "tests/".yellow(),
+                "*_test.wj".yellow()
             );
-            println!("    • Contain functions starting with {}", "test_".yellow());
+            println!(
+                "    • Mark tests with {} or name functions {}",
+                "@test".yellow(),
+                "test_*".yellow()
+            );
             println!();
         }
         return Ok(());
     }
 
-    if !json {
+    if !opts.json {
         println!(
             "{} Found {} test file(s)",
             "✓".green().bold(),
@@ -114,7 +129,7 @@ pub fn run_tests(
     fs::create_dir_all(&temp_dir)?;
 
     // Compile test files
-    if !json {
+    if !opts.json {
         println!("{} Compiling tests...", "→".bright_blue().bold());
     }
 
@@ -125,7 +140,7 @@ pub fn run_tests(
         all_tests.extend(tests);
     }
 
-    if !json {
+    if !opts.json {
         println!(
             "{} Found {} test function(s)",
             "✓".green().bold(),
@@ -136,10 +151,10 @@ pub fn run_tests(
 
     // Generate test harness (pass project root for library detection)
     let project_root = std::env::current_dir()?;
-    generate_test_harness(&temp_dir, &all_tests, filter, &project_root)?;
+    generate_test_harness(&temp_dir, &all_tests, opts.filter.as_deref(), &project_root, &opts)?;
 
     // Run tests
-    if !json {
+    if !opts.json {
         println!("{}", "─".repeat(50).bright_black());
         println!("{} Running tests...", "▶".bright_green().bold());
         println!("{}", "─".repeat(50).bright_black());
@@ -151,16 +166,16 @@ pub fn run_tests(
         .current_dir(&temp_dir)
         .env_remove("CARGO_TARGET_DIR");
 
-    if !parallel {
+    if !opts.parallel {
         cmd.arg("--").arg("--test-threads").arg("1");
     }
 
-    if let Some(filter_str) = filter {
+    if let Some(filter_str) = opts.filter.as_deref() {
         cmd.arg("--").arg(filter_str);
     }
 
-    if nocapture {
-        if filter.is_none() {
+    if opts.nocapture {
+        if opts.filter.is_none() {
             cmd.arg("--");
         }
         cmd.arg("--nocapture");
@@ -175,7 +190,7 @@ pub fn run_tests(
 
     let test_results = parse_test_output(&stdout, &stderr);
 
-    if json {
+    if opts.json {
         // JSON output for tooling
         println!("{{");
         println!("  \"success\": {},", output.status.success());
@@ -304,8 +319,10 @@ pub fn run_tests(
         anyhow::bail!("Tests failed");
     }
 
-    // Clean up
-    if temp_dir.exists() {
+    // Clean up (unless tests need to inspect the temp tree)
+    if std::env::var("WJ_TEST_KEEP_TEMP").is_ok() {
+        eprintln!("WJ_TEST_KEEP_TEMP: {}", temp_dir.display());
+    } else if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir)?;
     }
 

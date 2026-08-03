@@ -1,9 +1,10 @@
 //! Compiling the project under test, FFI wiring, and generating the Rust test harness crate.
 
 use crate::{build_project, build_project_ext, CompilationTarget};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
+use super::options::TestRunOptions;
 use super::test_discovery::TestFunction;
 use super::util::copy_dir_recursive;
 
@@ -37,11 +38,225 @@ fn directory_has_wj_sources(dir: &Path) -> bool {
     false
 }
 
+/// Read `[lib] name` from a Cargo.toml file, if present.
+fn read_cargo_lib_name(cargo_toml_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(cargo_toml_path).ok()?;
+    let lib_start = content.find("[lib]")?;
+    let name_start = content[lib_start..].find("name = \"")? + lib_start + "name = \"".len();
+    let name_end = content[name_start..].find('"')?;
+    Some(content[name_start..name_start + name_end].to_string())
+}
+
+/// Read `[package] name` from a Cargo.toml file, if present.
+fn read_cargo_package_name(cargo_toml_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(cargo_toml_path).ok()?;
+    let pkg_start = content.find("[package]")?;
+    let name_start = content[pkg_start..].find("name = \"")? + pkg_start + "name = \"".len();
+    let name_end = content[name_start..].find('"')?;
+    Some(content[name_start..name_start + name_end].to_string())
+}
+
+fn resolve_dependency_path(project_root: &Path, path: &str) -> PathBuf {
+    let p = Path::new(path);
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+    project_root
+        .join(p)
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.join(p))
+}
+
+/// Use a pre-built outbound tree (e.g. `build/`) as the library under test.
+fn resolve_prebuilt_library(
+    build_dir: &Path,
+    project_root: &Path,
+) -> Result<Option<(String, String, PathBuf)>> {
+    use colored::*;
+
+    let build_dir = if build_dir.is_absolute() {
+        build_dir.to_path_buf()
+    } else {
+        project_root.join(build_dir)
+    };
+
+    let lib_rs = build_dir.join("lib.rs");
+    if !lib_rs.exists() {
+        anyhow::bail!(
+            "--use-build-dir {} has no lib.rs — run `wj build --library --module-file -o {}` first",
+            build_dir.display(),
+            build_dir.display()
+        );
+    }
+
+    let build_cargo = build_dir.join("Cargo.toml");
+    let project_cargo = project_root.join("Cargo.toml");
+
+    // Dogfood layout: project root Cargo.toml is source of truth for crate identity;
+    // [lib].path often points at `build/lib.rs`.
+    let lib_name = read_cargo_lib_name(&project_cargo)
+        .or_else(|| read_cargo_lib_name(&build_cargo))
+        .or_else(|| {
+            project_root
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.replace('-', "_"))
+        })
+        .unwrap_or_else(|| "lib".to_string());
+
+    let package_name = read_cargo_package_name(&project_cargo)
+        .or_else(|| read_cargo_package_name(&build_cargo))
+        .unwrap_or_else(|| lib_name.replace('_', "-"));
+
+    // When the project manifest owns the crate, depend from project root so `path = "build/lib.rs"` works.
+    let dep_path = if project_cargo.exists()
+        && read_cargo_lib_name(&project_cargo).is_some()
+    {
+        project_root.to_path_buf()
+    } else {
+        build_dir.clone()
+    };
+
+    println!(
+        "   {} Using pre-built library at {} (lib: {}, dep path: {})",
+        "→".bright_blue().bold(),
+        build_dir.display(),
+        lib_name,
+        dep_path.display()
+    );
+
+    Ok(Some((lib_name, package_name, dep_path)))
+}
+
+/// Merge `[dependencies]` from the project root Cargo.toml into generated library Cargo.toml.
+fn merge_project_cargo_dependencies(project_root: &Path, cargo_toml: &mut String) -> Result<()> {
+    let project_cargo = project_root.join("Cargo.toml");
+    if !project_cargo.exists() {
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(&project_cargo)?;
+    let parsed: toml::Value = toml::from_str(&content)?;
+    let Some(deps) = parsed.get("dependencies").and_then(|v| v.as_table()) else {
+        return Ok(());
+    };
+
+    for (dep_name, dep_spec) in deps {
+        if dep_name == "windjammer-runtime" {
+            continue;
+        }
+
+        // Remove any existing line/table for this dependency.
+        remove_dependency_entry(cargo_toml, dep_name);
+
+        let dep_line = format_dependency_line(dep_name, dep_spec, project_root);
+        insert_dependency_line(cargo_toml, &dep_line);
+    }
+
+    Ok(())
+}
+
+fn remove_dependency_entry(cargo_toml: &mut String, dep_name: &str) {
+    let prefix = format!("{} =", dep_name);
+    let mut out = String::new();
+    let mut skip_multiline = false;
+    for line in cargo_toml.lines() {
+        let trimmed = line.trim();
+        if skip_multiline {
+            if trimmed.ends_with('}') {
+                skip_multiline = false;
+            }
+            continue;
+        }
+        if trimmed.starts_with(&prefix) {
+            if trimmed.contains('{') && !trimmed.contains('}') {
+                skip_multiline = true;
+            }
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    *cargo_toml = out;
+}
+
+fn format_dependency_line(dep_name: &str, dep_spec: &toml::Value, project_root: &Path) -> String {
+    if let Some(version) = dep_spec.as_str() {
+        return format!("{} = \"{}\"", dep_name, version);
+    }
+    if let Some(table) = dep_spec.as_table() {
+        let mut parts = Vec::new();
+        if let Some(version) = table.get("version").and_then(|v| v.as_str()) {
+            parts.push(format!("version = \"{}\"", version));
+        }
+        if let Some(path) = table.get("path").and_then(|v| v.as_str()) {
+            let abs_path = resolve_dependency_path(project_root, path);
+            parts.push(format!("path = \"{}\"", path_to_toml_string(&abs_path)));
+        }
+        if let Some(git) = table.get("git").and_then(|v| v.as_str()) {
+            parts.push(format!("git = \"{}\"", git));
+        }
+        if let Some(branch) = table.get("branch").and_then(|v| v.as_str()) {
+            parts.push(format!("branch = \"{}\"", branch));
+        }
+        if let Some(default_features) = table.get("default-features") {
+            parts.push(format!("default-features = {}", default_features));
+        }
+        if let Some(features) = table.get("features") {
+            if let Some(arr) = features.as_array() {
+                let feature_list: Vec<String> = arr
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| format!("\"{}\"", s))
+                    .collect();
+                if !feature_list.is_empty() {
+                    parts.push(format!("features = [{}]", feature_list.join(", ")));
+                }
+            } else if let Ok(features_str) = toml::to_string(features) {
+                parts.push(format!("features = {}", features_str.trim()));
+            }
+        }
+        if parts.is_empty() {
+            return String::new();
+        }
+        return format!("{} = {{ {} }}", dep_name, parts.join(", "));
+    }
+    String::new()
+}
+
+fn insert_dependency_line(cargo_toml: &mut String, dep_line: &str) {
+    if dep_line.is_empty() {
+        return;
+    }
+    if let Some(deps_pos) = cargo_toml.find("[dependencies]") {
+        let after = deps_pos + "[dependencies]".len();
+        if let Some(next_section) = cargo_toml[after..].find("\n[") {
+            cargo_toml.insert_str(after + next_section, &format!("\n{}", dep_line));
+        } else {
+            cargo_toml.push_str(&format!("\n{}\n", dep_line));
+        }
+    } else if let Some(lib_pos) = cargo_toml.find("[lib]") {
+        cargo_toml.insert_str(
+            lib_pos,
+            &format!("[dependencies]\n{}\n\n", dep_line),
+        );
+    }
+}
+
+fn project_cargo_has_dep(dep_name: &str, project_root: &Path) -> bool {
+    let project_cargo = project_root.join("Cargo.toml");
+    let Ok(content) = std::fs::read_to_string(&project_cargo) else {
+        return false;
+    };
+    content.contains(&format!("{} =", dep_name))
+}
+
 /// Detect and compile the library being tested (if it exists)
 /// Returns (library_name, library_path) for Cargo dependency, or None
 fn detect_and_compile_library(
     project_root: &Path,
     test_output_dir: &Path,
+    opts: &TestRunOptions,
 ) -> Result<Option<(String, String, PathBuf)>> {
     use std::fs;
 
@@ -62,6 +277,10 @@ fn detect_and_compile_library(
     } else {
         None
     };
+
+    if let Some(ref build_dir) = opts.use_build_dir {
+        return resolve_prebuilt_library(build_dir, project_root);
+    }
 
     // Check if there's a library to compile
     let src_dir = project_root.join("src");
@@ -93,7 +312,17 @@ fn detect_and_compile_library(
         .unwrap_or_else(|| "lib".to_string());
 
     // Create library output directory (clean it first to avoid stale files)
-    let lib_output_dir = test_output_dir.join("lib");
+    let lib_output_dir = opts
+        .output
+        .as_ref()
+        .map(|p| {
+            if p.is_absolute() {
+                p.clone()
+            } else {
+                project_root.join(p)
+            }
+        })
+        .unwrap_or_else(|| test_output_dir.join("lib"));
     if lib_output_dir.exists() {
         fs::remove_dir_all(&lib_output_dir)?;
     }
@@ -110,108 +339,47 @@ fn detect_and_compile_library(
     // Prefer mod.wj entry (excludes main.wj binary) when present — matches `wj build src/mod.wj`.
     let build_entry = if src_dir.join("mod.wj").exists() {
         src_dir.join("mod.wj")
+    } else if opts.module_file {
+        src_dir.join("mod.wj")
     } else {
         src_dir.clone()
     };
 
-    eprintln!("DEBUG: About to call build_project_ext for library");
+    crate::cargo_toml::set_skip_cargo_toml_generation(opts.no_generate_cargo_toml);
     match build_project_ext(
         &build_entry,
         &lib_output_dir,
         CompilationTarget::Rust,
         true,
-        true,
+        opts.library,
         &[],
     ) {
         Ok(_) => {
-            eprintln!("DEBUG: build_project returned Ok");
-            // Generate lib.rs entry point for the compiled library
-            // build_project generates Rust files but doesn't create lib.rs
-            if let Err(e) = generate_lib_rs_for_library(&lib_output_dir) {
-                eprintln!("WARNING: Failed to generate lib.rs: {}", e);
-                // Continue anyway - the library might still work
-            } else {
-                eprintln!("DEBUG: generate_lib_rs_for_library succeeded");
+            crate::build_utils::apply_library_build_post_steps(
+                &build_entry,
+                &lib_output_dir,
+                opts.library,
+                opts.module_file,
+            )
+            .context("library post-build steps failed")?;
+
+            // Generate lib.rs when module-file layout did not already produce one.
+            if !lib_output_dir.join("lib.rs").exists() {
+                if let Err(e) = generate_lib_rs_for_library(&lib_output_dir) {
+                    eprintln!("WARNING: Failed to generate lib.rs: {}", e);
+                }
             }
 
-            // TDD FIX: Copy FFI files from src/ffi to test library
-            // THE WINDJAMMER WAY: Dynamic, robust FFI integration
-            // This enables tests to work with full FFI functionality
             if let Err(e) = copy_ffi_files_to_test_library(project_root, &lib_output_dir) {
                 eprintln!("WARNING: Failed to copy FFI files: {}", e);
-                // Continue anyway - tests might not need FFI
-            } else {
-                eprintln!("DEBUG: FFI files copied successfully");
             }
 
-            eprintln!("DEBUG: About to fix Cargo.toml");
-
-            // TDD FIX: Use the project's actual lib name, not a _testlib suffix
-            // THE WINDJAMMER WAY: Test library name must match project lib name so imports work
-            // Bug: Tests were failing with E0433: unresolved module windjammer_game_core
-            // Root Cause: Test library was using *_testlib suffix, breaking imports
-            // Fix: Read the actual [lib] name from project's Cargo.toml
-
-            // Read project's Cargo.toml to get the actual lib name
             let project_cargo_toml = project_root.join("Cargo.toml");
-            let actual_lib_name = if project_cargo_toml.exists() {
-                match fs::read_to_string(&project_cargo_toml) {
-                    Ok(content) => {
-                        // Parse [lib] name from Cargo.toml
-                        if let Some(lib_section_start) = content.find("[lib]") {
-                            if let Some(name_start) = content[lib_section_start..].find("name = \"")
-                            {
-                                let abs_start = lib_section_start + name_start + "name = \"".len();
-                                content[abs_start..].find('"').map(|name_end| {
-                                    content[abs_start..abs_start + name_end].to_string()
-                                })
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    }
-                    Err(_) => None,
-                }
-            } else {
-                None
-            };
+            let test_lib_name = read_cargo_lib_name(&project_cargo_toml)
+                .unwrap_or_else(|| lib_name.replace('-', "_"));
+            let test_lib_package_name = read_cargo_package_name(&project_cargo_toml)
+                .unwrap_or_else(|| lib_name.replace('_', "-"));
 
-            // TDD FIX: Use actual library package name from project's Cargo.toml
-            // THE WINDJAMMER WAY: Test dependencies must use real library names
-            // Bug: Tests failing with E0433: unresolved module windjammer_game_core
-            // Root Cause: Test Cargo.toml uses windjammer-game-core-testlib, but tests import windjammer_game_core
-            // Fix: Read actual [package] name from project's Cargo.toml and use that for test dependency
-
-            let actual_package_name = if project_cargo_toml.exists() {
-                match fs::read_to_string(&project_cargo_toml) {
-                    Ok(content) => {
-                        // Parse [package] name from Cargo.toml
-                        content.find("[package]").and_then(|pkg_start| {
-                            content[pkg_start..]
-                                .find("name = \"")
-                                .and_then(|name_start| {
-                                    let abs_start = pkg_start + name_start + "name = \"".len();
-                                    content[abs_start..].find('"').map(|name_end| {
-                                        content[abs_start..abs_start + name_end].to_string()
-                                    })
-                                })
-                        })
-                    }
-                    Err(_) => None,
-                }
-            } else {
-                None
-            };
-
-            // Use actual lib name from Cargo.toml, or infer from package name
-            let test_lib_name = actual_lib_name.unwrap_or_else(|| lib_name.replace('-', "_"));
-            // Use actual package name from Cargo.toml, or infer from directory (NO -testlib suffix!)
-            let test_lib_package_name =
-                actual_package_name.unwrap_or_else(|| lib_name.replace('_', "-"));
-
-            // Fix the generated Cargo.toml to use the correct library name and add user dependencies
             let cargo_toml_path = lib_output_dir.join("Cargo.toml");
 
             println!(
@@ -300,8 +468,12 @@ fn detect_and_compile_library(
                                             path_to_toml_string(&abs_path)
                                         ));
                                     }
-                                    // Add desktop feature for windjammer-ui
-                                    if dep_name == "windjammer-ui" && !features.is_some() {
+                                    // Default desktop only when no features and project Cargo does not already specify this dep.
+                                    if dep_name == "windjammer-ui"
+                                        && !features.is_some()
+                                        && !opts.use_project_cargo
+                                        && !project_cargo_has_dep("windjammer-ui", project_root)
+                                    {
                                         deps_section.push_str("features = [\"desktop\"], ");
                                     }
                                     if let Some(g) = git {
@@ -328,6 +500,10 @@ fn detect_and_compile_library(
                                 cargo_toml.insert_str(lib_pos, &deps_section);
                             }
                         }
+                    }
+
+                    if opts.use_project_cargo {
+                        merge_project_cargo_dependencies(project_root, &mut cargo_toml)?;
                     }
 
                     if let Err(e) = fs::write(&cargo_toml_path, &cargo_toml) {
@@ -685,130 +861,13 @@ pub fn path_to_toml_string(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
-/// Find windjammer-runtime path using robust search logic
-fn find_windjammer_runtime_path() -> Result<PathBuf> {
-    use std::env;
-
-    // Compiled into the `wj` binary: always valid when built from the windjammer repo.
-    let compiler_runtime =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
-    if compiler_runtime.join("Cargo.toml").exists() {
-        return Ok(compiler_runtime);
-    }
-
-    // Installed `wj` binary: walk up from the executable location.
-    if let Ok(exe_path) = env::current_exe() {
-        let mut search = exe_path
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("."));
-        for _ in 0..8 {
-            let candidate = search.join("crates/windjammer-runtime");
-            if candidate.join("Cargo.toml").exists() {
-                return Ok(candidate);
-            }
-            if let Some(parent) = search.parent() {
-                search = parent.to_path_buf();
-            } else {
-                break;
-            }
-        }
-    }
-
-    // Runtime env var (e.g. `cargo test` subprocess with CARGO_MANIFEST_DIR set).
-    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        let runtime_path = PathBuf::from(manifest_dir).join("crates/windjammer-runtime");
-        if runtime_path.join("Cargo.toml").exists() {
-            return Ok(runtime_path);
-        }
-    }
-
-    // Start from current directory and search upward
-    let mut current = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-
-    // Try current directory first (if we're in windjammer repo)
-    if current
-        .join("crates/windjammer-runtime/Cargo.toml")
-        .exists()
-    {
-        return Ok(current.join("crates/windjammer-runtime"));
-    }
-
-    // Search up to 10 levels (increased from 5 for deeper project structures)
-    for _ in 0..10 {
-        if let Some(parent) = current.parent() {
-            // Check for windjammer/crates/windjammer-runtime (nested structure)
-            if parent
-                .join("windjammer/crates/windjammer-runtime/Cargo.toml")
-                .exists()
-            {
-                return Ok(parent.join("windjammer/crates/windjammer-runtime"));
-            }
-
-            // Check for crates/windjammer-runtime (flat structure)
-            if parent.join("crates/windjammer-runtime/Cargo.toml").exists() {
-                return Ok(parent.join("crates/windjammer-runtime"));
-            }
-
-            // Check current level for windjammer/crates (sibling search)
-            if current
-                .join("../windjammer/crates/windjammer-runtime/Cargo.toml")
-                .exists()
-            {
-                return Ok(current.join("../windjammer/crates/windjammer-runtime"));
-            }
-
-            // Check for ../../windjammer/crates (deeper sibling)
-            if current
-                .join("../../windjammer/crates/windjammer-runtime/Cargo.toml")
-                .exists()
-            {
-                return Ok(current.join("../../windjammer/crates/windjammer-runtime"));
-            }
-
-            // Check for ../../../windjammer/crates (even deeper)
-            if current
-                .join("../../../windjammer/crates/windjammer-runtime/Cargo.toml")
-                .exists()
-            {
-                return Ok(current.join("../../../windjammer/crates/windjammer-runtime"));
-            }
-
-            current = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-
-    // Fallback: try relative paths and canonicalize them
-    let candidates = vec![
-        PathBuf::from("../windjammer/crates/windjammer-runtime"),
-        PathBuf::from("../../windjammer/crates/windjammer-runtime"),
-        PathBuf::from("../../../windjammer/crates/windjammer-runtime"),
-        PathBuf::from("./crates/windjammer-runtime"),
-    ];
-
-    for candidate in candidates {
-        if candidate.join("Cargo.toml").exists() {
-            // Canonicalize to get absolute path
-            if let Ok(canonical) = candidate.canonicalize() {
-                return Ok(canonical);
-            }
-            return Ok(candidate);
-        }
-    }
-
-    anyhow::bail!(
-        "could not locate windjammer-runtime (searched compiler manifest, executable path, and cwd ancestors)"
-    )
-}
-
 /// Generate Rust test harness from Windjammer tests
 pub(crate) fn generate_test_harness(
     output_dir: &Path,
     tests: &[TestFunction],
     filter: Option<&str>,
     project_root: &Path,
+    opts: &TestRunOptions,
 ) -> Result<()> {
     use std::collections::HashMap;
     use std::fs;
@@ -824,7 +883,7 @@ pub(crate) fn generate_test_harness(
 
     // Compile the library first so test codegen can load `emitted_rust_ref_params`
     // from metadata.json (otherwise format! temps miss `&` for demoted `&str` formals).
-    let library_dependency = detect_and_compile_library(project_root, output_dir)?;
+    let library_dependency = detect_and_compile_library(project_root, output_dir, opts)?;
 
     // Compile each test file using the existing infrastructure
     for (file, file_tests) in &tests_by_file {
@@ -902,62 +961,60 @@ pub(crate) fn generate_test_harness(
 
     let _ = crate::rust_integration_tests::sync_rust_integration_tests(project_root);
 
-    // TDD FIX: Copy windjammer-runtime to test directory so tests can find it
-    // THE WINDJAMMER WAY: Self-contained test environments
-    let windjammer_runtime_path = find_windjammer_runtime_path()?;
-    let test_runtime_path = output_dir.join("crates").join("windjammer-runtime");
+    let runtime_path = opts
+        .runtime_path
+        .clone()
+        .unwrap_or_else(crate::cargo_toml::find_windjammer_runtime_path);
 
-    // Create crates directory and copy windjammer-runtime
-    use colored::*;
-    println!(
-        "   {} Copying windjammer-runtime to test directory",
-        "→".bright_blue().bold()
-    );
-    println!(
-        "   {} Source: {}",
-        "→".bright_blue().bold(),
-        windjammer_runtime_path.display()
-    );
-    println!(
-        "   {} Dest: {}",
-        "→".bright_blue().bold(),
-        test_runtime_path.display()
-    );
-    fs::create_dir_all(output_dir.join("crates"))
-        .map_err(|e| anyhow::anyhow!("Failed to create crates directory: {}", e))?;
+    let runtime_dep_line = if opts.no_runtime_copy {
+        format!(
+            "windjammer-runtime = {{ path = \"{}\", default-features = false }}",
+            path_to_toml_string(&runtime_path)
+        )
+    } else {
+        let test_runtime_path = output_dir.join("crates").join("windjammer-runtime");
 
-    if !windjammer_runtime_path.exists() {
-        anyhow::bail!(
-            "windjammer-runtime source path does not exist: {}",
-            windjammer_runtime_path.display()
+        use colored::*;
+        println!(
+            "   {} Copying windjammer-runtime to test directory",
+            "→".bright_blue().bold()
         );
-    }
+        fs::create_dir_all(output_dir.join("crates"))
+            .map_err(|e| anyhow::anyhow!("Failed to create crates directory: {}", e))?;
 
-    copy_dir_recursive(&windjammer_runtime_path, &test_runtime_path)
-        .map_err(|e| anyhow::anyhow!("Failed to copy windjammer-runtime: {}", e))?;
+        if !runtime_path.exists() {
+            anyhow::bail!(
+                "windjammer-runtime source path does not exist: {}",
+                runtime_path.display()
+            );
+        }
 
-    // TDD FIX: Patch windjammer-runtime's Cargo.toml to remove workspace inheritance
-    // When copied to a temp directory, there's no workspace root, so all fields must be explicit
-    let runtime_cargo_toml = test_runtime_path.join("Cargo.toml");
-    if runtime_cargo_toml.exists() {
-        let content = fs::read_to_string(&runtime_cargo_toml)?;
-        // Replace all workspace-inherited fields with explicit values
-        let patched = content
-            .replace("version.workspace = true", "version = \"0.1.0\"")
-            .replace("version = { workspace = true }", "version = \"0.1.0\"")
-            .replace("edition.workspace = true", "edition = \"2021\"")
-            .replace("edition = { workspace = true }", "edition = \"2021\"")
-            .replace("authors.workspace = true", "authors = []")
-            .replace("authors = { workspace = true }", "authors = []")
-            .replace("license.workspace = true", "license = \"MIT\"")
-            .replace("license = { workspace = true }", "license = \"MIT\"");
-        fs::write(&runtime_cargo_toml, patched)?;
-    }
+        copy_dir_recursive(&runtime_path, &test_runtime_path)
+            .map_err(|e| anyhow::anyhow!("Failed to copy windjammer-runtime: {}", e))?;
 
-    println!(
-        "   {} windjammer-runtime copied successfully",
-        "✓".green().bold()
-    );
+        let runtime_cargo_toml = test_runtime_path.join("Cargo.toml");
+        if runtime_cargo_toml.exists() {
+            let content = fs::read_to_string(&runtime_cargo_toml)?;
+            let patched = content
+                .replace("version.workspace = true", "version = \"0.1.0\"")
+                .replace("version = { workspace = true }", "version = \"0.1.0\"")
+                .replace("edition.workspace = true", "edition = \"2021\"")
+                .replace("edition = { workspace = true }", "edition = \"2021\"")
+                .replace("authors.workspace = true", "authors = []")
+                .replace("authors = { workspace = true }", "authors = []")
+                .replace("license.workspace = true", "license = \"MIT\"")
+                .replace("license = { workspace = true }", "license = \"MIT\"");
+            fs::write(&runtime_cargo_toml, patched)?;
+        }
+
+        println!(
+            "   {} windjammer-runtime copied successfully",
+            "✓".green().bold()
+        );
+
+        "windjammer-runtime = { path = \"crates/windjammer-runtime\", default-features = false }"
+            .to_string()
+    };
 
     let library_dep_str =
         if let Some((lib_crate_name, lib_package_name, lib_path)) = library_dependency {
@@ -978,15 +1035,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-windjammer-runtime = {{ path = "crates/windjammer-runtime", default-features = false }}
+{}
 smallvec = "1.13"{}
 
 [lib]
 name = "windjammer_tests"
 path = "lib.rs"
 "#,
+        runtime_dep_line,
         library_dep_str
     );
+
     fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
 
     // Create lib.rs that includes all test modules
