@@ -14,6 +14,7 @@ pub use file_operations::strip_main_functions;
 pub(crate) use module_generation::generate_mod_file_with_layout;
 pub(crate) use module_generation::mod_file_layout_for_build;
 pub use module_generation::{
-    cleanup_stale_module_files, cleanup_stale_module_files_recursive, generate_mod_file,
+    apply_library_build_post_steps, cleanup_stale_module_files,
+    cleanup_stale_module_files_recursive, generate_mod_file,
 };
 pub use nested_module_structure::generate_nested_module_structure;

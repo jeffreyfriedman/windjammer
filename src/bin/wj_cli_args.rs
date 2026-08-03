@@ -185,6 +185,38 @@ pub enum Commands {
         /// Output results as JSON for tooling
         #[arg(long)]
         json: bool,
+
+        /// Compile the library under test (default when `src/` has `.wj` files)
+        #[arg(long, default_value = "true")]
+        library: bool,
+
+        /// Generate scoped `mod.rs` layout after transpile (same as `wj build --module-file`)
+        #[arg(long)]
+        module_file: bool,
+
+        /// Output directory for library compile (default: temp `{lib}/`)
+        #[arg(short, long, value_name = "DIR")]
+        output: Option<PathBuf>,
+
+        /// Use a pre-built outbound tree instead of recompiling the library
+        #[arg(long, value_name = "DIR")]
+        use_build_dir: Option<PathBuf>,
+
+        /// Merge `[dependencies]` from project root `Cargo.toml` into the test library crate
+        #[arg(long)]
+        use_project_cargo: bool,
+
+        /// Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp)
+        #[arg(long)]
+        no_runtime_copy: bool,
+
+        /// Explicit path to windjammer-runtime (with `--no-runtime-copy`)
+        #[arg(long, value_name = "PATH")]
+        runtime_path: Option<PathBuf>,
+
+        /// Skip auto-generated Cargo.toml for library compile
+        #[arg(long)]
+        no_generate_cargo_toml: bool,
     },
 
     /// Format Windjammer code

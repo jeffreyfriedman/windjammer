@@ -92,14 +92,30 @@ pub fn run(cli: Cli) -> Result<()> {
             nocapture,
             parallel,
             json,
+            library,
+            module_file,
+            output,
+            use_build_dir,
+            use_project_cargo,
+            no_runtime_copy,
+            runtime_path,
+            no_generate_cargo_toml,
         } => {
-            windjammer::run_tests(
-                path.as_deref(),
-                filter.as_deref(),
+            windjammer::run_tests_with_options(windjammer::TestRunOptions {
+                path,
+                filter,
                 nocapture,
                 parallel,
                 json,
-            )?;
+                library,
+                module_file,
+                output,
+                use_build_dir,
+                use_project_cargo,
+                no_runtime_copy,
+                runtime_path,
+                no_generate_cargo_toml,
+            })?;
         }
         Commands::Fmt { check } => {
             windjammer::cli::fmt::execute(check)?;
