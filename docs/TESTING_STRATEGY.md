@@ -1,5 +1,7 @@
 # Comprehensive Testing Strategy for Windjammer
 
+**Related:** [`USER_LIBRARY_TEST_GAPS.md`](USER_LIBRARY_TEST_GAPS.md) — why `--module-file` / outbound-`build/` dogfood libraries still use Rust `cargo test` instead of `wj test`.
+
 ## 🎯 Overview
 
 **Goal:** Ensure all Windjammer components work reliably across platforms

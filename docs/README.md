@@ -34,6 +34,7 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 - [`API_REFERENCE.md`](API_REFERENCE.md) - API documentation
 - [`COOKBOOK.md`](COOKBOOK.md) - Code examples and recipes
 - [`TESTING_STRATEGY.md`](TESTING_STRATEGY.md) - Testing approach (TDD + Dogfooding)
+- [`USER_LIBRARY_TEST_GAPS.md`](USER_LIBRARY_TEST_GAPS.md) - Why dogfood crates still use Rust `cargo test` vs `wj test`
 - [`TOOLING_VISION.md`](TOOLING_VISION.md) - Tooling ecosystem
 
 **Project Management:**
