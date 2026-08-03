@@ -28,12 +28,12 @@ pub fn get_name(opt: Option<string>) -> string {
     if let Some(name) = opt {
         name
     } else {
-        "Unknown".to_string()
+        "Unknown"
     }
 }
 
 fn main() {
-    let n = get_name(Some("Alice".to_string()));
+    let n = get_name(Some("Alice"));
 }
 "#;
 

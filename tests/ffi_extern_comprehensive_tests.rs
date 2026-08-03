@@ -182,7 +182,7 @@ pub fn ffi_result(success: bool) -> Result<i32, string> {
     if success {
         Ok(42)
     } else {
-        Err("failed".to_string())
+        Err("failed")
     }
 }
 "#;

@@ -55,7 +55,13 @@ pub(crate) fn plain_string_formal_passes_owned_at_call_site(
             Some(OwnershipMode::Owned) | None
         ) && !callee_emits_shared_rust_ref_param(sig, param_idx);
     }
-    true
+    // Methods: owned plain `string` only when the analyzer contract is Owned (trait
+    // forwards, builder APIs). Readonly `&str` methods (`find_index(key)`) must not
+    // force callers to `.to_string()` literals (blackboard set_bool regression).
+    matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Owned) | None
+    ) && !callee_emits_shared_rust_ref_param(sig, param_idx)
 }
 
 /// Whether codegen recorded (or unambiguously converged) a shared-ref Rust formal for `param_idx`.
@@ -596,11 +602,11 @@ pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
     ) || matches!(
         arg_expr,
         Expression::MethodCall { method, object, .. }
-        if method.as_str() == "to_string" || method.as_str() == "string"
+        if (method.as_str() == "to_string" || method.as_str() == "string")
             && matches!(
-            &**object,
-            Expression::Literal { value: Literal::String(_), .. }
-        )
+                &**object,
+                Expression::Literal { value: Literal::String(_), .. }
+            )
     )
 }
 

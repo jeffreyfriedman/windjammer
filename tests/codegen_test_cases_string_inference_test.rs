@@ -129,7 +129,7 @@ fn greet(name: string) -> string {
 
 fn test_greet() {
     let result = greet("World")
-    assert_eq(result, "Hello, World".to_string())
+    assert_eq(result, "Hello, World")
 }
 "#;
 

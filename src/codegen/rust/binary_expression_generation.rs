@@ -392,10 +392,25 @@ impl<'ast> CodeGenerator<'ast> {
         // If LEFT side is String and op is Add, RIGHT must be borrowed (unless string literal)
         // Also: if RIGHT produces String (e.g., parts[j].clone()), add & for coercion
         if matches!(op, BinaryOp::Add) {
-            let left_type = self.infer_expression_type(left);
-            let right_type = self.infer_expression_type(right);
-            let left_is_string = matches!(left_type, Some(Type::String));
-            let right_is_string = matches!(right_type, Some(Type::String));
+            let expr_is_windjammer_string = |expr: &Expression| -> bool {
+                if self
+                    .infer_expression_type(expr)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                {
+                    return true;
+                }
+                if let Expression::Identifier { name, .. } = expr {
+                    if self.local_var_types.get(name).is_some_and(|t| {
+                        crate::codegen::rust::types::is_windjammer_text_type(t)
+                    }) {
+                        return true;
+                    }
+                }
+                false
+            };
+            let left_is_string = expr_is_windjammer_string(left);
+            let right_is_string = expr_is_windjammer_string(right);
 
             // Add & when either side is String (covers result + parts[j].clone())
             if left_is_string || right_is_string {

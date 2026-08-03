@@ -46,7 +46,7 @@ fn read_file(path: string) -> string {
     );
     // Should generate `use std::fs;` or similar
     assert!(
-        output.contains("use std::fs"),
+        output.contains("use std::fs") || output.contains("use windjammer_runtime::fs"),
         "use std::fs should generate an import. Got:\n{}",
         output
     );

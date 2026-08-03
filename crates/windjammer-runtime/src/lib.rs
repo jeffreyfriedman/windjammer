@@ -59,7 +59,8 @@ pub mod time;
 pub mod timeout;
 
 // Re-export commonly used types
-pub use http::{Request, Response, Router, Server, ServerRequest, ServerResponse};
+pub use http::{HttpMethod, Request, Response, Router, Server, ServerRequest, ServerResponse};
+pub use log_mod::LogLevel;
 
 // Prelude for common imports
 pub mod prelude {

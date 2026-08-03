@@ -62,7 +62,7 @@ impl TokenVerifier for JwtVerifier {
         if bearer_token.is_empty() {
             return Err("empty token")
         }
-        Ok(AuthClaims { sub: "u1".to_string(), email: "t@t.com".to_string() })
+        Ok(AuthClaims { sub: "u1", email: "t@t.com" })
     }
 }
 "#,

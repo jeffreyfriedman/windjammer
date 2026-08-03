@@ -2,6 +2,7 @@
 //! This allows the compiler to know the ownership requirements of stdlib functions
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
+use crate::parser::Type;
 use std::fs;
 use std::path::Path;
 
@@ -151,6 +152,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
 
     // Parse parameter ownership
     let param_ownership = parse_parameters(&params_str);
+    let emitted_rust_ref_params = parse_emitted_rust_ref_flags(&params_str);
     let has_self_receiver = first_param_is_self_receiver(&params_str);
 
     // Build full name with module prefix
@@ -165,7 +167,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         return_ownership: OwnershipMode::Owned, // Default
         has_self_receiver,
         is_extern: false,
-        emitted_rust_ref_params: None,
+        emitted_rust_ref_params,
         field_extract_params: None,
         forwarding_borrow_params: None,
     })
@@ -255,6 +257,40 @@ fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
             }
         })
         .collect()
+}
+
+/// True when the scanned Rust formal lowers to shared borrow (`&str`, `&T`, `AsRef<str>`).
+fn parse_emitted_rust_ref_flags(params_str: &str) -> Option<Vec<bool>> {
+    if params_str.trim().is_empty() {
+        return Some(vec![]);
+    }
+    Some(
+        params_str
+            .split(',')
+            .map(|param| {
+                let param = param.trim();
+                param.contains("AsRef<str>")
+                    || param.contains("&str")
+                    || (param.contains('&') && !param.contains("&mut"))
+            })
+            .collect(),
+    )
+}
+
+fn strings_split_signature(name: &str) -> FunctionSignature {
+    FunctionSignature {
+        name: name.to_string(),
+        param_types: vec![Type::String, Type::String],
+        formal_param_types: vec![Type::String, Type::String],
+        param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+        return_type: Some(Type::Vec(Box::new(Type::String))),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: Some(vec![true, true]),
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
 }
 
 /// Fallback signatures when runtime source isn't available
@@ -351,37 +387,10 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
 
     // windjammer_runtime::strings::split - used via "use ...::split"
     // Return type critical for Vec<String> indexing: let lines = split(...); let line = lines[i]
-    registry.add_function(
-        "split".to_string(),
-        FunctionSignature {
-            name: "split".to_string(),
-            param_types: vec![],
-            formal_param_types: vec![],
-            param_ownership: vec![Borrowed, Borrowed],
-            return_type: Some(Type::Vec(Box::new(Type::String))),
-            return_ownership: Owned,
-            has_self_receiver: false,
-            is_extern: false,
-            emitted_rust_ref_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
-        },
-    );
+    registry.add_function("split".to_string(), strings_split_signature("split"));
     registry.add_function(
         "strings::split".to_string(),
-        FunctionSignature {
-            name: "strings::split".to_string(),
-            param_types: vec![],
-            formal_param_types: vec![],
-            param_ownership: vec![Borrowed, Borrowed],
-            return_type: Some(Type::Vec(Box::new(Type::String))),
-            return_ownership: Owned,
-            has_self_receiver: false,
-            is_extern: false,
-            emitted_rust_ref_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
-        },
+        strings_split_signature("strings::split"),
     );
 
     Ok(())
@@ -450,6 +459,17 @@ mod tests {
         assert_eq!(
             parse_impl_type_name("impl<'a> Connection {"),
             Some("Connection".into())
+        );
+    }
+
+    #[test]
+    fn strings_split_scan_sets_delimiter_ref_flag() {
+        let line = "pub fn split<S: AsRef<str>>(s: S, delimiter: &str) -> Vec<String> {";
+        let sig = parse_function_signature(line, "strings").unwrap();
+        assert_eq!(
+            sig.emitted_rust_ref_params,
+            Some(vec![true, true]),
+            "AsRef<str> and &str formals must emit shared refs at call sites"
         );
     }
 }

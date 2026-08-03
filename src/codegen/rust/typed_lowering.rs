@@ -71,9 +71,7 @@ impl ArgCoercion {
                 }
             }
             ArgCoercion::ToOwnedString => {
-                if !expr.ends_with(".to_string()") && !expr.ends_with(".to_owned()") {
-                    *expr = format!("{}.to_string()", expr);
-                }
+                *expr = string_utilities::coerce_expr_to_owned_string(expr);
             }
             ArgCoercion::BorrowString => {
                 if !expr.starts_with('&') {
@@ -446,7 +444,7 @@ pub fn correct_legacy_output(
             || arg_str.ends_with(".to_owned()");
 
         if is_string_lit && formal_is_text && !already_converted {
-            *arg_str = format!("{}.to_string()", arg_str);
+            *arg_str = string_utilities::coerce_expr_to_owned_string(arg_str);
             return true;
         }
     }

@@ -100,7 +100,7 @@ impl Table {
 
 impl Renderable for Table {
     fn render(self) -> string {
-        "table".to_string()
+        "table"
     }
 }
 "#,
@@ -243,7 +243,7 @@ fn library_build_with_explicit_clone_must_exit_zero_after_codegen() {
     fs::write(
         src.join("clean.wj"),
         r#"
-pub fn ok() -> string { "ok".to_string() }
+pub fn ok() -> string { "ok" }
 "#,
     )
     .unwrap();
@@ -334,7 +334,7 @@ pub struct PeriodBadge {
 
 impl PeriodBadge {
     pub fn new(state: string) -> PeriodBadge {
-        PeriodBadge { state: state, label: "".to_string() }
+        PeriodBadge { state: state, label: "" }
     }
     pub fn label(self, label: string) -> PeriodBadge {
         self.label = label
@@ -343,7 +343,7 @@ impl PeriodBadge {
 }
 
 fn state_class(state: string) -> string {
-    if state == "open" { "open".to_string() } else { "other".to_string() }
+    if state == "open" { "open" } else { "other" }
 }
 
 impl Renderable for PeriodBadge {

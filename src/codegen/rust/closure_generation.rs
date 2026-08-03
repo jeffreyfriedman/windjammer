@@ -15,13 +15,41 @@ use crate::parser::{Expression, Statement};
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    pub(in crate::codegen::rust) fn closure_param_binding_name(param: &str) -> String {
+        if let Some(colon_idx) = param.find(": ") {
+            param[..colon_idx].to_string()
+        } else {
+            param.to_string()
+        }
+    }
+
+    fn format_closure_param_to_rust(&self, param: &str) -> String {
+        if let Some(colon_idx) = param.find(": ") {
+            let name = &param[..colon_idx];
+            let type_str = param[colon_idx + 2..].trim();
+            let ty = crate::codegen::rust::types::parse_wj_type_name(type_str);
+            let rust_ty = self.type_to_rust(&ty);
+            if self.closure_predicate_typed_params {
+                format!("{}: &{}", name, rust_ty)
+            } else {
+                format!("{}: {}", name, rust_ty)
+            }
+        } else {
+            param.to_string()
+        }
+    }
+
     /// Generate code for closure expression |params| body
     pub(in crate::codegen::rust) fn generate_closure(
         &mut self,
         parameters: &[String],
         body: &Expression<'ast>,
     ) -> String {
-        let params = parameters.join(", ");
+        let params = parameters
+            .iter()
+            .map(|p| self.format_closure_param_to_rust(p))
+            .collect::<Vec<_>>()
+            .join(", ");
 
         let is_compiler_generated = parameters.iter().any(|p| p.starts_with("__"));
         let captures_self = self.expression_references_self(body);
@@ -34,7 +62,8 @@ impl<'ast> CodeGenerator<'ast> {
             self.in_user_written_closure = true;
             prev_closure_params = Some(std::mem::take(&mut self.user_closure_params));
             for param in parameters {
-                self.user_closure_params.insert(param.clone());
+                self.user_closure_params
+                    .insert(Self::closure_param_binding_name(param));
             }
         }
 

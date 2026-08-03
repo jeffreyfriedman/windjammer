@@ -575,6 +575,19 @@ impl SignatureRegistry {
                 return Some(sig);
             }
         }
+        for candidate in
+            crate::codegen::rust::stdlib_method_traits::stdlib_receiver_lookup_candidates(type_name)
+        {
+            if candidate == type_name {
+                continue;
+            }
+            let alt = format!("{candidate}::{method}");
+            if let Some(sig) = self.get_signature(&alt) {
+                if Self::sig_user_arg_count(sig) == arg_count {
+                    return Some(sig);
+                }
+            }
+        }
         if let Some(keys) = self.method_index.get(method) {
             for key in keys {
                 if !key.ends_with(&format!("::{method}")) || !key.contains(type_name) {
@@ -1192,6 +1205,20 @@ pub fn parse_field(line: string) -> string {
                 1,
             ),
             "registry-only lookup must still detect runtime borrow for spawn args",
+        );
+    }
+
+    #[test]
+    fn find_method_on_windjammer_string_receiver_resolves_string_stdlib_meta() {
+        let reg = SignatureRegistry::new();
+        let sig = reg
+            .find_method_on_receiver_type("string", "find", 1)
+            .expect("string receiver must resolve String::find from stdlib_meta");
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                sig, 0,
+            ),
+            "find pattern arg must be &str in registry"
         );
     }
 }

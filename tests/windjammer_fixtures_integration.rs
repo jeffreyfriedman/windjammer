@@ -234,6 +234,10 @@ fixture!(
     "regression_hashmap_contains_string_test.wj"
 );
 fixture!(
+    regression_hashset_iterate_borrow_parent,
+    "regression_hashset_iterate_borrow_parent_test.wj"
+);
+fixture!(
     regression_hashmap_get_clone_string,
     "regression_hashmap_get_clone_string_test.wj"
 );

@@ -274,7 +274,11 @@ impl<'ast> CodeGenerator<'ast> {
                         );
                         if is_some {
                             let (_, inner) = &arguments[0];
-                            if self.expression_produces_usize(inner) {
+                            let inner_is_usize = self.expression_produces_usize(inner)
+                                || self.infer_expression_type_is_usize(inner);
+                            if inner_is_usize {
+                                let cast_suffix =
+                                    if t == "i32" { " as i32" } else { " as i64" };
                                 if expr_str.starts_with("Some(") && expr_str.ends_with(')') {
                                     let inner_part =
                                         expr_str[5..expr_str.len().saturating_sub(1)].trim();
@@ -282,9 +286,26 @@ impl<'ast> CodeGenerator<'ast> {
                                         .strip_suffix(".clone()")
                                         .unwrap_or(inner_part)
                                         .trim();
-                                    let cast_suffix = if t == "i32" { " as i32" } else { " as i64" };
-                                    *expr_str = format!("Some({}{})", base, cast_suffix);
+                                    *expr_str = format!("Some({base}{cast_suffix})");
                                     return;
+                                }
+                                // E0282 turbofish: `Some::<i64>(i)` when `i: usize` (e.g. find index).
+                                if expr_str.starts_with("Some::<") {
+                                    if let Some(open_paren) = expr_str.rfind('(') {
+                                        if expr_str.ends_with(')') {
+                                            let inner_part = expr_str
+                                                [open_paren + 1..expr_str.len() - 1]
+                                                .trim();
+                                            let base = inner_part
+                                                .strip_suffix(".clone()")
+                                                .unwrap_or(inner_part)
+                                                .trim();
+                                            let prefix = &expr_str[..=open_paren];
+                                            *expr_str =
+                                                format!("{prefix}{base}{cast_suffix})");
+                                            return;
+                                        }
+                                    }
                                 }
                             }
                         }

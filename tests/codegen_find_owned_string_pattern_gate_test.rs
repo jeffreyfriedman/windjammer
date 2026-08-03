@@ -34,14 +34,14 @@ fn find_owned_string_literal_must_borrow_for_pattern() {
         &src,
         r#"
 pub fn colon_at(s: string) -> Option<int> {
-    match s.find(":".to_string()) {
+    match s.find(":") {
         Some(i) => Some(i),
         None => None,
     }
 }
 
 fn main() {
-    let _ = colon_at("a:b".to_string())
+    let _ = colon_at("a:b")
 }
 "#,
     )

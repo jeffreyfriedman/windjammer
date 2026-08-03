@@ -198,6 +198,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) in_user_written_closure: bool,
     // USER CLOSURE PARAMS: Track parameters of current user-written closure
     pub(crate) user_closure_params: std::collections::HashSet<String>,
+    /// Iterator predicate methods (`filter`, `find`, …): typed closure params become `&T` in Rust.
+    pub(crate) closure_predicate_typed_params: bool,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
     pub(crate) generating_assignment_target: bool,
     /// While generating an assignment RHS, use this LHS type for float literal suffixes when
@@ -532,6 +534,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_func_is_pure_forwarding_delegate: false,
             in_user_written_closure: false,
             user_closure_params: std::collections::HashSet::new(),
+            closure_predicate_typed_params: false,
             generating_assignment_target: false,
             assignment_float_target_type: None,
             collect_target_type: None,
@@ -1904,6 +1907,14 @@ impl<'ast> CodeGenerator<'ast> {
         if self.emitted_rust_ref_formals.contains(name) {
             return true;
         }
+        if self.str_ref_optimized_params.contains(name)
+            && self
+                .current_function_params
+                .iter()
+                .any(|p| p.name == name)
+        {
+            return true;
+        }
         if self.current_fn_mixed_forwarder_params.contains(name) {
             return false;
         }
@@ -2780,6 +2791,40 @@ impl<'ast> CodeGenerator<'ast> {
         name.to_string()
     }
 
+    /// HashSet/HashMap loop elements are `&T` — deref when callee expects owned Copy scalar.
+    pub(crate) fn normalize_borrowed_iter_elem_for_owned_copy_scalar(
+        &self,
+        arg_expr: &Expression<'ast>,
+        coerced: &str,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+    ) -> String {
+        let Expression::Identifier { name, .. } = arg_expr else {
+            return coerced.to_string();
+        };
+        if !self.borrowed_iterator_vars.contains(name) {
+            return coerced.to_string();
+        }
+        let pidx = sig.arg_param_index(arg_index);
+        if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx) {
+            return coerced.to_string();
+        }
+        let wants_owned_copy_scalar = sig
+            .formal_param_type(pidx)
+            .or_else(|| sig.param_types.get(pidx))
+            .is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                crate::type_classification::is_copy_pass_by_value_formal(bare)
+            });
+        if wants_owned_copy_scalar && !coerced.starts_with('*') && !coerced.starts_with('&') {
+            return format!("*{coerced}");
+        }
+        coerced.to_string()
+    }
+
     /// Whether a binding (param, local, or implicit struct field) is Copy.
     pub(crate) fn binding_name_is_copy(&self, name: &str) -> bool {
         if self
@@ -2895,6 +2940,18 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Only scalar Copy formals (i64/bool/…) skip clone. Copy aggregates/enums
         // (Value, Lsn, …) still need `.clone()` for multi-use owned moves (regression-063).
+        if self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == name)
+            .is_some_and(|p| self.is_type_copy(&p.type_))
+            || self
+                .local_var_types
+                .get(name)
+                .is_some_and(|t| self.is_type_copy(t))
+        {
+            return arg_str.to_string();
+        }
         if self.binding_is_copy_pass_by_value_scalar(name) {
             return arg_str.to_string();
         }

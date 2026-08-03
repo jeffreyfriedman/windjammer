@@ -147,6 +147,26 @@ impl<'ast> CodeGenerator<'ast> {
         Self::variable_used_in_statements(body, "self")
     }
 
+    /// `for x in owner.field` must borrow when the loop body also uses `owner` (avoid partial move).
+    pub(crate) fn field_iterable_needs_borrow_when_owner_used_in_body(
+        &self,
+        iterable: &Expression,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let Expression::FieldAccess { object, .. } = iterable else {
+            return false;
+        };
+        if let Expression::Identifier { name, .. } = &**object {
+            if name == "self" {
+                return false;
+            }
+            return Self::variable_used_in_statements(body, name)
+                && !self.inferred_borrowed_params.contains(name)
+                && !self.inferred_mut_borrowed_params.contains(name);
+        }
+        false
+    }
+
     /// For `for x in coll` when `coll` is borrowed (`&self.field`): if the body calls a method on
     /// `x` whose inferred receiver is `&mut self` (e.g. `System::update` on `Box<dyn System>`),
     /// the iterable must be `&mut coll`, not `&coll`.

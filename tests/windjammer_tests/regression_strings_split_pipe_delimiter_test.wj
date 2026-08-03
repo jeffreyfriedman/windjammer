@@ -1,0 +1,21 @@
+// Repro (Phase 16 / LSQB CSV loader): strings::split must accept string literal delimiters
+// without coercing "|" to String (.to_string()) when the parameter expects &str.
+use std::strings
+
+pub fn parse_edge_fields(line: string) -> (string, string) {
+    let parts = strings::split(line, "|")
+    return (parts[0], parts[1])
+}
+
+pub fn test_strings_split_pipe_delimiter_parses_csv_pair() {
+    let fields = parse_edge_fields("1|2")
+    assert(fields.0 == "1", "src field")
+    assert(fields.1 == "2", "dst field")
+}
+
+pub fn test_strings_split_comma_delimiter() {
+    let parts = strings::split("a,b,c", ",")
+    assert_eq(parts.len() as i32, 3)
+    assert(parts[0] == "a", "first")
+    assert(parts[2] == "c", "third")
+}

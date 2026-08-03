@@ -1,0 +1,23 @@
+// Repro (Phase 17 / LSQB benchmark): loop over queries must borrow graph for &T callee.
+struct Graph {
+    count: i32,
+}
+
+fn run_query(graph: Graph, query_id: u32) -> i32 {
+    graph.count + query_id as i32
+}
+
+pub fn run_all_queries(graph: Graph) -> i32 {
+    let mut total = 0
+    let mut q = 1
+    while q <= 3 {
+        total = total + run_query(graph, q as u32)
+        q = q + 1
+    }
+    total
+}
+
+pub fn test_loop_reuses_graph_with_borrowed_callee() {
+    let g = Graph { count: 10 }
+    assert_eq(run_all_queries(g), 36)
+}

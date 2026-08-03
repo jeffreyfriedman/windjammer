@@ -5,6 +5,17 @@
 
 pub type NetResult<T> = Result<T, string>
 
+/// HTTP method verb (GET, POST, …).
+pub enum HttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+}
+
 /// HTTP Response
 pub struct Response {
     pub status: int,
@@ -15,7 +26,7 @@ pub struct Response {
 /// HTTP Request builder
 pub struct Request {
     pub url: string,
-    pub method: string,
+    pub method: HttpMethod,
     pub headers: Vec<(string, string)>,
     pub body: Option<string>,
     pub timeout: Option<int>, // seconds
@@ -26,7 +37,7 @@ impl Request {
     pub fn get(url: string) -> Request {
         Request {
             url: url,
-            method: "GET",
+            method: HttpMethod::GET,
             headers: vec![],
             body: None,
             timeout: None,
@@ -37,7 +48,7 @@ impl Request {
     pub fn post(url: string, body: string) -> Request {
         Request {
             url: url,
-            method: "POST",
+            method: HttpMethod::POST,
             headers: vec![],
             body: Some(body),
             timeout: None,
@@ -138,7 +149,7 @@ impl WebSocket {
 
 /// HTTP Server Request (received by server)
 pub struct ServerRequest {
-    pub method: string,
+    pub method: HttpMethod,
     pub path: string,
     pub headers: Vec<(string, string)>,
     pub body: string,
