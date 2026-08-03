@@ -26,7 +26,7 @@ impl MethodCallAnalyzer {
     pub fn should_add_clone(
         arg: &Expression,
         arg_str: &str,
-        method: &str,
+        _method: &str,
         param_idx: usize,
         method_signature: &Option<crate::analyzer::FunctionSignature>,
         borrowed_iterator_vars: &HashSet<String>,
@@ -77,11 +77,9 @@ impl MethodCallAnalyzer {
                                 return true;
                             }
                         }
-                    } else if crate::analyzer::stdlib_method_traits::is_storage_method(method) {
-                        // `Vec::push` / `insert` often lack a resolved signature in method
-                        // codegen — still clone `&T` iterator items into owned slots.
-                        return true;
                     }
+                    // No signature → do not guess from method names (`push`/`insert`/…).
+                    // Call sites must resolve stdlib/user signatures via the registry.
                 }
             }
         }
@@ -139,11 +137,26 @@ impl MethodCallAnalyzer {
         )
     }
 
-    /// Determine if we should add .cloned() for Option<&T> -> Option<T>
-    pub fn should_add_cloned(method: &str, _return_type: &Option<crate::parser::Type>) -> bool {
-        matches!(
-            method,
-            "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
-        ) || matches!(method, "unwrap" | "first" | "last")
+    /// Determine if we should add .cloned() for Option<&T> -> Option<T>.
+    /// Driven by the resolved return type (or signature return), never method names.
+    pub fn should_add_cloned(
+        _method: &str,
+        return_type: &Option<crate::parser::Type>,
+        method_signature: Option<&crate::analyzer::FunctionSignature>,
+    ) -> bool {
+        let ret = method_signature
+            .and_then(|s| s.return_type.as_ref())
+            .or(return_type.as_ref());
+        match ret {
+            Some(Type::Parameterized(base, args))
+                if matches!(base.as_str(), "Option" | "option") && args.len() == 1 =>
+            {
+                matches!(
+                    args[0],
+                    Type::Reference(_) | Type::MutableReference(_)
+                )
+            }
+            _ => false,
+        }
     }
 }

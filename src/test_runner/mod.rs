@@ -9,6 +9,7 @@
 use anyhow::Result;
 use std::path::Path;
 
+mod layout_detect;
 mod test_discovery;
 pub mod test_execution;
 mod test_reporting;
@@ -31,7 +32,7 @@ pub fn run_tests(
     ))
 }
 
-pub fn run_tests_with_options(opts: TestRunOptions) -> Result<()> {
+pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     use colored::*;
     use std::fs;
     use std::process::Command;
@@ -42,6 +43,8 @@ pub fn run_tests_with_options(opts: TestRunOptions) -> Result<()> {
     use test_reporting::{generate_coverage_report, parse_test_output};
 
     let start_time = Instant::now();
+    let project_root = std::env::current_dir()?;
+    layout_detect::apply_inferred_test_options(&project_root, &mut opts);
 
     // Determine test directory
     let test_dir = opts
@@ -150,7 +153,6 @@ pub fn run_tests_with_options(opts: TestRunOptions) -> Result<()> {
     }
 
     // Generate test harness (pass project root for library detection)
-    let project_root = std::env::current_dir()?;
     generate_test_harness(&temp_dir, &all_tests, opts.filter.as_deref(), &project_root, &opts)?;
 
     // Run tests

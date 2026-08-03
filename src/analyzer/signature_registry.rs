@@ -472,6 +472,18 @@ impl SignatureRegistry {
             .and_then(|g| g.find_signature_ending_with(suffix))
     }
 
+    /// All registered qualified keys for a bare method name (e.g. `push` → `Vec::push`, …).
+    pub fn method_keys_for(&self, method: &str) -> Option<&[String]> {
+        self.method_index
+            .get(method)
+            .map(|v| v.as_slice())
+            .or_else(|| {
+                self.global_fallback
+                    .as_ref()
+                    .and_then(|g| g.method_keys_for(method))
+            })
+    }
+
     /// Like [`Self::find_signature_ending_with`], but only when exactly one
     /// `{Type}::{suffix}` is registered (locally or via global fallback).
     pub fn find_unique_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {

@@ -4663,7 +4663,9 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         arg_count: usize,
     ) -> bool {
-        let receiver_type = Self::receiver_type_name_for_payload_storage(object);
+        let receiver_type = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| Self::receiver_type_name_for_payload_storage(object));
         if self.method_call_argument_stores_owned_payload_in_registry(
             method,
             receiver_type.as_deref(),
@@ -4779,18 +4781,15 @@ impl<'ast> CodeGenerator<'ast> {
                 object,
                 ..
             } => {
-                // `vec.push(param)` / `self.components.push(component)` — storage methods
-                // consume owned elements even when receiver-type registry lookup fails (`self`).
-                let is_storage =
-                    crate::analyzer::stdlib_method_traits::is_storage_method(method);
+                // Signature-driven: owned formals store the arg. Language-level
+                // `Some`/`Ok`/`Err` / PascalCase variant ctors always store.
                 let is_lang_payload = matches!(method.as_str(), "Some" | "Ok" | "Err")
                     || method
                         .chars()
                         .next()
                         .is_some_and(|c| c.is_ascii_uppercase());
                 arguments.iter().enumerate().any(|(i, (_, arg))| {
-                    let stores = is_storage
-                        || is_lang_payload
+                    let stores = is_lang_payload
                         || self.method_call_argument_stores_owned_payload(
                             method,
                             object,
