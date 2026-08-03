@@ -25,6 +25,61 @@ fn type_to_rust_mapped_owned_str_slot(type_: &Type, map_custom: &dyn Fn(&str) ->
     }
 }
 
+/// Parse a Windjammer type name from source annotations (closure params, etc.).
+pub fn parse_wj_type_name(s: &str) -> Type {
+    if let Some((base, args)) = parse_wj_angled_type_args(s.trim()) {
+        return Type::Parameterized(base, args);
+    }
+    match s.trim() {
+        "string" | "String" => Type::String,
+        "str" => Type::Custom("str".into()),
+        "int" | "i64" => Type::Int,
+        "i32" => Type::Custom("i32".into()),
+        "uint" | "u64" | "usize" => Type::Uint,
+        "bool" => Type::Bool,
+        "char" => Type::Custom("char".into()),
+        "f32" => Type::Custom("f32".into()),
+        "f64" | "float" => Type::Float,
+        other => Type::Custom(other.to_string()),
+    }
+}
+
+fn parse_wj_angled_type_args(s: &str) -> Option<(String, Vec<Type>)> {
+    let open = s.find('<')?;
+    let close = s.rfind('>')?;
+    if open >= close {
+        return None;
+    }
+    let base = s[..open].trim().to_string();
+    let inner = &s[open + 1..close];
+    let args = split_wj_top_level_commas(inner)
+        .into_iter()
+        .map(|part| parse_wj_type_name(part.trim()))
+        .collect();
+    Some((base, args))
+}
+
+fn split_wj_top_level_commas(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    if start < s.len() {
+        parts.push(&s[start..]);
+    }
+    parts
+}
+
 /// Whether generic args to this container should use [`type_to_rust_mapped_owned_str_slot`] for
 /// `str` (e.g. `HashMap<str, str>` → `HashMap<String, String>`).
 fn parameterized_base_uses_owned_str_slots(base: &str) -> bool {

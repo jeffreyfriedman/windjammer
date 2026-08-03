@@ -489,6 +489,37 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 }
             })
             .collect();
+        let cast_suffix = gen.current_function_return_type.as_ref().and_then(|t| {
+            if let Type::Option(inner) = t {
+                match inner.as_ref() {
+                    Type::Int => Some(" as i64"),
+                    Type::Int32 => Some(" as i32"),
+                    Type::Custom(n) if n == "int" || n == "i64" => Some(" as i64"),
+                    Type::Custom(n) if n == "i32" => Some(" as i32"),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        });
+        let args = if let Some(suffix) = cast_suffix {
+            if func_str.starts_with("Some::<") && arguments.len() == 1 {
+                let (_, inner) = &arguments[0];
+                if gen.expression_produces_usize(inner)
+                    || gen.infer_expression_type_is_usize(inner)
+                {
+                    args.into_iter()
+                        .map(|a| format!("{a}{suffix}"))
+                        .collect::<Vec<_>>()
+                } else {
+                    args
+                }
+            } else {
+                args
+            }
+        } else {
+            args
+        };
         return format!("{}({})", func_str, args.join(", "));
     }
 
@@ -834,10 +865,18 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         ) {
                             return arg_str.clone();
                         }
-                        let callee_formal_copy = sig
+                        let callee_formal_copy_scalar = sig
                             .formal_param_type(param_idx_b)
-                            .is_some_and(|t| gen.is_type_copy(t));
-                        if callee_formal_copy {
+                            .is_some_and(|t| {
+                                let bare = match t {
+                                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                                        inner.as_ref()
+                                    }
+                                    other => other,
+                                };
+                                crate::type_classification::is_copy_pass_by_value_formal(bare)
+                            });
+                        if callee_formal_copy_scalar {
                             return arg_str.clone();
                         }
                         let mut s = arg_str.clone();

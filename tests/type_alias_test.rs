@@ -103,7 +103,7 @@ pub fn create_quest(id: QuestId) -> QuestId {
 }
 
 fn main() {
-    let quest: QuestId = "rescue_silas".to_string()
+    let quest: QuestId = "rescue_silas"
     println!("{}", create_quest(quest))
 }
 "#;

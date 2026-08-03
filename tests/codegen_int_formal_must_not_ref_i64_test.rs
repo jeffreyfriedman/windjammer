@@ -51,7 +51,7 @@ fn int_formals_must_not_demote_to_ref_i64() {
         src.join("counts.wj"),
         r#"
 pub fn status_html(class_count: int, dept_count: int) -> string {
-    "c=".to_string() + class_count.to_string() + ",d=" + dept_count.to_string()
+    "c=" + class_count.to_string() + ",d=" + dept_count.to_string()
 }
 "#,
     )

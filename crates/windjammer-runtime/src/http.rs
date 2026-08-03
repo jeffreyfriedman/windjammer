@@ -17,6 +17,88 @@ use std::net::SocketAddr;
 use tokio::runtime::Runtime;
 
 // ============================================================================
+// HTTP METHOD
+// ============================================================================
+
+/// HTTP request method (GET, POST, …).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+}
+
+impl HttpMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HttpMethod::GET => "GET",
+            HttpMethod::POST => "POST",
+            HttpMethod::PUT => "PUT",
+            HttpMethod::DELETE => "DELETE",
+            HttpMethod::PATCH => "PATCH",
+            HttpMethod::HEAD => "HEAD",
+            HttpMethod::OPTIONS => "OPTIONS",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Option<Self> {
+        match s.to_ascii_uppercase().as_str() {
+            "GET" => Some(HttpMethod::GET),
+            "POST" => Some(HttpMethod::POST),
+            "PUT" => Some(HttpMethod::PUT),
+            "DELETE" => Some(HttpMethod::DELETE),
+            "PATCH" => Some(HttpMethod::PATCH),
+            "HEAD" => Some(HttpMethod::HEAD),
+            "OPTIONS" => Some(HttpMethod::OPTIONS),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for HttpMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl PartialEq<str> for HttpMethod {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str().eq_ignore_ascii_case(other)
+    }
+}
+
+impl PartialEq<&str> for HttpMethod {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str().eq_ignore_ascii_case(other)
+    }
+}
+
+impl From<&axum::http::Method> for HttpMethod {
+    fn from(method: &axum::http::Method) -> Self {
+        HttpMethod::from(method.clone())
+    }
+}
+
+impl From<axum::http::Method> for HttpMethod {
+    fn from(method: axum::http::Method) -> Self {
+        match method {
+            axum::http::Method::GET => HttpMethod::GET,
+            axum::http::Method::POST => HttpMethod::POST,
+            axum::http::Method::PUT => HttpMethod::PUT,
+            axum::http::Method::DELETE => HttpMethod::DELETE,
+            axum::http::Method::PATCH => HttpMethod::PATCH,
+            axum::http::Method::HEAD => HttpMethod::HEAD,
+            axum::http::Method::OPTIONS => HttpMethod::OPTIONS,
+            _ => HttpMethod::GET, // fallback for extension methods
+        }
+    }
+}
+
+// ============================================================================
 // CLIENT TYPES
 // ============================================================================
 
@@ -148,7 +230,7 @@ pub fn post(url: &str, body: &str) -> Result<Response, String> {
 /// HTTP Request received by server
 #[derive(Debug, Clone)]
 pub struct Request {
-    pub method: String,
+    pub method: HttpMethod,
     pub path: String,
     pub query: HashMap<String, String>,
     pub headers: HashMap<String, String>,
@@ -157,8 +239,8 @@ pub struct Request {
 
 impl Request {
     /// Get request method
-    pub fn method(&self) -> &str {
-        &self.method
+    pub fn method(&self) -> HttpMethod {
+        self.method
     }
 
     /// Get request path
@@ -518,7 +600,7 @@ pub fn parse_query_string(query: Option<&str>) -> HashMap<String, String> {
 
 /// Extract our Request type from Axum's request
 async fn extract_request(req: AxumRequest) -> Request {
-    let method = req.method().to_string();
+    let method = HttpMethod::from(req.method().clone());
     let path = req.uri().path().to_string();
 
     // Extract query parameters
@@ -579,7 +661,7 @@ where
 /// HTTP Server Request (received by simple server handlers)
 #[derive(Debug, Clone)]
 pub struct ServerRequest {
-    pub method: String,
+    pub method: HttpMethod,
     pub path: String,
     pub query: HashMap<String, String>,
     pub headers: Vec<(String, String)>,
@@ -643,7 +725,7 @@ where
         let app = AxumRouter::new().fallback(move |req: AxumRequest| {
             let handler = handler.clone();
             async move {
-                let method = req.method().to_string();
+                let method = HttpMethod::from(req.method().clone());
                 let path = req.uri().path().to_string();
                 let query = parse_query_string(req.uri().query());
                 let headers: Vec<(String, String)> = req
@@ -683,6 +765,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn http_method_from_str_is_case_insensitive() {
+        assert_eq!(HttpMethod::from_str_name("get"), Some(HttpMethod::GET));
+        assert_eq!(HttpMethod::from_str_name("Post"), Some(HttpMethod::POST));
+        assert_eq!(HttpMethod::from_str_name("UNKNOWN"), None);
+    }
+
+    #[test]
+    fn http_method_partial_eq_str() {
+        assert_eq!(HttpMethod::GET, "get");
+        assert_eq!(HttpMethod::POST, "POST");
+        assert_ne!(HttpMethod::DELETE, "GET");
+    }
+
+    #[test]
+    fn http_method_display() {
+        assert_eq!(HttpMethod::PATCH.to_string(), "PATCH");
+    }
+
+    #[test]
     fn test_response_constructors() {
         let resp = ServerResponse::ok("Hello".to_string());
         assert_eq!(resp.status, 200);
@@ -715,7 +816,7 @@ mod tests {
         let mut query = HashMap::new();
         query.insert("as_of".to_string(), "2026-06-15".to_string());
         let req = ServerRequest {
-            method: "GET".to_string(),
+            method: HttpMethod::GET,
             path: "/api/v1/reports/trial-balance".to_string(),
             query,
             headers: vec![],
@@ -728,7 +829,7 @@ mod tests {
     #[test]
     fn server_request_header_lookup_is_case_insensitive() {
         let req = ServerRequest {
-            method: "GET".to_string(),
+            method: HttpMethod::GET,
             path: "/api/v1/accounts".to_string(),
             query: HashMap::new(),
             headers: vec![("x-tenant-slug".to_string(), "demo".to_string())],

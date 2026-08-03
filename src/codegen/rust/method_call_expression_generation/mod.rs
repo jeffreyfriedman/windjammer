@@ -21,6 +21,8 @@ impl<'ast> CodeGenerator<'ast> {
         type_args: &Option<Vec<Type>>,
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
+        if method == "find" && arguments.len() == 1 {
+        }
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" { "to_string" } else { method };
         if super::rust_stdlib_annotations::is_strip_redundant(method) && arguments.is_empty() {

@@ -3054,13 +3054,13 @@ fn get_user_name(users: HashMap<i64, string>, user_id: i64) -> string {
     if let Some(name) = users.get(user_id) {
         name
     } else {
-        "Unknown".to_string()
+        "Unknown"
     }
 }
 
 fn main() {
     let mut users = HashMap::new()
-    users.insert(1, "Alice".to_string())
+    users.insert(1, "Alice")
     let _name = get_user_name(users, 1)
 }
 "#,

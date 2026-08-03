@@ -52,9 +52,9 @@ fn test_match_return_string() {
     let code = r#"
 pub fn number_name(n: i32) -> string {
     match n {
-        0 => "zero".to_string(),
-        1 => "one".to_string(),
-        _ => "other".to_string(),
+        0 => "zero",
+        1 => "one",
+        _ => "other",
     }
 }
 "#;

@@ -78,7 +78,7 @@ impl Player {
 }
 
 fn main() {
-    let player = Player::new("hero".to_string(), 100)
+    let player = Player::new("hero", 100)
     println!("{}", player.status())
     println!("{}", player.is_alive())
 }
@@ -212,7 +212,7 @@ struct App {
 
 impl App {
     fn new() -> App {
-        App { config: Config::new(), name: "test".to_string() }
+        App { config: Config::new(), name: "test" }
     }
 
     fn validate(self) -> bool {

@@ -310,6 +310,51 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         }
     }
 
+    // Signature-driven: owned String producers at `&str` / Pattern formals (e.g.
+    // `match s.find(":".to_string())`). Parser emits `Call(FieldAccess)` not
+    // `MethodCall` for `s.find(...)`, so finalize.rs pattern logic never runs.
+    let receiver_is_text = type_name.as_deref().is_some_and(|rt| {
+        rt == "String"
+            || rt == "string"
+            || rt == "str"
+            || rt.ends_with("::String")
+            || rt.ends_with("::str")
+    }) || matches!(
+        call_obj,
+        Expression::Identifier { name, .. }
+            if gen.local_var_types.get(name).is_some_and(|t| {
+                crate::codegen::rust::types::is_windjammer_text_type(t)
+            })
+                || gen.str_ref_optimized_params.contains(name)
+                || gen.emitted_rust_ref_formals.contains(name)
+                || gen.inferred_borrowed_params.contains(name.as_str())
+                || gen.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                })
+    ) || gen
+        .infer_expression_type(call_obj)
+        .as_ref()
+        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+    for (i, arg_str) in args.iter_mut().enumerate() {
+        let Some((_, arg_expr)) = arguments.get(i) else {
+            continue;
+        };
+        if crate::codegen::rust::string_utilities::method_call_arg_expects_pattern_str(
+            call_method,
+            i,
+            method_signature.as_ref(),
+            type_name.as_deref(),
+            receiver_is_text,
+            &gen.signature_registry,
+        ) {
+            crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                arg_expr,
+                arg_str,
+            );
+        }
+    }
+
     let call_str = format!(
         "{}{}{}({})",
         obj_str,

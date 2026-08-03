@@ -1,0 +1,12 @@
+// Gate: HttpMethod enum on ServerRequest.method compiles with std::http
+use std::http::*
+
+fn handle(req: ServerRequest) -> ServerResponse {
+    match req.method {
+        HttpMethod::GET => ServerResponse::ok("get"),
+        HttpMethod::POST => ServerResponse::ok("post"),
+        _ => ServerResponse::error(405, "method not allowed"),
+    }
+}
+
+fn main() {}

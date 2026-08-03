@@ -550,6 +550,29 @@ pub fn resolve_method_for_call_site(
 /// Only matches keys that are known trait definitions (registered via `trait_method_keys`).
 /// This prevents unrelated impl methods with the same name from incorrectly colliding
 /// (e.g. `Registry::register` must not affect `ComponentRegistry::register`).
+/// True when any trait definition in `global` declares an owned plain `string` at `arg_index`
+/// for instance method `method` (port-trait E0053 keep-owned at call sites).
+pub(crate) fn global_trait_owned_plain_string_arg(
+    global: &SignatureRegistry,
+    method: &str,
+    arg_index: usize,
+) -> bool {
+    let suffix = format!("::{method}");
+    for (key, trait_sig) in &global.signatures {
+        if !key.ends_with(&suffix) || !global.is_trait_method_key(key) {
+            continue;
+        }
+        if !trait_sig.has_self_receiver {
+            continue;
+        }
+        let pidx = trait_sig.arg_param_index(arg_index);
+        if formal_is_plain_windjammer_string(trait_sig, pidx) {
+            return true;
+        }
+    }
+    false
+}
+
 pub(crate) fn apply_trait_owned_string_call_site_contracts(
     global: &SignatureRegistry,
     method: &str,
@@ -613,6 +636,18 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
                 sig.formal_param_types.resize(idx + 1, Type::String);
             } else {
                 sig.formal_param_types[idx] = Type::String;
+            }
+            // Impl body may have preregistered `emitted_rust_ref_params[idx]=true` from
+            // readonly `&str` convergence — trait owned `string` wins at call sites.
+            let flag_len = sig.param_ownership.len();
+            if sig.emitted_rust_ref_params.is_none() {
+                sig.emitted_rust_ref_params = Some(vec![false; flag_len]);
+            }
+            if let Some(flags) = sig.emitted_rust_ref_params.as_mut() {
+                if flags.len() < flag_len {
+                    flags.resize(flag_len, false);
+                }
+                flags[idx] = false;
             }
         }
     }

@@ -7,6 +7,37 @@
 // LOG LEVELS
 //===============================================
 
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl LogLevel {
+    pub fn as_str(self) -> string {
+        match self {
+            LogLevel::Trace => "trace",
+            LogLevel::Debug => "debug",
+            LogLevel::Info => "info",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+        }
+    }
+
+    pub fn from_str(s: string) -> Option<LogLevel> {
+        match s {
+            "trace" | "TRACE" | "Trace" => Some(LogLevel::Trace),
+            "debug" | "DEBUG" | "Debug" => Some(LogLevel::Debug),
+            "info" | "INFO" | "Info" => Some(LogLevel::Info),
+            "warn" | "WARN" | "Warn" | "warning" | "WARNING" => Some(LogLevel::Warn),
+            "error" | "ERROR" | "Error" => Some(LogLevel::Error),
+            _ => None,
+        }
+    }
+}
+
 // Initialize logger (call once at start of program)
 fn init() {
     // Wraps: env_logger::init() or tracing_subscriber::fmt::init()
@@ -14,9 +45,8 @@ fn init() {
 }
 
 // Initialize with custom filter level
-fn init_with_level(level: string) {
+fn init_with_level(level: LogLevel) {
     // Wraps: env_logger::Builder::new().filter_level(level).init()
-    // Levels: "trace", "debug", "info", "warn", "error"
 }
 
 //===============================================
@@ -130,7 +160,7 @@ fn error_enabled() -> bool {
 //     log.init()
 //     
 //     // Or initialize with specific level
-//     log.init_with_level("debug")
+//     log.init_with_level(LogLevel::Debug)
 //     
 //     // Simple logging
 //     log.trace("Starting application")

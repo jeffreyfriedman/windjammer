@@ -58,11 +58,14 @@ impl CodeGenerator<'_> {
             return Some(String::new());
         }
 
-        // Rust std modules: pass through as `use std::fs`, `use std::process`, etc.
+        // Windjammer std::fs wraps windjammer_runtime (not Rust std::fs).
+        if module_base == "fs" || module_base.starts_with("fs::") {
+            return Some("use windjammer_runtime::fs;\n".to_string());
+        }
+
+        // Rust std modules: pass through as `use std::process`, etc.
         // `std::env` maps to windjammer_runtime (cross-backend get/get_or).
-        if module_base == "fs"
-            || module_base.starts_with("fs::")
-            || module_base == "process"
+        if module_base == "process"
             || module_base.starts_with("process::")
         {
             return Some(format!("use std::{};\n", module_name));

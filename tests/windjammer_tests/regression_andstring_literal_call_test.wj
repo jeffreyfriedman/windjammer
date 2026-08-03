@@ -1,0 +1,16 @@
+// Repro: string literal passed to `string` param that lowers to &String must emit
+// `&"lit".to_string()`, not `"lit".to_string()` (E0308 in library/multipass builds).
+
+pub fn andstring_callee(edge_kind: string) -> i64 {
+    if edge_kind == "Post_hasTag_Tag" {
+        return 1
+    }
+    0
+}
+
+pub fn test_string_literal_for_andstring_param() {
+    let n = andstring_callee("Post_hasTag_Tag")
+    if n != 1 {
+        assert(false, "string literal must bind to &String parameter")
+    }
+}

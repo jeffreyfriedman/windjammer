@@ -205,7 +205,15 @@ impl<'ast> CodeGenerator<'ast> {
                 else_block,
                 ..
             } => self.generate_if_statement(condition, then_block, else_block),
-            Statement::Match { value, arms, .. } => self.generate_match_statement(value, arms),
+            Statement::Match { value, arms, .. } => {
+                if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
+                    if let Expression::MethodCall { method, .. } = value {
+                        if method == "find" {
+                        }
+                    }
+                }
+                self.generate_match_statement(value, arms)
+            }
             Statement::Loop { body, .. } => self.generate_loop_statement(body),
             Statement::While {
                 condition, body, ..

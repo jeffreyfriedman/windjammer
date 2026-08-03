@@ -258,6 +258,42 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !(analyzed.mutated_parameters.contains(&param.name)
                         && !analyzed.returned_parameters.contains(&param.name));
+                // Port-trait owned `string` forwards keep caller `String` (E0053 / deps tests).
+                // Skip when the body only forwards to readonly text callees (`find_index`) —
+                // those siblings emit `&str` and the outer formal should match (blackboard set_*).
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_only_forwards_to_borrowed_text_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                }
+                // Blackboard-style keys: forward only to readonly `&str` callees (`find_index`).
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && self.param_only_forwards_to_borrowed_text_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    return format!("{}: &str", param.name);
+                }
                 let borrow_delegation = self.param_should_emit_borrowed_delegation_formal(param, func)
                     && !self.param_single_arg_owned_self_or_field_forward(param, func);
                 // Shared `&T` is reusable across multiple borrowing call sites
@@ -385,8 +421,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 || (self.is_type_copy(&param.type_)
                                     && !crate::type_classification::is_copy_pass_by_value_formal(
                                         &param.type_,
-                                    ))
-                                || matches!(&param.type_, Type::Custom(_))
+                                    )
+                                    && field_proj_readonly)
+                                || (matches!(&param.type_, Type::Custom(_))
+                                    && !self.is_type_copy(&param.type_))
                                 || Self::param_type_is_vec_container(&param.type_)))
                         || field_proj_readonly
                         || map_key_borrow_forward
@@ -1262,6 +1300,19 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
+                            if matches!(ownership_mode, OwnershipMode::Borrowed)
+                                && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                && self.param_only_forwards_to_emitted_owned_callees(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.inferred_borrowed_params.remove(&param.name);
+                                self.str_ref_optimized_params.remove(&param.name);
+                            }
+
                             if self.param_used_in_if_with_condition_and_branches(
                                 func.body.as_slice(),
                                 &param.name,
@@ -1784,9 +1835,15 @@ impl<'ast> CodeGenerator<'ast> {
                                         self.param_has_mut_method_via_field_projection(func.body.as_slice(), &param.name));
                                 }
                                 if false_mut_on_copy
-                                    && matches!(
-                                        ownership_mode,
-                                        OwnershipMode::MutBorrowed | OwnershipMode::Borrowed
+                                    && matches!(ownership_mode, OwnershipMode::MutBorrowed)
+                                {
+                                    ownership_mode = OwnershipMode::Owned;
+                                } else if false_mut_on_copy
+                                    && matches!(ownership_mode, OwnershipMode::Borrowed)
+                                    && !self.inferred_borrowed_params.contains(&param.name)
+                                    && !self.param_only_used_via_field_or_index_projection(
+                                        func.body.as_slice(),
+                                        &param.name,
                                     )
                                 {
                                     ownership_mode = OwnershipMode::Owned;
@@ -1819,7 +1876,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 &param.name,
                             );
                             let str_ref_ok = (self.str_ref_optimized_params.contains(&param.name)
-                                || analyzed.str_ref_optimizable_params.contains(&param.name))
+                                || analyzed.str_ref_optimizable_params.contains(&param.name)
+                                || self.param_only_forwards_to_borrowed_text_callees(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ))
                                 && !asref_fwd;
                             if asref_fwd {
                                 if _debug_formal {
@@ -1833,6 +1895,11 @@ impl<'ast> CodeGenerator<'ast> {
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
+                                && !self.param_only_forwards_to_emitted_owned_callees(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
                                 && (unused_params.contains(&param.name)
                                     || self.param_only_used_in_simple_or_tuple_discard(
                                         func.body.as_slice(),
@@ -1935,7 +2002,13 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                                 OwnershipMode::Borrowed if self.is_type_copy(formal_type) => {
-                                    if self.inferred_borrowed_params.contains(&param.name) {
+                                    // Copy-by-value: owned formal + call-site borrow, except
+                                    // field-projection-only aggregates (`run_query` → `&Graph`).
+                                    if self.emitted_rust_ref_formals.contains(&param.name)
+                                        && !crate::type_classification::is_copy_pass_by_value_formal(
+                                            formal_type,
+                                        )
+                                    {
                                         format!("&{}", self.type_to_rust(formal_type))
                                     } else {
                                         self.type_to_rust(formal_type)
@@ -2088,7 +2161,9 @@ impl<'ast> CodeGenerator<'ast> {
                             && !crate::analyzer::field_enum_borrow::param_only_used_as_field_enum_match_scrutinee(
                                 &param.name,
                                 func.body.as_slice(),
-                            )))
+                            )
+                            && !self.inferred_borrowed_params.contains(&param.name)
+                            && !self.emitted_rust_ref_formals.contains(&param.name)))
                 {
                     type_str = self.type_to_rust(&param.type_);
                 }
