@@ -155,19 +155,29 @@ impl<'ast> CodeGenerator<'ast> {
                 self.current_function_return_type.as_ref(),
             ));
         let mut prepared_arg = match arg_expr {
-            Expression::Identifier { name, .. }
+            Expression::Identifier { .. }
                 if !skip_auto_clone_for_borrow
                     && !skip_auto_clone_for_field_extract
                     && !collecting_ref_vec =>
             {
-                self.maybe_auto_clone(name, arg_str)
+                self.maybe_auto_clone_call_arg(
+                    arg_expr,
+                    arg_str,
+                    Some(callee_name),
+                    Some(arg_index),
+                )
             }
             // Field paths (`record.key`) moved into owned formals + reused in loops
             // need `.clone()`; identifier-only auto-clone misses them (regression-059).
             Expression::FieldAccess { .. } | Expression::Index { .. }
                 if !skip_auto_clone_for_borrow && !skip_auto_clone_for_field_extract =>
             {
-                self.maybe_auto_clone_expr_path(arg_expr, arg_str)
+                self.maybe_auto_clone_call_arg(
+                    arg_expr,
+                    arg_str,
+                    Some(callee_name),
+                    Some(arg_index),
+                )
             }
             _ => arg_str.to_string(),
         };
@@ -467,6 +477,26 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(callee_name),
                 Some(arg_index),
             );
+            if matches!(
+                arg_expr,
+                Expression::Literal {
+                    value: Literal::String(_),
+                    ..
+                }
+            ) && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+                callee_name,
+                arg_index,
+                None,
+                registry,
+                self.global_signature_registry.as_deref(),
+            ) && !finished.ends_with(".to_string()")
+                && !finished.ends_with(".to_owned()")
+            {
+                finished = format!(
+                    "{}.to_string()",
+                    finished.trim_start_matches('&')
+                );
+            }
             return Some(finished);
         };
 
@@ -3073,6 +3103,14 @@ impl<'ast> CodeGenerator<'ast> {
                         None,
                     ) || self.global_signature_registry.as_ref().is_some_and(|g| {
                         self.ir_callee_arg_expects_mut_borrow(g, callee, idx, None, None)
+                    }) || self.ir_callee_arg_expects_shared_borrow(
+                        &self.signature_registry,
+                        callee,
+                        idx,
+                        None,
+                        None,
+                    ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+                        self.ir_callee_arg_expects_shared_borrow(g, callee, idx, None, None)
                     }) {
                         return arg_str.to_string();
                     }
@@ -3092,6 +3130,14 @@ impl<'ast> CodeGenerator<'ast> {
                         None,
                     ) || self.global_signature_registry.as_ref().is_some_and(|g| {
                         self.ir_callee_arg_expects_mut_borrow(g, callee, idx, None, None)
+                    }) || self.ir_callee_arg_expects_shared_borrow(
+                        &self.signature_registry,
+                        callee,
+                        idx,
+                        None,
+                        None,
+                    ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+                        self.ir_callee_arg_expects_shared_borrow(g, callee, idx, None, None)
                     }) {
                         return arg_str.to_string();
                     }

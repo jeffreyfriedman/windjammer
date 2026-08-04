@@ -262,6 +262,26 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         coerced,
                     );
                     gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut coerced);
+                    if matches!(
+                        arg_to_generate,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+                        &qualified_name,
+                        i,
+                        Some(sig),
+                        &gen.signature_registry,
+                        gen.global_signature_registry.as_deref(),
+                    ) && !coerced.ends_with(".to_string()")
+                        && !coerced.ends_with(".to_owned()")
+                    {
+                        coerced = format!(
+                            "{}.to_string()",
+                            coerced.trim_start_matches('&')
+                        );
+                    }
                     return vec![coerced];
                 }
             }
@@ -437,7 +457,15 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                     type_name.as_deref(),
                                     Some(&gen.enum_variant_types),
                                     runtime_module,
-                                );
+                                )
+                                || (is_str_lit
+                                    && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+                                        &qualified_name,
+                                        i,
+                                        Some(sig),
+                                        &gen.signature_registry,
+                                        gen.global_signature_registry.as_deref(),
+                                    ));
                             let is_explicit_str_ref = sig
                                 .formal_param_type(sig_param_idx)
                                 .or_else(|| sig.param_types.get(sig_param_idx))
@@ -682,6 +710,26 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 ) {
                     arg_str = coerced;
                     ir_applied = true;
+                    if matches!(
+                        arg_to_generate,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+                        &qualified_name,
+                        i,
+                        fallback_sig.as_ref(),
+                        &gen.signature_registry,
+                        gen.global_signature_registry.as_deref(),
+                    ) && !arg_str.ends_with(".to_string()")
+                        && !arg_str.ends_with(".to_owned()")
+                    {
+                        arg_str = format!(
+                            "{}.to_string()",
+                            arg_str.trim_start_matches('&')
+                        );
+                    }
                 }
             }
 
@@ -731,9 +779,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             runtime_module,
                         )
                     })
-                    || (fallback_sig.is_none()
-                        && is_string_literal
-                        && matches!(call_method, "new" | "from")));
+                    || (is_string_literal
+                        && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+                            &qualified_name,
+                            i,
+                            fallback_sig.as_ref(),
+                            &gen.signature_registry,
+                            gen.global_signature_registry.as_deref(),
+                        )));
                 if needs_to_string {
                     arg_str = format!("{}.to_string()", arg_str);
                 }

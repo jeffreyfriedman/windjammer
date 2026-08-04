@@ -1,0 +1,8 @@
+use std::collections::HashMap
+
+/// SSSP seed: HashMap<i64, f64> must accept f64 literal 0.0 (not f32).
+pub fn sssp_seed(source: i64) -> HashMap<i64, f64> {
+    let mut distances = HashMap::new()
+    distances.insert(source, 0.0)
+    distances
+}

@@ -144,7 +144,8 @@ fn is_self_dense_access(expr: &Expression<'_>) -> bool {
     }
 }
 
-/// Receiver of `.clone()` is `self.dense` or `self.dense[index]` (typical `Vec<T>` storage in generic ECS arrays).
+/// Receiver of a method call is `self.dense` or `self.dense[index]` (typical `Vec<T>` storage).
+#[allow(dead_code)] // kept for ECS Clone-bound diagnostics / future signature-driven use
 fn clone_receiver_is_self_dense_path(expr: &Expression<'_>) -> bool {
     match expr {
         Expression::Index { object, .. } => is_self_dense_access(object),
@@ -160,21 +161,9 @@ fn expr_may_need_generic_clone_bound(expr: &Expression<'_>) -> bool {
             arguments,
             ..
         } => {
-            if matches!(
-                method.as_str(),
-                "clone" | "to_owned" | "to_vec" | "into_iter"
-            ) && clone_receiver_is_self_dense_path(object)
-            {
-                return true;
-            }
-            if matches!(method.as_str(), "clone" | "to_owned")
-                && matches!(
-                    &**object,
-                    Expression::FieldAccess { field, .. } if field == "data"
-                )
-            {
-                return true;
-            }
+            // Recurse into the receiver: `self.dense` / `self.data` already imply
+            // `T: Clone` via FieldAccess/Index arms — no method-name list.
+            let _ = method;
             if expr_may_need_generic_clone_bound(object) {
                 return true;
             }

@@ -1,0 +1,12 @@
+use crate::loop_query_engine::Graph
+use crate::loop_query_engine::run_query
+
+pub fn run_all_queries(graph: Graph) -> i32 {
+    let mut total = 0
+    let mut q = 1
+    while q <= 3 {
+        total = total + run_query(graph, q as u32)
+        q = q + 1
+    }
+    total
+}

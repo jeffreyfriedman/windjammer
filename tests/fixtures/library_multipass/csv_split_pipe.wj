@@ -1,0 +1,12 @@
+use std::strings
+
+/// LSQB CSV loader excerpt: pipe delimiter must stay &str in library multipass.
+pub fn parse_edge_fields(line: string) -> (string, string) {
+    let parts = strings::split(line, "|")
+    return (parts[0], parts[1])
+}
+
+pub fn first_csv_field(line: string) -> string {
+    let parts = strings::split(line, "|")
+    parts[0]
+}

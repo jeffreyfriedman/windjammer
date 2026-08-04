@@ -669,6 +669,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &value_str,
                         &self.inferred_borrowed_params,
                         &self.current_function_params,
+                        self.infer_expression_type(value).as_ref(),
                     );
                 output.push_str(&scrutinee);
             } else {

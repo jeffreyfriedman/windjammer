@@ -61,17 +61,25 @@ impl<'ast> CodeGenerator<'ast> {
         end: &Expression<'ast>,
         inclusive: bool,
     ) -> String {
-        // If end is .len() (returns usize), cast start to usize to avoid type mismatch
-        let end_is_len = matches!(
-            end,
-            Expression::MethodCall { method, .. }
-                if matches!(method.as_str(), "len" | "capacity" | "count")
-        );
+        // If end returns usize (registry: len/capacity/…), cast start to usize.
+        let end_is_usize = match end {
+            Expression::MethodCall {
+                object, method, ..
+            } => crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                method,
+                self.infer_expression_type(object)
+                    .as_ref()
+                    .and_then(Self::type_to_name)
+                    .as_deref(),
+                &self.signature_registry,
+            ),
+            _ => false,
+        };
 
         let mut start_str = self.generate_expression(start);
 
-        // If end is .len() and start has _i32 suffix, replace with _usize or add cast
-        if end_is_len {
+        // If end is usize and start has _i32 suffix, replace with _usize or add cast
+        if end_is_usize {
             if start_str.ends_with("_i32") {
                 // Replace _i32 with _usize for literals
                 start_str = start_str.replace("_i32", "_usize");

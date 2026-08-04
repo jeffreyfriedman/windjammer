@@ -10,16 +10,17 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
-/// Reused owned binding in a loop must borrow when callee emits `&T` (LSQB benchmark port).
+/// Reused owned binding in a loop must borrow when callee emits `&T`.
 #[test]
 fn test_reused_binding_borrows_for_emitted_ref_callee() {
     let source = r##"
 struct Graph {
     count: i32,
+    label: string,
 }
 
 fn run_query(graph: Graph, query_id: u32) -> i32 {
-    graph.count
+    graph.count + query_id as i32 + graph.label.len() as i32
 }
 
 pub fn run_all(graph: Graph) -> i32 {
@@ -36,9 +37,15 @@ pub fn run_all(graph: Graph) -> i32 {
     let generated = test_utils::compile_single(source);
 
     assert!(
-        generated.contains("run_query(&graph,") || generated.contains("run_query(& graph,")
-            || generated.contains("run_query(graph,") || generated.contains("run_query(graph ,"),
-        "reused graph in loop must borrow for &Graph callee or pass Copy Graph by value. Generated:\n{}",
+        generated.contains("run_query(&graph,") || generated.contains("run_query(& graph,"),
+        "reused non-Copy graph in loop must borrow for &Graph callee. Generated:\n{}",
+        generated
+    );
+    assert!(
+        !generated.contains("run_query(graph,")
+            && !generated.contains("run_query(graph ,")
+            && !generated.contains("run_query(graph.clone()"),
+        "must not pass owned graph when callee emits &Graph. Generated:\n{}",
         generated
     );
     assert!(
@@ -48,7 +55,7 @@ pub fn run_all(graph: Graph) -> i32 {
     );
 }
 
-/// strings::split with std import must not coerce pipe delimiter to String (LSQB CSV loader).
+/// `strings::split` with std import must not coerce pipe delimiter to String.
 #[test]
 fn test_strings_split_std_import_pipe_delimiter_codegen() {
     let source = r##"

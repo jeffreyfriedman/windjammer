@@ -3,7 +3,11 @@
 
 use crate::parser::ast::*;
 
-/// Check if an expression produces a usize result
+/// Check if an expression's AST shape is a common usize-producing method call.
+///
+/// Prefer `CodeGenerator::expression_produces_usize` (signature registry) when
+/// available. This pure helper cannot load the registry cheaply; it only mirrors
+/// consensus usize returns (`len` / `capacity` / `count`) for early cast insertion.
 pub fn expression_produces_usize(expr: &Expression) -> bool {
     matches!(
         expr,

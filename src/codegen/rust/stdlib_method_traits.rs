@@ -58,16 +58,7 @@ fn lookup_suffix<'a>(
     method: &str,
     registry: &'a SignatureRegistry,
 ) -> Option<&'a FunctionSignature> {
-    let pattern = format!("::{}", method);
-    let mut matches = registry
-        .signatures
-        .iter()
-        .filter(|(key, _)| key.ends_with(&pattern));
-    let first = matches.next();
-    if matches.next().is_some() {
-        return None; // ambiguous
-    }
-    first.map(|(_, sig)| sig)
+    registry.find_unique_signature_ending_with(method)
 }
 
 /// Get the first non-self parameter ownership mode.
@@ -194,9 +185,27 @@ pub fn method_returns_usize_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig =
-        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| return_type_is(s, is_usize_type))
+    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
+        return return_type_is(sig, is_usize_type);
+    }
+    if let Some(sig) = lookup_suffix(method, registry) {
+        return return_type_is(sig, is_usize_type);
+    }
+    consensus_return_is_usize(method, registry)
+}
+
+fn consensus_return_is_usize(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            any = true;
+            if !return_type_is(sig, is_usize_type) {
+                return false;
+            }
+        }
+    }
+    any
 }
 
 /// Does this method return an iterator?
@@ -238,6 +247,24 @@ pub fn method_returns_iterable_qualified(
 
 /// Whether an `Option` adapter should lower as `.as_ref().method(...)` under `&self`.
 ///
+/// True when `Option::{method}` takes owned `self` (needs `.as_ref()` under borrow).
+pub fn option_owned_self_method(method: &str, registry: &SignatureRegistry) -> bool {
+    owned_self_method_on(method, "Option", registry)
+}
+
+/// True when `Result::{method}` takes owned `self`.
+pub fn result_owned_self_method(method: &str, registry: &SignatureRegistry) -> bool {
+    owned_self_method_on(method, "Result", registry)
+}
+
+fn owned_self_method_on(method: &str, parent: &str, registry: &SignatureRegistry) -> bool {
+    let Some(sig) = lookup_sig(method, Some(parent), registry) else {
+        return false;
+    };
+    sig.has_self_receiver
+        && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
+}
+
 /// WJ stdlib_meta declares these with borrowed `Option` receivers; Rust's by-value
 /// `Option::map` / `and_then` / `or_else` still need the `as_ref` desugar.
 pub fn option_adapter_needs_as_ref(method: &str, registry: &SignatureRegistry) -> bool {
@@ -316,16 +343,40 @@ pub fn method_arg_is_string_pattern_qualified(
     method_arg_expects_rust_str_ref_qualified(method, receiver_type, registry, arg_index)
 }
 
+fn return_type_is_self(sig: &FunctionSignature) -> bool {
+    return_type_is(sig, |ty| matches!(ty, Type::Custom(n) if n == "Self"))
+}
+
+/// When `::{method}` is registered on many types, true only if every match returns `Self`.
+fn consensus_return_is_self(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            any = true;
+            if !return_type_is_self(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
 /// Is this method type-preserving (return type == `Self`)?
-/// e.g. clone, to_owned, to_vec, into_iter
+/// Driven by resolved signatures (and consensus when the receiver type is unknown).
 pub fn method_is_type_preserving_qualified(
     method: &str,
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig =
-        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| return_type_is(s, |ty| matches!(ty, Type::Custom(n) if n == "Self")))
+    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
+        return return_type_is_self(sig);
+    }
+    if let Some(sig) = lookup_suffix(method, registry) {
+        return return_type_is_self(sig);
+    }
+    // Ambiguous suffix (e.g. `clone` on many std types) — require unanimous `Self`.
+    consensus_return_is_self(method, registry)
 }
 
 /// Is this a storage method that moves a parameter into a collection?

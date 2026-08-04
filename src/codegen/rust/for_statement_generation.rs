@@ -317,14 +317,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if let Some(var) = &loop_var {
-            if let Expression::Range { end, .. } = iterable {
-                if self.expression_produces_usize(end) {
-                    self.usize_variables.insert(var.clone());
-                }
-            }
-        }
-
         if let Some(idx_var) = Self::extract_char_indices_index_var(iterable, pattern) {
             self.usize_variables.insert(idx_var);
         }
@@ -394,6 +386,16 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+            }
+        }
+
+        // Rust range iteration always binds `usize` (`for i in 0..n`), regardless of WJ
+        // registry typing for `.len()` (may be `int` while Rust emits `usize`).
+        if let Some(var) = &loop_var {
+            if matches!(iterable, Expression::Range { .. }) {
+                self.usize_variables.insert(var.clone());
+                self.local_var_types
+                    .insert(var.clone(), Type::Custom("usize".to_string()));
             }
         }
 

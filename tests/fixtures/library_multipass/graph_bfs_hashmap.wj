@@ -1,0 +1,40 @@
+use std::collections::HashMap
+
+pub struct GraphAdjacencyView {
+    pub vertex_count: u32,
+}
+
+pub struct GraphAdjacencyPort {}
+
+extern fn graph_neighbor_at(view: GraphAdjacencyView, v: i64, index: u32) -> i64
+extern fn graph_out_degree(view: GraphAdjacencyView, v: i64) -> u32
+
+/// Minimal WindjammerDB graph_bfs_engine HashMap pattern for library multipass gate.
+pub fn graph_bfs_run_on_view(port: GraphAdjacencyPort, view: GraphAdjacencyView, source: i64) -> HashMap<i64, i64> {
+    let mut distances = HashMap::new()
+    distances.insert(source, 0)
+    let mut queue = Vec::new()
+    queue.push(source)
+    let mut head = 0 as usize
+    while head < queue.len() {
+        let v = queue[head]
+        head = head + 1
+        let mut base = 0
+        if distances.contains_key(v) {
+            if let Some(d) = distances.get(v) {
+                base = d
+            }
+        }
+        let degree = graph_out_degree(view, v)
+        let mut i = 0
+        while i < degree {
+            let n = graph_neighbor_at(view, v, i as u32)
+            if n >= 0 && !distances.contains_key(n) {
+                distances.insert(n, base + 1)
+                queue.push(n)
+            }
+            i = i + 1
+        }
+    }
+    distances
+}

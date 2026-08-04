@@ -480,6 +480,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &value_str,
                         &self.inferred_borrowed_params,
                         &self.current_function_params,
+                        self.infer_expression_type(value).as_ref(),
                     );
                     output.push_str(&scrutinee);
                 } else if scrutinee_needs_ref && !value_str.ends_with(".clone()") {

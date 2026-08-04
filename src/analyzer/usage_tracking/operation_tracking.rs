@@ -135,10 +135,11 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when a field/index of `name` is an operand of arithmetic/`+` (string concat).
-    /// Distinguishes `deps.tag + ":"` (owned composition) from `value.data.len()` (readonly).
+    /// Distinguishes `deps.tag + ":"` (owned composition) from `graph.count + q` (readonly).
     pub(crate) fn param_projected_field_consumed_in_arithmetic(
         &self,
-        name: &str,
+        param_name: &str,
+        param_type: &Type,
         statements: &[&'ast Statement<'ast>],
     ) -> bool {
         for stmt in statements {
@@ -149,7 +150,11 @@ impl<'ast> Analyzer<'ast> {
                     value: Some(value), ..
                 }
                 | Statement::Assignment { value, .. } => {
-                    if self.expr_projected_field_consumed_in_arithmetic(name, value) {
+                    if self.expr_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        value,
+                    ) {
                         return true;
                     }
                 }
@@ -159,26 +164,45 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    if self.expr_projected_field_consumed_in_arithmetic(name, condition)
-                        || self.param_projected_field_consumed_in_arithmetic(name, then_block)
-                        || else_block.as_ref().is_some_and(|b| {
-                            self.param_projected_field_consumed_in_arithmetic(name, b)
-                        })
-                    {
+                    if self.expr_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        condition,
+                    ) || self.param_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        then_block,
+                    ) || else_block.as_ref().is_some_and(|b| {
+                        self.param_projected_field_consumed_in_arithmetic(
+                            param_name,
+                            param_type,
+                            b,
+                        )
+                    }) {
                         return true;
                     }
                 }
                 Statement::While {
                     condition, body, ..
                 } => {
-                    if self.expr_projected_field_consumed_in_arithmetic(name, condition)
-                        || self.param_projected_field_consumed_in_arithmetic(name, body)
-                    {
+                    if self.expr_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        condition,
+                    ) || self.param_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        body,
+                    ) {
                         return true;
                     }
                 }
                 Statement::For { body, .. } | Statement::Loop { body, .. } => {
-                    if self.param_projected_field_consumed_in_arithmetic(name, body) {
+                    if self.param_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        body,
+                    ) {
                         return true;
                     }
                 }
@@ -188,47 +212,127 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
-    fn expr_projected_field_consumed_in_arithmetic(&self, name: &str, expr: &Expression) -> bool {
+    fn expr_projected_field_consumed_in_arithmetic(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression,
+    ) -> bool {
         match expr {
             Expression::Binary {
                 op, left, right, ..
             } => {
                 use crate::parser::ast::operators::BinaryOp;
-                // Only `+` (string concat of projected fields). Numeric Sub/Mul/Div on
-                // Copy fields (`a.x - b.x`) must not force owned parent formals.
-                if matches!(op, BinaryOp::Add)
-                    && (self.expr_is_param_field_or_index_value(name, left)
-                        || self.expr_is_param_field_or_index_value(name, right))
-                {
-                    return true;
+                // Only `+` on non-Copy / text projected fields (string concat). Numeric
+                // `graph.count + q` reads Copy fields and must not force owned `graph`.
+                if matches!(op, BinaryOp::Add) {
+                    if (self.expr_is_param_field_or_index_value(param_name, left)
+                        && self.projected_add_field_consumes_parent(
+                            param_name,
+                            param_type,
+                            left,
+                        ))
+                        || (self.expr_is_param_field_or_index_value(param_name, right)
+                            && self.projected_add_field_consumes_parent(
+                                param_name,
+                                param_type,
+                                right,
+                            ))
+                    {
+                        return true;
+                    }
                 }
-                self.expr_projected_field_consumed_in_arithmetic(name, left)
-                    || self.expr_projected_field_consumed_in_arithmetic(name, right)
+                self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, left)
+                    || self.expr_projected_field_consumed_in_arithmetic(
+                        param_name,
+                        param_type,
+                        right,
+                    )
             }
             Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
-                self.expr_projected_field_consumed_in_arithmetic(name, operand)
+                self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, operand)
             }
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, arg)| self.expr_projected_field_consumed_in_arithmetic(name, arg)),
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, arg)
+            }),
             Expression::MethodCall {
                 object, arguments, ..
             } => {
-                self.expr_projected_field_consumed_in_arithmetic(name, object)
-                    || arguments
-                        .iter()
-                        .any(|(_, arg)| self.expr_projected_field_consumed_in_arithmetic(name, arg))
+                self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, object)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_projected_field_consumed_in_arithmetic(
+                            param_name,
+                            param_type,
+                            arg,
+                        )
+                    })
             }
-            Expression::StructLiteral { fields, .. } => fields
-                .iter()
-                .any(|(_, v)| self.expr_projected_field_consumed_in_arithmetic(name, v)),
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
+                self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, v)
+            }),
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
-                .any(|e| self.expr_projected_field_consumed_in_arithmetic(name, e)),
+                .any(|e| {
+                    self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, e)
+                }),
             Expression::Block { statements, .. } => {
-                self.param_projected_field_consumed_in_arithmetic(name, statements)
+                self.param_projected_field_consumed_in_arithmetic(
+                    param_name,
+                    param_type,
+                    statements,
+                )
             }
             _ => false,
+        }
+    }
+
+    /// True when a projected field in `+` is string-like or non-Copy (owned composition).
+    fn projected_add_field_consumes_parent(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression,
+    ) -> bool {
+        let Some(field_ty) = self.infer_projected_field_type(param_name, param_type, expr) else {
+            return false;
+        };
+        if Self::is_windjammer_text_param_type(&field_ty) {
+            return true;
+        }
+        !self.is_copy_type(&field_ty)
+    }
+
+    fn infer_projected_field_type(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression,
+    ) -> Option<Type> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                let base_ty = if self.expr_is_identifier(object, param_name) {
+                    param_type.clone()
+                } else {
+                    self.infer_projected_field_type(param_name, param_type, object)?
+                };
+                self.lookup_field_type_on_struct(&base_ty, field)
+            }
+            Expression::Index { object, .. } => {
+                let base_ty = if self.expr_is_identifier(object, param_name) {
+                    param_type.clone()
+                } else {
+                    self.infer_projected_field_type(param_name, param_type, object)?
+                };
+                match &base_ty {
+                    Type::Vec(inner) => Some((**inner).clone()),
+                    Type::Array(inner, _) => Some((**inner).clone()),
+                    Type::Parameterized(name, args) if name == "Vec" && args.len() == 1 => {
+                        Some(args[0].clone())
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
         }
     }
 

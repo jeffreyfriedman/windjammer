@@ -1,0 +1,20 @@
+// Repro (Phase 24 / graph_ldbc_validation_engine): strings::starts_with must accept
+// string literal prefix without coercing "#" to String when parameter expects &str.
+use std::strings
+
+pub fn ldbc_validation_is_comment_line(line: string) -> bool {
+    let trimmed = strings::trim(line)
+    if strings::is_empty(trimmed) {
+        return false
+    }
+    return strings::starts_with(trimmed, "#")
+}
+
+pub fn test_strings_starts_with_hash_comment_prefix() {
+    if !ldbc_validation_is_comment_line("# comment") {
+        assert(false, "starts_with must detect hash comment lines")
+    }
+    if ldbc_validation_is_comment_line("0 1") {
+        assert(false, "starts_with must not match data lines")
+    }
+}

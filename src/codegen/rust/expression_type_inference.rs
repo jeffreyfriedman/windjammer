@@ -251,8 +251,22 @@ impl<'ast> CodeGenerator<'ast> {
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
             Expression::MethodCall { object, method, .. } => {
-                // Check well-known methods first
-                if matches!(method.as_str(), "len" | "capacity" | "count") {
+                // Prefer usize returns from the signature registry (len/capacity/…).
+                let obj_ty_early = self.infer_expression_type(object);
+                let recv_early = obj_ty_early.as_ref().and_then(Self::type_to_name);
+                let usize_recv = match recv_early.as_deref() {
+                    Some("str") => Some("String"),
+                    other => other,
+                };
+                if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                    method,
+                    usize_recv,
+                    &self.signature_registry,
+                ) || crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                    method,
+                    None,
+                    &self.signature_registry,
+                ) {
                     return Some(Type::Custom("usize".to_string()));
                 }
                 // Static constructors: `String::new()` → String via stdlib signature registry.
@@ -268,21 +282,34 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // .clone() returns the same type as the object
-                // This enables type inference through cloned iterables:
-                //   for x in &collection.clone() → x has same element type as collection
-                if matches!(
-                    method.as_str(),
-                    "clone" | "to_owned" | "to_vec" | "into_iter"
+                // Type-preserving methods (registry return `Self`) keep the receiver type.
+                if crate::codegen::rust::stdlib_method_traits::method_is_type_preserving_qualified(
+                    method,
+                    recv_early.as_deref(),
+                    &self.signature_registry,
                 ) {
-                    return self.infer_expression_type(object);
+                    return obj_ty_early;
                 }
-                // TDD FIX: .unwrap() on Option<T> → T
-                if method == "unwrap" {
-                    if let Some(obj_type) = self.infer_expression_type(object) {
-                        if let Type::Option(inner) = obj_type {
-                            return Some(*inner);
+                // Option/Result owned-self adapters: peel wrapper from receiver type.
+                if let Some(obj_type) = obj_ty_early.as_ref() {
+                    match obj_type {
+                        Type::Option(inner)
+                            if crate::codegen::rust::stdlib_method_traits::option_owned_self_method(
+                                method,
+                                &self.signature_registry,
+                            ) =>
+                        {
+                            return Some((**inner).clone());
                         }
+                        Type::Result(ok, _)
+                            if crate::codegen::rust::stdlib_method_traits::result_owned_self_method(
+                                method,
+                                &self.signature_registry,
+                            ) =>
+                        {
+                            return Some((**ok).clone());
+                        }
+                        _ => {}
                     }
                 }
                 // Iterator methods: return the collection type so
@@ -299,6 +326,33 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 let obj_ty = self.infer_expression_type(object);
+                // Prefer signature-registry return types (stdlib_meta) over hardcoded
+                // method-name tables — `String::trim` → `&str`, not `&String`.
+                if let Some(obj_type) = obj_ty.as_ref() {
+                    let type_name = match obj_type {
+                        Type::String => Some("String"),
+                        Type::Custom(n) => Some(n.as_str()),
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            match inner.as_ref() {
+                                Type::String => Some("String"),
+                                Type::Custom(n) => Some(n.as_str()),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+                    if let Some(tn) = type_name {
+                        let base = tn.split('<').next().unwrap_or(tn);
+                        for candidate in [tn, base] {
+                            let qualified = format!("{candidate}::{method}");
+                            if let Some(sig) = self.get_signature_with_global(&qualified) {
+                                if let Some(ret) = &sig.return_type {
+                                    return Some(ret.clone());
+                                }
+                            }
+                        }
+                    }
+                }
                 if let Some(ref ot) = obj_ty {
                     if let Some(ret) = Self::stdlib_method_return_type(ot, method) {
                         return Some(ret);
@@ -313,10 +367,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(t) = self.method_return_types.get(method.as_str()) {
                     return Some(t.clone());
                 }
-                // TDD FIX: Cross-file method resolution via signature registry.
-                // When the method is on a different type (e.g., animation.frame_count()),
-                // method_return_types won't have it. Resolve the object's type, then
-                // look up Type::method in the signature registry.
+                // Cross-file method resolution via signature registry (non-String receivers).
                 if let Some(obj_type) = obj_ty {
                     let type_name = match &obj_type {
                         Type::Custom(n) => n.clone(),
@@ -474,23 +525,28 @@ impl<'ast> CodeGenerator<'ast> {
     /// the correct return type for that specific receiver type.
     ///
     /// Example: `Vec<T>.get(i)` → `Option<&T>`, `HashMap<K,V>.get(k)` → `Option<&V>`.
-    fn stdlib_method_return_type(receiver: &Type, method: &str) -> Option<Type> {
+    pub(in crate::codegen::rust) fn stdlib_method_return_type(receiver: &Type, method: &str) -> Option<Type> {
         let inner = Self::peel_references(receiver);
 
         match inner {
             Type::String => Self::string_method_return_type(method),
+            other if crate::codegen::rust::types::is_windjammer_text_type(other) => {
+                Self::string_method_return_type(method)
+            }
             _ => Self::collection_method_return_type(receiver, method),
         }
     }
 
-    /// Return types for String/&str methods.
+    /// Return types for String/&str methods (fallback when registry miss).
+    /// Prefer `stdlib_meta` / signature registry — these names are last-resort only.
     fn string_method_return_type(method: &str) -> Option<Type> {
+        let str_ref = || Type::Reference(Box::new(Type::Custom("str".into())));
         match method {
             "as_str" | "trim" | "trim_start" | "trim_end" | "trim_start_matches"
-            | "trim_end_matches" | "trim_matches" => Some(Type::Reference(Box::new(Type::String))),
-            "strip_prefix" | "strip_suffix" => Some(Type::Option(Box::new(Type::Reference(
-                Box::new(Type::String),
-            )))),
+            | "trim_end_matches" | "trim_matches" => Some(str_ref()),
+            "strip_prefix" | "strip_suffix" => {
+                Some(Type::Option(Box::new(str_ref())))
+            }
             "to_lowercase" | "to_uppercase" | "to_ascii_lowercase" | "to_ascii_uppercase"
             | "repeat" | "replace" | "replacen" => Some(Type::String),
             "len" | "capacity" => Some(Type::Custom("usize".to_string())),

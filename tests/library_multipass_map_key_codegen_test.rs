@@ -150,3 +150,198 @@ fn test_library_multipass_readonly_param_not_mut_borrow() {
         "find_index_by_id call must borrow or move tree, not &mut. Got:\n{rs}"
     );
 }
+
+#[test]
+fn test_library_multipass_hashmap_i64_key_auto_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/hashmap_i64_bfs_keys.wj",
+        &fixture("hashmap_i64_bfs_keys.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/hashmap_i64_bfs_keys.rs")
+        .expect("hashmap_i64_bfs_keys.rs generated");
+
+    assert!(
+        rs.contains("contains_key(&") && rs.contains(".get(&"),
+        "HashMap<i64> keys must auto-borrow in library multipass. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_strings_split_pipe_delimiter() {
+    let mut test = MultiFileTest::new();
+    test.add_file("csv/split_pipe.wj", &fixture("csv_split_pipe.wj"));
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("csv/split_pipe.rs")
+        .expect("csv/split_pipe.rs generated");
+
+    assert!(
+        rs.contains("strings::split("),
+        "expected strings::split call. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"|\".to_string()"),
+        "pipe delimiter must not coerce to String in library multipass. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_loop_reused_graph_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file("mod.wj", "pub mod loop_query_engine;\npub mod loop_query_runner;\n");
+    test.add_file("loop_query_engine.wj", &fixture("loop_query_engine.wj"));
+    test.add_file("loop_query_runner.wj", &fixture("loop_query_runner.wj"));
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("loop_query_runner.rs")
+        .expect("loop_query_runner.rs generated");
+
+    assert!(
+        rs.contains("run_query(&graph,") || rs.contains("run_query(& graph,"),
+        "reused graph in loop must borrow for cross-module &Graph callee. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("graph.clone()"),
+        "must not clone graph each loop iteration. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_hashmap_i64_loop_local_key_auto_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/hashmap_i64_loop_local_key.wj",
+        &fixture("hashmap_i64_loop_local_key.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/hashmap_i64_loop_local_key.rs")
+        .expect("hashmap_i64_loop_local_key.rs generated");
+
+    assert!(
+        rs.contains("contains_key(&n") || rs.contains("contains_key(& n"),
+        "loop-local i64 keys must auto-borrow for HashMap::contains_key. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("contains_key(n)") || rs.contains("contains_key(&n"),
+        "must not pass owned i64 to contains_key. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_hashmap_i64_f64_zero_literal_insert() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/hashmap_i64_f64_zero_literal.wj",
+        &fixture("hashmap_i64_f64_zero_literal.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/hashmap_i64_f64_zero_literal.rs")
+        .expect("hashmap_i64_f64_zero_literal.rs generated");
+
+    assert!(
+        !rs.contains("0.0_f32"),
+        "HashMap<i64,f64>::insert must infer f64 for 0.0 literal. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("0.0_f64") || rs.contains("0.0"),
+        "expected f64 zero literal in insert. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_for_in_vertices_reuse_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/for_in_vertices_reuse.wj",
+        &fixture("for_in_vertices_reuse.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/for_in_vertices_reuse.rs")
+        .expect("for_in_vertices_reuse.rs generated");
+
+    assert!(
+        rs.contains("vertex_lookup_len(&vertices") || rs.contains("vertex_lookup_len(& vertices"),
+        "for-in loop must borrow vertices when reused in callee. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("vertices.clone()"),
+        "must not clone vertices each for-in iteration. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_graph_bfs_hashmap_compiles() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/graph_bfs_hashmap.wj",
+        &fixture("graph_bfs_hashmap.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/graph_bfs_hashmap.rs")
+        .expect("graph_bfs_hashmap.rs generated");
+
+    assert!(
+        rs.contains("contains_key(&n") || rs.contains("contains_key(& n"),
+        "neighbor_at binding must auto-borrow for HashMap::contains_key. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+#[test]
+fn test_library_multipass_csv_for_in_line_string_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "csv/for_in_line.wj",
+        &fixture("csv_for_in_line.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let _rs = map
+        .get("csv/for_in_line.rs")
+        .expect("csv/for_in_line.rs generated");
+
+    test.assert_compiles_without_error();
+}
