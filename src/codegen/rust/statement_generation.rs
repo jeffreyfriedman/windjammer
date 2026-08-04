@@ -723,6 +723,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when the scrutinee root (`self`, a param, …) is emitted as `&mut` in Rust.
+    pub(in crate::codegen::rust) fn option_scrutinee_root_allows_mut_borrow(
+        &self,
+        value: &Expression<'ast>,
+    ) -> bool {
+        let Some(root) = self.root_identifier_of_field_or_index_chain(value) else {
+            return false;
+        };
+        self.inferred_mut_borrowed_params.contains(root)
+    }
+
     /// `&` / `&mut` prefix for matching on `Option` when the scrutinee lives behind a borrow.
     pub(in crate::codegen::rust) fn option_scrutinee_ref_prefix(
         &self,
@@ -776,7 +787,9 @@ impl<'ast> CodeGenerator<'ast> {
         some_arm: Option<&MatchArm<'ast>>,
     ) -> &'static str {
         if let Some(arm) = some_arm {
-            if self.option_match_needs_mut_scrutinee_for_some_arm(arm, value) {
+            if self.option_match_needs_mut_scrutinee_for_some_arm(arm, value)
+                && self.option_scrutinee_root_allows_mut_borrow(value)
+            {
                 return "&mut ";
             }
         }
@@ -793,13 +806,18 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
                 if self.is_type_copy(&inner) {
                     if let Some(arm) = some_arm {
-                        if self.option_arm_mutates_some_binding(arm, value) {
+                        if self.option_arm_mutates_some_binding(arm, value)
+                            && self.option_scrutinee_root_allows_mut_borrow(value)
+                        {
                             return "&mut ";
                         }
                     }
                     return "";
                 }
             }
+        }
+        if base == "&mut " && !self.option_scrutinee_root_allows_mut_borrow(value) {
+            return "";
         }
         if base == "&mut " {
             if let Some(Type::Option(inner)) = self.infer_expression_type(value) {

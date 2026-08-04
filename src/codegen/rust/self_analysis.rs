@@ -362,15 +362,22 @@ pub fn function_consumes_self(func: &FunctionDecl) -> bool {
 }
 
 /// Check if the function iterates over a `self.field` (consuming the field)
-/// without just calling `.clone()` on elements. This pattern requires owned `self`.
+/// without just calling type-preserving / snapshot-safe methods on elements.
+/// This pattern requires owned `self`.
 /// e.g. `for cond in self.conditions { if !cond.check() { ... } }`
-pub fn function_iterates_self_field_consuming(func: &FunctionDecl) -> bool {
+pub fn function_iterates_self_field_consuming(
+    func: &FunctionDecl,
+    registry: Option<&crate::analyzer::SignatureRegistry>,
+) -> bool {
     func.body
         .iter()
-        .any(|stmt| statement_iterates_self_field(stmt))
+        .any(|stmt| statement_iterates_self_field(stmt, registry))
 }
 
-fn statement_iterates_self_field(stmt: &Statement) -> bool {
+fn statement_iterates_self_field(
+    stmt: &Statement,
+    registry: Option<&crate::analyzer::SignatureRegistry>,
+) -> bool {
     match stmt {
         Statement::For { iterable, body, .. } => {
             let is_self_field = matches!(
@@ -379,12 +386,13 @@ fn statement_iterates_self_field(stmt: &Statement) -> bool {
                     if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
             );
             if is_self_field {
-                // Only count as consuming if the body doesn't just clone elements
-                // (snapshot pattern uses for+clone → should be &self)
-                !body.iter().all(|s| statement_only_clones_element(s))
+                // Only count as consuming if the body doesn't just clone/snapshot elements
+                !body
+                    .iter()
+                    .all(|s| statement_only_clones_element(s, registry))
             } else {
-                // Check nested statements
-                body.iter().any(|s| statement_iterates_self_field(s))
+                body.iter()
+                    .any(|s| statement_iterates_self_field(s, registry))
             }
         }
         Statement::If {
@@ -392,43 +400,57 @@ fn statement_iterates_self_field(stmt: &Statement) -> bool {
             else_block,
             ..
         } => {
-            then_block.iter().any(|s| statement_iterates_self_field(s))
+            then_block
+                .iter()
+                .any(|s| statement_iterates_self_field(s, registry))
                 || else_block
                     .as_ref()
-                    .is_some_and(|b| b.iter().any(|s| statement_iterates_self_field(s)))
+                    .is_some_and(|b| b.iter().any(|s| statement_iterates_self_field(s, registry)))
         }
         _ => false,
     }
 }
 
-fn statement_only_clones_element(stmt: &Statement) -> bool {
+fn statement_only_clones_element(
+    stmt: &Statement,
+    registry: Option<&crate::analyzer::SignatureRegistry>,
+) -> bool {
     match stmt {
         Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
-            expression_only_clones(expr)
+            expression_only_clones(expr, registry)
         }
         _ => false,
     }
 }
 
-fn expression_only_clones(expr: &Expression) -> bool {
-    matches!(
-        expr,
-        Expression::MethodCall { method, .. }
-            if matches!(
-                method.as_str(),
-                "clone" | "to_owned" | "to_vec" | "into_iter"
-            ) || matches!(
-                method.as_str(),
-                "push"
-                    | "insert"
-                    | "extend"
-                    | "append"
-                    | "push_front"
-                    | "push_back"
-                    | "add"
-                    | "fill"
-            )
-    )
+/// Snapshot / copy-out body: type-preserving calls (registry `Self`) or storing
+/// into another collection (owned payload formal) — not a method-name list.
+fn expression_only_clones(
+    expr: &Expression,
+    registry: Option<&crate::analyzer::SignatureRegistry>,
+) -> bool {
+    let Expression::MethodCall {
+        method, arguments, ..
+    } = expr
+    else {
+        return false;
+    };
+    let Some(registry) = registry else {
+        return false;
+    };
+    if crate::codegen::rust::stdlib_method_traits::method_is_type_preserving_qualified(
+        method, None, registry,
+    ) {
+        return true;
+    }
+    // `out.push(elem)` / insert into a local — owned payload at some arg index.
+    (0..arguments.len()).any(|i| {
+        crate::codegen::rust::stdlib_method_traits::method_is_storage_qualified(
+            method, None, registry,
+        ) || crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
+            method, None, i, arguments.len(), registry,
+        )
+    })
 }
 
 fn expression_is_bare_self(expr: &Expression) -> bool {

@@ -1,4 +1,4 @@
-// Repro (Phase 16 / LSQB CSV loader): strings::split must accept string literal delimiters
+// Repro: strings::split must accept string literal delimiters
 // without coercing "|" to String (.to_string()) when the parameter expects &str.
 use std::strings
 

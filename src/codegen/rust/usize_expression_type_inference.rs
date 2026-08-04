@@ -64,19 +64,47 @@ impl<'ast> CodeGenerator<'ast> {
     /// Used for auto-casting between i32 and usize in comparisons
     pub(crate) fn expression_produces_usize(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::MethodCall { method, .. } => {
-                if matches!(method.as_str(), "len" | "capacity" | "count") {
+            Expression::MethodCall {
+                object, method, ..
+            } => {
+                let obj_ty = self.infer_expression_type(object);
+                let recv = obj_ty.as_ref().and_then(Self::type_to_name);
+                if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                    method,
+                    recv.as_deref(),
+                    &self.signature_registry,
+                ) {
                     return true;
                 }
-                self.infer_expression_type_is_usize(expr)
+                // `&str` / unknown receivers: consensus or String::{method} usize API.
+                if self.method_call_rust_emits_usize(expr) {
+                    return true;
+                }
+                if self.infer_expression_type_is_usize(expr) {
+                    return true;
+                }
+                false
             }
             Expression::Call {
                 function,
                 arguments,
                 ..
             } if arguments.is_empty() => {
-                if let Expression::FieldAccess { field, .. } = function {
-                    if matches!(field.as_str(), "len" | "capacity" | "count") {
+                if self.method_call_rust_emits_usize(expr) {
+                    return true;
+                }
+                if let Expression::FieldAccess {
+                    object, field, ..
+                } = function
+                {
+                    if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                        field,
+                        self.infer_expression_type(object)
+                            .as_ref()
+                            .and_then(Self::type_to_name)
+                            .as_deref(),
+                        &self.signature_registry,
+                    ) {
                         return true;
                     }
                 }
@@ -314,19 +342,69 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if !self.expression_produces_usize(expr) {
-            return;
-        }
-        match target_type {
-            Some("usize") => {}
-            Some("int") | Some("i64") => {
-                *expr_str = format!("{} as i64", expr_str);
+        let cast_suffix = match target_type {
+            Some("usize") => return,
+            Some("i32") => " as i32",
+            Some("int") | Some("i64") => " as i64",
+            _ => return,
+        };
+
+        if self.expression_produces_usize(expr) || self.method_call_rust_emits_usize(expr) {
+            if !expr_str.contains(" as i64") && !expr_str.contains(" as i32") {
+                *expr_str = format!("{expr_str}{cast_suffix}");
             }
-            Some("i32") => {
-                *expr_str = format!("{} as i32", expr_str);
-            }
-            _ => {}
         }
+    }
+
+    /// Rust lowers text/collection size queries to `usize`. Prefer registry
+    /// `usize` returns; fall back to consensus when the receiver type is unknown
+    /// or only known as Rust `str`.
+    fn method_call_rust_emits_usize(&self, expr: &Expression) -> bool {
+        let (method, object) = match expr {
+            Expression::MethodCall { method, object, .. } => (method.as_str(), &**object),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } if arguments.is_empty() => {
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    (field.as_str(), &**object)
+                } else {
+                    return false;
+                }
+            }
+            _ => return false,
+        };
+        let obj_ty = self.infer_expression_type(object);
+        let recv = obj_ty.as_ref().and_then(Self::type_to_name);
+        let registry = &self.signature_registry;
+        let returns_usize = |receiver: Option<&str>| {
+            crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                method, receiver, registry,
+            )
+        };
+        if returns_usize(recv.as_deref()) {
+            return true;
+        }
+        // `&str` / slice temps share String/Vec size APIs in Rust (`usize`).
+        if returns_usize(Some("String")) || returns_usize(Some("Vec")) {
+            return true;
+        }
+        if obj_ty
+            .as_ref()
+            .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
+            && returns_usize(Some("String"))
+        {
+            return true;
+        }
+        if let Some(obj_ty) = obj_ty.as_ref() {
+            if Self::stdlib_method_return_type(obj_ty, method)
+                .is_some_and(|t| matches!(t, Type::Custom(n) if n == "usize"))
+            {
+                return true;
+            }
+        }
+        returns_usize(None)
     }
 
     /// Cast an index expression to `usize` if needed for Rust array/Vec indexing.

@@ -31,7 +31,15 @@ impl<'ast> CodeGenerator<'ast> {
             ..
         } = left
         {
-            if matches!(method.as_str(), "len" | "capacity" | "count") && arguments.is_empty() {
+            if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                method,
+                self.infer_expression_type(object)
+                    .as_ref()
+                    .and_then(Self::type_to_name)
+                    .as_deref(),
+                &self.signature_registry,
+            ) && arguments.is_empty()
+            {
                 // Check if comparing to 0
                 if let Expression::Literal {
                     value: Literal::Int(0),

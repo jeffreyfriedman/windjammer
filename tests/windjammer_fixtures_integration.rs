@@ -278,3 +278,28 @@ fixture!(
     "regression_format_macro_string_literal_test.wj"
 );
 fixture!(stdlib_strings_parse, "stdlib_strings_parse_test.wj");
+// --- Cross-crate dogfood ownership/borrow repros; expect FAIL until compiler fixed ---
+fixture!(
+    regression_hashmap_i64_key_lookup,
+    "regression_hashmap_i64_key_lookup_test.wj"
+);
+fixture!(
+    regression_hashmap_i64_get_insert_bfs,
+    "regression_hashmap_i64_get_insert_bfs_test.wj"
+);
+fixture!(
+    regression_loop_reused_graph_borrow,
+    "regression_loop_reused_graph_borrow_test.wj"
+);
+fixture!(
+    regression_andstring_literal_call,
+    "regression_andstring_literal_call_test.wj"
+);
+fixture!(
+    regression_strings_split_pipe_delimiter,
+    "regression_strings_split_pipe_delimiter_test.wj"
+);
+fixture!(
+    regression_strings_starts_with_literal,
+    "regression_strings_starts_with_literal_test.wj"
+);

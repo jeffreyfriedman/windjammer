@@ -1,0 +1,17 @@
+use std::strings
+
+/// LSQB loader pattern: for-in line variable passed to string param in full multipass.
+pub fn lsqb_first_csv_field(line: string) -> string {
+    let parts = strings::split(line, "|")
+    parts[0]
+}
+
+pub fn count_data_lines(lines: Vec<string>) -> i32 {
+    let mut count = 0
+    for line in lines {
+        if strings::len(lsqb_first_csv_field(line)) > 0 {
+            count = count + 1
+        }
+    }
+    count
+}

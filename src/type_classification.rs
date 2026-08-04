@@ -323,7 +323,9 @@ pub fn is_constructor_name(name: &str) -> bool {
 // Method Classification (ownership-producing methods)
 // =============================================================================
 
-/// Methods that produce an owned value regardless of receiver ownership.
+/// DEPRECATED: prefer signature-registry return `Self` / ownership (not method spelling).
+#[deprecated(note = "use method_is_type_preserving_qualified from stdlib_method_traits")]
+#[allow(dead_code)]
 pub fn is_ownership_producing_method(name: &str) -> bool {
     matches!(name, "clone" | "to_owned" | "to_string" | "into_iter")
 }

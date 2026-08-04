@@ -1,0 +1,19 @@
+/// LCC outer loop: for v in vertices { callee(vertices, v) } must borrow vertices.
+pub fn vertex_step_count(vertices: Vec<i64>) -> u32 {
+    let mut total = 0
+    for v in vertices {
+        total = total + vertex_lookup_len(vertices, v)
+    }
+    total as u32
+}
+
+pub fn vertex_lookup_len(vertices: Vec<i64>, vertex: i64) -> i32 {
+    let mut i = 0
+    while i < vertices.len() {
+        if vertices[i] == vertex {
+            return vertices.len() as i32
+        }
+        i = i + 1
+    }
+    0
+}

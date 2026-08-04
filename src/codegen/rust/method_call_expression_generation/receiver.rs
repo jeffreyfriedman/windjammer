@@ -17,19 +17,28 @@ impl<'ast> CodeGenerator<'ast> {
         // e.g., self.lights[i].is_enabled() → no need to clone the whole Light2D
         let prev_field_access = self.in_field_access_object;
         self.in_field_access_object = true;
-        // DOUBLE-CLONE FIX: When the source has explicit .clone(), suppress auto-clone
-        // on the object to prevent .clone().clone(). The explicit clone IS the clone.
         let prev_explicit_clone = self.in_explicit_clone_call;
-        if method == "clone" {
-            self.in_explicit_clone_call = true;
-        }
-        // Suppress .into() coercion on receiver of .to_string() / .to_owned() / .clone()
-        // since those methods already produce an owned value.
         let prev_coerce = self.coerce_string_literals_to_owned;
-        if matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter")
-            || method == "to_string"
-            || method == "string"
-        {
+
+        // Type-preserving methods (registry: return `Self`) already own/copy the
+        // value — suppress nested auto-clone and string-literal `.into()` coercion.
+        let recv_ty_name = self
+            .infer_expression_type(object)
+            .as_ref()
+            .and_then(Self::type_to_name);
+        let registry = self
+            .global_signature_registry()
+            .unwrap_or(&self.signature_registry);
+        let is_type_preserving =
+            crate::codegen::rust::stdlib_method_traits::method_is_type_preserving_qualified(
+                method,
+                recv_ty_name.as_deref(),
+                registry,
+            );
+        // WJ `string` / Rust `to_string` are explicit owned conversions (not registry Self).
+        let is_explicit_owned_convert = method == "to_string" || method == "string";
+        if is_type_preserving || is_explicit_owned_convert {
+            self.in_explicit_clone_call = true;
             self.coerce_string_literals_to_owned = false;
         }
         let mut obj_str = self.generate_expression_with_precedence(object);
@@ -54,8 +63,7 @@ impl<'ast> CodeGenerator<'ast> {
         // and the variable is a borrowed iterator variable (from `for x in &collection`).
         // Must clone: `condition.clone().evaluate(state)` instead of `condition.evaluate(state)`.
         if let Expression::Identifier { name, .. } = object {
-            let is_type_preserving =
-                matches!(method, "clone" | "to_owned" | "to_vec" | "into_iter");
+            // Skip consume-clone for type-preserving methods (already computed above).
             let is_borrowed_iter =
                 self.borrowed_iterator_vars.contains(name) && !is_type_preserving;
             let is_mut_borrowed_param =
@@ -137,24 +145,22 @@ impl<'ast> CodeGenerator<'ast> {
             obj_str = obj_str[..obj_str.len() - 8].to_string();
         }
 
-        // TDD FIX: Option::unwrap() move error prevention
-        // When calling .unwrap() / .first() / .last() on a borrowed param's field
-        // (`node.children.unwrap()` where node is &Node), lower via `.as_ref()` so we
-        // do not move out of `&Option<T>`.
-        if matches!(method, "unwrap" | "first" | "last")
-            && self.expression_traces_to_inferred_borrowed_param(object)
+        // Option methods that take owned `self` (unwrap, …) on a borrowed path need
+        // `.as_ref()` first — driven by Option::{method} ownership in the registry.
+        if crate::codegen::rust::stdlib_method_traits::option_owned_self_method(
+            method,
+            &self.signature_registry,
+        ) && self.expression_traces_to_inferred_borrowed_param(object)
             && !obj_str.contains(".as_ref()")
             && !obj_str.contains(".clone()")
         {
             obj_str = format!("{}.as_ref()", obj_str);
         }
 
-        // E0507: borrowed `self.field` adapters that Rust implements by-value on `Option`
-        // (`map` / `and_then` / …) lower via `.as_ref()` so `&self` methods stay borrowed.
-        // Driven by Option stdlib_meta Borrowed receivers + method registry — not a bare
-        // method-name list for ownership, but the as_ref desugar for known Option adapters.
-        if self.inferred_borrowed_params.contains("self")
-            && self.codegen_expression_traces_to_self(object)
+        // E0507: borrowed `Option` adapters that Rust implements by-value
+        // (`map` / `and_then` / …) lower via `.as_ref()` so `&T` methods stay borrowed.
+        // Driven by Option stdlib_meta + method registry — not a bare method-name list.
+        if self.expression_traces_to_inferred_borrowed_param(object)
             && !obj_str.contains(".as_ref()")
             && crate::codegen::rust::stdlib_method_traits::option_adapter_needs_as_ref(
                 method,

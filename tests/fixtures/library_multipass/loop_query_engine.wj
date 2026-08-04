@@ -1,0 +1,8 @@
+pub struct Graph {
+    pub count: i32,
+    pub label: string,
+}
+
+pub fn run_query(graph: Graph, query_id: u32) -> i32 {
+    graph.count + query_id as i32 + graph.label.len() as i32
+}

@@ -392,7 +392,7 @@ impl<'ast> Analyzer<'ast> {
         // binding; demoting to `&AppDeps` breaks call sites that still pass owned.
         if !self.is_copy_type(param_type)
             && matches!(param_type, Type::Custom(_))
-            && self.param_projected_field_consumed_in_arithmetic(param_name, body)
+            && self.param_projected_field_consumed_in_arithmetic(param_name, param_type, body)
         {
             return Ok(OwnershipMode::Owned);
         }

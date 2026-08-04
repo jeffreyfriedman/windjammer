@@ -325,18 +325,13 @@ impl<'ast> Analyzer<'ast> {
                             return true;
                         }
 
-                        if super::stdlib_method_traits::is_storage_method(method) && idx == 0 {
-                            return true;
-                        }
-
-                        if super::stdlib_method_traits::is_storage_method(method)
-                            && registry.lookup_method(method).is_some_and(|sig| {
-                                sig.param_type_for_arg(idx).is_some_and(|t| {
-                                    self.is_windjammer_string_param_type(t)
-                                        || self.type_is_owned_string(t)
-                                })
-                            })
-                        {
+                        if crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
+                            method,
+                            None,
+                            idx,
+                            arguments.len(),
+                            registry,
+                        ) {
                             return true;
                         }
 
@@ -1217,9 +1212,13 @@ impl<'ast> Analyzer<'ast> {
         sig: &super::FunctionSignature,
         arg_idx: usize,
         param_type: &Type,
-        method: &str,
+        _method: &str,
     ) -> bool {
-        if super::stdlib_method_traits::is_storage_method(method) {
+        // Owned formals are never `&String` — signature ownership is authoritative.
+        if matches!(
+            sig.param_ownership_for_arg(arg_idx),
+            Some(super::OwnershipMode::Owned)
+        ) {
             return false;
         }
         self.is_windjammer_string_param_type(param_type)

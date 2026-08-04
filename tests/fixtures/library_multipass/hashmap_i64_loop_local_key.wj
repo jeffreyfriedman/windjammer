@@ -1,0 +1,19 @@
+use std::collections::HashMap
+
+/// Neighbor id from port call (not array index) — graph_bfs_engine pattern.
+pub fn neighbor_at(index: u32) -> i64 {
+    index as i64
+}
+
+pub fn bfs_visit_neighbors(distances: HashMap<i64, i64>, degree: u32) -> HashMap<i64, i64> {
+    let mut map = distances
+    let mut i = 0
+    while i < degree as i32 {
+        let n = neighbor_at(i as u32)
+        if !map.contains_key(n) {
+            map.insert(n, 1)
+        }
+        i = i + 1
+    }
+    map
+}
