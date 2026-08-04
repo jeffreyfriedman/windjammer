@@ -135,8 +135,10 @@ impl Default for SignatureRegistry {
 }
 
 impl SignatureRegistry {
-    pub fn new() -> Self {
-        let baseline = STDLIB_BASELINE.get_or_init(|| {
+    /// Shared stdlib baseline (loaded once). Prefer this over `new()` when only
+    /// reading stdlib / meta signatures — avoids cloning the full HashMap.
+    pub fn stdlib() -> &'static SignatureRegistry {
+        STDLIB_BASELINE.get_or_init(|| {
             let mut registry = SignatureRegistry {
                 signatures: HashMap::new(),
                 type_collision_keys: HashSet::new(),
@@ -153,9 +155,11 @@ impl SignatureRegistry {
 
             Self::load_stdlib_meta(&mut registry);
             registry
-        });
+        })
+    }
 
-        baseline.clone()
+    pub fn new() -> Self {
+        Self::stdlib().clone()
     }
 
     /// Lightweight empty registry (no stdlib) for building deltas.

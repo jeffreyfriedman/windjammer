@@ -85,9 +85,15 @@ impl<'ast> Analyzer<'ast> {
                 method,
                 ..
             } => {
-                // clone(), to_owned(), etc. preserve the receiver type.
-                if super::stdlib_method_traits::is_type_preserving(method) {
-                    return self.infer_receiver_type_base(inner, func);
+                // Type-preserving methods (registry return `Self`) keep the receiver type.
+                let recv = self.infer_receiver_type_base(inner, func);
+                let registry = SignatureRegistry::stdlib();
+                if super::stdlib_method_traits::method_is_type_preserving_qualified(
+                    method,
+                    recv.as_deref(),
+                    registry,
+                ) {
+                    return recv.or_else(|| self.infer_receiver_type_base(inner, func));
                 }
                 None
             }

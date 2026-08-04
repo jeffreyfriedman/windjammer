@@ -944,7 +944,10 @@ impl<'ast> CodeGenerator<'ast> {
                 || super::self_analysis::function_return_moves_self_fields(func)
                 || super::self_analysis::function_matches_on_self(func)
                 || super::self_analysis::function_flows_self_through_local(func)
-                || super::self_analysis::function_iterates_self_field_consuming(func)
+                || super::self_analysis::function_iterates_self_field_consuming(
+                    func,
+                    Some(&self.signature_registry),
+                )
             {
                 consuming_methods.insert(func.name.clone());
                 continue;

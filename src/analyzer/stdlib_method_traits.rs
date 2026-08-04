@@ -263,6 +263,9 @@ pub fn is_known_readonly(method: &str) -> bool {
     KNOWN_READONLY.contains(&method)
 }
 
+/// DEPRECATED: prefer `method_is_type_preserving_qualified` (signature / consensus).
+#[deprecated(note = "use method_is_type_preserving_qualified")]
+#[allow(dead_code)]
 pub fn is_type_preserving(method: &str) -> bool {
     TYPE_PRESERVING.contains(&method)
 }
@@ -320,6 +323,10 @@ pub(crate) fn decompose_collection_key_lookup<'ast>(
     }
 }
 
+/// DEPRECATED: prefer `method_is_storage_qualified` / `method_call_argument_stores_owned_payload`.
+/// Name-based storage classification must not drive ownership or string coercion.
+#[deprecated(note = "use method_is_storage_qualified / method_call_argument_stores_owned_payload")]
+#[allow(dead_code)]
 pub fn is_storage_method(method: &str) -> bool {
     STORAGE.contains(&method)
 }
@@ -355,6 +362,17 @@ fn lookup_unqualified<'a>(
         return None;
     }
     registry.get_signature(method)
+}
+
+fn lookup_suffix<'a>(
+    method: &str,
+    registry: &'a SignatureRegistry,
+) -> Option<&'a FunctionSignature> {
+    registry.find_unique_signature_ending_with(method)
+}
+
+fn return_type_is(sig: &FunctionSignature, pred: impl Fn(&Type) -> bool) -> bool {
+    sig.return_type.as_ref().is_some_and(pred)
 }
 
 fn first_arg_ownership(sig: &FunctionSignature) -> Option<OwnershipMode> {
@@ -434,6 +452,50 @@ pub fn is_known_readonly_qualified(
         }
     }
     false
+}
+
+fn return_type_is_self(sig: &FunctionSignature) -> bool {
+    return_type_is(sig, |ty| matches!(ty, Type::Custom(n) if n == "Self"))
+}
+
+/// When `::{method}` is registered on many types, true only if every match returns `Self`.
+fn consensus_return_is_self(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            any = true;
+            if !return_type_is_self(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
+/// Is this method type-preserving (return type == `Self`)?
+/// Driven by resolved signatures (and consensus when the receiver type is unknown).
+pub fn method_is_type_preserving_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
+        return return_type_is_self(sig);
+    }
+    if let Some(sig) = lookup_suffix(method, registry) {
+        return return_type_is_self(sig);
+    }
+    consensus_return_is_self(method, registry)
+}
+
+/// True when `Option::{method}` takes owned `self` (needs `.as_ref()` desugar under borrow).
+pub fn option_owned_self_method(method: &str, registry: &SignatureRegistry) -> bool {
+    let Some(sig) = lookup_sig(method, Some("Option"), registry) else {
+        return false;
+    };
+    sig.has_self_receiver
+        && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
 }
 
 pub fn method_is_storage_qualified(

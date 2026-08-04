@@ -1,0 +1,19 @@
+use std::collections::HashMap
+
+/// Graphalytics BFS excerpt: HashMap<i64, i64> get/contains_key in library multipass.
+pub fn bfs_distance(map: HashMap<i64, i64>, vertex: i64) -> i64 {
+    if map.contains_key(vertex) {
+        if let Some(d) = map.get(vertex) {
+            return d
+        }
+    }
+    -1
+}
+
+pub fn bfs_visit(map: HashMap<i64, i64>, source: i64) -> HashMap<i64, i64> {
+    let mut distances = map
+    if !distances.contains_key(source) {
+        distances.insert(source, 0)
+    }
+    distances
+}

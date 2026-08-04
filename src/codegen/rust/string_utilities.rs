@@ -184,6 +184,45 @@ pub fn call_site_param_expects_owned_string(
         && sig.param_types.get(idx).is_some_and(param_is_owned_string_type)
 }
 
+/// Bare string literals on type-qualified associated calls (`Column::new("lit")`) must
+/// auto-own at the Rust boundary when there is no defining-module codegen refresh
+/// (external path deps, stale import stubs). Signature-driven — not method-name lists.
+pub fn type_qualified_associated_string_literal_needs_rust_owned_string(
+    qualified_name: &str,
+    arg_index: usize,
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    registry: &crate::analyzer::SignatureRegistry,
+    global_registry: Option<&crate::analyzer::SignatureRegistry>,
+) -> bool {
+    if !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+        qualified_name,
+    ) || arg_index != 0
+    {
+        return false;
+    }
+    let registry_has_codegen_refresh = |reg: &crate::analyzer::SignatureRegistry| {
+        reg.get_signature(qualified_name)
+            .is_some_and(|s| s.emitted_rust_ref_params.is_some())
+    };
+    if sig.is_some_and(|s| s.emitted_rust_ref_params.is_some()) {
+        return sig.is_some_and(|s| call_site_param_expects_owned_string(s, arg_index));
+    }
+    if registry_has_codegen_refresh(registry)
+        || global_registry.is_some_and(registry_has_codegen_refresh)
+    {
+        return sig.is_some_and(|s| call_site_param_expects_owned_string(s, arg_index));
+    }
+    // Signature-driven fallback: stdlib / global metadata (`HashMap::get` → Borrowed `&Q`).
+    let resolved = sig
+        .or_else(|| registry.get_signature(qualified_name))
+        .or_else(|| global_registry.and_then(|g| g.get_signature(qualified_name)));
+    if let Some(s) = resolved {
+        return call_site_param_expects_owned_string(s, arg_index);
+    }
+    // Unknown extern associated call with no metadata — conservative owned literal.
+    true
+}
+
 /// Parameter type is `&String` — a reference to an owned String.
 /// Distinct from `&str` (`param_is_rust_str_ref`). String literals passed to
 /// `&String` params need `&"literal".to_string()` conversion.
@@ -795,21 +834,23 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
     false
 }
 
-/// Append `.as_str()` to a match scrutinee when the match contains string literal
-/// patterns. Skips if the expression is already `&str` (a borrowed param or a
-/// param typed as `string`/`str`/`&str`).
 /// Append `.as_str()` when matching an owned `String` against string-literal patterns.
-/// Phase-2 / borrowed `&str` formals (tracked in `borrowed_params`) stay bare.
+/// Phase-2 / borrowed `&str` formals and locals whose inferred type is already `&str`
+/// stay bare (stable Rust: `&str::as_str` is unstable).
 pub fn maybe_append_as_str_for_match(
     value_str: &str,
     borrowed_params: &std::collections::HashSet<String>,
     function_params: &[crate::parser::Parameter],
+    scrutinee_type: Option<&Type>,
 ) -> String {
     if value_str.ends_with(".as_str()") {
         return value_str.to_string();
     }
     // Already a string slice binding — `match name { "x" => ... }` is valid.
     if borrowed_params.contains(value_str) {
+        return value_str.to_string();
+    }
+    if scrutinee_type.is_some_and(param_is_rust_str_ref) {
         return value_str.to_string();
     }
     let param_is_str_slice = function_params.iter().any(|p| {

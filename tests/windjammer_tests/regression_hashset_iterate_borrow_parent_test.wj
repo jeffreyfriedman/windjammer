@@ -1,4 +1,4 @@
-// Repro (Phase 16 / LSQB Q4–Q7): iterate HashSet field while calling helper that borrows parent struct.
+// Repro: iterate HashSet field while calling helper that borrows parent struct.
 // Pattern: for post in graph.posts { count += helper(graph, post) }
 use std::collections::HashSet
 

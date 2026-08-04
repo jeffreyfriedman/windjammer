@@ -15,20 +15,28 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     call_method: &str,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> String {
+    let type_name = gen.infer_type_name(call_obj);
+    let registry = gen
+        .global_signature_registry()
+        .unwrap_or(&gen.signature_registry);
+    let is_type_preserving =
+        crate::codegen::rust::stdlib_method_traits::method_is_type_preserving_qualified(
+            call_method,
+            type_name.as_deref(),
+            registry,
+        );
+
     let prev_explicit_clone = gen.in_explicit_clone_call;
-    if matches!(call_method, "clone" | "to_owned" | "to_vec" | "into_iter") {
+    if is_type_preserving {
         gen.in_explicit_clone_call = true;
     }
     let mut obj_str = gen.generate_expression(call_obj);
     gen.in_explicit_clone_call = prev_explicit_clone;
 
-    if matches!(call_method, "clone" | "to_owned" | "to_vec" | "into_iter")
-        && obj_str.ends_with(".clone()")
-    {
+    // Strip redundant auto-clone before an explicit type-preserving `.clone()`.
+    if call_method == "clone" && obj_str.ends_with(".clone()") {
         obj_str = obj_str[..obj_str.len() - 8].to_string();
     }
-
-    let type_name = gen.infer_type_name(call_obj);
 
     // Prefer converged signature_registry (Owned consumers like MannequinMesh::generate)
     // over per-body method_signatures_by_type (may infer Borrowed when a formal is reused
