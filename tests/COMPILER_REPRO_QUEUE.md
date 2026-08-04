@@ -1,24 +1,32 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-Cross-crate / multipass dogfooding surfaced these codegen gaps. Each has a **failing** repro; fix the compiler/analyzer/codegen, then delete application workarounds.
+Cross-crate / multipass dogfooding surfaced these codegen gaps. Each row has a
+**codegen-shape** repro (emitted Rust assert) and/or a runtime fixture. Prefer the
+codegen gates as source of truth; fixtures alone can pass while multipass still
+mis-emits.
 
-| Priority | Bug | Repro test(s) | Workaround pattern (forbidden long-term) |
-|----------|-----|---------------|------------------------------------------|
-| P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in 62-file multipass** | isolated: **`test_library_multipass_graph_bfs_hashmap_compiles`** · full crate: swap `graph_vertex_map.wj` | `graph_vertex_map.wj` Vec backend (single swap point) |
-| P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `regression_loop_reused_graph_borrow_test.wj`, **`test_library_multipass_loop_reused_graph_borrow`** | `.clone()` in loop bodies |
-| P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | **`test_library_multipass_for_in_vertices_reuse_borrow`** | Index `while` loops instead of `for-in` (LCC) |
-| P1 | **`HashMap<i64, f64>::insert(k, 0.0)` — literal must infer f64 not f32** | **`test_library_multipass_hashmap_i64_f64_zero_literal_insert`** | Vec maps / explicit f64 helpers |
-| P1 | String literal → `string` param must emit `&"lit".to_string()` not owned String | `regression_andstring_literal_call_test.wj` | Manual string compares / delayed transpile |
-| P1 | Cross-crate `Type::new("lit")` with owned `String` formal — no WJ sig → bare `&str` | `codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test` | `owned_string("lit")` / WJ-source `.to_string()` |
-| P1 | `strings::split(line, "\|")` — pipe delimiter must stay `&str`, not `.to_string()` | ✅ isolated gate · ❌ **full wdb-layers `for line in lines` → `string` param** | Byte-at-a-time CSV parse; while-index loop in loader |
-| P1 | `strings::starts_with(s, "#")` — literal prefix same as split | ✅ `regression_strings_starts_with_literal_test.wj` | ~~Magic byte compares~~ **REMOVED** |
-| P2 | Cross-module `Vec` helper calls omit `&` borrows | `bug_cross_module_vec_borrow_test.rs` | Inline helpers per file (duplicate logic) |
+**Verified green on tip** (`cargo test --release --test all` filter below,
+2026-08-04): **18/18** including multipass + `bug_*` shape tests.
 
-## WindjammerDB migration path (ArcadeDB perf)
+| Priority | Bug | Repro test(s) | Status |
+|----------|-----|---------------|--------|
+| P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
+| P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
+| P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ |
+| P1 | **`HashMap<i64, f64>::insert(k, 0.0)` — literal must infer f64 not f32** | `test_library_multipass_hashmap_i64_f64_zero_literal_insert` | ✅ |
+| P1 | String literal → `string` param must emit `&"lit".to_string()` not owned String | `regression_andstring_literal_call_test.wj` | ✅ |
+| P1 | Cross-crate `Type::new("lit")` with owned `String` formal — no WJ sig → bare `&str` | `codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test` | ✅ |
+| P1 | `strings::split(line, "\|")` — pipe delimiter must stay `&str` | `bug_loop_reused_binding_borrow_test` (split gate), `test_library_multipass_strings_split_pipe_delimiter`, `test_library_multipass_csv_for_in_line_string_param` | ✅ |
+| P1 | `strings::starts_with(s, "#")` — literal prefix same as split | `regression_strings_starts_with_literal_test.wj` | ✅ |
+| P2 | Cross-module `Vec` helper calls omit `&` borrows | `bug_cross_module_vec_borrow_test.rs` | ✅ |
 
-1. **Now:** All graph engines use `graph_vertex_map.wj` (hexagonal port). Vec backend is centralized — one swap point.
-2. **When P0/P1 HashMap repros pass:** Replace `graph_vertex_map.wj` internals with `HashMap<i64, T>` only.
-3. **Next perf (no compiler block):** SSSP binary heap, real `run_nanos` wall-clock in engines, parallel PageRank iterations.
+## Application cleanup (after green gates)
+
+1. ✅ **Swap** `graph_vertex_map.wj` Vec backend → HashMap — applied in windjammerdb (2026-08-04); `graph_vertex_map.vec.wj` kept as backup.
+2. Remove remaining byte-parse / inline-helper / `take_value` shims tracked in
+   `WINDJAMMERDB_ISSUES.md` once WDB-046/047/049-class dogfood tests stay green
+   on the same tip (they are green as of 2026-08-04 in
+   `cross_crate_dogfooding_ownership_test` / `path_and_bytes_borrow_tests`).
 
 ## Run repros
 
@@ -31,8 +39,9 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
   test_library_multipass_loop_reused \
   test_library_multipass_graph_bfs_hashmap \
   test_library_multipass_csv_for_in_line \
+  test_library_multipass_for_in_vertices \
   cross_crate_associated_new_bare_literal \
+  dogfood_store_has_key_forward_ref dogfood_lsm_store_apply_patch \
+  dogfood_wal_ffi_snapshot path_bytes_ffi_vec \
   -- --test-threads=1
 ```
-
-When a row's gate is green, remove the corresponding application workaround in the same session.
