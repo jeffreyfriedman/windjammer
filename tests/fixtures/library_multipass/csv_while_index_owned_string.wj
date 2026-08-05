@@ -1,0 +1,27 @@
+use std::strings
+
+pub fn parse_vertex_line(line: string) -> Option<i64> {
+    let field = strings::substring(line, 0, strings::len(line))
+    if strings::is_empty(field) {
+        return None
+    }
+    Some(1)
+}
+
+pub fn count_parsed_lines(content: string) -> i32 {
+    let lines = strings::split_lines(content)
+    let mut count = 0
+    let mut li = 0
+    while li < lines.len() {
+        if li == 0 {
+            li = li + 1
+            continue
+        }
+        let line = lines[li]
+        if parse_vertex_line(line).is_some() {
+            count = count + 1
+        }
+        li = li + 1
+    }
+    count
+}
