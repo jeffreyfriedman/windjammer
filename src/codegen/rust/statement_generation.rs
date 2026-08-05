@@ -1183,6 +1183,25 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Borrow-break when scrutinee yields owned `Option<T>` (Copy or not) — bind the
+    /// Option by value and match it. Avoids `.map(|v| v.to_owned()).as_ref()` which
+    /// forces cloning the method receiver (`self.network.clone().poll(...)`).
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_option(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        let Some(ty) = self.infer_expression_type(expr) else {
+            return false;
+        };
+        let Type::Option(inner) = ty else {
+            return false;
+        };
+        !matches!(
+            inner.as_ref(),
+            Type::Reference(_) | Type::MutableReference(_)
+        )
+    }
+
     pub(in crate::codegen::rust) fn get_assignment_target_type(
         &self,
         target: &Expression,

@@ -621,13 +621,20 @@ impl<'ast> CodeGenerator<'ast> {
             && !use_copied_borrow_break
             && !option_reassigns
             && self.match_borrow_break_yields_owned_copy_option(value);
+        let use_owned_option_borrow_break = needs_borrow_break
+            && !use_copied_borrow_break
+            && !use_owned_copy_borrow_break
+            && !option_reassigns
+            && self.match_borrow_break_yields_owned_option(value);
         let use_owned_clone_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && !use_owned_copy_borrow_break
+            && !use_owned_option_borrow_break
             && (self.match_borrow_break_yields_owned_clone(value) || option_reassigns);
         let borrow_break_as_ref = needs_borrow_break
             && !use_copied_borrow_break
             && !use_owned_copy_borrow_break
+            && !use_owned_option_borrow_break
             && !use_owned_clone_borrow_break;
 
         let mut output = self.indent();
@@ -640,7 +647,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
-            } else if use_owned_copy_borrow_break {
+            } else if use_owned_copy_borrow_break || use_owned_option_borrow_break {
                 output.push_str(&format!("let __match_borrow_break = {};\n", value_str));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
@@ -683,6 +690,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let match_binds_refs = if use_copied_borrow_break
             || use_owned_copy_borrow_break
+            || use_owned_option_borrow_break
             || use_owned_clone_borrow_break
             || use_copied_option
         {
