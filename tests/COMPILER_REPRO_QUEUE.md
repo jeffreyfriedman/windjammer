@@ -19,6 +19,8 @@ mis-emits.
 | P1 | `strings::split(line, "\|")` — pipe delimiter must stay `&str` | `bug_loop_reused_binding_borrow_test` (split gate), `test_library_multipass_strings_split_pipe_delimiter`, `test_library_multipass_csv_for_in_line_string_param` | ✅ |
 | P1 | `strings::starts_with(s, "#")` — literal prefix same as split | `regression_strings_starts_with_literal_test.wj` | ✅ |
 | P2 | Cross-module `Vec` helper calls omit `&` borrows | `bug_cross_module_vec_borrow_test.rs` | ✅ |
+| P1 | `trim_end_matches("/")` must not emit `"/".to_string()` (Pattern) | `codegen_trim_end_matches_owned_string_pattern_gate_test` | ❌ open |
+| P1 | `find(":")` must not emit `":".to_string()` (Pattern) | `codegen_find_owned_string_pattern_gate_test` | ❌ open (same class) |
 
 ## Application cleanup (after green gates)
 
@@ -43,6 +45,8 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
   test_library_multipass_csv_while_index \
   test_library_multipass_for_in_vertices \
   cross_crate_associated_new_bare_literal \
+  trim_end_matches_string_literal_must_borrow \
+  find_owned_string_literal_must_borrow \
   dogfood_store_has_key_forward_ref dogfood_lsm_store_apply_patch \
   dogfood_wal_ffi_snapshot path_bytes_ffi_vec \
   -- --test-threads=1
