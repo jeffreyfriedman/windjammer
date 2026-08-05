@@ -21,15 +21,15 @@ mis-emits.
 | P2 | Cross-module `Vec` helper calls omit `&` borrows | `bug_cross_module_vec_borrow_test.rs` | ✅ |
 | P1 | `trim_end_matches("/")` must not emit `"/".to_string()` (Pattern) | `codegen_trim_end_matches_owned_string_pattern_gate_test` | ❌ open |
 | P1 | `find(":")` must not emit `":".to_string()` (Pattern) | `codegen_find_owned_string_pattern_gate_test` | ❌ open (same class) |
+| P1 | **`let Type { mut field } = value` — mut field in struct destructure (Rust parity)** | `test_struct_destructure_mut_field_compiles`, `test_struct_destructure_mut_field_hashmap_set_no_inner_clone` | ❌ open |
 
 ## Application cleanup (after green gates)
 
 1. ✅ **Swap** `graph_vertex_map.wj` Vec backend → HashMap — applied in windjammerdb (2026-08-04); `graph_vertex_map.vec.wj` kept as backup.
 2. ✅ **CSV pipe fields** — `lsqb_csv_loader.wj` uses `strings::split(line, "|")` (not `byte_at`/substring). Gate: `test_library_multipass_csv_while_index_owned_string_param` (+ for-in / split multipass). LSQB lib tests green after clean `rm -rf gen && wj build`.
-3. Remove remaining inline-helper / `take_value` shims tracked in
-   `WINDJAMMERDB_ISSUES.md` once WDB-046/047/049-class dogfood tests stay green
-   on the same tip (they are green as of 2026-08-04 in
-   `cross_crate_dogfooding_ownership_test` / `path_and_bytes_borrow_tests`).
+3. ✅ **Harness extract** — `drain_network` uses `match self.network.poll(...)` (WDB-042). Compiler emits in-place `&mut` call; no `let mut net = self.network`.
+4. ✅ **Index `consistent()`** — `key_in_range` (no byte-field extract). Network `poll` delegates to `release_held_if_ready`.
+5. `take_value` / `keys_equal_bytes` already absent from `.wj`; remaining optional polish is `self.queue.clone()` into owned helpers.
 
 ## Run repros
 
@@ -47,6 +47,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
   cross_crate_associated_new_bare_literal \
   trim_end_matches_string_literal_must_borrow \
   find_owned_string_literal_must_borrow \
+  struct_destructure_mut_field \
   dogfood_store_has_key_forward_ref dogfood_lsm_store_apply_patch \
   dogfood_wal_ffi_snapshot path_bytes_ffi_vec \
   -- --test-threads=1

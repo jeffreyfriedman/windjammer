@@ -123,7 +123,32 @@ impl<'ast> CodeGenerator<'ast> {
                                         .method_requires_consuming_self_receiver(&qualified, sig))
                                 && !obj_str.ends_with(".clone()")
                             {
-                                obj_str = format!("{}.clone()", obj_str);
+                                // From `&mut self`, calling another `&mut self` method
+                                // must reborrow — never `self.clone().method()`.
+                                let ownership =
+                                    self.effective_method_self_ownership(&qualified, sig);
+                                let skip_clone = is_mut_borrowed_param
+                                    && matches!(
+                                        ownership,
+                                        crate::analyzer::OwnershipMode::MutBorrowed
+                                            | crate::analyzer::OwnershipMode::Borrowed
+                                    );
+                                let skip_owned_mut_helper = is_mut_borrowed_param
+                                    && matches!(
+                                        ownership,
+                                        crate::analyzer::OwnershipMode::Owned
+                                    )
+                                    && !matches!(
+                                        sig.return_type.as_ref(),
+                                        Some(crate::parser::Type::Custom(ret))
+                                            if self.current_struct_name.as_ref().is_some_and(|sn| {
+                                                sn == ret
+                                                    || sn.split('<').next().unwrap_or(sn) == ret
+                                            })
+                                    );
+                                if !skip_clone && !skip_owned_mut_helper {
+                                    obj_str = format!("{}.clone()", obj_str);
+                                }
                             }
                         } else if is_borrowed_iter
                             && !is_mut_borrowed_param
@@ -189,17 +214,58 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.get_signature_with_global(&format!("{base}::{method}"))
                                 });
                         needs_clone = sig_opt.is_some_and(|sig| {
-                            let qualified = self
-                                .current_struct_name
-                                .as_ref()
-                                .map(|sn| format!("{sn}::{method}"))
-                                .unwrap_or_else(|| {
-                                    Self::type_to_name(&recv_ty)
-                                        .map(|tn| format!("{tn}::{method}"))
-                                        .unwrap_or_else(|| method.to_string())
-                                });
-                            sig.has_self_receiver
-                                && self.method_requires_consuming_self_receiver(&qualified, sig)
+                            if !sig.has_self_receiver {
+                                return false;
+                            }
+                            // Look up ownership on the *receiver* type
+                            // (`SimNetwork::poll`), not the enclosing impl
+                            // (`SimHarness::poll`) — otherwise upgrades miss.
+                            let recv_qualified = format!("{tn}::{method}");
+                            let base = tn.split('<').next().unwrap_or(tn.as_str());
+                            let base_qualified = format!("{base}::{method}");
+                            let ownership_recv =
+                                self.effective_method_self_ownership(&recv_qualified, sig);
+                            let ownership_base =
+                                self.effective_method_self_ownership(&base_qualified, sig);
+                            let ownership = match (ownership_recv, ownership_base) {
+                                (
+                                    crate::analyzer::OwnershipMode::MutBorrowed,
+                                    _,
+                                )
+                                | (
+                                    _,
+                                    crate::analyzer::OwnershipMode::MutBorrowed,
+                                ) => crate::analyzer::OwnershipMode::MutBorrowed,
+                                (
+                                    crate::analyzer::OwnershipMode::Borrowed,
+                                    _,
+                                )
+                                | (
+                                    _,
+                                    crate::analyzer::OwnershipMode::Borrowed,
+                                ) => crate::analyzer::OwnershipMode::Borrowed,
+                                (other, _) => other,
+                            };
+                            let enclosing_mut =
+                                self.inferred_mut_borrowed_params.contains("self");
+                            match ownership {
+                                crate::analyzer::OwnershipMode::Borrowed
+                                | crate::analyzer::OwnershipMode::MutBorrowed => false,
+                                crate::analyzer::OwnershipMode::Owned if enclosing_mut => {
+                                    // Analyzer may mark mutating methods Owned (field
+                                    // move into a helper). From `&mut self`, prefer
+                                    // reborrowing `self.field` unless the method
+                                    // returns the receiver type (builder / consume).
+                                    let returns_recv_self =
+                                        matches!(
+                                            sig.return_type.as_ref(),
+                                            Some(crate::parser::Type::Custom(name))
+                                                if name == &tn || name == base
+                                        );
+                                    returns_recv_self
+                                }
+                                crate::analyzer::OwnershipMode::Owned => true,
+                            }
                         });
                     }
                     if needs_clone {

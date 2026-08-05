@@ -1765,10 +1765,11 @@ impl SimNetwork {
         SimNetwork { pending: Vec::new() }
     }
 
-    pub fn poll(self, clock: LogicalTime) -> Option<i64> {
+    pub fn poll(self, clock: LogicalTime) -> Option<(i64, string)> {
         if self.pending.len() > 0 {
-            self.pending.pop()
+            let v = self.pending.pop()
             let _ = clock.tick
+            Some((v, "ok"))
         } else {
             None
         }

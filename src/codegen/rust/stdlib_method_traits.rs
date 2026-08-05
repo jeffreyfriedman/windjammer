@@ -179,6 +179,26 @@ pub fn is_known_stdlib_method_qualified(
         || lookup_suffix(method, registry).is_some()
 }
 
+/// Clippy-style `len() == 0` → `is_empty()` rewrite is only valid when:
+/// 1. the left-hand method is `len` (or `capacity` on types that also expose `is_empty`)
+/// 2. the *receiver type* has an `is_empty` signature in the registry
+///
+/// Do not use suffix/`usize` consensus here — user methods like
+/// `SimNetwork::pending_count() -> usize` must not become `is_empty()`.
+pub fn method_is_len_like_empty_check(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if method != "len" && method != "capacity" {
+        return false;
+    }
+    if !method_returns_usize_qualified(method, receiver_type, registry) {
+        return false;
+    }
+    lookup_sig("is_empty", receiver_type, registry).is_some()
+}
+
 /// Does this method return `usize`?
 pub fn method_returns_usize_qualified(
     method: &str,

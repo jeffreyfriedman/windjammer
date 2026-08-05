@@ -156,3 +156,83 @@ fn child_lens(node: Node) -> Option<int> {
         );
     }
 }
+
+/// `pending_count() > 0` must not rewrite to `!is_empty()` just because the
+/// method returns usize. Only `len`/`capacity` on types that expose `is_empty`
+/// may take that Clippy-style rewrite.
+#[test]
+fn usize_count_method_must_not_rewrite_to_is_empty() {
+    let rust = compile(
+        r#"
+struct SimNetwork {
+    queue: Vec<int>,
+}
+
+impl SimNetwork {
+    fn pending_count(self) -> usize {
+        self.queue.len()
+    }
+}
+
+struct SimHarness {
+    network: SimNetwork,
+}
+
+impl SimHarness {
+    fn drain(self) {
+        while self.network.pending_count() > 0 {
+            let _ = 1
+        }
+    }
+}
+"#,
+        "pending_count.wj",
+    );
+    assert!(
+        rust.contains("pending_count()"),
+        "must keep pending_count call:\n{rust}"
+    );
+    assert!(
+        !rust.contains("network.is_empty()"),
+        "must not rewrite pending_count()>0 to is_empty:\n{rust}"
+    );
+}
+
+/// Mutating helper called as `self.release()` from `&mut self` poll must not
+/// emit `self.clone().release()`.
+#[test]
+fn mut_self_helper_call_must_not_clone_self() {
+    let rust = compile(
+        r#"
+struct SimNetwork {
+    queue: Vec<int>,
+}
+
+impl SimNetwork {
+    fn release_held(self) {
+        if self.queue.len() > 0 {
+            self.queue.pop()
+        }
+    }
+
+    fn poll(self) -> Option<int> {
+        self.release_held()
+        if self.queue.len() > 0 {
+            self.queue.pop()
+        } else {
+            None
+        }
+    }
+}
+"#,
+        "self_helper.wj",
+    );
+    assert!(
+        rust.contains("self.release_held(") || rust.contains("self.release_held()"),
+        "expected direct self.release_held call:\n{rust}"
+    );
+    assert!(
+        !rust.contains("self.clone().release_held"),
+        "must not clone self before mutating helper:\n{rust}"
+    );
+}
