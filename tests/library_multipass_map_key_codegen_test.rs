@@ -345,3 +345,26 @@ fn test_library_multipass_csv_for_in_line_string_param() {
 
     test.assert_compiles_without_error();
 }
+
+#[test]
+fn test_library_multipass_csv_while_index_owned_string_param() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "csv/while_index_owned.wj",
+        &fixture("csv_while_index_owned_string.wj"),
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("csv/while_index_owned.rs")
+        .expect("while_index_owned.rs generated");
+
+    assert!(
+        !rs.contains("parse_vertex_line(&line)"),
+        "owned string formal must receive line by value, not &line. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}

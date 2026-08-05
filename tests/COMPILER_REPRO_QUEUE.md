@@ -23,7 +23,8 @@ mis-emits.
 ## Application cleanup (after green gates)
 
 1. ✅ **Swap** `graph_vertex_map.wj` Vec backend → HashMap — applied in windjammerdb (2026-08-04); `graph_vertex_map.vec.wj` kept as backup.
-2. Remove remaining byte-parse / inline-helper / `take_value` shims tracked in
+2. ✅ **CSV pipe fields** — `lsqb_csv_loader.wj` uses `strings::split(line, "|")` (not `byte_at`/substring). Gate: `test_library_multipass_csv_while_index_owned_string_param` (+ for-in / split multipass). LSQB lib tests green after clean `rm -rf gen && wj build`.
+3. Remove remaining inline-helper / `take_value` shims tracked in
    `WINDJAMMERDB_ISSUES.md` once WDB-046/047/049-class dogfood tests stay green
    on the same tip (they are green as of 2026-08-04 in
    `cross_crate_dogfooding_ownership_test` / `path_and_bytes_borrow_tests`).
@@ -39,6 +40,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
   test_library_multipass_loop_reused \
   test_library_multipass_graph_bfs_hashmap \
   test_library_multipass_csv_for_in_line \
+  test_library_multipass_csv_while_index \
   test_library_multipass_for_in_vertices \
   cross_crate_associated_new_bare_literal \
   dogfood_store_has_key_forward_ref dogfood_lsm_store_apply_patch \
