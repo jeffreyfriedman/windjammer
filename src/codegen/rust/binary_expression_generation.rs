@@ -31,7 +31,7 @@ impl<'ast> CodeGenerator<'ast> {
             ..
         } = left
         {
-            if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+            if crate::codegen::rust::stdlib_method_traits::method_is_len_like_empty_check(
                 method,
                 self.infer_expression_type(object)
                     .as_ref()
