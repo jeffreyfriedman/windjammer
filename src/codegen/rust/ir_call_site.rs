@@ -2167,7 +2167,13 @@ impl<'ast> CodeGenerator<'ast> {
         sig: &crate::analyzer::FunctionSignature,
         param_idx: usize,
     ) -> String {
+        if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
+            return rewritten;
+        }
         if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
+            return arg_str.to_string();
+        }
+        if arg_str.contains("std::mem::take(") {
             return arg_str.to_string();
         }
         if arg_str.ends_with(".to_string()") {
@@ -3155,7 +3161,14 @@ impl<'ast> CodeGenerator<'ast> {
         arg_str: &str,
     ) -> String {
         if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
+            // Still rewrite clone → mem::take for call-arg writeback behind &mut self.
+            if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
+                return rewritten;
+            }
             return arg_str.to_string();
+        }
+        if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
+            return rewritten;
         }
         let Some(path) = Self::auto_clone_expr_path(arg_expr) else {
             return arg_str.to_string();

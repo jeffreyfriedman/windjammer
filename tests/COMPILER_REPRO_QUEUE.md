@@ -29,7 +29,9 @@ mis-emits.
 2. ✅ **CSV pipe fields** — `lsqb_csv_loader.wj` uses `strings::split(line, "|")` (not `byte_at`/substring). Gate: `test_library_multipass_csv_while_index_owned_string_param` (+ for-in / split multipass). LSQB lib tests green after clean `rm -rf gen && wj build`.
 3. ✅ **Harness extract** — `drain_network` uses `match self.network.poll(...)` (WDB-042). Compiler emits in-place `&mut` call; no `let mut net = self.network`.
 4. ✅ **Index `consistent()`** — `key_in_range` (no byte-field extract). Network `poll` delegates to `release_held_if_ready`.
-5. `take_value` / `keys_equal_bytes` already absent from `.wj`; remaining optional polish is `self.queue.clone()` into owned helpers.
+5. ✅ **`self.queue.clone()` into owned helpers** — call-arg writeback
+   (`let r = f(self.field); self.field = r.sub`) emits `std::mem::take(&mut self.field)`.
+   Gate: `codegen_owned_field_call_writeback_gate_test`.
 
 ## Run repros
 
