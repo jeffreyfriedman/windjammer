@@ -1,0 +1,45 @@
+// FAILING REPRO: struct destructure with `mut` field binding (Rust parity).
+//
+// Rust supports:
+//   let VertexMap { mut inner } = map;
+//   inner.insert(key, value);
+//
+// Windjammer today parses `Point { x, y }` but rejects `{ mut inner }` with:
+//   "Expected field name in struct pattern"
+//
+// Dogfooding: windjammerdb graph_vertex_map.wj needs move-not-clone HashMap updates.
+// Workaround until fixed: `let mut result = map; result.inner.insert(...)`.
+
+use std::collections::HashMap
+
+pub struct VertexMap {
+    pub inner: HashMap<i64, f64>,
+}
+
+pub fn vertex_map_set(map: VertexMap, vertex: i64, value: f64) -> VertexMap {
+    let VertexMap { mut inner } = map
+    inner.insert(vertex, value)
+    VertexMap { inner: inner }
+}
+
+pub fn vertex_map_add(map: VertexMap, vertex: i64, delta: f64) -> VertexMap {
+    let VertexMap { mut inner } = map
+    if inner.contains_key(vertex) {
+        if let Some(cur) = inner.get(vertex) {
+            inner.insert(vertex, cur + delta)
+        }
+    }
+    VertexMap { inner: inner }
+}
+
+pub fn test_vertex_map_mut_destructure_moves_hashmap() -> bool {
+    let mut map = VertexMap { inner: HashMap::new() }
+    map = vertex_map_set(map, 1, 10.0)
+    map = vertex_map_add(map, 1, 5.0)
+    if map.inner.contains_key(1) {
+        if let Some(v) = map.inner.get(1) {
+            return v == 15.0
+        }
+    }
+    false
+}

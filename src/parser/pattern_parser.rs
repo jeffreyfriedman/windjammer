@@ -8,6 +8,52 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// Parse one field in a struct / struct-like enum pattern.
+    ///
+    /// Accepts Rust-parity forms:
+    /// - `field`           → shorthand `field: field`
+    /// - `mut field`       → shorthand `field: mut field`
+    /// - `field: pattern`  → explicit (pattern may itself be `mut binding`)
+    fn parse_struct_pattern_field(&mut self) -> Result<(String, Pattern<'static>), String> {
+        // Shorthand `mut field` — field name is the ident after `mut`.
+        if self.current_token() == &Token::Mut {
+            self.advance();
+            let field_name = if let Token::Ident(name) = self.current_token() {
+                let n = name.clone();
+                self.advance();
+                n
+            } else {
+                return Err(format!(
+                    "Expected field name after 'mut' in struct pattern (at token position {})",
+                    self.position
+                ));
+            };
+            return Ok((field_name.clone(), Pattern::MutBinding(field_name)));
+        }
+
+        let field_name = if let Token::Ident(name) = self.current_token() {
+            let n = name.clone();
+            self.advance();
+            n
+        } else {
+            return Err(format!(
+                "Expected field name in struct pattern (at token position {})",
+                self.position
+            ));
+        };
+
+        // Explicit `field: pattern` (including `field: mut binding`)
+        let pattern = if self.current_token() == &Token::Colon {
+            self.advance();
+            self.parse_pattern()?
+        } else {
+            // Shorthand: field means field: field
+            Pattern::Identifier(field_name.clone())
+        };
+
+        Ok((field_name, pattern))
+    }
+
     /// Parse a pattern with OR support: pattern1 | pattern2 | pattern3
     pub fn parse_pattern_with_or(&mut self) -> Result<Pattern<'static>, String> {
         let first = self.parse_pattern()?;
@@ -257,27 +303,7 @@ impl Parser {
                                 ));
                             }
 
-                            // Parse field name
-                            let field_name = if let Token::Ident(name) = self.current_token() {
-                                let n = name.clone();
-                                self.advance();
-                                n
-                            } else {
-                                return Err(format!(
-                                    "Expected field name in struct pattern (at token position {})",
-                                    self.position
-                                ));
-                            };
-
-                            // Check if there's a colon (explicit pattern) or not (shorthand)
-                            let pattern = if self.current_token() == &Token::Colon {
-                                self.advance();
-                                self.parse_pattern()?
-                            } else {
-                                // Shorthand: field means field: field
-                                Pattern::Identifier(field_name.clone())
-                            };
-
+                            let (field_name, pattern) = self.parse_struct_pattern_field()?;
                             fields.push((field_name, pattern));
 
                             // Check for comma or end
@@ -377,27 +403,7 @@ impl Parser {
                             ));
                         }
 
-                        // Parse field name
-                        let field_name = if let Token::Ident(name) = self.current_token() {
-                            let n = name.clone();
-                            self.advance();
-                            n
-                        } else {
-                            return Err(format!(
-                                "Expected field name in struct pattern (at token position {})",
-                                self.position
-                            ));
-                        };
-
-                        // Check if there's a colon (explicit pattern) or not (shorthand)
-                        let pattern = if self.current_token() == &Token::Colon {
-                            self.advance();
-                            self.parse_pattern()?
-                        } else {
-                            // Shorthand: field means field: field
-                            Pattern::Identifier(field_name.clone())
-                        };
-
+                        let (field_name, pattern) = self.parse_struct_pattern_field()?;
                         fields.push((field_name, pattern));
 
                         // Check for comma or end
@@ -492,8 +498,14 @@ impl Parser {
                 EnumPatternBinding::Struct(fields, has_wildcard) => {
                     let parts: Vec<String> = fields
                         .iter()
-                        .map(|(field_name, pattern)| {
-                            format!("{}: {}", field_name, Self::pattern_to_string(pattern))
+                        .map(|(field_name, pattern)| match pattern {
+                            Pattern::Identifier(binding) if binding == field_name => {
+                                field_name.clone()
+                            }
+                            Pattern::MutBinding(binding) if binding == field_name => {
+                                format!("mut {}", field_name)
+                            }
+                            _ => format!("{}: {}", field_name, Self::pattern_to_string(pattern)),
                         })
                         .collect();
                     if *has_wildcard {
@@ -517,11 +529,13 @@ impl Parser {
     ///
     /// Irrefutable patterns (always match):
     /// - Identifier: `x`, `_`
+    /// - MutBinding: `mut x`
     /// - Tuple: `(a, b)` (if all elements are irrefutable)
     /// - Reference: `&x` (if inner is irrefutable)
+    /// - Struct / struct-like: `Point { x, y }`, `Point { mut x }` (if field pats irrefutable)
     ///
     /// Refutable patterns (can fail):
-    /// - Enum variant: `Some(x)`, `Ok(value)`
+    /// - Enum variant: `Some(x)`, `Ok(value)` (tuple/single/none bindings)
     /// - Literal: `42`, `"hello"`, `true`
     /// - Or pattern: `x | y`
     pub fn is_pattern_refutable(pattern: &Pattern) -> bool {
@@ -537,7 +551,14 @@ impl Parser {
             Pattern::Ref(_) => false, // ref x is irrefutable (always matches and borrows)
             Pattern::RefMut(_) => false, // ref mut x is irrefutable
 
-            // Refutable patterns
+            // Struct / struct-like patterns share EnumVariant AST with enums.
+            // Field-struct bindings are irrefutable when every field pattern is
+            // (Rust parity: `let Point { x, y } = p`, `let Type { mut f } = v`).
+            Pattern::EnumVariant(_, EnumPatternBinding::Struct(fields, _)) => fields
+                .iter()
+                .any(|(_, field_pat)| Self::is_pattern_refutable(field_pat)),
+
+            // Other enum bindings (Some(x), None, Ok(v)) are refutable
             Pattern::EnumVariant(_, _) => true,
             Pattern::Literal(_) => true,
             Pattern::Or(_) => true,
