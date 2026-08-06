@@ -21,7 +21,8 @@
 //!    `if *c == '{'` (loop var is already `char` → E0614).
 //!
 //! 3. **JSON field helper** — owned `string` key formal + `find` / call sites with
-//!    `"role".to_string()` must typecheck (`&str`/`String` consistently).
+//!    bare `"role"` must typecheck (`&str`/`String` consistently). Codegen owns
+//!    literals when the formal is owned — fixtures must not use `.to_string()` (W0006).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -166,7 +167,7 @@ pub fn count_objects(array_json: string) -> int {
 }
 
 fn main() {
-    println!("{}", count_objects("[{},{\"a\":1}]".to_string()))
+    println!("{}", count_objects("[{},{\"a\":1}]"))
 }
 "#;
 
@@ -185,24 +186,24 @@ fn main() {
 fn json_string_field_helper_must_cargo_check() {
     let source = r#"
 pub fn json_string_field(obj: string, key: string) -> Option<string> {
-    let needle = "\"".to_string() + key + "\""
+    let needle = "\"" + key + "\""
     match obj.find(needle) {
         Some(idx) => {
             let after = obj.substring(idx, obj.len())
-            Some(after.to_string())
+            Some(after)
         },
         None => None,
     }
 }
 
 pub fn role_hint(obj: string) -> string {
-    match json_string_field(obj, "role".to_string()) {
+    match json_string_field(obj, "role") {
         Some(r) => r,
         None => {
             if obj.contains("\"customer\"") {
-                "customer".to_string()
+                "customer"
             } else {
-                "".to_string()
+                ""
             }
         },
     }
@@ -216,7 +217,7 @@ pub fn parse_rows(json: string) -> Vec<Row> {
     let slices = vec![json]
     let mut out: Vec<Row> = Vec::new()
     for obj in slices {
-        match json_string_field(obj, "display_name".to_string()) {
+        match json_string_field(obj, "display_name") {
             Some(name) => {
                 out.push(Row { name: name })
             },
@@ -227,8 +228,8 @@ pub fn parse_rows(json: string) -> Vec<Row> {
 }
 
 fn main() {
-    println!("{}", role_hint("{\"role\":\"vendor\"}".to_string()))
-    println!("{}", parse_rows("{\"display_name\":\"Acme\"}".to_string()).len())
+    println!("{}", role_hint("{\"role\":\"vendor\"}"))
+    println!("{}", parse_rows("{\"display_name\":\"Acme\"}").len())
 }
 "#;
 
