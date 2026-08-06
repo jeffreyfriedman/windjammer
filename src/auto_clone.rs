@@ -792,14 +792,11 @@ impl AutoCloneAnalysis {
                 // reference (E0507) — clone even when `self` is not used again later.
                 // Example: `let lo = self.start.bytes; let hi = self.end.bytes` must
                 // clone both, not only the first field when `self` is reused.
-                // Exception: extract-assign writeback `let mut x = self.f; …; self.f = x`
-                // (regression-042) — bare move, no clone.
+                // Exception: writeback patterns (codegen emits `mem::take` / bare move):
+                // - extract-assign: `let mut x = self.f; …; self.f = x` (regression-042)
+                // - call-arg writeback: `let r = f(self.f); …; self.f = r.remaining`
                 if root == "self"
-                    && Self::self_field_has_extract_writeback(
-                        statements,
-                        path,
-                        field_move.statement_idx,
-                    )
+                    && Self::self_field_has_writeback(statements, path, field_move.statement_idx)
                 {
                     continue;
                 }
@@ -813,16 +810,20 @@ impl AutoCloneAnalysis {
         }
     }
 
-    /// `let mut x = self.field; …; self.field = x` — extract then writeback.
-    fn self_field_has_extract_writeback(
+    /// True when `field_path` is moved and later written back (extract or call-arg).
+    ///
+    /// Patterns:
+    /// - `let mut x = self.field; …; self.field = x`
+    /// - `let r = f(self.field); …; self.field = r.subfield`
+    pub fn self_field_has_writeback(
         statements: &[&Statement],
         field_path: &str,
-        _extract_stmt_idx: usize,
+        _move_stmt_idx: usize,
     ) -> bool {
-        Self::find_extract_writeback_in_stmts(statements, field_path)
+        Self::find_writeback_in_stmts(statements, field_path)
     }
 
-    fn find_extract_writeback_in_stmts(statements: &[&Statement], field_path: &str) -> bool {
+    fn find_writeback_in_stmts(statements: &[&Statement], field_path: &str) -> bool {
         for (i, stmt) in statements.iter().enumerate() {
             if let Statement::Let {
                 pattern: Pattern::Identifier(binding),
@@ -830,9 +831,13 @@ impl AutoCloneAnalysis {
                 ..
             } = stmt
             {
-                if Self::expr_is_field_path(value, field_path) {
+                let extracts_field = Self::expr_is_field_path(value, field_path);
+                let call_moves_field = Self::expr_call_or_method_has_field_arg(value, field_path);
+                if extracts_field || call_moves_field {
                     for later in statements.iter().skip(i + 1) {
-                        if Self::stmt_assigns_binding_to_field_path(later, binding, field_path) {
+                        if Self::stmt_assigns_binding_or_prefix_to_field_path(
+                            later, binding, field_path,
+                        ) {
                             return true;
                         }
                     }
@@ -844,11 +849,11 @@ impl AutoCloneAnalysis {
                     else_block,
                     ..
                 } => {
-                    if Self::find_extract_writeback_in_stmts(then_block, field_path) {
+                    if Self::find_writeback_in_stmts(then_block, field_path) {
                         return true;
                     }
                     if let Some(eb) = else_block {
-                        if Self::find_extract_writeback_in_stmts(eb, field_path) {
+                        if Self::find_writeback_in_stmts(eb, field_path) {
                             return true;
                         }
                     }
@@ -856,7 +861,7 @@ impl AutoCloneAnalysis {
                 Statement::While { body, .. }
                 | Statement::For { body, .. }
                 | Statement::Loop { body, .. } => {
-                    if Self::find_extract_writeback_in_stmts(body, field_path) {
+                    if Self::find_writeback_in_stmts(body, field_path) {
                         return true;
                     }
                 }
@@ -870,6 +875,18 @@ impl AutoCloneAnalysis {
         Self::field_access_path(expr).as_deref() == Some(field_path)
     }
 
+    /// True when `expr` is a call/method-call that passes `field_path` as an owned argument.
+    fn expr_call_or_method_has_field_arg(expr: &Expression, field_path: &str) -> bool {
+        match expr {
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments
+                    .iter()
+                    .any(|(_, arg)| Self::expr_is_field_path(arg, field_path))
+            }
+            _ => false,
+        }
+    }
+
     fn field_access_path(expr: &Expression) -> Option<String> {
         match expr {
             Expression::FieldAccess { object, field, .. } => {
@@ -881,7 +898,15 @@ impl AutoCloneAnalysis {
         }
     }
 
-    fn stmt_assigns_binding_to_field_path(
+    /// True when `expr` is `binding` or `binding.field…` (writeback from call result).
+    fn expr_is_binding_or_field_of(expr: &Expression, binding: &str) -> bool {
+        match Self::field_access_path(expr) {
+            Some(path) => path == binding || path.starts_with(&format!("{binding}.")),
+            None => false,
+        }
+    }
+
+    fn stmt_assigns_binding_or_prefix_to_field_path(
         stmt: &Statement,
         binding: &str,
         field_path: &str,
@@ -893,28 +918,27 @@ impl AutoCloneAnalysis {
                 compound_op: None,
                 ..
             } => {
-                matches!(value, Expression::Identifier { name, .. } if name == binding)
-                    && Self::expr_is_field_path(target, field_path)
+                Self::expr_is_field_path(target, field_path)
+                    && Self::expr_is_binding_or_field_of(value, binding)
             }
             Statement::If {
                 then_block,
                 else_block,
                 ..
             } => {
-                then_block
-                    .iter()
-                    .any(|s| Self::stmt_assigns_binding_to_field_path(s, binding, field_path))
-                    || else_block.as_ref().is_some_and(|eb| {
-                        eb.iter().any(|s| {
-                            Self::stmt_assigns_binding_to_field_path(s, binding, field_path)
-                        })
+                then_block.iter().any(|s| {
+                    Self::stmt_assigns_binding_or_prefix_to_field_path(s, binding, field_path)
+                }) || else_block.as_ref().is_some_and(|eb| {
+                    eb.iter().any(|s| {
+                        Self::stmt_assigns_binding_or_prefix_to_field_path(s, binding, field_path)
                     })
+                })
             }
             Statement::While { body, .. }
             | Statement::For { body, .. }
-            | Statement::Loop { body, .. } => body
-                .iter()
-                .any(|s| Self::stmt_assigns_binding_to_field_path(s, binding, field_path)),
+            | Statement::Loop { body, .. } => body.iter().any(|s| {
+                Self::stmt_assigns_binding_or_prefix_to_field_path(s, binding, field_path)
+            }),
             _ => false,
         }
     }

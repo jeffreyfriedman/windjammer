@@ -478,8 +478,63 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Call-arg writeback behind `&mut self`: `let r = f(self.field); self.field = r.sub`.
+    /// Prefer `std::mem::take`; fall back to `.clone()` when the type lacks Default.
+    /// Returns `None` when this is not a writeback site (or owned `self` can bare-move).
+    pub(in crate::codegen::rust) fn try_self_field_writeback_owned_arg(
+        &self,
+        arg_expr: &Expression<'ast>,
+        arg_str: &str,
+    ) -> Option<String> {
+        if !matches!(arg_expr, Expression::FieldAccess { .. }) {
+            return None;
+        }
+        if arg_str.contains("std::mem::take(") || arg_str.ends_with(".take()") {
+            return None;
+        }
+        let root = self.root_identifier_of_field_or_index_chain(arg_expr)?;
+        if root != "self" {
+            return None;
+        }
+        let field_path = self.extract_field_access_path_string(arg_expr);
+        if field_path.is_empty() {
+            return None;
+        }
+        let body: Vec<&Statement<'_>> = self.current_function_body.iter().copied().collect();
+        if !crate::auto_clone::AutoCloneAnalysis::self_field_has_writeback(
+            &body,
+            &field_path,
+            self.current_statement_idx,
+        ) {
+            return None;
+        }
+        // Owned `self`: bare move is valid — leave the arg as-is.
+        if !self.inferred_mut_borrowed_params.contains("self")
+            && !self.inferred_borrowed_params.contains("self")
+        {
+            return None;
+        }
+        let Some(ty) = self.infer_expression_type(arg_expr) else {
+            return None;
+        };
+        if self.is_type_copy(&ty) {
+            return None;
+        }
+        let mut base = arg_str.to_string();
+        if base.ends_with(".clone()") {
+            base.truncate(base.len() - ".clone()".len());
+        }
+        let base = base.trim_start_matches('&').trim().to_string();
+        if self.inferred_mut_borrowed_params.contains("self") && self.type_supports_mem_take(&ty)
+        {
+            Some(format!("std::mem::take(&mut {base})"))
+        } else {
+            Some(format!("{base}.clone()"))
+        }
+    }
+
     /// True when `ty` is safe for `std::mem::take` (Default in std or auto-derived).
-    fn type_supports_mem_take(&self, ty: &Type) -> bool {
+    pub(in crate::codegen::rust) fn type_supports_mem_take(&self, ty: &Type) -> bool {
         match ty {
             Type::Int
             | Type::Int32
@@ -537,10 +592,13 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 let target_path = self.extract_field_access_path_string(target);
-                matches!(
-                    value,
-                    Expression::Identifier { name, .. } if name == binding
-                ) && target_path == field_path
+                if target_path != field_path {
+                    return false;
+                }
+                // `self.field = binding` or `self.field = binding.subfield` (call writeback).
+                let value_path = self.extract_field_access_path_string(value);
+                value_path == binding
+                    || value_path.starts_with(&format!("{binding}."))
             }
             Statement::If {
                 then_block,
