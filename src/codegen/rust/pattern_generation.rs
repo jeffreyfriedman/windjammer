@@ -44,7 +44,13 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         let field_strs: Vec<String> = fields
                             .iter()
-                            .map(|(name, pat)| format!("{}: {}", name, self.pattern_to_rust(pat)))
+                            .map(|(name, pat)| match pat {
+                                Pattern::Identifier(binding) if binding == name => name.clone(),
+                                Pattern::MutBinding(binding) if binding == name => {
+                                    format!("mut {}", name)
+                                }
+                                _ => format!("{}: {}", name, self.pattern_to_rust(pat)),
+                            })
                             .collect();
                         if *has_wildcard {
                             format!("{} {{ {}, .. }}", variant, field_strs.join(", "))
@@ -105,17 +111,16 @@ impl<'ast> CodeGenerator<'ast> {
                         } else {
                             let field_strs: Vec<String> = fields
                                 .iter()
-                                .map(|(n, pat)| {
-                                    if let Pattern::Identifier(binding) = pat {
-                                        if binding == n {
-                                            return n.clone();
-                                        }
+                                .map(|(n, pat)| match pat {
+                                    Pattern::Identifier(binding) if binding == n => n.clone(),
+                                    Pattern::MutBinding(binding) if binding == n => {
+                                        format!("mut {}", n)
                                     }
-                                    format!(
+                                    _ => format!(
                                         "{}: {}",
                                         n,
                                         self.generate_pattern_with_scrutinee(pat, None)
-                                    )
+                                    ),
                                 })
                                 .collect();
                             if *has_wildcard {
