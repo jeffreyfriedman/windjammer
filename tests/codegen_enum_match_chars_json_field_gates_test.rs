@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Gates — enum match qualification, `chars()` loops, JSON field helpers.
+//! FAILING REPROS — enum match qualification, `chars()` loops, JSON field helpers.
 //!
 //! Each gate `cargo check`s emitted Rust:
 //!
@@ -113,18 +113,18 @@ enum Mode { Workspace, Business }
 
 pub fn body_for(route: Route, mode: Mode) -> string {
     match route {
-        Money if mode == Mode::Business => "<div data-mode-business></div>",
-        Money => "<div class=\"hub-panel\"></div>",
-        Home => "<div class=\"home-hero\"></div>",
-        Unknown => "<p class=\"err\">Unknown</p>",
+        Money if mode == Mode::Business => "<div data-mode-business></div>".to_string(),
+        Money => "<div class=\"hub-panel\"></div>".to_string(),
+        Home => "<div class=\"home-hero\"></div>".to_string(),
+        Unknown => "<p class=\"err\">Unknown</p>".to_string(),
     }
 }
 
 pub fn title(route: Route) -> string {
     match route {
-        Home => "Home",
-        Money => "Money",
-        Unknown => "Unknown",
+        Home => "Home".to_string(),
+        Money => "Money".to_string(),
+        Unknown => "Unknown".to_string(),
     }
 }
 
@@ -166,7 +166,7 @@ pub fn count_objects(array_json: string) -> int {
 }
 
 fn main() {
-    println!("{}", count_objects("[{},{\"a\":1}]"))
+    println!("{}", count_objects("[{},{\"a\":1}]".to_string()))
 }
 "#;
 
@@ -185,7 +185,7 @@ fn main() {
 fn json_string_field_helper_must_cargo_check() {
     let source = r#"
 pub fn json_string_field(obj: string, key: string) -> Option<string> {
-    let needle = "\"" + key + "\""
+    let needle = "\"".to_string() + key + "\""
     match obj.find(needle) {
         Some(idx) => {
             let after = obj.substring(idx, obj.len())
@@ -196,13 +196,13 @@ pub fn json_string_field(obj: string, key: string) -> Option<string> {
 }
 
 pub fn role_hint(obj: string) -> string {
-    match json_string_field(obj, "role") {
+    match json_string_field(obj, "role".to_string()) {
         Some(r) => r,
         None => {
             if obj.contains("\"customer\"") {
-                "customer"
+                "customer".to_string()
             } else {
-                ""
+                "".to_string()
             }
         },
     }
@@ -216,7 +216,7 @@ pub fn parse_rows(json: string) -> Vec<Row> {
     let slices = vec![json]
     let mut out: Vec<Row> = Vec::new()
     for obj in slices {
-        match json_string_field(obj, "display_name") {
+        match json_string_field(obj, "display_name".to_string()) {
             Some(name) => {
                 out.push(Row { name: name })
             },
@@ -227,8 +227,8 @@ pub fn parse_rows(json: string) -> Vec<Row> {
 }
 
 fn main() {
-    println!("{}", role_hint("{\"role\":\"vendor\"}"))
-    println!("{}", parse_rows("{\"display_name\":\"Acme\"}").len())
+    println!("{}", role_hint("{\"role\":\"vendor\"}".to_string()))
+    println!("{}", parse_rows("{\"display_name\":\"Acme\"}".to_string()).len())
 }
 "#;
 

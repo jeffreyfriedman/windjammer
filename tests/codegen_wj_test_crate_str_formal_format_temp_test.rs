@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! REGRESSION (`wj test` crate / E3.9.3): library `&str` formals vs format temps + HashMap.
+//! FAILING REPRO (`wj test` crate / E3.9.3 unblock):
 //!
 //! `wj test` compiles `@test` files into a separate `windjammer-tests` crate
 //! against the library. Library `string` formals often demote to `&str`, while

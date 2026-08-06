@@ -10,15 +10,13 @@
     feature = "codegen_tests",
 ))]
 
-//! Regen-unblock contract for windjammer-ui (dogfood).
+//! Regen-unblock contract for multipass component libraries (dogfood).
 //!
-//! Hand mirrors + `SKIP_WJ_REGEN=1` exist because regenerated components historically
-//! dropped `*_runtime_js`, required forbidden `.clone()` (W0005), or failed multipass
+//! Host skip flags exist because regenerated components historically dropped
+//! `*_runtime_js`, required forbidden `.clone()` (W0005), or failed multipass
 //! compose / string-concat borrow consistency.
 //!
-//! Status on tip (2026-07-30 evening): **5/5 PASS** — D5 trio selective regen is SOT.
-//! Full-tree regen still needs TECH_DEBT #1–#7; keep `SKIP_WJ_REGEN=1` for whole-crate builds.
-//! Regen helper: `windjammer-ui/scripts/regen-d5-trio.sh`.
+//! Broader full-tree regen contract: `codegen_component_library_regen_gates_test`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -29,15 +27,15 @@ mod test_utils;
 fn owned_string_plus_owned_string_chain_must_rustc() {
     let source = r#"
 pub fn build_html(name: string, extra: string) -> string {
-    let open = "<div>"
+    let open = "<div>".to_string()
     let mid = name
-    let close = "</div>"
+    let close = "</div>".to_string()
     open + mid + extra + close
 }
 
 fn main() {
-    let name = "x"
-    let extra = " y"
+    let name = "x".to_string()
+    let extra = " y".to_string()
     println!("{}", build_html(name, extra))
 }
 "#;
@@ -84,10 +82,10 @@ pub struct CurrencyInput {
 impl CurrencyInput {
     pub fn new() -> CurrencyInput {
         CurrencyInput {
-            name: "amount",
-            input_id: "",
-            label: "",
-            extra_attrs: "",
+            name: "amount".to_string(),
+            input_id: "".to_string(),
+            label: "".to_string(),
+            extra_attrs: "".to_string(),
             value_cents: 0,
             required: false,
         }
@@ -119,16 +117,16 @@ impl Renderable for CurrencyInput {
         }
         let req = if self.required { " required" } else { "" }
         let extra = if self.extra_attrs.len() == 0 {
-            ""
+            "".to_string()
         } else {
-            " " + self.extra_attrs
+            " ".to_string() + self.extra_attrs
         }
         let label_html = if self.label.len() == 0 {
-            ""
+            "".to_string()
         } else {
-            "<label for=\"" + id + "\">" + self.label + "</label>"
+            "<label for=\"".to_string() + id + "\">" + self.label + "</label>"
         }
-        "<div class=\"wj-currency-input\">"
+        "<div class=\"wj-currency-input\">".to_string()
             + label_html
             + "<input id=\""
             + id
@@ -145,9 +143,9 @@ impl Renderable for CurrencyInput {
 
 fn main() {
     let html = CurrencyInput::new()
-        .input_id("checkAmount")
-        .label("Amount")
-        .extra_attrs("data-wj-write-check-amount")
+        .input_id("checkAmount".to_string())
+        .label("Amount".to_string())
+        .extra_attrs("data-wj-write-check-amount".to_string())
         .render()
     println!("{}", html)
 }
@@ -276,10 +274,10 @@ pub struct CurrencyInput {
 impl CurrencyInput {
     pub fn new() -> CurrencyInput {
         CurrencyInput {
-            name: "amount",
-            input_id: "",
-            label: "",
-            extra_attrs: "",
+            name: "amount".to_string(),
+            input_id: "".to_string(),
+            label: "".to_string(),
+            extra_attrs: "".to_string(),
         }
     }
     pub fn name(self, name: string) -> CurrencyInput { self.name = name; self }
@@ -291,7 +289,7 @@ impl CurrencyInput {
 impl Renderable for CurrencyInput {
     fn render(self) -> string {
         let id = if self.input_id.len() == 0 { self.name } else { self.input_id }
-        "<div class=\"wj-currency-input\"><input id=\""
+        "<div class=\"wj-currency-input\"><input id=\"".to_string()
             + id
             + "\" name=\""
             + self.name
@@ -316,19 +314,19 @@ pub struct WriteCheckForm {
 
 impl WriteCheckForm {
     pub fn new() -> WriteCheckForm {
-        WriteCheckForm { bank_code: "1000" }
+        WriteCheckForm { bank_code: "1000".to_string() }
     }
 }
 
 impl Renderable for WriteCheckForm {
     fn render(self) -> string {
         let amount = CurrencyInput::new()
-            .name("amount")
-            .input_id("checkAmount")
-            .label("Amount")
-            .extra_attrs("data-wj-write-check-amount")
+            .name("amount".to_string())
+            .input_id("checkAmount".to_string())
+            .label("Amount".to_string())
+            .extra_attrs("data-wj-write-check-amount".to_string())
             .render()
-        "<div class=\"wj-write-check-form\" data-wj-write-check data-wj-bank-code=\""
+        "<div class=\"wj-write-check-form\" data-wj-write-check data-wj-bank-code=\"".to_string()
             + self.bank_code
             + "\">"
             + amount

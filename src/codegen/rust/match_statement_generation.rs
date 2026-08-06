@@ -641,9 +641,16 @@ impl<'ast> CodeGenerator<'ast> {
 
         if needs_borrow_break {
             if use_copied_borrow_break {
+                // Scrutinee may already have `.copied()` from `use_copied_option`
+                // (HashMap::get → Option<&Copy>). Do not append a second `.copied()`.
+                let borrowed = if value_str.ends_with(".copied()") {
+                    value_str.clone()
+                } else {
+                    format!("{}.copied()", value_str)
+                };
                 output.push_str(&format!(
-                    "let __match_borrow_break = {}.copied();\n",
-                    value_str
+                    "let __match_borrow_break = {};\n",
+                    borrowed
                 ));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
