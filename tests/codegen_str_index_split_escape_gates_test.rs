@@ -132,7 +132,7 @@ pub fn object_slices(array_json: string) -> Vec<string> {
 }
 
 fn main() {
-    println!("{}", object_slices("[{},{\"a\":1}]").len())
+    println!("{}", object_slices("[{},{\"a\":1}]".to_string()).len())
 }
 "#;
 
@@ -164,7 +164,7 @@ pub fn slice_num(rest: string) -> string {
 }
 
 fn main() {
-    println!("{}", slice_num("42,true"))
+    println!("{}", slice_num("42,true".to_string()))
 }
 "#;
 
@@ -200,7 +200,7 @@ pub fn slice_num(rest: string) -> string {
 }
 
 fn main() {
-    println!("{}", slice_num("42,true"))
+    println!("{}", slice_num("42,true".to_string()))
 }
 "#;
 
@@ -220,15 +220,15 @@ fn main() {
 fn substring_match_arm_must_return_owned_string() {
     let source = r#"
 pub fn after_key(json: string, key: string) -> string {
-    let needle = "\"" + key + "\""
+    let needle = "\"".to_string() + key + "\""
     match json.find(needle) {
         Some(idx) => json.substring(idx, json.len()),
-        None => "",
+        None => "".to_string(),
     }
 }
 
 fn main() {
-    println!("{}", after_key("{\"role\":\"x\"}", "role"))
+    println!("{}", after_key("{\"role\":\"x\"}".to_string(), "role".to_string()))
 }
 "#;
 
@@ -253,9 +253,9 @@ pub fn resolve_key(chord: string) -> Option<string> {
         return None
     }
     let rows = vec![
-        "a|Alpha|#/a",
-        "b|Beta|#/b",
-        "c|Gamma|#/c",
+        "a|Alpha|#/a".to_string(),
+        "b|Beta|#/b".to_string(),
+        "c|Gamma|#/c".to_string(),
     ]
     for row in rows {
         let parts = row.split("|").collect()
@@ -269,7 +269,7 @@ pub fn resolve_key(chord: string) -> Option<string> {
 }
 
 pub fn crumb_html(items: Vec<string>) -> string {
-    let mut out = "<nav>"
+    let mut out = "<nav>".to_string()
     let mut i = 0
     for item in items {
         let parts = item.split("|").collect()
@@ -285,11 +285,11 @@ pub fn crumb_html(items: Vec<string>) -> string {
 }
 
 fn main() {
-    match resolve_key("b") {
+    match resolve_key("b".to_string()) {
         Some(h) => println!("{}", h),
         None => println!("none"),
     }
-    let items = vec!["#/a|Alpha", "#/b|Beta"]
+    let items = vec!["#/a|Alpha".to_string(), "#/b|Beta".to_string()]
     println!("{}", crumb_html(items))
 }
 "##;
@@ -326,7 +326,7 @@ fn backslash_and_backtick_string_literals_must_compile() {
         "}\n",
         "\n",
         "fn main() {\n",
-        "    println!(\"{}\", map_entry(\"home\", \"<div>x</div>\"))\n",
+        "    println!(\"{}\", map_entry(\"home\".to_string(), \"<div>x</div>\".to_string()))\n",
         "}\n",
     ]
     .concat();
@@ -360,7 +360,7 @@ pub struct Tile {
 
 impl Tile {
     pub fn new() -> Tile {
-        Tile { value_html: "" }
+        Tile { value_html: "".to_string() }
     }
     pub fn value_html(self, html: string) -> Tile {
         self.value_html = html

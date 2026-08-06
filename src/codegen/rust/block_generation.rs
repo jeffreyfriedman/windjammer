@@ -42,6 +42,14 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
 
+            // WDB-088: `let tmp = self.a; self.a = self.b; self.b = tmp` → mem::swap
+            if let Some((folded, skip_b, skip_c)) = self.try_fold_self_field_swap(stmts, i) {
+                output.push_str(&folded);
+                self.skip_block_indices.insert(skip_b);
+                self.skip_block_indices.insert(skip_c);
+                continue;
+            }
+
             let is_last = i == len - 1;
             // TDD: Track if this is the last statement (used by If handler)
             self.current_is_last_statement = is_last;
@@ -789,6 +797,77 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_void_block = saved_void_block;
         self.in_unsafe_block = old_in_unsafe;
         output
+    }
+
+    /// `let tmp = self.a; self.a = self.b; self.b = tmp` → `std::mem::swap(&mut self.a, &mut self.b)`
+    /// (WDB-088 — PageRank double-buffer must not clone Vec fields).
+    fn try_fold_self_field_swap(
+        &self,
+        stmts: &[&'ast Statement<'ast>],
+        i: usize,
+    ) -> Option<(String, usize, usize)> {
+        if i + 2 >= stmts.len() {
+            return None;
+        }
+        let Statement::Let {
+            pattern: Pattern::Identifier(tmp),
+            value: extract,
+            else_block: None,
+            ..
+        } = stmts[i]
+        else {
+            return None;
+        };
+        let field_a = Self::self_field_name(extract)?;
+        let Statement::Assignment {
+            target: target_a,
+            value: value_b,
+            compound_op: None,
+            ..
+        } = stmts[i + 1]
+        else {
+            return None;
+        };
+        let Statement::Assignment {
+            target: target_b,
+            value: value_tmp,
+            compound_op: None,
+            ..
+        } = stmts[i + 2]
+        else {
+            return None;
+        };
+        if Self::self_field_name(target_a).as_deref() != Some(field_a.as_str()) {
+            return None;
+        }
+        let field_b = Self::self_field_name(value_b)?;
+        if field_b == field_a {
+            return None;
+        }
+        if Self::self_field_name(target_b).as_deref() != Some(field_b.as_str()) {
+            return None;
+        }
+        match value_tmp {
+            Expression::Identifier { name, .. } if name == tmp => {}
+            _ => return None,
+        }
+        let code = format!(
+            "{}std::mem::swap(&mut self.{}, &mut self.{});\n",
+            self.indent(),
+            field_a,
+            field_b
+        );
+        Some((code, i + 1, i + 2))
+    }
+
+    fn self_field_name(expr: &Expression<'_>) -> Option<String> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => match &**object {
+                Expression::Identifier { name, .. } if name == "self" => Some(field.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// `let mut s = "".to_string(); if c { s = a } else { s = b }` → `let s = if c { a } else { b }`

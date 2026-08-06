@@ -1,8 +1,8 @@
 # User-library test gaps (`wj test` vs dogfood crates)
 
 **Audience:** language / tooling owners  
-**Date:** 2026-08-02 (updated 2026-08-03)  
-**Context:** Dogfood library packages historically ran **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::testing` / `std::test`, `@test`). Tip closes the harness gaps so packages can migrate to Windjammer tests.
+**Date:** 2026-08-02  
+**Context:** LedgerKit `finance-screens` (and similar packages) still run **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::testing` / `std::test`, `@test`).
 
 This document lists the **concrete gaps** that block migrating those tests to Windjammer today. It is language-only (no product names required to act on the items).
 
@@ -17,72 +17,75 @@ Windjammer **does** have a real test stack for the happy path:
 | `wj test` CLI | Discovers `*_test.wj` / files under `tests/` |
 | `@test` decorator **or** `test_*` fn names | Both recognized in discovery |
 | `std::testing` / `std::test` asserts | `assert`, `assert_eq`, `assert_contains`, Option/Result helpers |
-| `@property_test` | Discovered + codegen + auto-imports |
-| `@test(setup=…, teardown=…)` | Emits `with_setup_teardown` + auto-imports |
 | Library under test | Harness can compile the package lib into a temp crate and link tests |
 | Path deps (incl. special-case `windjammer-ui`) | Partially supported in `test_execution` |
 
 Examples: `examples/testing_examples.wj`, `examples/syntax_tests/32_testing/`, `std/testing.wj`, `std/test/mod.wj`.
 
-**Dogfood parity flags (tip / v0.50.0):**
-
-| Flag | Purpose |
-|------|---------|
-| `--module-file --library` | Same post-transpile layout as `wj build --library --module-file` |
-| `--use-build-dir DIR` | Link pre-built outbound tree; skip library recompile |
-| `--use-project-cargo` | Merge project root `Cargo.toml` deps/features into test lib crate |
-| `--no-runtime-copy [--runtime-path PATH]` | Path-dep `windjammer-runtime` without recursive copy into temp |
-| `--copy-runtime` | Force recursive copy (overrides path-dep inference) |
-| `-o/--output DIR` | Outbound dir for fresh library compile (when not using `--use-build-dir`) |
-| `--no-generate-cargo-toml` | Skip auto Cargo.toml for library compile |
-
-**Auto-inference (no flags required when layout matches):**
-
-| Signal | Inferred |
-|--------|----------|
-| `Cargo.toml` `[lib] path = "build/lib.rs"` + `build/lib.rs` exists | `--use-build-dir build` + `--use-project-cargo` |
-| `wj.toml` `windjammer-runtime = { path = "…" }` | `--no-runtime-copy` + that runtime path |
-| `src/mod.wj` / `src/lib.wj` (fresh compile path) | `--module-file` |
-
-Integration gates: `tests/wj_test_*_test.rs`.
+So the gap is not “no testing language” — it is **dogfood / library-project fidelity**.
 
 ---
 
-## Gaps — status
+## Gaps that force Rust tests today
 
-### 1. Custom `--module-file` / outbound `build/` layouts — **CLOSED**
+### 1. Custom `--module-file` / outbound `build/` layouts
 
-`wj test --module-file --library` runs the same post-steps as `wj build` (`apply_library_build_post_steps`: scoped `mod.rs`, strip `main()`).
+Dogfood libraries often use:
 
-`wj test --use-build-dir build` links a pre-built tree without recompiling it (mtime of `build/lib.rs` unchanged). When the project root `Cargo.toml` owns `[lib] path = "build/lib.rs"`, the harness path-deps the **project root** (dogfood layout). Auto-detected when that layout is present.
+```bash
+wj build src/mod.wj --module-file -o build --no-cargo
+```
 
-### 2. Dual Cargo identity (WJ crate vs Rust crate) — **CLOSED (opt-in + auto)**
+then a hand-maintained `Cargo.toml` with `path = "build/lib.rs"`.
 
-`wj test --use-project-cargo` merges project root `[dependencies]` (paths, features, `default-features`) into the temp test-library `Cargo.toml`. Auto-enabled with dogfood `build/` layout detection. `windjammer-ui` is no longer forced to `desktop` when the project manifest already declares the dep or specifies features.
+`wj test` assumes a **standard package layout** (`wj.toml` + `src/` → its own temp compile). It does **not**:
 
-### 3. Discovery UX vs docs / examples mismatch — **CLOSED**
+- honor an existing outbound `build/` tree as the lib under test, or  
+- re-run the same `--module-file` Makefile contract the package uses for shipping.
 
-Empty-state help now mentions `tests/`, `*_test.wj`, and `@test`. Advanced APIs (`@property_test`, setup/teardown) auto-import under codegen; see remaining items for `mock`/`bench` surface docs.
+**Need:** `wj test` must build the library the same way `make build` / CI builds it (flags, outbound dir, re-export patching).
 
-### 4. Harness fragility (runtime / sandbox copy) — **CLOSED (default when path known)**
+### 2. Dual Cargo identity (WJ crate vs Rust crate)
 
-`wj test --no-runtime-copy` (and `--runtime-path`) writes a Cargo path dep to `windjammer-runtime` instead of copying into `{temp}/crates/windjammer-runtime`. When `wj.toml` declares a path dep, this is the **default**. Use `--copy-runtime` to force the old copy behavior.
+Packages frequently keep:
 
-### 5. Tip ownership asymmetry for “pure WJ” tests — **CLOSED (gates green)**
+- `wj.toml` for Windjammer, and  
+- a separate Rust `Cargo.toml` that points at generated sources and path-deps.
 
-Related tip gates are green:
+`wj test` spins a **fresh** temp Cargo project and copies/rewrites deps. Drift vs the package’s real Cargo features (e.g. `windjammer-ui` `web` vs `desktop`, `default-features`) causes false reds or missing symbols.
+
+**Need:** either consume the package’s Cargo.toml as source of truth for deps/features, or generate an equivalent that matches documented dogfood defaults.
+
+### 3. Discovery UX vs docs / examples mismatch
+
+CLI help text still says “functions starting with `test_`”, while discovery also accepts `@test`. Examples mix `std::testing`, `std::test`, and rich APIs (`mock`, `bench`, `property`) that may not all be wired for library tests.
+
+**Need:** one documented happy path (`tests/foo_test.wj` + `@test` + `std::testing`) that `wj test` guarantees for libraries.
+
+### 4. Harness fragility (runtime / sandbox copy)
+
+`wj test` copies `windjammer-runtime` into the temp tree. That step fails under restricted environments and is a sharp edge for CI agents.
+
+**Need:** depend on a published/path `windjammer-runtime` via Cargo like normal packages, without recursive copy from the compiler checkout.
+
+### 5. Tip ownership asymmetry still breaks “pure WJ” tests
+
+Even when `wj test` runs, library code must avoid Rustisms (`"lit".to_string()`) while tip still emits bare `&str` into some owned `String` formals (external UI builders). Tests that only call pure WJ helpers work; tests that compile UI dogfood hit the same codegen bugs as the app.
+
+**Related gates (already filed):**
 
 - `rust_leakage_string_literal_to_string_forbidden_test` — forbid `"…".to_string()` in WJ source  
 - `codegen_bare_string_literal_owned_method_arg_gate_test` — bare lit into owned method must auto-own  
 - `codegen_empty_string_option_match_arm_gate_test` — `None => ""` vs `Some(s) => s`  
 - `codegen_owned_string_trait_render_concat_gate_test` — cross-module `.render()` concat borrow  
-- `codegen_signature_driven_coercion_gates_test` — Pattern/`&str` and storage via signatures, not method-name lists  
 
-Do not reintroduce `"literal".to_string()` in `.wj`. New UI-builder edge cases still belong as language gates, not product workarounds.
+Until those are green, dogfood packages keep a small `owned_string` / interpolation workaround surface — and often keep Rust tests that already compile against tip’s emitted signatures.
 
-### 6. No first-class “integration test against generated lib in-place” — **CLOSED**
+### 6. No first-class “integration test against generated lib in-place”
 
-`wj test --use-build-dir build` (or auto-detect) satisfies in-place testing against the CI-shipped artifact without recompile.
+Rust `#[cfg(test)]` / `tests/*.rs` can import `finance_screens` from the **exact** artifact CI ships. `wj test` always recompiles into a temp dir; failures are harder to bisect against `build/*.rs`.
+
+**Need:** optional `wj test --use-build-dir build` (or similar) for dogfood packages.
 
 ---
 
@@ -90,22 +93,13 @@ Do not reintroduce `"literal".to_string()` in `.wj`. New UI-builder edge cases s
 
 A dogfood library package can:
 
-1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`. — **yes** (lint + codegen gates)  
-2. Add `tests/foo_test.wj` using `@test` + `std::testing::assert_contains` / `assert_eq`. — **yes**  
-3. Run `wj test` with the **same** compile flags as `wj build` for that package. — **yes** (flags **or** auto-detect)  
-4. Path-depend on UI crates (web features) without manual Cargo.toml surgery. — **yes** (`--use-project-cargo` / auto)  
-5. Drop the parallel Rust `tests/*.rs` harness without losing coverage. — **yes** for tip; migrate package-by-package  
+1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`.  
+2. Add `tests/foo_test.wj` using `@test` + `std::testing::assert_contains` / `assert_eq`.  
+3. Run `wj test` with the **same** compile flags as `wj build` for that package.  
+4. Path-depend on `windjammer-ui` (web features) without manual Cargo.toml surgery.  
+5. Drop the parallel Rust `tests/*.rs` harness without losing coverage.
 
-Recommended dogfood invocation:
-
-```bash
-# Prefer bare `wj test` when Cargo.toml + build/ + wj.toml match dogfood layout.
-wj test
-
-# Explicit (still supported):
-wj test --module-file --library --use-project-cargo --no-runtime-copy
-wj test --use-build-dir build --use-project-cargo --no-runtime-copy
-```
+Until then, Rust tests against generated libs remain a **temporary adapter**, not a preference.
 
 ---
 
@@ -113,14 +107,5 @@ wj test --use-build-dir build --use-project-cargo --no-runtime-copy
 
 - Prefer WJ SOT + language gates for tip bugs.  
 - Keep Rust tests thin: call `crate_api::…`, assert strings/ints — no duplicated product logic.  
-- When migrating a suite to `wj test`, prefer bare `wj test` after dogfood layout is in place; fall back to explicit flags if needed.  
+- When migrating a suite to `wj test`, do it package-by-package after criteria 1–4 work on tip.  
 - Do not reintroduce `"literal".to_string()` in `.wj` to pacify tip; file/extend gates instead.
-
----
-
-## Remaining work
-
-| Item | Notes |
-|------|--------|
-| `std::testing` mock/bench surface | Runtime APIs exist; document one happy path + optional `@bench` discovery in `wj test` |
-| Package migrations | Convert remaining Rust adapter tests to `*_test.wj` package-by-package |

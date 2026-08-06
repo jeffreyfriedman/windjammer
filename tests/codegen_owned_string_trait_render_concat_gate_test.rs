@@ -60,19 +60,19 @@ use crate::chips::{Label, Renderable}
 
 pub fn wrap_label(text: string) -> string {
     let chip = Label { text: text }.render()
-    let mut html = "<span>"
+    let mut html = "<span>".to_string()
     html = html + chip
-    html = html + "</span>"
+    html = html + "</span>".to_string()
     html
 }
 
 pub fn banner_plus_body(ok: bool) -> string {
     let banner = if ok {
-        "ok"
+        "ok".to_string()
     } else {
-        "err"
+        "err".to_string()
     }
-    let body = Label { text: "body" }.render()
+    let body = Label { text: "body".to_string() }.render()
     banner + body
 }
 "#,

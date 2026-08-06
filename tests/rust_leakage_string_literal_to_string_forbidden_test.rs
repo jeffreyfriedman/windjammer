@@ -10,11 +10,13 @@
     feature = "analyzer_tests",
 ))]
 
-//! String-literal `.to_string()` is forbidden Windjammer (Rust leakage).
+//! FAILING REPRO — string-literal `.to_string()` is forbidden Windjammer (Rust leakage).
 //!
 //! String literals are already `string`. Prefer bare `"text"` / `""`
 //! (codegen → `String::from("text")` / `String::new()`).
 //! `"…".to_string()` is a Rustism and must lint for **any** literal, not only empty.
+//!
+//! Language-only; no product/repo names.
 
 use windjammer::lexer::Lexer;
 use windjammer::linter::rust_leakage::RustLeakageLinter;

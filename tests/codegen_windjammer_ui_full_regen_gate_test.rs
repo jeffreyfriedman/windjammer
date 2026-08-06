@@ -10,23 +10,20 @@
     feature = "codegen_tests",
 ))]
 
-//! Full windjammer-ui regenerate gates (pure Windjammer conversion).
+//! Full multipass component-library regenerate gates (pure Windjammer).
 //!
-//! Tip `wj build src/components_wj --library --module-file` still cannot replace
-//! `src/components/generated/` safely. These tests are the contract for the
-//! compiler session — keep them **red** until full-tree regen + `cargo check`
-//! of windjammer-ui succeeds without `SKIP_WJ_REGEN=1` / hand patches.
+//! Tip `wj build --library --module-file` of a components tree still cannot
+//! safely replace a generated/ tree. Keep these **red** until full-tree regen
+//! + `cargo check` succeeds without skip flags / hand patches.
 //!
-//! Observed on tip (2026-08-01):
+//! Observed on tip:
 //! 1. Library multipass inserts `&col` when forwarding owned `TableColumn` /
-//!    `TableRow` into `Table::{column,row}` → rustc E0308 (DataTable dogfood).
+//!    `TableRow` into `Table::{column,row}` → rustc E0308.
 //! 2. Explicit `.clone()` / `.iter()` / ownership annotations (W0005/W0003/W0001)
-//!    make `wj build --library` exit non-zero **after** codegen, so windjammer-ui
-//!    `build.rs` panics even though `.rs` files were written.
+//!    make `wj build --library` exit non-zero **after** codegen, so host
+//!    `build.rs` wrappers panic even though `.rs` files were written.
 //!
-//! Related (already green regressions): `codegen_windjammer_ui_regen_unblock_test`,
-//! `codegen_windjammer_ui_fix_generated_debt_test`,
-//! `codegen_authfetch_mount_param_ambiguous_glob_test`.
+//! Prefer also: `codegen_component_library_regen_gates_test` (broader language shapes).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -100,7 +97,7 @@ impl Table {
 
 impl Renderable for Table {
     fn render(self) -> string {
-        "table"
+        "table".to_string()
     }
 }
 "#,
@@ -184,11 +181,11 @@ fn datatable_owned_column_row_forward_must_cargo_check() {
          Table methods that take owned values. Got:\n{dt}"
     );
 
-    // Probe cargo-check like windjammer-ui selective regen.
+    // Probe cargo-check like a components-crate selective regen.
     fs::write(
         out.join("Cargo.toml"),
         r#"[package]
-name = "wjui_datatable_regen_probe"
+name = "datatable_owned_forward_probe"
 version = "0.1.0"
 edition = "2021"
 [workspace]
@@ -226,11 +223,11 @@ path = "lib.rs"
 
 /// Gate B — explicit `.clone()` must not fail the library build exit code after codegen.
 ///
-/// windjammer-ui `build.rs` panics on non-zero `wj` status. Today tip exits non-zero
-/// with "Rust leakage errors" even though `.rs` files were written — blocking regen.
+/// Host `build.rs` wrappers panic on non-zero `wj` status. Tip exits non-zero with
+/// "Rust leakage errors" even though `.rs` files were written — blocking regen.
 ///
 /// Desired: either auto-eliminate `.clone()` (preferred) **or** exit 0 with warnings
-/// once codegen completed for `--library` builds used by windjammer-ui.
+/// once codegen completed for `--library` builds.
 #[test]
 fn library_build_with_explicit_clone_must_exit_zero_after_codegen() {
     let tmp = TempDir::new().expect("tempdir");
@@ -243,7 +240,7 @@ fn library_build_with_explicit_clone_must_exit_zero_after_codegen() {
     fs::write(
         src.join("clean.wj"),
         r#"
-pub fn ok() -> string { "ok" }
+pub fn ok() -> string { "ok".to_string() }
 "#,
     )
     .unwrap();
@@ -278,7 +275,7 @@ pub fn twice(s: string) -> string {
     );
     assert!(
         status.status.success(),
-        "library regen must exit 0 after codegen so windjammer-ui build.rs does not panic.\n\
+        "library regen must exit 0 after codegen so host build.rs does not panic.\n\
          Prefer auto-removing `.clone()` (W0005). stderr:\n{}",
         String::from_utf8_lossy(&status.stderr)
     );
@@ -289,7 +286,7 @@ pub fn twice(s: string) -> string {
 }
 
 /// Gate C — PeriodBadge-style reuse: owned string into helper then Badge::new again.
-/// Mirrors remaining `.clone()` in windjammer-ui `periodbadge.wj` / `approvalcard.wj`.
+/// Mirrors remaining source `.clone()` in component libraries that reuse state.
 #[test]
 fn period_badge_style_owned_reuse_library_must_cargo_check_without_source_clone() {
     let tmp = TempDir::new().expect("tempdir");
@@ -334,7 +331,7 @@ pub struct PeriodBadge {
 
 impl PeriodBadge {
     pub fn new(state: string) -> PeriodBadge {
-        PeriodBadge { state: state, label: "" }
+        PeriodBadge { state: state, label: "".to_string() }
     }
     pub fn label(self, label: string) -> PeriodBadge {
         self.label = label
@@ -343,7 +340,7 @@ impl PeriodBadge {
 }
 
 fn state_class(state: string) -> string {
-    if state == "open" { "open" } else { "other" }
+    if state == "open" { "open".to_string() } else { "other".to_string() }
 }
 
 impl Renderable for PeriodBadge {
@@ -385,7 +382,7 @@ impl Renderable for PeriodBadge {
     fs::write(
         out.join("Cargo.toml"),
         r#"[package]
-name = "wjui_period_regen_probe"
+name = "period_badge_owned_reuse_probe"
 version = "0.1.0"
 edition = "2021"
 [workspace]

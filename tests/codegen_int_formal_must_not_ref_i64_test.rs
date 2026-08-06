@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Gate — `int` formals must not demote to `&i64`.
+//! FAILING REPRO — `int` formals must not demote to `&i64`.
 //!
 //! Read-only / by-value integer parameters in library multipass emit must stay
 //! `i64` (or `i32`), never `&i64`, so call sites can pass literals (`fn(2, 1)`).
@@ -51,7 +51,7 @@ fn int_formals_must_not_demote_to_ref_i64() {
         src.join("counts.wj"),
         r#"
 pub fn status_html(class_count: int, dept_count: int) -> string {
-    "c=" + class_count.to_string() + ",d=" + dept_count.to_string()
+    "c=".to_string() + class_count.to_string() + ",d=" + dept_count.to_string()
 }
 "#,
     )
@@ -66,14 +66,7 @@ pub fn status_html(class_count: int, dept_count: int) -> string {
     );
 
     let generated = fs::read_to_string(out.join("counts.rs")).expect("counts.rs");
-    let generated = generated
-        .lines()
-        .filter(|l| {
-            let t = l.trim();
-            !(t.starts_with("#[allow(unused_imports)]") || t == "use super::*;")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let generated = generated.replace("#[allow(unused_imports)]\nuse super::*;\n\n", "");
     assert!(
         !generated.contains("class_count: &i64")
             && !generated.contains("dept_count: &i64")
