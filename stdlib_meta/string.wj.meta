@@ -369,6 +369,30 @@
       "parent_type": "String",
       "param_ownership": ["Borrowed"],
       "has_self_receiver": true
+    },
+    "String::trim_end_matches": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::trim_start_matches": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "String::trim_matches": {
+      "params": ["Reference(String)", "Reference(Custom(\"str\"))"],
+      "return_type": "Reference(Custom(\"str\"))",
+      "is_associated": true,
+      "parent_type": "String",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
     }
   }
 }
