@@ -228,6 +228,31 @@ pub fn sum_positive(items: Vec<i32>) -> i32 {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
+fn test_while_true_with_break() {
+    // Regression: `while true` is valid Windjammer (Rust parity). Do not "work around"
+    // with flag-controlled loops — if this fails, fix the compiler.
+    let code = r#"
+pub fn countdown(start: i32) -> i32 {
+    let mut n = start
+    while true {
+        if n <= 0 {
+            break
+        }
+        n = n - 1
+    }
+    n
+}
+"#;
+    let (success, _generated, err) = test_utils::compile_via_cli(code);
+    assert!(
+        success,
+        "while true {{ ... break }} must compile (Rust parity). Error: {}",
+        err
+    );
+}
+
+#[test]
+#[cfg_attr(tarpaulin, ignore)]
 fn test_infinite_loop() {
     let code = r#"
 pub fn find_value() -> i32 {

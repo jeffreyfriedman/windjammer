@@ -10,12 +10,12 @@
     feature = "codegen_tests",
 ))]
 
-//! Gate (dogfood): `string` fn params must codegen as owned
+//! FAILING REPRO (dogfood): `string` fn params must codegen as owned
 //! `String` (or auto `.to_string()` at call sites) when passed into methods that
 //! take `String` — not bare `&str`.
 //!
-//! Seen in dashboard Home compose:
-//! pub fn render_kpi_grid(cash_html: string, ...) {
+//! Shape:
+//! pub fn render_kpi(cash_html: string, ...) {
 //! KpiTile::new(...).value_html(cash_html) // value_html expects String
 //! }
 //! Codegen emitted `cash_html: &str` + `.value_html(cash_html)` → E0308.

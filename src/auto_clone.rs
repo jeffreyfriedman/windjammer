@@ -9,7 +9,7 @@
 // This module tracks variable usage and determines where clones are needed.
 
 use crate::parser::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Tracks where automatic clones should be inserted
 #[derive(Debug, Clone)]
@@ -92,7 +92,7 @@ impl AutoCloneAnalysis {
 
         // For each variable, determine if it needs clones
         for (var_name, usages) in &usage_map {
-            analysis.analyze_variable_usages(var_name, usages);
+            analysis.analyze_variable_usages(var_name, usages, &func.body);
         }
 
         // Partial-move detection: if a field path like "s.item" is moved,
@@ -638,8 +638,14 @@ impl AutoCloneAnalysis {
         }
     }
 
-    /// Analyze usages of a single variable to determine where clones are needed
-    fn analyze_variable_usages(&mut self, var_name: &str, usages: &[Usage]) {
+    /// Analyze usages of a single variable to determine where clones are needed.
+    /// `statements` is the function body (for writeback detection: `map = f(map, …)`).
+    fn analyze_variable_usages(
+        &mut self,
+        var_name: &str,
+        usages: &[Usage],
+        statements: &[&Statement],
+    ) {
         // Find the definition
         let definition = usages.iter().find(|u| u.kind == UsageKind::Definition);
         let definition_idx = definition.map(|u| u.statement_idx);
@@ -650,6 +656,9 @@ impl AutoCloneAnalysis {
         // They're valid if they contain a dot, parentheses, or square brackets.
         let is_complex_expr =
             var_name.contains('.') || var_name.contains('(') || var_name.contains('[');
+
+        // Statement indices where `var = f(var, …)` restores ownership after the move.
+        let writeback_idxs = Self::collect_direct_writeback_indices(statements, var_name);
 
         if definition_idx.is_none() && !is_complex_expr {
             // Parameters have no Definition in the body, but moves still need `.clone()`
@@ -664,6 +673,9 @@ impl AutoCloneAnalysis {
                 .filter(|u| u.kind != UsageKind::Definition)
                 .collect();
             for move_usage in &moves {
+                if writeback_idxs.contains(&move_usage.statement_idx) {
+                    continue;
+                }
                 let has_later_use = total_uses
                     .iter()
                     .any(|u| u.statement_idx > move_usage.statement_idx);
@@ -711,6 +723,11 @@ impl AutoCloneAnalysis {
             .collect();
 
         for move_usage in &moves {
+            // `map = f(map, …)` moves then restores — do not clone at the writeback site.
+            if writeback_idxs.contains(&move_usage.statement_idx) {
+                continue;
+            }
+
             let has_later_use = total_uses
                 .iter()
                 .any(|u| u.statement_idx > move_usage.statement_idx);
@@ -815,6 +832,7 @@ impl AutoCloneAnalysis {
     /// Patterns:
     /// - `let mut x = self.field; …; self.field = x`
     /// - `let r = f(self.field); …; self.field = r.subfield`
+    /// - `map = f(map, …)` (direct binding writeback — WDB-084)
     pub fn self_field_has_writeback(
         statements: &[&Statement],
         field_path: &str,
@@ -823,8 +841,121 @@ impl AutoCloneAnalysis {
         Self::find_writeback_in_stmts(statements, field_path)
     }
 
+    /// Statement indices where ownership is restored after a move of `binding`.
+    ///
+    /// Patterns (same global counter scheme as [`build_usage_map`]):
+    /// - `binding = f(binding, …)` (WDB-084)
+    /// - `let t = f(binding, …); …; binding = t.i` (WDB-087 tuple writeback)
+    fn collect_direct_writeback_indices(
+        statements: &[&Statement],
+        binding: &str,
+    ) -> HashSet<usize> {
+        let mut out = HashSet::new();
+        let mut counter: usize = 0;
+        Self::collect_direct_writeback_indices_in_stmts(statements, binding, &mut counter, &mut out);
+        out
+    }
+
+    fn collect_direct_writeback_indices_in_stmts(
+        statements: &[&Statement],
+        binding: &str,
+        counter: &mut usize,
+        out: &mut HashSet<usize>,
+    ) {
+        for (i, stmt) in statements.iter().enumerate() {
+            let idx = *counter;
+            *counter += 1;
+
+            if Self::stmt_is_direct_binding_writeback(stmt, binding) {
+                out.insert(idx);
+            }
+
+            // WDB-087: `let t = f(binding, …); …; binding = t.0` — mark the Let (move site).
+            if let Statement::Let {
+                pattern: Pattern::Identifier(tmp),
+                value,
+                ..
+            } = stmt
+            {
+                if Self::expr_call_or_method_has_field_arg(value, binding) {
+                    let restored = statements[i + 1..].iter().any(|later| {
+                        Self::stmt_assigns_binding_or_prefix_to_field_path(later, tmp, binding)
+                    });
+                    if restored {
+                        out.insert(idx);
+                    }
+                }
+            }
+
+            match stmt {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    Self::collect_direct_writeback_indices_in_stmts(
+                        then_block.as_slice(),
+                        binding,
+                        counter,
+                        out,
+                    );
+                    if let Some(eb) = else_block {
+                        Self::collect_direct_writeback_indices_in_stmts(
+                            eb.as_slice(),
+                            binding,
+                            counter,
+                            out,
+                        );
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::For { body, .. }
+                | Statement::Loop { body, .. } => {
+                    Self::collect_direct_writeback_indices_in_stmts(
+                        body.as_slice(),
+                        binding,
+                        counter,
+                        out,
+                    );
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            Self::collect_direct_writeback_indices_in_stmts(
+                                statements.as_slice(),
+                                binding,
+                                counter,
+                                out,
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// `map = f(map, …)` or `map = map.method(…)` — move into call, assign result back.
+    fn stmt_is_direct_binding_writeback(stmt: &Statement, binding: &str) -> bool {
+        match stmt {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op: None,
+                ..
+            } => {
+                Self::expr_is_field_path(target, binding)
+                    && Self::expr_call_or_method_has_field_arg(value, binding)
+            }
+            _ => false,
+        }
+    }
+
     fn find_writeback_in_stmts(statements: &[&Statement], field_path: &str) -> bool {
         for (i, stmt) in statements.iter().enumerate() {
+            if Self::stmt_is_direct_binding_writeback(stmt, field_path) {
+                return true;
+            }
             if let Statement::Let {
                 pattern: Pattern::Identifier(binding),
                 value,

@@ -148,11 +148,15 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
     }
 
     let after_fn = line.strip_prefix("pub fn ")?;
-    let (func_name, params_str) = extract_rust_fn_name_and_params(after_fn)?;
+    let (func_name, generics_str, params_str) = extract_rust_fn_name_generics_and_params(after_fn)?;
+
+    // Type params bounded `S: AsRef<str>` (runtime strings/db helpers) borrow like `&str`.
+    let asref_str_type_params = asref_str_generic_type_params(&generics_str);
 
     // Parse parameter ownership
-    let param_ownership = parse_parameters(&params_str);
-    let emitted_rust_ref_params = parse_emitted_rust_ref_flags(&params_str);
+    let param_ownership = parse_parameters(&params_str, &asref_str_type_params);
+    let emitted_rust_ref_params =
+        parse_emitted_rust_ref_flags(&params_str, &asref_str_type_params);
     let has_self_receiver = first_param_is_self_receiver(&params_str);
 
     // Build full name with module prefix
@@ -184,11 +188,12 @@ fn first_param_is_self_receiver(params_str: &str) -> bool {
         || first.starts_with("mut self:")
 }
 
-/// Strip `name<'a>` / `name<T>` generics and extract the parameter list.
-fn extract_rust_fn_name_and_params(after_fn: &str) -> Option<(String, String)> {
+/// Strip `name<'a>` / `name<T>` generics and extract `(name, generics, params)`.
+fn extract_rust_fn_name_generics_and_params(after_fn: &str) -> Option<(String, String, String)> {
     let name_end = after_fn.find(|c| c == '<' || c == '(')?;
     let func_name = after_fn[..name_end].trim().to_string();
     let mut rest = &after_fn[name_end..];
+    let mut generics_str = String::new();
     if rest.starts_with('<') {
         let mut depth = 0;
         let mut end = None;
@@ -206,6 +211,8 @@ fn extract_rust_fn_name_and_params(after_fn: &str) -> Option<(String, String)> {
             }
         }
         let close = end?;
+        // Keep inner generics (`S: AsRef<str>`) without the outer `<…>`.
+        generics_str = rest[1..close].to_string();
         rest = &rest[close + 1..];
     }
     let open = rest.find('(')?;
@@ -226,16 +233,84 @@ fn extract_rust_fn_name_and_params(after_fn: &str) -> Option<(String, String)> {
         }
     }
     let params_end = params_end?;
-    Some((func_name, rest[params_start..params_end].to_string()))
+    Some((
+        func_name,
+        generics_str,
+        rest[params_start..params_end].to_string(),
+    ))
 }
 
-fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
+/// Type parameters with an `AsRef<str>` / `AsRef<str>`-style bound in fn generics.
+///
+/// Runtime helpers use `fn len<S: AsRef<str>>(s: S)` — the borrow contract is on the
+/// generic bound, not the formal (`s: S` alone looks owned to a naive param scan).
+fn asref_str_generic_type_params(generics_str: &str) -> Vec<String> {
+    if generics_str.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for clause in split_top_level_commas(generics_str) {
+        let clause = clause.trim();
+        if !(clause.contains("AsRef<str>") || clause.contains("AsRef<&str>")) {
+            continue;
+        }
+        let name = clause
+            .split([':', '+'])
+            .next()
+            .unwrap_or("")
+            .trim();
+        if !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            out.push(name.to_string());
+        }
+    }
+    out
+}
+
+fn split_top_level_commas(s: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut depth: i32 = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&s[start..]);
+    parts
+}
+
+fn param_type_name(param: &str) -> Option<&str> {
+    let ty = param.rsplit(':').next()?.trim();
+    let ty = ty.split('<').next()?.trim();
+    if ty.is_empty() {
+        return None;
+    }
+    Some(ty)
+}
+
+fn param_is_asref_str_type_param(param: &str, asref_str_type_params: &[String]) -> bool {
+    param_type_name(param).is_some_and(|ty| {
+        asref_str_type_params.iter().any(|p| p == ty)
+    })
+}
+
+fn parse_parameters(params_str: &str, asref_str_type_params: &[String]) -> Vec<OwnershipMode> {
     if params_str.trim().is_empty() {
         return Vec::new();
     }
 
-    params_str
-        .split(',')
+    split_top_level_commas(params_str)
+        .into_iter()
         .map(|param| {
             let param = param.trim();
 
@@ -244,7 +319,9 @@ fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
                 OwnershipMode::MutBorrowed
             }
             // impl AsRef<str> (db::connect, Connection::query, etc.)
-            else if param.contains("AsRef<str>") {
+            else if param.contains("AsRef<str>")
+                || param_is_asref_str_type_param(param, asref_str_type_params)
+            {
                 OwnershipMode::Borrowed
             }
             // Check for &
@@ -260,16 +337,20 @@ fn parse_parameters(params_str: &str) -> Vec<OwnershipMode> {
 }
 
 /// True when the scanned Rust formal lowers to shared borrow (`&str`, `&T`, `AsRef<str>`).
-fn parse_emitted_rust_ref_flags(params_str: &str) -> Option<Vec<bool>> {
+fn parse_emitted_rust_ref_flags(
+    params_str: &str,
+    asref_str_type_params: &[String],
+) -> Option<Vec<bool>> {
     if params_str.trim().is_empty() {
         return Some(vec![]);
     }
     Some(
-        params_str
-            .split(',')
+        split_top_level_commas(params_str)
+            .into_iter()
             .map(|param| {
                 let param = param.trim();
                 param.contains("AsRef<str>")
+                    || param_is_asref_str_type_param(param, asref_str_type_params)
                     || param.contains("&str")
                     || (param.contains('&') && !param.contains("&mut"))
             })
@@ -471,5 +552,16 @@ mod tests {
             Some(vec![true, true]),
             "AsRef<str> and &str formals must emit shared refs at call sites"
         );
+        assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
+        assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed);
+    }
+
+    #[test]
+    fn strings_len_asref_generic_param_is_borrowed() {
+        let line = "pub fn len<S: AsRef<str>>(s: S) -> usize {";
+        let sig = parse_function_signature(line, "strings").unwrap();
+        assert_eq!(sig.name, "strings::len");
+        assert_eq!(sig.param_ownership, vec![OwnershipMode::Borrowed]);
+        assert_eq!(sig.emitted_rust_ref_params, Some(vec![true]));
     }
 }

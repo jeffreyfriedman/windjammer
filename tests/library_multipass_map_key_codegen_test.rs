@@ -368,3 +368,215 @@ fn test_library_multipass_csv_while_index_owned_string_param() {
 
     test.assert_compiles_without_error();
 }
+
+/// Owned / demoted WJ `string` reused into a method `&str` formal must borrow
+/// (`loader.load(&path)`), not move or clone (`path` / `path.clone()`).
+#[test]
+fn test_library_multipass_owned_string_to_string_method_must_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "assets/loader.wj",
+        r#"
+pub struct AssetLoader {
+    loads: int,
+}
+
+impl AssetLoader {
+    pub fn new() -> AssetLoader {
+        AssetLoader { loads: 0 }
+    }
+
+    pub fn load(self, path: string) -> int {
+        self.loads = self.loads + 1
+        strings::len(path)
+    }
+}
+"#,
+    );
+    test.add_file(
+        "assets/runner.wj",
+        r#"
+use crate::assets::loader::AssetLoader
+
+pub fn load_twice(path: string) -> int {
+    let mut loader = AssetLoader::new()
+    let a = loader.load(path)
+    let b = loader.load(path)
+    a + b
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("assets/runner.rs")
+        .expect("runner.rs generated");
+
+    assert!(
+        !rs.contains("path.clone()"),
+        "must not clone reused string into &str method formal. Got:\n{rs}"
+    );
+    let load_lines: Vec<&str> = rs
+        .lines()
+        .filter(|l| l.contains("loader.load("))
+        .collect();
+    assert!(
+        !load_lines.is_empty(),
+        "expected loader.load call sites. Got:\n{rs}"
+    );
+    // Accept either shape:
+    // - owned `path: String` + `load(&path)` into demoted `&str` formal
+    // - demoted `path: &str` + `load(path)` (already a shared borrow; `&path` would be `&&str`)
+    let path_already_str_ref = rs.contains("path: &str") || rs.contains("path:&str");
+    for line in &load_lines {
+        let ok = line.contains("load(&path)")
+            || line.contains("load(& path)")
+            || (path_already_str_ref
+                && (line.contains("load(path)") || line.contains("load( path)")));
+        assert!(
+            ok,
+            "expected borrow-safe path at demoted string formal call site.\nLine: {line}\nFull:\n{rs}"
+        );
+    }
+
+    test.assert_compiles_without_error();
+}
+
+
+/// WDB-084: `map = f(map, k, v)` writeback must not clone map.
+#[test]
+fn test_library_multipass_map_writeback_must_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/map_writeback.wj",
+        r#"
+use std::collections::HashMap
+
+fn put_entry(map: HashMap<string, int>, key: string, value: int) -> HashMap<string, int> {
+    map.insert(key, value)
+    map
+}
+
+pub fn build_scores() -> HashMap<string, int> {
+    let mut map: HashMap<string, int> = HashMap::new()
+    map = put_entry(map, "a", 1)
+    map = put_entry(map, "b", 2)
+    map
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/map_writeback.rs")
+        .expect("map_writeback.rs generated");
+
+    assert!(
+        !rs.contains("map.clone()"),
+        "map = put_entry(map, …) writeback must not clone map. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("put_entry(map,")
+            || rs.contains("put_entry(map ,")
+            || rs.contains("put_entry(&mut map,")
+            || rs.contains("put_entry(&mut map ,"),
+        "expected move or &mut writeback of map into put_entry (no clone). Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+/// WDB-086: HashMap::get borrow-break must emit exactly one `.copied()` on Copy V.
+#[test]
+fn test_library_multipass_hashmap_get_borrow_break_single_copied() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/vertex_u32_map.wj",
+        r#"
+use std::collections::HashMap
+
+pub struct GraphVertexU32Map {
+    pub inner: HashMap<i64, u32>,
+}
+
+impl GraphVertexU32Map {
+    pub fn inc(self, label: i64) {
+        if self.inner.contains_key(label) {
+            if let Some(count) = self.inner.get(label) {
+                self.inner.insert(label, count + 1)
+                return
+            }
+        }
+        self.inner.insert(label, 1)
+    }
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/vertex_u32_map.rs")
+        .expect("vertex_u32_map.rs generated");
+
+    assert!(
+        !rs.contains(".copied().copied()"),
+        "HashMap::get borrow-break must not double .copied() on Copy V. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains(".copied()"),
+        "HashMap::get on Copy V should use .copied() once. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
+
+/// WDB-087: tuple restore `let t = f(v, w); v = t.0; w = t.1` must not clone heap Vecs.
+#[test]
+fn test_library_multipass_tuple_writeback_must_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/tuple_writeback.wj",
+        r#"
+pub fn push_pair(costs: Vec<f64>, verts: Vec<i64>, cost: f64, vertex: i64) -> (Vec<f64>, Vec<i64>) {
+    let mut c = costs
+    let mut v = verts
+    c.push(cost)
+    v.push(vertex)
+    (c, v)
+}
+
+pub fn grow_heap(n: int) -> (Vec<f64>, Vec<i64>) {
+    let mut costs: Vec<f64> = Vec::new()
+    let mut verts: Vec<i64> = Vec::new()
+    let mut i = 0
+    while i < n {
+        let pushed = push_pair(costs, verts, i as f64, i as i64)
+        costs = pushed.0
+        verts = pushed.1
+        i = i + 1
+    }
+    (costs, verts)
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/tuple_writeback.rs")
+        .expect("tuple_writeback.rs generated");
+
+    assert!(
+        !rs.contains("costs.clone()") && !rs.contains("verts.clone()"),
+        "tuple writeback after push_pair must not clone heap vectors. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
