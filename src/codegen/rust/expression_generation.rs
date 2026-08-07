@@ -277,8 +277,6 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 let func_str = self.generate_expression_immut(function);
 
-                // TDD FIX: Check if this is a stdlib method that needs usize parameters
-                // e.g., Vec::with_capacity(size) where size: int should generate: Vec::with_capacity(size as usize)
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.as_str()),
                     Expression::FieldAccess { object, field, .. } => {
@@ -293,11 +291,6 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => None,
                 };
-
-                let needs_usize_first_arg = func_name.is_some_and(|name| {
-                    let method_part = name.rsplit("::").next().unwrap_or(name);
-                    matches!(method_part, "with_capacity" | "reserve")
-                });
 
                 // Unified signature resolution for immut path.
                 let receiver_type = match function {
@@ -382,11 +375,37 @@ impl<'ast> CodeGenerator<'ast> {
                     // Restore suppress flag
                     self.suppress_string_conversion.set(old_suppress);
 
-                    // For first argument to with_capacity/reserve, cast int to usize if it's an identifier
-                    if idx == 0 && needs_usize_first_arg {
-                        if matches!(arg, Expression::Identifier { .. }) {
-                            arg_str = format!("{} as usize", arg_str);
-                        }
+                    // Signature-driven: coerce into `usize` formals (no method-name lists).
+                    if let Some(ref r) = resolved_sig {
+                        let sig = &r.sig;
+                        let sig_param_idx = sig.arg_param_index(idx);
+                        let formal = sig
+                            .formal_param_type(sig_param_idx)
+                            .or_else(|| sig.param_types.get(sig_param_idx));
+                        let already_usize = match arg {
+                            Expression::Identifier { name, .. } => {
+                                self.current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *name)
+                                    .is_some_and(|p| {
+                                        matches!(&p.type_, Type::Custom(n) if n == "usize")
+                                    })
+                                    || self.local_var_types.get(name).is_some_and(|t| {
+                                        matches!(t, Type::Custom(n) if n == "usize")
+                                    })
+                                    || self.usize_variables.contains(name)
+                            }
+                            _ => {
+                                self.infer_expression_type_is_usize(arg)
+                                    || self.expression_produces_usize(arg)
+                            }
+                        };
+                        crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+                            arg,
+                            &mut arg_str,
+                            formal,
+                            already_usize,
+                        );
                     }
 
                     // Ownership-based string coercion for instance method calls

@@ -17,8 +17,8 @@ impl<K, V> HashMap<K, V> {
         HashMap { inner: RustHashMap::new() }
     }
     
-    pub fn with_capacity(capacity: int) -> Self {
-        HashMap { inner: RustHashMap::with_capacity(capacity as usize) }
+    pub fn with_capacity(capacity: usize) -> Self {
+        HashMap { inner: RustHashMap::with_capacity(capacity) }
     }
     
     pub fn insert(self, key: K, value: V) -> Option<V> {
@@ -64,8 +64,8 @@ impl<T> HashSet<T> {
         HashSet { inner: RustHashSet::new() }
     }
     
-    pub fn with_capacity(capacity: int) -> Self {
-        HashSet { inner: RustHashSet::with_capacity(capacity as usize) }
+    pub fn with_capacity(capacity: usize) -> Self {
+        HashSet { inner: RustHashSet::with_capacity(capacity) }
     }
     
     pub fn insert(self, value: T) -> bool {
@@ -169,8 +169,8 @@ impl<T> VecDeque<T> {
         VecDeque { inner: RustVecDeque::new() }
     }
     
-    pub fn with_capacity(capacity: int) -> Self {
-        VecDeque { inner: RustVecDeque::with_capacity(capacity as usize) }
+    pub fn with_capacity(capacity: usize) -> Self {
+        VecDeque { inner: RustVecDeque::with_capacity(capacity) }
     }
     
     pub fn push_front(self, value: T) {

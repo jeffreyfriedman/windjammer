@@ -580,3 +580,49 @@ pub fn grow_heap(n: int) -> (Vec<f64>, Vec<i64>) {
 
     test.assert_compiles_without_error();
 }
+
+/// WDB-089: Rust `HashMap::with_capacity` takes `usize`. Multipass must not cast
+/// a `usize` arg to `i64` (WJ std used to declare `capacity: int`).
+#[test]
+fn test_library_multipass_hashmap_with_capacity_usize_no_i64_cast() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/vertex_capacity.wj",
+        r#"
+use std::collections::HashMap
+
+pub fn make_f64_map(n: usize) -> HashMap<i64, f64> {
+    HashMap::with_capacity(n)
+}
+
+pub fn make_f64_map_from_int(n: int) -> HashMap<i64, f64> {
+    HashMap::with_capacity(n)
+}
+"#,
+    );
+
+    let map = test
+        .compile()
+        .expect("library multipass compile should succeed");
+    let rs = map
+        .get("graph/vertex_capacity.rs")
+        .expect("vertex_capacity.rs generated");
+
+    assert!(
+        !rs.contains("with_capacity(n as i64)"),
+        "usize capacity must not cast to i64 for Rust HashMap. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("with_capacity(n)")
+            || rs.contains("with_capacity(n as usize)"),
+        "usize capacity should pass through (or cast int→usize only). Got:\n{rs}"
+    );
+    // int overload must reach Rust as usize
+    assert!(
+        rs.contains("with_capacity(n as usize)")
+            || rs.matches("with_capacity(n)").count() >= 2,
+        "int capacity must coerce to usize for Rust HashMap. Got:\n{rs}"
+    );
+
+    test.assert_compiles_without_error();
+}
