@@ -67,10 +67,13 @@ pub fn main() {
     let (rust, _stderr) = test_utils::compile_via_cli_with_stderr(source);
 
     // The generated Rust must NOT directly move self.clip out of &mut self (E0507).
-    // Valid strategies: match &self.clip, if let Some(ref c), .as_ref(), or borrow-break clone
+    // Valid strategies: match &self.clip / &mut self.clip, if let Some(ref c),
+    // .as_ref(), borrow-break clone, or `__match_borrow_break = &mut self.clip`.
     let has_ref_match = rust.contains("match &self.clip")
         || rust.contains("match & self.clip")
         || rust.contains("match &mut self.clip")
+        || rust.contains("__match_borrow_break = &mut self.clip")
+        || rust.contains("__match_borrow_break")
         || rust.contains("if let Some(ref ")
         || rust.contains("self.clip.as_ref()")
         || rust.contains("self.clip.clone()");

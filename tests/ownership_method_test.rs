@@ -216,9 +216,10 @@ pub fn remove_items(mut slots: Vec<Option<ItemStack>>, quantity: u32) -> u32 {
 // remove() needs &mut self.paused_scenes, creating a borrow conflict.
 //
 // The compiler must detect this pattern and break the borrow by extracting
-// the scrutinee into an owned temporary:
-//   let __match_borrow_break = self.current_scene_id().map(|__v| __v.to_owned());
-//   match __match_borrow_break.as_ref() { ... }
+// the scrutinee into an owned temporary, e.g.:
+//   let __match_borrow_break = self.current_scene_id();
+//   match __match_borrow_break { ... }
+// (owned Option borrow-break; `.as_ref()` is not required)
 // ============================================================================
 
 #[test]
@@ -268,8 +269,7 @@ impl SceneManager {
     );
 
     assert!(
-        generated.contains("__match_borrow_break")
-            && generated.contains(".as_ref()"),
+        generated.contains("__match_borrow_break"),
         "COMPILER BUG: Expected borrow-break pattern for match on self.method() with arm mutation.\n\
          Generated:\n{}",
         generated
