@@ -713,14 +713,9 @@ impl<'ast> Analyzer<'ast> {
                     return false;
                 }
 
-                // Check if param is passed as an argument to a method whose
-                // corresponding parameter has MutBorrowed ownership.
-                // Example: obj.apply(state) where apply expects &mut DialogueState
-                // → state must be MutBorrowed.
-                // HashMap/HashSet key args are never mut-borrowed (get_mut key is &Q not &mut Q).
-                if super::stdlib_method_traits::is_collection_key_method(method) {
-                    return false;
-                }
+                // HashMap/HashSet key args are Borrowed (`&Q`), never MutBorrowed.
+                // Signature loop below decides MutBorrowed from param_ownership — do not
+                // short-circuit on method-name lists (Vec::remove shares "remove").
                 if let Expression::MethodCall { arguments, .. } = expr {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {

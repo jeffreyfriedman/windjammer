@@ -786,12 +786,13 @@ impl<'ast> CodeGenerator<'ast> {
             &sig,
             arg_index,
             receiver_type_name,
-        ) {
-            expected.ownership = OwnedType::Ref(Region::fresh(4));
-        } else if arg_index == 0
-            && crate::analyzer::stdlib_method_traits::is_set_lookup_method(method_simple)
+        ) || (arg_index == 0
             && receiver_is_set
+            && crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_from_sig(
+                &sig, arg_index,
+            ))
         {
+            // Signature-driven: map/set lookup formals are `&T` (Borrowed), never method-name lists.
             let arg_already_borrowed = matches!(
                 arg_expr,
                 Expression::Identifier { name, .. }
@@ -800,7 +801,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || self.emitted_rust_ref_formals.contains(name)
             );
             if !arg_already_borrowed {
-                expected.ownership = OwnedType::Ref(Region::fresh(6));
+                expected.ownership = OwnedType::Ref(Region::fresh(4));
             }
         } else if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
             &sig, arg_index,

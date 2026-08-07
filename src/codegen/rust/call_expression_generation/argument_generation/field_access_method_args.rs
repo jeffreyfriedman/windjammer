@@ -990,8 +990,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                                 && gen.is_type_copy(t)
                         });
-                    let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(call_method)
-                        && i == 0;
+                    let is_coll_key = i == 0
+                        && fallback_sig.as_ref().is_some_and(|sig| {
+                            crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_from_sig(
+                                sig, i,
+                            )
+                        });
                     crate::codegen::rust::typed_lowering::correct_legacy_output(
                         sig,
                         i,

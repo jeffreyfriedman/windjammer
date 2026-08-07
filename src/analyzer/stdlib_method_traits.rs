@@ -231,10 +231,15 @@ pub fn is_map_key_method(method: &str) -> bool {
     MAP_KEY.contains(&method)
 }
 
+/// HashSet/BTreeSet lookup method names — AST / trait-identity only
+/// (see [`decompose_collection_key_lookup`]). Ownership decisions must use
+/// signature `param_ownership` / codegen qualified helpers, not this list.
 pub fn is_set_lookup_method(method: &str) -> bool {
     matches!(method, "contains" | "remove")
 }
 
+/// Map or set key-lookup method name — for AST decomposition of lookup shapes.
+/// Not an ownership oracle (Vec::remove is also named `remove`).
 pub fn is_collection_key_method(method: &str) -> bool {
     is_map_key_method(method) || is_set_lookup_method(method)
 }
