@@ -69,13 +69,30 @@ pub fn match_arm_needs_string_ascription(body: &Expression) -> bool {
         || crate::codegen::rust::arm_string_analysis::arm_returns_converted_string(body)
 }
 
+/// True when `ty` is Windjammer/Rust owned string (`string` / `String`).
+pub fn type_is_owned_string(ty: &Type) -> bool {
+    matches!(ty, Type::String)
+        || matches!(ty, Type::Custom(n) if n == "String" || n == "string")
+}
+
+/// True when a type slot ultimately needs an owned `String` payload.
+/// Peels `Option` / `Result` wrappers so `Option<string>` / `Result<string, _>`
+/// drive the same substring / match-arm ownership as bare `string`.
+pub fn type_expects_owned_string_payload(ty: &Type) -> bool {
+    match ty {
+        Type::Option(inner) => type_expects_owned_string_payload(inner),
+        Type::Result(ok, _) => type_expects_owned_string_payload(ok),
+        other => type_is_owned_string(other),
+    }
+}
+
 /// Check if return type expects owned String in Rust.
-/// Enclosing function/slot expects owned `String` in Rust (`string` / `String` in Windjammer).
+/// Enclosing function/slot expects owned `String` in Rust (`string` / `String` in Windjammer),
+/// including when that payload is wrapped in `Option` / `Result`.
 pub fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
     match ret {
-        Some(Type::String) => true,
-        Some(Type::Custom(n)) if n == "String" || n == "string" => true,
-        _ => false,
+        Some(ty) => type_expects_owned_string_payload(ty),
+        None => false,
     }
 }
 
@@ -139,8 +156,7 @@ pub fn param_is_rust_str_ref(param_type: &Type) -> bool {
 
 /// Parameter type is an owned Windjammer `string` / Rust `String`.
 pub fn param_is_owned_string_type(param_type: &Type) -> bool {
-    matches!(param_type, Type::String)
-        || matches!(param_type, Type::Custom(n) if n == "string" || n == "String")
+    type_is_owned_string(param_type)
 }
 
 /// True when the resolved signature expects an owned string at this argument index.

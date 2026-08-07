@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Gates — string indexing, split/collect, escape literals, multipass formals.
+//! Gates (GREEN) — string indexing, split/collect, escape literals, multipass formals.
 //!
 //! Contract per gate: `wj build` emits Rust that `cargo check`s (or, for
 //! lexer/parser gates, `wj` itself must accept the source).
