@@ -288,15 +288,16 @@ jobs:
             sed 's/.*FAIL \[[^]]*\] [^ ]* //' | \
             sort > /tmp/actual-failures.txt
           
-          # Compare against known failures
+          # Compare against known failures (ignore # comments / blank lines)
           KNOWN=".config/known-test-failures.txt"
           if [ ! -f "$KNOWN" ]; then
             echo "❌ No known-failures file found and tests failed"
             exit 1
           fi
+          grep -vE '^\s*(#|$)' "$KNOWN" | sort > /tmp/known-failures.txt || true
           
           # Find NEW failures (in actual but not in known)
-          NEW_FAILURES=$(comm -23 /tmp/actual-failures.txt "$KNOWN")
+          NEW_FAILURES=$(comm -23 /tmp/actual-failures.txt /tmp/known-failures.txt)
           
           if [ -n "$NEW_FAILURES" ]; then
             echo "❌ NEW test failures detected (not in known-test-failures.txt):"
@@ -307,14 +308,14 @@ jobs:
           fi
           
           # Find FIXED tests (in known but not in actual — celebrate!)
-          FIXED=$(comm -23 "$KNOWN" /tmp/actual-failures.txt)
+          FIXED=$(comm -23 /tmp/known-failures.txt /tmp/actual-failures.txt)
           if [ -n "$FIXED" ]; then
             echo "🎉 Tests that are now PASSING (remove from known-test-failures.txt):"
             echo "$FIXED"
           fi
           
           ACTUAL_COUNT=$(wc -l < /tmp/actual-failures.txt | tr -d ' ')
-          KNOWN_COUNT=$(wc -l < "$KNOWN" | tr -d ' ')
+          KNOWN_COUNT=$(wc -l < /tmp/known-failures.txt | tr -d ' ')
           echo "✅ No new failures. Known: $KNOWN_COUNT, Actual: $ACTUAL_COUNT"
       
       - name: Run doctests
