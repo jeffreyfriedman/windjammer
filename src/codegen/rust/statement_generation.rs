@@ -1339,6 +1339,38 @@ impl<'ast> CodeGenerator<'ast> {
         self.expression_assigns_to_expression(body, scrutinee)
     }
 
+    /// Owned `__match_borrow_break` temps need `let mut` when an arm mutates a
+    /// pattern binding or writebacks through the scrutinee (E0596 otherwise).
+    pub(in crate::codegen::rust) fn match_borrow_break_temp_needs_mut(
+        &self,
+        arms: &[crate::parser::MatchArm<'ast>],
+        scrutinee: &Expression,
+    ) -> bool {
+        arms.iter().any(|arm| {
+            if self.option_arm_reassigns_scrutinee_field(scrutinee, arm.body) {
+                return true;
+            }
+            if self.option_arm_mutates_some_binding(arm, scrutinee) {
+                return true;
+            }
+            let body_stmts: &[&Statement] = if let Expression::Block { statements, .. } = arm.body {
+                statements.as_slice()
+            } else {
+                &[]
+            };
+            let mut bound = std::collections::HashSet::new();
+            self.extract_pattern_bindings(&arm.pattern, &mut bound);
+            bound.iter().any(|name| {
+                body_stmts
+                    .iter()
+                    .any(|s| self.statement_mutates_variable_field(s, name))
+                    || body_stmts
+                        .iter()
+                        .any(|s| self.statement_nonreadonly_method_call_on_var(s, name))
+            })
+        })
+    }
+
     fn expression_assigns_to_expression(
         &self,
         expr: &Expression<'ast>,
@@ -1408,6 +1440,50 @@ impl<'ast> CodeGenerator<'ast> {
             ) => {
                 self.expressions_equivalent_for_assign(l_obj, r_obj)
                     && self.expressions_equivalent_for_assign(l_idx, r_idx)
+            }
+            // `self.slots[i as usize] = ...` must match scrutinee `self.slots[i as usize]`
+            // so option reassignment forces owned clone borrow-break (not overlapping `&mut`).
+            (
+                Expression::Cast {
+                    expr: l_expr,
+                    type_: l_ty,
+                    ..
+                },
+                Expression::Cast {
+                    expr: r_expr,
+                    type_: r_ty,
+                    ..
+                },
+            ) => l_ty == r_ty && self.expressions_equivalent_for_assign(l_expr, r_expr),
+            (
+                Expression::Unary {
+                    op: l_op,
+                    operand: l_operand,
+                    ..
+                },
+                Expression::Unary {
+                    op: r_op,
+                    operand: r_operand,
+                    ..
+                },
+            ) => l_op == r_op && self.expressions_equivalent_for_assign(l_operand, r_operand),
+            (
+                Expression::Binary {
+                    left: l_left,
+                    op: l_op,
+                    right: l_right,
+                    ..
+                },
+                Expression::Binary {
+                    left: r_left,
+                    op: r_op,
+                    right: r_right,
+                    ..
+                },
+            ) => {
+                l_op == r_op
+                    && self.expressions_equivalent_for_assign(l_left, r_left)
+                    && self.expressions_equivalent_for_assign(l_right, r_right)
             }
             _ => false,
         }

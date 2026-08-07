@@ -1453,6 +1453,18 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
+            // Runtime AsRef<&str> forwards keep owned WJ `string` formals (call sites
+            // pass by value; the body borrows into `strings::` / `db::` / …).
+            if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                && self.param_only_forwarded_to_asref_str_runtime(
+                    func.body.as_slice(),
+                    &param.name,
+                )
+            {
+                self.inferred_borrowed_params.remove(&param.name);
+                self.str_ref_optimized_params.remove(&param.name);
+                continue;
+            }
             if self.current_struct_name.as_ref().is_some_and(|sn| {
                 self.struct_is_owned_engine_key_facade(sn, param)
             }) {
@@ -2236,6 +2248,12 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
                     // Enum/struct payload stores keep Owned — never demote to `&String`+clone.
                     && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
+                    // AsRef runtime forwards keep owned WJ `string` (CSV while-index gate).
+                    && !(crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                        && self.param_only_forwarded_to_asref_str_runtime(
+                            func.body.as_slice(),
+                            &param.name,
+                        ))
                 {
                     ownership = crate::analyzer::OwnershipMode::Borrowed;
                 }
@@ -6816,14 +6834,17 @@ impl<'ast> CodeGenerator<'ast> {
                         || self.param_type_is_asref_runtime_receiver(name)
             ),
             Expression::Identifier { name, .. } => {
-                // `db::connect` may lower as path Identifier "connect" with module context,
-                // or qualified name containing `db`.
-                name.contains("db::")
-                    || name.ends_with("::connect")
-                    || name.ends_with("::query")
-                    || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                // Qualified paths lower as `Identifier("strings::substring")` /
+                // `Identifier("std::strings::len")` — extract the runtime module segment.
+                let module =
+                    crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                         name,
+                    );
+                name.contains("db::")
+                    || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                        module,
                     )
+                    || self.is_imported_runtime_std_module(module)
             }
             _ => false,
         }

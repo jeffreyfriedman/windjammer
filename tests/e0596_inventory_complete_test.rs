@@ -144,9 +144,11 @@ pub fn main() {}
     assert!(compiles, "Should compile without E0596. Generated:\n{}", rs);
     let has_ref_mut_pattern = rs.contains("Some(ref mut stack)");
     let has_mut_scrutinee = rs.contains("&mut self.slots[");
+    let has_owned_clone_break = rs.contains("let mut __match_borrow_break = self.slots[")
+        && rs.contains("].clone()");
     assert!(
-        has_ref_mut_pattern || has_mut_scrutinee,
-        "Should generate ref mut binding or &mut scrutinee. Generated:\n{}",
+        has_ref_mut_pattern || has_mut_scrutinee || has_owned_clone_break,
+        "Should generate ref mut binding, &mut scrutinee, or owned clone borrow-break. Generated:\n{}",
         rs
     );
 }
