@@ -114,18 +114,18 @@ enum Mode { Workspace, Business }
 
 pub fn body_for(route: Route, mode: Mode) -> string {
     match route {
-        Money if mode == Mode::Business => "<div data-mode-business></div>".to_string(),
-        Money => "<div class=\"hub-panel\"></div>".to_string(),
-        Home => "<div class=\"home-hero\"></div>".to_string(),
-        Unknown => "<p class=\"err\">Unknown</p>".to_string(),
+        Money if mode == Mode::Business => "<div data-mode-business></div>",
+        Money => "<div class=\"hub-panel\"></div>",
+        Home => "<div class=\"home-hero\"></div>",
+        Unknown => "<p class=\"err\">Unknown</p>",
     }
 }
 
 pub fn title(route: Route) -> string {
     match route {
-        Home => "Home".to_string(),
-        Money => "Money".to_string(),
-        Unknown => "Unknown".to_string(),
+        Home => "Home",
+        Money => "Money",
+        Unknown => "Unknown",
     }
 }
 

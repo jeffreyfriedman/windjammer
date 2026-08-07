@@ -23,7 +23,7 @@ pub struct KpiGrid { tiles: Vec<string> }
 
 impl KpiTile {
     pub fn new(label: string) -> KpiTile {
-        KpiTile { label: label, value_html: "".to_string() }
+        KpiTile { label: label, value_html: "" }
     }
     pub fn value_html(self, html: string) -> KpiTile {
         self.value_html = html
@@ -41,7 +41,7 @@ impl KpiGrid {
         self
     }
     pub fn render(self) -> string {
-        let mut body = "".to_string()
+        let mut body = ""
         for t in &self.tiles {
             body.push_str(t)
         }
@@ -51,17 +51,17 @@ impl KpiGrid {
 
 fn home_kpis(cash: string, balanced: bool) -> string {
     let tb = if balanced {
-        "Balanced".to_string()
+        "Balanced"
     } else {
-        "Out".to_string()
+        "Out"
     }
-    let a = KpiTile::new("Cash".to_string()).value_html(cash).render()
-    let b = KpiTile::new("Trial".to_string()).value_html(tb).render()
+    let a = KpiTile::new("Cash").value_html(cash).render()
+    let b = KpiTile::new("Trial").value_html(tb).render()
     KpiGrid::new().tile(a).tile(b).render()
 }
 
 fn main() {
-    println!("{}", home_kpis("$1".to_string(), true))
+    println!("{}", home_kpis("$1", true))
 }
 "##;
 
