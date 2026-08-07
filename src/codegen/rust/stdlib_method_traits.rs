@@ -131,6 +131,37 @@ fn is_map_receiver(receiver_type: Option<&str>) -> bool {
 
 // ── Primary query functions ──────────────────────────────────────────────
 
+fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && matches!(
+            sig.param_ownership.first(),
+            Some(OwnershipMode::MutBorrowed)
+        )
+}
+
+/// When `::{method}` is registered on many types, true only if every *instance*
+/// method match takes `&mut self` (`MutBorrowed`). Free functions that share the
+/// suffix (e.g. `collections::take`) are ignored. Ambiguous method names
+/// (e.g. `Option::replace` vs `String::replace`) correctly return false — use
+/// the qualified API instead.
+fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            // Free functions / associated fns share the suffix but have no self.
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_mutates_receiver(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
 /// Does this method mutate its receiver (`&mut self`)?
 pub fn method_mutates_receiver_qualified(
     method: &str,
@@ -138,16 +169,12 @@ pub fn method_mutates_receiver_qualified(
     registry: &SignatureRegistry,
 ) -> bool {
     if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] == OwnershipMode::MutBorrowed;
-        }
+        return sig_mutates_receiver(sig);
     }
     if let Some(sig) = lookup_suffix(method, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] == OwnershipMode::MutBorrowed;
-        }
+        return sig_mutates_receiver(sig);
     }
-    false
+    consensus_mutates_receiver(method, registry)
 }
 
 /// Is this method definitely read-only (`&self`)?
@@ -625,55 +652,14 @@ pub fn method_is_string_search_qualified(
 
 // ── Convenience wrappers (no receiver type) ──────────────────────────────
 // Used at call sites that lack receiver type context.
+// Driven by stdlib signature consensus — never by expanding method-name lists.
 
+/// Unqualified fallback: unanimous `MutBorrowed` self across stdlib `::{method}` keys.
+/// Prefer [`method_mutates_receiver_qualified`] when receiver type + registry are available.
+///
+/// Delegates to the analyzer helper so both crates share one consensus implementation.
 pub fn method_mutates_receiver(method: &str) -> bool {
-    matches!(
-        method,
-        "push"
-            | "pop"
-            | "insert"
-            | "remove"
-            | "clear"
-            | "append"
-            | "extend"
-            | "drain"
-            | "truncate"
-            | "resize"
-            | "retain"
-            | "sort"
-            | "sort_by"
-            | "sort_by_key"
-            | "sort_unstable"
-            | "sort_unstable_by"
-            | "dedup"
-            | "reverse"
-            | "swap"
-            | "swap_remove"
-            | "reserve"
-            | "shrink_to_fit"
-            | "split_off"
-            | "fill"
-            | "set"
-            | "rotate_left"
-            | "rotate_right"
-            | "set_len"
-            | "push_str"
-            | "push_front"
-            | "push_back"
-            | "pop_front"
-            | "pop_back"
-            | "make_ascii_lowercase"
-            | "make_ascii_uppercase"
-            | "add"
-            | "take"
-            | "replace"
-            | "get_or_insert"
-            | "get_or_insert_with"
-            | "entry"
-            | "get_mut"
-            | "iter_mut"
-            | "values_mut"
-    )
+    crate::analyzer::stdlib_method_traits::method_mutates_receiver(method)
 }
 
 /// HashMap/BTreeMap key methods — name classification for stdlib trait identity only.
@@ -1030,7 +1016,8 @@ pub fn runtime_std_call_arg_needs_auto_borrow(
 #[cfg(test)]
 mod pattern_registry_tests {
     use super::*;
-    use crate::analyzer::SignatureRegistry;
+    use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
+    use crate::parser::Type;
 
     #[test]
     fn string_find_and_chars_driven_by_stdlib_meta() {
@@ -1058,6 +1045,94 @@ mod pattern_registry_tests {
         assert!(method_returns_iterable_qualified(
             "iter",
             Some("Vec"),
+            &reg
+        ));
+    }
+
+    #[test]
+    fn method_mutates_receiver_push_via_stdlib_consensus() {
+        assert!(
+            method_mutates_receiver("push"),
+            "Vec::push / String::push are MutBorrowed in stdlib_meta"
+        );
+        assert!(method_mutates_receiver("insert"));
+        assert!(method_mutates_receiver("clear"));
+        assert!(method_mutates_receiver("take"));
+    }
+
+    #[test]
+    fn method_mutates_receiver_readonly_and_unknown_are_false() {
+        assert!(!method_mutates_receiver("len"));
+        assert!(!method_mutates_receiver("is_empty"));
+        assert!(
+            !method_mutates_receiver("totally_unknown_method_xyz"),
+            "no matching signatures → conservative false"
+        );
+    }
+
+    #[test]
+    fn method_mutates_receiver_replace_ambiguous_without_type() {
+        // Option::replace is MutBorrowed; String::replace is Borrowed.
+        assert!(
+            !method_mutates_receiver("replace"),
+            "unqualified consensus must not treat ambiguous replace as mutating"
+        );
+    }
+
+    #[test]
+    fn method_mutates_receiver_qualified_disambiguates_replace() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(method_mutates_receiver_qualified(
+            "replace",
+            Some("Option"),
+            reg
+        ));
+        assert!(!method_mutates_receiver_qualified(
+            "replace",
+            Some("String"),
+            reg
+        ));
+        assert!(method_mutates_receiver_qualified("push", Some("Vec"), reg));
+        assert!(!method_mutates_receiver_qualified("len", Some("Vec"), reg));
+    }
+
+    #[test]
+    fn consensus_mutates_receiver_empty_registry_is_false() {
+        let empty = SignatureRegistry::empty();
+        assert!(!consensus_mutates_receiver("push", &empty));
+        assert!(!method_mutates_receiver_qualified(
+            "push",
+            Some("Vec"),
+            &empty
+        ));
+    }
+
+    #[test]
+    fn consensus_mutates_receiver_mixed_ownership_is_false() {
+        let mut reg = SignatureRegistry::empty();
+        let mut a = FunctionSignature::default();
+        a.name = "A::flip".into();
+        a.param_types = vec![Type::Custom("A".into())];
+        a.param_ownership = vec![OwnershipMode::MutBorrowed];
+        a.has_self_receiver = true;
+        reg.add_function("A::flip".into(), a);
+
+        let mut b = FunctionSignature::default();
+        b.name = "B::flip".into();
+        b.param_types = vec![Type::Custom("B".into())];
+        b.param_ownership = vec![OwnershipMode::Borrowed];
+        b.has_self_receiver = true;
+        reg.add_function("B::flip".into(), b);
+
+        assert!(!consensus_mutates_receiver("flip", &reg));
+        assert!(method_mutates_receiver_qualified(
+            "flip",
+            Some("A"),
+            &reg
+        ));
+        assert!(!method_mutates_receiver_qualified(
+            "flip",
+            Some("B"),
             &reg
         ));
     }

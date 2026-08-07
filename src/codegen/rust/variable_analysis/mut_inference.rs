@@ -478,6 +478,8 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn is_mutating_method(&self, method: &str) -> bool {
+        // Stdlib consensus fallback; prefer method_mutates_receiver_qualified when
+        // receiver type is known (see expression_mutates_variable_field priority paths).
         crate::codegen::rust::stdlib_method_traits::method_mutates_receiver(method)
     }
 

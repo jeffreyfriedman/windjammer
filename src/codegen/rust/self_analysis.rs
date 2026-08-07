@@ -1420,11 +1420,11 @@ fn method_is_mutating_on_receiver(
     method_is_mutating(method, registry, struct_name, receiver_upgrades)
 }
 
-/// Determine if a method call is mutating by consulting the stdlib method registry
-/// and the user's SignatureRegistry.
+/// Determine if a method call is mutating by consulting the signature registry
+/// and stdlib signature consensus.
 ///
 /// Priority:
-/// 1. stdlib `method_mutates_receiver` → definitively mutating (push, insert, clear, etc.)
+/// 1. Signature-driven `method_mutates_receiver_qualified` / consensus (MutBorrowed self)
 /// 2. Codegen self-receiver upgrades (same-impl / prior-file &mut self)
 /// 3. SignatureRegistry lookup → use the analyzed ownership of the self receiver
 /// 4. Unknown → default to not-mutating (assignment detection covers actual field writes)
@@ -1437,7 +1437,17 @@ fn method_is_mutating(
     if crate::analyzer::stdlib_method_traits::is_known_readonly(method) {
         return false;
     }
-    if super::stdlib_method_traits::method_mutates_receiver(method) {
+    // Prefer type-qualified registry lookup; fall back to stdlib consensus only
+    // when no receiver type / registry is available (or lookup misses).
+    let stdlib_mutates = match registry {
+        Some(reg) => super::stdlib_method_traits::method_mutates_receiver_qualified(
+            method,
+            struct_name,
+            reg,
+        ),
+        None => super::stdlib_method_traits::method_mutates_receiver(method),
+    };
+    if stdlib_mutates {
         return true;
     }
 
