@@ -664,6 +664,16 @@ impl<'ast> Analyzer<'ast> {
                         str_ref_optimizable_params.remove(&param.name);
                         continue;
                     }
+                    // Free-function AsRef runtime forwards (`strings::substring(line)`): keep
+                    // owned WJ `string` so callers pass by value (CSV while-index gate).
+                    if self.param_only_forwarded_to_asref_str_runtime_modules(
+                        &param.name,
+                        &func.body,
+                    ) {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                        str_ref_optimizable_params.remove(&param.name);
+                        continue;
+                    }
                     if matches!(
                         inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Borrowed)
@@ -734,8 +744,20 @@ impl<'ast> Analyzer<'ast> {
                     ),
                     Some(OwnershipMode::Borrowed)
                 ) {
-                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
-                    str_ref_optimizable_params.insert(param.name.clone());
+                    // Do not demote free-function AsRef-only forwards to `&str` — callers
+                    // must pass owned `String` (parse_vertex_line(line) after index clone).
+                    if func.parent_type.is_none()
+                        && self.param_only_forwarded_to_asref_str_runtime_modules(
+                            &param.name,
+                            &func.body,
+                        )
+                    {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                        str_ref_optimizable_params.remove(&param.name);
+                    } else {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        str_ref_optimizable_params.insert(param.name.clone());
+                    }
                 }
                 continue;
             }

@@ -280,6 +280,8 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
                 // Blackboard-style keys: forward only to readonly `&str` callees (`find_index`).
+                // Runtime AsRef modules (`strings::substring`, `db::connect`, …) keep owned
+                // WJ `string` so callers pass by value (CSV while-index / std_db gates).
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
@@ -287,6 +289,10 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
+                    )
+                    && !self.param_only_forwarded_to_asref_str_runtime(
+                        func.body.as_slice(),
+                        &param.name,
                     )
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());

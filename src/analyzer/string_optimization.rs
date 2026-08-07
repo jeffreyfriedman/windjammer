@@ -674,7 +674,11 @@ impl<'ast> Analyzer<'ast> {
 
     /// `db.connect(url)` / `conn.query(sql, …)` — runtime AsRef<&str> APIs. Keep owned
     /// WJ `string` formals so call sites emit `&url` (std_db_call_site_borrow_test).
-    fn param_only_forwarded_to_asref_str_runtime_modules(
+    ///
+    /// Also used by free-function ownership inference: AsRef-only forwards must keep
+    /// owned `String` at the API boundary so callers pass by value (`parse_vertex_line(line)`),
+    /// while the callee body borrows into runtime AsRef APIs.
+    pub(crate) fn param_only_forwarded_to_asref_str_runtime_modules(
         &self,
         param_name: &str,
         body: &[&Statement],
@@ -746,11 +750,15 @@ impl<'ast> Analyzer<'ast> {
         expr: &Expression,
         saw: &mut bool,
     ) -> bool {
+        // Bare module (`strings`) or qualified callee path (`strings::substring`,
+        // `std::strings::len`) — shared with codegen via `runtime_std_module_uses_asref_str`.
         let is_asref_module = |name: &str| {
-            matches!(
-                name,
-                "db" | "env" | "strings" | "json" | "jwt" | "regex" | "csv" | "mime" | "http"
-            ) || name.ends_with("::db")
+            let module =
+                crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+                    name,
+                );
+            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(module)
+                || name.ends_with("::db")
                 || name.contains("db::")
         };
         let arg_is_param = |arg: &Expression| {
@@ -805,8 +813,9 @@ impl<'ast> Analyzer<'ast> {
                                 Expression::Identifier { name, .. }
                                     if is_asref_module(name) || name == "conn"
                             ),
+                            // Qualified paths lower as `Identifier("strings::substring")`.
                             Expression::Identifier { name, .. } => {
-                                is_asref_module(name) || name.contains("db::")
+                                is_asref_module(name) || name == "conn"
                             }
                             _ => false,
                         };

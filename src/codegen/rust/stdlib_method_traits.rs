@@ -791,6 +791,16 @@ pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
     )
 }
 
+/// Module segment of a callee path: `strings`, `strings::substring`, `std::strings::len`.
+pub fn runtime_module_segment_from_callee_path(name: &str) -> &str {
+    let parts: Vec<&str> = name.split("::").collect();
+    match parts.as_slice() {
+        ["std", m, ..] => m,
+        [m, ..] => m,
+        [] => name,
+    }
+}
+
 /// Stdlib struct types that lower to a `windjammer_runtime` module (receiver type → module).
 pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
     let base = type_name.rsplit("::").next().unwrap_or(type_name);

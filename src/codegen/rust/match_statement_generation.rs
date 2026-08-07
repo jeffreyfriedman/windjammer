@@ -104,9 +104,14 @@ impl<'ast> CodeGenerator<'ast> {
 
             let match_binds_refs_early_check = self.match_expression_binds_refs(value)
                 || self.expression_type_contains_reference(value);
+            let option_reassigns_early = matches!(
+                &arms[0].pattern,
+                Pattern::EnumVariant(name, _) if name == "Some" || name.ends_with("::Some")
+            ) && self.option_arm_reassigns_scrutinee_field(value, arms[0].body);
             let needs_borrow_break_check = (self.match_scrutinee_is_self_method_call(value)
                 || self.match_scrutinee_is_self_field(value))
                 && (self.match_arms_mutate_self(arms)
+                    || option_reassigns_early
                     || (self.inferred_mut_borrowed_params.contains("self")
                         && self.match_arms_call_self_method(arms)));
 
@@ -621,10 +626,14 @@ impl<'ast> CodeGenerator<'ast> {
             && !use_copied_borrow_break
             && !option_reassigns
             && self.match_borrow_break_yields_owned_copy_option(value);
+        // Owned-option borrow-break is for method returns (`self.network.poll()` →
+        // `Option<T>`). Self-field / index Option must clone into an owned temp so
+        // mut / ref-mut arms and scrutinee reassignment do not overlap borrows.
         let use_owned_option_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && !use_owned_copy_borrow_break
             && !option_reassigns
+            && !self.match_scrutinee_is_self_field(value)
             && self.match_borrow_break_yields_owned_option(value);
         let use_owned_clone_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
@@ -638,6 +647,18 @@ impl<'ast> CodeGenerator<'ast> {
             && !use_owned_clone_borrow_break;
 
         let mut output = self.indent();
+
+        // Owned clone borrow-break always uses `let mut`: arms either mutate
+        // bindings, write back the scrutinee, or move non-Copy payloads out of
+        // the cloned value (blend-tree / inventory patterns).
+        let owned_break_needs_mut = use_owned_clone_borrow_break
+            || ((use_owned_copy_borrow_break || use_owned_option_borrow_break)
+                && self.match_borrow_break_temp_needs_mut(arms, value));
+        let borrow_break_let = if owned_break_needs_mut {
+            "let mut __match_borrow_break"
+        } else {
+            "let __match_borrow_break"
+        };
 
         if needs_borrow_break {
             if use_copied_borrow_break {
@@ -655,16 +676,13 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_owned_copy_borrow_break || use_owned_option_borrow_break {
-                output.push_str(&format!("let __match_borrow_break = {};\n", value_str));
+                output.push_str(&format!("{} = {};\n", borrow_break_let, value_str));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_owned_clone_borrow_break {
                 let expr = self.generate_expression(value);
                 let raw = self.strip_leading_borrow_prefix(&expr);
-                output.push_str(&format!(
-                    "let mut __match_borrow_break = {}.clone();\n",
-                    raw
-                ));
+                output.push_str(&format!("{} = {}.clone();\n", borrow_break_let, raw));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else {
@@ -779,11 +797,22 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     &[]
                 };
+            // Owned clone/copy borrow-break matches owned values — upgrade to `mut`,
+            // never `ref mut` (which would require a mutable place behind a reference).
+            let scrutinee_is_ref_for_upgrade = if use_owned_clone_borrow_break
+                || use_owned_copy_borrow_break
+                || use_copied_borrow_break
+                || use_owned_option_borrow_break
+            {
+                false
+            } else {
+                match_scrutinee_ref_prefix.contains("mut")
+                    || self.option_indexed_scrutinee_needs_mut_opt(Some(arm), value)
+            };
             let upgraded_pattern = self.upgrade_pattern_mut_bindings(
                 &arm.pattern,
                 body_stmts,
-                match_scrutinee_ref_prefix.contains("mut")
-                    || self.option_indexed_scrutinee_needs_mut_opt(Some(arm), value),
+                scrutinee_is_ref_for_upgrade,
                 Some(arm.body),
                 Some(value),
             );
