@@ -51,7 +51,7 @@ fn int_formals_must_not_demote_to_ref_i64() {
         src.join("counts.wj"),
         r#"
 pub fn status_html(class_count: int, dept_count: int) -> string {
-    "c=".to_string() + class_count.to_string() + ",d=" + dept_count.to_string()
+    "c=" + class_count.to_string() + ",d=" + dept_count.to_string()
 }
 "#,
     )
@@ -66,7 +66,9 @@ pub fn status_html(class_count: int, dept_count: int) -> string {
     );
 
     let generated = fs::read_to_string(out.join("counts.rs")).expect("counts.rs");
-    let generated = generated.replace("#[allow(unused_imports)]\nuse super::*;\n\n", "");
+    let generated = generated
+        .replace("#[allow(unused_imports)]\nuse super::*;\n\n", "")
+        .replace("#[allow(unused_imports)]\nuse super::*;\n", "");
     assert!(
         !generated.contains("class_count: &i64")
             && !generated.contains("dept_count: &i64")

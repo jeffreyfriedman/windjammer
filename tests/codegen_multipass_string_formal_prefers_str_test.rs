@@ -36,7 +36,7 @@ fn multipass_read_only_string_formals_must_not_emit_ref_string() {
         src.join("grid.wj"),
         r#"
 pub fn render_grid(left_html: string, right_html: string, ok: bool) -> string {
-    let mark = if ok { "ok".to_string() } else { "bad".to_string() }
+    let mark = if ok { "ok" } else { "bad" }
     format!("<div>{}{}{}</div>", left_html, right_html, mark)
 }
 "#,
