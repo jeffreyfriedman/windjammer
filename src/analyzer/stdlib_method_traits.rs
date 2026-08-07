@@ -8,53 +8,8 @@ use crate::parser::Type;
 use super::{FunctionSignature, OwnershipMode, SignatureRegistry};
 
 // ── Inline fallback tables (legacy method_registry parity) ───────────────
-
-const MUTATES_RECEIVER: &[&str] = &[
-    "push",
-    "pop",
-    "insert",
-    "remove",
-    "clear",
-    "append",
-    "extend",
-    "drain",
-    "truncate",
-    "resize",
-    "retain",
-    "sort",
-    "sort_by",
-    "sort_by_key",
-    "sort_unstable",
-    "sort_unstable_by",
-    "dedup",
-    "reverse",
-    "swap",
-    "swap_remove",
-    "reserve",
-    "shrink_to_fit",
-    "split_off",
-    "fill",
-    "set",
-    "rotate_left",
-    "rotate_right",
-    "set_len",
-    "push_str",
-    "push_front",
-    "push_back",
-    "pop_front",
-    "pop_back",
-    "make_ascii_lowercase",
-    "make_ascii_uppercase",
-    "add",
-    "take",
-    "replace",
-    "get_or_insert",
-    "get_or_insert_with",
-    "entry",
-    "get_mut",
-    "iter_mut",
-    "values_mut",
-];
+// Mutating-receiver detection is signature-driven (see consensus_mutates_receiver).
+// Do not reintroduce MUTATES_RECEIVER method-name lists.
 
 const KNOWN_READONLY: &[&str] = &[
     "contains_key",
@@ -255,8 +210,10 @@ const COMMON_STDLIB_NAMES: &[&str] = &[
 
 // ── Inline fallbacks ─────────────────────────────────────────────────────
 
+/// Unqualified fallback: unanimous `MutBorrowed` self across stdlib `::{method}` keys.
+/// Prefer [`method_mutates_receiver_qualified`] when receiver type + registry are available.
 pub fn method_mutates_receiver(method: &str) -> bool {
-    MUTATES_RECEIVER.contains(&method)
+    consensus_mutates_receiver(method, SignatureRegistry::stdlib())
 }
 
 pub fn is_known_readonly(method: &str) -> bool {
@@ -418,22 +375,49 @@ pub(crate) fn is_map_receiver(receiver_type: Option<&str>) -> bool {
     })
 }
 
+fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && matches!(
+            sig.param_ownership.first(),
+            Some(OwnershipMode::MutBorrowed)
+        )
+}
+
+/// When `::{method}` is registered on many types, true only if every *instance*
+/// method match takes `&mut self`. Free functions that share the suffix are
+/// ignored. Ambiguous method names return false — use the qualified API instead.
+fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_mutates_receiver(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
 pub fn method_mutates_receiver_qualified(
     method: &str,
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
     if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] == OwnershipMode::MutBorrowed;
-        }
+        return sig_mutates_receiver(sig);
+    }
+    if let Some(sig) = lookup_suffix(method, registry) {
+        return sig_mutates_receiver(sig);
     }
     if let Some(sig) = lookup_unqualified(method, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] == OwnershipMode::MutBorrowed;
-        }
+        return sig_mutates_receiver(sig);
     }
-    false
+    consensus_mutates_receiver(method, registry)
 }
 
 pub fn is_known_readonly_qualified(
@@ -568,4 +552,36 @@ pub fn method_is_slice_search_qualified(
             && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
             && first_arg_type(s).is_some_and(|ty| is_reference_type(ty) && !is_str_reference(ty))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn method_mutates_receiver_stdlib_consensus() {
+        assert!(method_mutates_receiver("push"));
+        assert!(method_mutates_receiver("clear"));
+        assert!(!method_mutates_receiver("len"));
+        assert!(
+            !method_mutates_receiver("replace"),
+            "Option vs String replace must not consensus-mutate"
+        );
+        assert!(!method_mutates_receiver("no_such_method_zzz"));
+    }
+
+    #[test]
+    fn method_mutates_receiver_qualified_option_replace() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(method_mutates_receiver_qualified(
+            "replace",
+            Some("Option"),
+            reg
+        ));
+        assert!(!method_mutates_receiver_qualified(
+            "replace",
+            Some("String"),
+            reg
+        ));
+    }
 }
