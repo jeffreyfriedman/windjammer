@@ -12,14 +12,19 @@ set -o pipefail
 
 KNOWN=".config/known-test-failures.txt"
 ACTUAL_FILE=$(mktemp)
-trap "rm -f $ACTUAL_FILE" EXIT
+KNOWN_FILE=$(mktemp)
+trap "rm -f $ACTUAL_FILE $KNOWN_FILE" EXIT
 
 if [ ! -f "$KNOWN" ]; then
     echo "⚠️  No known-failures file at $KNOWN — running tests normally"
     exec cargo test "$@"
 fi
 
-echo "🔧 Running tests with ratcheting (known failures: $(wc -l < "$KNOWN" | tr -d ' '))"
+# Strip comments/blank lines so header-only files stay empty for the ratchet.
+grep -vE '^\s*(#|$)' "$KNOWN" | sort > "$KNOWN_FILE" || true
+KNOWN_COUNT=$(wc -l < "$KNOWN_FILE" | tr -d ' ')
+
+echo "🔧 Running tests with ratcheting (known failures: $KNOWN_COUNT)"
 echo ""
 
 cargo test "$@" 2>&1 | tee /tmp/test-ratchet-output.txt
@@ -41,14 +46,14 @@ if [ "$ACTUAL_COUNT" -eq 0 ]; then
     exit 1
 fi
 
-NEW_FAILURES=$(comm -23 "$ACTUAL_FILE" "$KNOWN")
-FIXED_TESTS=$(comm -23 "$KNOWN" "$ACTUAL_FILE")
+NEW_FAILURES=$(comm -23 "$ACTUAL_FILE" "$KNOWN_FILE")
+FIXED_TESTS=$(comm -23 "$KNOWN_FILE" "$ACTUAL_FILE")
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📊 Ratchet Report"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "   Known failures: $(wc -l < "$KNOWN" | tr -d ' ')"
+echo "   Known failures: $KNOWN_COUNT"
 echo "   Actual failures: $ACTUAL_COUNT"
 
 if [ -n "$FIXED_TESTS" ]; then
