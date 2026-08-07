@@ -1,0 +1,100 @@
+{
+  "module_path": "BTreeSet",
+  "structs": {},
+  "functions": {
+    "BTreeSet::insert": {
+      "params": ["MutableReference(Custom(\"BTreeSet\"))", "Custom(\"T\")"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::remove": {
+      "params": ["MutableReference(Custom(\"BTreeSet\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::contains": {
+      "params": ["Reference(Custom(\"BTreeSet\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::clear": {
+      "params": ["MutableReference(Custom(\"BTreeSet\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::len": {
+      "params": ["Reference(Custom(\"BTreeSet\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::is_empty": {
+      "params": ["Reference(Custom(\"BTreeSet\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::iter": {
+      "params": ["Reference(Custom(\"BTreeSet\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::into_iter": {
+      "params": ["Custom(\"BTreeSet\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::new": {
+      "params": [],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": [],
+      "has_self_receiver": false
+    },
+    "BTreeSet::clone": {
+      "params": ["Reference(Custom(\"BTreeSet\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "BTreeSet::retain": {
+      "params": ["MutableReference(Custom(\"BTreeSet\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "BTreeSet",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    }
+  },
+  "enums": {},
+  "traits": {},
+  "impls": [],
+  "dependencies": [],
+  "copy_types": [],
+  "exports": []
+}

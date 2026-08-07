@@ -1012,15 +1012,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                             });
                             let is_set_or_map_key = i == 0
-                                && (crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(
-                                    method,
-                                ) || crate::codegen::rust::stdlib_method_traits::is_map_key_method(
-                                    method,
-                                )
-                                    || crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                                && (crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
                                         &contract_sig,
                                         i,
                                         receiver_rt.as_deref(),
+                                    )
+                                    || crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_from_sig(
+                                        &contract_sig,
+                                        i,
                                     ));
                             if callee_copy
                                 && caller_copy
@@ -1067,20 +1066,12 @@ impl<'ast> CodeGenerator<'ast> {
                             receiver_rt.as_deref(),
                             false,
                         );
-                        if i == 0
-                            && !coerced.starts_with('&')
-                            && (crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(
-                                method,
-                            ) || crate::codegen::rust::stdlib_method_traits::is_map_key_method(
-                                method,
-                            ))
-                            && receiver_rt.as_ref().is_some_and(|rt| {
-                                let base = rt.split('<').next().unwrap_or(rt);
-                                crate::codegen::rust::stdlib_method_traits::is_set_type_name(base)
-                                    || crate::codegen::rust::stdlib_method_traits::is_map_type_name(
-                                        base,
-                                    )
-                            })
+                        if !coerced.starts_with('&')
+                            && crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                                &contract_sig,
+                                i,
+                                receiver_rt.as_deref(),
+                            )
                         {
                             crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
                                 &mut coerced,
@@ -1324,32 +1315,60 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // TDD FIX: Vec index methods require usize arguments.
-                // Int inference may resolve the literal to i32/u32/i64/u64 due to
-                // conflicting constraints. Fix at codegen level: rewrite any
-                // integer suffix to _usize for the first argument of known
-                // index-taking methods.
-                if i == 0
-                    && crate::codegen::rust::stdlib_method_traits::is_index_taking_method(method)
+                // Signature-driven: formal `usize` index/capacity args (Vec::remove, insert, …).
+                // Prefer resolved call-site / method signature over method-name lists.
                 {
-                    let is_int_literal = matches!(
-                        arg,
-                        Expression::Literal {
-                            value: Literal::Int(_) | Literal::IntSuffixed(_, _),
-                            ..
-                        }
-                    );
-                    if is_int_literal {
-                        let int_suffixes =
-                            ["_i32", "_i64", "_u32", "_u64", "_i16", "_u16", "_i8", "_u8"];
-                        for suffix in &int_suffixes {
-                            if arg_str.ends_with(suffix) {
-                                arg_str = format!(
-                                    "{}_usize",
-                                    &arg_str[..arg_str.len() - suffix.len()]
-                                );
-                                break;
+                    let usize_sig = call_site_sig.as_ref().or(method_signature.as_ref());
+                    if let Some(sig) = usize_sig {
+                        let formal = sig
+                            .formal_param_type(sig.arg_param_index(i))
+                            .or_else(|| sig.param_types.get(sig.arg_param_index(i)));
+                        let already_usize = match arg {
+                            Expression::Identifier { name, .. } => {
+                                self.current_function_params
+                                    .iter()
+                                    .find(|p| p.name == *name)
+                                    .is_some_and(|p| {
+                                        matches!(&p.type_, Type::Custom(n) if n == "usize")
+                                    })
+                                    || self.local_var_types.get(name).is_some_and(|t| {
+                                        matches!(t, Type::Custom(n) if n == "usize")
+                                    })
+                                    || self.usize_variables.contains(name)
                             }
+                            _ => {
+                                self.infer_expression_type_is_usize(arg)
+                                    || self.expression_produces_usize(arg)
+                            }
+                        };
+                        crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+                            arg,
+                            &mut arg_str,
+                            formal,
+                            already_usize,
+                        );
+                    } else if i == 0
+                        && crate::codegen::rust::stdlib_method_traits::method_is_index_taking_qualified(
+                            method,
+                            receiver_type_name,
+                            &self.signature_registry,
+                        )
+                    {
+                        // Registry knows the formal is usize but call-site sig missing.
+                        let is_int_literal = matches!(
+                            arg,
+                            Expression::Literal {
+                                value: Literal::Int(_) | Literal::IntSuffixed(_, _),
+                                ..
+                            }
+                        );
+                        if is_int_literal {
+                            crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+                                arg,
+                                &mut arg_str,
+                                Some(&Type::Custom("usize".to_string())),
+                                false,
+                            );
                         }
                     }
                 }
@@ -2762,24 +2781,13 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver_type_name,
                         &self.signature_registry,
                         i,
+                    ) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_qualified(
+                        method,
+                        receiver_type_name,
+                        &self.signature_registry,
+                        i,
                     );
-                let is_map_method = crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
-                    && i == 0
-                    && (self.infer_expression_type(object).as_ref().is_some_and(
-                        crate::codegen::rust::stdlib_method_traits::is_map_type,
-                    ) || self
-                        .infer_type_name(object)
-                        .as_ref()
-                        .is_some_and(|n| crate::codegen::rust::stdlib_method_traits::is_map_type_name(n)));
-                let is_set_method = crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(method)
-                    && i == 0
-                    && (self.infer_expression_type(object).as_ref().is_some_and(
-                        crate::codegen::rust::stdlib_method_traits::is_set_type,
-                    ) || self
-                        .infer_type_name(object)
-                        .as_ref()
-                        .is_some_and(|n| crate::codegen::rust::stdlib_method_traits::is_set_type_name(n)));
-                if (is_auto_borrow || is_map_method || is_set_method)
+                if (is_auto_borrow || is_collection_key_arg)
                     && (is_auto_borrow || i == 0)
                 {
                     let is_string_literal = matches!(arg, Expression::Literal { value: Literal::String(_), .. });

@@ -3509,41 +3509,51 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_index != 0 {
             return false;
         }
-        let is_key_method = crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
-            || (include_set_lookup
-                && crate::codegen::rust::stdlib_method_traits::is_set_lookup_method(method));
-        if !is_key_method {
-            return false;
-        }
-        if let Expression::Identifier { name, .. } = object {
-            if let Some(param) = func.parameters.iter().find(|p| p.name == *name) {
-                if crate::codegen::rust::stdlib_method_traits::is_map_type(&param.type_) {
-                    return true;
-                }
-                if include_set_lookup
-                    && crate::codegen::rust::stdlib_method_traits::is_set_type(&param.type_)
-                {
-                    return true;
-                }
-            }
-        }
-        if let Expression::FieldAccess { object, field, .. } = object {
+        let receiver_ty = if let Expression::Identifier { name, .. } = object {
+            func.parameters
+                .iter()
+                .find(|p| p.name == *name)
+                .map(|p| &p.type_)
+        } else if let Expression::FieldAccess { object, field, .. } = object {
             if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
-                if let Some(sn) = self.current_struct_name.as_ref() {
-                    if let Some(fields) = self.lookup_struct_field_types(sn) {
-                        if let Some(field_ty) = fields.get(field.as_str()) {
-                            if crate::codegen::rust::stdlib_method_traits::is_map_type(field_ty) {
-                                return true;
-                            }
-                            if include_set_lookup
-                                && crate::codegen::rust::stdlib_method_traits::is_set_type(field_ty)
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                }
+                self.current_struct_name.as_ref().and_then(|sn| {
+                    self.lookup_struct_field_types(sn)
+                        .and_then(|fields| fields.get(field.as_str()))
+                })
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        if let Some(ty) = receiver_ty {
+            let is_map = crate::codegen::rust::stdlib_method_traits::is_map_type(ty);
+            let is_set = include_set_lookup
+                && crate::codegen::rust::stdlib_method_traits::is_set_type(ty);
+            if !is_map && !is_set {
+                return false;
+            }
+            let rt = Self::type_to_name(ty);
+            let rt_ref = rt.as_deref().or_else(|| match ty {
+                Type::Parameterized(base, _) | Type::Custom(base) => Some(base.as_str()),
+                _ => None,
+            });
+            return crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_qualified(
+                method,
+                rt_ref,
+                &self.signature_registry,
+                0,
+            ) || crate::codegen::rust::stdlib_method_traits::method_arg_needs_auto_borrow_at_index(
+                method,
+                rt_ref,
+                &self.signature_registry,
+                0,
+            ) || (is_map
+                && crate::codegen::rust::stdlib_method_traits::method_is_map_key_qualified(
+                    method,
+                    rt_ref,
+                    &self.signature_registry,
+                ));
         }
         let Some(rt) = (if let Expression::Identifier { name, .. } = object {
             func.parameters
@@ -3560,9 +3570,28 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let base = rt.split('<').next().unwrap_or(rt.as_str());
-        crate::codegen::rust::stdlib_method_traits::is_map_type_name(base)
-            || (include_set_lookup
-                && crate::codegen::rust::stdlib_method_traits::is_set_type_name(base))
+        let is_map = crate::codegen::rust::stdlib_method_traits::is_map_type_name(base);
+        let is_set = include_set_lookup
+            && crate::codegen::rust::stdlib_method_traits::is_set_type_name(base);
+        if !is_map && !is_set {
+            return false;
+        }
+        crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_qualified(
+            method,
+            Some(base),
+            &self.signature_registry,
+            0,
+        ) || crate::codegen::rust::stdlib_method_traits::method_arg_needs_auto_borrow_at_index(
+            method,
+            Some(base),
+            &self.signature_registry,
+            0,
+        ) || (is_map
+            && crate::codegen::rust::stdlib_method_traits::method_is_map_key_qualified(
+                method,
+                Some(base),
+                &self.signature_registry,
+            ))
     }
 
     fn method_arg_is_qualified_collection_key(

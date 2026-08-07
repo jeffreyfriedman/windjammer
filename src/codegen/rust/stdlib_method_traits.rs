@@ -663,17 +663,13 @@ pub fn method_mutates_receiver(method: &str) -> bool {
 }
 
 /// HashMap/BTreeMap key methods — name classification for stdlib trait identity only.
-/// Ownership decisions must still go through [`method_is_map_key_qualified`] / signatures.
+/// Ownership / borrow decisions must use [`method_is_map_key_qualified`],
+/// [`method_arg_expects_borrowed_reference_qualified`], or [`is_collection_key_lookup`].
 pub fn is_map_key_method(method: &str) -> bool {
     matches!(
         method,
         "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
     )
-}
-
-/// HashSet/BTreeSet lookup — first arg is always borrowed.
-pub fn is_set_lookup_method(method: &str) -> bool {
-    matches!(method, "contains" | "remove")
 }
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.
@@ -692,13 +688,6 @@ pub fn is_map_type(ty: &crate::parser::Type) -> bool {
         crate::parser::Type::Custom(name) => is_map_type_name(name),
         _ => false,
     }
-}
-
-pub fn is_index_taking_method(method: &str) -> bool {
-    matches!(
-        method,
-        "insert" | "remove" | "swap" | "swap_remove" | "drain" | "split_off"
-    )
 }
 
 pub fn is_closure_taking_method(method: &str) -> bool {
@@ -1135,5 +1124,64 @@ mod pattern_registry_tests {
             Some("B"),
             &reg
         ));
+    }
+
+    #[test]
+    fn hashset_lookup_args_expect_borrowed_element_ref() {
+        let reg = SignatureRegistry::stdlib();
+        for method in ["contains", "remove"] {
+            assert!(
+                method_arg_expects_borrowed_reference_qualified(method, Some("HashSet"), reg, 0),
+                "HashSet::{method} first arg must be &T"
+            );
+            assert!(
+                method_arg_expects_borrowed_reference_qualified(method, Some("BTreeSet"), reg, 0),
+                "BTreeSet::{method} first arg must be &T"
+            );
+            let sig = reg
+                .get_signature(&format!("HashSet::{method}"))
+                .unwrap_or_else(|| panic!("missing HashSet::{method} in stdlib_meta"));
+            assert!(is_collection_key_lookup(sig, 0, Some("HashSet")));
+            assert!(!method_is_index_taking_qualified(method, Some("HashSet"), reg));
+        }
+    }
+
+    #[test]
+    fn vec_remove_index_is_owned_usize_not_borrowed_key() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(method_is_index_taking_qualified("remove", Some("Vec"), reg));
+        assert!(!method_arg_expects_borrowed_reference_qualified(
+            "remove",
+            Some("Vec"),
+            reg,
+            0
+        ));
+        let sig = reg
+            .get_signature("Vec::remove")
+            .expect("Vec::remove in stdlib_meta");
+        assert!(!is_collection_key_lookup(sig, 0, Some("Vec")));
+        assert!(first_arg_type(sig).is_some_and(is_usize_type));
+    }
+
+    #[test]
+    fn hashmap_get_expects_borrowed_key_ref() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(method_arg_expects_borrowed_reference_qualified(
+            "get",
+            Some("HashMap"),
+            reg,
+            0
+        ));
+        assert!(method_is_map_key_qualified("get", Some("HashMap"), reg));
+        assert!(method_arg_expects_borrowed_reference_qualified(
+            "contains_key",
+            Some("HashMap"),
+            reg,
+            0
+        ));
+        let sig = reg
+            .get_signature("HashMap::get")
+            .expect("HashMap::get in stdlib_meta");
+        assert!(is_collection_key_lookup(sig, 0, Some("HashMap")));
     }
 }

@@ -1,0 +1,108 @@
+{
+  "module_path": "HashSet",
+  "structs": {},
+  "functions": {
+    "HashSet::insert": {
+      "params": ["MutableReference(Custom(\"HashSet\"))", "Custom(\"T\")"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    },
+    "HashSet::remove": {
+      "params": ["MutableReference(Custom(\"HashSet\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["MutBorrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::contains": {
+      "params": ["Reference(Custom(\"HashSet\"))", "Reference(Custom(\"T\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Borrowed", "Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::clear": {
+      "params": ["MutableReference(Custom(\"HashSet\"))"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["MutBorrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::len": {
+      "params": ["Reference(Custom(\"HashSet\"))"],
+      "return_type": "Custom(\"usize\")",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::is_empty": {
+      "params": ["Reference(Custom(\"HashSet\"))"],
+      "return_type": "Bool",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::iter": {
+      "params": ["Reference(Custom(\"HashSet\"))"],
+      "return_type": "Custom(\"Iterator\")",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::into_iter": {
+      "params": ["Custom(\"HashSet\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": true
+    },
+    "HashSet::with_capacity": {
+      "params": ["Custom(\"usize\")"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Owned"],
+      "has_self_receiver": false
+    },
+    "HashSet::new": {
+      "params": [],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": [],
+      "has_self_receiver": false
+    },
+    "HashSet::clone": {
+      "params": ["Reference(Custom(\"HashSet\"))"],
+      "return_type": "Custom(\"Self\")",
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "HashSet::retain": {
+      "params": ["MutableReference(Custom(\"HashSet\"))", "Custom(\"Fn\")"],
+      "return_type": null,
+      "is_associated": true,
+      "parent_type": "HashSet",
+      "param_ownership": ["MutBorrowed", "Owned"],
+      "has_self_receiver": true
+    }
+  },
+  "enums": {},
+  "traits": {},
+  "impls": [],
+  "dependencies": [],
+  "copy_types": [],
+  "exports": []
+}
