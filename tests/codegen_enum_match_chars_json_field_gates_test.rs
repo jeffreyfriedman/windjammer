@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPROS — enum match qualification, `chars()` loops, JSON field helpers.
+//! Gates (GREEN) — enum match qualification, `chars()` loops, JSON field helpers.
 //!
 //! Each gate `cargo check`s emitted Rust:
 //!

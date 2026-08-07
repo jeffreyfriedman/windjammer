@@ -72,14 +72,17 @@ CLI help text still says “functions starting with `test_`”, while discovery 
 
 Even when `wj test` runs, library code must avoid Rustisms (`"lit".to_string()`) while tip still emits bare `&str` into some owned `String` formals (external UI builders). Tests that only call pure WJ helpers work; tests that compile UI dogfood hit the same codegen bugs as the app.
 
-**Related gates (already filed):**
+**Related gates (GREEN on tip as of fixture W0006 scrub + Option\<string\> payload own):**
 
 - `rust_leakage_string_literal_to_string_forbidden_test` — forbid `"…".to_string()` in WJ source  
 - `codegen_bare_string_literal_owned_method_arg_gate_test` — bare lit into owned method must auto-own  
 - `codegen_empty_string_option_match_arm_gate_test` — `None => ""` vs `Some(s) => s`  
 - `codegen_owned_string_trait_render_concat_gate_test` — cross-module `.render()` concat borrow  
+- `codegen_enum_match_chars_json_field_gates_test` — enum qualify / chars / `Option<string>` field helper  
+- `codegen_home_kpitile_compose_test` — KpiTile/KpiGrid compose without WJ-source `.to_string()`  
+- `codegen_str_index_split_escape_gates_test` — index/split/escape + multipass formals  
 
-Until those are green, dogfood packages keep a small `owned_string` / interpolation workaround surface — and often keep Rust tests that already compile against tip’s emitted signatures.
+Dogfood packages should no longer need `"lit".to_string()` workarounds for these patterns; remaining Rust harness tests are for other gaps (see above).
 
 ### 6. No first-class “integration test against generated lib in-place”
 

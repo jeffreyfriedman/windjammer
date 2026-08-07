@@ -447,6 +447,16 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if !string_utilities::already_owned_string_expr(&value_str) {
                         value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                     }
+                } else if var_name.is_some_and(|vn| {
+                    self.local_var_types
+                        .get(vn)
+                        .is_some_and(string_utilities::type_is_owned_string)
+                }) && !string_utilities::already_owned_string_expr(&value_str)
+                    && value_str.starts_with('&')
+                {
+                    // Untyped `let s = …` infers WJ `string` but RHS may emit `&text[i..j]`
+                    // — coerce so `Some(s)` / owned returns typecheck.
+                    value_str = string_utilities::coerce_expr_to_owned_string(&value_str);
                 } else if mutable
                     && string_utilities::return_type_expects_owned_string(
                         &self.current_function_return_type,

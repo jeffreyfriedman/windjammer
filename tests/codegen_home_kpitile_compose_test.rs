@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO (dogfood): compose KpiTile/KpiGrid in application Windjammer.
+//! Gate (GREEN, dogfood): compose KpiTile/KpiGrid in application Windjammer.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
