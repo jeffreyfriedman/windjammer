@@ -40,7 +40,10 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
         MethodSignature::new(
             "Vec",
             "insert",
-            vec![Type::Uint, Type::Custom("T".to_string())], // index: usize, element: T
+            vec![
+                Type::Custom("usize".to_string()),
+                Type::Custom("T".to_string()),
+            ], // index: usize, element: T
             vec![OwnershipMode::Owned, OwnershipMode::Owned],
             None,
             true,
@@ -51,7 +54,7 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
         MethodSignature::new(
             "Vec",
             "remove",
-            vec![Type::Uint], // index: usize (owned, not &usize)
+            vec![Type::Custom("usize".to_string())], // index: usize (owned, not &usize)
             vec![OwnershipMode::Owned],
             Some(Type::Custom("T".to_string())),
             true,
@@ -62,7 +65,7 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
         MethodSignature::new(
             "Vec",
             "get",
-            vec![Type::Uint],
+            vec![Type::Custom("usize".to_string())],
             vec![OwnershipMode::Owned],
             Some(Type::Option(Box::new(Type::Reference(Box::new(Type::Custom(
                 "T".to_string(),
@@ -75,7 +78,7 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
         MethodSignature::new(
             "Vec",
             "get_mut",
-            vec![Type::Uint],
+            vec![Type::Custom("usize".to_string())],
             vec![OwnershipMode::Owned],
             Some(Type::Option(Box::new(Type::MutableReference(Box::new(
                 Type::Custom("T".to_string()),
@@ -220,6 +223,49 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     map.insert("ConcurrentMap".to_string(), hashmap_methods.clone());
     map.insert("HashMap".to_string(), hashmap_methods);
 
+    // HashSet<T> / BTreeSet<T> — lookup args are `&T` (Borrowed), not owned.
+    let mut hashset_methods = HashMap::new();
+    hashset_methods.insert(
+        "contains".to_string(),
+        MethodSignature::new(
+            "HashSet",
+            "contains",
+            vec![Type::Reference(Box::new(Type::Custom("T".to_string())))],
+            vec![OwnershipMode::Borrowed],
+            Some(Type::Bool),
+            true,
+        ),
+    );
+    hashset_methods.insert(
+        "remove".to_string(),
+        MethodSignature::new(
+            "HashSet",
+            "remove",
+            vec![Type::Reference(Box::new(Type::Custom("T".to_string())))],
+            vec![OwnershipMode::Borrowed],
+            Some(Type::Bool),
+            true,
+        ),
+    );
+    hashset_methods.insert(
+        "insert".to_string(),
+        MethodSignature::new(
+            "HashSet",
+            "insert",
+            vec![Type::Custom("T".to_string())],
+            vec![OwnershipMode::Owned],
+            Some(Type::Bool),
+            true,
+        ),
+    );
+    map.insert("BTreeSet".to_string(), hashset_methods.clone());
+    // Retarget cloned entries to BTreeSet receiver before inserting HashSet.
+    if let Some(bt) = map.get_mut("BTreeSet") {
+        for sig in bt.values_mut() {
+            sig.receiver_type = "BTreeSet".to_string();
+        }
+    }
+    map.insert("HashSet".to_string(), hashset_methods);
 
     map
 }
