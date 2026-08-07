@@ -19,6 +19,47 @@ fn module_qualified_call_name(
     }
 }
 
+fn arg_expression_already_usize<'ast>(
+    gen: &CodeGenerator<'ast>,
+    arg: &Expression<'ast>,
+) -> bool {
+    match arg {
+        Expression::Identifier { name, .. } => {
+            gen.current_function_params
+                .iter()
+                .find(|p| p.name == *name)
+                .is_some_and(|p| matches!(&p.type_, Type::Custom(n) if n == "usize"))
+                || gen
+                    .local_var_types
+                    .get(name)
+                    .is_some_and(|t| matches!(t, Type::Custom(n) if n == "usize"))
+                || gen.usize_variables.contains(name)
+        }
+        _ => {
+            gen.infer_expression_type_is_usize(arg) || gen.expression_produces_usize(arg)
+        }
+    }
+}
+
+fn coerce_usize_formal_arg<'ast>(
+    gen: &CodeGenerator<'ast>,
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
+    arg: &Expression<'ast>,
+    arg_str: &mut String,
+) {
+    let sig_param_idx = sig.arg_param_index(arg_index);
+    let formal = sig
+        .formal_param_type(sig_param_idx)
+        .or_else(|| sig.param_types.get(sig_param_idx));
+    crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+        arg,
+        arg_str,
+        formal,
+        arg_expression_already_usize(gen, arg),
+    );
+}
+
 /// `json::get(value, …)` and friends: WJ declares owned `Value`, Rust takes `&Value`.
 fn maybe_borrow_runtime_std_json_value_arg<'ast>(
     gen: &CodeGenerator<'ast>,
@@ -282,6 +323,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             coerced.trim_start_matches('&')
                         );
                     }
+                    coerce_usize_formal_arg(gen, sig, i, arg_to_generate, &mut coerced);
                     return vec![coerced];
                 }
             }
@@ -635,6 +677,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 
             gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut arg_str);
 
+            coerce_usize_formal_arg(gen, sig, i, arg_to_generate, &mut arg_str);
+
             vec![arg_str]
         })
         .collect()
@@ -960,6 +1004,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
             }
 
             gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut arg_str);
+
+            if let Some(ref sig) = fallback_sig {
+                coerce_usize_formal_arg(gen, sig, i, arg_to_generate, &mut arg_str);
+            }
 
             arg_str
         })

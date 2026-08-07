@@ -90,16 +90,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     gen, func_name,
                 );
 
-            // TDD FIX: Cast int arguments to usize for stdlib methods
-            // Vec::with_capacity(size) where size: int → Vec::with_capacity(size as usize)
-            // Vec::with_capacity(10) where 10: int literal → Vec::with_capacity(10_usize)
-            let method_part = func_name.rsplit("::").next().unwrap_or(func_name);
-            if i == 0 && matches!(method_part, "with_capacity" | "reserve")
-            {
-                match arg {
+            // Signature-driven: coerce args into `usize` formals (capacity/index).
+            // Replaces former hardcoded `with_capacity`/`reserve` method-name lists.
+            if let Some(ref sig) = signature {
+                let sig_param_idx = sig.arg_param_index(i);
+                let formal = sig
+                    .formal_param_type(sig_param_idx)
+                    .or_else(|| sig.param_types.get(sig_param_idx));
+                let already_usize = match arg {
                     Expression::Identifier { name, .. } => {
-                        let already_usize = gen
-                            .current_function_params
+                        gen.current_function_params
                             .iter()
                             .find(|p| p.name == *name)
                             .is_some_and(|p| {
@@ -107,25 +107,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             })
                             || gen.local_var_types.get(name).is_some_and(|t| {
                                 matches!(t, Type::Custom(n) if n == "usize")
-                            });
-                        if !already_usize {
-                            arg_str = format!("{} as usize", arg_str);
-                        }
-                    }
-                    Expression::Literal {
-                        value: Literal::Int(val),
-                        ..
-                    } => {
-                        // Literals: use usize suffix
-                        arg_str = format!("{}_usize", val);
+                            })
+                            || gen.usize_variables.contains(name)
                     }
                     _ => {
-                        // Other expressions (e.g., calculations): wrap in (expr) as usize
-                        if !arg_str.ends_with("_usize") && !arg_str.contains(" as usize") {
-                            arg_str = format!("({}) as usize", arg_str);
-                        }
+                        gen.infer_expression_type_is_usize(arg)
+                            || gen.expression_produces_usize(arg)
                     }
-                }
+                };
+                crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+                    arg,
+                    &mut arg_str,
+                    formal,
+                    already_usize,
+                );
             }
 
             // WINDJAMMER FFI: Convert string arguments for extern functions

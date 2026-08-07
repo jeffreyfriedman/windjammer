@@ -50,6 +50,59 @@ pub fn maybe_cast_usize_to_int(expr_str: String, needs_cast: bool) -> String {
     }
 }
 
+/// True when a WJ/parser type is the Rust `usize` capacity/index formal.
+pub fn type_is_usize(ty: &Type) -> bool {
+    matches!(ty, Type::Custom(n) if n == "usize")
+}
+
+/// Coerce a call argument to match a `usize` formal (Rust collection capacity/index).
+///
+/// Signature-driven: only runs when the resolved formal is `usize`. Skips when the
+/// argument is already usize-typed or already lowered with `as usize` / `_usize`.
+pub fn coerce_arg_str_for_usize_formal(
+    arg: &Expression,
+    arg_str: &mut String,
+    formal: Option<&Type>,
+    arg_already_usize: bool,
+) {
+    if !formal.is_some_and(type_is_usize) {
+        return;
+    }
+    if arg_already_usize {
+        return;
+    }
+    if arg_str.contains(" as usize") || arg_str.ends_with("_usize") {
+        return;
+    }
+    // Strip a stale signed cast from IR when WJ used to declare int capacity
+    // (`n as i64` → `n as usize` for Rust HashMap::with_capacity).
+    if let Some(base) = arg_str.strip_suffix(" as i64") {
+        *arg_str = format!("{base} as usize");
+        return;
+    }
+    if let Some(base) = arg_str
+        .strip_prefix('(')
+        .and_then(|s| s.strip_suffix(" as i64)"))
+    {
+        *arg_str = format!("({base}) as usize");
+        return;
+    }
+    match arg {
+        Expression::Literal {
+            value: Literal::Int(val),
+            ..
+        } => {
+            *arg_str = format!("{val}_usize");
+        }
+        Expression::Identifier { .. } => {
+            *arg_str = format!("{arg_str} as usize");
+        }
+        _ => {
+            *arg_str = format!("({arg_str}) as usize");
+        }
+    }
+}
+
 /// Generate a cast for usize in binary operations
 pub fn cast_for_usize_binary_op(
     left_str: &str,
