@@ -266,21 +266,33 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a method on the given type is known to mutate its receiver,
-    /// using both the stdlib method registry and the signature registry.
+    /// preferring signature registry (type-qualified) over stdlib consensus.
     fn method_mutates_via_registry_or_sig(&self, method: &str, receiver_type: &Type) -> bool {
-        if super::stdlib_method_traits::method_mutates_receiver(method) {
-            return true;
-        }
         let type_name = match receiver_type {
-            Type::Custom(name) => name.as_str(),
-            _ => return false,
+            Type::Custom(name) => Some(name.as_str()),
+            Type::Parameterized(base, _) => Some(base.as_str()),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                return self.method_mutates_via_registry_or_sig(method, inner);
+            }
+            _ => None,
         };
-        let qualified = format!("{}::{}", type_name, method);
-        if let Some(sig) = self.get_signature_with_global(&qualified) {
-            if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-                return sig.param_ownership[0] == crate::analyzer::OwnershipMode::MutBorrowed;
+        if let Some(tn) = type_name {
+            let base = tn.split('<').next().unwrap_or(tn);
+            let short = base.rsplit("::").next().unwrap_or(base);
+            if super::stdlib_method_traits::method_mutates_receiver_qualified(
+                method,
+                Some(short),
+                &self.signature_registry,
+            ) {
+                return true;
+            }
+            let qualified = format!("{short}::{method}");
+            if let Some(sig) = self.get_signature_with_global(&qualified) {
+                if sig.has_self_receiver && !sig.param_ownership.is_empty() {
+                    return sig.param_ownership[0] == crate::analyzer::OwnershipMode::MutBorrowed;
+                }
             }
         }
-        false
+        super::stdlib_method_traits::method_mutates_receiver(method)
     }
 }

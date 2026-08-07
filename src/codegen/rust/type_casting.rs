@@ -8,6 +8,11 @@ use crate::parser::ast::*;
 /// Prefer `CodeGenerator::expression_produces_usize` (signature registry) when
 /// available. This pure helper cannot load the registry cheaply; it only mirrors
 /// consensus usize returns (`len` / `capacity` / `count`) for early cast insertion.
+///
+/// Call sites with a `SignatureRegistry` must use
+/// [`crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified`]
+/// (or `CodeGenerator::expression_produces_usize`) instead of extending this
+/// method-name list. A registry-aware sibling belongs in a follow-up PR.
 pub fn expression_produces_usize(expr: &Expression) -> bool {
     matches!(
         expr,

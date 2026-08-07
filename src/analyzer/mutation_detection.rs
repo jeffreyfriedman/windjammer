@@ -537,18 +537,21 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 if self.is_in_receiver_chain(name, object) {
-                    if super::stdlib_method_traits::method_mutates_receiver(method) {
-                        return true;
-                    }
-                    // PRIORITY 1: Type-qualified registry lookup when we know the receiver type.
-                    // This prevents cross-type collisions where `set_lighting` from TypeA
-                    // shadows `VoxelGPURenderer::set_lighting` in the bare-name registry.
+                    // PRIORITY 1: Type-qualified registry / stdlib consensus when we know
+                    // the receiver type (avoids expanding method-name lists).
                     let mut qualified_attempted = false;
                     if let Expression::Identifier { name: recv, .. } = &**object {
                         if recv == name {
                             if let Some(param_ty) = param_type_hint {
                                 if let Type::Custom(type_name) = param_ty {
                                     qualified_attempted = true;
+                                    if super::stdlib_method_traits::method_mutates_receiver_qualified(
+                                        method,
+                                        Some(type_name.as_str()),
+                                        registry,
+                                    ) {
+                                        return true;
+                                    }
                                     if let Some(sig) = registry
                                         .get_signature(&format!("{}::{}", type_name, method))
                                     {
@@ -567,13 +570,22 @@ impl<'ast> Analyzer<'ast> {
                                             ) {
                                                 return true;
                                             }
-                                        } else {
+                                        } else if sig.has_self_receiver
+                                            && !sig.param_ownership.is_empty()
+                                        {
                                             return false;
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    // Unqualified stdlib consensus (Vec::push etc.) when no type yet.
+                    if !qualified_attempted
+                        && super::stdlib_method_traits::method_mutates_receiver(method)
+                    {
+                        return true;
                     }
 
                     // PRIORITY 1b: For chained field access (param.field.method()),
@@ -583,8 +595,16 @@ impl<'ast> Analyzer<'ast> {
                     if let Some(receiver_type) =
                         self.resolve_field_chain_type_for_param(name, object, param_type_hint)
                     {
-                        if let Type::Custom(recv_type_name) = &receiver_type {
+                        if let Some(recv_type_name) = type_base_for_registry_lookup(&receiver_type)
+                        {
                             qualified_attempted = true;
+                            if super::stdlib_method_traits::method_mutates_receiver_qualified(
+                                method,
+                                Some(&recv_type_name),
+                                registry,
+                            ) {
+                                return true;
+                            }
                             let qname = format!("{}::{}", recv_type_name, method);
                             if let Some(sig) = registry.get_signature(&qname) {
                                 if sig.has_self_receiver {
@@ -597,7 +617,8 @@ impl<'ast> Analyzer<'ast> {
                                     {
                                         return true;
                                     }
-                                } else {
+                                } else if sig.has_self_receiver && !sig.param_ownership.is_empty()
+                                {
                                     return false;
                                 }
                             }
