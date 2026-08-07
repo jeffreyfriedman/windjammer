@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO — `string + local` after a **cross-module** trait `.render()` must borrow.
+//! Gate (GREEN) — `string + local` after a **cross-module** trait `.render()` must borrow.
 //!
 //! Same-file trait methods correctly emit `html + &chip`. When `.render()` is defined
 //! in a sibling module and called across `use crate::…`, tip omits `&` on the owned

@@ -10,11 +10,10 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO — bare string literals into owned `string` methods must auto-own in codegen.
+//! Gate (GREEN) — bare string literals into owned `string` methods must auto-own in codegen.
 //!
-//! WJ source must not write `"msg"`. Tip must emit ownership at the Rust
+//! WJ source must not write `"msg".to_string()`. Tip emits ownership at the Rust
 //! boundary when the callee formal is owned `String` (e.g. builder `.empty_message(String)`).
-//! Today tip leaves bare lits as `&str` for some external methods → E0308.
 //!
 //! Language-only; no product/repo names. Fixture uses a sibling-module builder.
 

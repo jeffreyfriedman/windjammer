@@ -429,7 +429,21 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 let arg = &arguments[i].1;
                 let result = arg_str.clone();
 
-                // Auto-convert string literals to String for Option/Result wrappers
+                // Auto-convert string literals / &str slices to String for Option/Result
+                // wrappers when the payload is owned string (`Option<string>`, `Result<string, _>`).
+                let payload_wants_owned_string = match (&gen.current_function_return_type, func_name)
+                {
+                    (Some(Type::Option(inner)), "Some") => {
+                        crate::codegen::rust::string_utilities::type_is_owned_string(inner)
+                    }
+                    (Some(Type::Result(ok, _)), "Ok") => {
+                        crate::codegen::rust::string_utilities::type_is_owned_string(ok)
+                    }
+                    (Some(Type::Result(_, err)), "Err") => {
+                        crate::codegen::rust::string_utilities::type_is_owned_string(err)
+                    }
+                    _ => false,
+                };
                 if matches!(
                     arg,
                     Expression::Literal {
@@ -438,6 +452,12 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     }
                 ) {
                     format!("{}.to_string()", result)
+                } else if payload_wants_owned_string
+                    && !crate::codegen::rust::string_utilities::already_owned_string_expr(&result)
+                    && result.starts_with('&')
+                {
+                    // `Some(&s[i..j])` → owned String payload (type-driven, not method names)
+                    crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&result)
                 } else if let Expression::Identifier { name, .. } = arg {
                     // BUGFIX: Don't clone if function returns Option<&T>, Option<&mut T>, or Result<&T, E>
                     // When returning Option<&Squad>, Some(squad) should NOT become Some(squad.clone())
