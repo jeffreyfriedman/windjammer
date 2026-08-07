@@ -364,11 +364,13 @@ pub fn main() -> i32 {
     let (generated, success) = test_utils::compile_single_check(code);
     let err = if !success { &generated } else { "" };
 
-    // Ideal: compute(&v, *ri). Until full coercion, generated code may leave
-    // rustc to error (E0308) which is still a useful regression snapshot.
+    // Ideal / improved: compute(&v, *ri as usize). Also accept compute(&v, *ri)
+    // or without deref. Until full coercion, rustc may still error (E0308).
     assert!(
         (generated.contains("compute(&v") || generated.contains("compute(v"))
-            && (generated.contains(", *ri)") || generated.contains(", ri)")),
+            && (generated.contains(", *ri as usize)")
+                || generated.contains(", *ri)")
+                || generated.contains(", ri)")),
         "Should reflect attempt to pass vec and index. Got:\n{}",
         generated
     );
