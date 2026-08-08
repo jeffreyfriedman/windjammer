@@ -10,7 +10,7 @@ impl MethodCallAnalyzer {
         method: &str,
         arg: &Expression,
         ctx: &MethodCallContext<'_, '_>,
-        arg_count: usize,
+        _arg_count: usize,
         receiver_type_name: Option<&str>,
         local_var_types: Option<&std::collections::HashMap<String, Type>>,
         signature_registry: Option<&crate::analyzer::SignatureRegistry>,
@@ -45,22 +45,14 @@ impl MethodCallAnalyzer {
             return false;
         }
 
-        if arg_count > 1 && super::super::stdlib_method_traits::is_map_key_method(method) {
-            return false;
-        }
-
-        if super::super::stdlib_method_traits::is_map_key_method(method) {
-            let is_known_map = receiver_type_name.is_some_and(|n| {
-                let base = n.split('<').next().unwrap_or(n);
-                matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
-            });
-            let is_known_vec =
-                receiver_type_name.is_some_and(|n| n.split('<').next().unwrap_or(n) == "Vec");
-
-            if is_known_vec {
-                return false;
-            }
-            if is_known_map {
+        // Signature-driven collection key / borrowed-element args — no method-name lists.
+        if let Some(registry) = signature_registry {
+            if super::super::stdlib_method_traits::method_arg_expects_borrowed_reference_qualified(
+                method,
+                receiver_type_name,
+                registry,
+                param_idx,
+            ) {
                 if let Expression::Identifier { name, .. } = arg {
                     let is_already_ref = current_function_params.iter().any(|p| {
                         p.name == *name
@@ -74,40 +66,24 @@ impl MethodCallAnalyzer {
                         return false;
                     }
                 }
-                return true;
-            }
 
-            // Receiver type unknown — `remove` has incompatible semantics across types
-            // (Vec::remove takes owned usize, HashMap::remove takes &K). Don't assume
-            // collection key borrow; let the method signature system handle it.
-            if method == "remove" {
-                return false;
-            }
-
-            if Self::is_copy_type_with_locals(
-                arg,
-                usize_variables,
-                current_function_params,
-                local_var_types,
-            ) {
-                return true;
-            }
-
-            if receiver_type_name.is_none() {
-                // Unknown receiver — `get`/`remove` semantics differ (Vec vs HashMap).
-                // Signature registry + IR coercion decide borrow; do not guess from method name.
-                return false;
-            }
-
-            if super::super::stdlib_method_traits::is_map_key_method(method) {
                 if let Expression::Cast { type_, .. } = arg {
                     if Self::is_copy_type_annotation_internal(type_) {
                         return false;
                     }
                 }
-            }
 
-            return true;
+                if Self::is_copy_type_with_locals(
+                    arg,
+                    usize_variables,
+                    current_function_params,
+                    local_var_types,
+                ) {
+                    return true;
+                }
+
+                return true;
+            }
         }
 
         if Self::is_copy_type_with_locals(

@@ -175,7 +175,9 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
             Some(&gen.enum_variant_types),
             runtime_module,
-        ) || sig.as_ref().is_some_and(|s| {
+        ) || (!runtime_module.is_some_and(
+            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
+        ) && sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
             if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(s, idx) {
                 return false;
@@ -192,7 +194,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .get(idx)
                 .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
             text_formal && owned_contract && not_str_ref
-        })
+        }))
         {
             *arg_str = format!("{}.to_string()", arg_str.trim_start_matches('&'));
         }

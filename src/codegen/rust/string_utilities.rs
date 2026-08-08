@@ -648,12 +648,12 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     }
 
     // `&String` formals need `&"lit".to_string()` — never strip to a bare `&"lit"` (&str).
-    // Exception: map-key methods (`contains_key`/`get`/…) accept `&Q where K: Borrow<Q>`,
-    // so a bare `"lit"` (&str) is correct for `HashMap<String, _>` — do not allocate.
-    let method_name = sig.name.rsplit("::").next().unwrap_or(sig.name.as_str());
-    let is_map_key_lookup =
-        crate::codegen::rust::stdlib_method_traits::is_map_key_method(method_name);
-    let param_is_amp_string = !is_map_key_lookup
+    // Exception: map/set key lookups accept `&Q where K: Borrow<Q>`, so a bare `"lit"` (&str)
+    // is correct for `HashMap<String, _>` — do not allocate.
+    let receiver = receiver_type.or_else(|| sig.name.rsplit_once("::").map(|(rt, _)| rt));
+    let is_collection_key_lookup =
+        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(sig, arg_index, receiver);
+    let param_is_amp_string = !is_collection_key_lookup
         && sig.param_types.get(param_idx).is_some_and(|t| {
             param_is_rust_string_ref(t)
                 || (callee_emits_rust_ref
@@ -682,8 +682,8 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         *arg_str = format!("&{owned}");
         return;
     }
-    // Map-key `&K` with K=String: keep bare string literals (Borrow<&str>).
-    if is_map_key_lookup
+    // Map/set key `&K` with K=String: keep bare string literals (Borrow<&str>).
+    if is_collection_key_lookup
         && matches!(
             arg,
             Expression::Literal {
