@@ -866,7 +866,12 @@ pub fn is_runtime_std_module(name: &str) -> bool {
     )
 }
 
-/// Runtime std modules whose Rust implementations take `AsRef<str>` for Windjammer `string` params.
+/// Runtime std modules whose Rust implementations historically took `AsRef<str>`.
+///
+/// **Do not use for ownership/coercion decisions** — prefer
+/// [`runtime_wj_owned_rust_borrowed_param`] / [`runtime_or_str_ref_formal_skips_literal_owned`]
+/// / [`runtime_std_param_needs_auto_borrow_resolved`]. Remaining call sites should migrate
+/// off this list; it is retained only for import/module-identity helpers.
 pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
     matches!(
         module,
