@@ -1170,6 +1170,30 @@ impl<'ast> CodeGenerator<'ast> {
                                 &mut coerced,
                             );
                         }
+                        // IR early-return skips Phase 3 — apply cross-crate builder
+                        // bare-lit → owned String here (empty_message("…") with no WJ sig).
+                        if matches!(
+                            arg_to_generate,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) && !coerced.ends_with(".to_string()")
+                            && !coerced.ends_with(".to_owned()")
+                            && crate::codegen::rust::string_utilities::unresolved_instance_method_string_literal_needs_rust_owned_string(
+                                method,
+                                i,
+                                Some(&contract_sig),
+                                &self.signature_registry,
+                                self.global_signature_registry.as_deref(),
+                                receiver_rt.as_deref().or(receiver_type_name),
+                            )
+                        {
+                            coerced = format!(
+                                "{}.to_string()",
+                                coerced.trim_start_matches('&')
+                            );
+                        }
                         return coerced;
                     }
                 }

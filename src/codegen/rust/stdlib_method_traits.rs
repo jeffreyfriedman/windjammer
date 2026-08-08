@@ -1053,11 +1053,10 @@ pub fn resolve_runtime_std_module<'a>(
 
 /// Whether a runtime-std call argument needs `&` inserted at the Rust call site.
 ///
-/// Uses param types when available; falls back to scanned `param_ownership` (runtime
-/// scanner often has empty `param_types` but correct borrow hints from Rust signatures).
+/// Driven by scanned `param_ownership` / resolved signatures — never by module-name lists.
 pub fn runtime_std_call_arg_needs_auto_borrow(
     module: &str,
-    method: &str,
+    _method: &str,
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
     inferred_type: Option<&crate::parser::Type>,
@@ -1075,27 +1074,12 @@ pub fn runtime_std_call_arg_needs_auto_borrow(
     }
 
     let module = resolve_runtime_std_module(module, receiver_type);
-    let param_idx = signature.map(|s| s.arg_param_index(arg_index));
-    let sig_type = param_idx.and_then(|idx| {
-        signature.and_then(|s| {
-            s.formal_param_type(idx)
-                .or_else(|| s.param_types.get(idx))
-        })
-    });
 
     if signature.is_some_and(|sig| runtime_wj_owned_rust_borrowed_param(sig, arg_index)) {
         return true;
     }
 
-    if let Some(ty) = sig_type.or(inferred_type) {
-        if runtime_std_module_uses_asref_str(module)
-            && (crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
-                || crate::codegen::rust::types::is_windjammer_text_type(ty))
-        {
-            return true;
-        }
-    }
-
+    let param_idx = signature.map(|s| s.arg_param_index(arg_index));
     if let Some(ownership) = param_idx.and_then(|idx| {
         signature.and_then(|s| s.param_ownership.get(idx).copied())
     }) {
@@ -1106,8 +1090,25 @@ pub fn runtime_std_call_arg_needs_auto_borrow(
         }
     }
 
-    runtime_std_module_uses_asref_str(module)
-        && inferred_type.is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+    // Fail closed without a Borrowed formal: do not guess from module name + text type.
+    let _ = inferred_type;
+    false
+}
+
+/// Signature-driven: string literals must stay bare (`&str`) at this runtime/stdlib formal.
+pub fn runtime_or_str_ref_formal_skips_literal_owned(
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+) -> bool {
+    let Some(sig) = sig else {
+        return false;
+    };
+    runtime_wj_owned_rust_borrowed_param(sig, arg_index)
+        || method_arg_expects_rust_str_ref_from_sig(sig, arg_index)
+        || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            sig,
+            sig.arg_param_index(arg_index),
+        )
 }
 
 #[cfg(test)]
