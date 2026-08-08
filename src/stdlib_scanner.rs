@@ -79,21 +79,43 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
         }
 
         if let Some(sig) = parse_function_signature(trimmed, module_name) {
-            let method_name = sig
-                .name
-                .rsplit_once("::")
-                .map(|(_, m)| m.to_string())
-                .unwrap_or_else(|| sig.name.clone());
-            registry.add_function(sig.name.clone(), sig.clone());
-            if let Some(ref ty) = current_impl {
-                let mut typed = sig;
-                typed.name = format!("{ty}::{method_name}");
-                registry.add_function(typed.name.clone(), typed);
-            }
+            register_scanned_runtime_signature(
+                registry,
+                module_name,
+                sig,
+                current_impl.as_deref(),
+            );
         }
     }
 
     Ok(())
+}
+
+/// Register a scanned runtime fn under `module::name`, optional `*_mod` → short alias,
+/// and `Type::name` when inside an `impl`.
+fn register_scanned_runtime_signature(
+    registry: &mut SignatureRegistry,
+    module_name: &str,
+    sig: FunctionSignature,
+    current_impl: Option<&str>,
+) {
+    let method_name = sig
+        .name
+        .rsplit_once("::")
+        .map(|(_, m)| m.to_string())
+        .unwrap_or_else(|| sig.name.clone());
+    registry.add_function(sig.name.clone(), sig.clone());
+    // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
+    if let Some(short) = module_name.strip_suffix("_mod") {
+        let mut aliased = sig.clone();
+        aliased.name = format!("{short}::{method_name}");
+        registry.add_function(aliased.name.clone(), aliased);
+    }
+    if let Some(ty) = current_impl {
+        let mut typed = sig;
+        typed.name = format!("{ty}::{method_name}");
+        registry.add_function(typed.name.clone(), typed);
+    }
 }
 
 /// `impl Connection` / `impl Connection {` / `impl<'a> Connection` → `Connection`.
@@ -563,5 +585,23 @@ mod tests {
         assert_eq!(sig.name, "strings::len");
         assert_eq!(sig.param_ownership, vec![OwnershipMode::Borrowed]);
         assert_eq!(sig.emitted_rust_ref_params, Some(vec![true]));
+    }
+
+    #[test]
+    fn csv_mod_registers_short_csv_alias() {
+        let mut reg = SignatureRegistry::new();
+        let sig = parse_function_signature(
+            "pub fn parse(input: &str) -> Result<Vec<Vec<String>>, String> {",
+            "csv_mod",
+        )
+        .unwrap();
+        register_scanned_runtime_signature(&mut reg, "csv_mod", sig, None);
+        let aliased = reg
+            .get_signature("csv::parse")
+            .expect("csv_mod must alias to csv::parse");
+        assert_eq!(aliased.param_ownership[0], OwnershipMode::Borrowed);
+        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+            aliased, 0
+        ));
     }
 }

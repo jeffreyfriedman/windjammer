@@ -729,22 +729,13 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(&sig),
                 arg_index,
             ) {
+                if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
+                    expected.base = BaseType::String;
+                }
                 expected.ownership = OwnedType::Ref(Region::fresh(7));
             } else if crate::codegen::rust::string_utilities::param_is_rust_str_ref(formal_ty) {
                 expected.base = BaseType::String;
                 expected.ownership = OwnedType::Ref(Region::fresh(5));
-            } else if (crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                callee_module,
-            ) || crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-                registry,
-                callee_name,
-                Some(&sig),
-                arg_index,
-            ))
-                && crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
-            {
-                expected.base = BaseType::String;
-                expected.ownership = OwnedType::Ref(Region::fresh(8));
             }
         }
         if sig.param_types.get(param_idx).is_some_and(|t| {
@@ -762,15 +753,20 @@ impl<'ast> CodeGenerator<'ast> {
             if matches!(
                 ownership,
                 OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+            ) && crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                &sig, arg_index,
             ) {
-                if callee_module == "json" {
-                    expected.ownership = OwnedType::Ref(Region::fresh(7));
-                } else if crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                    callee_module,
-                ) {
+                // Scanned runtime AsRef/&str formals: keep owned WJ text as Ref at call site.
+                if crate::codegen::rust::types::is_windjammer_text_type(
+                    sig.formal_param_type(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx))
+                        .unwrap_or(&Type::String),
+                ) || runtime_param_type
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                {
                     expected.base = BaseType::String;
-                    expected.ownership = OwnedType::Ref(Region::fresh(8));
                 }
+                expected.ownership = OwnedType::Ref(Region::fresh(8));
             }
         }
         if crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
