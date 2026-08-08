@@ -1,0 +1,29 @@
+use std::collections::HashMap
+
+pub fn neighbor_id(i: u32) -> i64 {
+    i as i64
+}
+
+pub fn u_degree(i: u32) -> u32 {
+    i + 1
+}
+
+/// LCC-style nested triangle loop: outer over neighbors, inner over u's adjacency.
+pub fn count_triangle_hits(neighbor_set: HashMap<i64, u32>, degree: u32) -> u32 {
+    let mut hits = 0
+    let mut i = 0
+    while i < degree {
+        let u = neighbor_id(i as u32)
+        let u_deg = u_degree(i as u32)
+        let mut j = 0
+        while j < u_deg {
+            let w = neighbor_id(j as u32)
+            if neighbor_set.contains_key(w) {
+                hits = hits + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    hits
+}

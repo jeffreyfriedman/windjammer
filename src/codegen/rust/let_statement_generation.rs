@@ -38,8 +38,12 @@ impl<'ast> CodeGenerator<'ast> {
         // TDD FIX (E0596): When `let x = self.field.get(key)` and downstream code
         // mutates the value obtained from x (via match/if-let), upgrade get→get_mut.
         if let Some(vn) = var_name {
-            if super::self_analysis::is_self_field_get_call(value)
-                && self.let_binding_value_is_mutated_downstream(vn)
+            if super::self_analysis::is_self_field_get_call(
+                value,
+                &self.signature_registry,
+                self.current_struct_name.as_deref(),
+                Some(&self.struct_field_types),
+            ) && self.let_binding_value_is_mutated_downstream(vn)
             {
                 self.upgrade_get_to_get_mut = true;
             }

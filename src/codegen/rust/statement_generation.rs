@@ -413,13 +413,15 @@ impl<'ast> CodeGenerator<'ast> {
         if !matches!(value, Expression::FieldAccess { .. }) {
             return;
         }
-        let root = self.root_identifier_of_field_or_index_chain(value);
-        let is_self_borrowed = root.is_some_and(|r| {
-            r == "self"
-                && (self.inferred_borrowed_params.contains("self")
-                    || self.inferred_mut_borrowed_params.contains("self"))
-        });
-        if !is_self_borrowed {
+        let Some(root) = self.root_identifier_of_field_or_index_chain(value) else {
+            return;
+        };
+        let root_is_mut = self.inferred_mut_borrowed_params.contains(root);
+        let root_is_shared = self.inferred_borrowed_params.contains(root);
+        // WDB-090: mut-borrowed params (not only `self`) need take/clear / writeback rewriting.
+        // Shared `&T` still clones non-Copy fields below via the final branch when root is self.
+        let is_self_shared_or_mut = root == "self" && (root_is_shared || root_is_mut);
+        if !root_is_mut && !is_self_shared_or_mut {
             return;
         }
         let Some(ty) = self.infer_expression_type(value) else {
@@ -430,8 +432,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let is_option =
             matches!(&ty, Type::Option(_)) || matches!(&ty, Type::Custom(n) if n == "Option");
-        let self_is_mut = self.inferred_mut_borrowed_params.contains("self");
-        if is_option && self_is_mut {
+        if is_option && root_is_mut {
             // Strip any .clone() that auto_clone inserted prematurely
             if value_str.ends_with(".clone()") {
                 value_str.truncate(value_str.len() - ".clone()".len());
@@ -453,15 +454,30 @@ impl<'ast> CodeGenerator<'ast> {
                     *value_str = format!("{}.take()", value_str);
                 }
             }
-        } else if self_is_mut
+            return;
+        }
+
+        let field_path = self.extract_field_access_path_string(value);
+
+        // WDB-090: `let v = csr.field; csr.field = Vec::new()` → `std::mem::take(&mut csr.field)`.
+        if root_is_mut && self.type_supports_mem_take(&ty) {
+            if let Some(next_idx) = self.next_statement_clears_field_to_default(&field_path) {
+                if value_str.ends_with(".clone()") {
+                    value_str.truncate(value_str.len() - ".clone()".len());
+                }
+                let base = value_str.trim_start_matches('&').trim();
+                *value_str = format!("std::mem::take(&mut {base})");
+                self.skip_block_indices.insert(next_idx);
+                return;
+            }
+        }
+
+        if root_is_mut
             && binding_name.is_some_and(|b| {
-                self.block_writes_back_field_to_binding(
-                    &self.extract_field_access_path_string(value),
-                    b,
-                )
+                self.block_writes_back_field_to_binding(&field_path, b)
             })
         {
-            // Extract-assign writeback behind `&mut self`: cannot bare-move (E0507).
+            // Extract-assign writeback behind `&mut`: cannot bare-move (E0507).
             // Prefer `mem::take` when the field type derives/implements Default
             // (regression-042 `SimNetwork`); otherwise `.clone()` (engines without Default).
             if value_str.ends_with(".clone()") {
@@ -475,6 +491,79 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else if !value_str.ends_with(".clone()") {
             *value_str = format!("{}.clone()", value_str);
+        }
+    }
+
+    /// Next stmt is `field = Vec::new()` / empty Default constructor — fold into `mem::take`.
+    fn next_statement_clears_field_to_default(&self, field_path: &str) -> Option<usize> {
+        let next_idx = self.current_block_local_idx + 1;
+        if next_idx >= self.current_function_body.len() {
+            return None;
+        }
+        let next_stmt = self.current_function_body[next_idx];
+        match next_stmt {
+            Statement::Assignment {
+                target,
+                value,
+                compound_op: None,
+                ..
+            } => {
+                let target_path = self.extract_field_access_path_string(target);
+                if target_path != field_path {
+                    return None;
+                }
+                if self.expression_is_empty_default_constructor(value) {
+                    Some(next_idx)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// `Vec::new()`, `Vec::<T>::new()`, `HashMap::new()`, etc. — Default-empty clears.
+    fn expression_is_empty_default_constructor(&self, expr: &Expression<'_>) -> bool {
+        if crate::codegen::rust::call_site_borrow::expression_is_vec_new_constructor(expr) {
+            return true;
+        }
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } if arguments.is_empty() => match &**function {
+                Expression::FieldAccess {
+                    object,
+                    field,
+                    ..
+                } if field == "new" => matches!(
+                    &**object,
+                    Expression::Identifier { name, .. }
+                        if matches!(
+                            name.as_str(),
+                            "Vec"
+                                | "HashMap"
+                                | "HashSet"
+                                | "BTreeMap"
+                                | "BTreeSet"
+                                | "VecDeque"
+                                | "String"
+                        )
+                ),
+                Expression::Identifier { name, .. } => {
+                    name.ends_with("::new")
+                        && (name.starts_with("Vec")
+                            || name.starts_with("HashMap")
+                            || name.starts_with("HashSet")
+                            || name.starts_with("BTreeMap")
+                            || name.starts_with("BTreeSet")
+                            || name.starts_with("VecDeque")
+                            || name == "String::new")
+                }
+                _ => false,
+            },
+            _ => false,
         }
     }
 
@@ -1053,11 +1142,6 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression,
     ) -> bool {
-        if let Expression::MethodCall { method, .. } = expr {
-            if method == "get_mut" {
-                return true;
-            }
-        }
         if let Some(Type::Option(inner)) = self.infer_expression_type(expr) {
             return matches!(inner.as_ref(), Type::MutableReference(_));
         }
@@ -1158,24 +1242,24 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // Fallback: `HashMap`/`BTreeMap`/`Map`.get returns `Option<&V>` in Rust. When
-        // inference loses the inner Reference wrap, still use `.copied()` for Copy `V`
-        // so `Some(v) => v` is owned `V` (not `&V` vs owned default arm).
+        // Fallback: map shared-get returns `Option<&V>` in Rust. When inference loses the
+        // inner Reference wrap, still use `.copied()` for Copy `V` via signature registry.
         if let Expression::MethodCall { object, method, .. } = expr {
-            if method == "get" {
+            let receiver_type = self
+                .infer_type_name(object)
+                .or_else(|| self.infer_indexed_element_type_name(object));
+            if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                method,
+                receiver_type.as_deref(),
+                &self.signature_registry,
+            ) {
                 if let Some(obj_ty) = self.infer_expression_type(object) {
                     let bare = match &obj_ty {
                         Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
                         other => other,
                     };
-                    if let Type::Parameterized(name, args) = bare {
-                        let base = name.split('<').next().unwrap_or(name.as_str());
-                        if matches!(
-                            base,
-                            "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "OrderedMap"
-                        ) && args.len() >= 2
-                            && self.is_type_copy(&args[1])
-                        {
+                    if let Type::Parameterized(_, args) = bare {
+                        if args.len() >= 2 && self.is_type_copy(&args[1]) {
                             return true;
                         }
                     }
@@ -1194,7 +1278,14 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if let Expression::MethodCall { object, method, .. } = expr {
-            if method == "get" {
+            let receiver_type = self
+                .infer_type_name(object)
+                .or_else(|| self.infer_indexed_element_type_name(object));
+            if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                method,
+                receiver_type.as_deref(),
+                &self.signature_registry,
+            ) {
                 if let Expression::FieldAccess {
                     object: root,
                     field,
@@ -1205,14 +1296,11 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(struct_name) = &self.current_struct_name {
                             let base = struct_name.split('<').next().unwrap_or(struct_name);
                             if let Some(fields) = self.lookup_struct_field_types(base) {
-                                if let Some(Type::Parameterized(base_ty, args)) =
+                                if let Some(Type::Parameterized(_, args)) =
                                     fields.get(field.as_str())
                                 {
-                                    if (base_ty == "Map" || base_ty == "HashMap") && args.len() >= 2
-                                    {
-                                        if self.is_type_copy(&args[1]) {
-                                            return true;
-                                        }
+                                    if args.len() >= 2 && self.is_type_copy(&args[1]) {
+                                        return true;
                                     }
                                 }
                             }

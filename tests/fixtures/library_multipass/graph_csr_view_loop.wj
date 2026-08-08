@@ -1,0 +1,40 @@
+pub struct GraphAdjacencyView {
+    pub vertex_count: u32,
+    pub vertex_ids: Vec<i64>,
+    pub offsets: Vec<u32>,
+    pub neighbors: Vec<i64>,
+    pub weights: Vec<f64>,
+}
+
+pub fn graph_csr_vertex_index(view: GraphAdjacencyView, vertex: i64) -> i64 {
+    let mut i = 0
+    while i < view.vertex_ids.len() {
+        if view.vertex_ids[i] == vertex {
+            return i as i64
+        }
+        i = i + 1
+    }
+    -1
+}
+
+pub fn graph_csr_local_out_degree(view: GraphAdjacencyView, vertex: i64) -> u32 {
+    let idx = graph_csr_vertex_index(view, vertex)
+    if idx < 0 {
+        return 0
+    }
+    view.offsets[(idx as usize) + 1] - view.offsets[idx as usize]
+}
+
+pub fn graph_csr_local_neighbor_at(view: GraphAdjacencyView, vertex: i64, index: u32) -> i64 {
+    let idx = graph_csr_vertex_index(view, vertex)
+    if idx < 0 {
+        return -1
+    }
+    let start = view.offsets[idx as usize]
+    let end = view.offsets[(idx as usize) + 1]
+    let pos = start + index
+    if pos >= end {
+        return -1
+    }
+    view.neighbors[pos as usize]
+}

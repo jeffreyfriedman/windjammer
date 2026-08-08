@@ -1,0 +1,23 @@
+use crate::graph_csr_view_loop::GraphAdjacencyView
+use crate::graph_csr_view_loop::graph_csr_local_neighbor_at
+use crate::graph_csr_view_loop::graph_csr_local_out_degree
+
+pub fn walk_csr_view(view: GraphAdjacencyView) -> u32 {
+    let mut total = 0
+    let mut v = 0
+    while v < view.vertex_ids.len() {
+        let vertex = view.vertex_ids[v]
+        let degree = graph_csr_local_out_degree(view, vertex)
+        total = total + degree
+        let mut j = 0
+        while j < degree {
+            let n = graph_csr_local_neighbor_at(view, vertex, j)
+            if n >= 0 {
+                total = total + 1
+            }
+            j = j + 1
+        }
+        v = v + 1
+    }
+    total
+}
