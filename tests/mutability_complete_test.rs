@@ -52,16 +52,16 @@ impl ItemStack {
 }
 pub fn merge(slots: Vec<Option<ItemStack>>, to_slot: usize, from_quantity: i32) {
     if let Some(to_stack) = slots[to_slot] {
-        to_stack.add(from_quantity)
+        to_stack.quantity = to_stack.quantity + from_quantity
     }
 }
 "#;
     let result = test_utils::compile_single(src);
     let ok = result.contains("Some(ref mut to_stack)")
-        || (result.contains("if let Some(to_stack) = &slots") && result.contains("to_stack.add"));
+        || (result.contains("if let Some(to_stack) = &slots") && result.contains("to_stack.quantity"));
     assert!(
         ok,
-        "Should generate ref-mut or &slots[…] if-let for to_stack.add(). Got:\n{}",
+        "Should generate ref-mut or &slots[…] if-let for to_stack.quantity mutation. Got:\n{}",
         result
     );
 }
@@ -162,7 +162,7 @@ fn test_if_let_some_ref_mut_nested_from_assignment() {
 pub struct Slot { pub quantity: i32 }
 pub fn transfer_partial(slots: Vec<Option<Slot>>, from_slot: usize, to_slot: usize, can_add: i32) {
     if let Some(to_stack) = slots[to_slot] {
-        to_stack.add(can_add)
+        to_stack.quantity = to_stack.quantity + can_add
         if let Some(from) = slots[from_slot] {
             from.quantity = from.quantity - can_add
         }
@@ -171,10 +171,10 @@ pub fn transfer_partial(slots: Vec<Option<Slot>>, from_slot: usize, to_slot: usi
 "#;
     let result = test_utils::compile_single(src);
     let to_ok = result.contains("Some(ref mut to_stack)")
-        || (result.contains("if let Some(to_stack) = &slots") && result.contains("to_stack.add"));
+        || (result.contains("if let Some(to_stack) = &slots") && result.contains("to_stack.quantity"));
     assert!(
         to_ok,
-        "Should generate ref-mut or &slots if-let for to_stack. Got:\n{}",
+        "Should generate ref-mut or &slots if-let for to_stack.quantity. Got:\n{}",
         result
     );
     let from_ok = result.contains("Some(ref mut from)")
@@ -222,16 +222,16 @@ impl ItemStack {
 }
 pub fn add_to_stack(slots: Vec<Option<ItemStack>>, slot: usize, amount: i32) {
     if let Some(stack) = slots[slot] {
-        stack.add(amount)
+        stack.quantity = stack.quantity + amount
     }
 }
 "#;
     let result = test_utils::compile_single(src);
     let ok = result.contains("Some(ref mut stack)")
-        || (result.contains("if let Some(stack) = &slots") && result.contains("stack.add"));
+        || (result.contains("if let Some(stack) = &slots") && result.contains("stack.quantity"));
     assert!(
         ok,
-        "Should generate ref-mut or &slots[…] if-let for stack.add(). Got:\n{}",
+        "Should generate ref-mut or &slots[…] if-let for stack.quantity mutation. Got:\n{}",
         result
     );
 }
