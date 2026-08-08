@@ -3018,6 +3018,50 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// When returning owned `Option<T>` but the expression yields `Option<&T>`
+    /// (e.g. `HashMap::get`), append `.copied()` / `.cloned()` from inferred types —
+    /// not method-name lists.
+    pub(crate) fn coerce_option_ref_return_to_owned(
+        &self,
+        expr_str: &mut String,
+        expr: &crate::parser::Expression,
+    ) {
+        if !self.returns_option_owned_type() {
+            return;
+        }
+        if !self.expression_type_contains_reference(expr) {
+            return;
+        }
+        if expr_str.ends_with(".cloned()")
+            || expr_str.ends_with(".copied()")
+            || expr_str.ends_with(".clone()")
+            || expr_str.contains(".map(|v| v.clone())")
+        {
+            return;
+        }
+        let Some(ty) = self.infer_expression_type(expr) else {
+            *expr_str = format!("{}.cloned()", expr_str);
+            return;
+        };
+        if Self::type_contains_mut_reference_static(&ty) {
+            *expr_str = format!("{}.map(|v| v.clone())", expr_str);
+            return;
+        }
+        let copy_payload = matches!(
+            &ty,
+            Type::Option(inner)
+                if matches!(
+                    inner.as_ref(),
+                    Type::Reference(r) | Type::MutableReference(r) if self.is_type_copy(r.as_ref())
+                )
+        );
+        if copy_payload {
+            *expr_str = format!("{}.copied()", expr_str);
+        } else {
+            *expr_str = format!("{}.cloned()", expr_str);
+        }
+    }
+
     /// Apply owned-String tail coercion to an implicit-return or explicit-return expression.
     ///
     /// When a function returns `String`, this converts string literals to owned form,

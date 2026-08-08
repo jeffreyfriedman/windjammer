@@ -1346,6 +1346,19 @@ mod pattern_registry_tests {
     }
 
     #[test]
+    fn remove_suffix_conflicts_on_first_arg_ownership() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(
+            reg.suffix_has_conflicting_first_arg_ownership("remove", 1),
+            "Vec::remove(Owned) vs HashMap::remove(Borrowed) must conflict"
+        );
+        assert!(
+            !reg.suffix_has_conflicting_first_arg_ownership("contains_key", 1),
+            "map contains_key entries should agree on Borrowed key"
+        );
+    }
+
+    #[test]
     fn user_get_named_method_is_not_map_shared_get() {
         let reg = SignatureRegistry::stdlib();
         assert!(!is_map_shared_get_call("get", Some("Holder"), reg));

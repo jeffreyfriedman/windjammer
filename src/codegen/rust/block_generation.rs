@@ -191,22 +191,7 @@ impl<'ast> CodeGenerator<'ast> {
                             self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
                         }
 
-                        let returns_option_owned = self.returns_option_owned_type();
-                        if returns_option_owned
-                            && self.expression_type_contains_reference(expr)
-                            && !expr_str.ends_with(".cloned()")
-                            && !expr_str.ends_with(".clone()")
-                        {
-                            if self
-                                .infer_expression_type(expr)
-                                .as_ref()
-                                .is_some_and(Self::type_contains_mut_reference_static)
-                            {
-                                expr_str = format!("{}.map(|v| v.clone())", expr_str);
-                            } else {
-                                expr_str = format!("{}.cloned()", expr_str);
-                            }
-                        }
+                        self.coerce_option_ref_return_to_owned(&mut expr_str, expr);
 
                         output.push_str(&expr_str);
 
@@ -323,22 +308,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
                             }
 
-                            let returns_option_owned = self.returns_option_owned_type();
-                            if returns_option_owned
-                                && self.expression_type_contains_reference(expr)
-                                && !expr_str.ends_with(".cloned()")
-                                && !expr_str.ends_with(".clone()")
-                            {
-                                if self
-                                    .infer_expression_type(expr)
-                                    .as_ref()
-                                    .is_some_and(Self::type_contains_mut_reference_static)
-                                {
-                                    expr_str = format!("{}.map(|v| v.clone())", expr_str);
-                                } else {
-                                    expr_str = format!("{}.cloned()", expr_str);
-                                }
-                            }
+                            self.coerce_option_ref_return_to_owned(&mut expr_str, expr);
 
                             output.push_str(&expr_str);
                             output.push('\n');
