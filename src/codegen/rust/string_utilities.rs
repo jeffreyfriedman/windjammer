@@ -1006,14 +1006,14 @@ mod tests {
         );
         assert!(
             !unresolved_instance_method_string_literal_needs_rust_owned_string(
-                "find",
+                "trim_end_matches",
                 0,
                 None,
                 &crate::analyzer::SignatureRegistry::stdlib(),
                 None,
-                None,
+                Some("String"),
             ),
-            "find Pattern slot stays bare even without receiver type"
+            "trim_end_matches Pattern slot stays bare with String receiver"
         );
     }
 
