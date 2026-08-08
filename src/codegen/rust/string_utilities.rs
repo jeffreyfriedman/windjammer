@@ -519,11 +519,13 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
     runtime_module: Option<&str>,
 ) -> bool {
-    if runtime_module
-        .is_some_and(crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str)
-    {
+    // Signature-driven: AsRef<&str> / `&str` runtime formals keep bare string literals.
+    if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+        sig, arg_index,
+    ) {
         return false;
     }
+    let _ = runtime_module;
 
     // Prefer signature: Pattern/`&str` formals stay bare (no method-name lists).
     if let Some(s) = sig {
@@ -954,13 +956,17 @@ mod tests {
 
     #[test]
     fn runtime_std_module_skips_literal_owned_coercion() {
+        let reg = crate::analyzer::SignatureRegistry::stdlib();
+        let sig = reg
+            .get_signature("strings::starts_with")
+            .expect("strings::starts_with scanned from runtime");
         assert!(!string_literal_needs_owned_coercion_with_enum(
-            None,
+            Some(sig),
             1,
             Some("starts_with"),
             None,
             None,
-            Some("strings"),
+            None,
         ));
     }
 
