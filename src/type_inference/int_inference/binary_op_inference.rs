@@ -25,22 +25,20 @@ impl IntInference {
             | BinaryOp::Shl
             | BinaryOp::Shr => {
                 if matches!(op, BinaryOp::Add | BinaryOp::Sub) {
-                    let left_is_len =
-                        matches!(left, Expression::MethodCall { method, .. } if method == "len");
-                    let right_is_len =
-                        matches!(right, Expression::MethodCall { method, .. } if method == "len");
-                    if left_is_len && right_is_literal {
+                    let left_returns_usize = self.method_call_returns_usize(left);
+                    let right_returns_usize = self.method_call_returns_usize(right);
+                    if left_returns_usize && right_is_literal {
                         self.constraints.push(IntConstraint::MustBe(
                             right_id,
                             IntType::Usize,
-                            "arithmetic with .len() (usize)".to_string(),
+                            "arithmetic with usize-returning method".to_string(),
                         ));
                     }
-                    if right_is_len && left_is_literal {
+                    if right_returns_usize && left_is_literal {
                         self.constraints.push(IntConstraint::MustBe(
                             left_id,
                             IntType::Usize,
-                            "arithmetic with .len() (usize)".to_string(),
+                            "arithmetic with usize-returning method".to_string(),
                         ));
                     }
                 }
@@ -53,22 +51,20 @@ impl IntInference {
             | BinaryOp::Le
             | BinaryOp::Gt
             | BinaryOp::Ge => {
-                let left_is_len =
-                    matches!(left, Expression::MethodCall { method, .. } if method == "len");
-                let right_is_len =
-                    matches!(right, Expression::MethodCall { method, .. } if method == "len");
-                if left_is_len && right_is_literal {
+                let left_returns_usize = self.method_call_returns_usize(left);
+                let right_returns_usize = self.method_call_returns_usize(right);
+                if left_returns_usize && right_is_literal {
                     self.constraints.push(IntConstraint::MustBe(
                         right_id,
                         IntType::Usize,
-                        "comparison with .len() (usize)".to_string(),
+                        "comparison with usize-returning method".to_string(),
                     ));
                 }
-                if right_is_len && left_is_literal {
+                if right_returns_usize && left_is_literal {
                     self.constraints.push(IntConstraint::MustBe(
                         left_id,
                         IntType::Usize,
-                        "comparison with .len() (usize)".to_string(),
+                        "comparison with usize-returning method".to_string(),
                     ));
                 }
 

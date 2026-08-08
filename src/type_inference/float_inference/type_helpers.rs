@@ -218,6 +218,20 @@ impl FloatInference {
                     None
                 }
             }
+            Type::Custom(name) if name.contains('<') => {
+                let base = name.split('<').next().unwrap_or(name);
+                if matches!(base, "HashMap" | "BTreeMap" | "Map") {
+                    if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
+                        let inner = &name[start + 1..end];
+                        let value = inner.split(',').nth(1)?.trim();
+                        return Some(self.parse_type_from_string(value));
+                    }
+                }
+                None
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.extract_map_value_type(inner)
+            }
             _ => None,
         }
     }
@@ -245,6 +259,173 @@ impl FloatInference {
                 // Vec<T> has 1 type argument
                 if !type_args.is_empty() {
                     Some(type_args[0].clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn parse_type_from_string(&self, s: &str) -> Type {
+        match s {
+            "i32" => Type::Int32,
+            "i64" => Type::Int,
+            "u64" => Type::Custom("u64".to_string()),
+            "u32" => Type::Custom("u32".to_string()),
+            "usize" => Type::Custom("usize".to_string()),
+            "u8" => Type::Custom("u8".to_string()),
+            "i8" => Type::Custom("i8".to_string()),
+            "u16" => Type::Custom("u16".to_string()),
+            "i16" => Type::Custom("i16".to_string()),
+            "f32" => Type::Float,
+            "f64" => Type::Float,
+            "bool" => Type::Bool,
+            "string" => Type::String,
+            _ => Type::Custom(s.to_string()),
+        }
+    }
+
+    fn substitute_generic_params_typed(&self, ty: &Type, generics: &[Type]) -> Type {
+        match ty {
+            Type::Custom(name) if name.len() == 1 => {
+                let ch = name.chars().next().unwrap();
+                if ch.is_ascii_uppercase() {
+                    let idx = match ch {
+                        'K' => 0,
+                        'V' => 1,
+                        'T' => 0,
+                        'U' => 1,
+                        'E' => 1,
+                        _ => return ty.clone(),
+                    };
+                    if let Some(concrete) = generics.get(idx) {
+                        return concrete.clone();
+                    }
+                }
+                ty.clone()
+            }
+            Type::Option(inner) => Type::Option(Box::new(
+                self.substitute_generic_params_typed(inner, generics),
+            )),
+            Type::Result(ok, err) => Type::Result(
+                Box::new(self.substitute_generic_params_typed(ok, generics)),
+                Box::new(self.substitute_generic_params_typed(err, generics)),
+            ),
+            Type::Vec(inner) => Type::Vec(Box::new(
+                self.substitute_generic_params_typed(inner, generics),
+            )),
+            _ => ty.clone(),
+        }
+    }
+
+    /// Resolve method param types with generic substitution from the receiver type.
+    fn resolve_method_param_types<'ast>(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_count: usize,
+        context_type: Option<&Type>,
+    ) -> Option<Vec<Type>> {
+        let receiver_type = self
+            .infer_type_from_expression(object)
+            .or_else(|| context_type.cloned())?;
+        let receiver_is_map = self.extract_map_key_type(&receiver_type).is_some();
+
+        let (qualified, receiver_generics) = match &receiver_type {
+            Type::Parameterized(base, type_params) => {
+                (format!("{}::{}", base, method), type_params.clone())
+            }
+            Type::Custom(n) => {
+                let base = n.split('<').next().unwrap_or(n);
+                let generics = if n.contains('<') {
+                    if let (Some(start), Some(end)) = (n.find('<'), n.rfind('>')) {
+                        let inner = &n[start + 1..end];
+                        inner
+                            .split(',')
+                            .map(|s| self.parse_type_from_string(s.trim()))
+                            .collect()
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                };
+                (format!("{}::{}", base, method), generics)
+            }
+            Type::Vec(_) => (format!("Vec::{}", method), vec![]),
+            _ => return None,
+        };
+
+        let substitute = |params: Vec<Type>| {
+            let mut out: Vec<Type> = if receiver_generics.is_empty() {
+                params
+            } else {
+                params
+                    .into_iter()
+                    .map(|ty| self.substitute_generic_params_typed(&ty, &receiver_generics))
+                    .collect()
+            };
+            // Fill remaining single-letter generics from receiver shape (HashMap<K,V>, Vec<T>).
+            for param in &mut out {
+                if let Type::Custom(name) = param {
+                    if name.len() == 1 && name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                        match name.as_str() {
+                            "V" => {
+                                if let Some(v) = self.extract_map_value_type(&receiver_type) {
+                                    *param = v;
+                                } else if let Some(ctx) = context_type {
+                                    if let Some(v) = self.extract_map_value_type(ctx) {
+                                        *param = v;
+                                    }
+                                }
+                            }
+                            "T" => {
+                                if let Some(t) = self.extract_vec_element_type(&receiver_type) {
+                                    *param = t;
+                                }
+                            }
+                            "K" => {
+                                if let Some(k) = self.extract_map_key_type(&receiver_type) {
+                                    *param = k;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            out
+        };
+
+        if let Some((params, _)) = self.function_signatures.get(&qualified).cloned() {
+            return Some(substitute(params));
+        }
+
+        if receiver_is_map {
+            return None;
+        }
+
+        self.function_signatures
+            .iter()
+            .filter(|(func_name, (params, _))| {
+                func_name.split("::").last() == Some(method)
+                    && (params.len() == arg_count + 1 || params.len() == arg_count)
+            })
+            .map(|(_, (params, _))| substitute(params.clone()))
+            .next()
+    }
+
+    fn extract_map_key_type(&self, ty: &Type) -> Option<Type> {
+        match ty {
+            Type::Parameterized(name, args) if (name == "HashMap" || name == "BTreeMap") && !args.is_empty() => {
+                Some(args[0].clone())
+            }
+            Type::Custom(name) if name.starts_with("HashMap<") || name.starts_with("BTreeMap<") => {
+                if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
+                    let inner = &name[start + 1..end];
+                    let first = inner.split(',').next()?.trim();
+                    Some(self.parse_type_from_string(first))
                 } else {
                     None
                 }

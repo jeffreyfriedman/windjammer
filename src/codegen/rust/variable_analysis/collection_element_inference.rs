@@ -1,6 +1,39 @@
+use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::*;
 
 use super::CodeGenerator;
+
+fn sig_stores_element(sig: &FunctionSignature) -> bool {
+    if !sig.has_self_receiver {
+        return false;
+    }
+    if !matches!(
+        sig.param_ownership.first(),
+        Some(OwnershipMode::MutBorrowed)
+    ) {
+        return false;
+    }
+    let self_count = usize::from(sig.has_self_receiver);
+    if sig.param_types.len() <= self_count {
+        return false;
+    }
+    let last_idx = sig.param_types.len() - 1;
+    match sig.formal_param_type(last_idx) {
+        Some(Type::Custom(name)) if name == "usize" || name == "K" => false,
+        Some(Type::Reference(inner) | Type::MutableReference(inner)) => !matches!(
+            **inner,
+            Type::Custom(ref n) if n == "K"
+        ),
+        _ => true,
+    }
+}
+
+fn method_stores_element_in_registry(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    registry
+        .all_signatures_for_suffix_search()
+        .any(|(key, sig)| key.ends_with(&pattern) && sig_stores_element(sig))
+}
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
@@ -314,23 +347,17 @@ impl<'ast> CodeGenerator<'ast> {
                 return None;
             }
 
-            let is_push_or_insert = matches!(
-                method.as_str(),
-                "push"
-                    | "insert"
-                    | "extend"
-                    | "append"
-                    | "push_front"
-                    | "push_back"
-                    | "add"
-                    | "fill"
-            );
-            if !is_push_or_insert || arguments.is_empty() {
+            let registry = self
+                .global_signature_registry
+                .as_deref()
+                .unwrap_or(&self.signature_registry);
+            if !method_stores_element_in_registry(method, registry) {
+                return None;
+            }
+            if arguments.is_empty() {
                 return None;
             }
 
-            // For .push(arg), the element type comes from the single argument
-            // For .insert(arg), same for HashSet (single arg)
             let arg_expr = &arguments[arguments.len() - 1].1;
             return self.infer_expression_type(arg_expr);
         }

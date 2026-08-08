@@ -117,37 +117,19 @@ impl IntInference {
         inference
     }
 
-    /// Register common stdlib method signatures for type inference
+    /// Register stdlib method signatures from the shared SignatureRegistry baseline.
     fn register_stdlib_signatures(&mut self) {
-        use crate::parser::Type;
+        use crate::analyzer::SignatureRegistry;
 
-        // Vec<T> methods
-        self.function_signatures.insert(
-            "Vec::with_capacity".to_string(),
-            (vec![Type::Custom("usize".to_string())], None),
-        );
-        self.function_signatures.insert(
-            "Vec::reserve".to_string(),
-            (vec![Type::Custom("usize".to_string())], None),
-        );
-        self.function_signatures.insert(
-            "Vec::resize".to_string(),
-            (vec![Type::Custom("usize".to_string()), Type::Int], None), // (new_len: usize, value: T)
-        );
-        self.function_signatures.insert(
-            "Vec::truncate".to_string(),
-            (vec![Type::Custom("usize".to_string())], None),
-        );
-
-        // HashMap<K,V> methods - REMOVED: Now auto-collected from std/collections.wj!
-        // The Windjammer stdlib defines HashMap, and the compiler automatically
-        // discovers its methods during analysis. No hard-coding needed!
-
-        // String methods
-        self.function_signatures.insert(
-            "String::with_capacity".to_string(),
-            (vec![Type::Custom("usize".to_string())], None),
-        );
+        for (name, sig) in SignatureRegistry::stdlib().all_signatures() {
+            let param_types = if !sig.formal_param_types.is_empty() {
+                sig.formal_param_types.clone()
+            } else {
+                sig.param_types.clone()
+            };
+            self.function_signatures
+                .insert(name.clone(), (param_types, sig.return_type.clone()));
+        }
     }
 
     pub fn set_current_file(&mut self, file: String) -> usize {

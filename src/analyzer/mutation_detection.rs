@@ -272,7 +272,14 @@ impl<'ast> Analyzer<'ast> {
         }
         if let Expression::MethodCall { object, method, .. } = expr {
             if self.is_in_receiver_chain(binding, object) {
-                return !super::stdlib_method_traits::is_known_readonly(method);
+                let receiver_type = self
+                    .resolve_field_chain_type_for_param(binding, object, None)
+                    .and_then(|ty| type_base_for_registry_lookup(&ty));
+                return super::stdlib_method_traits::method_mutates_receiver_qualified(
+                    method,
+                    receiver_type.as_deref(),
+                    registry,
+                ) || super::stdlib_method_traits::method_mutates_receiver(method);
             }
         }
         false
