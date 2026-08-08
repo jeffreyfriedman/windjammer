@@ -69,6 +69,35 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // `Vec<f64>` / `Vec<f32>` receiver → float element type for generic store formals (`push(T)`).
+        let collection_float_elem: Option<Type> = {
+            let receiver_ty = receiver_type_inferred.clone().or_else(|| match object {
+                Expression::Identifier { name, .. } => self
+                    .local_var_types
+                    .get(name.as_str())
+                    .cloned()
+                    .or_else(|| {
+                        self.current_function_params
+                            .iter()
+                            .find(|p| p.name == *name)
+                            .map(|p| p.type_.clone())
+                    }),
+                _ => None,
+            });
+            receiver_ty.as_ref().and_then(|rty| {
+                Self::peeled_collection_element_type(rty)
+                    .filter(|e| {
+                        crate::codegen::rust::type_classification_utilities::is_float_type(e)
+                    })
+                    .cloned()
+            })
+        };
+        if self.assignment_float_target_type.is_none() {
+            if let Some(ref elem) = collection_float_elem {
+                self.assignment_float_target_type = Some(elem.clone());
+            }
+        }
+
         let args_vec: Vec<String> = arguments
             .iter()
             .enumerate()
