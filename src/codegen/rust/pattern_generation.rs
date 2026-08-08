@@ -407,43 +407,46 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Expression::MethodCall { method, object, .. } => {
-                // .get() on HashMap/BTreeMap always returns Option<&V> in Rust.
-                // Check object type via both type inference and struct field lookup.
-                if method == "get" {
-                    if let Some(obj_ty) = self.infer_expression_type(object) {
-                        if Self::is_hashmap_like_type(&obj_ty) {
-                            return true;
-                        }
-                    }
-                    // Fallback: check struct field types when object is self.field
-                    if let Expression::FieldAccess {
-                        object: fa_obj,
-                        field: fa_field,
-                        ..
-                    } = object
-                    {
-                        if let Expression::Identifier { name, .. } = fa_obj {
-                            if name == "self" {
-                                if let Some(ft) = self.get_struct_field_type(fa_field) {
-                                    if Self::is_hashmap_like_type(&ft) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
                 if let Some(ty) = self.infer_expression_type(expr) {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
                         return true;
                     }
-                    if method == "get" {
-                        if let Type::Option(inner) = &ty {
-                            if matches!(
-                                inner.as_ref(),
-                                Type::Reference(_) | Type::MutableReference(_)
-                            ) {
-                                return true;
+                    if let Type::Option(inner) = &ty {
+                        if matches!(
+                            inner.as_ref(),
+                            Type::Reference(_) | Type::MutableReference(_)
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+                let receiver_type = self
+                    .infer_type_name(object)
+                    .or_else(|| self.infer_indexed_element_type_name(object));
+                if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                    method,
+                    receiver_type.as_deref(),
+                    &self.signature_registry,
+                ) {
+                    return true;
+                }
+                // Fallback: self.field when infer_type_name missed the map receiver type
+                if let Expression::FieldAccess {
+                    object: fa_obj,
+                    field: fa_field,
+                    ..
+                } = object
+                {
+                    if matches!(&**fa_obj, Expression::Identifier { name, .. } if name == "self") {
+                        if let Some(ft) = self.get_struct_field_type(fa_field) {
+                            if let Some(receiver_type) = Self::map_receiver_type_name(&ft) {
+                                if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                                    method,
+                                    Some(&receiver_type),
+                                    &self.signature_registry,
+                                ) {
+                                    return true;
+                                }
                             }
                         }
                     }
@@ -461,17 +464,31 @@ impl<'ast> CodeGenerator<'ast> {
                         ..
                     } = function
                     {
-                        if field == "get" {
-                            if let Type::Option(inner) = &ty {
-                                if matches!(
-                                    inner.as_ref(),
-                                    Type::Reference(_) | Type::MutableReference(_)
-                                ) {
-                                    return true;
-                                }
+                        if let Type::Option(inner) = &ty {
+                            if matches!(
+                                inner.as_ref(),
+                                Type::Reference(_) | Type::MutableReference(_)
+                            ) {
+                                return true;
                             }
-                            if let Some(obj_ty) = self.infer_expression_type(fa_obj) {
-                                if Self::is_hashmap_like_type(&obj_ty) {
+                        }
+                        let receiver_type = self
+                            .infer_type_name(fa_obj)
+                            .or_else(|| self.infer_indexed_element_type_name(fa_obj));
+                        if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                            field,
+                            receiver_type.as_deref(),
+                            &self.signature_registry,
+                        ) {
+                            return true;
+                        }
+                        if let Some(obj_ty) = self.infer_expression_type(fa_obj) {
+                            if let Some(receiver_type) = Self::map_receiver_type_name(&obj_ty) {
+                                if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                                    field,
+                                    Some(&receiver_type),
+                                    &self.signature_registry,
+                                ) {
                                     return true;
                                 }
                             }
@@ -490,16 +507,20 @@ impl<'ast> CodeGenerator<'ast> {
         field_types.get(field_name).cloned()
     }
 
-    fn is_hashmap_like_type(ty: &Type) -> bool {
+    fn map_receiver_type_name(ty: &Type) -> Option<String> {
         match ty {
+            Type::Parameterized(name, _) if crate::codegen::rust::stdlib_method_traits::is_map_type_name(name) => {
+                Some(name.clone())
+            }
             Type::Custom(name) => {
-                // Bare "Map" without type params could be a user struct, not a HashMap alias
-                matches!(name.as_str(), "HashMap" | "BTreeMap" | "IndexMap")
+                let base = name.split('<').next().unwrap_or(name);
+                if crate::codegen::rust::stdlib_method_traits::is_map_type_name(base) {
+                    Some(base.to_string())
+                } else {
+                    None
+                }
             }
-            Type::Parameterized(name, _) => {
-                matches!(name.as_str(), "HashMap" | "BTreeMap" | "Map" | "IndexMap")
-            }
-            _ => false,
+            _ => None,
         }
     }
 }

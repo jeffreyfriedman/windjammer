@@ -30,12 +30,28 @@ impl FloatInference {
             }
             Expression::Call { function, .. } => {
                 // Parser desugars `receiver.method(args)` as Call(FieldAccess(receiver, method), args).
-                // HashMap/Map `.get` must infer like MethodCall so `match m.get(..)` gets arm float context.
+                // Map shared-get must infer like MethodCall so `match m.get(..)` gets arm float context.
                 if let Expression::FieldAccess { object, field, .. } = function {
-                    if field == "get" {
-                        if let Some(object_type) = self.infer_type_from_expression(object) {
-                            if let Some(value_ty) = self.extract_map_value_type(&object_type) {
-                                return Some(Type::Option(Box::new(value_ty)));
+                    if let Some(object_type) = self.infer_type_from_expression(object) {
+                        let type_name = match &object_type {
+                            Type::Custom(name) => name.clone(),
+                            Type::Parameterized(name, _) => name.clone(),
+                            _ => String::new(),
+                        };
+                        if !type_name.is_empty() {
+                            let full_name = format!("{}::{}", type_name, field);
+                            if let Some((_, Some(ret))) = self.function_signatures.get(&full_name) {
+                                if crate::codegen::rust::stdlib_method_traits::type_is_option_shared_ref(
+                                    ret,
+                                ) || crate::codegen::rust::stdlib_method_traits::type_is_option_mut_ref(
+                                    ret,
+                                ) {
+                                    if let Some(value_ty) =
+                                        self.extract_map_value_type(&object_type)
+                                    {
+                                        return Some(Type::Option(Box::new(value_ty)));
+                                    }
+                                }
                             }
                         }
                     }
@@ -64,17 +80,22 @@ impl FloatInference {
             Expression::MethodCall { object, method, .. } => {
                 // object.method() - need object's type to find method signature
                 let object_type = self.infer_type_from_expression(object)?;
-                // TDD: Map<K,V>::get / HashMap::get → Option<V> (match arms need float context)
-                if method == "get" {
-                    if let Some(value_ty) = self.extract_map_value_type(&object_type) {
-                        return Some(Type::Option(Box::new(value_ty)));
-                    }
-                }
                 let type_name = match &object_type {
                     Type::Custom(name) => name.clone(),
+                    Type::Parameterized(name, _) => name.clone(),
                     _ => return None,
                 };
                 let full_name = format!("{}::{}", type_name, method);
+                // Map shared-get → Option<V> (match arms need float context on value type)
+                if let Some((_, Some(ret))) = self.function_signatures.get(&full_name) {
+                    if crate::codegen::rust::stdlib_method_traits::type_is_option_shared_ref(ret)
+                        || crate::codegen::rust::stdlib_method_traits::type_is_option_mut_ref(ret)
+                    {
+                        if let Some(value_ty) = self.extract_map_value_type(&object_type) {
+                            return Some(Type::Option(Box::new(value_ty)));
+                        }
+                    }
+                }
                 if let Some((_, ret)) = self.function_signatures.get(&full_name) {
                     return ret.clone();
                 }

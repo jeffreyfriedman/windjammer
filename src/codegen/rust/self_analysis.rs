@@ -722,7 +722,7 @@ pub fn function_modifies_self_or_derived_local(
             }
         }
     }
-    self_field_get_binding_is_mutated(func, registry, struct_name)
+    self_field_get_binding_is_mutated(func, registry, struct_name, field_types)
 }
 
 // =============================================================================
@@ -738,8 +738,13 @@ fn self_field_get_binding_is_mutated(
     func: &FunctionDecl,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
 ) -> bool {
-    let get_bindings = collect_self_field_get_bindings(func);
+    let stdlib = SignatureRegistry::stdlib();
+    let reg = registry.unwrap_or(&stdlib);
+    let get_bindings = collect_self_field_get_bindings(func, reg, struct_name, field_types);
     if get_bindings.is_empty() {
         return false;
     }
@@ -752,7 +757,14 @@ fn self_field_get_binding_is_mutated(
 }
 
 /// Collect local variables that are assigned from `self.field.get(...)`.
-fn collect_self_field_get_bindings(func: &FunctionDecl) -> HashSet<String> {
+fn collect_self_field_get_bindings(
+    func: &FunctionDecl,
+    registry: &SignatureRegistry,
+    struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+) -> HashSet<String> {
     let mut bindings = HashSet::new();
     for stmt in &func.body {
         if let Statement::Let { pattern, value, .. } = stmt {
@@ -761,7 +773,7 @@ fn collect_self_field_get_bindings(func: &FunctionDecl) -> HashSet<String> {
                 _ => None,
             };
             if let Some(name) = name {
-                if is_self_field_get_call(value) {
+                if is_self_field_get_call(value, registry, struct_name, field_types) {
                     bindings.insert(name.to_string());
                 }
             }
@@ -770,13 +782,37 @@ fn collect_self_field_get_bindings(func: &FunctionDecl) -> HashSet<String> {
     bindings
 }
 
-/// Check if an expression is `self.field.get(...)`.
-pub fn is_self_field_get_call(expr: &Expression) -> bool {
-    if let Expression::MethodCall { object, method, .. } = expr {
-        method == "get" && is_self_field_chain(object)
-    } else {
-        false
+/// Check if an expression is `self.field.<map-key-get>(...)` (signature-driven, not name-only).
+pub fn is_self_field_get_call(
+    expr: &Expression,
+    registry: &SignatureRegistry,
+    struct_name: Option<&str>,
+    field_types: Option<
+        &std::collections::HashMap<String, std::collections::HashMap<String, crate::parser::Type>>,
+    >,
+) -> bool {
+    let Expression::MethodCall { object, method, .. } = expr else {
+        return false;
+    };
+    if !is_self_field_chain(object) {
+        return false;
     }
+    let Some(struct_name) = struct_name else {
+        return false;
+    };
+    let Some(all_fields) = field_types else {
+        return false;
+    };
+    let Some(receiver_type_name) =
+        resolve_self_field_chain_type_name(object, struct_name, all_fields)
+    else {
+        return false;
+    };
+    crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+        method,
+        Some(&receiver_type_name),
+        registry,
+    )
 }
 
 /// Check if a method name is known to be read-only (no mutation).

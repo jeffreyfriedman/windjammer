@@ -103,6 +103,91 @@ fn return_type_is(sig: &FunctionSignature, pred: impl Fn(&Type) -> bool) -> bool
     sig.return_type.as_ref().is_some_and(&pred)
 }
 
+/// Return type is `Option<&T>` / `Option<Reference(_)>`.
+pub fn method_returns_option_shared_ref(sig: &FunctionSignature) -> bool {
+    return_type_is(sig, |ty| {
+        matches!(
+            ty,
+            Type::Option(inner) if matches!(inner.as_ref(), Type::Reference(_))
+        )
+    })
+}
+
+/// Return type is `Option<&mut T>` / `Option<MutableReference(_)>`.
+pub fn method_returns_option_mut_ref(sig: &FunctionSignature) -> bool {
+    return_type_is(sig, |ty| {
+        matches!(
+            ty,
+            Type::Option(inner) if matches!(inner.as_ref(), Type::MutableReference(_))
+        )
+    })
+}
+
+/// Parsed return type is `Option<&T>`.
+pub fn type_is_option_shared_ref(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::Option(inner) if matches!(inner.as_ref(), Type::Reference(_))
+    )
+}
+
+/// Parsed return type is `Option<&mut T>`.
+pub fn type_is_option_mut_ref(ty: &Type) -> bool {
+    matches!(
+        ty,
+        Type::Option(inner) if matches!(inner.as_ref(), Type::MutableReference(_))
+    )
+}
+
+/// Map/set key lookup returning a shared reference inside `Option` (e.g. `HashMap::get`).
+pub fn is_map_shared_get_call(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    let sig = lookup_sig(method, receiver_type, registry);
+    let Some(sig) = sig else {
+        return false;
+    };
+    if !method_returns_option_shared_ref(sig) {
+        return false;
+    }
+    if method_is_map_key_qualified(method, receiver_type, registry) {
+        return true;
+    }
+    is_collection_key_lookup(sig, 0, receiver_type)
+}
+
+/// Name of a method on `receiver_type` that returns `Option<&mut T>`, if any.
+/// Prefers the conventional Rust map API name when present; otherwise any match.
+pub fn map_option_mut_ref_method_name<'a>(
+    receiver_type: Option<&str>,
+    registry: &'a SignatureRegistry,
+) -> Option<&'a str> {
+    let rt = receiver_type?;
+    let preferred = format!("{rt}::get_mut");
+    if let Some(sig) = registry.get_signature(&preferred) {
+        if method_returns_option_mut_ref(sig) {
+            return Some("get_mut");
+        }
+    }
+    let prefix = format!("{rt}::");
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.starts_with(&prefix) && method_returns_option_mut_ref(sig) {
+            return key.rsplit("::").next();
+        }
+    }
+    None
+}
+
+/// Whether the receiver type has a method returning `Option<&mut T>` (map `get_mut` sibling).
+pub fn map_has_get_mut_sibling(
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    map_option_mut_ref_method_name(receiver_type, registry).is_some()
+}
+
 // ── Map type constants ───────────────────────────────────────────────────
 
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
@@ -1265,5 +1350,16 @@ mod pattern_registry_tests {
             .get_signature("HashMap::get")
             .expect("HashMap::get in stdlib_meta");
         assert!(is_collection_key_lookup(sig, 0, Some("HashMap")));
+        assert!(method_returns_option_shared_ref(sig));
+        assert!(is_map_shared_get_call("get", Some("HashMap"), reg));
+        assert!(map_has_get_mut_sibling(Some("HashMap"), reg));
+        assert!(!is_map_shared_get_call("get", Some("String"), reg));
+    }
+
+    #[test]
+    fn user_get_named_method_is_not_map_shared_get() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(!is_map_shared_get_call("get", Some("Holder"), reg));
+        assert!(!map_has_get_mut_sibling(Some("Holder"), reg));
     }
 }
