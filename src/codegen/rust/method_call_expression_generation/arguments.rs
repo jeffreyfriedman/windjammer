@@ -1664,18 +1664,9 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if is_string_literal
                     && !string_literal_converted
-                    && !crate::codegen::rust::stdlib_method_traits::receiver_uses_asref_str_runtime_module(
-                        None,
-                        type_name.as_deref(),
-                        |name| self.is_imported_runtime_std_module(name),
-                    )
-                    && !matches!(
-                        object,
-                        Expression::Identifier { name, .. }
-                            if self.is_imported_runtime_std_module(name)
-                                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                                    name,
-                                )
+                    && !crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                        method_signature.as_ref(),
+                        i,
                     )
                     && !crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
                         method,
@@ -1702,29 +1693,29 @@ impl<'ast> CodeGenerator<'ast> {
                     arg_str = format!("{}.to_string()", arg_str);
                 }
 
-                // Runtime std modules (`strings.len(self.text)`) take `AsRef<str>` — borrow
-                // owned string fields/vars instead of moving out of `&mut self`.
+                // Runtime AsRef<&str> formals: borrow owned string fields/vars (signature-driven).
                 if !is_string_literal {
-                    let asref_str_module =
-                        crate::codegen::rust::stdlib_method_traits::receiver_uses_asref_str_runtime_module(
-                            None,
-                            type_name.as_deref(),
-                            |name| self.is_imported_runtime_std_module(name),
-                        );
-                    let param_is_string = method_signature
-                        .as_ref()
-                        .and_then(|sig| sig.param_type_for_arg(i))
-                        .is_some_and(
-                            crate::codegen::rust::string_utilities::param_is_owned_string_type,
-                        );
+                    let asref_str_formal = method_signature.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                            sig, i,
+                        ) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                            sig, i,
+                        )
+                    }) || type_name.as_ref().is_some_and(|tn| {
+                        crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+                            method,
+                            Some(tn.as_str()),
+                            &self.signature_registry,
+                            i,
+                        )
+                    });
                     let arg_is_string = crate::codegen::rust::string_utilities::expression_is_owned_string_for_asref_borrow(
                         arg_to_generate,
                         self.infer_expression_type(arg_to_generate).as_ref(),
                         &self.local_var_types,
                         &self.current_function_params,
                     );
-                    if asref_str_module
-                        && param_is_string
+                    if asref_str_formal
                         && (arg_is_string
                             || matches!(
                                 arg_to_generate,
@@ -2219,14 +2210,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // Owned String formals (resolved sig) or unresolved extern builders
                 // (`empty_message("…")` with no WJ metadata) must auto-own.
                 if is_string_literal && !string_literal_converted && !arg_str.ends_with(".to_string()") {
-                    let runtime_std_asref = matches!(
-                        object,
-                        Expression::Identifier { name, .. }
-                            if self.is_imported_runtime_std_module(name)
-                                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                                    name,
-                                )
-                    );
+                    let runtime_std_asref = call_site_sig.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                            Some(sig),
+                            i,
+                        )
+                    });
                     let needs_conversion = !runtime_std_asref && match call_site_sig.as_ref() {
                         Some(sig) => {
                             let pi = sig.arg_param_index(i);
