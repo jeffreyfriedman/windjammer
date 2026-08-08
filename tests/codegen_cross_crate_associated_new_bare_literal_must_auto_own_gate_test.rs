@@ -150,3 +150,157 @@ extcol = {{ path = "{ext_path}" }}
         String::from_utf8_lossy(&check.stderr)
     );
 }
+
+fn write_ext_builder_crate(root: &std::path::Path) {
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        r#"[package]
+name = "exttable"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "src/lib.rs"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        r#"
+pub struct Column {
+    pub header: String,
+}
+
+impl Column {
+    pub fn new(header: String) -> Self {
+        Self { header }
+    }
+}
+
+pub struct Table {
+    pub empty: String,
+    pub cols: Vec<Column>,
+}
+
+impl Table {
+    pub fn new() -> Self {
+        Self {
+            empty: String::new(),
+            cols: Vec::new(),
+        }
+    }
+
+    pub fn empty_message(mut self, msg: String) -> Self {
+        self.empty = msg;
+        self
+    }
+
+    pub fn column(mut self, col: Column) -> Self {
+        self.cols.push(col);
+        self
+    }
+}
+"#,
+    )
+    .unwrap();
+}
+
+/// Builder-chain formals (`empty_message("…")`, nested `Column::new("Name")`) must
+/// also auto-own across crates — dogfood shape for DataTable-style APIs.
+#[test]
+fn cross_crate_builder_bare_literal_must_auto_own() {
+    let tmp = TempDir::new().unwrap();
+    let ext = tmp.path().join("exttable");
+    let src = tmp.path().join("src");
+    let out = tmp.path().join("out");
+    write_ext_builder_crate(&ext);
+    fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&out).unwrap();
+
+    fs::write(src.join("mod.wj"), "pub mod view\n").unwrap();
+    fs::write(
+        src.join("view.wj"),
+        r#"
+use exttable::{Table, Column}
+
+pub fn make() -> Table {
+    Table::new()
+        .empty_message("No rows")
+        .column(Column::new("Name"))
+}
+"#,
+    )
+    .unwrap();
+
+    let wj = env!("CARGO_BIN_EXE_wj");
+    let build = Command::new(wj)
+        .args([
+            "build",
+            src.join("mod.wj").to_str().unwrap(),
+            "--module-file",
+            "-o",
+            out.to_str().unwrap(),
+            "--no-cargo",
+        ])
+        .output()
+        .expect("run wj");
+    assert!(
+        build.status.success(),
+        "wj build must succeed. stderr=\n{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let view_rs = fs::read_to_string(out.join("view.rs")).unwrap_or_default();
+    let owns_empty = view_rs.contains("empty_message(\"No rows\".to_string())")
+        || view_rs.contains("empty_message(String::from(\"No rows\"))")
+        || view_rs.contains("empty_message(\"No rows\".to_owned())");
+    let owns_col = view_rs.contains("Column::new(\"Name\".to_string())")
+        || view_rs.contains("Column::new(String::from(\"Name\"))")
+        || view_rs.contains("Column::new(\"Name\".to_owned())");
+    assert!(
+        owns_empty && owns_col,
+        "cross-crate builder bare lits must auto-own. Got:\n{view_rs}"
+    );
+    assert!(
+        !view_rs.contains("empty_message(\"No rows\")")
+            && !view_rs.contains("Column::new(\"Name\")"),
+        "must not pass bare &str into owned String builder formals. Got:\n{view_rs}"
+    );
+
+    let crate_dir = tmp.path().join("crate");
+    fs::create_dir_all(crate_dir.join("src")).unwrap();
+    let ext_path = ext.display().to_string().replace('\\', "/");
+    fs::write(
+        crate_dir.join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "cross_crate_builder_lit_gate"
+version = "0.0.0"
+edition = "2021"
+[lib]
+path = "src/lib.rs"
+[dependencies]
+exttable = {{ path = "{ext_path}" }}
+"#
+        ),
+    )
+    .unwrap();
+    let view = view_rs
+        .replace("use crate::", "use ")
+        .replace("use super::*;\n", "");
+    fs::write(
+        crate_dir.join("src/lib.rs"),
+        format!("#![allow(dead_code, unused)]\n{view}\n"),
+    )
+    .unwrap();
+    let check = Command::new("cargo")
+        .args(["check", "--quiet"])
+        .current_dir(&crate_dir)
+        .output()
+        .expect("cargo check");
+    assert!(
+        check.status.success(),
+        "cross-crate builder bare lit must cargo check. stderr=\n{}\nview=\n{view_rs}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+}
