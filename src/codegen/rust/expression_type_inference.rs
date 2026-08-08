@@ -280,30 +280,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 let obj_ty = self.infer_expression_type(object);
                 // Prefer signature-registry return types (stdlib_meta) over hardcoded
-                // method-name tables — `String::trim` → `&str`, not `&String`.
+                // method-name tables — `String::trim` → `&str`, `HashMap::get` → `Option<&V>`.
+                // Must cover Parameterized/Vec/Option receivers via `type_to_name`.
                 if let Some(obj_type) = obj_ty.as_ref() {
-                    let type_name = match obj_type {
-                        Type::String => Some("String"),
-                        Type::Custom(n) => Some(n.as_str()),
-                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                            match inner.as_ref() {
-                                Type::String => Some("String"),
-                                Type::Custom(n) => Some(n.as_str()),
-                                _ => None,
-                            }
-                        }
-                        _ => None,
-                    };
-                    if let Some(tn) = type_name {
-                        let base = tn.split('<').next().unwrap_or(tn);
-                        for candidate in [tn, base] {
-                            let qualified = format!("{candidate}::{method}");
-                            if let Some(sig) = self.get_signature_with_global(&qualified) {
-                                if let Some(ret) = &sig.return_type {
-                                    return Some(Self::substitute_stdlib_generics(ret, obj_type));
-                                }
-                            }
-                        }
+                    if let Some(ret) = self.registry_method_return_type(obj_type, method) {
+                        return Some(ret);
                     }
                 }
                 if let Some(t) =
@@ -442,23 +423,17 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Look up a method return type from the signature registry with generic substitution.
+    ///
+    /// Uses [`Self::type_to_name`] so `HashMap<K,V>`, `Vec<T>`, and other parameterized
+    /// receivers resolve (`HashMap::get` → `Option<&V>`), not only bare `Custom`/`String`.
     pub(in crate::codegen::rust) fn registry_method_return_type(
         &self,
         receiver: &Type,
         method: &str,
     ) -> Option<Type> {
-        let type_name = match receiver {
-            Type::String => Some("String"),
-            Type::Custom(n) => Some(n.as_str()),
-            Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
-                Type::String => Some("String"),
-                Type::Custom(n) => Some(n.as_str()),
-                _ => None,
-            },
-            _ => None,
-        }?;
-        let base = type_name.split('<').next().unwrap_or(type_name);
-        for candidate in [type_name, base] {
+        let type_name = Self::type_to_name(receiver)?;
+        let base = type_name.split('<').next().unwrap_or(type_name.as_str());
+        for candidate in [type_name.as_str(), base] {
             let qualified = format!("{candidate}::{method}");
             if let Some(sig) = self.get_signature_with_global(&qualified) {
                 if let Some(ret) = &sig.return_type {
