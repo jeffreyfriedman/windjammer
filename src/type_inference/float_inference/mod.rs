@@ -98,7 +98,7 @@ impl Default for FloatInference {
 
 impl FloatInference {
     pub fn new() -> Self {
-        FloatInference {
+        let mut inference = FloatInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
@@ -122,6 +122,22 @@ impl FloatInference {
             file_name_to_id: HashMap::new(),
             next_file_id: 1,
             type_aliases: HashMap::new(),
+        };
+        inference.register_stdlib_signatures();
+        inference
+    }
+
+    fn register_stdlib_signatures(&mut self) {
+        use crate::analyzer::SignatureRegistry;
+
+        for (name, sig) in SignatureRegistry::stdlib().all_signatures() {
+            let param_types = if !sig.formal_param_types.is_empty() {
+                sig.formal_param_types.clone()
+            } else {
+                sig.param_types.clone()
+            };
+            self.function_signatures
+                .insert(name.clone(), (param_types, sig.return_type.clone()));
         }
     }
 
@@ -169,7 +185,9 @@ impl FloatInference {
         &mut self,
         signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
     ) {
-        self.function_signatures = signatures;
+        for (key, value) in signatures {
+            self.function_signatures.insert(key, value);
+        }
     }
 
     /// TDD FIX: Get all collected function signatures (for building global registry)

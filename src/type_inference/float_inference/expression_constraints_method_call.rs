@@ -68,34 +68,10 @@ impl FloatInference {
             }
         }
 
-        // Look up method signature, preferring the receiver's own type to avoid
-        // collisions (e.g. Slider::max vs f64::max).
-        let receiver_type_name = self
-            .infer_type_from_expression(object)
-            .and_then(|ty| match ty {
-                Type::Custom(name) => Some(name),
-                _ => None,
-            });
-
-        let method_sig = if let Some(ref type_name) = receiver_type_name {
-            let qualified = format!("{}::{}", type_name, method);
-            self.function_signatures
-                .get(&qualified)
-                .map(|(params, ret)| (params.clone(), ret.clone()))
-        } else {
-            self.function_signatures
-                .iter()
-                .filter(|(func_name, (params, _))| {
-                    let name_match = func_name.split("::").last() == Some(method);
-                    let param_match =
-                        params.len() == arguments.len() + 1 || params.len() == arguments.len();
-                    name_match && param_match
-                })
-                .map(|(_, (params, ret))| (params.clone(), ret.clone()))
-                .next()
-        };
-
-        if let Some((param_types, _)) = method_sig {
+        // Signature-driven param constraints (includes generic substitution for HashMap/Vec).
+        if let Some(param_types) =
+            self.resolve_method_param_types(object, method, arguments.len(), return_type)
+        {
             let param_offset = if param_types.len() == arguments.len() + 1 {
                 1
             } else {
@@ -121,72 +97,6 @@ impl FloatInference {
                             FloatType::Unknown => {}
                         }
                     }
-                }
-            }
-        }
-
-        if let Expression::Identifier { name, .. } = object {
-            if let Some(var_type) = self.var_types.get(name).cloned() {
-                if method == "insert" {
-                    if let Some(value_type) = self.extract_hashmap_value_type(&var_type) {
-                        if let Some(float_ty) = self.extract_float_type(&value_type) {
-                            if arguments.len() >= 2 {
-                                let value_arg = arguments[1].1;
-                                let value_id = self.get_expr_id(value_arg);
-                                match float_ty {
-                                    FloatType::F32 => {
-                                        self.constraints.push(Constraint::MustBeF32(
-                                            value_id,
-                                            "HashMap<K, f32>.insert(K, f32)".to_string(),
-                                        ));
-                                    }
-                                    FloatType::F64 => {
-                                        self.constraints.push(Constraint::MustBeF64(
-                                            value_id,
-                                            "HashMap<K, f64>.insert(K, f64)".to_string(),
-                                        ));
-                                    }
-                                    FloatType::Unknown => {}
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if method == "push" {
-                    if let Some(elem_type) = self.extract_vec_element_type(&var_type) {
-                        if let Some(float_ty) = self.extract_float_type(&elem_type) {
-                            if !arguments.is_empty() {
-                                let value_arg = arguments[0].1;
-                                let value_id = self.get_expr_id(value_arg);
-                                match float_ty {
-                                    FloatType::F32 => {
-                                        self.constraints.push(Constraint::MustBeF32(
-                                            value_id,
-                                            "Vec<f32>.push(f32)".to_string(),
-                                        ));
-                                    }
-                                    FloatType::F64 => {
-                                        self.constraints.push(Constraint::MustBeF64(
-                                            value_id,
-                                            "Vec<f64>.push(f64)".to_string(),
-                                        ));
-                                    }
-                                    FloatType::Unknown => {}
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if let Some(elem_type) = self.var_element_types.get(name).cloned() {
-                if method == "push" {
-                    if !arguments.is_empty() {
-                        let value_arg = arguments[0].1;
-                        self.collect_expression_constraints(value_arg, Some(&elem_type));
-                    }
-                } else if method == "insert" && arguments.len() >= 2 {
-                    let value_arg = arguments[1].1;
-                    self.collect_expression_constraints(value_arg, Some(&elem_type));
                 }
             }
         }
