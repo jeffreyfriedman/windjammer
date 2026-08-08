@@ -164,6 +164,7 @@ impl GoGenerator {
                 ..
             } => {
                 let obj_str = self.generate_expression(object);
+                let receiver_ty = self.hint_receiver_type_name(object);
                 let args: Vec<String> = arguments
                     .iter()
                     .map(|(_, arg)| self.generate_expression(arg))
@@ -171,13 +172,17 @@ impl GoGenerator {
                 match method.as_str() {
                     "len" => format!("int64(len({}))", obj_str),
                     "is_empty" => format!("len({}) == 0", obj_str),
-                    m if crate::codegen::go::stdlib_method_lowering::go_lowers_push_to_append(m, None)
-                        && args.len() == 1 =>
+                    m if crate::codegen::go::stdlib_method_lowering::go_lowers_push_to_append(
+                        m,
+                        receiver_ty.as_deref(),
+                    ) && args.len() == 1 =>
                     {
                         format!("append({}, {})", obj_str, args[0])
                     }
-                    m if crate::codegen::go::stdlib_method_lowering::go_contains_needs_stub(m, None)
-                        && args.len() == 1 =>
+                    m if crate::codegen::go::stdlib_method_lowering::go_contains_needs_stub(
+                        m,
+                        receiver_ty.as_deref(),
+                    ) && args.len() == 1 =>
                     {
                         "/* contains */ false /* TODO */".to_string()
                     }

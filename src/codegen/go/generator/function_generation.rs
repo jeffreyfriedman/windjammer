@@ -306,6 +306,7 @@ impl GoGenerator {
         ));
 
         self.push_scope();
+        self.seed_local_type_hints(func, None);
         // Register parameters as declared variables
         for p in &func.parameters {
             if p.name != "self" {
@@ -460,6 +461,7 @@ impl GoGenerator {
         ));
 
         self.push_scope();
+        self.seed_local_type_hints(func, Some(type_name));
         for p in &func.parameters {
             if p.name != "self" {
                 self.declare_var(&p.name);

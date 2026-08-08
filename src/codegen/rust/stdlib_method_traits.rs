@@ -728,9 +728,11 @@ pub fn method_is_closure_taking_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    let sig =
-        lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
-    sig.is_some_and(|s| first_arg_type(s).is_some_and(is_closure_type))
+    crate::analyzer::stdlib_method_traits::method_is_closure_taking_qualified(
+        method,
+        receiver_type,
+        registry,
+    )
 }
 
 /// Is this a slice search method (`contains`, `binary_search`) whose first arg
@@ -814,24 +816,7 @@ pub fn is_map_type(ty: &crate::parser::Type) -> bool {
 }
 
 pub fn is_closure_taking_method(method: &str) -> bool {
-    matches!(
-        method,
-        "filter"
-            | "any"
-            | "all"
-            | "find"
-            | "find_map"
-            | "position"
-            | "take_while"
-            | "skip_while"
-            | "map_while"
-            | "partition"
-            | "rposition"
-            | "retain"
-            | "sort_by"
-            | "sort_by_key"
-            | "sort_unstable_by"
-    )
+    method_is_closure_taking_qualified(method, None, SignatureRegistry::stdlib())
 }
 
 /// Module names from `use std::…` that map to `windjammer_runtime::*` imports.
