@@ -415,7 +415,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // AUTO-WRAP function pointers in iterator adapter methods (before IR call-site path).
                 if i == 0
-                    && crate::codegen::rust::stdlib_method_traits::is_closure_taking_method(method)
+                    && crate::codegen::rust::stdlib_method_traits::method_is_closure_taking_qualified(
+                        method,
+                        receiver_type_name,
+                        &self.signature_registry,
+                    )
                 {
                     if let Expression::Identifier { name, .. } = arg_to_generate {
                         let is_fn_ptr_param = self.current_function_params.iter().any(|p| {
@@ -1468,7 +1472,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // THE WINDJAMMER WAY: Users write the natural `filter(predicate)` and the
                 // compiler generates `filter(|__e| predicate(__e))`.
                 if i == 0
-                    && crate::codegen::rust::stdlib_method_traits::is_closure_taking_method(method)
+                    && crate::codegen::rust::stdlib_method_traits::method_is_closure_taking_qualified(
+                        method,
+                        receiver_type_name,
+                        &self.signature_registry,
+                    )
                 {
                     if let Expression::Identifier { name, .. } = arg {
                         // Wrap function pointer parameters: iter adapters expect FnMut(&&T),
@@ -1712,11 +1720,20 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if type_name.as_deref().is_some_and(|tn| {
                         crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type(tn)
                             == Some("db")
-                    }) && matches!(
-                        method,
-                        "query" | "execute" | "get_string" | "get_int" | "get_string_at"
-                            | "get_int_at"
-                    ) && i == 0
+                    }) && {
+                        method_signature.as_ref().is_some_and(|sig| {
+                            crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                                sig, i,
+                            )
+                        }) || type_name.as_ref().is_some_and(|tn| {
+                            crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+                                method,
+                                Some(tn.as_str()),
+                                &self.signature_registry,
+                                i,
+                            )
+                        })
+                    } && i == 0
                         && matches!(
                             arg_to_generate,
                             Expression::Identifier { .. } | Expression::FieldAccess { .. }

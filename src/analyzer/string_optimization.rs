@@ -1141,14 +1141,19 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
+                let reg = super::SignatureRegistry::stdlib();
                 if self.expr_is_param_or_ref_to_param(param_name, object)
-                    && self.method_name_is_string_runtime(method)
+                    && Self::method_is_string_runtime(method, Some("String"), reg)
                 {
                     return true;
                 }
                 for (_, arg) in arguments {
                     if self.expr_is_param_or_ref_to_param(param_name, arg)
-                        && self.method_name_is_string_runtime(method)
+                        && (crate::analyzer::stdlib_method_traits::method_is_string_search_qualified(
+                            method,
+                            Some("String"),
+                            reg,
+                        ) || Self::method_is_string_runtime(method, Some("String"), reg))
                     {
                         return true;
                     }
@@ -1185,19 +1190,15 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn method_name_is_string_runtime(&self, method: &str) -> bool {
-        matches!(
+    fn method_is_string_runtime(
+        method: &str,
+        receiver_type: Option<&str>,
+        registry: &super::SignatureRegistry,
+    ) -> bool {
+        crate::analyzer::stdlib_method_traits::method_is_string_runtime_qualified(
             method,
-            "starts_with"
-                | "ends_with"
-                | "contains"
-                | "substring"
-                | "len"
-                | "trim"
-                | "to_lowercase"
-                | "to_uppercase"
-                | "split"
-                | "replace"
+            receiver_type,
+            registry,
         )
     }
 

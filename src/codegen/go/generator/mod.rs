@@ -62,6 +62,8 @@ struct GoGenerator {
     declared_structs: Vec<String>,
     declared_vars: Vec<std::collections::HashSet<String>>,
     declared_enums: std::collections::HashMap<String, Vec<String>>,
+    /// Best-effort local/param type names for signature-driven method lowering.
+    local_type_hints: std::collections::HashMap<String, String>,
 }
 
 impl GoGenerator {
@@ -73,6 +75,7 @@ impl GoGenerator {
             declared_structs: Vec::new(),
             declared_vars: vec![std::collections::HashSet::new()],
             declared_enums: std::collections::HashMap::new(),
+            local_type_hints: std::collections::HashMap::new(),
         }
     }
 
@@ -129,6 +132,52 @@ impl GoGenerator {
 
     fn indent(&self) -> String {
         "\t".repeat(self.indent_level)
+    }
+
+    fn type_name_hint(&self, ty: &Type) -> Option<String> {
+        match ty {
+            Type::String => Some("String".to_string()),
+            Type::Custom(name) if name == "string" => Some("String".to_string()),
+            Type::Custom(name) => {
+                let base = name.split('<').next().unwrap_or(name);
+                Some(base.to_string())
+            }
+            Type::Parameterized(base, _) => Some(base.clone()),
+            _ => None,
+        }
+    }
+
+    fn seed_local_type_hints(&mut self, func: &FunctionDecl, self_type: Option<&str>) {
+        self.local_type_hints.clear();
+        if let Some(ty) = self_type {
+            self.local_type_hints
+                .insert("self".to_string(), ty.to_string());
+        }
+        for p in &func.parameters {
+            if p.name == "self" {
+                continue;
+            }
+            if let Some(hint) = self.type_name_hint(&p.type_) {
+                self.local_type_hints.insert(p.name.clone(), hint);
+            }
+        }
+    }
+
+    fn hint_receiver_type_name(&self, object: &Expression) -> Option<String> {
+        match object {
+            Expression::Identifier { name, .. } => self.local_type_hints.get(name).cloned(),
+            Expression::FieldAccess { object, .. } => self.hint_receiver_type_name(object),
+            Expression::StructLiteral { name, .. } => Some(name.clone()),
+            Expression::Call { function, .. } => {
+                if let Expression::Identifier { name, .. } = &**function {
+                    if let Some(base) = name.strip_suffix("::new") {
+                        return Some(base.to_string());
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 }
 

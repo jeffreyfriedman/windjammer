@@ -397,6 +397,92 @@ pub fn method_float_args_match_receiver(
         .is_some_and(|params| params.iter().any(|p| *p == float_ty))
 }
 
+fn sig_is_storage_like(sig: &FunctionSignature) -> bool {
+    if !sig.has_self_receiver || arg_count(sig) == 0 {
+        return false;
+    }
+    if sig.param_ownership[0] != OwnershipMode::MutBorrowed {
+        return false;
+    }
+    let start = 1;
+    for i in start..sig.param_ownership.len() {
+        if sig.param_ownership[i] == OwnershipMode::Owned {
+            if let Some(ty) = sig.param_types.get(i) {
+                if !is_usize_type(ty) && !is_closure_type(ty) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// When `::{method}` is registered on many types, true only if every *instance*
+/// method match is storage-like (`Vec::push`-style). Ambiguous names return false.
+pub fn consensus_storage_method(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_is_storage_like(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
+fn sig_is_closure_taking(sig: &FunctionSignature) -> bool {
+    first_arg_type(sig).is_some_and(is_closure_type)
+}
+
+/// Unanimous closure-first-arg across all stdlib instance methods named `::{method}`.
+pub fn consensus_closure_taking_method(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_is_closure_taking(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
+fn sig_is_membership_test(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && sig.return_type.as_ref().is_some_and(|t| matches!(t, Type::Bool))
+        && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
+        && first_arg_type(sig).is_some_and(is_reference_type)
+}
+
+/// Unanimous bool membership-test shape across stdlib instance `::{method}` keys.
+pub fn consensus_membership_test_method(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_is_membership_test(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
 pub fn method_is_storage_qualified(
     method: &str,
     receiver_type: Option<&str>,
@@ -404,23 +490,88 @@ pub fn method_is_storage_qualified(
 ) -> bool {
     let sig = lookup_sig(method, receiver_type, registry)
         .or_else(|| lookup_unqualified(method, registry));
-    if let Some(s) = sig {
-        if !s.has_self_receiver || arg_count(s) == 0 {
-            return false;
+    sig.is_some_and(sig_is_storage_like)
+}
+
+pub fn method_is_closure_taking_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
+        return sig_is_closure_taking(sig);
+    }
+    if receiver_type.is_none() {
+        return consensus_closure_taking_method(method, registry);
+    }
+    lookup_unqualified(method, registry).is_some_and(sig_is_closure_taking)
+}
+
+/// String search methods (`starts_with`, `ends_with`, `contains`) whose first arg is `&str`.
+pub fn method_is_string_search_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    let sig = lookup_sig(method, receiver_type, registry)
+        .or_else(|| lookup_unqualified(method, registry));
+    sig.is_some_and(|s| {
+        s.has_self_receiver
+            && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
+            && first_arg_type(s).is_some_and(is_str_reference)
+    })
+}
+
+fn return_type_is_string_like(sig: &FunctionSignature) -> bool {
+    fn type_is_string_like(t: &Type) -> bool {
+        match t {
+            Type::String => true,
+            Type::Custom(n) => n == "string" || n == "str",
+            _ => false,
         }
-        if s.param_ownership[0] != OwnershipMode::MutBorrowed {
-            return false;
-        }
-        let start = 1;
-        for i in start..s.param_ownership.len() {
-            if s.param_ownership[i] == OwnershipMode::Owned {
-                if let Some(ty) = s.param_types.get(i) {
-                    if !is_usize_type(ty) && !is_closure_type(ty) {
-                        return true;
-                    }
-                }
+    }
+    sig.return_type
+        .as_ref()
+        .is_some_and(|t| type_is_string_like(t) || matches!(t, Type::Option(inner) if type_is_string_like(inner)))
+}
+
+/// True when `method` is a String/`strings` runtime API (search, transform, module fn).
+pub fn method_is_string_runtime_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if method_is_string_search_qualified(method, receiver_type, registry) {
+        return true;
+    }
+    if registry.get_signature(&format!("strings::{method}")).is_some() {
+        return true;
+    }
+    for ty in ["String", "string", "str"] {
+        if let Some(sig) = lookup_sig(method, Some(ty), registry) {
+            if sig.has_self_receiver && return_type_is_string_like(sig) {
+                return true;
             }
         }
+    }
+    false
+}
+
+pub fn method_is_membership_test_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if method_is_string_search_qualified(method, receiver_type, registry) {
+        return true;
+    }
+    let sig = lookup_sig(method, receiver_type, registry)
+        .or_else(|| lookup_unqualified(method, registry));
+    if let Some(s) = sig {
+        return sig_is_membership_test(s);
+    }
+    if receiver_type.is_none() {
+        return consensus_membership_test_method(method, registry);
     }
     false
 }
