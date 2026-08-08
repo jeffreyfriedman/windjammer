@@ -802,8 +802,8 @@ impl<'ast> CodeGenerator<'ast> {
         } else if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
             &sig, arg_index,
         ) && matches!(expected.base, BaseType::String | BaseType::Custom(_))
-            && !crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                callee_module,
+            && !crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                &sig, arg_index,
             )
         {
             expected.ownership = OwnedType::Owned;
@@ -1527,8 +1527,9 @@ impl<'ast> CodeGenerator<'ast> {
             && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&callee_sig, callee_pidx)
             && !runtime_std_needs_borrow
             && !(crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
-                && crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                    callee_module,
+                && crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                    Some(&callee_sig),
+                    arg_index,
                 ))
         {
             let callee_borrows_text = self.ir_sig_arg_expects_shared_borrow(&callee_sig, arg_index)
@@ -1661,8 +1662,9 @@ impl<'ast> CodeGenerator<'ast> {
                 value: Literal::String(_),
                 ..
             }
-        ) && !crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-            callee_module,
+        ) && !crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+            Some(&sig),
+            arg_index,
         )
             && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
@@ -2804,10 +2806,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-            effective_module,
-        )
-            && matches!(
+        if matches!(
                 arg_expr,
                 Expression::Literal {
                     value: Literal::String(_),
@@ -2815,6 +2814,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             )
             && coerced.ends_with(".to_string()")
+            && crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                signature,
+                arg_index,
+            )
         {
             coerced = coerced
                 .trim_end_matches(".to_string()")

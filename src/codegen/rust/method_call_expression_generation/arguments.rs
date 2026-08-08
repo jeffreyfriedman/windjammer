@@ -1582,21 +1582,14 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                         .or_else(|| method_signature.clone());
 
-                    // Check what the parameter wants
-                    let asref_str_module =
-                        crate::codegen::rust::stdlib_method_traits::receiver_uses_asref_str_runtime_module(
-                            None,
-                            type_name.as_deref(),
-                            |name| self.is_imported_runtime_std_module(name),
+                    // Check what the parameter wants — signature-driven (AsRef/&str formals
+                    // skip `.to_string()`), not module-name lists.
+                    let asref_str_formal = effective_sig.as_ref().is_some_and(|sig| {
+                        crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                            Some(sig),
+                            i,
                         )
-                        || matches!(
-                            object,
-                            Expression::Identifier { name, .. }
-                                if self.is_imported_runtime_std_module(name)
-                                    || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                                        name,
-                                    )
-                        );
+                    });
 
                     let param_type = effective_sig
                         .as_ref()
@@ -1612,7 +1605,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     });
 
-                    if asref_str_module {
+                    if asref_str_formal {
                         false
                     } else if is_explicit_str_ref {
                         false
