@@ -139,6 +139,16 @@ fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
         )
 }
 
+/// True when the receiver is not `&mut self` (`Owned` and `Borrowed` both count).
+/// Mirror of `analyzer::stdlib_method_traits::sig_readonly_receiver`.
+fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && sig
+            .param_ownership
+            .first()
+            .is_some_and(|o| *o != OwnershipMode::MutBorrowed)
+}
+
 /// When `::{method}` is registered on many types, true only if every *instance*
 /// method match takes `&mut self` (`MutBorrowed`). Free functions that share the
 /// suffix (e.g. `collections::take`) are ignored. Ambiguous method names
@@ -162,6 +172,26 @@ fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> boo
     any
 }
 
+/// When `::{method}` is registered on many types, true only if every *instance*
+/// method match does not take `&mut self`. Free functions that share the suffix
+/// are ignored. Mirror of `analyzer::stdlib_method_traits::consensus_readonly_receiver`.
+fn consensus_readonly_receiver(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_readonly_receiver(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
 /// Does this method mutate its receiver (`&mut self`)?
 pub fn method_mutates_receiver_qualified(
     method: &str,
@@ -177,23 +207,19 @@ pub fn method_mutates_receiver_qualified(
     consensus_mutates_receiver(method, registry)
 }
 
-/// Is this method definitely read-only (`&self`)?
+/// Is this method definitely read-only (not `&mut self`)?
 pub fn is_known_readonly_qualified(
     method: &str,
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
     if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] == OwnershipMode::Borrowed;
-        }
+        return sig_readonly_receiver(sig);
     }
     if let Some(sig) = lookup_suffix(method, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] == OwnershipMode::Borrowed;
-        }
+        return sig_readonly_receiver(sig);
     }
-    false
+    consensus_readonly_receiver(method, registry)
 }
 
 /// Is this a known method in the stdlib signatures?
@@ -653,6 +679,14 @@ pub fn method_is_string_search_qualified(
 // ── Convenience wrappers (no receiver type) ──────────────────────────────
 // Used at call sites that lack receiver type context.
 // Driven by stdlib signature consensus — never by expanding method-name lists.
+
+/// Unqualified fallback: unanimous non-`MutBorrowed` self across stdlib `::{method}` keys.
+/// Prefer [`is_known_readonly_qualified`] when receiver type + registry are available.
+///
+/// Delegates to the analyzer helper so both crates share one consensus implementation.
+pub fn is_known_readonly(method: &str) -> bool {
+    crate::analyzer::stdlib_method_traits::is_known_readonly(method)
+}
 
 /// Unqualified fallback: unanimous `MutBorrowed` self across stdlib `::{method}` keys.
 /// Prefer [`method_mutates_receiver_qualified`] when receiver type + registry are available.
@@ -1124,6 +1158,54 @@ mod pattern_registry_tests {
             Some("B"),
             &reg
         ));
+    }
+
+    #[test]
+    fn consensus_readonly_receiver_empty_registry_is_false() {
+        let empty = SignatureRegistry::empty();
+        assert!(!consensus_readonly_receiver("len", &empty));
+        assert!(!is_known_readonly_qualified("len", Some("Vec"), &empty));
+    }
+
+    #[test]
+    fn consensus_readonly_receiver_mixed_ownership_is_false() {
+        let mut reg = SignatureRegistry::empty();
+        let mut a = FunctionSignature::default();
+        a.name = "A::peek".into();
+        a.param_types = vec![Type::Custom("A".into())];
+        a.param_ownership = vec![OwnershipMode::MutBorrowed];
+        a.has_self_receiver = true;
+        reg.add_function("A::peek".into(), a);
+
+        let mut b = FunctionSignature::default();
+        b.name = "B::peek".into();
+        b.param_types = vec![Type::Custom("B".into())];
+        b.param_ownership = vec![OwnershipMode::Borrowed];
+        b.has_self_receiver = true;
+        reg.add_function("B::peek".into(), b);
+
+        assert!(!consensus_readonly_receiver("peek", &reg));
+        assert!(!is_known_readonly_qualified("peek", Some("A"), &reg));
+        assert!(is_known_readonly_qualified("peek", Some("B"), &reg));
+    }
+
+    #[test]
+    fn consensus_readonly_receiver_unanimous_borrowed_is_true() {
+        let mut reg = SignatureRegistry::empty();
+        for (ty, own) in [
+            ("A", OwnershipMode::Borrowed),
+            ("B", OwnershipMode::Borrowed),
+        ] {
+            let mut sig = FunctionSignature::default();
+            sig.name = format!("{ty}::size");
+            sig.param_types = vec![Type::Custom(ty.into())];
+            sig.param_ownership = vec![own];
+            sig.has_self_receiver = true;
+            reg.add_function(format!("{ty}::size"), sig);
+        }
+        assert!(consensus_readonly_receiver("size", &reg));
+        assert!(is_known_readonly("len"));
+        assert!(!is_known_readonly("push"));
     }
 
     #[test]

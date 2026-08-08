@@ -8,173 +8,10 @@ use crate::parser::Type;
 use super::{FunctionSignature, OwnershipMode, SignatureRegistry};
 
 // ── Inline fallback tables (legacy method_registry parity) ───────────────
-// Mutating-receiver detection is signature-driven (see consensus_mutates_receiver).
-// Do not reintroduce MUTATES_RECEIVER method-name lists.
-
-const KNOWN_READONLY: &[&str] = &[
-    "contains_key",
-    "get",
-    "get_key_value",
-    "len",
-    "is_empty",
-    "contains",
-    "first",
-    "last",
-    "capacity",
-    "keys",
-    "values",
-    "binary_search",
-    "to_le_bytes",
-    "to_be_bytes",
-    "from_le_bytes",
-    "from_be_bytes",
-    "iter",
-    "into_iter",
-    "windows",
-    "chunks",
-    "enumerate",
-    "lines",
-    "chars",
-    "bytes",
-    "split",
-    "split_whitespace",
-    "clone",
-    "to_string",
-    "to_owned",
-    "to_vec",
-    "as_str",
-    "as_ref",
-    "as_slice",
-    "as_bytes",
-    "as_deref",
-    "as_ptr",
-    "as_mut_ptr",
-    "trim",
-    "starts_with",
-    "ends_with",
-    "to_lowercase",
-    "to_uppercase",
-    "is_ascii",
-    "substring",
-    "splitn",
-    "rsplit",
-    "repeat",
-    "replacen",
-    "rfind",
-    "match_indices",
-    "trim_start",
-    "trim_end",
-    "strip_prefix",
-    "strip_suffix",
-    "to_ascii_lowercase",
-    "to_ascii_uppercase",
-    "slice",
-    "reversed",
-    "extend_from_slice",
-    "count",
-    "with_capacity",
-    "abs",
-    "ceil",
-    "floor",
-    "round",
-    "sqrt",
-    "cbrt",
-    "powi",
-    "powf",
-    "sin",
-    "cos",
-    "tan",
-    "asin",
-    "acos",
-    "atan",
-    "atan2",
-    "sinh",
-    "cosh",
-    "tanh",
-    "asinh",
-    "acosh",
-    "atanh",
-    "log",
-    "log2",
-    "log10",
-    "ln",
-    "exp",
-    "exp2",
-    "min",
-    "max",
-    "clamp",
-    "signum",
-    "copysign",
-    "fract",
-    "recip",
-    "to_radians",
-    "to_degrees",
-    "is_nan",
-    "is_infinite",
-    "is_finite",
-    "is_normal",
-    "is_sign_positive",
-    "is_sign_negative",
-    "leading_zeros",
-    "trailing_zeros",
-    "count_ones",
-    "count_zeros",
-    "wrapping_add",
-    "wrapping_sub",
-    "wrapping_mul",
-    "saturating_add",
-    "saturating_sub",
-    "saturating_mul",
-    "checked_add",
-    "checked_sub",
-    "checked_mul",
-    "checked_div",
-    "display",
-    "fmt",
-    "cmp",
-    "partial_cmp",
-    "eq",
-    "ne",
-    "is_some",
-    "is_none",
-    "is_ok",
-    "is_err",
-    "unwrap",
-    "unwrap_or",
-    "unwrap_or_else",
-    "unwrap_or_default",
-    "expect",
-    "map",
-    "and_then",
-    "or_else",
-    "ok_or",
-    "ok_or_else",
-    "filter",
-    "any",
-    "all",
-    "find",
-    "find_map",
-    "position",
-    "take_while",
-    "skip_while",
-    "map_while",
-    "partition",
-    "rposition",
-];
+// Mutating/readonly-receiver detection is signature-driven (see consensus_*).
+// Do not reintroduce method-name lists for ownership decisions.
 
 const MAP_KEY: &[&str] = &["remove", "contains_key", "get", "get_mut", "get_key_value"];
-
-const STORAGE: &[&str] = &[
-    "push",
-    "insert",
-    "extend",
-    "append",
-    "add",
-    "push_front",
-    "push_back",
-];
-
-const TYPE_PRESERVING: &[&str] = &["clone", "to_owned", "to_vec", "into_iter"];
 
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
 
@@ -217,14 +54,7 @@ pub fn method_mutates_receiver(method: &str) -> bool {
 }
 
 pub fn is_known_readonly(method: &str) -> bool {
-    KNOWN_READONLY.contains(&method)
-}
-
-/// DEPRECATED: prefer `method_is_type_preserving_qualified` (signature / consensus).
-#[deprecated(note = "use method_is_type_preserving_qualified")]
-#[allow(dead_code)]
-pub fn is_type_preserving(method: &str) -> bool {
-    TYPE_PRESERVING.contains(&method)
+    consensus_readonly_receiver(method, SignatureRegistry::stdlib())
 }
 
 pub fn is_map_key_method(method: &str) -> bool {
@@ -283,14 +113,6 @@ pub(crate) fn decompose_collection_key_lookup<'ast>(
         },
         _ => None,
     }
-}
-
-/// DEPRECATED: prefer `method_is_storage_qualified` / `method_call_argument_stores_owned_payload`.
-/// Name-based storage classification must not drive ownership or string coercion.
-#[deprecated(note = "use method_is_storage_qualified / method_call_argument_stores_owned_payload")]
-#[allow(dead_code)]
-pub fn is_storage_method(method: &str) -> bool {
-    STORAGE.contains(&method)
 }
 
 // ── SignatureRegistry helpers ────────────────────────────────────────────
@@ -388,6 +210,15 @@ fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
         )
 }
 
+/// True when the receiver is not `&mut self` (`Owned` and `Borrowed` both count).
+fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && sig
+            .param_ownership
+            .first()
+            .is_some_and(|o| *o != OwnershipMode::MutBorrowed)
+}
+
 /// When `::{method}` is registered on many types, true only if every *instance*
 /// method match takes `&mut self`. Free functions that share the suffix are
 /// ignored. Ambiguous method names return false — use the qualified API instead.
@@ -401,6 +232,26 @@ fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> boo
             }
             any = true;
             if !sig_mutates_receiver(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
+/// When `::{method}` is registered on many types, true only if every *instance*
+/// method match does not take `&mut self` (`Owned` and `Borrowed` both count as
+/// non-mutating-in-place). Free functions that share the suffix are ignored.
+fn consensus_readonly_receiver(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if key.ends_with(&pattern) {
+            if !sig.has_self_receiver {
+                continue;
+            }
+            any = true;
+            if !sig_readonly_receiver(sig) {
                 return false;
             }
         }
@@ -431,16 +282,15 @@ pub fn is_known_readonly_qualified(
     registry: &SignatureRegistry,
 ) -> bool {
     if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] != OwnershipMode::MutBorrowed;
-        }
+        return sig_readonly_receiver(sig);
+    }
+    if let Some(sig) = lookup_suffix(method, registry) {
+        return sig_readonly_receiver(sig);
     }
     if let Some(sig) = lookup_unqualified(method, registry) {
-        if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-            return sig.param_ownership[0] != OwnershipMode::MutBorrowed;
-        }
+        return sig_readonly_receiver(sig);
     }
-    false
+    consensus_readonly_receiver(method, registry)
 }
 
 fn return_type_is_self(sig: &FunctionSignature) -> bool {
@@ -588,5 +438,65 @@ mod tests {
             Some("String"),
             reg
         ));
+    }
+
+    #[test]
+    fn is_known_readonly_stdlib_consensus() {
+        assert!(is_known_readonly("len"));
+        assert!(is_known_readonly("is_empty"));
+        assert!(is_known_readonly("get"));
+        assert!(!is_known_readonly("push"));
+        assert!(!is_known_readonly("clear"));
+        assert!(
+            !is_known_readonly("replace"),
+            "Option vs String replace must not consensus-readonly"
+        );
+        assert!(!is_known_readonly("no_such_method_zzz"));
+    }
+
+    #[test]
+    fn consensus_readonly_receiver_empty_registry_is_false() {
+        let empty = SignatureRegistry::empty();
+        assert!(!consensus_readonly_receiver("len", &empty));
+        assert!(!is_known_readonly_qualified("len", Some("Vec"), &empty));
+    }
+
+    #[test]
+    fn consensus_readonly_receiver_mixed_ownership_is_false() {
+        let mut reg = SignatureRegistry::empty();
+        let mut a = FunctionSignature::default();
+        a.name = "A::peek".into();
+        a.param_types = vec![Type::Custom("A".into())];
+        a.param_ownership = vec![OwnershipMode::MutBorrowed];
+        a.has_self_receiver = true;
+        reg.add_function("A::peek".into(), a);
+
+        let mut b = FunctionSignature::default();
+        b.name = "B::peek".into();
+        b.param_types = vec![Type::Custom("B".into())];
+        b.param_ownership = vec![OwnershipMode::Borrowed];
+        b.has_self_receiver = true;
+        reg.add_function("B::peek".into(), b);
+
+        assert!(!consensus_readonly_receiver("peek", &reg));
+        assert!(!is_known_readonly_qualified("peek", Some("A"), &reg));
+        assert!(is_known_readonly_qualified("peek", Some("B"), &reg));
+    }
+
+    #[test]
+    fn consensus_readonly_receiver_unanimous_borrowed_is_true() {
+        let mut reg = SignatureRegistry::empty();
+        for (ty, own) in [
+            ("A", OwnershipMode::Borrowed),
+            ("B", OwnershipMode::Borrowed),
+        ] {
+            let mut sig = FunctionSignature::default();
+            sig.name = format!("{ty}::size");
+            sig.param_types = vec![Type::Custom(ty.into())];
+            sig.param_ownership = vec![own];
+            sig.has_self_receiver = true;
+            reg.add_function(format!("{ty}::size"), sig);
+        }
+        assert!(consensus_readonly_receiver("size", &reg));
     }
 }

@@ -687,14 +687,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 sig_for_lit, challenger, lit_pidx,
                             );
                         }
-                        let registry_expects_owned_string = [func_name, simple]
-                            .iter()
-                            .filter_map(|name| gen.signature_registry.get_signature(name))
-                            .any(|s| {
-                                crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                                    s, i,
-                                )
-                            });
+                        let runtime_module = func_name.split("::").next();
+                        let asref_runtime = runtime_module.is_some_and(
+                            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                        );
+                        let registry_expects_owned_string = !asref_runtime
+                            && [func_name, simple]
+                                .iter()
+                                .filter_map(|name| gen.signature_registry.get_signature(name))
+                                .any(|s| {
+                                    crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                        s, i,
+                                    )
+                                });
                         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             sig_for_lit.as_ref(),
                             i,
@@ -704,13 +709,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .next()
                                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
                             Some(&gen.enum_variant_types),
-                            func_name.split("::").next(),
+                            runtime_module,
                         ) || registry_expects_owned_string
-                            || sig_for_lit.as_ref().is_some_and(|s| {
-                            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                                s, i,
-                            )
-                        }) {
+                            || (!asref_runtime
+                                && sig_for_lit.as_ref().is_some_and(|s| {
+                                    crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                        s, i,
+                                    )
+                                }))
+                        {
                             coerced = format!(
                                 "{}.to_string()",
                                 coerced.trim_start_matches('&')
@@ -2624,9 +2631,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                             && gen.is_type_copy(t)
                     });
-                let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(
-                    func_name.rsplit("::").next().unwrap_or(func_name),
-                ) && i == 0;
+                let receiver_type = crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
+                    .or_else(|| {
+                        func_name
+                            .rsplit_once("::")
+                            .map(|(rt, _)| rt)
+                    });
+                let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                    sig,
+                    i,
+                    receiver_type,
+                );
                 let formal_is_owned_string = sig.formal_param_type(pidx).is_some_and(|t| {
                     !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                         && crate::codegen::rust::types::is_windjammer_text_type(t)
@@ -2648,9 +2663,17 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                                 && gen.is_type_copy(t)
                         });
-                    let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(
-                        func_name.rsplit("::").next().unwrap_or(func_name),
-                    ) && i == 0;
+                    let receiver_type = crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
+                        .or_else(|| {
+                            func_name
+                                .rsplit_once("::")
+                                .map(|(rt, _)| rt)
+                        });
+                    let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                        sig,
+                        i,
+                        receiver_type,
+                    );
                     crate::codegen::rust::typed_lowering::correct_legacy_output(
                         sig,
                         i,

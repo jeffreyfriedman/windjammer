@@ -3994,3 +3994,49 @@ pub fn build_grid() {
         "must not clone grid for mut VoxelGrid param. Got:\n{rs}"
     );
 }
+
+/// WDB Phase 37 dogfood: `strings::starts_with(s, "#")` under library multipass must not
+/// emit `"#".to_string()` — runtime takes `&str` / AsRef despite WJ std stub `prefix: string`.
+#[test]
+fn test_library_multipass_strings_starts_with_literal_stays_str() {
+    use std::fs;
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/validation.wj",
+        r##"
+use std::strings
+
+pub fn is_comment_line(line: string) -> bool {
+    let trimmed = strings::trim(line)
+    if strings::is_empty(trimmed) {
+        return false
+    }
+    return strings::starts_with(trimmed, "#")
+}
+"##,
+    );
+    test.add_file("graph/mod.wj", "pub mod validation");
+    test.add_file("mod.wj", "pub mod graph");
+
+    build_project_ext(
+        &test.build_dir().parent().unwrap().join("src"),
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("compile failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("graph/validation.rs")).expect("validation.rs");
+    assert!(
+        rs.contains("starts_with(") && rs.contains("\"#\""),
+        "expected bare hash literal for starts_with. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"#\".to_string()"),
+        "strings::starts_with prefix literal must stay &str under library multipass. Got:\n{rs}"
+    );
+}

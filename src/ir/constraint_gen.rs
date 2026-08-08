@@ -745,7 +745,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                             .first()
                             .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
                 });
-                if mut_self || (sig.is_none() && is_mutating_method(method)) {
+                if mut_self
+                    || (sig.is_none()
+                        && crate::analyzer::stdlib_method_traits::method_mutates_receiver(method))
+                {
                     let r = self.fresh_region();
                     self.cs
                         .add(Constraint::OwnershipIs(obj_var, OwnedType::MutRef(r)));
@@ -1324,32 +1327,6 @@ fn is_bitwise_op(op: &BinaryOp) -> bool {
             | BinaryOp::BitXor
             | BinaryOp::Shl
             | BinaryOp::Shr
-    )
-}
-
-/// Heuristic: common mutating method names.
-fn is_mutating_method(method: &str) -> bool {
-    matches!(
-        method,
-        "push"
-            | "pop"
-            | "insert"
-            | "remove"
-            | "clear"
-            | "extend"
-            | "push_str"
-            | "set"
-            | "drain"
-            | "truncate"
-            | "resize"
-            | "retain"
-            | "sort"
-            | "sort_by"
-            | "sort_unstable"
-            | "reverse"
-            | "swap"
-            | "fill"
-            | "append"
     )
 }
 

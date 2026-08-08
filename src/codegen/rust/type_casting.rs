@@ -3,38 +3,6 @@
 
 use crate::parser::ast::*;
 
-/// Check if an expression's AST shape is a common usize-producing method call.
-///
-/// Prefer `CodeGenerator::expression_produces_usize` (signature registry) when
-/// available. This pure helper cannot load the registry cheaply; it only mirrors
-/// consensus usize returns (`len` / `capacity` / `count`) for early cast insertion.
-///
-/// Call sites with a `SignatureRegistry` must use
-/// [`crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified`]
-/// (or `CodeGenerator::expression_produces_usize`) instead of extending this
-/// method-name list. A registry-aware sibling belongs in a follow-up PR.
-pub fn expression_produces_usize(expr: &Expression) -> bool {
-    matches!(
-        expr,
-        Expression::MethodCall {
-            method,
-            ..
-        } if matches!(method.as_str(), "len" | "capacity" | "count")
-    ) || matches!(
-        expr,
-        Expression::Call {
-            function,
-            arguments,
-            ..
-        } if arguments.is_empty()
-            && matches!(
-                function,
-                Expression::FieldAccess { field, .. }
-                    if matches!(field.as_str(), "len" | "capacity" | "count")
-            )
-    )
-}
-
 /// Check if an expression is a usize literal
 pub fn is_usize_literal(expr: &Expression) -> bool {
     matches!(
@@ -134,35 +102,6 @@ pub fn cast_for_usize_binary_op(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::builders::{expr_call, expr_field, expr_var};
-    use crate::test_utils::test_alloc_expr;
-
-    #[test]
-    fn test_call_form_len_produces_usize() {
-        // Parser represents `items.len()` as Call(FieldAccess(items, "len"), []).
-        let items = test_alloc_expr(expr_var("items"));
-        let len_sel = test_alloc_expr(expr_field(items, "len"));
-        let call = test_alloc_expr(expr_call(len_sel, vec![]));
-        assert!(
-            expression_produces_usize(call),
-            "Call/FieldAccess len() should count as usize-producing"
-        );
-    }
-
-    #[test]
-    fn test_expression_produces_usize() {
-        let expr = Expression::MethodCall {
-            object: test_alloc_expr(Expression::Identifier {
-                name: "vec".to_string(),
-                location: None,
-            }),
-            method: "len".to_string(),
-            type_args: None,
-            arguments: vec![],
-            location: None,
-        };
-        assert!(expression_produces_usize(&expr));
-    }
 
     #[test]
     fn test_maybe_cast_usize_to_int() {

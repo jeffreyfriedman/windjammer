@@ -392,8 +392,9 @@ mod tests {
         assert!(analyzer.is_mutating_method("clear"));
         assert!(analyzer.is_mutating_method("append"));
         assert!(analyzer.is_mutating_method("take"));
-        assert!(analyzer.is_mutating_method("replace"));
         assert!(analyzer.is_mutating_method("get_or_insert"));
+        // `replace` is MutBorrowed on Option but Borrowed on String — unqualified consensus is false.
+        assert!(!analyzer.is_mutating_method("replace"));
 
         // Non-mutating methods
         assert!(!analyzer.is_mutating_method("len"));

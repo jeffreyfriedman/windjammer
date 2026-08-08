@@ -795,7 +795,15 @@ impl<'ast> CodeGenerator<'ast> {
                 .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
             Expression::MethodCall { object, method, .. } => {
                 if matches!(&**object, Expression::Identifier { name, .. } if name == var_name) {
-                    return !super::self_analysis::is_known_readonly_method_name(method);
+                    // Signature / consensus only — unknown user methods are not mutating
+                    // (assignment detection covers field writes). Do not treat
+                    // `!is_known_readonly` as mutate: consensus miss would false-upgrade get→get_mut.
+                    return super::self_analysis::method_is_mutating(
+                        method,
+                        Some(&self.signature_registry),
+                        None,
+                        Some(&self.self_receiver_upgrades),
+                    );
                 }
                 false
             }
@@ -849,7 +857,12 @@ impl<'ast> CodeGenerator<'ast> {
                         false
                     };
                 if (is_var || is_field_of_var)
-                    && !super::self_analysis::is_known_readonly_method_name(method)
+                    && super::self_analysis::method_is_mutating(
+                        method,
+                        Some(&self.signature_registry),
+                        None,
+                        Some(&self.self_receiver_upgrades),
+                    )
                 {
                     return true;
                 }
