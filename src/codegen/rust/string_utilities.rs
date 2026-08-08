@@ -239,6 +239,54 @@ pub fn type_qualified_associated_string_literal_needs_rust_owned_string(
     true
 }
 
+/// Bare string literals on instance method calls (`table.empty_message("lit")`) must
+/// auto-own at the Rust boundary when there is no WJ signature / codegen refresh
+/// (external path-dep builders). Parallel to
+/// [`type_qualified_associated_string_literal_needs_rust_owned_string`].
+///
+/// Stdlib Pattern / `&str` consensus keeps literals bare (`find`, `starts_with`, …).
+pub fn unresolved_instance_method_string_literal_needs_rust_owned_string(
+    method: &str,
+    arg_index: usize,
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    registry: &crate::analyzer::SignatureRegistry,
+    global_registry: Option<&crate::analyzer::SignatureRegistry>,
+    receiver_type: Option<&str>,
+) -> bool {
+    if let Some(s) = sig {
+        if s.emitted_rust_ref_params.is_some()
+            || !s.param_types.is_empty()
+            || !s.formal_param_types.is_empty()
+        {
+            return call_site_param_expects_owned_string(s, arg_index);
+        }
+    }
+
+    let pattern_or_str_ref = |reg: &crate::analyzer::SignatureRegistry, recv: Option<&str>| {
+        crate::codegen::rust::stdlib_method_traits::method_arg_is_string_pattern_qualified(
+            method, recv, reg, arg_index,
+        ) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+            method, recv, reg, arg_index,
+        ) || crate::codegen::rust::stdlib_method_traits::method_is_string_search_qualified(
+            method, recv, reg,
+        )
+    };
+
+    for reg in std::iter::once(registry).chain(global_registry) {
+        if pattern_or_str_ref(reg, receiver_type) || pattern_or_str_ref(reg, None) {
+            return false;
+        }
+    }
+
+    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+    if pattern_or_str_ref(&stdlib, receiver_type) || pattern_or_str_ref(&stdlib, None) {
+        return false;
+    }
+
+    // Unknown extern instance method with no metadata — conservative owned literal.
+    true
+}
+
 /// Parameter type is `&String` — a reference to an owned String.
 /// Distinct from `&str` (`param_is_rust_str_ref`). String literals passed to
 /// `&String` params need `&"literal".to_string()` conversion.
@@ -490,6 +538,20 @@ pub fn string_literal_needs_owned_coercion_with_enum(
         if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
             if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
                 return true;
+            }
+        }
+        // Cross-crate builders: instance method + known receiver, no WJ signature.
+        // Free-function / unknown-receiver sites stay bare (Pattern unit tests; no guess).
+        if let Some(m) = method {
+            if receiver_type.is_some() {
+                return unresolved_instance_method_string_literal_needs_rust_owned_string(
+                    m,
+                    arg_index,
+                    None,
+                    &crate::analyzer::SignatureRegistry::stdlib(),
+                    None,
+                    receiver_type,
+                );
             }
         }
         // No signature and no enum-factory evidence — emit as-is (registry must supply
@@ -912,6 +974,62 @@ mod tests {
             None,
             None,
         ));
+    }
+
+    #[test]
+    fn unresolved_builder_method_literal_needs_owned_without_sig() {
+        assert!(
+            unresolved_instance_method_string_literal_needs_rust_owned_string(
+                "empty_message",
+                0,
+                None,
+                &crate::analyzer::SignatureRegistry::stdlib(),
+                None,
+                Some("Table"),
+            ),
+            "cross-crate builder with no WJ sig must auto-own bare lit"
+        );
+    }
+
+    #[test]
+    fn unresolved_string_search_literal_stays_bare() {
+        assert!(
+            !unresolved_instance_method_string_literal_needs_rust_owned_string(
+                "starts_with",
+                0,
+                None,
+                &crate::analyzer::SignatureRegistry::stdlib(),
+                None,
+                Some("String"),
+            ),
+            "stdlib Pattern/&str consensus must keep search lits bare"
+        );
+        assert!(
+            !unresolved_instance_method_string_literal_needs_rust_owned_string(
+                "find",
+                0,
+                None,
+                &crate::analyzer::SignatureRegistry::stdlib(),
+                None,
+                None,
+            ),
+            "find Pattern slot stays bare even without receiver type"
+        );
+    }
+
+    #[test]
+    fn receiver_known_unresolved_builder_coerces_via_string_literal_predicate() {
+        assert!(
+            string_literal_needs_owned_coercion_with_enum(
+                None,
+                0,
+                Some("empty_message"),
+                Some("Table"),
+                None,
+                None,
+            ),
+            "receiver+method without sig must coerce for cross-crate builders"
+        );
     }
 
     #[test]

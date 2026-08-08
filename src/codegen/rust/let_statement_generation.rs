@@ -81,7 +81,10 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(current_scope) = self.local_variable_scopes.last_mut() {
                 current_scope.insert(name.to_string());
             }
-        } else if matches!(pattern, Pattern::Tuple(_)) {
+        } else if matches!(
+            pattern,
+            Pattern::Tuple(_) | Pattern::EnumVariant(_, _)
+        ) {
             let mut bound = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut bound);
             if let Some(current_scope) = self.local_variable_scopes.last_mut() {
@@ -278,6 +281,10 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(t) = inferred_type {
                 self.local_var_types.insert(name.to_string(), t);
             }
+        } else {
+            // Struct / enum destructure: `let VertexMap { mut inner } = map`
+            // Register field binding types so `inner.get(k)` resolves to HashMap::get.
+            self.register_destructure_binding_types(pattern);
         }
 
         // PHASE 8: Check if this variable should use SmallVec
@@ -876,6 +883,36 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
             _ => false,
+        }
+    }
+
+    /// Register types for bindings in `let Type { field, mut other } = …` so later
+    /// method calls on those bindings resolve via `Type::field`'s type (e.g. HashMap).
+    fn register_destructure_binding_types(&mut self, pattern: &Pattern<'_>) {
+        use crate::parser::EnumPatternBinding;
+        let Pattern::EnumVariant(type_name, EnumPatternBinding::Struct(fields, _)) = pattern else {
+            return;
+        };
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        let field_types: Vec<(String, Type)> = self
+            .lookup_struct_field_types(type_name)
+            .or_else(|| self.lookup_struct_field_types(base))
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default();
+        if field_types.is_empty() {
+            return;
+        }
+        for (field_name, pat) in fields {
+            let binding = match pat {
+                Pattern::Identifier(n) | Pattern::MutBinding(n) => Some(n.as_str()),
+                Pattern::Ref(n) | Pattern::RefMut(n) => Some(n.as_str()),
+                _ => None,
+            };
+            let Some(binding) = binding else { continue };
+            if let Some((_, ty)) = field_types.iter().find(|(k, _)| k == field_name) {
+                self.local_var_types
+                    .insert(binding.to_string(), ty.clone());
+            }
         }
     }
 }

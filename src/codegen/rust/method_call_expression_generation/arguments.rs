@@ -2199,8 +2199,8 @@ impl<'ast> CodeGenerator<'ast> {
                 );
 
                 // Cross-crate string literal → String conversion:
-                // If the string literal was not already converted but the call-site signature
-                // expects an owned String parameter, add .to_string() now.
+                // Owned String formals (resolved sig) or unresolved extern builders
+                // (`empty_message("…")` with no WJ metadata) must auto-own.
                 if is_string_literal && !string_literal_converted && !arg_str.ends_with(".to_string()") {
                     let runtime_std_asref = matches!(
                         object,
@@ -2210,20 +2210,31 @@ impl<'ast> CodeGenerator<'ast> {
                                     name,
                                 )
                     );
-                    let needs_conversion = !runtime_std_asref
-                        && call_site_sig.as_ref().is_some_and(|sig| {
-                        let pi = sig.arg_param_index(i);
-                        !crate::codegen::rust::call_signature_resolution::static_impl_text_borrows_at_call_site(
-                            sig, pi,
-                        ) && matches!(
-                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
-                                sig, i, receiver_type_name,
-                            ),
-                            OwnershipMode::Owned,
-                        ) && sig.param_type_for_arg(i).is_some_and(
-                            crate::codegen::rust::string_utilities::param_is_owned_string_type,
-                        )
-                    });
+                    let needs_conversion = !runtime_std_asref && match call_site_sig.as_ref() {
+                        Some(sig) => {
+                            let pi = sig.arg_param_index(i);
+                            !crate::codegen::rust::call_signature_resolution::static_impl_text_borrows_at_call_site(
+                                sig, pi,
+                            ) && matches!(
+                                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                                    sig, i, receiver_type_name,
+                                ),
+                                OwnershipMode::Owned,
+                            ) && sig.param_type_for_arg(i).is_some_and(
+                                crate::codegen::rust::string_utilities::param_is_owned_string_type,
+                            )
+                        }
+                        None => {
+                            crate::codegen::rust::string_utilities::unresolved_instance_method_string_literal_needs_rust_owned_string(
+                                method,
+                                i,
+                                None,
+                                &self.signature_registry,
+                                self.global_signature_registry.as_deref(),
+                                receiver_type_name,
+                            )
+                        }
+                    };
                     if needs_conversion {
                         arg_str = format!("{}.to_string()", arg_str);
                     }
@@ -2999,8 +3010,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // Restore suppress flag
                 self.suppress_borrowed_clone = prev_suppress;
 
-                let effective_sig = type_name
+                let effective_sig = receiver_type_name_owned
                     .as_ref()
+                    .or(type_name.as_ref())
                     .and_then(|tn| {
                         self.lookup_method_signature_on_receiver_type(
                             tn,
@@ -3017,7 +3029,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(method),
                         arg_to_generate,
                         &mut arg_str,
-                        type_name.as_deref(),
+                        receiver_type_name.or(type_name.as_deref()),
                         Some(&self.enum_variant_types),
                         None,
                     );
