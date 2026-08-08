@@ -385,7 +385,16 @@ impl CodeGenerator<'_> {
                         .or_else(|| self.infer_type_name(object))
                         .as_deref(),
                     &self.signature_registry,
-                ) || crate::codegen::rust::stdlib_method_traits::is_closure_taking_method(method)
+                ) || {
+                    let recv = self
+                        .mc_infer_method_receiver_type_name(object)
+                        .or_else(|| self.infer_type_name(object));
+                    crate::codegen::rust::stdlib_method_traits::method_is_closure_taking_qualified(
+                        method,
+                        recv.as_deref(),
+                        &self.signature_registry,
+                    )
+                }
                 {
                     return self.infer_iterator_item_type_at_expr(object);
                 }

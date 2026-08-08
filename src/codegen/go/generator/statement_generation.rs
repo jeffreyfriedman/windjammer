@@ -91,9 +91,10 @@ impl GoGenerator {
                     ..
                 } = expr
                 {
+                    let receiver_ty = self.hint_receiver_type_name(object);
                     if crate::codegen::go::stdlib_method_lowering::go_lowers_push_to_append(
                         method,
-                        None,
+                        receiver_ty.as_deref(),
                     ) && arguments.len() == 1
                     {
                         let obj_str = self.generate_expression(object);

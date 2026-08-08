@@ -1,44 +1,58 @@
 //! Signature-driven method lowering helpers for the Go backend.
 
 use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
-use crate::parser::Type;
 
-fn lookup_method_sig<'a>(
-    method: &str,
-    receiver_type: Option<&str>,
-    registry: &'a SignatureRegistry,
-) -> Option<&'a crate::analyzer::FunctionSignature> {
-    if let Some(ty) = receiver_type {
-        let base = ty.split('<').next().unwrap_or(ty);
-        if let Some(sig) = registry.get_signature(&format!("{base}::{method}")) {
-            return Some(sig);
+fn is_string_like_receiver_base(base: &str) -> bool {
+    matches!(base, "String" | "string" | "str")
+}
+
+fn receiver_base(ty: &str) -> &str {
+    ty.split('<').next().unwrap_or(ty)
+}
+
+/// Consensus for Go `append` lowering: storage-like and not homonymous with String APIs.
+fn consensus_go_append_storage(method: &str, registry: &SignatureRegistry) -> bool {
+    let pattern = format!("::{method}");
+    let mut any_non_string = false;
+    let mut saw_string = false;
+    for (key, sig) in registry.all_signatures_for_suffix_search() {
+        if !key.ends_with(&pattern) || !sig.has_self_receiver {
+            continue;
+        }
+        let base = key.split("::").next().unwrap_or("");
+        if is_string_like_receiver_base(base) {
+            saw_string = true;
+            continue;
+        }
+        any_non_string = true;
+        if !stdlib_method_traits::method_is_storage_qualified(method, Some(base), registry) {
+            return false;
         }
     }
-    registry.find_unique_signature_ending_with(method)
+    if saw_string && any_non_string {
+        return false;
+    }
+    any_non_string
 }
 
 /// True when `receiver.method(arg)` should lower to Go `append(receiver, arg)`.
 ///
 /// Requires a mutating storage method (`Vec::push`-like): `&mut self` receiver and an owned
-/// element parameter. Without a receiver type, only unambiguous `Vec::push` matches.
+/// element parameter. `String::push` is excluded — it is storage-like but not slice append.
+/// Without a receiver type, returns false when the name is ambiguous (e.g. homonymous `push`).
 pub fn go_lowers_push_to_append(method: &str, receiver_type: Option<&str>) -> bool {
     let reg = SignatureRegistry::stdlib();
-    if let Some(ty) = receiver_type {
-        if stdlib_method_traits::method_is_storage_qualified(method, Some(ty), reg) {
-            return true;
-        }
+    match receiver_type {
+        Some(ty) if is_string_like_receiver_base(receiver_base(ty)) => false,
+        Some(ty) => stdlib_method_traits::method_is_storage_qualified(method, Some(ty), reg),
+        None => consensus_go_append_storage(method, reg),
     }
-    stdlib_method_traits::method_is_storage_qualified(method, Some("Vec"), reg)
 }
 
 /// True when the call is a stdlib membership test we cannot lower yet (emit stub).
 pub fn go_contains_needs_stub(method: &str, receiver_type: Option<&str>) -> bool {
     let reg = SignatureRegistry::stdlib();
-    let sig = lookup_method_sig(method, receiver_type, reg);
-    sig.is_some_and(|s| {
-        s.return_type.as_ref().is_some_and(|t| matches!(t, Type::Bool))
-            && s.param_ownership.len() > if s.has_self_receiver { 1 } else { 0 }
-    })
+    stdlib_method_traits::method_is_membership_test_qualified(method, receiver_type, reg)
 }
 
 #[cfg(test)]
@@ -53,5 +67,10 @@ mod tests {
     #[test]
     fn string_push_is_not_append() {
         assert!(!go_lowers_push_to_append("push", Some("String")));
+    }
+
+    #[test]
+    fn push_without_receiver_type_is_ambiguous() {
+        assert!(!go_lowers_push_to_append("push", None));
     }
 }
