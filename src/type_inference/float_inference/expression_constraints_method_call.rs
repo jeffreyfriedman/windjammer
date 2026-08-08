@@ -30,13 +30,15 @@ impl FloatInference {
             }
         }
 
-        const SELF_ARG_METHODS: &[&str] = &[
-            "min", "max", "clamp", "copysign", "atan2", "hypot", "powf",
-        ];
-        // Only add float constraints when the receiver is actually a float type.
-        // Struct builder methods (e.g. Slider::max) share names with numeric methods
-        // but must not trigger float inference constraints.
-        if SELF_ARG_METHODS.contains(&method) && method_return_type.is_some() {
+        use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+
+        let receiver_type = self.infer_type_from_expression(object);
+        if stdlib_method_traits::method_float_args_match_receiver(
+            method,
+            receiver_type.as_ref(),
+            SignatureRegistry::stdlib(),
+        ) && method_return_type.is_some()
+        {
             let receiver_id = self.get_expr_id(object);
             for (_label, arg) in arguments.iter() {
                 let arg_id = self.get_expr_id(arg);

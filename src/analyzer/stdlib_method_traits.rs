@@ -337,6 +337,66 @@ pub fn option_owned_self_method(method: &str, registry: &SignatureRegistry) -> b
         && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
 }
 
+/// Peel `&T` / `&mut T` and return `"f32"` / `"f64"` for primitive float receivers.
+pub fn float_primitive_name(ty: &Type) -> Option<&'static str> {
+    match ty {
+        Type::Float => Some("f64"),
+        Type::Custom(s) if s == "float" => Some("f64"),
+        Type::Custom(s) if s == "f32" => Some("f32"),
+        Type::Custom(s) if s == "f64" => Some("f64"),
+        Type::Reference(inner) | Type::MutableReference(inner) => float_primitive_name(inner),
+        _ => None,
+    }
+}
+
+fn return_type_is_float(sig: &FunctionSignature, float_name: &str) -> bool {
+    sig.return_type.as_ref().is_some_and(|t| match t {
+        Type::Float => float_name == "f64",
+        Type::Custom(s) if s == float_name => true,
+        _ => false,
+    })
+}
+
+/// True when `receiver` is `f32`/`f64` and `Receiver::method` returns the same float type.
+///
+/// Guards struct builder methods (`Slider::max`) — receiver must be a primitive float, not
+/// an arbitrary type that happens to define `max`.
+pub fn method_preserves_float_receiver(
+    method: &str,
+    receiver_type: Option<&Type>,
+    registry: &SignatureRegistry,
+) -> bool {
+    let Some(float_name) = receiver_type.and_then(float_primitive_name) else {
+        return false;
+    };
+    lookup_sig(method, Some(float_name), registry).is_some_and(|sig| {
+        return_type_is_float(sig, float_name)
+    })
+}
+
+/// True when the resolved float method has at least one parameter of the receiver float type
+/// (e.g. `f32::max(other: f32)`). Used for float arg/receiver unification constraints.
+pub fn method_float_args_match_receiver(
+    method: &str,
+    receiver_type: Option<&Type>,
+    registry: &SignatureRegistry,
+) -> bool {
+    let Some(float_name) = receiver_type.and_then(float_primitive_name) else {
+        return false;
+    };
+    let Some(sig) = lookup_sig(method, Some(float_name), registry) else {
+        return false;
+    };
+    if !return_type_is_float(sig, float_name) {
+        return false;
+    }
+    let float_ty = Type::Custom(float_name.to_string());
+    let start = if sig.has_self_receiver { 1 } else { 0 };
+    sig.param_types
+        .get(start..)
+        .is_some_and(|params| params.iter().any(|p| *p == float_ty))
+}
+
 pub fn method_is_storage_qualified(
     method: &str,
     receiver_type: Option<&str>,

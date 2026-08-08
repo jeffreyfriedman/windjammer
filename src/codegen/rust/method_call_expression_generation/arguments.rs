@@ -25,6 +25,73 @@ fn is_ref_closure_method(method: &str) -> bool {
 }
 
 impl<'ast> CodeGenerator<'ast> {
+    /// When `receiver.method(args)` is a primitive float method, set literal/coercion context
+    /// for arguments to match the receiver float type (`f32` vs `f64`).
+    pub(in crate::codegen::rust) fn push_float_method_argument_context(
+        &mut self,
+        method: &str,
+        object: &Expression<'ast>,
+    ) -> Option<Type> {
+        let prev = self.assignment_float_target_type.clone();
+        let receiver_type_inferred = self.infer_expression_type(object);
+        let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+        let preserves_on = |float: &str| {
+            crate::analyzer::stdlib_method_traits::method_preserves_float_receiver(
+                method,
+                Some(&Type::Custom(float.to_string())),
+                stdlib,
+            )
+        };
+        // Primitive float methods are registered on both f32 and f64; struct builders
+        // like `Slider::max` must not match (receiver is not a float type).
+        let is_primitive_float_method =
+            preserves_on("f32") && preserves_on("f64");
+        let receiver_is_float = receiver_type_inferred.as_ref().is_some_and(|rty| {
+            crate::codegen::rust::type_classification_utilities::is_float_type(rty)
+                || matches!(rty, Type::Custom(n) if n == "float")
+        });
+        let is_float_method = is_primitive_float_method
+            && (receiver_is_float || receiver_type_inferred.is_none());
+        if is_float_method {
+            use crate::type_inference::FloatType;
+            let from_numeric = self.numeric_inference.as_ref().and_then(|ni| {
+                match ni.get_float_type(object) {
+                    FloatType::F32 => Some(Type::Custom("f32".to_string())),
+                    FloatType::F64 => Some(Type::Custom("f64".to_string())),
+                    FloatType::Unknown => None,
+                }
+            });
+            if let Some(ty) = from_numeric {
+                self.assignment_float_target_type = Some(ty);
+            } else if let Some(float_name) = receiver_type_inferred
+                .as_ref()
+                .and_then(crate::analyzer::stdlib_method_traits::float_primitive_name)
+            {
+                self.assignment_float_target_type =
+                    Some(Type::Custom(float_name.to_string()));
+            } else if let Some(ref rft) = receiver_type_inferred {
+                match rft {
+                    Type::Custom(n)
+                        if matches!(n.as_str(), "f64" | "float" | "f32") =>
+                    {
+                        let suffix = if n == "f32" { "f32" } else { "f64" };
+                        self.assignment_float_target_type =
+                            Some(Type::Custom(suffix.to_string()));
+                    }
+                    Type::Float => {
+                        // Windjammer default float is f32 unless inference/context says f64.
+                        self.assignment_float_target_type =
+                            Some(Type::Custom("f32".to_string()));
+                    }
+                    _ => {}
+                }
+            } else {
+                self.assignment_float_target_type = Some(Type::Custom("f32".to_string()));
+            }
+        }
+        prev
+    }
+
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn mc_build_method_call_arg_strings(
         &mut self,
@@ -35,9 +102,7 @@ impl<'ast> CodeGenerator<'ast> {
         type_name: Option<String>,
     ) -> (Vec<String>, Option<Type>) {
         self.refresh_pure_forwarding_delegate_flag();
-        // Float method argument context: for methods like clamp/max/min on float
-        // receivers, arguments should use the same float type as the receiver.
-        let prev_float_target = self.assignment_float_target_type.clone();
+        let prev_float_target = self.push_float_method_argument_context(method, object);
         let receiver_type_inferred = self.infer_expression_type(object);
         let receiver_is_string_collection =
             Self::is_string_element_collection(receiver_type_inferred.as_ref())
@@ -51,24 +116,6 @@ impl<'ast> CodeGenerator<'ast> {
                     receiver_type_inferred.as_ref(),
                     self.current_function_return_type.as_ref(),
                 );
-        let is_float_method = crate::type_classification::is_float_receiver_method(method);
-        if is_float_method {
-            if let Some(ref rft) = receiver_type_inferred {
-                match rft {
-                    Type::Custom(n) if n == "f64" => {
-                        self.assignment_float_target_type = Some(Type::Custom("f64".to_string()));
-                    }
-                    Type::Custom(n) if n == "f32" => {
-                        self.assignment_float_target_type = Some(Type::Custom("f32".to_string()));
-                    }
-                    Type::Float => {
-                        self.assignment_float_target_type = Some(Type::Custom("f64".to_string()));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
         // `Vec<f64>` / `Vec<f32>` receiver → float element type for generic store formals (`push(T)`).
         let collection_float_elem: Option<Type> = {
             let receiver_ty = receiver_type_inferred.clone().or_else(|| match object {
@@ -339,7 +386,8 @@ impl<'ast> CodeGenerator<'ast> {
                         .or_else(|| sig.param_types.get(pidx));
                     if param_ty.is_some_and(
                         crate::codegen::rust::type_classification_utilities::is_float_type,
-                    ) {
+                    ) && self.assignment_float_target_type.is_none()
+                    {
                         self.assignment_float_target_type = param_ty.cloned();
                     }
                 }

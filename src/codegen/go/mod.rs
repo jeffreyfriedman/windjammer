@@ -32,5 +32,6 @@
 
 mod generator;
 mod ir_lowering;
+mod stdlib_method_lowering;
 
 pub use generator::GoBackend;

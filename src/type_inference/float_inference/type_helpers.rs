@@ -99,39 +99,11 @@ impl FloatInference {
                 if let Some((_, ret)) = self.function_signatures.get(&full_name) {
                     return ret.clone();
                 }
-                // TDD FIX: Fallback for primitive methods — return same float type as receiver.
-                // Keep in sync with `determine_method_return_type` F32_METHODS (subset used here).
-                const PRIMITIVE_SAME_TYPE: &[&str] = &[
-                    "sqrt",
-                    "sin",
-                    "cos",
-                    "tan",
-                    "asin",
-                    "acos",
-                    "atan",
-                    "atan2",
-                    "abs",
-                    "floor",
-                    "ceil",
-                    "round",
-                    "length",
-                    "magnitude",
-                    "distance",
-                    "dot",
-                    "recip",
-                    "powf",
-                    "powi",
-                    "exp",
-                    "ln",
-                    "log",
-                    "log2",
-                    "to_degrees",
-                    "to_radians",
-                ];
-                if PRIMITIVE_SAME_TYPE.contains(&method.as_str())
-                    && (matches!(object_type, Type::Custom(ref s) if s == "f32" || s == "f64")
-                        || matches!(object_type, Type::Float))
-                {
+                if crate::analyzer::stdlib_method_traits::method_preserves_float_receiver(
+                    method,
+                    Some(&object_type),
+                    crate::analyzer::SignatureRegistry::stdlib(),
+                ) {
                     return Some(object_type);
                 }
                 None
@@ -523,118 +495,67 @@ impl FloatInference {
     /// Determine the return type of a method call
     /// Returns Some(FloatType) if the method is known to return f32/f64, None otherwise
     fn determine_method_return_type(&self, object: &Expression, method: &str) -> Option<FloatType> {
-        // TDD FIX: For methods on f32/f64 primitives, return the same type
-        // Standard library f32 methods that return f32:
-        const F32_METHODS: &[&str] = &[
-            // Trigonometric
-            "sin",
-            "cos",
-            "tan",
-            "asin",
-            "acos",
-            "atan",
-            "atan2",
-            "sinh",
-            "cosh",
-            "tanh",
-            "asinh",
-            "acosh",
-            "atanh",
-            // Exponential/logarithmic
-            "exp",
-            "exp2",
-            "exp_m1",
-            "ln",
-            "log",
-            "log2",
-            "log10",
-            "ln_1p",
-            // Power/root
-            "sqrt",
-            "cbrt",
-            "hypot",
-            "powf",
-            "powi",
-            // Rounding
-            "floor",
-            "ceil",
-            "round",
-            "trunc",
-            "fract",
-            // Absolute/sign
-            "abs",
-            "signum",
-            "copysign",
-            // Min/max
-            "max",
-            "min",
-            "clamp",
-            // Misc
-            "recip",
-            "to_degrees",
-            "to_radians",
-        ];
+        use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+
+        let registry = SignatureRegistry::stdlib();
+
+        let float_from_receiver = |receiver_type: &Type| -> Option<FloatType> {
+            if stdlib_method_traits::method_preserves_float_receiver(
+                method,
+                Some(receiver_type),
+                registry,
+            ) {
+                return self.extract_float_type(receiver_type);
+            }
+            None
+        };
 
         // Check if this is a method call on an identifier
         if let Expression::Identifier { name, .. } = object {
-            // Look up the identifier's type from var_types
             if let Some(var_type) = self.var_types.get(name) {
-                // Check if it's an f32 or f64 type
-                let is_f32 = matches!(var_type, Type::Float)
-                    || matches!(var_type, Type::Custom(s) if s == "f32");
-                let is_f64 = matches!(var_type, Type::Custom(s) if s == "f64");
-
-                if is_f32 && F32_METHODS.contains(&method) {
-                    return Some(FloatType::F32);
-                }
-                if is_f64 && F32_METHODS.contains(&method) {
-                    return Some(FloatType::F64);
+                if let Some(ft) = float_from_receiver(var_type) {
+                    return Some(ft);
                 }
             }
         }
 
-        // Method on a field (e.g. self.vy.sqrt(), pos.x.acos()): infer receiver type from the
-        // field-access expression. Do NOT scan function_signatures by method basename — HashMap
-        // order could pick `f64::acos` while the receiver is f32, forcing spurious f64 promotion.
+        // Method on a field (e.g. self.vy.sqrt(), pos.x.acos())
         if let Expression::FieldAccess { .. } = object {
             if let Some(ty) = self.infer_type_from_expression(object) {
-                let is_f32 =
-                    matches!(&ty, Type::Float) || matches!(&ty, Type::Custom(s) if s == "f32");
-                let is_f64 = matches!(&ty, Type::Custom(s) if s == "f64");
-                if is_f32 && F32_METHODS.contains(&method) {
-                    return Some(FloatType::F32);
-                }
-                if is_f64 && F32_METHODS.contains(&method) {
-                    return Some(FloatType::F64);
+                if let Some(ft) = float_from_receiver(&ty) {
+                    return Some(ft);
                 }
             }
         }
 
-        // For MethodCall on MethodCall (chaining), try to infer from the inner call.
-        // Guard: only treat as a float method if the receiver actually IS a float type.
-        // Struct builder methods like `Slider::max` must NOT collide with `f32::max`.
-        if let Expression::MethodCall { .. } = object {
-            if F32_METHODS.contains(&method) {
-                if let Some(object_type) = self.infer_type_from_expression(object) {
-                    if let Some(float_ty) = self.extract_float_type(&object_type) {
-                        return Some(float_ty);
-                    }
-                    // Receiver is a known non-float type (e.g. Slider) — not a numeric method.
-                    return None;
+        // MethodCall on MethodCall (chaining): guard — only float receivers (not Slider::max).
+        if let Expression::MethodCall {
+            object: inner_obj,
+            method: inner_method,
+            ..
+        } = object
+        {
+            if let Some(object_type) = self.infer_type_from_expression(object) {
+                if let Some(ft) = float_from_receiver(&object_type) {
+                    return Some(ft);
                 }
-                // Can't determine receiver type — fall back to f32 heuristic for
-                // chained math like `vec.x.sin().cos()` where type info isn't available.
-                return Some(FloatType::F32);
+                return None;
+            }
+            // Chained math without type info: infer inner float return, then check outer method.
+            if let Some(inner_ft) = self.determine_method_return_type(inner_obj, inner_method) {
+                let ty = match inner_ft {
+                    FloatType::F32 => Type::Custom("f32".to_string()),
+                    FloatType::F64 => Type::Custom("f64".to_string()),
+                    FloatType::Unknown => return None,
+                };
+                return float_from_receiver(&ty);
             }
         }
 
-        // TDD FIX: For MethodCall on Binary (e.g., (x*x + y*y).sqrt()), infer from operands
-        // Handles physics/advanced_collision.wj: len = (edge_x*edge_x + edge_y*edge_y).sqrt()
+        // MethodCall on Binary (e.g., (x*x + y*y).sqrt())
         if let Expression::Binary { .. } = object {
-            if F32_METHODS.contains(&method) {
-                if let Some(object_type) = self.infer_type_from_expression(object) {
-                    return self.extract_float_type(&object_type);
-                }
+            if let Some(object_type) = self.infer_type_from_expression(object) {
+                return float_from_receiver(&object_type);
             }
         }
 

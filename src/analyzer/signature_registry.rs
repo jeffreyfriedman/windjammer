@@ -154,6 +154,7 @@ impl SignatureRegistry {
             }
 
             Self::load_stdlib_meta(&mut registry);
+            super::primitive_float_signatures::register_primitive_float_signatures(&mut registry);
             registry
         })
     }

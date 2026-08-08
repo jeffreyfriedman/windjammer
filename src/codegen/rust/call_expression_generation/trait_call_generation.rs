@@ -95,26 +95,31 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         _ => None,
     };
 
-    let mut args: Vec<String> = if let Some(ref sig) = method_signature {
-        argument_generation::field_access_method_args_with_signature(
-            gen,
-            sig,
-            call_method,
-            &method_signature,
-            &type_name,
-            call_obj,
-            runtime_module,
-            arguments,
-        )
-    } else {
-        argument_generation::field_access_method_args_fallback(
-            gen,
-            call_method,
-            &type_name,
-            call_obj,
-            runtime_module,
-            arguments,
-        )
+    let mut args: Vec<String> = {
+        let prev_float = gen.push_float_method_argument_context(call_method, call_obj);
+        let built = if let Some(ref sig) = method_signature {
+            argument_generation::field_access_method_args_with_signature(
+                gen,
+                sig,
+                call_method,
+                &method_signature,
+                &type_name,
+                call_obj,
+                runtime_module,
+                arguments,
+            )
+        } else {
+            argument_generation::field_access_method_args_fallback(
+                gen,
+                call_method,
+                &type_name,
+                call_obj,
+                runtime_module,
+                arguments,
+            )
+        };
+        gen.assignment_float_target_type = prev_float;
+        built
     };
 
     // Runtime std modules where WJ declares owned aggregates but Rust takes references.
@@ -378,8 +383,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         || gen.ffi_module_aliases.contains(&obj_str);
 
     if is_extern_call && !gen.in_unsafe_block {
-        format!("(unsafe {{ {} }})", call_str)
-    } else {
-        call_str
+        return format!("(unsafe {{ {} }})", call_str);
     }
+    call_str
 }
