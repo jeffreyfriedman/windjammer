@@ -556,7 +556,7 @@ impl SignatureRegistry {
         method: &str,
         arg_count: usize,
     ) -> bool {
-        let mut ownerships = std::collections::HashSet::new();
+        let mut seen: Vec<OwnershipMode> = Vec::new();
         for (_key, sig) in self.all_signatures_for_suffix_search() {
             let suffix = _key.rsplit("::").next().unwrap_or(_key.as_str());
             if suffix != method {
@@ -571,11 +571,13 @@ impl SignatureRegistry {
                 continue;
             }
             let first_user = if sig.has_self_receiver { 1 } else { 0 };
-            if let Some(own) = sig.param_ownership.get(first_user) {
-                ownerships.insert(*own);
+            if let Some(&own) = sig.param_ownership.get(first_user) {
+                if !seen.iter().any(|o| *o == own) {
+                    seen.push(own);
+                }
             }
         }
-        ownerships.len() > 1
+        seen.len() > 1
     }
 
     fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
