@@ -49,22 +49,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.maybe_cast_usize_to_int_target(&mut return_str, e, target);
             }
 
-            let returns_option_owned = self.returns_option_owned_type();
-            if returns_option_owned
-                && self.expression_type_contains_reference(e)
-                && !return_str.ends_with(".cloned()")
-                && !return_str.ends_with(".clone()")
-            {
-                if self
-                    .infer_expression_type(e)
-                    .as_ref()
-                    .is_some_and(Self::type_contains_mut_reference_static)
-                {
-                    return_str = format!("{}.map(|v| v.clone())", return_str);
-                } else {
-                    return_str = format!("{}.cloned()", return_str);
-                }
-            }
+            self.coerce_option_ref_return_to_owned(&mut return_str, e);
 
             // DOGFOODING FIX: Vec indexing returns &T for non-Copy, but return expects T
             // e.g. return self.slots[idx] where slots: Vec<SaveSlot> → need .clone()
