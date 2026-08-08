@@ -17,6 +17,7 @@ mod mutation_detection;
 mod optimization_detectors;
 mod parameter_analysis;
 mod passthrough_inference;
+mod primitive_float_signatures;
 mod program_initialization;
 mod self_access_and_option_refs;
 mod self_analysis;
