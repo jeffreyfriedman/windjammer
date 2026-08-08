@@ -548,6 +548,36 @@ impl SignatureRegistry {
             .and_then(|g| g.find_signature_by_name_and_arg_count(name, arg_count))
     }
 
+    /// True when multiple `*::{method}` entries share `arg_count` but disagree on the
+    /// first user-arg ownership (`Owned` vs `Borrowed`). Suffix-resolving without a
+    /// receiver type would pick an arbitrary homonym (e.g. `Vec::remove` vs `HashMap::remove`).
+    pub fn suffix_has_conflicting_first_arg_ownership(
+        &self,
+        method: &str,
+        arg_count: usize,
+    ) -> bool {
+        let mut ownerships = std::collections::HashSet::new();
+        for (_key, sig) in self.all_signatures_for_suffix_search() {
+            let suffix = _key.rsplit("::").next().unwrap_or(_key.as_str());
+            if suffix != method {
+                continue;
+            }
+            let user_args = if sig.has_self_receiver {
+                sig.param_ownership.len().saturating_sub(1)
+            } else {
+                sig.param_ownership.len()
+            };
+            if user_args != arg_count {
+                continue;
+            }
+            let first_user = if sig.has_self_receiver { 1 } else { 0 };
+            if let Some(own) = sig.param_ownership.get(first_user) {
+                ownerships.insert(*own);
+            }
+        }
+        ownerships.len() > 1
+    }
+
     fn sig_user_arg_count(sig: &FunctionSignature) -> usize {
         crate::codegen::rust::call_signature_resolution::effective_user_arg_count(sig)
     }

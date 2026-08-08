@@ -147,9 +147,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         // No receiver type known: suffix-match with arg-count validation.
         // Never do bare `get_signature(method)` — it could pick any type's method.
-        // Skip `remove` specifically because it has incompatible semantics across types:
-        // Vec::remove(usize) takes owned index, HashMap::remove(&K) takes borrowed key.
-        if method == "remove" {
+        // Skip when same-suffix methods disagree on first-arg ownership
+        // (e.g. Vec::remove owned usize vs HashMap::remove borrowed &K) — not a name list.
+        if self
+            .signature_registry
+            .suffix_has_conflicting_first_arg_ownership(method, arguments.len())
+            || self.global_signature_registry().is_some_and(|g| {
+                g.suffix_has_conflicting_first_arg_ownership(method, arguments.len())
+            })
+        {
             return None;
         }
         let local_sig = self
