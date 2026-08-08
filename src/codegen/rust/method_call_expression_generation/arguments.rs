@@ -217,10 +217,22 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } = arg
                 {
-                    let is_hashmap_key_method =
-                        crate::codegen::rust::stdlib_method_traits::is_map_key_method(method) && i == 0;
+                    let strip_ref_for_collection_key = sig_for_effective
+                        .is_some_and(|sig| {
+                            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                                sig,
+                                i,
+                                receiver_type_name,
+                            )
+                        })
+                        || crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_qualified(
+                            method,
+                            receiver_type_name,
+                            &self.signature_registry,
+                            i,
+                        );
 
-                    if is_hashmap_key_method {
+                    if strip_ref_for_collection_key {
                         if let Expression::Identifier { .. } = &**operand {
                             operand
                         } else {
@@ -1718,8 +1730,6 @@ impl<'ast> CodeGenerator<'ast> {
                         self.str_ref_optimized_params.contains(name.as_str());
 
                     if is_str_ref_optimized {
-                        let is_map_key = crate::codegen::rust::stdlib_method_traits::is_map_key_method(method)
-                            && i == 0;
                         let param_idx_for_sig = method_signature.as_ref().map_or(i, |s| s.arg_param_index(i));
                         let callee_sig = call_site_sig
                             .clone()
@@ -1733,6 +1743,13 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 })
                             });
+                        let is_collection_key = callee_sig.as_ref().is_some_and(|sig| {
+                            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                                sig,
+                                i,
+                                receiver_type_name,
+                            )
+                        });
                         let arg_is_owned_string_binding =
                             if let Expression::Identifier { name, .. } = arg_to_generate {
                                 self.current_function_params.iter().any(|p| {
@@ -1762,7 +1779,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     crate::codegen::rust::string_utilities::param_is_rust_str_ref,
                                 )
                         });
-                        if !is_map_key
+                        if !is_collection_key
                             && !arg_is_owned_string_binding
                             && !callee_borrows
                             && !crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::callee_param_is_rust_str_slice(

@@ -6,15 +6,20 @@
 use crate::parser::{Expression, Parameter, Type, UnaryOp};
 use std::collections::HashSet;
 
-/// Strip a leading `&ident` for collection key methods so `should_add_ref` can re-add `&` only when needed.
+/// Strip a leading `&ident` for collection key lookups so `should_add_ref` can re-add `&` only when needed.
 /// Parser emits `obj.method(args)` as `Call { function: FieldAccess(obj, method), args }`.
+///
+/// Ownership/borrow decisions require `sig` + `receiver_type`; when `sig` is absent, no strip occurs.
 pub fn strip_unary_ref_for_collection_key_arg<'a>(
-    method: &str,
     param_idx: usize,
     arg: &'a Expression<'a>,
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    receiver_type: Option<&str>,
 ) -> &'a Expression<'a> {
-    let is_key_method = super::stdlib_method_traits::is_map_key_method(method) && param_idx == 0;
-    if !is_key_method {
+    let should_strip = sig.is_some_and(|s| {
+        super::stdlib_method_traits::is_collection_key_lookup(s, param_idx, receiver_type)
+    });
+    if !should_strip {
         return arg;
     }
     if let Expression::Unary {

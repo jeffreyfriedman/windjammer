@@ -255,8 +255,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
         .iter()
         .enumerate()
         .flat_map(|(i, (_label, arg))| {
-            let arg_to_generate =
-                expression_utilities::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
+            let arg_to_generate = expression_utilities::strip_unary_ref_for_collection_key_arg(
+                i,
+                arg,
+                Some(sig),
+                type_name.as_deref(),
+            );
             let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg_to_generate);
             gen.restore_arg_gen_scope(scope);
@@ -731,8 +735,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
         .iter()
         .enumerate()
         .map(|(i, (_label, arg))| {
-            let arg_to_generate =
-                expression_utilities::strip_unary_ref_for_collection_key_arg(call_method, i, arg);
+            let arg_to_generate = expression_utilities::strip_unary_ref_for_collection_key_arg(
+                i,
+                arg,
+                fallback_sig.as_ref(),
+                type_name.as_deref(),
+            );
             let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg_to_generate);
             gen.restore_arg_gen_scope(scope);

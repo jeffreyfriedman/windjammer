@@ -234,32 +234,47 @@ impl MethodCallAnalyzer {
             }
         }
 
-        if matches!(arg, Expression::MethodCall { .. }) {
-            let is_map_key_method = matches!(
-                method,
-                "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
-            ) && param_idx == 0;
-            let is_known_map = receiver_type_name.is_some_and(|n| {
-                let base = n.split('<').next().unwrap_or(n);
-                crate::type_classification::is_map_type(base)
-            });
-            if is_map_key_method && is_known_map {
-                return true;
+        let is_collection_key_lookup_arg = || -> bool {
+            if param_idx != 0 {
+                return false;
             }
             if let Some(sig) = method_signature {
-                let sig_param_idx = if sig.has_self_receiver {
-                    param_idx + 1
-                } else {
-                    param_idx
-                };
-                let is_borrowed = sig
-                    .param_ownership
-                    .get(sig_param_idx)
-                    .is_some_and(|&o| matches!(o, OwnershipMode::Borrowed));
-                if !is_borrowed {
-                    return false;
+                if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                    sig,
+                    param_idx,
+                    receiver_type_name,
+                ) {
+                    return true;
                 }
+            }
+            signature_registry.is_some_and(|registry| {
+                crate::codegen::rust::stdlib_method_traits::method_is_map_key_qualified(
+                    method,
+                    receiver_type_name,
+                    registry,
+                )
+            })
+        };
+
+        if matches!(arg, Expression::MethodCall { .. }) {
+            if is_collection_key_lookup_arg() {
+                return true;
+            }
+            let expects_borrowed = if let Some(sig) = method_signature {
+                crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_from_sig(
+                    sig, param_idx,
+                )
+            } else if let Some(registry) = signature_registry {
+                crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_qualified(
+                    method,
+                    receiver_type_name,
+                    registry,
+                    param_idx,
+                )
             } else {
+                false
+            };
+            if !expects_borrowed {
                 return false;
             }
         }
@@ -270,16 +285,7 @@ impl MethodCallAnalyzer {
             }
         }
 
-        let is_hashmap_key_method = matches!(
-            method,
-            "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
-        ) && param_idx == 0
-            && receiver_type_name.is_some_and(|n| {
-                let base = n.split('<').next().unwrap_or(n);
-                crate::type_classification::is_map_type(base)
-            });
-
-        if is_hashmap_key_method {
+        if is_collection_key_lookup_arg() {
             if let Expression::Identifier { name, .. } = arg {
                 if arg_identifier_already_generates_as_rust_ref(
                     name,
@@ -315,18 +321,8 @@ impl MethodCallAnalyzer {
         }
 
         if let Expression::Cast { type_, .. } = arg {
-            if Self::is_copy_type_annotation_internal(type_) {
-                let is_known_map = receiver_type_name.is_some_and(|n| {
-                    let base = n.split('<').next().unwrap_or(n);
-                    matches!(base, "HashMap" | "BTreeMap" | "IndexMap")
-                });
-                let is_map_key_method = matches!(
-                    method,
-                    "get" | "get_mut" | "remove" | "contains_key" | "get_key_value"
-                ) && param_idx == 0;
-                if !(is_known_map && is_map_key_method) {
-                    return false;
-                }
+            if Self::is_copy_type_annotation_internal(type_) && !is_collection_key_lookup_arg() {
+                return false;
             }
         }
 

@@ -781,30 +781,7 @@ pub fn is_self_field_get_call(expr: &Expression) -> bool {
 
 /// Check if a method name is known to be read-only (no mutation).
 pub fn is_known_readonly_method_name(method: &str) -> bool {
-    matches!(
-        method,
-        "len"
-            | "is_empty"
-            | "contains"
-            | "contains_key"
-            | "get"
-            | "first"
-            | "last"
-            | "iter"
-            | "keys"
-            | "values"
-            | "clone"
-            | "to_string"
-            | "as_str"
-            | "display"
-            | "fmt"
-            | "eq"
-            | "ne"
-            | "cmp"
-            | "partial_cmp"
-            | "hash"
-            | "bone_count"
-    )
+    crate::analyzer::stdlib_method_traits::is_known_readonly(method)
 }
 
 /// Check if a statement contains a match/if-let that binds a get-result
@@ -1428,7 +1405,7 @@ fn method_is_mutating_on_receiver(
 /// 2. Codegen self-receiver upgrades (same-impl / prior-file &mut self)
 /// 3. SignatureRegistry lookup → use the analyzed ownership of the self receiver
 /// 4. Unknown → default to not-mutating (assignment detection covers actual field writes)
-fn method_is_mutating(
+pub(crate) fn method_is_mutating(
     method: &str,
     registry: Option<&SignatureRegistry>,
     struct_name: Option<&str>,

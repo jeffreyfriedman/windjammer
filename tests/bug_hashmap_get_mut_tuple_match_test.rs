@@ -49,9 +49,12 @@ struct Skeleton {
 
 impl Skeleton {
     pub fn update(self) {
+        self.bones.push(0.0)
     }
 
     pub fn set_bone_position(self, idx: u32, x: f32) {
+        self.bones.push(x)
+        let _ = idx
     }
 }
 
