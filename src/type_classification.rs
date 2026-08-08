@@ -330,49 +330,24 @@ pub fn is_ownership_producing_method(name: &str) -> bool {
     matches!(name, "clone" | "to_owned" | "to_string" | "into_iter")
 }
 
-/// Methods that operate on float receivers and whose arguments should
-/// match the receiver's float type.
+/// DEPRECATED: use [`crate::analyzer::stdlib_method_traits::method_preserves_float_receiver`]
+/// with the receiver type — bare method names collide with struct builders (`Slider::max`).
+#[deprecated(note = "use method_preserves_float_receiver(method, receiver_type, registry)")]
 pub fn is_float_receiver_method(name: &str) -> bool {
-    matches!(
-        name,
-        "clamp"
-            | "max"
-            | "min"
-            | "abs"
-            | "copysign"
-            | "recip"
-            | "to_degrees"
-            | "to_radians"
-            | "signum"
-            | "powf"
-            | "powi"
-            | "sqrt"
-            | "cbrt"
-            | "log"
-            | "log2"
-            | "log10"
-            | "exp"
-            | "exp2"
-            | "sin"
-            | "cos"
-            | "tan"
-            | "asin"
-            | "acos"
-            | "atan"
-            | "atan2"
-            | "sinh"
-            | "cosh"
-            | "tanh"
-            | "ceil"
-            | "floor"
-            | "round"
-            | "fract"
-            | "trunc"
-            | "hypot"
-            | "mul_add"
-            | "ln"
-            | "fma"
-    )
+    use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+    use crate::parser::Type;
+    // Legacy callers without receiver context: only true for unambiguous f32/f64 methods.
+    for float in ["f32", "f64"] {
+        let ty = Type::Custom(float.to_string());
+        if stdlib_method_traits::method_preserves_float_receiver(
+            name,
+            Some(&ty),
+            SignatureRegistry::stdlib(),
+        ) {
+            return true;
+        }
+    }
+    false
 }
 
 // =============================================================================
@@ -460,9 +435,23 @@ mod tests {
 
     #[test]
     fn test_float_methods() {
-        assert!(is_float_receiver_method("clamp"));
-        assert!(is_float_receiver_method("sin"));
-        assert!(!is_float_receiver_method("push"));
+        use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+        use crate::parser::Type;
+        let reg = SignatureRegistry::stdlib();
+        let f32_ty = Type::Custom("f32".into());
+        assert!(stdlib_method_traits::method_preserves_float_receiver(
+            "clamp", Some(&f32_ty), reg
+        ));
+        assert!(stdlib_method_traits::method_preserves_float_receiver(
+            "sin", Some(&f32_ty), reg
+        ));
+        assert!(!stdlib_method_traits::method_preserves_float_receiver(
+            "push", Some(&f32_ty), reg
+        ));
+        let slider = Type::Custom("Slider".into());
+        assert!(!stdlib_method_traits::method_preserves_float_receiver(
+            "max", Some(&slider), reg
+        ));
     }
 
     #[test]

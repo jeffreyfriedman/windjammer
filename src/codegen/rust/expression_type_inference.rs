@@ -1,73 +1,26 @@
 //! Infers [`Type`] from expressions; stdlib and primitive-float method returns.
 
+use crate::analyzer::SignatureRegistry;
 use crate::codegen::rust::CodeGenerator;
 use crate::parser::{Expression, Literal, Statement, Type};
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
-    /// `f32::sin` / `f64::ln` etc. return the same float type as the receiver. Without this,
-    /// codegen falls through to unqualified `acos` from `std/math.wj` (`f64 -> f64`) and
-    /// `float_class_for_binary_operand` inserts spurious `as f64` next to real f32 values.
+    /// `f32::sin` / `f64::ln` etc. return the same float type as the receiver.
     fn rust_primitive_float_method_return_type(
         receiver: Option<&Type>,
         method: &str,
     ) -> Option<Type> {
-        const SAME_FLOAT_RETURN: &[&str] = &[
-            "sin",
-            "cos",
-            "tan",
-            "asin",
-            "acos",
-            "atan",
-            "atan2",
-            "sinh",
-            "cosh",
-            "tanh",
-            "asinh",
-            "acosh",
-            "atanh",
-            "exp",
-            "exp2",
-            "exp_m1",
-            "ln",
-            "log",
-            "log2",
-            "log10",
-            "ln_1p",
-            "sqrt",
-            "cbrt",
-            "hypot",
-            "powf",
-            "powi",
-            "floor",
-            "ceil",
-            "round",
-            "trunc",
-            "fract",
-            "abs",
-            "signum",
-            "copysign",
-            "max",
-            "min",
-            "clamp",
-            "recip",
-            "to_degrees",
-            "to_radians",
-        ];
-        if !SAME_FLOAT_RETURN.contains(&method) {
+        let recv = receiver?;
+        if !crate::codegen::rust::stdlib_method_traits::method_preserves_float_receiver(
+            method,
+            Some(recv),
+            &SignatureRegistry::stdlib(),
+        ) {
             return None;
         }
-        let mut t = receiver?;
-        loop {
-            match t {
-                Type::Reference(inner) | Type::MutableReference(inner) => t = inner.as_ref(),
-                Type::Custom(s) if s == "f32" || s == "f64" => {
-                    return Some(Type::Custom(s.clone()));
-                }
-                Type::Float => return Some(Type::Custom("f32".to_string())),
-                _ => return None,
-            }
-        }
+        crate::codegen::rust::stdlib_method_traits::float_primitive_name(recv)
+            .map(|n| Type::Custom(n.to_string()))
     }
 
     /// Try to infer the Type of an expression from local variable tracking and function parameters.
@@ -347,15 +300,10 @@ impl<'ast> CodeGenerator<'ast> {
                             let qualified = format!("{candidate}::{method}");
                             if let Some(sig) = self.get_signature_with_global(&qualified) {
                                 if let Some(ret) = &sig.return_type {
-                                    return Some(ret.clone());
+                                    return Some(Self::substitute_stdlib_generics(ret, obj_type));
                                 }
                             }
                         }
-                    }
-                }
-                if let Some(ref ot) = obj_ty {
-                    if let Some(ret) = Self::stdlib_method_return_type(ot, method) {
-                        return Some(ret);
                     }
                 }
                 if let Some(t) =
@@ -366,33 +314,6 @@ impl<'ast> CodeGenerator<'ast> {
                 // Look up from the method return type registry (populated during impl generation)
                 if let Some(t) = self.method_return_types.get(method.as_str()) {
                     return Some(t.clone());
-                }
-                // Cross-file method resolution via signature registry (non-String receivers).
-                if let Some(obj_type) = obj_ty {
-                    let type_name = match &obj_type {
-                        Type::Custom(n) => n.clone(),
-                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                            match inner.as_ref() {
-                                Type::Custom(n) => n.clone(),
-                                _ => String::new(),
-                            }
-                        }
-                        _ => String::new(),
-                    };
-                    if !type_name.is_empty() {
-                        let qualified = format!("{}::{}", type_name, method);
-                        if let Some(sig) = self.get_signature_with_global(&qualified) {
-                            return sig.return_type.clone();
-                        }
-                        // Also try base name for generic types
-                        let base_name = type_name.split('<').next().unwrap_or(&type_name);
-                        if base_name != type_name {
-                            let qualified = format!("{}::{}", base_name, method);
-                            if let Some(sig) = self.get_signature_with_global(&qualified) {
-                                return sig.return_type.clone();
-                            }
-                        }
-                    }
                 }
                 // No type context available — don't do bare lookup to avoid
                 // picking a different type's method (e.g., "new" → wrong type).
@@ -467,7 +388,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // rules as MethodCall so we do not fall through to unqualified `acos` → f64.
                     let recv_ty = self.infer_expression_type(object);
                     if let Some(ref ot) = recv_ty {
-                        if let Some(ret) = Self::stdlib_method_return_type(ot, field) {
+                        if let Some(ret) = self.registry_method_return_type(ot, field) {
                             return Some(ret);
                         }
                     }
@@ -520,89 +441,32 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Infer the return type of a method call on a known Rust stdlib type.
-    /// Driven entirely by the receiver's inferred type — the method name selects
-    /// the correct return type for that specific receiver type.
-    ///
-    /// Example: `Vec<T>.get(i)` → `Option<&T>`, `HashMap<K,V>.get(k)` → `Option<&V>`.
-    pub(in crate::codegen::rust) fn stdlib_method_return_type(receiver: &Type, method: &str) -> Option<Type> {
-        let inner = Self::peel_references(receiver);
-
-        match inner {
-            Type::String => Self::string_method_return_type(method),
-            other if crate::codegen::rust::types::is_windjammer_text_type(other) => {
-                Self::string_method_return_type(method)
-            }
-            _ => Self::collection_method_return_type(receiver, method),
-        }
-    }
-
-    /// Return types for String/&str methods (fallback when registry miss).
-    /// Prefer `stdlib_meta` / signature registry — these names are last-resort only.
-    fn string_method_return_type(method: &str) -> Option<Type> {
-        let str_ref = || Type::Reference(Box::new(Type::Custom("str".into())));
-        match method {
-            "as_str" | "trim" | "trim_start" | "trim_end" | "trim_start_matches"
-            | "trim_end_matches" | "trim_matches" => Some(str_ref()),
-            "strip_prefix" | "strip_suffix" => {
-                Some(Type::Option(Box::new(str_ref())))
-            }
-            "to_lowercase" | "to_uppercase" | "to_ascii_lowercase" | "to_ascii_uppercase"
-            | "repeat" | "replace" | "replacen" => Some(Type::String),
-            "len" | "capacity" => Some(Type::Custom("usize".to_string())),
-            "is_empty"
-            | "contains"
-            | "starts_with"
-            | "ends_with"
-            | "is_ascii"
-            | "eq_ignore_ascii_case" => Some(Type::Bool),
-            "find" | "rfind" => Some(Type::Option(Box::new(Type::Custom("usize".to_string())))),
-            "chars" | "bytes" | "lines" | "split_whitespace" | "split" | "splitn" | "rsplitn" => {
-                None
-            } // iterator types
-            _ => None,
-        }
-    }
-
-    fn collection_method_return_type(receiver: &Type, method: &str) -> Option<Type> {
-        let inner = Self::peel_references(receiver);
-
-        match inner {
-            Type::Vec(elem) | Type::Array(elem, _) => match method {
-                "get" | "first" | "last" => {
-                    Some(Type::Option(Box::new(Type::Reference(elem.clone()))))
-                }
-                "get_mut" | "first_mut" | "last_mut" => {
-                    Some(Type::Option(Box::new(Type::MutableReference(elem.clone()))))
-                }
+    /// Look up a method return type from the signature registry with generic substitution.
+    pub(in crate::codegen::rust) fn registry_method_return_type(
+        &self,
+        receiver: &Type,
+        method: &str,
+    ) -> Option<Type> {
+        let type_name = match receiver {
+            Type::String => Some("String"),
+            Type::Custom(n) => Some(n.as_str()),
+            Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                Type::String => Some("String"),
+                Type::Custom(n) => Some(n.as_str()),
                 _ => None,
             },
-            Type::Parameterized(name, params) => {
-                let base = name.split('<').next().unwrap_or(name.as_str());
-                match base {
-                    "HashMap" | "BTreeMap" | "IndexMap" if params.len() >= 2 => match method {
-                        "get" => Some(Type::Option(Box::new(Type::Reference(Box::new(
-                            params[1].clone(),
-                        ))))),
-                        "get_mut" => Some(Type::Option(Box::new(Type::MutableReference(
-                            Box::new(params[1].clone()),
-                        )))),
-                        _ => None,
-                    },
-                    "VecDeque" | "LinkedList" if !params.is_empty() => match method {
-                        "get" | "front" | "back" => Some(Type::Option(Box::new(Type::Reference(
-                            Box::new(params[0].clone()),
-                        )))),
-                        "get_mut" | "front_mut" | "back_mut" => Some(Type::Option(Box::new(
-                            Type::MutableReference(Box::new(params[0].clone())),
-                        ))),
-                        _ => None,
-                    },
-                    _ => None,
+            _ => None,
+        }?;
+        let base = type_name.split('<').next().unwrap_or(type_name);
+        for candidate in [type_name, base] {
+            let qualified = format!("{candidate}::{method}");
+            if let Some(sig) = self.get_signature_with_global(&qualified) {
+                if let Some(ret) = &sig.return_type {
+                    return Some(Self::substitute_stdlib_generics(ret, receiver));
                 }
             }
-            _ => None,
         }
+        None
     }
 
     /// Tuple destructuring via numeric fields: `i_c.0` when `i_c: (usize, char)`.
@@ -613,6 +477,41 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let idx = field.parse::<usize>().ok()?;
         tuple.get(idx).cloned()
+    }
+
+    /// Substitute stdlib generic placeholders (`T`, `K`, `V`) from the concrete receiver type.
+    fn substitute_stdlib_generics(ret: &Type, receiver: &Type) -> Type {
+        match ret {
+            Type::Custom(n) if n == "T" => Self::peeled_collection_element_type(receiver)
+                .cloned()
+                .unwrap_or_else(|| ret.clone()),
+            Type::Custom(n) if n == "V" => {
+                if let Type::Parameterized(_, params) = Self::peel_references(receiver) {
+                    if params.len() >= 2 {
+                        return params[1].clone();
+                    }
+                }
+                ret.clone()
+            }
+            Type::Custom(n) if n == "K" => {
+                if let Type::Parameterized(_, params) = Self::peel_references(receiver) {
+                    if !params.is_empty() {
+                        return params[0].clone();
+                    }
+                }
+                ret.clone()
+            }
+            Type::Option(inner) => Type::Option(Box::new(Self::substitute_stdlib_generics(
+                inner, receiver,
+            ))),
+            Type::Reference(inner) => Type::Reference(Box::new(Self::substitute_stdlib_generics(
+                inner, receiver,
+            ))),
+            Type::MutableReference(inner) => Type::MutableReference(Box::new(
+                Self::substitute_stdlib_generics(inner, receiver),
+            )),
+            other => other.clone(),
+        }
     }
 
     /// Strip `&T` / `&mut T` wrappers to get the underlying owned type.

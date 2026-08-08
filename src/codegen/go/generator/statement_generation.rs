@@ -91,7 +91,11 @@ impl GoGenerator {
                     ..
                 } = expr
                 {
-                    if method == "push" && arguments.len() == 1 {
+                    if crate::codegen::go::stdlib_method_lowering::go_lowers_push_to_append(
+                        method,
+                        None,
+                    ) && arguments.len() == 1
+                    {
                         let obj_str = self.generate_expression(object);
                         let arg_str = self.generate_expression(arguments[0].1);
                         return format!(

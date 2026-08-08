@@ -8,6 +8,10 @@
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::{Expression, Type};
 
+pub use crate::analyzer::stdlib_method_traits::{
+    float_primitive_name, method_float_args_match_receiver, method_preserves_float_receiver,
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 /// Receiver type names to try for stdlib `Type::method` registry lookup.

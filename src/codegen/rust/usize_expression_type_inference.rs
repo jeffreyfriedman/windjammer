@@ -398,9 +398,12 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if let Some(obj_ty) = obj_ty.as_ref() {
-            if Self::stdlib_method_return_type(obj_ty, method)
-                .is_some_and(|t| matches!(t, Type::Custom(n) if n == "usize"))
-            {
+            let receiver = Self::type_to_name(obj_ty);
+            if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                method,
+                receiver.as_deref(),
+                &self.signature_registry,
+            ) {
                 return true;
             }
         }

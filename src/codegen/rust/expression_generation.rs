@@ -871,6 +871,19 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // Priority 0: explicit float target from assignment / method-call arg context
+                // (receiver-driven f32 vs f64 for `.clamp(0.0, 1.0)` etc.)
+                if let Some(suffix) = self.assignment_float_target_type.as_ref().and_then(
+                    float_type_utilities::float_literal_suffix_from_assignment_lhs,
+                ) {
+                    let s = f.to_string();
+                    return if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                        format!("{}.0_{}", s, suffix)
+                    } else {
+                        format!("{}_{}", s, suffix)
+                    };
+                }
+
                 // Priority 1: Use inference engine results (most accurate)
                 {
                     use crate::type_inference::FloatType;

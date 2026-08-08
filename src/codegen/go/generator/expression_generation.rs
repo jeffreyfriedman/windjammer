@@ -171,10 +171,14 @@ impl GoGenerator {
                 match method.as_str() {
                     "len" => format!("int64(len({}))", obj_str),
                     "is_empty" => format!("len({}) == 0", obj_str),
-                    "push" if args.len() == 1 => {
+                    m if crate::codegen::go::stdlib_method_lowering::go_lowers_push_to_append(m, None)
+                        && args.len() == 1 =>
+                    {
                         format!("append({}, {})", obj_str, args[0])
                     }
-                    "contains" if args.len() == 1 => {
+                    m if crate::codegen::go::stdlib_method_lowering::go_contains_needs_stub(m, None)
+                        && args.len() == 1 =>
+                    {
                         "/* contains */ false /* TODO */".to_string()
                     }
                     "to_string" | "string" => format!("fmt.Sprintf(\"%v\", {})", obj_str),
