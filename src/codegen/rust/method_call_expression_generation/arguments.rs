@@ -3570,55 +3570,47 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Returns true if the type is a collection whose element/key type is String.
-    /// Covers Vec<String>, HashMap<String, _>, HashSet<String>, etc.
+    /// True when a collection receiver stores owned text in its primary slot
+    /// (`Vec<string>` element, map/set key). Uses peeled element types + map/set
+    /// classifiers — not a hardcoded collection-name list for ownership.
     fn is_string_element_collection(ty: Option<&Type>) -> bool {
         let Some(t) = ty else { return false };
+        if let Some(elem) = Self::peeled_collection_element_type(t) {
+            return crate::codegen::rust::types::is_windjammer_text_type(elem);
+        }
         match t {
-            Type::Vec(inner) => crate::codegen::rust::types::is_windjammer_text_type(inner),
-            Type::Parameterized(name, args) => {
-                if args.is_empty() {
-                    return false;
-                }
-                let is_known_collection = matches!(
-                    name.as_str(),
-                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "VecDeque" | "LinkedList"
-                );
-                is_known_collection
-                    && crate::codegen::rust::types::is_windjammer_text_type(&args[0])
+            Type::Parameterized(_, args)
+                if !args.is_empty()
+                    && (crate::codegen::rust::stdlib_method_traits::is_map_type(t)
+                        || crate::codegen::rust::stdlib_method_traits::is_set_type(t)) =>
+            {
+                crate::codegen::rust::types::is_windjammer_text_type(&args[0])
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::is_string_element_collection(Some(inner.as_ref()))
             }
             _ => false,
         }
     }
 
-    /// Fallback: when `infer_expression_type` returns an unparameterized `Custom("HashMap")`
-    /// etc., check if the function return type matches a known String-keyed collection and
-    /// the receiver type name matches.
+    /// Fallback when inference yields bare `Custom("HashMap")` without type args:
+    /// use the enclosing function return type's parameterized shape if names align.
     fn is_string_collection_from_return_type(
         receiver_ty: Option<&Type>,
         return_ty: Option<&Type>,
     ) -> bool {
         let Some(ret) = return_ty else { return false };
-        let receiver_name = match receiver_ty {
-            Some(Type::Custom(n)) => Some(n.as_str()),
-            None => None,
-            _ => return false,
-        };
-        match ret {
-            Type::Vec(inner) if receiver_name.is_none() || receiver_name == Some("Vec") => {
-                crate::codegen::rust::types::is_windjammer_text_type(inner)
-            }
-            Type::Parameterized(name, args) if !args.is_empty() => {
-                let name_matches = receiver_name.is_none() || receiver_name == Some(name.as_str());
-                let is_known_collection = matches!(
-                    name.as_str(),
-                    "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "VecDeque" | "LinkedList"
-                );
-                name_matches
-                    && is_known_collection
-                    && crate::codegen::rust::types::is_windjammer_text_type(&args[0])
-            }
-            _ => false,
+        if !Self::is_string_element_collection(Some(ret)) {
+            return false;
+        }
+        match receiver_ty {
+            None => true,
+            Some(Type::Custom(n)) => match ret {
+                Type::Vec(_) => n == "Vec",
+                Type::Parameterized(pn, _) => n == pn,
+                _ => false,
+            },
+            Some(r) => Self::type_to_name(r) == Self::type_to_name(ret),
         }
     }
 }
