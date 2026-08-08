@@ -43,3 +43,31 @@ fn init_scores() -> Vec<f32> {
         rust_code
     );
 }
+
+/// Bug (Phase 38 / Graphalytics): `Vec<f64>.push(0.0)` emitted `0.0_f32` (default float).
+#[test]
+fn test_vec_f64_push_float_literal() {
+    let wj_source = r#"
+fn init_scores() -> Vec<f64> {
+    let mut scores: Vec<f64> = Vec::new()
+    scores.push(0.0)
+    scores.push(1.0)
+    scores
+}
+"#;
+
+    let rust_code = test_utils::compile_single(wj_source);
+
+    eprintln!("Generated Rust:\n{}", rust_code);
+
+    assert!(
+        !rust_code.contains("0.0_f32") && !rust_code.contains("1.0_f32"),
+        "Float literals must be f64 when pushing to Vec<f64>, got:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("0.0_f64") && rust_code.contains("1.0_f64"),
+        "Expected 0.0_f64 / 1.0_f64 for Vec<f64>::push, got:\n{}",
+        rust_code
+    );
+}
