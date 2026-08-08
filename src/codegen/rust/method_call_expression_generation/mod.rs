@@ -66,13 +66,29 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // TDD FIX: Upgrade HashMap.get() to get_mut() when the bound value is mutated downstream
-        let effective_method = if method == "get" && self.upgrade_get_to_get_mut {
-            self.upgrade_get_to_get_mut = false;
-            "get_mut"
+        // TDD FIX: Upgrade map shared-get to get_mut when the bound value is mutated downstream.
+        // Signature-gated: only map key lookups returning Option<&V>, never arbitrary `.get`.
+        let receiver_type_name = self
+            .infer_type_name(object)
+            .or_else(|| self.infer_indexed_element_type_name(object));
+        let mut_sibling: Option<String> = if self.upgrade_get_to_get_mut
+            && crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                method,
+                receiver_type_name.as_deref(),
+                &self.signature_registry,
+            ) {
+            crate::codegen::rust::stdlib_method_traits::map_option_mut_ref_method_name(
+                receiver_type_name.as_deref(),
+                &self.signature_registry,
+            )
+            .map(|s| s.to_string())
         } else {
-            method
+            None
         };
+        if self.upgrade_get_to_get_mut {
+            self.upgrade_get_to_get_mut = false;
+        }
+        let effective_method = mut_sibling.as_deref().unwrap_or(method);
 
         
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);

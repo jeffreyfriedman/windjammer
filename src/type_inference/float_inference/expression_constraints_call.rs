@@ -7,20 +7,39 @@ impl FloatInference {
         return_type: Option<&Type>,
     ) {
         if let Expression::FieldAccess { object, field, .. } = function {
-            if field == "get" {
+            let map_shared_get = self.infer_type_from_expression(object).and_then(|object_type| {
+                let type_name = match &object_type {
+                    Type::Custom(name) => name.clone(),
+                    Type::Parameterized(name, _) => name.clone(),
+                    _ => return None,
+                };
+                if type_name.is_empty() {
+                    return None;
+                }
+                let full_name = format!("{type_name}::{field}");
+                self.function_signatures
+                    .get(&full_name)
+                    .and_then(|(_, ret)| ret.as_ref())
+                    .filter(|ret| {
+                        crate::codegen::rust::stdlib_method_traits::type_is_option_shared_ref(ret)
+                            || crate::codegen::rust::stdlib_method_traits::type_is_option_mut_ref(ret)
+                    })
+                    .map(|_| ())
+            });
+            if map_shared_get.is_some() {
                 if let Some(float_ty) = self.map_receiver_value_float_type(object) {
                     let call_id = self.get_expr_id(expr);
                     match float_ty {
                         FloatType::F32 => {
                             self.constraints.push(Constraint::MustBeF32(
                                 call_id,
-                                "map get optional value is f32".to_string(),
+                                "map shared-get optional value is f32".to_string(),
                             ));
                         }
                         FloatType::F64 => {
                             self.constraints.push(Constraint::MustBeF64(
                                 call_id,
-                                "map get optional value is f64".to_string(),
+                                "map shared-get optional value is f64".to_string(),
                             ));
                         }
                         FloatType::Unknown => {}
