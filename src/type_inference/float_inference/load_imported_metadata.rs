@@ -27,7 +27,11 @@ impl FloatInference {
                 if let (Some(crate_name), Some(ref ty_name)) = (module_path.first(), &type_name) {
                     let crate_key = crate_name.replace('-', "_");
                     if let Some(meta_dir) = self.external_crate_metadata_paths.get(&crate_key) {
-                        let metadata_path = meta_dir.join("metadata.json");
+                        let Some(metadata_path) =
+                            crate::metadata::resolve_metadata_json_path(meta_dir)
+                        else {
+                            continue;
+                        };
                         if let Ok(meta_json) = std::fs::read_to_string(&metadata_path) {
                             if let Ok(crate_meta) =
                                 serde_json::from_str::<CrateMetadata>(&meta_json)
@@ -46,19 +50,13 @@ impl FloatInference {
                                         self.struct_field_types.insert(ty_name.clone(), field_map);
                                     }
                                 }
-                                // Load function signatures
-                                for (func_name, sig) in &crate_meta.functions {
-                                    let params: Vec<Type> = sig
-                                        .params
-                                        .iter()
-                                        .filter_map(|s| ModuleMetadata::deserialize_type(s))
-                                        .collect();
-                                    let return_type = sig
-                                        .return_type
-                                        .as_ref()
-                                        .and_then(|s| ModuleMetadata::deserialize_type(s));
-                                    self.function_signatures
-                                        .insert(func_name.clone(), (params, return_type));
+                                // Load function signatures (shared helper with int inference)
+                                for (func_name, sig) in
+                                    crate::metadata::load_function_signatures_from_metadata(
+                                        meta_dir,
+                                    )
+                                {
+                                    self.function_signatures.insert(func_name, sig);
                                 }
                                 continue; // Handled, skip .wj.meta lookup
                             }

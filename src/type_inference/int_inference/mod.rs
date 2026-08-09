@@ -10,6 +10,7 @@ use crate::type_inference::int_implicit_casts::is_safe_implicit_cast;
 use crate::type_inference::struct_field_registry;
 use crate::type_inference::ExprId;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Integer type (i32, i64, u32, u64, usize, etc.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +73,8 @@ pub struct IntInference {
     imported_type_registry_keys: HashMap<String, String>,
     /// `pub use` from each module (`module_path` as `a::b` or `""` for crate root) → exported name → qualified struct key.
     module_re_exports: HashMap<String, HashMap<String, String>>,
+    /// External crate → directory (or file) containing `metadata.json` for cross-crate formals.
+    external_crate_metadata_paths: HashMap<String, PathBuf>,
     expr_id_cache: HashMap<(usize, usize, usize), ExprId>,
     current_file_id: usize,
     file_name_to_id: HashMap<String, usize>,
@@ -102,6 +105,7 @@ impl IntInference {
             struct_defining_module_paths: HashMap::new(),
             imported_type_registry_keys: HashMap::new(),
             module_re_exports: HashMap::new(),
+            external_crate_metadata_paths: HashMap::new(),
             expr_id_cache: HashMap::new(),
             current_file_id: 0,
             file_name_to_id: HashMap::new(),
@@ -181,6 +185,50 @@ impl IntInference {
         self.module_re_exports = re_exports;
     }
 
+    /// Register external crate metadata roots so imported callees (e.g. `use lib::double`
+    /// with `double(x: i32)`) constrain int literals via `metadata.json`.
+    pub fn set_external_crate_metadata_paths(
+        &mut self,
+        paths: &HashMap<String, PathBuf>,
+    ) {
+        self.external_crate_metadata_paths = paths.clone();
+    }
+
+    /// Load function signatures from external `metadata.json` when the program imports
+    /// that crate (`use prebuilt_i32_lib::double`). Signature-driven — no name heuristics.
+    fn load_imported_external_function_signatures<'ast>(&mut self, program: &Program<'ast>) {
+        use crate::parser::ast::core::Item;
+
+        for item in &program.items {
+            let Item::Use { path, .. } = item else {
+                continue;
+            };
+            let mut module_path: Vec<String> = path
+                .iter()
+                .skip_while(|s| {
+                    s.as_str() == "crate" || s.as_str() == "self" || s.as_str() == "super"
+                })
+                .cloned()
+                .collect();
+            if module_path.len() < 2 {
+                continue;
+            }
+            let _imported_name = module_path.pop();
+            let Some(crate_name) = module_path.first() else {
+                continue;
+            };
+            let crate_key = crate_name.replace('-', "_");
+            let Some(meta_dir) = self.external_crate_metadata_paths.get(&crate_key) else {
+                continue;
+            };
+            for (func_name, sig) in
+                crate::metadata::load_function_signatures_from_metadata(meta_dir)
+            {
+                self.function_signatures.insert(func_name, sig);
+            }
+        }
+    }
+
     /// Register signatures/metadata from a program (no constraint collection).
     pub fn prepare_program<'ast>(&mut self, program: &Program<'ast>) {
         if let Some(first_item) = program.items.first() {
@@ -196,6 +244,7 @@ impl IntInference {
             self.register_const_and_static(item);
         }
 
+        self.load_imported_external_function_signatures(program);
         self.register_use_imports_from_items(&program.items);
     }
 
