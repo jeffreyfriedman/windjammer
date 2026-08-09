@@ -184,12 +184,13 @@ impl<'ast> CodeGenerator<'ast> {
                                         Some(Type::Custom(type_name.to_string()))
                                     }
                                 } else {
-                                    // Not a constructor — look up return type from signature registry
-                                    // e.g., MathHelper::fade(x) → return type is f32
+                                    // Not a name-heuristic constructor — look up return type
+                                    // from signature registry (e.g. MathHelper::fade, Loader::datagen_defaults).
                                     let qualified = format!("{}::{}", type_name, field);
                                     self.get_signature_with_global(&qualified)
                                         .and_then(|sig| sig.return_type.clone())
                                         .or_else(|| self.infer_expression_type(value))
+                                        .or_else(|| Some(Type::Custom(type_name.to_string())))
                                 }
                             } else {
                                 None
@@ -246,21 +247,38 @@ impl<'ast> CodeGenerator<'ast> {
                     Expression::MethodCall {
                         object, method, ..
                     } => {
-                        // `String::new()` may parse as MethodCall on a type identifier.
+                        // `Type::assoc()` may parse as MethodCall on a type identifier.
+                        // Signature-driven: use registry return type (not hardcoded
+                        // `new`/`from_`/`with_`/`default` name lists — WDB Phase 49).
                         if let Expression::Identifier {
                             name: type_name, ..
                         } = &**object
                         {
-                            if type_name.chars().next().is_some_and(|c| c.is_uppercase())
-                                && (method == "new"
+                            if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                                let qualified = format!("{type_name}::{method}");
+                                if let Some(ret) = self
+                                    .get_signature_with_global(&qualified)
+                                    .and_then(|sig| sig.return_type.clone())
+                                {
+                                    Some(ret)
+                                } else if *type_name == "String"
+                                    && (method == "new" || method.starts_with("from_"))
+                                {
+                                    Some(Type::String)
+                                } else if method == "new"
                                     || method.starts_with("from_")
                                     || method.starts_with("with_")
-                                    || method == "default")
-                            {
-                                if *type_name == "String" {
-                                    Some(Type::String)
+                                    || method == "default"
+                                {
+                                    // Fallback when meta is not yet available (cold pass).
+                                    self.infer_expression_type(value).or_else(|| {
+                                        Some(Type::Custom(type_name.to_string()))
+                                    })
                                 } else {
                                     self.infer_expression_type(value).or_else(|| {
+                                        // Associated fn on a known type: prefer the type
+                                        // itself over leaving the local untyped (which
+                                        // breaks later Borrowed-string method coercion).
                                         Some(Type::Custom(type_name.to_string()))
                                     })
                                 }
