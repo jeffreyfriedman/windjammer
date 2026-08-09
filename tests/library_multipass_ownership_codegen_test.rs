@@ -4135,3 +4135,211 @@ pub fn test_load_via_defaults() {
         "must not emit .to_string() on Borrowed path after datagen_defaults() (isolated regen). Got:\n{rs}"
     );
 }
+
+
+/// WDB-091 large-crate shape: `pub use loader::LdbcGraphLoader` + `use crate::graph::LdbcGraphLoader`
+/// (re-export), not `use crate::graph::loader::…`. Must keep Borrowed path after datagen_defaults.
+#[test]
+fn test_library_multipass_reexport_associated_ctor_str_method() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/ldbc_graph_loader.wj",
+        r#"
+pub struct LdbcGraphLoader {
+    pub undirected: bool,
+}
+
+impl LdbcGraphLoader {
+    pub fn datagen_defaults() -> LdbcGraphLoader {
+        LdbcGraphLoader { undirected: true }
+    }
+
+    pub fn load_edge_file(self, path: string) -> int {
+        if path.len() == 0 {
+            return 1
+        }
+        0
+    }
+}
+"#,
+    );
+    test.add_file(
+        "graph/session_test.wj",
+        r#"
+use crate::graph::LdbcGraphLoader
+
+pub fn test_load_via_defaults() {
+    let loader = LdbcGraphLoader::datagen_defaults()
+    let _ = loader.load_edge_file("fixtures/toy_triangle.e")
+}
+"#,
+    );
+    test.add_file(
+        "graph/mod.wj",
+        "pub mod ldbc_graph_loader\npub mod session_test\npub use ldbc_graph_loader::LdbcGraphLoader",
+    );
+    test.add_file("mod.wj", "pub mod graph");
+
+    let src = test.build_dir().parent().unwrap().join("src");
+    build_project_ext(
+        &src,
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("first pass failed: {e}"));
+
+    let rs1 = fs::read_to_string(test.build_dir().join("graph/session_test.rs")).expect("rs1");
+    assert!(
+        !rs1.contains("\"fixtures/toy_triangle.e\".to_string()"),
+        "first pass must keep &str after re-export associated ctor. Got:\n{rs1}"
+    );
+
+    let project_root = test.build_dir().parent().unwrap();
+    let _ = fs::remove_file(project_root.join(".wj-cache/graph/session_test.wj.meta"));
+    let _ = fs::remove_file(test.build_dir().join("graph/session_test.rs"));
+    let session_src = src.join("graph/session_test.wj");
+    let mut body = fs::read_to_string(&session_src).expect("session_test.wj");
+    body.push_str(&format!(
+        "\n// touch {}\n",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::write(&session_src, body).expect("touch");
+
+    build_project_ext(
+        &src,
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("isolated second pass failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("graph/session_test.rs")).expect("session_test.rs");
+    assert!(
+        rs.contains("load_edge_file(\"fixtures/toy_triangle.e\")"),
+        "re-export associated-ctor caller must keep &str. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"fixtures/toy_triangle.e\".to_string()"),
+        "must not emit .to_string() after datagen_defaults via pub use. Got:\n{rs}"
+    );
+}
+
+
+/// WDB-091: associated ctor + method that forwards `string` into an extern fn.
+/// Ownership convergence on the method must still keep call-site path literals bare
+/// (`emitted_rust_ref_params` / Borrowed), matching ldbc_graph_loader dogfood.
+#[test]
+fn test_library_multipass_associated_ctor_extern_forward_str_method() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/ldbc_graph_loader.wj",
+        r#"
+extern fn graph_ldbc_load_edge_file_ffi(path: string, undirected: i64) -> i64
+
+pub struct LdbcGraphLoader {
+    pub undirected: bool,
+}
+
+impl LdbcGraphLoader {
+    pub fn datagen_defaults() -> LdbcGraphLoader {
+        LdbcGraphLoader { undirected: true }
+    }
+
+    pub fn load_edge_file(self, path: string) -> int {
+        let undirected_flag = if self.undirected { 1 } else { 0 }
+        let ok = graph_ldbc_load_edge_file_ffi(path, undirected_flag)
+        ok as int
+    }
+}
+"#,
+    );
+    test.add_file(
+        "graph/session_test.wj",
+        r#"
+use crate::graph::LdbcGraphLoader
+
+pub fn test_load_via_defaults() {
+    let loader = LdbcGraphLoader::datagen_defaults()
+    let _ = loader.load_edge_file("fixtures/toy_triangle.e")
+}
+
+pub fn test_load_via_struct_lit() {
+    let loader = LdbcGraphLoader { undirected: true }
+    let _ = loader.load_edge_file("fixtures/toy_chain.e")
+}
+"#,
+    );
+    test.add_file(
+        "graph/mod.wj",
+        "pub mod ldbc_graph_loader\npub mod session_test\npub use ldbc_graph_loader::LdbcGraphLoader",
+    );
+    test.add_file("mod.wj", "pub mod graph");
+
+    let src = test.build_dir().parent().unwrap().join("src");
+    build_project_ext(
+        &src,
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("first pass failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("graph/session_test.rs")).expect("rs");
+    assert!(
+        !rs.contains("\"fixtures/toy_triangle.e\".to_string()"),
+        "datagen_defaults + extern-forward must keep &str. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"fixtures/toy_chain.e\".to_string()"),
+        "struct-literal + extern-forward must keep &str. Got:\n{rs}"
+    );
+
+    let project_root = test.build_dir().parent().unwrap();
+    let _ = fs::remove_file(project_root.join(".wj-cache/graph/session_test.wj.meta"));
+    let _ = fs::remove_file(test.build_dir().join("graph/session_test.rs"));
+    let session_src = src.join("graph/session_test.wj");
+    let mut body = fs::read_to_string(&session_src).expect("wj");
+    body.push_str(&format!(
+        "\n// touch {}\n",
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+    ));
+    fs::write(&session_src, body).unwrap();
+
+    build_project_ext(
+        &src,
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("isolated second pass failed: {e}"));
+
+    let rs2 = fs::read_to_string(test.build_dir().join("graph/session_test.rs")).expect("rs2");
+    assert!(
+        rs2.contains("load_edge_file(\"fixtures/toy_triangle.e\")"),
+        "isolated regen datagen_defaults path must stay bare. Got:\n{rs2}"
+    );
+    assert!(
+        !rs2.contains("\"fixtures/toy_triangle.e\".to_string()"),
+        "isolated regen must not .to_string() after datagen_defaults+extern. Got:\n{rs2}"
+    );
+}
