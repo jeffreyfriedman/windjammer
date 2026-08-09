@@ -37,6 +37,8 @@ impl<'ast> CodeGenerator<'ast> {
                 Self::assignment_target_needs_float_codegen_context(inner)
             }
             Type::Custom(name) if name == "f32" || name == "f64" => true,
+            // Generic `float` / `Type::Float` maps to f64 via float_literal_suffix_from_assignment_lhs.
+            Type::Float => true,
             Type::Vec(inner) | Type::Array(inner, _) => {
                 Self::assignment_target_needs_float_codegen_context(inner)
             }

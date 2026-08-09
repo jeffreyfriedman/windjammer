@@ -293,6 +293,10 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(Self::assignment_target_needs_float_codegen_context)
         {
             self.assignment_float_target_type = tgt_ty.clone();
+        } else if let Some(ft) = self.resolve_compound_assign_float_target(target) {
+            // WDB-092: Index assign (`distances[u] = 0.0`) — fall back to float inference /
+            // compound-assign resolution when direct LHS type inference is weak.
+            self.assignment_float_target_type = Some(Type::Custom(ft.to_string()));
         }
         let mut value_str = self.generate_expression(value);
         self.assignment_float_target_type = prev_assign_ty;

@@ -220,6 +220,9 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => None,
                 }
             }
+            // Chained `Type { .. }.method(...)` must resolve like let-bound struct literals
+            // (WDB-091 / signature-driven string coercion).
+            Expression::StructLiteral { name, .. } => Some(name.clone()),
             _ => None,
         }
     }
