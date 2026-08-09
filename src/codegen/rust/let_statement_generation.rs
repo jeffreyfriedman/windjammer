@@ -12,6 +12,52 @@ use crate::parser::*;
 use super::{string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Infer a let-binding type from its value (signature-driven), refining bare
+    /// `Vec` / `HashSet` element types from return type or forward `.push`/`.insert` usage.
+    fn infer_let_value_type(
+        &self,
+        value: &Expression<'ast>,
+        var_name: Option<&str>,
+    ) -> Option<Type> {
+        let base = self.infer_expression_type(value)?;
+        let collection_name = match &base {
+            Type::Custom(n) if n == "Vec" || n == "HashSet" => Some(n.as_str()),
+            Type::Vec(_) => return Some(base),
+            Type::Parameterized(base_name, args)
+                if (base_name == "Vec" || base_name == "HashSet") && args.is_empty() =>
+            {
+                Some(base_name.as_str())
+            }
+            _ => return Some(base),
+        };
+        let Some(collection_name) = collection_name else {
+            return Some(base);
+        };
+
+        let elem_from_return = match &self.current_function_return_type {
+            Some(Type::Vec(inner)) if collection_name == "Vec" => Some(inner.as_ref().clone()),
+            Some(Type::Parameterized(b, args))
+                if b == collection_name && !args.is_empty() =>
+            {
+                Some(args[0].clone())
+            }
+            _ => None,
+        };
+        let elem_from_push = if elem_from_return.is_none() {
+            var_name.and_then(|vn| self.infer_collection_element_type_from_usage(vn))
+        } else {
+            None
+        };
+        if let Some(inner) = elem_from_return.or(elem_from_push) {
+            return Some(if collection_name == "Vec" {
+                Type::Vec(Box::new(inner))
+            } else {
+                Type::Parameterized(collection_name.to_string(), vec![inner])
+            });
+        }
+        Some(base)
+    }
+
     /// Generate code for a let statement
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_let_statement(
@@ -128,166 +174,10 @@ impl<'ast> CodeGenerator<'ast> {
                         operand,
                         ..
                     } => self.infer_expression_type(operand),
-                    Expression::Call { function, .. } => {
-                        // Type::method() pattern (e.g., Foo::new())
-                        if let Expression::FieldAccess { object, field, .. } = *function {
-                            if let Expression::Identifier {
-                                name: type_name, ..
-                            } = *object
-                            {
-                                if type_name.chars().next().is_some_and(|c| c.is_uppercase())
-                                    && (field == "new"
-                                        || field.starts_with("from_")
-                                        || field.starts_with("with_")
-                                        || field == "default")
-                                {
-                                    // E0282: For Vec::new() / HashSet::new(), infer element type.
-                                    // Priority: 1) return type  2) forward-scan .push()/.insert()
-                                    if (type_name == "Vec" || type_name == "HashSet")
-                                        && field == "new"
-                                    {
-                                        let elem_from_return =
-                                            match &self.current_function_return_type {
-                                                Some(Type::Vec(inner)) if type_name == "Vec" => {
-                                                    Some(inner.as_ref().clone())
-                                                }
-                                                Some(Type::Parameterized(base, args))
-                                                    if base == type_name && !args.is_empty() =>
-                                                {
-                                                    Some(args[0].clone())
-                                                }
-                                                _ => None,
-                                            };
-                                        let elem_from_push = if elem_from_return.is_none() {
-                                            var_name.and_then(|vn| {
-                                                self.infer_collection_element_type_from_usage(vn)
-                                            })
-                                        } else {
-                                            None
-                                        };
-                                        let elem_type = elem_from_return.or(elem_from_push);
-                                        if let Some(inner) = elem_type {
-                                            if type_name == "Vec" {
-                                                Some(Type::Vec(Box::new(inner)))
-                                            } else {
-                                                Some(Type::Parameterized(
-                                                    type_name.to_string(),
-                                                    vec![inner],
-                                                ))
-                                            }
-                                        } else {
-                                            Some(Type::Custom(type_name.to_string()))
-                                        }
-                                    } else if type_name == "String" {
-                                        Some(Type::String)
-                                    } else {
-                                        Some(Type::Custom(type_name.to_string()))
-                                    }
-                                } else {
-                                    // Not a name-heuristic constructor — look up return type
-                                    // from signature registry (e.g. MathHelper::fade, Loader::datagen_defaults).
-                                    let qualified = format!("{}::{}", type_name, field);
-                                    self.get_signature_with_global(&qualified)
-                                        .and_then(|sig| sig.return_type.clone())
-                                        .or_else(|| self.infer_expression_type(value))
-                                        .or_else(|| Some(Type::Custom(type_name.to_string())))
-                                }
-                            } else {
-                                None
-                            }
-                        } else if let Expression::Identifier { name: fn_name, .. } = *function {
-                            // Handle Identifier("Vec::new") path (parser emits this form)
-                            if fn_name == "Vec::new" || fn_name == "HashSet::new" {
-                                let collection_name = if fn_name.starts_with("Vec") {
-                                    "Vec"
-                                } else {
-                                    "HashSet"
-                                };
-                                let elem_from_return = match &self.current_function_return_type {
-                                    Some(Type::Vec(inner)) if collection_name == "Vec" => {
-                                        Some(inner.as_ref().clone())
-                                    }
-                                    Some(Type::Parameterized(base, args))
-                                        if base == collection_name && !args.is_empty() =>
-                                    {
-                                        Some(args[0].clone())
-                                    }
-                                    _ => None,
-                                };
-                                let elem_from_push = if elem_from_return.is_none() {
-                                    var_name.and_then(|vn| {
-                                        self.infer_collection_element_type_from_usage(vn)
-                                    })
-                                } else {
-                                    None
-                                };
-                                let elem_type = elem_from_return.or(elem_from_push);
-                                if let Some(inner) = elem_type {
-                                    if collection_name == "Vec" {
-                                        Some(Type::Vec(Box::new(inner)))
-                                    } else {
-                                        Some(Type::Parameterized(
-                                            collection_name.to_string(),
-                                            vec![inner],
-                                        ))
-                                    }
-                                } else {
-                                    Some(Type::Custom(collection_name.to_string()))
-                                }
-                            } else if fn_name == "String::new" {
-                                Some(Type::String)
-                            } else {
-                                self.infer_expression_type(value)
-                            }
-                        } else {
-                            // Simple function call: look up in signature registry
-                            self.infer_expression_type(value)
-                        }
-                    }
-                    Expression::MethodCall {
-                        object, method, ..
-                    } => {
-                        // `Type::assoc()` may parse as MethodCall on a type identifier.
-                        // Signature-driven: use registry return type (not hardcoded
-                        // `new`/`from_`/`with_`/`default` name lists — WDB Phase 49).
-                        if let Expression::Identifier {
-                            name: type_name, ..
-                        } = &**object
-                        {
-                            if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                                let qualified = format!("{type_name}::{method}");
-                                if let Some(ret) = self
-                                    .get_signature_with_global(&qualified)
-                                    .and_then(|sig| sig.return_type.clone())
-                                {
-                                    Some(ret)
-                                } else if *type_name == "String"
-                                    && (method == "new" || method.starts_with("from_"))
-                                {
-                                    Some(Type::String)
-                                } else if method == "new"
-                                    || method.starts_with("from_")
-                                    || method.starts_with("with_")
-                                    || method == "default"
-                                {
-                                    // Fallback when meta is not yet available (cold pass).
-                                    self.infer_expression_type(value).or_else(|| {
-                                        Some(Type::Custom(type_name.to_string()))
-                                    })
-                                } else {
-                                    self.infer_expression_type(value).or_else(|| {
-                                        // Associated fn on a known type: prefer the type
-                                        // itself over leaving the local untyped (which
-                                        // breaks later Borrowed-string method coercion).
-                                        Some(Type::Custom(type_name.to_string()))
-                                    })
-                                }
-                            } else {
-                                self.infer_expression_type(value)
-                            }
-                        } else {
-                            self.infer_expression_type(value)
-                        }
+                    Expression::Call { .. } | Expression::MethodCall { .. } => {
+                        // Signature-driven via infer_expression_type (associated Type::assoc,
+                        // WDB-091). Refine empty Vec/HashSet element types from usage.
+                        self.infer_let_value_type(value, var_name)
                     }
                     _ => {
                         // Fall back to general expression type inference

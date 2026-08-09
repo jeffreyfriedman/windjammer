@@ -1108,12 +1108,20 @@ pub fn runtime_or_str_ref_formal_skips_literal_owned(
     let Some(sig) = sig else {
         return false;
     };
+    let pidx = sig.arg_param_index(arg_index);
+    // Owned `String` formals must never skip `.to_string()`, even with stale Borrowed.
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+        return false;
+    }
+    if sig.param_types.get(pidx).is_some_and(|t| {
+        crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
+    }) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+    {
+        return false;
+    }
     runtime_wj_owned_rust_borrowed_param(sig, arg_index)
         || method_arg_expects_rust_str_ref_from_sig(sig, arg_index)
-        || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-            sig,
-            sig.arg_param_index(arg_index),
-        )
+        || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
 }
 
 #[cfg(test)]

@@ -173,14 +173,14 @@ pub fn call_site_param_expects_owned_string(
     }) {
         return false;
     }
+    if sig.param_types.get(idx).is_some_and(param_is_owned_string_type) {
+        return true;
+    }
     if matches!(
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
         crate::analyzer::OwnershipMode::Borrowed
     ) {
         return false;
-    }
-    if sig.param_types.get(idx).is_some_and(param_is_owned_string_type) {
-        return true;
     }
     if let Some(flags) = &sig.emitted_rust_ref_params {
         if flags.get(idx) == Some(&true) {
@@ -612,19 +612,13 @@ pub fn string_literal_needs_owned_coercion_with_enum(
         }
     }
 
-    // Rust formal is owned `String` — allocate when the converged contract is owned, even if
-    // stale borrow metadata lingers from multipass analysis.
-    if param_is_owned_string_type(param_type) {
-        if matches!(
-            crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
-            crate::analyzer::OwnershipMode::Owned,
-        ) || sig
-            .param_ownership
-            .get(idx)
-            .is_some_and(|o| matches!(o, OwnershipMode::Owned))
-        {
-            return true;
-        }
+    // Owned `String` Rust formals always allocate for literals — even with stale Borrowed
+    // analyzer ownership (store-forced Owned emission).
+    if param_is_owned_string_type(param_type)
+        && !param_is_rust_str_ref(param_type)
+        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx)
+    {
+        return true;
     }
 
     if matches!(

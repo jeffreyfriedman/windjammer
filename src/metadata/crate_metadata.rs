@@ -176,7 +176,10 @@ pub fn extract_struct_field_types(
 
 /// Load struct field types from a metadata.json file on disk.
 pub fn load_struct_field_types_from_file(path: &Path) -> HashMap<String, HashMap<String, Type>> {
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Some(metadata_path) = resolve_metadata_json_path(path) else {
+        return HashMap::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&metadata_path) else {
         return HashMap::new();
     };
     let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
@@ -199,6 +202,62 @@ pub fn load_merged_external_struct_fields(
             if exclude_local.is_none_or(|locals| !locals.contains(&struct_name)) {
                 merged.entry(struct_name).or_default().extend(field_map);
             }
+        }
+    }
+    merged
+}
+
+/// Resolve `metadata.json` whether `path` is the file itself or its parent directory.
+pub fn resolve_metadata_json_path(path: &Path) -> Option<PathBuf> {
+    if path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    let joined = path.join("metadata.json");
+    if joined.is_file() {
+        Some(joined)
+    } else {
+        None
+    }
+}
+
+/// Load function signatures from a crate `metadata.json` (file or directory).
+/// Shared by float/int numeric inference for cross-crate literal suffixing.
+pub fn load_function_signatures_from_metadata(
+    meta_dir_or_file: &Path,
+) -> HashMap<String, (Vec<Type>, Option<Type>)> {
+    let Some(metadata_path) = resolve_metadata_json_path(meta_dir_or_file) else {
+        return HashMap::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&metadata_path) else {
+        return HashMap::new();
+    };
+    let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
+        return HashMap::new();
+    };
+    let mut out = HashMap::new();
+    for (func_name, sig) in &crate_meta.functions {
+        let params: Vec<Type> = sig
+            .params
+            .iter()
+            .filter_map(|s| ModuleMetadata::deserialize_type(s))
+            .collect();
+        let return_type = sig
+            .return_type
+            .as_ref()
+            .and_then(|s| ModuleMetadata::deserialize_type(s));
+        out.insert(func_name.clone(), (params, return_type));
+    }
+    out
+}
+
+/// Merge function signatures from all external crate metadata roots.
+pub fn load_merged_external_function_signatures(
+    external_paths: &HashMap<String, PathBuf>,
+) -> HashMap<String, (Vec<Type>, Option<Type>)> {
+    let mut merged = HashMap::new();
+    for meta_dir in external_paths.values() {
+        for (name, sig) in load_function_signatures_from_metadata(meta_dir) {
+            merged.insert(name, sig);
         }
     }
     merged

@@ -185,8 +185,9 @@ impl<'ast> CodeGenerator<'ast> {
         let method_simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
 
         // Module-qualified free calls (`draw::draw_text`): without an exact-key
-        // signature for this module path, do not coerce string literals. Simple-name
-        // / local_sig homonyms (e.g. rendering_api::draw_text Owned) must not win.
+        // signature for this module path, do not coerce string literals from
+        // *cross-module* homonyms. Same-unit inline `mod` callees often register
+        // only the bare name — allow that fallback instead of failing closed.
         if crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
             callee_name,
         ) && matches!(
@@ -201,7 +202,14 @@ impl<'ast> CodeGenerator<'ast> {
                     .global_signature_registry
                     .as_ref()
                     .is_some_and(|g| g.get_signature(callee_name).is_some());
-            if !has_exact_module_sig {
+            let has_inline_simple_sig = self.inline_module_qualified_call(callee_name)
+                && (registry.get_signature(method_simple).is_some()
+                    || self
+                        .global_signature_registry
+                        .as_ref()
+                        .is_some_and(|g| g.get_signature(method_simple).is_some())
+                    || local_sig.is_some());
+            if !has_exact_module_sig && !has_inline_simple_sig {
                 return Some(prepared_arg);
             }
         }
@@ -230,8 +238,17 @@ impl<'ast> CodeGenerator<'ast> {
                 .global_signature_registry
                 .as_ref()
                 .and_then(|g| g.get_signature(callee_name).cloned());
+            let from_simple = if self.inline_module_qualified_call(callee_name) {
+                registry.get_signature(simple).cloned().or_else(|| {
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple).cloned())
+                })
+            } else {
+                None
+            };
             crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
-                [from_global, from_reg, from_local],
+                [from_global, from_reg, from_simple, from_local],
             )
         }
         .or_else(|| registry.lookup_method(callee_name).cloned());
@@ -1693,8 +1710,7 @@ impl<'ast> CodeGenerator<'ast> {
                 value: Literal::String(_),
                 ..
             }
-        ) && !self.inline_module_qualified_call(callee_name)
-            && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+        ) && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
             && crate::codegen::rust::string_utilities::string_literal_needs_to_string(
                 &sig,
                 arg_index,
