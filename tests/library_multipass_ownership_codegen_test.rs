@@ -4040,3 +4040,98 @@ pub fn is_comment_line(line: string) -> bool {
         "strings::starts_with prefix literal must stay &str under library multipass. Got:\n{rs}"
     );
 }
+
+/// WDB Phase 49 dogfood: associated constructor names outside `new`/`from_`/`with_`/`default`
+/// (e.g. `LdbcGraphLoader::datagen_defaults`) must still type the local so a later
+/// `loader.load_edge_file("…")` keeps the path literal as `&str` (emitted Borrowed).
+///
+/// Critical: regenerate the *caller* alone after the defining module's `.wj.meta` exists —
+/// cold multipass often looks fine; isolated second-pass codegen is where the bug shows.
+#[test]
+fn test_library_multipass_associated_constructor_types_receiver_for_str_method() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use windjammer::{build_project_ext, CompilationTarget};
+
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "graph/loader.wj",
+        r#"
+pub struct LdbcGraphLoader {
+    pub undirected: bool,
+}
+
+impl LdbcGraphLoader {
+    pub fn datagen_defaults() -> LdbcGraphLoader {
+        LdbcGraphLoader { undirected: true }
+    }
+
+    pub fn load_edge_file(self, path: string) -> int {
+        if path.len() == 0 {
+            return 1
+        }
+        0
+    }
+}
+"#,
+    );
+    test.add_file(
+        "graph/session_test.wj",
+        r#"
+use crate::graph::loader::LdbcGraphLoader
+
+pub fn test_load_via_defaults() {
+    let loader = LdbcGraphLoader::datagen_defaults()
+    let _ = loader.load_edge_file("fixtures/toy_triangle.e")
+}
+"#,
+    );
+    test.add_file("graph/mod.wj", "pub mod loader\npub mod session_test");
+    test.add_file("mod.wj", "pub mod graph");
+
+    let src = test.build_dir().parent().unwrap().join("src");
+    build_project_ext(
+        &src,
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("first pass failed: {e}"));
+
+    // Force isolated regen of the caller only (loader meta must remain).
+    let project_root = test.build_dir().parent().unwrap();
+    let _ = fs::remove_file(project_root.join(".wj-cache/graph/session_test.wj.meta"));
+    let _ = fs::remove_file(test.build_dir().join("graph/session_test.rs"));
+    let session_src = src.join("graph/session_test.wj");
+    let mut body = fs::read_to_string(&session_src).expect("session_test.wj");
+    body.push_str(&format!(
+        "\n// touch {}\n",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::write(&session_src, body).expect("touch session_test.wj");
+
+    build_project_ext(
+        &src,
+        test.build_dir(),
+        CompilationTarget::Rust,
+        false,
+        true,
+        &[],
+    )
+    .unwrap_or_else(|e| panic!("isolated second pass failed: {e}"));
+
+    let rs = fs::read_to_string(test.build_dir().join("graph/session_test.rs")).expect("session_test.rs");
+    assert!(
+        rs.contains("load_edge_file(\"fixtures/toy_triangle.e\")"),
+        "path literal must stay &str after isolated regen of associated-constructor caller. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("\"fixtures/toy_triangle.e\".to_string()"),
+        "must not emit .to_string() on Borrowed path after datagen_defaults() (isolated regen). Got:\n{rs}"
+    );
+}
