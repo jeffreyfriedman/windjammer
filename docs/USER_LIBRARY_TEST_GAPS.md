@@ -1,12 +1,31 @@
 # User-library test gaps (`wj test` vs dogfood crates)
 
 **Audience:** language / tooling owners  
-**Date:** 2026-08-02  
+**Date:** 2026-08-09  
 **Context:** LedgerKit `finance-screens` (and similar packages) still run **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::testing` / `std::test`, `@test`).
 
 This document lists the **concrete gaps** that block migrating those tests to Windjammer today. It is language-only (no product names required to act on the items).
 
 ---
+
+## Status on tip (2026-08-09)
+
+**GREEN**
+
+- `wj test --module-file --library`
+- `--use-project-cargo` feature merge
+- Combined `--use-build-dir` + `--use-project-cargo` on multipass stub (i64 / default int formals)
+
+**RED gates filed (language-only)**
+
+- `tests/wj_test_use_build_dir_i32_literal_gate_test.rs` — `@test` int lit vs explicit `i32` formal emits `3_i64` under `--use-build-dir`
+- `tests/wj_test_use_build_dir_defaults_skip_wj_regen_gate_test.rs` — `--use-build-dir` must default `SKIP_WJ_REGEN=1` for path-dep Cargo children
+
+**Dogfood**
+
+- Package with UI path-dep still blocked until `SKIP_WJ_REGEN` default + clean generated UI
+- Rust `cargo test` remains interim
+
 
 ## What already works
 
@@ -96,11 +115,11 @@ Rust `#[cfg(test)]` / `tests/*.rs` can import `finance_screens` from the **exact
 
 A dogfood library package can:
 
-1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`.  
-2. Add `tests/foo_test.wj` using `@test` + `std::testing::assert_contains` / `assert_eq`.  
-3. Run `wj test` with the **same** compile flags as `wj build` for that package.  
-4. Path-depend on `windjammer-ui` (web features) without manual Cargo.toml surgery.  
-5. Drop the parallel Rust `tests/*.rs` harness without losing coverage.
+1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`. — **partially met** (related ownership / leakage gates green; dogfood still on Rust harness for other gaps)  
+2. Add `tests/foo_test.wj` using `@test` + `std::testing::assert_contains` / `assert_eq`. — **partially met** (discovery + asserts work; end-to-end library dogfood still blocked)  
+3. Run `wj test` with the **same** compile flags as `wj build` for that package. — **partially met** (`--module-file --library`, `--use-project-cargo`, combined `--use-build-dir` + `--use-project-cargo` green on multipass stub; **RED** i32-literal emit under `--use-build-dir`)  
+4. Path-depend on `windjammer-ui` (web features) without manual Cargo.toml surgery. — **not met** (blocked on `--use-build-dir` defaulting `SKIP_WJ_REGEN=1` + clean generated UI)  
+5. Drop the parallel Rust `tests/*.rs` harness without losing coverage. — **not met** (Rust `cargo test` remains interim)
 
 Until then, Rust tests against generated libs remain a **temporary adapter**, not a preference.
 
