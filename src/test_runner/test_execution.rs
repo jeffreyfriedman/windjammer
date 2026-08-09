@@ -68,10 +68,14 @@ fn resolve_dependency_path(project_root: &Path, path: &str) -> PathBuf {
 }
 
 /// Use a pre-built outbound tree (e.g. `build/`) as the library under test.
+/// Detect `[lib] path = "build/lib.rs"` dogfood layout and reuse a pre-built tree.
+///
+/// Returns `(crate_name, package_name, cargo_dep_path, metadata_dir)`.
+/// For dogfood, Cargo depends on the project root while signatures load from `build/`.
 fn resolve_prebuilt_library(
     build_dir: &Path,
     project_root: &Path,
-) -> Result<Option<(String, String, PathBuf)>> {
+) -> Result<Option<(String, String, PathBuf, PathBuf)>> {
     use colored::*;
 
     let build_dir = if build_dir.is_absolute() {
@@ -109,7 +113,7 @@ fn resolve_prebuilt_library(
         .unwrap_or_else(|| lib_name.replace('_', "-"));
 
     // When the project manifest owns the crate, depend from project root so `path = "build/lib.rs"` works.
-    let dep_path = if project_cargo.exists()
+    let cargo_dep_path = if project_cargo.exists()
         && read_cargo_lib_name(&project_cargo).is_some()
     {
         project_root.to_path_buf()
@@ -117,15 +121,19 @@ fn resolve_prebuilt_library(
         build_dir.clone()
     };
 
+    // Signatures / `emitted_rust_ref_params` live next to generated `lib.rs`.
+    let metadata_dir = build_dir.clone();
+
     println!(
-        "   {} Using pre-built library at {} (lib: {}, dep path: {})",
+        "   {} Using pre-built library at {} (lib: {}, dep path: {}, metadata: {})",
         "→".bright_blue().bold(),
         build_dir.display(),
         lib_name,
-        dep_path.display()
+        cargo_dep_path.display(),
+        metadata_dir.display()
     );
 
-    Ok(Some((lib_name, package_name, dep_path)))
+    Ok(Some((lib_name, package_name, cargo_dep_path, metadata_dir)))
 }
 
 /// Merge `[dependencies]` from the project root Cargo.toml into generated library Cargo.toml.
@@ -252,12 +260,12 @@ fn project_cargo_has_dep(dep_name: &str, project_root: &Path) -> bool {
 }
 
 /// Detect and compile the library being tested (if it exists)
-/// Returns (library_name, library_path) for Cargo dependency, or None
+/// Returns `(crate_name, package_name, cargo_dep_path, metadata_dir)`, or None
 fn detect_and_compile_library(
     project_root: &Path,
     test_output_dir: &Path,
     opts: &TestRunOptions,
-) -> Result<Option<(String, String, PathBuf)>> {
+) -> Result<Option<(String, String, PathBuf, PathBuf)>> {
     use std::fs;
 
     // Look for wj.toml or windjammer.toml
@@ -532,7 +540,12 @@ fn detect_and_compile_library(
             }
 
             println!("   {} Library compiled successfully", "✓".green().bold());
-            Ok(Some((test_lib_name, test_lib_package_name, lib_output_dir)))
+            Ok(Some((
+                test_lib_name,
+                test_lib_package_name,
+                lib_output_dir.clone(),
+                lib_output_dir,
+            )))
         }
         Err(e) => {
             println!("   {} Library compilation failed: {}", "✗".red().bold(), e);
@@ -895,8 +908,8 @@ pub(crate) fn generate_test_harness(
         }
 
         // Compile the file to Rust — pass library metadata when available.
-        if let Some((lib_crate_name, _, lib_output_dir)) = &library_dependency {
-            let meta = [(lib_crate_name.as_str(), lib_output_dir.as_path())];
+        if let Some((lib_crate_name, _, _, meta_dir)) = &library_dependency {
+            let meta = [(lib_crate_name.as_str(), meta_dir.as_path())];
             build_project_ext(
                 file,
                 output_dir,
@@ -945,7 +958,7 @@ pub(crate) fn generate_test_harness(
     }
 
     // Tests compiled above still contain `use crate::...`; point them at the library crate.
-    if let Some((lib_crate_name, _, _)) = &library_dependency {
+    if let Some((lib_crate_name, _, _, _)) = &library_dependency {
         for file in tests_by_file.keys() {
             let output_file = output_dir.join(format!(
                 "{}.rs",
@@ -1017,7 +1030,7 @@ pub(crate) fn generate_test_harness(
     };
 
     let library_dep_str =
-        if let Some((lib_crate_name, lib_package_name, lib_path)) = library_dependency {
+        if let Some((lib_crate_name, lib_package_name, lib_path, _)) = library_dependency {
             format!(
                 "\n{} = {{ path = \"{}\", package = \"{}\" }}",
                 lib_crate_name,

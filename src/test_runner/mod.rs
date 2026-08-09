@@ -168,6 +168,13 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
         .current_dir(&temp_dir)
         .env_remove("CARGO_TARGET_DIR");
 
+    // Dogfood `--use-build-dir` / project-Cargo layouts path-depend on crates whose
+    // `build.rs` tip-transpiles unless SKIP_WJ_REGEN is set. Default it for Cargo
+    // children so prebuilt outbound trees are not invalidated mid-test.
+    if opts.use_build_dir.is_some() || opts.use_project_cargo {
+        cmd.env("SKIP_WJ_REGEN", "1");
+    }
+
     if !opts.parallel {
         cmd.arg("--").arg("--test-threads").arg("1");
     }

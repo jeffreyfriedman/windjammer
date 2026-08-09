@@ -6,6 +6,52 @@ use crate::parser::{Expression, Literal, Statement, Type};
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
+    /// `TypeName::assoc` return type from the signature registry (Call or MethodCall form).
+    /// No method-name heuristics — drives let-binding typing for Borrowed-string coercion.
+    fn infer_associated_fn_return_type(&self, type_name: &str, method: &str) -> Option<Type> {
+        if !type_name.starts_with(|c: char| c.is_ascii_uppercase()) {
+            return None;
+        }
+        let resolve_self = |ty: &Type| -> Type {
+            match ty {
+                Type::Custom(n) if n == "Self" || n == type_name => {
+                    if type_name == "String" {
+                        Type::String
+                    } else {
+                        Type::Custom(type_name.to_string())
+                    }
+                }
+                Type::Custom(n) if n == "String" => Type::String,
+                other => other.clone(),
+            }
+        };
+        let qualified = format!("{type_name}::{method}");
+        if let Some(sig) = self.get_signature_with_global(&qualified) {
+            if let Some(ret) = &sig.return_type {
+                return Some(resolve_self(ret));
+            }
+            if !sig.has_self_receiver {
+                return Some(if type_name == "String" {
+                    Type::String
+                } else {
+                    Type::Custom(type_name.to_string())
+                });
+            }
+        }
+        if let Some(ms) = self.lookup_method_signature(type_name, method) {
+            if let Some(ret) = &ms.return_type {
+                return Some(resolve_self(ret));
+            }
+        }
+        // Cold pass / missing meta: prefer typing the local as the nominal type so later
+        // method coercion can resolve Borrowed string formals (WDB-091).
+        Some(if type_name == "String" {
+            Type::String
+        } else {
+            Type::Custom(type_name.to_string())
+        })
+    }
+
     /// `f32::sin` / `f64::ln` etc. return the same float type as the receiver.
     fn rust_primitive_float_method_return_type(
         receiver: Option<&Type>,
@@ -222,16 +268,14 @@ impl<'ast> CodeGenerator<'ast> {
                 ) {
                     return Some(Type::Custom("usize".to_string()));
                 }
-                // Static constructors: `String::new()` → String via stdlib signature registry.
+                // Associated functions: `TypeName::assoc()` (may parse as MethodCall).
+                // Signature-driven — same rules as Call(FieldAccess(Type, method)).
                 if let Expression::Identifier { name: type_name, .. } = &**object {
                     if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                        if let Some(ms) = self.lookup_method_signature(type_name, method) {
-                            if let Some(ret) = &ms.return_type {
-                                return Some(ret.clone());
-                            }
-                        }
-                        if method == "new" && type_name == "String" {
-                            return Some(Type::String);
+                        if let Some(ret) =
+                            self.infer_associated_fn_return_type(type_name, method)
+                        {
+                            return Some(ret);
                         }
                     }
                 }
@@ -347,22 +391,10 @@ impl<'ast> CodeGenerator<'ast> {
                         name: type_name, ..
                     } = object
                     {
-                        let qualified = format!("{}::{}", type_name, field);
-                        if let Some(sig) = self.get_signature_with_global(&qualified) {
-                            if let Some(ref ret) = sig.return_type {
-                                return Some(ret.clone());
-                            }
-                            // Constructor convention: Type::new() returns Type
-                            // even when metadata has return_type: null
-                            if !sig.has_self_receiver
-                                && type_name.starts_with(|c: char| c.is_ascii_uppercase())
-                            {
-                                return Some(Type::Custom(type_name.clone()));
-                            }
-                        }
-                        // Even without signature, CamelCase::method() likely returns CamelCase
-                        if type_name.starts_with(|c: char| c.is_ascii_uppercase()) {
-                            return Some(Type::Custom(type_name.clone()));
+                        if let Some(ret) =
+                            self.infer_associated_fn_return_type(type_name, field)
+                        {
+                            return Some(ret);
                         }
                     }
                     // Instance call: Call(FieldAccess(receiver, method), args) — same return type

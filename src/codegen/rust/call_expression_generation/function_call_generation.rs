@@ -87,17 +87,11 @@ fn apply_owned_string_literal_coercion<'ast>(
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
     args: &mut [String],
 ) {
-    if gen.inline_module_qualified_call(func_name)
-        || crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
-            func_name,
-        )
-    {
-        return;
-    }
-
+    // Signature-driven for all callees — including inline `mod` and lowercase
+    // `module::fn` paths. Do not blanket-skip by module spelling.
     let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
-    let allow_simple_fallback =
-        !crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
+    let allow_simple_fallback = gen.inline_module_qualified_call(func_name)
+        || !crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
             func_name,
         );
 
@@ -117,11 +111,6 @@ fn apply_owned_string_literal_coercion<'ast>(
             continue;
         }
         let runtime_module = func_name.split("::").next();
-        if runtime_module
-            .is_some_and(crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str)
-        {
-            continue;
-        }
         // Prefer defining-module refreshed `&str` over stale analyzer stubs.
         let mut sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
             gen.global_signature_registry
@@ -165,6 +154,12 @@ fn apply_owned_string_literal_coercion<'ast>(
                 sig, challenger, pidx,
             );
         }
+        if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+            sig.as_ref(),
+            i,
+        ) {
+            continue;
+        }
         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
             sig.as_ref(),
             i,
@@ -175,9 +170,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
             Some(&gen.enum_variant_types),
             runtime_module,
-        ) || (!runtime_module.is_some_and(
-            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
-        ) && sig.as_ref().is_some_and(|s| {
+        ) || sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
             if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(s, idx) {
                 return false;
@@ -194,8 +187,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .get(idx)
                 .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
             text_formal && owned_contract && not_str_ref
-        }))
-        {
+        }) {
             *arg_str = format!("{}.to_string()", arg_str.trim_start_matches('&'));
         }
     }
