@@ -175,7 +175,12 @@ pub(in crate::metadata) fn merge_module_metadata_signatures(
     for (name, sig) in &meta.functions {
         if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
             registry.add_function(name.clone(), a_sig.clone());
-            if !meta.module_path.is_empty() && !name.contains("::") {
+            // Always install `module_path::…` aliases. Keys are often already
+            // `Type::method` (contain `::`); still need `mod::Type::method` so
+            // suffix search / refresh survive bare-key filtering.
+            if !meta.module_path.is_empty()
+                && !name.starts_with(&format!("{}::", meta.module_path))
+            {
                 let qualified = format!("{}::{}", meta.module_path, name);
                 registry.add_function(qualified, a_sig);
             }
