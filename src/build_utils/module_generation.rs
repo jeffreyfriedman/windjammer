@@ -659,6 +659,34 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
             }
         }
     }
+
+    // WDB-093: When `_mod_items.rs` is absent (incremental regen), fall back to source `mod.wj`
+    // so cross-crate `pub use other_crate::Item` survives into auto-generated mod.rs.
+    if user_reexports.is_empty() {
+        if let Some(ref src_dir) = sibling_src {
+            let mod_wj = src_dir.join("mod.wj");
+            if mod_wj.exists() {
+                if let Ok(wj_content) = fs::read_to_string(&mod_wj) {
+                    let local_modules: std::collections::HashSet<&str> =
+                        modules.iter().map(|s| s.as_str()).collect();
+                    let (_, pub_uses) =
+                        crate::module_system::import_resolution::parse_mod_declarations(&wj_content);
+                    for path in pub_uses {
+                        let first = path.split("::").next().unwrap_or("");
+                        if is_test_module(first) {
+                            continue;
+                        }
+                        if local_modules.contains(first) {
+                            user_reexports.push(format!("pub use self::{};", path));
+                        } else {
+                            // External crate (e.g. wdb_index::Bm25Index) — keep absolute path.
+                            user_reexports.push(format!("pub use {};", path));
+                        }
+                    }
+                }
+            }
+        }
+    }
     let has_user_reexports = !user_reexports.is_empty();
 
     let mut content = String::from("// Auto-generated mod.rs by Windjammer CLI\n");
@@ -812,4 +840,45 @@ pub fn cleanup_stale_module_files_recursive(dir: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod wdb093_cross_crate_pub_use_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn regenerates_cross_crate_pub_use_from_mod_wj_without_mod_items() {
+        let temp = tempfile::tempdir().unwrap();
+        let out = temp.path().join("gen/observability");
+        let src = temp.path().join("src/observability");
+        fs::create_dir_all(&out).unwrap();
+        fs::create_dir_all(&src).unwrap();
+        fs::write(
+            src.join("mod.wj"),
+            "pub mod observability_layer\npub use observability_layer::ObservabilityLayer\npub use wdb_index::Bm25Index\npub use wdb_index::PartTextStats\n",
+        )
+        .unwrap();
+        fs::write(out.join("observability_layer.rs"), "pub struct ObservabilityLayer;\n").unwrap();
+        // Auto-generated mod.rs WITHOUT cross-crate re-exports (bug state).
+        fs::write(
+            out.join("mod.rs"),
+            "// Auto-generated mod.rs by Windjammer CLI\npub mod observability_layer;\n\n// Re-export public items\npub use observability_layer::*;\n",
+        )
+        .unwrap();
+
+        let out_root = temp.path().join("gen");
+        let src_root = temp.path().join("src");
+        generate_mod_file_with_layout(&out, Some((&out_root, &src_root))).unwrap();
+
+        let regenerated = fs::read_to_string(out.join("mod.rs")).unwrap();
+        assert!(
+            regenerated.contains("pub use wdb_index::Bm25Index"),
+            "expected cross-crate Bm25Index re-export, got:\n{regenerated}"
+        );
+        assert!(
+            regenerated.contains("pub use wdb_index::PartTextStats"),
+            "expected cross-crate PartTextStats re-export, got:\n{regenerated}"
+        );
+    }
 }

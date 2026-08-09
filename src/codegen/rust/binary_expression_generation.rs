@@ -337,10 +337,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // E0277: mixed f32/f64 (inference + `as f32` vs default `_f64` literals).
+        // WDB-092: include comparisons (`distances[u] < 0.0`) so index-element f64
+        // promotes a default `_f32` literal on the other side.
         if (is_arithmetic || is_comparison)
             && matches!(
                 op,
-                BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::Eq
+                    | BinaryOp::Ne
+                    | BinaryOp::Lt
+                    | BinaryOp::Gt
+                    | BinaryOp::Le
+                    | BinaryOp::Ge
             )
         {
             let prefer_f32_from_assignment = is_arithmetic

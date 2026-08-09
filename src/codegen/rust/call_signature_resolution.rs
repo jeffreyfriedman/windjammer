@@ -533,6 +533,20 @@ pub fn resolve_method_for_call_site(
                             refreshed,
                         );
                     }
+                } else if let Some((_, refreshed)) = best_method_signature_for_receiver(
+                    g,
+                    receiver_type,
+                    method,
+                    arg_count,
+                ) {
+                    // Bare `Type::method` may have been filtered; module-qualified
+                    // defining-module meta still carries `emitted_rust_ref_params`.
+                    if refreshed.emitted_rust_ref_params.is_some() {
+                        crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                            &mut resolved.sig,
+                            &refreshed,
+                        );
+                    }
                 }
             }
         }

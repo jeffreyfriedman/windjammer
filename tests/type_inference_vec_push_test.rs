@@ -71,3 +71,56 @@ fn init_scores() -> Vec<f64> {
         rust_code
     );
 }
+
+/// WDB-092: `distances[u] = 0.0` on `Vec<f64>` must emit `0.0_f64`, not default `0.0_f32`.
+#[test]
+fn test_vec_f64_index_assign_float_literal() {
+    let wj_source = r#"
+fn seed_source() {
+    let mut distances: Vec<f64> = Vec::new()
+    distances.push(1.0)
+    let u = 0
+    distances[u] = 0.0
+}
+"#;
+
+    let rust_code = test_utils::compile_single(wj_source);
+
+    eprintln!("Generated Rust:\n{}", rust_code);
+
+    assert!(
+        !rust_code.contains("0.0_f32"),
+        "Index assign float literal must not be f32 for Vec<f64>, got:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("0.0_f64"),
+        "Expected distances[u] = 0.0_f64 for Vec<f64>, got:\n{}",
+        rust_code
+    );
+}
+
+/// WDB-092: comparison against Vec&lt;f64&gt; element must also use f64 literal.
+#[test]
+fn test_vec_f64_index_compare_float_literal() {
+    let wj_source = r#"
+fn is_seeded(distances: Vec<f64>, u: int) -> bool {
+    distances[u] < 0.0
+}
+"#;
+
+    let rust_code = test_utils::compile_single(wj_source);
+
+    eprintln!("Generated Rust:\n{}", rust_code);
+
+    assert!(
+        !rust_code.contains("0.0_f32"),
+        "Index compare float literal must not be f32 for Vec<f64>, got:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("0.0_f64"),
+        "Expected distances[u] < 0.0_f64 for Vec<f64>, got:\n{}",
+        rust_code
+    );
+}

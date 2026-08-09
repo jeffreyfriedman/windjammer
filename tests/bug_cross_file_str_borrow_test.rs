@@ -13,10 +13,11 @@
 // analyzer), and struct B in a different file calls that method, the codegen
 // generates `.clone()` instead of `&` for string field arguments.
 //
-// Root cause: library_multipass.rs loads .wj.meta converged signatures (line 404)
-// but immediately drops them with drop_dependency_signatures_for_local_types (line 405-407).
-// When files are skipped during incremental builds, their converged Borrowed
-// ownership is lost, falling back to declaration stubs with Owned ownership.
+// Root cause: library_multipass previously loaded same-crate `.wj.meta` then
+// immediately dropped bare `Type::method` keys via a second
+// `drop_dependency_signatures_for_local_types` call. Defining-module Borrowed
+// ownership was lost on incremental skips; declaration stubs with Owned won.
+// Fix: merge local `.wj.meta` after dependency filtering — do not drop again.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

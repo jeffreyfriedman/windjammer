@@ -401,11 +401,10 @@ pub(crate) fn build_library_multipass(
         &mut global_registry.signatures,
         &local_struct_names,
     );
+    // Merge same-crate `.wj.meta` AFTER dependency filtering. Do not drop again —
+    // a second `drop_dependency_signatures_for_local_types` would delete bare
+    // `Type::method` keys from defining-module metas (WDB-091 / cross-file &str).
     crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &mut global_registry);
-    crate::metadata::drop_dependency_signatures_for_local_types(
-        &mut global_registry.signatures,
-        &local_struct_names,
-    );
     let mut global_float_signatures: HashMap<
         String,
         (
@@ -990,17 +989,24 @@ pub(crate) fn build_library_multipass(
                 }
             }
             for key in keys {
-                if let Some(existing) = reg.get_signature(&key) {
-                    if prefer_converged_over_stub(existing, sig)
-                        && !body_borrow_must_not_replace_owned_formal_stub(existing, sig)
-                        && !body_borrow_must_not_replace_owned_copy_formal(
-                            existing,
-                            sig,
-                            &global_copy_structs,
-                        )
+                match reg.get_signature(&key) {
+                    None => {
+                        // Defining-module meta may only exist under a module-qualified
+                        // alias; always install the canonical `Type::method` key.
+                        reg.signatures.insert(key, sig.clone());
+                    }
+                    Some(existing)
+                        if prefer_converged_over_stub(existing, sig)
+                            && !body_borrow_must_not_replace_owned_formal_stub(existing, sig)
+                            && !body_borrow_must_not_replace_owned_copy_formal(
+                                existing,
+                                sig,
+                                &global_copy_structs,
+                            ) =>
                     {
                         reg.signatures.insert(key, sig.clone());
                     }
+                    Some(_) => {}
                 }
             }
         }
