@@ -1,31 +1,33 @@
 # User-library test gaps (`wj test` vs dogfood crates)
 
 **Audience:** language / tooling owners  
-**Date:** 2026-08-09  
-**Context:** LedgerKit `finance-screens` (and similar packages) still run **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::testing` / `std::test`, `@test`).
+**Date:** 2026-08-10  
+**Context:** Dogfood libraries often still run **Rust** `cargo test` against WJ-generated `build/lib.rs` even though Windjammer advertises a full test suite (`wj test`, `std::testing` / `std::test`, `@test`).
 
 This document lists the **concrete gaps** that block migrating those tests to Windjammer today. It is language-only (no product names required to act on the items).
 
 ---
 
-## Status on tip (2026-08-09)
+## Status on tip (2026-08-10)
 
 **GREEN**
 
 - `wj test --module-file --library`
 - `--use-project-cargo` feature merge
 - Combined `--use-build-dir` + `--use-project-cargo` on multipass stub (i64 / default int formals)
+- `tests/wj_test_use_build_dir_i32_literal_gate_test.rs` — `@test` int lit vs explicit `i32` formal under `--use-build-dir`
+- `tests/wj_test_use_build_dir_defaults_skip_wj_regen_gate_test.rs` — `--use-build-dir` defaults `SKIP_WJ_REGEN=1` for path-dep Cargo children
 
 **RED gates filed (language-only)**
 
-- `tests/wj_test_use_build_dir_i32_literal_gate_test.rs` — `@test` int lit vs explicit `i32` formal emits `3_i64` under `--use-build-dir`
-- `tests/wj_test_use_build_dir_defaults_skip_wj_regen_gate_test.rs` — `--use-build-dir` must default `SKIP_WJ_REGEN=1` for path-dep Cargo children
+- `tests/wj_test_transpiles_discovered_wj_test_modules_gate_test.rs` — `wj test` discovers `*_test.wj` and emits `pub mod …` but does **not** write the transpiled `.rs` into the temp crate → cargo **E0583** (`file not found for module`)
 
 **Dogfood**
 
-- Package with UI path-dep still blocked until `SKIP_WJ_REGEN` default + clean generated UI
-- Rust `cargo test` remains interim
+- Prefer `SKIP_WJ_REGEN=1` for path-dep cargo until deliberate selective UI regen (generated trees can dirty)
+- Rust `cargo test` remains interim until the transpile-discovered-modules gate greens; aspirational `tests/*_test.wj` pilots may land ahead of tip
 
+---
 
 ## What already works
 
@@ -64,6 +66,8 @@ then a hand-maintained `Cargo.toml` with `path = "build/lib.rs"`.
 
 **Need:** `wj test` must build the library the same way `make build` / CI builds it (flags, outbound dir, re-export patching).
 
+**Status:** largely met via `--use-build-dir` + `--module-file` / `--library` on tip (see GREEN list).
+
 ### 2. Dual Cargo identity (WJ crate vs Rust crate)
 
 Packages frequently keep:
@@ -74,6 +78,8 @@ Packages frequently keep:
 `wj test` spins a **fresh** temp Cargo project and copies/rewrites deps. Drift vs the package’s real Cargo features (e.g. `windjammer-ui` `web` vs `desktop`, `default-features`) causes false reds or missing symbols.
 
 **Need:** either consume the package’s Cargo.toml as source of truth for deps/features, or generate an equivalent that matches documented dogfood defaults.
+
+**Status:** `--use-project-cargo` greens feature merge on tip.
 
 ### 3. Discovery UX vs docs / examples mismatch
 
@@ -105,9 +111,19 @@ Dogfood packages should no longer need `"lit".to_string()` workarounds for these
 
 ### 6. No first-class “integration test against generated lib in-place”
 
-Rust `#[cfg(test)]` / `tests/*.rs` can import `finance_screens` from the **exact** artifact CI ships. `wj test` always recompiles into a temp dir; failures are harder to bisect against `build/*.rs`.
+Rust `#[cfg(test)]` / `tests/*.rs` can import the **exact** artifact CI ships. `wj test` always recompiles into a temp dir; failures are harder to bisect against `build/*.rs`.
 
 **Need:** optional `wj test --use-build-dir build` (or similar) for dogfood packages.
+
+**Status:** flag exists and is GREEN for i32 / SKIP_WJ_REGEN; blocked on §7 for end-to-end `.wj` suites.
+
+### 7. Discovered `*_test.wj` must be transpiled into the temp crate (RED)
+
+Discovery finds `tests/foo_test.wj` and generates `pub mod foo_test;` in the temp `lib.rs`, but does not write `foo_test.rs`. Cargo then fails with **E0583** (`file not found for module`) before any assertion runs.
+
+**Gate:** `tests/wj_test_transpiles_discovered_wj_test_modules_gate_test.rs`
+
+**Need:** transpile each discovered `*_test.wj` into the temp test crate alongside the `pub mod` declaration.
 
 ---
 
@@ -115,19 +131,9 @@ Rust `#[cfg(test)]` / `tests/*.rs` can import `finance_screens` from the **exact
 
 A dogfood library package can:
 
-1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`. — **partially met** (related ownership / leakage gates green; dogfood still on Rust harness for other gaps)  
-2. Add `tests/foo_test.wj` using `@test` + `std::testing::assert_contains` / `assert_eq`. — **partially met** (discovery + asserts work; end-to-end library dogfood still blocked)  
-3. Run `wj test` with the **same** compile flags as `wj build` for that package. — **partially met** (`--module-file --library`, `--use-project-cargo`, combined `--use-build-dir` + `--use-project-cargo` green on multipass stub; **RED** i32-literal emit under `--use-build-dir`)  
-4. Path-depend on `windjammer-ui` (web features) without manual Cargo.toml surgery. — **not met** (blocked on `--use-build-dir` defaulting `SKIP_WJ_REGEN=1` + clean generated UI)  
-5. Drop the parallel Rust `tests/*.rs` harness without losing coverage. — **not met** (Rust `cargo test` remains interim)
+1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`. — **partially met** (related ownership / leakage gates green)  
+2. Add `tests/foo_test.wj` using `@test` + `std::testing` / `std::test` asserts. — **blocked** on §7 E0583 until tip greens the transpile gate  
+3. Run `wj test` with the **same** compile flags as `wj build` for that package. — **met on tip** (`--module-file --library`, `--use-project-cargo`, `--use-build-dir` + i32 lit + SKIP_WJ_REGEN default)  
+4. Path-depend on UI crates without manual Cargo.toml surgery. — **met for harness** (SKIP_WJ_REGEN default green); still prefer deliberate UI regen  
 
-Until then, Rust tests against generated libs remain a **temporary adapter**, not a preference.
-
----
-
-## Interim guidance for product agents
-
-- Prefer WJ SOT + language gates for tip bugs.  
-- Keep Rust tests thin: call `crate_api::…`, assert strings/ints — no duplicated product logic.  
-- When migrating a suite to `wj test`, do it package-by-package after criteria 1–4 work on tip.  
-- Do not reintroduce `"literal".to_string()` in `.wj` to pacify tip; file/extend gates instead.
+When migrating a suite to `wj test`, do it package-by-package after criteria 1–4 work on tip.
