@@ -1146,11 +1146,16 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Module-qualified free-function path (not `Type::method` / `Self::method`).
+    /// Same-crate `crate::mod::fn` paths are not external boundaries — signatures
+    /// register under the bare function name within the crate multipass.
     pub(crate) fn is_module_boundary_callee(callee_name: &str) -> bool {
         let Some((qualifier, _)) = callee_name.rsplit_once("::") else {
             return false;
         };
         if qualifier == "Self" || qualifier.ends_with("::Self") {
+            return false;
+        }
+        if qualifier == "crate" || qualifier.starts_with("crate::") {
             return false;
         }
         let last = qualifier.rsplit("::").next().unwrap_or(qualifier);

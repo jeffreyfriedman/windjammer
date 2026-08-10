@@ -863,6 +863,7 @@ pub fn is_runtime_std_module(name: &str) -> bool {
             | "testing"
             | "game"
             | "env"
+            | "fs"
     )
 }
 
