@@ -866,19 +866,6 @@ pub fn is_runtime_std_module(name: &str) -> bool {
     )
 }
 
-/// Runtime std modules whose Rust implementations historically took `AsRef<str>`.
-///
-/// **Do not use for ownership/coercion decisions** — prefer
-/// [`runtime_wj_owned_rust_borrowed_param`] / [`runtime_or_str_ref_formal_skips_literal_owned`]
-/// / [`runtime_std_param_needs_auto_borrow_resolved`]. Remaining call sites should migrate
-/// off this list; it is retained only for import/module-identity helpers.
-pub fn runtime_std_module_uses_asref_str(module: &str) -> bool {
-    matches!(
-        module,
-        "strings" | "json" | "jwt" | "regex" | "csv" | "mime" | "http" | "env" | "db"
-    )
-}
-
 /// Module segment of a callee path: `strings`, `strings::substring`, `std::strings::len`.
 pub fn runtime_module_segment_from_callee_path(name: &str) -> &str {
     let parts: Vec<&str> = name.split("::").collect();
@@ -896,26 +883,6 @@ pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
         "Connection" | "Row" | "DatabaseType" => Some("db"),
         _ => None,
     }
-}
-
-/// Whether a method call receiver uses an AsRef<str> runtime std module.
-pub fn receiver_uses_asref_str_runtime_module(
-    runtime_module: Option<&str>,
-    receiver_type: Option<&str>,
-    is_imported_runtime_std_module: impl Fn(&str) -> bool,
-) -> bool {
-    if runtime_module.is_some_and(runtime_std_module_uses_asref_str) {
-        return true;
-    }
-    if let Some(tn) = receiver_type {
-        if let Some(m) = runtime_std_module_for_type(tn) {
-            return runtime_std_module_uses_asref_str(m);
-        }
-        if is_imported_runtime_std_module(tn) {
-            return runtime_std_module_uses_asref_str(tn);
-        }
-    }
-    false
 }
 
 /// Scanned runtime Rust signature borrows this arg while the WJ formal is still owned.
@@ -1045,7 +1012,7 @@ pub fn resolve_runtime_std_module<'a>(
     callee_module: &'a str,
     receiver_type: Option<&str>,
 ) -> &'a str {
-    if is_runtime_std_module(callee_module) || runtime_std_module_uses_asref_str(callee_module) {
+    if is_runtime_std_module(callee_module) {
         return callee_module;
     }
     if let Some(tn) = receiver_type {

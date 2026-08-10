@@ -86,9 +86,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     let runtime_module = match call_obj {
         Expression::Identifier { name, .. }
             if gen.is_imported_runtime_std_module(name)
-                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                    name,
-                ) =>
+                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name) =>
         {
             Some(name.as_str())
         }
