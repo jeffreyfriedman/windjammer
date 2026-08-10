@@ -751,13 +751,13 @@ impl<'ast> Analyzer<'ast> {
         saw: &mut bool,
     ) -> bool {
         // Bare module (`strings`) or qualified callee path (`strings::substring`,
-        // `std::strings::len`) — shared with codegen via `runtime_std_module_uses_asref_str`.
+        // `std::strings::len`) — shared with codegen via `is_runtime_std_module`.
         let is_asref_module = |name: &str| {
             let module =
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     name,
                 );
-            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(module)
+            crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
                 || name.ends_with("::db")
                 || name.contains("db::")
         };

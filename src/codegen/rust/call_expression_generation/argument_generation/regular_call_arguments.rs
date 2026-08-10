@@ -688,18 +688,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             );
                         }
                         let runtime_module = func_name.split("::").next();
-                        let asref_runtime = runtime_module.is_some_and(
-                            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
-                        );
-                        let registry_expects_owned_string = !asref_runtime
-                            && [func_name, simple]
-                                .iter()
-                                .filter_map(|name| gen.signature_registry.get_signature(name))
-                                .any(|s| {
-                                    crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                                        s, i,
-                                    )
-                                });
+                        // Signature-driven only — `string_literal_needs_owned_coercion_with_enum`
+                        // already consults `runtime_or_str_ref_formal_skips_literal_owned`.
+                        let registry_expects_owned_string = [func_name, simple]
+                            .iter()
+                            .filter_map(|name| gen.signature_registry.get_signature(name))
+                            .any(|s| {
+                                crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                    s, i,
+                                )
+                            });
                         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             sig_for_lit.as_ref(),
                             i,
@@ -711,12 +709,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             Some(&gen.enum_variant_types),
                             runtime_module,
                         ) || registry_expects_owned_string
-                            || (!asref_runtime
-                                && sig_for_lit.as_ref().is_some_and(|s| {
-                                    crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                                        s, i,
-                                    )
-                                }))
+                            || sig_for_lit.as_ref().is_some_and(|s| {
+                                crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                    s, i,
+                                )
+                            })
                         {
                             coerced = format!(
                                 "{}.to_string()",
@@ -1982,12 +1979,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                                 });
 
-                                let asref_str_runtime = func_name
-                                    .split("::")
-                                    .next()
-                                    .is_some_and(super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str);
-
-                                if param_is_str_ref || asref_str_runtime {
+                                if param_is_str_ref
+                                    || crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                                        Some(sig),
+                                        i,
+                                    )
+                                {
                                     return vec![arg_str];
                                 }
 
@@ -2533,32 +2530,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
-            // Runtime std modules (db, env, …): Rust takes &str while WJ declares owned string.
-            if !arg_str.starts_with('&') {
-                let module = func_name.split("::").next().unwrap_or("");
-                if super::super::super::stdlib_method_traits::runtime_std_module_uses_asref_str(
-                    module,
-                ) {
-                    let param_is_string = signature
-                        .as_ref()
-                        .and_then(|sig| sig.param_types.get(i))
-                        .is_some_and(
-                            crate::codegen::rust::string_utilities::param_is_owned_string_type,
-                        );
-                    if param_is_string
-                        && matches!(
-                            arg,
-                            Expression::Identifier { .. } | Expression::FieldAccess { .. }
-                        )
-                    {
-                        arg_str = format!("&{}", arg_str);
-                    }
-                }
-            }
-
             // Runtime std module auto-borrow: windjammer_runtime functions take &T
             // for non-Copy struct params (e.g. json::get(&value, ...) not json::get(value, ...)).
             // WJ stdlib declares owned params; the Rust side uses references.
+            // Signature-driven via `runtime_std_param_needs_auto_borrow_resolved` — no module-name lists.
             if !arg_str.starts_with('&') {
                 if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                     &gen.signature_registry,
@@ -3024,25 +2999,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         arg_str = stripped.to_string();
                     }
                 }
-            }
-
-            // Runtime std (`strings`, `json`, …) uses AsRef<str> — literals stay &str.
-            if func_name
-                .split("::")
-                .next()
-                .is_some_and(
-                    crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
-                )
-                && matches!(
+                // Signature-driven: Borrowed / `&str` / emitted shared-ref formals keep bare literals.
+                if matches!(
                     arg,
                     Expression::Literal {
                         value: Literal::String(_),
                         ..
                     }
-                )
-            {
-                if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
-                    arg_str = stripped.to_string();
+                ) && crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                    text_sig.as_ref().or(signature.as_ref()),
+                    i,
+                ) {
+                    if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
+                        arg_str = stripped.to_string();
+                    }
                 }
             }
 

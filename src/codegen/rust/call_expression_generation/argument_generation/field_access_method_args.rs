@@ -190,28 +190,15 @@ fn arg_expression_is_copy_non_text_scalar<'ast>(
     false
 }
 
-/// `strings.len(self.text)` etc. — borrow owned fields instead of moving out of `&mut self`.
-fn asref_str_module_for_receiver<'ast>(
-    gen: &CodeGenerator<'ast>,
-    runtime_module: Option<&str>,
-    type_name: &Option<String>,
-) -> bool {
-    crate::codegen::rust::stdlib_method_traits::receiver_uses_asref_str_runtime_module(
-        runtime_module,
-        type_name.as_deref(),
-        |name| gen.is_imported_runtime_std_module(name),
-    )
-}
-
-/// `strings.len(self.text)` etc. — borrow owned fields instead of moving out of `&mut self`.
+/// Borrow owned string fields/locals when the resolved formal is WJ-owned + Rust-borrowed.
 fn borrow_runtime_std_str_arg<'ast>(
     gen: &CodeGenerator<'ast>,
-    runtime_module: Option<&str>,
-    type_name: &Option<String>,
+    qualified_name: &str,
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
     arg: &'ast Expression<'ast>,
     arg_str: String,
 ) -> String {
-    let asref_str_module = asref_str_module_for_receiver(gen, runtime_module, type_name);
     let arg_is_string =
         crate::codegen::rust::string_utilities::expression_is_owned_string_for_asref_borrow(
             arg,
@@ -219,7 +206,15 @@ fn borrow_runtime_std_str_arg<'ast>(
             &gen.local_var_types,
             &gen.current_function_params,
         );
-    if asref_str_module
+    let needs_borrow = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+        &gen.signature_registry,
+        qualified_name,
+        sig,
+        arg_index,
+    ) || sig.is_some_and(|s| {
+        crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(s, arg_index)
+    });
+    if needs_borrow
         && arg_is_string
         && matches!(
             arg,
@@ -248,7 +243,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
     let runtime_module = runtime_module.or_else(|| {
         qualified_name.split("::").next().filter(|m| {
-            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
+            crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(m)
         })
     });
     arguments
@@ -488,8 +483,11 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             };
                         if (is_str_lit || is_caller_str_slice_param) && !arg_is_owned_string_binding
                         {
-                            let asref_str_module =
-                                asref_str_module_for_receiver(gen, runtime_module, type_name);
+                            let skips_owned_literal =
+                                crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                                    Some(sig),
+                                    i,
+                                );
                             let static_impl_borrows =
                                 crate::codegen::rust::call_signature_resolution::static_impl_text_borrows_at_call_site(
                                     sig,
@@ -523,10 +521,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                                 });
                             let needs_owned_from_str_param = is_caller_str_slice_param
                                 && !is_explicit_str_ref
-                                && !asref_str_module
+                                && !skips_owned_literal
                                 && !static_impl_borrows;
                             if (!is_explicit_str_ref
-                                && !asref_str_module
+                                && !skips_owned_literal
                                 && !static_impl_borrows
                                 && needs_owned_literal)
                                 || needs_owned_from_str_param
@@ -576,26 +574,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
 
             arg_str = borrow_runtime_std_str_arg(
                 gen,
-                runtime_module,
-                type_name,
+                &qualified_name,
+                Some(sig),
+                i,
                 arg_to_generate,
                 arg_str,
             );
-
-            if asref_str_module_for_receiver(gen, runtime_module, type_name) {
-                let param_is_string = sig.param_types.get(sig_param_idx).is_some_and(
-                    crate::codegen::rust::string_utilities::param_is_owned_string_type,
-                );
-                if param_is_string
-                    && matches!(
-                        arg_to_generate,
-                        Expression::Identifier { .. } | Expression::FieldAccess { .. }
-                    )
-                    && !arg_str.starts_with('&')
-                {
-                    arg_str = format!("&{arg_str}");
-                }
-            }
 
             // Borrow owned String/expr args when callee's `string` param is Borrowed (&str in Rust).
             // Skip when ownership collision detected for this method.
@@ -700,7 +684,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
     let runtime_module = runtime_module.or_else(|| {
         qualified_name.split("::").next().filter(|m| {
-            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(m)
+            crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(m)
         })
     });
     let fallback_sig = type_name
@@ -814,9 +798,12 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                         })
             );
             if is_string_literal || is_str_param {
-                let asref_str_module =
-                    asref_str_module_for_receiver(gen, runtime_module, type_name);
-                let needs_to_string = !asref_str_module
+                let skips_owned_literal =
+                    crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+                        fallback_sig.as_ref(),
+                        i,
+                    );
+                let needs_to_string = !skips_owned_literal
                     && !gen.inline_module_qualified_call(&qualified_name)
                     && !crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
                         &qualified_name,
@@ -887,8 +874,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
             }
             arg_str = borrow_runtime_std_str_arg(
                 gen,
-                runtime_module,
-                type_name,
+                &qualified_name,
+                fallback_sig.as_ref(),
+                i,
                 arg_to_generate,
                 arg_str,
             );
