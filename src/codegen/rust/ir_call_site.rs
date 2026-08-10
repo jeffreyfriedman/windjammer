@@ -3561,5 +3561,8 @@ fn main() {
         assert!(!CodeGenerator::is_module_boundary_callee("HashMap::new"));
         assert!(!CodeGenerator::is_module_boundary_callee("Self::new"));
         assert!(!CodeGenerator::is_module_boundary_callee("plain_fn"));
+        // Same-crate paths resolve via bare-name registry entries (WDB-094).
+        assert!(!CodeGenerator::is_module_boundary_callee("crate::circuit_row::copy_rows"));
+        assert!(!CodeGenerator::is_module_boundary_callee("crate::vec_map::vec_map_get_f64"));
     }
 }
