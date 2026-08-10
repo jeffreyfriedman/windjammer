@@ -1380,19 +1380,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     false
                 } else if let Some(ref sig) = signature {
                     let method = func_name.rsplit("::").next();
-                    let is_constructor = func_name == "new" || func_name.ends_with("::new");
                     if sig.is_extern {
                         sig.param_types.get(i).is_some_and(|ty| {
                             crate::codegen::rust::string_utilities::param_is_owned_string_type(ty)
                         })
-                    } else if is_constructor
-                        && sig.param_types.get(i).is_some_and(
-                            crate::codegen::rust::types::is_windjammer_text_type,
-                        )
-                    {
-                        // Constructor string params use struct-literal storage in the
-                        // callee body — literals are passed as &str at the call site.
-                        false
                     } else if signature_from_simple_fallback && {
                         let qualifier = func_name.split("::").next().unwrap_or("");
                         qualifier.chars().next().is_some_and(|c| c.is_lowercase())
@@ -1417,9 +1408,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         )
                     }
                 } else {
-                    // No signature found — check enum variant registry
-                    // WINDJAMMER FIX: Enum variant constructors like GameEvent::ItemPickup("text")
-                    // need .to_string() when the variant field is String type
+                    // No signature: enum variant fields, or type-qualified associated calls
+                    // without WJ meta (external path deps). Never guess from method names.
                     if let Some(variant_types) = gen.enum_variant_types.get(func_name) {
                         // TDD FIX: Check for both Type::String and Type::Custom("String")
                         variant_types.get(i).is_some_and(|ty| {
@@ -1427,8 +1417,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 || matches!(ty, Type::Custom(name) if name == "String")
                         })
                     } else {
-                        // Fallback heuristic for constructors
-                        func_name == "new" || func_name.ends_with("::new")
+                        crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+                            func_name,
+                            i,
+                            None,
+                            &gen.signature_registry,
+                            gen.global_signature_registry.as_deref(),
+                        )
                     }
                 };
 
@@ -2114,7 +2109,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             // value. Only add `&` when callee analysis converged to borrow (&str).
                             if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
                                 func_name,
-                            ) && !sig.has_self_receiver && func_name.ends_with("::new")
+                            ) && !sig.has_self_receiver
                             {
                                 if let Expression::Identifier { name, .. } = arg {
                                     let is_caller_owned_string = gen
