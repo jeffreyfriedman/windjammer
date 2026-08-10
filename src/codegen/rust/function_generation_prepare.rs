@@ -6756,12 +6756,12 @@ impl<'ast> CodeGenerator<'ast> {
                     .infer_type_name(object)
                     .as_deref()
                     .and_then(crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type)
-                    .is_some_and(crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str)
+                    .is_some_and(crate::codegen::rust::stdlib_method_traits::is_runtime_std_module)
                     || matches!(
                         &**object,
                         Expression::Identifier { name, .. }
                             if self.is_imported_runtime_std_module(name)
-                                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                                     name,
                                 )
                                 || self.param_type_is_asref_runtime_receiver(name)
@@ -6857,7 +6857,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &**object,
                 Expression::Identifier { name, .. }
                     if self.is_imported_runtime_std_module(name)
-                        || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                        || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                             name,
                         )
                         || self.param_type_is_asref_runtime_receiver(name)
@@ -6870,7 +6870,7 @@ impl<'ast> CodeGenerator<'ast> {
                         name,
                     );
                 name.contains("db::")
-                    || crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str(
+                    || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                         module,
                     )
                     || self.is_imported_runtime_std_module(module)
@@ -6890,7 +6890,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Custom(tn) => {
                     crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type(tn)
                         .is_some_and(
-                            crate::codegen::rust::stdlib_method_traits::runtime_std_module_uses_asref_str,
+                            crate::codegen::rust::stdlib_method_traits::is_runtime_std_module,
                         )
                 }
                 _ => false,
