@@ -2095,7 +2095,6 @@ impl BuildFingerprint {
             spawn_call,
             "args",
             None,
-            false,
             None,
             Some(2),
         );

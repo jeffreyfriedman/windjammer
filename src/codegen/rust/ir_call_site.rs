@@ -31,6 +31,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
+    ///
+    /// For known callees this is total: always returns `Some` when `call_sites` is on.
+    /// Missing signatures at module boundaries are recorded as hard errors (fail closed).
     pub(crate) fn apply_ir_call_site_coercion(
         &self,
         registry: &SignatureRegistry,
@@ -39,43 +42,10 @@ impl<'ast> CodeGenerator<'ast> {
         arg_expr: &Expression<'ast>,
         arg_str: &str,
         local_sig: Option<&crate::analyzer::FunctionSignature>,
-        skip_on_ownership_collision: bool,
         receiver_type_name: Option<&str>,
         user_arg_count: Option<usize>,
     ) -> Option<String> {
         if !self.ir_cutover.call_sites {
-            return None;
-        }
-
-        let simple_callee = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        let local_emitted_mut = self
-            .function_emitted_mut_arg_indices
-            .get(callee_name)
-            .or_else(|| self.function_emitted_mut_arg_indices.get(simple_callee))
-            .is_some_and(|indices| indices.contains(&arg_index));
-        let has_preregistered_local_callee = [callee_name, simple_callee].iter().any(|name| {
-            registry
-                .get_signature(name)
-                .is_some_and(|sig| sig.emitted_rust_ref_params.is_some())
-        });
-        if skip_on_ownership_collision
-            && crate::codegen::rust::call_signature_resolution::has_ownership_collision_for_call(
-                self, callee_name,
-            )
-            && !local_emitted_mut
-            && !has_preregistered_local_callee
-            // Global defining-module refresh also counts — String→&str multipass must not
-            // force the non-IR path that strips `&` (regression-049 replay_to_lsn).
-            && !self
-                .global_signature_registry
-                .as_ref()
-                .is_some_and(|g| {
-                    [callee_name, simple_callee].iter().any(|name| {
-                        g.get_signature(name)
-                            .is_some_and(|sig| sig.emitted_rust_ref_params.is_some())
-                    })
-                })
-        {
             return None;
         }
 
@@ -184,19 +154,16 @@ impl<'ast> CodeGenerator<'ast> {
 
         let method_simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
 
-        // Module-qualified free calls (`draw::draw_text`): without an exact-key
-        // signature for this module path, do not coerce string literals from
-        // *cross-module* homonyms. Same-unit inline `mod` callees often register
-        // only the bare name — allow that fallback instead of failing closed.
-        if crate::codegen::rust::call_signature_resolution::is_lowercase_user_module_qualified_call(
-            callee_name,
-        ) && matches!(
-            arg_expr,
-            Expression::Literal {
-                value: Literal::String(_),
-                ..
-            }
-        ) {
+        // Module-qualified free calls without an exact registry key: fail closed.
+        // Do not coerce from cross-module homonyms or guess ownership. Inline `mod`
+        // callees may register only the bare name — allow that fallback.
+        if Self::is_module_boundary_callee(callee_name)
+            && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
+                crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+                    callee_name,
+                ),
+            )
+        {
             let has_exact_module_sig = registry.get_signature(callee_name).is_some()
                 || self
                     .global_signature_registry
@@ -210,6 +177,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(|g| g.get_signature(method_simple).is_some())
                     || local_sig.is_some());
             if !has_exact_module_sig && !has_inline_simple_sig {
+                self.report_missing_boundary_signature(callee_name);
                 return Some(prepared_arg);
             }
         }
@@ -450,6 +418,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         let Some(mut sig) = sig
         else {
+            // Unresolved non-boundary callees (stdlib Pattern, bare names): finish
+            // via runtime/registry helpers — never name-based ownership guesses.
             let mut finished = self.finish_runtime_std_call_arg(
                 callee_name,
                 arg_index,
@@ -3503,5 +3473,93 @@ fn safety_type_from_arg_expression(expr: &Expression) -> SafetyType {
             SafetyType::borrowed(BaseType::Inferred, Region::fresh(3))
         }
         _ => SafetyType::owned(BaseType::Inferred),
+    }
+}
+
+#[cfg(test)]
+mod ir_total_tests {
+    use super::*;
+    use crate::analyzer::{Analyzer, OwnershipMode};
+    use crate::codegen::rust::{CodeGenerator, IrCutoverConfig};
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use crate::CompilationTarget;
+
+    #[test]
+    fn apply_ir_returns_some_when_call_sites_on_for_known_callee() {
+        let source = r#"
+fn takes_borrowed(s: string) {}
+fn main() {
+    let x = "hi"
+    takes_borrowed(x)
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, mut registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let _ = analyzed;
+        // Ensure Borrowed formal is visible to IR.
+        let sig = registry
+            .signatures
+            .get_mut("takes_borrowed")
+            .expect("takes_borrowed signature from analyzer");
+        sig.param_ownership = vec![OwnershipMode::Borrowed];
+        sig.emitted_rust_ref_params = Some(vec![true]);
+
+        let mut gen = CodeGenerator::new(registry.clone(), CompilationTarget::Rust);
+        gen.ir_cutover = IrCutoverConfig {
+            ownership: true,
+            clones: true,
+            param_types: true,
+            str_ref: true,
+            call_sites: true,
+            locals: true,
+        };
+
+        let call_arg = program.items.iter().find_map(|item| {
+            if let crate::parser::Item::Function { decl, .. } = item {
+                if decl.name != "main" {
+                    return None;
+                }
+                decl.body.iter().find_map(|stmt| {
+                    if let crate::parser::Statement::Expression { expr, .. } = stmt {
+                        if let Expression::Call { arguments, .. } = expr {
+                            return arguments.first().map(|(_, a)| *a);
+                        }
+                    }
+                    None
+                })
+            } else {
+                None
+            }
+        })
+        .expect("call arg");
+
+        let coerced = gen.apply_ir_call_site_coercion(
+            &registry,
+            "takes_borrowed",
+            0,
+            call_arg,
+            "x",
+            registry.get_signature("takes_borrowed"),
+            None,
+            Some(1),
+        );
+        assert!(
+            coerced.is_some(),
+            "IR must always coerce known callees when call_sites is on"
+        );
+    }
+
+    #[test]
+    fn module_boundary_callee_detection() {
+        assert!(CodeGenerator::is_module_boundary_callee("unknown_crate::missing_api"));
+        assert!(CodeGenerator::is_module_boundary_callee("wal::replay_to_lsn"));
+        assert!(!CodeGenerator::is_module_boundary_callee("HashMap::new"));
+        assert!(!CodeGenerator::is_module_boundary_callee("Self::new"));
+        assert!(!CodeGenerator::is_module_boundary_callee("plain_fn"));
     }
 }

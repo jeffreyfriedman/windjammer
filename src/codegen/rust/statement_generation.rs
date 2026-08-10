@@ -1227,9 +1227,28 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when matching on `Option<&T>` where `T: Copy` (e.g. `map.get(&key)` → use `.copied()`).
+    /// Dual AST forms for `recv.method(...)`: `MethodCall` or `Call(FieldAccess)`.
+    fn method_call_receiver_and_name<'b>(
+        expr: &'b Expression<'ast>,
+    ) -> Option<(&'b Expression<'ast>, &'b str)> {
+        match expr {
+            Expression::MethodCall { object, method, .. } => Some((*object, method.as_str())),
+            Expression::Call {
+                function:
+                    Expression::FieldAccess {
+                        object,
+                        field,
+                        ..
+                    },
+                ..
+            } => Some((*object, field.as_str())),
+            _ => None,
+        }
+    }
+
     pub(in crate::codegen::rust) fn match_scrutinee_option_yields_copy(
         &self,
-        expr: &Expression,
+        expr: &Expression<'ast>,
     ) -> bool {
         if let Some(ty) = self.infer_expression_type(expr) {
             if let Type::Option(inner) = ty {
@@ -1246,7 +1265,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Fallback: map shared-get returns `Option<&V>` in Rust. When inference loses the
         // inner Reference wrap, still use `.copied()` for Copy `V` via signature registry.
-        if let Expression::MethodCall { object, method, .. } = expr {
+        if let Some((object, method)) = Self::method_call_receiver_and_name(expr) {
             let receiver_type = self
                 .infer_type_name(object)
                 .or_else(|| self.infer_indexed_element_type_name(object));
@@ -1266,35 +1285,15 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-            }
-        }
-        false
-    }
-
-    /// Borrow-break on `self.method()` returning `Option<&Copy>` should use `.copied()`.
-    pub(in crate::codegen::rust) fn match_borrow_break_yields_ref_copy_binding(
-        &self,
-        expr: &Expression,
-    ) -> bool {
-        if self.match_scrutinee_option_yields_copy(expr) {
-            return true;
-        }
-        if let Expression::MethodCall { object, method, .. } = expr {
-            let receiver_type = self
-                .infer_type_name(object)
-                .or_else(|| self.infer_indexed_element_type_name(object));
-            if crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
-                method,
-                receiver_type.as_deref(),
-                &self.signature_registry,
-            ) {
+                // Struct field `self.map: Map<K, V>` — value type may only live in
+                // the field-type registry when expression inference loses generics.
                 if let Expression::FieldAccess {
                     object: root,
                     field,
                     ..
-                } = &**object
+                } = object
                 {
-                    if matches!(&**root, Expression::Identifier { name, .. } if name == "self") {
+                    if matches!(root, Expression::Identifier { name, .. } if name == "self") {
                         if let Some(struct_name) = &self.current_struct_name {
                             let base = struct_name.split('<').next().unwrap_or(struct_name);
                             if let Some(fields) = self.lookup_struct_field_types(base) {
@@ -1312,6 +1311,81 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// Borrow-break on `self.method()` returning `Option<&Copy>` should use `.copied()`.
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_ref_copy_binding(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        if self.match_scrutinee_option_yields_copy(expr) {
+            return true;
+        }
+        let Some((object, method)) = Self::method_call_receiver_and_name(expr) else {
+            return false;
+        };
+        // `self.field.get(key)` on Map/HashMap<_, Copy>: prefer field-type registry.
+        // Local signature registries often lack `Map::get` on the first multipass;
+        // fall back to stdlib `HashMap::get` / field generics.
+        if let Expression::FieldAccess {
+            object: root,
+            field,
+            ..
+        } = object
+        {
+            if matches!(root, Expression::Identifier { name, .. } if name == "self") {
+                if let Some(struct_name) = &self.current_struct_name {
+                    let base = struct_name.split('<').next().unwrap_or(struct_name);
+                    if let Some(fields) = self.lookup_struct_field_types(base) {
+                        if let Some(field_ty) = fields.get(field.as_str()) {
+                            let bare = match field_ty {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    inner.as_ref()
+                                }
+                                other => other,
+                            };
+                            if let Type::Parameterized(map_name, args) = bare {
+                                if crate::codegen::rust::stdlib_method_traits::is_map_type_name(
+                                    map_name,
+                                ) && args.len() >= 2
+                                    && self.is_type_copy(&args[1])
+                                {
+                                    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+                                    let is_shared_get = crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                                        method,
+                                        Some(map_name.as_str()),
+                                        &self.signature_registry,
+                                    ) || crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                                        method,
+                                        Some(map_name.as_str()),
+                                        &stdlib,
+                                    ) || crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+                                        method,
+                                        Some("HashMap"),
+                                        &stdlib,
+                                    );
+                                    if is_shared_get {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let receiver_type = self
+            .infer_type_name(object)
+            .or_else(|| self.infer_indexed_element_type_name(object));
+        crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+            method,
+            receiver_type.as_deref(),
+            &self.signature_registry,
+        ) || crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+            method,
+            receiver_type.as_deref(),
+            &crate::analyzer::SignatureRegistry::stdlib(),
+        )
     }
 
     /// Borrow-break on `self.method()` returning owned `Option<Copy>` — match directly, no `.copied()`.

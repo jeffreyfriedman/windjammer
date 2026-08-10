@@ -230,7 +230,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     arg,
                     &arg_str,
                     signature.as_ref(),
-                    has_ownership_collision,
                     associated_receiver.as_deref(),
                     Some(arguments.len()),
                 ) {
@@ -1258,6 +1257,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     }
                     return vec![coerced];
                 }
+                debug_assert!(
+                    false,
+                    "IR call-site coercion must be total for non-extern callees when call_sites is on ({func_name})"
+                );
                 let callee_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                     signature.clone(),
                     gen.global_signature_registry

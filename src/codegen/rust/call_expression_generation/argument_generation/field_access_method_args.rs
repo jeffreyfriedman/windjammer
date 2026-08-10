@@ -270,7 +270,6 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                     arg_to_generate,
                     &arg_str,
                     Some(sig),
-                    false,
                     type_name.as_deref(),
                     Some(arguments.len()),
                 ) {
@@ -740,7 +739,6 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     arg_to_generate,
                     &arg_str,
                     fallback_sig.as_ref(),
-                    false,
                     type_name.as_deref(),
                     None,
                 ) {
