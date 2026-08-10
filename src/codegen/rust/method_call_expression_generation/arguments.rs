@@ -468,7 +468,6 @@ impl<'ast> CodeGenerator<'ast> {
                         arg_to_generate,
                         &arg_str,
                         sig_for_effective,
-                        false,
                         receiver_for_ir.as_deref(),
                         Some(arguments.len()),
                     ) {
@@ -1196,6 +1195,10 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         return coerced;
                     }
+                    debug_assert!(
+                        false,
+                        "IR call-site coercion must be total when call_sites is on ({qualified_callee})"
+                    );
                 }
 
                 let callee_wants_str_borrow = call_site_sig.as_ref().is_some_and(|sig| {

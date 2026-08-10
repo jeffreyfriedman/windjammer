@@ -235,8 +235,10 @@ pub fn type_qualified_associated_string_literal_needs_rust_owned_string(
     if let Some(s) = resolved {
         return call_site_param_expects_owned_string(s, arg_index);
     }
-    // Unknown extern associated call with no metadata — conservative owned literal.
-    true
+    // Unknown associated call with no metadata — do not guess owned literals.
+    // Boundary / cross-crate callees must supply signatures; rustc or boundary
+    // hard-errors catch gaps (no name-based ownership heuristics).
+    false
 }
 
 /// Bare string literals on instance method calls (`table.empty_message("lit")`) must
@@ -283,8 +285,8 @@ pub fn unresolved_instance_method_string_literal_needs_rust_owned_string(
         return false;
     }
 
-    // Unknown extern instance method with no metadata — conservative owned literal.
-    true
+    // Unknown instance method with no metadata — do not guess owned literals.
+    false
 }
 
 /// Parameter type is `&String` — a reference to an owned String.
@@ -977,9 +979,9 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_builder_method_literal_needs_owned_without_sig() {
+    fn unresolved_builder_method_literal_does_not_guess_owned() {
         assert!(
-            unresolved_instance_method_string_literal_needs_rust_owned_string(
+            !unresolved_instance_method_string_literal_needs_rust_owned_string(
                 "empty_message",
                 0,
                 None,
@@ -987,7 +989,7 @@ mod tests {
                 None,
                 Some("Table"),
             ),
-            "cross-crate builder with no WJ sig must auto-own bare lit"
+            "missing signature must not guess owned literals"
         );
     }
 
@@ -1018,9 +1020,9 @@ mod tests {
     }
 
     #[test]
-    fn receiver_known_unresolved_builder_coerces_via_string_literal_predicate() {
+    fn receiver_known_unresolved_builder_does_not_guess_owned() {
         assert!(
-            string_literal_needs_owned_coercion_with_enum(
+            !string_literal_needs_owned_coercion_with_enum(
                 None,
                 0,
                 Some("empty_message"),
@@ -1028,7 +1030,7 @@ mod tests {
                 None,
                 None,
             ),
-            "receiver+method without sig must coerce for cross-crate builders"
+            "receiver+method without sig must not guess owned coercion"
         );
     }
 

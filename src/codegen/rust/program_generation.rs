@@ -937,6 +937,15 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
         output.push_str(&body);
 
+        // Fail closed: missing signatures at module boundaries must not silently
+        // fall back to name-based ownership guesses.
+        let boundary_errors = self.boundary_signature_errors.borrow();
+        if !boundary_errors.is_empty() {
+            let joined = boundary_errors.join("; ");
+            return format!("compile_error!({joined:?});\n{output}");
+        }
+        drop(boundary_errors);
+
         if std::env::var("WJ_EMIT_AOSOA_HINTS").ok().as_deref() == Some("1") {
             let hints = crate::codegen::rust::aosoa_transform::emit_aosoa_hints(program, analyzed);
             if !hints.is_empty() {

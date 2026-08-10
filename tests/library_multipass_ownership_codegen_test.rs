@@ -2773,8 +2773,10 @@ pub fn create_metal_material() -> Material {
     let rs = map.get("rendering/material.rs").expect("material.rs");
 
     assert!(
-        rs.contains("set_name(\"Metal\".to_string())") || rs.contains("set_name(\"Metal\".into())"),
-        "owned String param needs allocation from literal. Got:\n{rs}"
+        rs.contains("set_name(\"Metal\".to_string())")
+            || rs.contains("set_name(\"Metal\".into())")
+            || (rs.contains("name: &str") && rs.contains("set_name(\"Metal\")")),
+        "owned String or IR &str formal must accept string literal. Got:\n{rs}"
     );
 }
 
