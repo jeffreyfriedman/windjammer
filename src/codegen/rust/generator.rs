@@ -341,6 +341,8 @@ pub struct CodeGenerator<'ast> {
     /// Full IR module (all functions), set when cutover is active. Functions are looked up
     /// by name when codegen begins processing each AnalyzedFunction.
     pub(crate) ir_module_functions: Vec<crate::ir::IrFunction>,
+    /// Hard errors for boundary calls with no registry signature (fail closed — no guesses).
+    pub(crate) boundary_signature_errors: std::cell::RefCell<Vec<String>>,
 }
 
 /// Configuration for incremental IR cutover.
@@ -592,6 +594,7 @@ impl<'ast> CodeGenerator<'ast> {
             ir_cutover: IrCutoverConfig::from_env(),
             current_ir_function: None,
             ir_module_functions: Vec::new(),
+            boundary_signature_errors: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -1089,29 +1092,75 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed.inferred_ownership.get(param_name).copied()
     }
 
-    /// Ownership for formal demotion / str_ref: analyzer `Borrowed`/`MutBorrowed` beats stale IR `Owned`.
+    /// Definitive IR param ownership (excludes `OwnedType::Inferred`).
+    /// When present, formals must not re-walk the body for keep-owned heuristics.
+    pub(crate) fn ir_param_ownership_definitive(
+        &self,
+        param_name: &str,
+    ) -> Option<OwnershipMode> {
+        if !self.ir_cutover.ownership {
+            return None;
+        }
+        let ir_fn = self.current_ir_function.as_ref()?;
+        let safety_ty = ir_fn.param_types.get(param_name)?;
+        if matches!(
+            safety_ty.ownership,
+            crate::ir::safety_type::OwnedType::Inferred
+        ) {
+            return None;
+        }
+        Some(owned_type_to_ownership_mode(&safety_ty.ownership))
+    }
+
+    /// Ownership for formal demotion / str_ref.
     ///
-    /// The solver may leave plain `string` or readonly aggregates as `Owned` while multipass
-    /// convergence and the analyzer already settled on shared/mut borrows. Codegen must trust
-    /// the analyzer contract for emitted Rust formals (`&str`, `&Vec<T>`, `&mut Grid`, …).
+    /// Prefer definitive IR borrows (`Ref` / `MutRef`). Analyzer `Borrowed` /
+    /// `MutBorrowed` still beats stale IR `Owned` (solver often leaves Owned
+    /// before multipass convergence). Body-walk keep-owned must not override
+    /// IR borrows — see `ir_param_ownership_definitive` at formal emit.
     pub(crate) fn param_ownership_for_formal_demotion(
         &self,
         param_name: &str,
         analyzed: &AnalyzedFunction<'_>,
     ) -> Option<OwnershipMode> {
         let analyzer = analyzed.inferred_ownership.get(param_name).copied();
-        let ir = self.get_param_ownership(param_name, analyzed);
+        let ir = self.ir_param_ownership_definitive(param_name);
         match (analyzer, ir) {
+            (_, Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)) => ir,
             (
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
-                Some(OwnershipMode::Owned),
+                Some(OwnershipMode::Owned) | None,
             ) => analyzer,
-            (
-                Some(OwnershipMode::Owned),
-                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
-            ) => analyzer,
-            _ => ir.or(analyzer),
+            (_, Some(OwnershipMode::Owned)) => ir,
+            _ => analyzer.or_else(|| self.get_param_ownership(param_name, analyzed)),
         }
+    }
+
+    /// Record a hard error for a module-qualified call with no registry signature.
+    pub(crate) fn report_missing_boundary_signature(&self, callee_name: &str) {
+        let msg = format!("missing boundary signature for `{callee_name}`");
+        let mut errors = self.boundary_signature_errors.borrow_mut();
+        if !errors.iter().any(|e| e == &msg) {
+            errors.push(msg);
+        }
+    }
+
+    /// Module-qualified free-function path (not `Type::method` / `Self::method`).
+    pub(crate) fn is_module_boundary_callee(callee_name: &str) -> bool {
+        let Some((qualifier, _)) = callee_name.rsplit_once("::") else {
+            return false;
+        };
+        if qualifier == "Self" || qualifier.ends_with("::Self") {
+            return false;
+        }
+        let last = qualifier.rsplit("::").next().unwrap_or(qualifier);
+        last.chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+    }
+
+    pub fn ir_cutover_call_sites_enabled(&self) -> bool {
+        self.ir_cutover.call_sites
     }
 
     /// Check if a parameter name has ownership info (in IR or analyzer).
@@ -1160,32 +1209,34 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Get the effective inferred param type at a given index, preferring IR when cutover is enabled.
-    /// Falls back to the analyzer's `inferred_param_types` when IR cutover is off or IR has no data.
+    ///
+    /// When `param_types` cutover is on and IR has a resolved base type, emit from the
+    /// analyzer's inferred parser Type that matches that IR binding (same source of truth
+    /// as ownership cutover). Falls back to analyzer / declared type otherwise.
     pub(crate) fn get_effective_param_type<'b>(
         &self,
         param_idx: usize,
         param: &'b Parameter<'ast>,
         analyzed: &'b AnalyzedFunction<'ast>,
     ) -> &'b Type {
-        if self.ir_cutover.param_types {
-            if let Some(ir_fn) = &self.current_ir_function {
-                if let Some(safety_ty) = ir_fn.param_types.get(&param.name) {
-                    if safety_ty.base != crate::ir::safety_type::BaseType::Inferred {
-                        // IR has a resolved type — use the analyzer's inferred type
-                        // (which is the parser Type representation of the same data).
-                        // The IR and analyzer should agree; the IR just confirms it.
-                        return analyzed
-                            .inferred_param_types
-                            .get(param_idx)
-                            .unwrap_or(&param.type_);
-                    }
-                }
-            }
-        }
-        analyzed
+        let analyzer_ty = analyzed
             .inferred_param_types
             .get(param_idx)
-            .unwrap_or(&param.type_)
+            .unwrap_or(&param.type_);
+        if !self.ir_cutover.param_types {
+            return analyzer_ty;
+        }
+        let Some(ir_fn) = self.current_ir_function.as_ref() else {
+            return analyzer_ty;
+        };
+        let Some(safety_ty) = ir_fn.param_types.get(&param.name) else {
+            return analyzer_ty;
+        };
+        if safety_ty.base == crate::ir::safety_type::BaseType::Inferred {
+            return analyzer_ty;
+        }
+        // IR resolved — analyzer inferred type is the parser projection of the same binding.
+        analyzer_ty
     }
 
     /// Attach the converged crate-wide registry for lookup fallback (library multipass codegen).

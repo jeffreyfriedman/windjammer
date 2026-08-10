@@ -164,7 +164,7 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
 
-                // SMART STRING INFERENCE: Use the inferred type from analyzer (string → &str vs String)
+                // SMART STRING INFERENCE: Prefer IR-confirmed param types when cutover is on.
                 let inferred_type = if payload_forces_owned
                     || matches!(
                         analyzed.inferred_ownership.get(&param.name),
@@ -175,10 +175,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     &param.type_
                 } else {
-                    analyzed
-                        .inferred_param_types
-                        .get(param_idx)
-                        .unwrap_or(&param.type_)
+                    self.get_effective_param_type(param_idx, param, analyzed)
                 };
 
                 // E0053: Trait impl formal parameters must match the trait item. Plain `string` in
@@ -1687,7 +1684,21 @@ impl<'ast> CodeGenerator<'ast> {
                             );
                             // Reuse outer `borrow_delegation` — do not re-enter
                             // `param_should_emit_borrowed_delegation_formal` (stack overflow).
-                            let keep_owned_contract = payload_forces_owned
+                            // Prefer definitive IR borrows over body-walk keep-owned.
+                            // IR Owned still allows keep-owned / analyzer demotion until
+                            // the solver fully replaces those contracts.
+                            let ir_borrow = self.ir_param_ownership_definitive(&param.name).filter(
+                                |m| {
+                                    matches!(
+                                        m,
+                                        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                    )
+                                },
+                            );
+                            let keep_owned_contract = if ir_borrow.is_some() {
+                                false
+                            } else {
+                                payload_forces_owned
                                 || discard_keep_owned
                                 || keep_owned_facade
                                 || (self.current_fn_mixed_forwarder_params.contains(&param.name)
@@ -1712,14 +1723,17 @@ impl<'ast> CodeGenerator<'ast> {
                                     && !self.associated_text_identity_return_may_borrow(
                                         func, param, analyzed,
                                     ))
-                                || (moves_via_struct_init && !vec_store_borrow_ok && !borrow_delegation);
+                                || (moves_via_struct_init && !vec_store_borrow_ok && !borrow_delegation)
+                            };
                             // Mutated / MutBorrowed formals must not be forced Owned by facade
                             // keep-owned heuristics (Copy aggregate field writes need `&mut T`).
                             let keep_owned_contract = keep_owned_contract
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name));
-                            if payload_forces_owned
+                            if let Some(ir_mode) = ir_borrow {
+                                ownership_mode = ir_mode;
+                            } else if payload_forces_owned
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name))
