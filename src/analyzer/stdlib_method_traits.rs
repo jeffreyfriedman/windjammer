@@ -498,13 +498,19 @@ pub fn method_is_closure_taking_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        return sig_is_closure_taking(sig);
+    if let Some(recv) = receiver_type {
+        if let Some(sig) = lookup_sig(method, Some(recv), registry) {
+            return sig_is_closure_taking(sig);
+        }
+        // Collection iterator adapters: `Vec::find` isn't registered; `Iterator::find` is.
+        // Homonym `String::find(char)` is resolved above and returns false for fn-ptr args.
+        let stdlib = SignatureRegistry::stdlib();
+        if lookup_sig(method, Some("Iterator"), &stdlib).is_some_and(sig_is_closure_taking) {
+            return true;
+        }
+        return lookup_unqualified(method, registry).is_some_and(sig_is_closure_taking);
     }
-    if receiver_type.is_none() {
-        return consensus_closure_taking_method(method, registry);
-    }
-    lookup_unqualified(method, registry).is_some_and(sig_is_closure_taking)
+    consensus_closure_taking_method(method, registry)
 }
 
 /// String search methods (`starts_with`, `ends_with`, `contains`) whose first arg is `&str`.

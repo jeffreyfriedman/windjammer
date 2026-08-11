@@ -158,11 +158,14 @@ For every coercion rule or constraint change:
 ### Phase 5 progress (2026-08-10)
 
 - **IR total for known callees:** `apply_ir_call_site_coercion` no longer returns `None` on ownership-collision deferral; `skip_on_ownership_collision` removed.
-- **Formals from IR:** when `OwnedType` is definitive, skip body-walk `keep_owned_contract`; prefer `ir_param_ownership_definitive` / `get_effective_param_type`.
+- **Formals from IR:** when `OwnedType` is definitive borrow, skip body-walk `keep_owned_contract`; prefer `ir_param_ownership_definitive` / `get_effective_param_type`.
 - **Missing boundary signatures:** module-qualified callees without an exact registry key emit `compile_error!("missing boundary signature for …")` — no name-based ownership guesses.
-- **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`.
+- **Deleted `typed_lowering::correct_legacy_output`** and all call sites; deleted `function_call_generation` `!call_sites` legacy auto-borrow block; removed `Vec::new()` string-prefix borrow heuristic.
+- **Field-access fallback early-returns on IR** (no post-IR legacy double-patch); Copy-aggregate owned formal checks DRY'd into `call_site_borrow::{bare_type,sig_formal}_is_copy_aggregate_owned`.
+- **Owned string formals:** `payload_forces_owned` beats stale IR Borrowed unless `str_ref_params` hints; `call_site_param_expects_owned_string` respects runtime/`&str` skips (`strings::starts_with`).
+- **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`.
 
-Remaining: shrink/delete `typed_lowering::correct_legacy_output` and leftover legacy call-site phases once dogfood stays green.
+Remaining: fold post-IR mut-borrow / owned-peel clusters from `regular_call_arguments` / method `arguments` into `ir_call_site::finalize_post_ir_call_arg`; delete unreachable legacy tails when cutover is on.
 
 ## Related Documentation
 

@@ -730,9 +730,10 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
             arg_str =
                 gen.peel_copy_ref_match_binding_for_value(arg_to_generate, &arg_str);
 
-            let mut ir_applied = false;
+            // Phase 5: IR owns coercion when call_sites is on — return early like
+            // `field_access_method_args_with_signature` (no legacy double-patch).
             if gen.ir_cutover.call_sites {
-                if let Some(coerced) = gen.apply_ir_call_site_coercion(
+                if let Some(mut coerced) = gen.apply_ir_call_site_coercion(
                     &gen.signature_registry,
                     &qualified_name,
                     i,
@@ -742,8 +743,26 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     type_name.as_deref(),
                     None,
                 ) {
-                    arg_str = coerced;
-                    ir_applied = true;
+                    if let Some(ref sig) = fallback_sig {
+                        coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+                            gen,
+                            sig,
+                            i,
+                            arg_to_generate,
+                            coerced,
+                            type_name.as_deref(),
+                            Some(call_method),
+                            Some(arguments.len()),
+                        );
+                    }
+                    coerced = maybe_borrow_runtime_std_json_value_arg(
+                        gen,
+                        &qualified_name,
+                        i,
+                        arg_to_generate,
+                        coerced,
+                    );
+                    gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut coerced);
                     if matches!(
                         arg_to_generate,
                         Expression::Literal {
@@ -756,15 +775,23 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                         fallback_sig.as_ref(),
                         &gen.signature_registry,
                         gen.global_signature_registry.as_deref(),
-                    ) && !arg_str.ends_with(".to_string()")
-                        && !arg_str.ends_with(".to_owned()")
+                    ) && !coerced.ends_with(".to_string()")
+                        && !coerced.ends_with(".to_owned()")
                     {
-                        arg_str = format!(
+                        coerced = format!(
                             "{}.to_string()",
-                            arg_str.trim_start_matches('&')
+                            coerced.trim_start_matches('&')
                         );
                     }
+                    if let Some(ref sig) = fallback_sig {
+                        coerce_usize_formal_arg(gen, sig, i, arg_to_generate, &mut coerced);
+                    }
+                    return coerced;
                 }
+                debug_assert!(
+                    false,
+                    "IR call-site coercion must be total when call_sites is on ({qualified_name})"
+                );
             }
 
             arg_str = maybe_borrow_runtime_std_json_value_arg(
@@ -829,8 +856,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 }
             }
 
-            let should_ref = !ir_applied
-                && crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
+            let should_ref =
+                crate::codegen::rust::method_call_analyzer::MethodCallAnalyzer::should_add_ref(
                     arg_to_generate,
                     &arg_str,
                     call_method,
@@ -910,7 +937,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 });
                 let is_instance_call =
                     type_name.is_some() && !is_static_associated_call;
-                if !ir_applied && is_instance_call && !is_copy_literal {
+                if is_instance_call && !is_copy_literal {
                     let is_non_copy_value = gen
                         .infer_expression_type(arg_to_generate)
                         .as_ref()
@@ -973,34 +1000,6 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 type_name.as_deref(),
                 false,
             );
-            if !gen.ir_cutover.call_sites
-                && crate::codegen::rust::typed_lowering::is_typed_lowering_enabled()
-            {
-                if let Some(ref sig) = fallback_sig {
-                    let pidx = sig.arg_param_index(i);
-                    let is_formal_copy = sig
-                        .formal_param_type(pidx)
-                        .is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                && gen.is_type_copy(t)
-                        });
-                    let is_coll_key = i == 0
-                        && fallback_sig.as_ref().is_some_and(|sig| {
-                            crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_from_sig(
-                                sig, i,
-                            )
-                        });
-                    crate::codegen::rust::typed_lowering::correct_legacy_output(
-                        sig,
-                        i,
-                        arg_to_generate,
-                        &mut arg_str,
-                        is_formal_copy,
-                        is_coll_key,
-                    );
-                }
-            }
-
             gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut arg_str);
 
             if let Some(ref sig) = fallback_sig {

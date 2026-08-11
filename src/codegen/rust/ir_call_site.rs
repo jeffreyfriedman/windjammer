@@ -220,6 +220,7 @@ impl<'ast> CodeGenerator<'ast> {
             )
         }
         .or_else(|| registry.lookup_method(callee_name).cloned());
+        let sig_for_owned_literal = sig.clone();
         // Upgrade stale owned WJ `string` formals to defining-module `&str` emission.
         // Never consult bare method-name keys for type-qualified calls (`App::record_resource`)
         // — homonyms can replace the whole signature with unrelated Borrowed formals.
@@ -1659,6 +1660,10 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 &sig, param_idx,
             )
+            && !crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
+            && !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &sig, arg_index,
+            )
             && sig
             .param_type_for_arg(arg_index)
             .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref)
@@ -1680,12 +1685,18 @@ impl<'ast> CodeGenerator<'ast> {
                 value: Literal::String(_),
                 ..
             }
-        ) && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
-            && crate::codegen::rust::string_utilities::string_literal_needs_to_string(
-                &sig,
+        ) && !self.ir_sig_arg_expects_shared_borrow(
+            sig_for_owned_literal.as_ref().unwrap_or(&sig),
+            arg_index,
+        )
+            && (crate::codegen::rust::string_utilities::string_literal_needs_to_string(
+                sig_for_owned_literal.as_ref().unwrap_or(&sig),
                 arg_index,
                 Some(callee_module),
-            )
+            ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                sig_for_owned_literal.as_ref().unwrap_or(&sig),
+                arg_index,
+            ))
             && !coerced.ends_with(".to_string()")
         {
             return Some(format!(
@@ -2139,6 +2150,20 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_expr,
                 &mut coerced,
             );
+        }
+        if matches!(
+            arg_expr,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        ) && coerced.starts_with('&')
+            && coerced.ends_with(".to_string()")
+            && (crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &sig, arg_index,
+            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx))
+        {
+            coerced = coerced.trim_start_matches('&').to_string();
         }
         Some(coerced)
     }
@@ -3213,6 +3238,12 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return false;
+        }
+        if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+            sig, arg_index,
+        ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+        {
             return false;
         }
         if sig

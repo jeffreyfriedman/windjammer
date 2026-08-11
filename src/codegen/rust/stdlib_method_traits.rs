@@ -203,6 +203,15 @@ pub fn is_set_type_name(name: &str) -> bool {
     SET_TYPES.contains(&short)
 }
 
+/// Stdlib types whose zero-arg empty ctor clears to Default (writeback take).
+pub fn is_stdlib_default_empty_type(name: &str) -> bool {
+    let base = name.split('<').next().unwrap_or(name);
+    let short = base.rsplit("::").next().unwrap_or(base);
+    is_map_type_name(short)
+        || is_set_type_name(short)
+        || matches!(short, "Vec" | "VecDeque" | "String")
+}
+
 pub fn is_set_type(ty: &crate::parser::Type) -> bool {
     match ty {
         crate::parser::Type::Parameterized(base, _) if is_set_type_name(base) => true,
@@ -828,7 +837,9 @@ pub fn module_qualified_method_name(
     is_imported_runtime_std_module: impl Fn(&str) -> bool,
 ) -> String {
     if let Some(tn) = receiver_type_name {
-        return format!("{tn}::{method}");
+        if tn.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+            return format!("{tn}::{method}");
+        }
     }
     if let Expression::Identifier { name, .. } = object {
         if is_imported_runtime_std_module(name)
@@ -844,13 +855,14 @@ pub fn module_qualified_method_name(
 pub fn is_runtime_std_module(name: &str) -> bool {
     matches!(
         name,
-        "strings"
+        "http"
+            | "server"
+            | "strings"
             | "json"
             | "jwt"
             | "time"
             | "math"
             | "random"
-            | "http"
             | "mime"
             | "subprocess"
             | "async_runtime"
