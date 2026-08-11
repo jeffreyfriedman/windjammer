@@ -163,10 +163,11 @@ For every coercion rule or constraint change:
 - **Deleted `typed_lowering::correct_legacy_output`** and all call sites; deleted `function_call_generation` `!call_sites` legacy auto-borrow block; removed `Vec::new()` string-prefix borrow heuristic.
 - **Field-access fallback early-returns on IR** (no post-IR legacy double-patch); Copy-aggregate owned formal checks DRY'd into `call_site_borrow::{bare_type,sig_formal}_is_copy_aggregate_owned`.
 - **Owned string formals:** `payload_forces_owned` beats stale IR Borrowed unless `str_ref_params` hints; `call_site_param_expects_owned_string` respects runtime/`&str` skips (`strings::starts_with`).
-- **Post-IR DRY:** `reconcile_post_ir_mut_borrow_and_owned_peel` consolidates mut-borrow + owned/recursive peel; `regular_call_arguments` / method `arguments` call it instead of duplicated clusters (~180 LOC net removed).
-- **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`.
+- **Post-IR DRY:** `reconcile_post_ir_mut_borrow_and_owned_peel` consolidates mut-borrow + owned/recursive peel; multi-candidate owned peel lives in `peel_stale_borrow_for_multi_candidate_owned_formal`.
+- **IR-None fail-closed:** when `call_sites` is on and IR returns `None`, emit prepared arg and return — never fall through to legacy ownership tails.
+- **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`.
 
-Remaining: fold string-finalize / multi-candidate owned peel / collection-key tails into IR; delete unreachable legacy paths behind `debug_assert` when cutover is on.
+Remaining: fold string-finalize / collection-key post-IR tails into IR; delete legacy `!call_sites` paths when opt-out is retired.
 
 ## Related Documentation
 

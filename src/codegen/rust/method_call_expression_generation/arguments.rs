@@ -1173,6 +1173,8 @@ impl<'ast> CodeGenerator<'ast> {
                         false,
                         "IR call-site coercion must be total when call_sites is on ({qualified_callee})"
                     );
+                    // Phase 5: never fall through to legacy method-arg ownership path.
+                    return arg_str;
                 }
 
                 let callee_wants_str_borrow = call_site_sig.as_ref().is_some_and(|sig| {

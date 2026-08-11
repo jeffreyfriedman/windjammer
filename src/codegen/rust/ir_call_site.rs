@@ -2545,57 +2545,17 @@ impl<'ast> CodeGenerator<'ast> {
             );
         }
 
-        // Owned formals: strip stale `&` / `&mut` (prefer refreshed contract).
-        let peel_sig =
-            self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, sig);
-        let peel_pidx = peel_sig.arg_param_index(arg_index);
-        let mut_arg_emitted = {
-            let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-            self.function_emitted_mut_arg_indices
-                .get(callee_name)
-                .or_else(|| self.function_emitted_mut_arg_indices.get(simple))
-                .is_some_and(|indices| indices.contains(&arg_index))
-        };
-        let expects_mut = mut_arg_emitted
-            || wants_mut
-            || matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                    &peel_sig, arg_index,
-                ),
-                crate::analyzer::OwnershipMode::MutBorrowed,
-            )
-            || peel_sig.param_types.get(peel_pidx).is_some_and(|t| {
-                matches!(t, Type::MutableReference(_))
-            })
-            || peel_sig.formal_param_type(peel_pidx).is_some_and(|t| {
-                matches!(t, Type::MutableReference(_))
-            });
-        let emits_shared =
-            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                &peel_sig, peel_pidx,
-            );
-        let force_owned = !expects_mut
-            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                &peel_sig, peel_pidx,
-            ) || (!emits_shared
-                && (crate::ir::signature_bridge::call_site_expects_owned_pass(
-                    &peel_sig, peel_pidx,
-                ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                    &peel_sig, arg_index,
-                ))));
-        if force_owned
-            && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-                registry,
-                callee_name,
-                Some(&peel_sig),
-                arg_index,
-            )
-            && (coerced.starts_with("&mut ")
-                || (coerced.starts_with('&') && !coerced.starts_with("&mut ")))
-        {
-            *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-                .to_string();
-        }
+        // Owned formals: strip stale `&` / `&mut`. Prefer *any* layered signature
+        // candidate that confirms owned emission (defining-module refresh beats a
+        // stale Borrowed stub — dogfood `policy: Policy`).
+        self.peel_stale_borrow_for_multi_candidate_owned_formal(
+            coerced,
+            callee_name,
+            arg_index,
+            sig,
+            registry,
+            wants_mut,
+        );
 
         // Recursive same-fn call into owned formal emitted by this function.
         if let Expression::Identifier { name, .. } = arg_expr {
@@ -2610,6 +2570,103 @@ impl<'ast> CodeGenerator<'ast> {
                 && coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
             {
+                *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                    .to_string();
+            }
+        }
+    }
+
+    /// Multi-candidate owned-formal peel: any defining-module / global / local
+    /// signature that confirms owned emission wins over stale Borrowed stubs.
+    /// Signature-driven only — no method-name ownership heuristics.
+    pub(crate) fn peel_stale_borrow_for_multi_candidate_owned_formal(
+        &self,
+        coerced: &mut String,
+        callee_name: &str,
+        arg_index: usize,
+        primary_sig: &crate::analyzer::FunctionSignature,
+        registry: &SignatureRegistry,
+        wants_mut: bool,
+    ) {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let refreshed = self.refreshed_call_site_sig_for_arg(
+            registry,
+            callee_name,
+            arg_index,
+            primary_sig,
+        );
+        let candidates: [Option<&crate::analyzer::FunctionSignature>; 6] = [
+            registry.get_signature(callee_name),
+            registry.get_signature(simple),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(callee_name)),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(simple)),
+            Some(primary_sig),
+            Some(&refreshed),
+        ];
+        let mut_arg_emitted = self
+            .function_emitted_mut_arg_indices
+            .get(callee_name)
+            .or_else(|| self.function_emitted_mut_arg_indices.get(simple))
+            .is_some_and(|indices| indices.contains(&arg_index));
+        let any_emitted_owned = candidates.iter().flatten().any(|sig| {
+            let pidx = sig.arg_param_index(arg_index);
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+        });
+        let any_emits_shared = candidates.iter().flatten().any(|sig| {
+            let pidx = sig.arg_param_index(arg_index);
+            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+        });
+        let any_expects_owned = candidates.iter().flatten().any(|sig| {
+            let pidx = sig.arg_param_index(arg_index);
+            crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+        });
+        let any_expects_mut = wants_mut
+            || mut_arg_emitted
+            || candidates.iter().flatten().any(|sig| {
+                let pidx = sig.arg_param_index(arg_index);
+                matches!(
+                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                        sig, arg_index,
+                    ),
+                    crate::analyzer::OwnershipMode::MutBorrowed,
+                ) || sig.param_types.get(pidx).is_some_and(|t| {
+                    matches!(t, Type::MutableReference(_))
+                }) || sig.formal_param_type(pidx).is_some_and(|t| {
+                    matches!(t, Type::MutableReference(_))
+                })
+            });
+        let peel_owned = (any_emitted_owned || (!any_emits_shared && any_expects_owned))
+            && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                registry,
+                callee_name,
+                Some(primary_sig),
+                arg_index,
+            );
+        // Prefer refreshed / primary for shared-ref confirmation — owned emission among
+        // other layered stubs must not peel a confirmed `&str` / `&T` formal.
+        let confirmed_shared_ref = {
+            let rpidx = refreshed.arg_param_index(arg_index);
+            let ppidx = primary_sig.arg_param_index(arg_index);
+            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &refreshed, rpidx,
+            ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                primary_sig, ppidx,
+            )
+        };
+        // Owned emission wins over a stale Borrowed stub among layered candidates
+        // (dogfood `policy: Policy`). Never peel `&mut` when any candidate expects mut-borrow.
+        if peel_owned && !any_expects_mut && !confirmed_shared_ref {
+            if coerced.starts_with("&mut ") {
+                if any_emitted_owned {
+                    *coerced =
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                            .to_string();
+                }
+            } else if coerced.starts_with('&') && any_emitted_owned {
                 *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                     .to_string();
             }

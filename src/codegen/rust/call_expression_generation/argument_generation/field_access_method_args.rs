@@ -792,6 +792,8 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     false,
                     "IR call-site coercion must be total when call_sites is on ({qualified_name})"
                 );
+                // Phase 5: never fall through to legacy field-access ownership path.
+                return arg_str;
             }
 
             arg_str = maybe_borrow_runtime_std_json_value_arg(
