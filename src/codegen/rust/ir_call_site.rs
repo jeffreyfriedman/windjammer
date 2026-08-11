@@ -2787,6 +2787,43 @@ impl<'ast> CodeGenerator<'ast> {
             Some(&self.enum_variant_types),
             Self::runtime_module_for_call_site_finalize(callee_name),
         );
+
+        // Vec locals into `&Vec<T>` formals (signature-driven; not in apply_ir).
+        *coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
+            self,
+            &text_sig,
+            arg_index,
+            arg_expr,
+            std::mem::take(coerced),
+            receiver_type_name,
+            Some(simple),
+            user_arg_count,
+        );
+
+        // Terminal: owned `string` formals must not keep `&"lit".to_string()`.
+        let text_param_idx = text_sig.arg_param_index(arg_index);
+        if matches!(
+            arg_expr,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        ) && coerced.starts_with('&')
+            && coerced.ends_with(".to_string()")
+            && (crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                callee_name,
+            ) || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                &text_sig, text_param_idx,
+            ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &text_sig, text_param_idx,
+            )) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &text_sig, arg_index,
+            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                &text_sig, text_param_idx,
+            ))
+        {
+            *coerced = coerced.trim_start_matches('&').to_string();
+        }
     }
 
     fn runtime_module_for_call_site_finalize(callee_name: &str) -> Option<&str> {

@@ -167,9 +167,11 @@ For every coercion rule or constraint change:
 - **IR-None fail-closed:** when `call_sites` is on and IR returns `None`, emit prepared arg and return — never fall through to legacy ownership tails.
 - **Collection-key finalize in IR:** `finalize_ir_collection_key_arg` (binding-aware strip + `finalize_collection_key_call_site_arg`) runs at end of `apply_ir_call_site_coercion` and again at end of reconcile; method post-IR early/late collection-key clusters deleted.
 - **String/text finalize in reconcile:** prefer_shared text-ref upgrade + `finalize_borrowed_text_call_site_arg` + FieldAccess `&str` ensure + string-literal finalize live in `reconcile_post_ir_mut_borrow_and_owned_peel`; regular_call duplicated text_sig block removed.
-- **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`.
+- **Post-IR tail collapse (2026-08-11):** deleted regular_call owned-literal / runtime-std / FieldAccess text-borrow clusters; moved vec-local borrow + `&"lit".to_string()` peel into reconcile; regular_call IR path uses a single terminal reconcile; method IR path runs reconcile last (covers builder bare-lit → owned String).
+- **Cross-crate bare lit auto-own:** type-qualified / unresolved-instance helpers default to owned when no Pattern/`&str` evidence (no `::new` name lists); empty stub sigs fall through to the same path.
+- **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test.rs`.
 
-Remaining: delete remaining regular_call post-IR owned-literal / runtime-borrow tails once covered by IR; delete legacy `!call_sites` paths when opt-out is retired.
+Remaining: fold remaining `keep_shared_ref` / enforce / copy-aggregate `&mut` peel into reconcile; delete legacy `!call_sites` paths when opt-out is retired.
 
 ## Related Documentation
 
