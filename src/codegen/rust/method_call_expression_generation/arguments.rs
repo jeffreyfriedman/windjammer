@@ -873,31 +873,18 @@ impl<'ast> CodeGenerator<'ast> {
                             &qualified,
                             i,
                         );
-                        if (crate::ir::signature_bridge::call_site_expects_owned_pass(
-                                &contract_sig,
-                                pidx,
-                            )
-                            || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                &contract_sig,
-                                pidx,
-                            )
-                            || contract_sig.formal_param_type(pidx).is_some_and(|t| {
-                                let bare = match t {
-                                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                                        inner.as_ref()
-                                    }
-                                    other => other,
-                                };
-                                self.is_type_copy(bare)
-                                    && !crate::type_classification::is_copy_pass_by_value_formal(
-                                        bare,
-                                    )
-                            }))
-                            && coerced.starts_with('&')
-                            && !coerced.starts_with("&mut ")
-                        {
-                            coerced = coerced.trim_start_matches('&').to_string();
-                        } else if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        self.reconcile_post_ir_mut_borrow_and_owned_peel(
+                            &mut coerced,
+                            arg_to_generate,
+                            &qualified,
+                            i,
+                            &contract_sig,
+                            &self.signature_registry,
+                            receiver_rt.as_deref(),
+                            Some(arguments.len()),
+                            false,
+                        );
+                        if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             &contract_sig,
                             pidx,
                         ) && !contract_sig
