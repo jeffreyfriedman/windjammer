@@ -277,129 +277,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.signature_registry,
                         )
                     };
-                    // Mut-borrow / owned peel / text finalize run once at the end of this
-                    // IR path via `reconcile_post_ir_mut_borrow_and_owned_peel`.
-
-                    if coerced.starts_with("&mut ") {
-                        if let Some(sig) = signature.as_ref().or_else(|| {
-                            gen.signature_registry.get_signature(func_name).or_else(|| {
-                                gen.global_signature_registry
-                                    .as_ref()
-                                    .and_then(|g| g.get_signature(func_name))
-                            })
-                        }) {
-                            let idx = sig.arg_param_index(i);
-                            // Only peel Copy aggregates that emit owned formals. True
-                            // `&mut T` Copy formals (`t: &mut Transform`) and codegen-
-                            // recorded mut slots (`fill_grid`) must keep `&mut`.
-                            let mut_arg_emitted = gen
-                                .function_emitted_mut_arg_indices
-                                .get(func_name)
-                                .or_else(|| {
-                                    func_name.rsplit("::").next().and_then(|simple| {
-                                        gen.function_emitted_mut_arg_indices.get(simple)
-                                    })
-                                })
-                                .is_some_and(|indices| indices.contains(&i));
-                            if !mut_arg_emitted {
-                                if let Some(formal) = sig.formal_param_type(idx) {
-                                    let bare = match formal {
-                                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                                            inner.as_ref()
-                                        }
-                                        other => other,
-                                    };
-                                    if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            bare,
-                                        )
-                                        && !matches!(
-                                            formal,
-                                            Type::Reference(_) | Type::MutableReference(_)
-                                        )
-                                        && !matches!(
-                                            sig.param_types.get(idx),
-                                            Some(Type::MutableReference(_))
-                                        )
-                                        && !matches!(
-                                            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                                                sig, idx,
-                                            ),
-                                            OwnershipMode::MutBorrowed,
-                                        )
-                                    {
-                                        coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
-                                            &coerced,
-                                        )
-                                        .to_string();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let Some(ref sig) = post_ir_borrow_sig {
-                        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-                        let pidx = sig.arg_param_index(i);
-                        // Prefer defining-module refresh with shared-ref slots over importer
-                        // stubs that recorded `emitted_rust_ref_params = Some([false, …])`.
-                        let mut enforce_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                            gen.global_signature_registry
-                                .as_ref()
-                                .and_then(|g| g.get_signature(func_name).cloned()),
-                            gen.global_signature_registry
-                                .as_ref()
-                                .and_then(|g| g.get_signature(simple).cloned()),
-                            Some(sig.clone()),
-                            gen.signature_registry.get_signature(func_name).cloned(),
-                            gen.signature_registry.get_signature(simple).cloned(),
-                        ])
-                        .unwrap_or_else(|| sig.clone());
-                        enforce_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
-                            Some(enforce_sig),
-                            gen.global_signature_registry
-                                .as_ref()
-                                .and_then(|g| g.get_signature(func_name))
-                                .or_else(|| {
-                                    gen.global_signature_registry
-                                        .as_ref()
-                                        .and_then(|g| g.get_signature(simple))
-                                }),
-                            pidx,
-                        )
-                        .unwrap_or_else(|| sig.clone());
-                        let pidx = enforce_sig.arg_param_index(i);
-                        // Don't let a stale analyzer stub strip IR's confirmed `&item`
-                        // after collision-aware IR already lowered the arg (bug_e0308).
-                        // Also keep `&` when *any* registry view emits shared-ref for this slot.
-                        let keep_shared_ref = coerced.starts_with('&')
-                            && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                &enforce_sig, pidx,
-                            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
-                                &enforce_sig, pidx,
-                            ) || gen
-                                .global_signature_registry
-                                .as_ref()
-                                .and_then(|g| {
-                                    g.get_signature(func_name)
-                                        .or_else(|| g.get_signature(simple))
-                                })
-                                .is_some_and(|gs| {
-                                    let gp = gs.arg_param_index(i);
-                                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                        gs, gp,
-                                    )
-                                }));
-                        if !keep_shared_ref {
-                            gen.enforce_call_site_ownership_contract(
-                                &mut coerced,
-                                arg,
-                                &enforce_sig,
-                                pidx,
-                                func_name,
-                                i,
-                            );
-                        }
-                    }
+                    // Mut-borrow / owned peel / prefer-shared enforce / text finalize run
+                    // once at the end via `reconcile_post_ir_mut_borrow_and_owned_peel`.
                     coerced = gen.coerce_explicit_ref_for_owned_callee_arg(
                         arg,
                         coerced,
@@ -445,8 +324,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
-                    // Single terminal reconcile: text finalize, collection keys, vec borrow,
-                    // and `&"lit".to_string()` peel live in the IR helper.
+                    // Single terminal reconcile: prefer-shared enforce, copy-aggregate
+                    // `&mut` peel, text/collection finalize, vec borrow, owned-lit peel.
                     let peel_sig = post_ir_borrow_sig.as_ref().or(signature.as_ref()).or_else(|| {
                         gen.signature_registry.get_signature(func_name).or_else(|| {
                             gen.global_signature_registry

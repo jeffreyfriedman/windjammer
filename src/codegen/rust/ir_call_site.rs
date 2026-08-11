@@ -2530,6 +2530,24 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         let param_idx = sig.arg_param_index(arg_index);
 
+        // Prefer-shared enforce without stripping IR-confirmed shared refs (bug_e0308).
+        self.enforce_ir_ownership_preserving_confirmed_shared_ref(
+            coerced,
+            arg_expr,
+            callee_name,
+            arg_index,
+            sig,
+            registry,
+        );
+
+        // Spurious `&mut` on owned Copy-aggregate formals (regression-060).
+        self.peel_spurious_mut_borrow_on_owned_copy_aggregate(
+            coerced,
+            callee_name,
+            arg_index,
+            sig,
+        );
+
         // Stale `&` on owned user free-fn formals (circular-dep / multipass).
         let skip_stale_borrow = !callee_name.contains("::")
             && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
@@ -2931,6 +2949,128 @@ impl<'ast> CodeGenerator<'ast> {
                 *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                     .to_string();
             }
+        }
+    }
+
+    /// Prefer-shared enforce that preserves IR-confirmed `&` (bug_e0308).
+    ///
+    /// Stale analyzer stubs must not strip collision-aware shared borrows when
+    /// any registry view emits shared-ref for the slot.
+    pub(crate) fn enforce_ir_ownership_preserving_confirmed_shared_ref(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+        callee_name: &str,
+        arg_index: usize,
+        sig: &crate::analyzer::FunctionSignature,
+        registry: &SignatureRegistry,
+    ) {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let pidx = sig.arg_param_index(arg_index);
+        let mut enforce_sig =
+            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(callee_name).cloned()),
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple).cloned()),
+                Some(sig.clone()),
+                registry.get_signature(callee_name).cloned(),
+                registry.get_signature(simple).cloned(),
+            ])
+            .unwrap_or_else(|| sig.clone());
+        enforce_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+            Some(enforce_sig),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(callee_name))
+                .or_else(|| {
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple))
+                }),
+            pidx,
+        )
+        .unwrap_or_else(|| sig.clone());
+        let pidx = enforce_sig.arg_param_index(arg_index);
+        let keep_shared_ref = coerced.starts_with('&')
+            && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &enforce_sig, pidx,
+            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                &enforce_sig, pidx,
+            ) || self
+                .global_signature_registry
+                .as_ref()
+                .and_then(|g| {
+                    g.get_signature(callee_name)
+                        .or_else(|| g.get_signature(simple))
+                })
+                .is_some_and(|gs| {
+                    let gp = gs.arg_param_index(arg_index);
+                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        gs, gp,
+                    )
+                }));
+        if !keep_shared_ref {
+            self.enforce_call_site_ownership_contract(
+                coerced,
+                arg_expr,
+                &enforce_sig,
+                pidx,
+                callee_name,
+                arg_index,
+            );
+        }
+    }
+
+    /// Peel `&mut` when the formal is an owned Copy aggregate (not a true `&mut T` slot).
+    fn peel_spurious_mut_borrow_on_owned_copy_aggregate(
+        &self,
+        coerced: &mut String,
+        callee_name: &str,
+        arg_index: usize,
+        sig: &crate::analyzer::FunctionSignature,
+    ) {
+        if !coerced.starts_with("&mut ") {
+            return;
+        }
+        let idx = sig.arg_param_index(arg_index);
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let mut_arg_emitted = self
+            .function_emitted_mut_arg_indices
+            .get(callee_name)
+            .or_else(|| self.function_emitted_mut_arg_indices.get(simple))
+            .is_some_and(|indices| indices.contains(&arg_index));
+        if mut_arg_emitted {
+            return;
+        }
+        let Some(formal) = sig.formal_param_type(idx) else {
+            return;
+        };
+        let bare = match formal {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+            && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+            && !matches!(
+                formal,
+                Type::Reference(_) | Type::MutableReference(_)
+            )
+            && !matches!(
+                sig.param_types.get(idx),
+                Some(Type::MutableReference(_))
+            )
+            && !matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                    sig, idx,
+                ),
+                crate::analyzer::OwnershipMode::MutBorrowed,
+            )
+        {
+            *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                .to_string();
         }
     }
 
