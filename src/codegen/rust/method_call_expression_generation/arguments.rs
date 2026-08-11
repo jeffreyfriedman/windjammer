@@ -476,82 +476,8 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver_for_ir.as_deref(),
                         Some(arguments.len()),
                     ) {
-                        if is_collection_key_arg {
-                            if let Some(name) =
-                                crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
-                                    arg,
-                                )
-                                .or_else(|| {
-                                    crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
-                                        arg_to_generate,
-                                    )
-                                })
-                            {
-                                if self.emitted_rust_ref_formals.contains(&name)
-                                    || self.identifier_already_ref(&name)
-                                {
-                                    crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
-                                        arg,
-                                        &mut coerced,
-                                    );
-                                } else if self.current_function_params.iter().any(|p| p.name == name)
-                                {
-                                    crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
-                                        arg,
-                                        &mut coerced,
-                                    );
-                                }
-                            }
-                            let binding_already_ref = crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
-                                arg_to_generate,
-                            )
-                            .or_else(|| {
-                                crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
-                                    arg,
-                                )
-                            })
-                            .is_some_and(|name| {
-                                self.emitted_rust_ref_formals.contains(&name)
-                                    || self.str_ref_optimized_params.contains(&name)
-                                    || self.binding_emits_as_rust_shared_ref(&name)
-                                    || self.identifier_already_ref(&name)
-                            });
-                            // `&str` / emitted shared-ref formals are already borrowed —
-                            // never re-prefix `&` (would create `&&str` for HashMap::get).
-                            let text_param_already_shared = crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
-                                arg_to_generate,
-                            )
-                            .or_else(|| {
-                                crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(
-                                    arg,
-                                )
-                            })
-                            .is_some_and(|name| {
-                                !self.collection_key_owned_params.contains(&name)
-                                    && self.current_function_params.iter().any(|p| {
-                                        p.name == name
-                                            && crate::codegen::rust::types::is_windjammer_text_type(
-                                                &p.type_,
-                                            )
-                                    })
-                                    && (self.emitted_rust_ref_formals.contains(&name)
-                                        || self.str_ref_optimized_params.contains(&name)
-                                        || self.inferred_borrowed_params.contains(&name)
-                                        || self.identifier_already_ref(&name))
-                            });
-                            if !coerced.starts_with('&')
-                                && !binding_already_ref
-                                && !text_param_already_shared
-                                && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(
-                                    arg_to_generate,
-                                )
-                                && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(
-                                    arg_to_generate,
-                                )
-                            {
-                                coerced = format!("&{coerced}");
-                            }
-                        }
+                        // Collection-key finalize lives in `apply_ir_call_site_coercion`
+                        // (`finalize_ir_collection_key_arg`) — no post-IR re-prefix.
                         let fallback_sig = sig_for_effective
                             .cloned()
                             .or_else(|| method_signature.clone())
@@ -1119,26 +1045,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 &mut coerced,
                             );
                         }
-                        crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
-                            Some(&contract_sig),
-                            i,
-                            arg_to_generate,
-                            &mut coerced,
-                            false,
-                            receiver_rt.as_deref(),
-                            false,
-                        );
-                        if !coerced.starts_with('&')
-                            && crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
-                                &contract_sig,
-                                i,
-                                receiver_rt.as_deref(),
-                            )
-                        {
-                            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
-                                &mut coerced,
-                            );
-                        }
+                        // Collection-key finalize is inside `apply_ir_call_site_coercion`.
                         // IR early-return skips Phase 3 — apply cross-crate builder
                         // bare-lit → owned String here (empty_message("…") with no WJ sig).
                         if matches!(

@@ -155,7 +155,7 @@ For every coercion rule or constraint change:
 | 4 | Multipass IR merge, dogfood + breach-protocol dogfooding |
 | 5 | Delete legacy heuristics (`call_site_borrow`, `correct_legacy_output`) — **in progress** |
 
-### Phase 5 progress (2026-08-10)
+### Phase 5 progress (2026-08-11)
 
 - **IR total for known callees:** `apply_ir_call_site_coercion` no longer returns `None` on ownership-collision deferral; `skip_on_ownership_collision` removed.
 - **Formals from IR:** when `OwnedType` is definitive borrow, skip body-walk `keep_owned_contract`; prefer `ir_param_ownership_definitive` / `get_effective_param_type`.
@@ -165,9 +165,11 @@ For every coercion rule or constraint change:
 - **Owned string formals:** `payload_forces_owned` beats stale IR Borrowed unless `str_ref_params` hints; `call_site_param_expects_owned_string` respects runtime/`&str` skips (`strings::starts_with`).
 - **Post-IR DRY:** `reconcile_post_ir_mut_borrow_and_owned_peel` consolidates mut-borrow + owned/recursive peel; multi-candidate owned peel lives in `peel_stale_borrow_for_multi_candidate_owned_formal`.
 - **IR-None fail-closed:** when `call_sites` is on and IR returns `None`, emit prepared arg and return — never fall through to legacy ownership tails.
+- **Collection-key finalize in IR:** `finalize_ir_collection_key_arg` (binding-aware strip + `finalize_collection_key_call_site_arg`) runs at end of `apply_ir_call_site_coercion` and again at end of reconcile; method post-IR early/late collection-key clusters deleted.
+- **String/text finalize in reconcile:** prefer_shared text-ref upgrade + `finalize_borrowed_text_call_site_arg` + FieldAccess `&str` ensure + string-literal finalize live in `reconcile_post_ir_mut_borrow_and_owned_peel`; regular_call duplicated text_sig block removed.
 - **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`.
 
-Remaining: fold string-finalize / collection-key post-IR tails into IR; delete legacy `!call_sites` paths when opt-out is retired.
+Remaining: delete remaining regular_call post-IR owned-literal / runtime-borrow tails once covered by IR; delete legacy `!call_sites` paths when opt-out is retired.
 
 ## Related Documentation
 
