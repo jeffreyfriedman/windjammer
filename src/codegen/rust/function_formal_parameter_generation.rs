@@ -1695,7 +1695,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 },
                             );
-                            let keep_owned_contract = if ir_borrow.is_some() {
+                            let keep_owned_contract = if ir_borrow.is_some() && !discard_keep_owned {
                                 false
                             } else {
                                 payload_forces_owned
@@ -1731,15 +1731,25 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name));
-                            if let Some(ir_mode) = ir_borrow {
-                                ownership_mode = ir_mode;
-                            } else if payload_forces_owned
+                            // Prefer definitive IR borrows over body-walk keep-owned —
+                            // unless this is a payload-stored builder/setter without an
+                            // explicit IR `str_ref_params` hint (Banner::message: stale
+                            // IR Borrowed must not demote owned `string` field stores).
+                            let ir_str_ref_hint = self.current_ir_function.as_ref().is_some_and(|ir| {
+                                ir.str_ref_params.contains(&param.name)
+                            });
+                            if payload_forces_owned
+                                && !ir_str_ref_hint
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name))
                             {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.str_ref_optimized_params.remove(&param.name);
+                            } else if let Some(ir_mode) = ir_borrow {
+                                if !discard_keep_owned {
+                                    ownership_mode = ir_mode;
+                                }
                             } else if (self.param_passed_to_slice_search_string_elem(
                                 func.body.as_slice(),
                                 &param.name,
@@ -2127,6 +2137,15 @@ impl<'ast> CodeGenerator<'ast> {
                                             // still say Owned (move into `let _ = path`) — trust
                                             // str_ref_optimized / registry &str over that.
                                             "&str".to_string()
+                                        } else if (payload_stored || payload_forces_owned)
+                                            && !self.current_ir_function.as_ref().is_some_and(|ir| {
+                                                ir.str_ref_params.contains(&param.name)
+                                            })
+                                        {
+                                            // Builder/setter: WJ formal is owned `string` stored
+                                            // into an owned field — never default to `&str`
+                                            // unless IR explicitly listed the param in str_ref_params.
+                                            self.type_to_rust(&param.type_)
                                         } else {
                                             // Default borrowed string formals to &str
                                             // (idiomatic Rust, accepts both String and &str).
