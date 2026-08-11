@@ -2165,7 +2165,100 @@ impl<'ast> CodeGenerator<'ast> {
         {
             coerced = coerced.trim_start_matches('&').to_string();
         }
+
+        // Single IR finalize pass: collection keys + string literals (signature-driven).
+        // Callers must not re-implement collection-key prefix/strip after apply_ir returns.
+        self.finalize_ir_collection_key_arg(
+            &mut coerced,
+            arg_expr,
+            &sig,
+            arg_index,
+            receiver_type_name,
+        );
+        crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+            Some(&sig),
+            arg_index,
+            Some(method_simple),
+            arg_expr,
+            &mut coerced,
+            receiver_type_name,
+            Some(&self.enum_variant_types),
+            Self::runtime_module_for_call_site_finalize(callee_name),
+        );
+
         Some(coerced)
+    }
+
+    /// Signature-driven map/set key finalize: strip `&&` on already-shared bindings,
+    /// then ensure `&K` when the formal is a collection-key lookup.
+    ///
+    /// Binding awareness lives here (IR) so method/free-call sites stay DRY.
+    fn finalize_ir_collection_key_arg(
+        &self,
+        arg_str: &mut String,
+        arg_expr: &Expression<'ast>,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+        receiver_type_name: Option<&str>,
+    ) {
+        if !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            sig,
+            arg_index,
+            receiver_type_name,
+        ) {
+            return;
+        }
+
+        let binding_name =
+            crate::codegen::rust::call_site_borrow::borrow_target_identifier_name(arg_expr);
+        let binding_already_shared = binding_name.as_ref().is_some_and(|name| {
+            self.emitted_rust_ref_formals.contains(name)
+                || self.str_ref_optimized_params.contains(name.as_str())
+                || self.binding_emits_as_rust_shared_ref(name)
+                || self.identifier_already_ref(name)
+                || (self.inferred_borrowed_params.contains(name.as_str())
+                    && !self.collection_key_owned_params.contains(name.as_str()))
+        });
+        let text_param_already_shared = binding_name.as_ref().is_some_and(|name| {
+            !self.collection_key_owned_params.contains(name.as_str())
+                && self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                })
+                && (self.emitted_rust_ref_formals.contains(name)
+                    || self.str_ref_optimized_params.contains(name.as_str())
+                    || self.inferred_borrowed_params.contains(name.as_str())
+                    || self.identifier_already_ref(name))
+        });
+        let arg_already_rust_ref = binding_name.as_ref().is_some_and(|name| {
+            self.identifier_already_ref(name)
+                || self.emitted_rust_ref_formals.contains(name)
+                || self.str_ref_optimized_params.contains(name.as_str())
+                || self.inferred_borrowed_params.contains(name.as_str())
+        });
+
+        // Drop a spurious leading `&` when the binding already lowers as `&T` / `&str`
+        // (HashMap::get(key) never HashMap::get(&key) → &&str).
+        if binding_already_shared
+            || text_param_already_shared
+            || binding_name.as_ref().is_some_and(|name| {
+                self.current_function_params.iter().any(|p| p.name == *name)
+            })
+        {
+            crate::codegen::rust::call_site_borrow::strip_redundant_borrow_on_ref_binding(
+                arg_expr, arg_str,
+            );
+        }
+
+        crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+            Some(sig),
+            arg_index,
+            arg_expr,
+            arg_str,
+            arg_already_rust_ref,
+            receiver_type_name,
+            binding_already_shared || text_param_already_shared,
+        );
     }
 
     /// When a binding/path is moved and reused, and the final argument is passed by
@@ -2431,7 +2524,7 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         sig: &crate::analyzer::FunctionSignature,
         registry: &SignatureRegistry,
-        _receiver_type_name: Option<&str>,
+        receiver_type_name: Option<&str>,
         user_arg_count: Option<usize>,
         has_ownership_collision: bool,
     ) {
@@ -2573,6 +2666,137 @@ impl<'ast> CodeGenerator<'ast> {
                 *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                     .to_string();
             }
+        }
+
+        // Prefer defining-module shared-text formals (`path: &str`) over stale owned stubs
+        // before the IR text/collection finalize pass (regression-049).
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(callee_name).cloned()),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(simple).cloned()),
+            registry.get_signature(callee_name).cloned(),
+            registry.get_signature(simple).cloned(),
+            Some(sig.clone()),
+        ])
+        .unwrap_or_else(|| sig.clone());
+        let pidx_for_upgrade = text_sig.arg_param_index(arg_index);
+        for challenger in [
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(callee_name)),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(simple)),
+            registry.get_signature(callee_name),
+            registry.get_signature(simple),
+        ] {
+            text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                Some(text_sig),
+                challenger,
+                pidx_for_upgrade,
+            )
+            .unwrap_or_else(|| sig.clone());
+        }
+
+        let arg_already_rust_ref = matches!(
+            arg_expr,
+            Expression::Identifier { name, .. }
+                if self.identifier_already_ref(name)
+                    || self.str_ref_optimized_params.contains(name.as_str())
+                    || self.inferred_borrowed_params.contains(name)
+        );
+        let skip_borrow_finalize = matches!(
+            arg_expr,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        ) && (coerced.ends_with(".to_string()") || coerced.ends_with(".to_owned()"))
+            && {
+                let pidx = sig.arg_param_index(arg_index);
+                crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    sig, pidx,
+                ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    sig, pidx,
+                )
+            };
+        if !skip_borrow_finalize {
+            // Run even under ownership collision: confirmed `&str` FieldAccess must
+            // still borrow (regression-049). Peels above already gate on collision.
+            crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
+                Some(&text_sig),
+                arg_index,
+                receiver_type_name,
+                arg_expr,
+                coerced,
+                arg_already_rust_ref,
+            );
+        }
+        if matches!(arg_expr, Expression::FieldAccess { .. } | Expression::Index { .. }) {
+            let pidx = text_sig.arg_param_index(arg_index);
+            *coerced = self.ensure_ref_for_owned_string_field_when_callee_expects_str(
+                &Some(text_sig.clone()),
+                pidx,
+                arg_expr,
+                coerced.clone(),
+                false,
+            );
+            if !coerced.starts_with('&')
+                && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &text_sig, pidx,
+                )
+                && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    &text_sig, pidx,
+                ) || text_sig.param_types.get(pidx).is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                        || matches!(
+                            t,
+                            Type::Reference(inner)
+                                if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                        )
+                }))
+                && self
+                    .infer_expression_type(arg_expr)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+            {
+                *coerced = format!("&{coerced}");
+            }
+        }
+
+        // Re-apply IR collection-key / string-literal finalize after owned peels so
+        // HashMap::get / Set::contains keep `&K` (and strip `&&` on shared bindings).
+        self.finalize_ir_collection_key_arg(
+            coerced,
+            arg_expr,
+            &text_sig,
+            arg_index,
+            receiver_type_name,
+        );
+        crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
+            Some(&text_sig),
+            arg_index,
+            Some(simple),
+            arg_expr,
+            coerced,
+            receiver_type_name,
+            Some(&self.enum_variant_types),
+            Self::runtime_module_for_call_site_finalize(callee_name),
+        );
+    }
+
+    fn runtime_module_for_call_site_finalize(callee_name: &str) -> Option<&str> {
+        let m = crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+            callee_name,
+        );
+        if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(m) {
+            Some(m)
+        } else {
+            None
         }
     }
 
