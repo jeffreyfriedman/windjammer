@@ -791,14 +791,10 @@ impl<'ast> CodeGenerator<'ast> {
                             .as_deref()
                             .map(|rt| format!("{rt}::{method}"))
                             .unwrap_or_else(|| method.to_string());
-                        self.enforce_call_site_ownership_contract(
-                            &mut coerced,
-                            arg_to_generate,
-                            &contract_sig,
-                            pidx,
-                            &qualified,
-                            i,
-                        );
+                        // Ownership contract enforce runs once in terminal
+                        // `reconcile_post_ir_mut_borrow_and_owned_peel` (prefer-shared,
+                        // keep IR-confirmed `&`). Method-specific shared-borrow re-add
+                        // and copy-aggregate peels stay here before that reconcile.
                         if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             &contract_sig,
                             pidx,
