@@ -524,7 +524,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// `Vec::new()`, `Vec::<T>::new()`, `HashMap::new()`, etc. — Default-empty clears.
+    /// Empty stdlib collection / `String` constructors — Default-empty clears for writeback.
+    /// Type-driven via [`is_stdlib_default_empty_type`]; not an ownership/coercion heuristic.
     fn expression_is_empty_default_constructor(&self, expr: &Expression<'_>) -> bool {
         if crate::codegen::rust::call_site_borrow::expression_is_vec_new_constructor(expr) {
             return true;
@@ -534,37 +535,21 @@ impl<'ast> CodeGenerator<'ast> {
                 function,
                 arguments,
                 ..
-            } if arguments.is_empty() => match &**function {
-                Expression::FieldAccess {
-                    object,
-                    field,
-                    ..
-                } if field == "new" => matches!(
-                    &**object,
-                    Expression::Identifier { name, .. }
-                        if matches!(
-                            name.as_str(),
-                            "Vec"
-                                | "HashMap"
-                                | "HashSet"
-                                | "BTreeMap"
-                                | "BTreeSet"
-                                | "VecDeque"
-                                | "String"
-                        )
-                ),
-                Expression::Identifier { name, .. } => {
-                    name.ends_with("::new")
-                        && (name.starts_with("Vec")
-                            || name.starts_with("HashMap")
-                            || name.starts_with("HashSet")
-                            || name.starts_with("BTreeMap")
-                            || name.starts_with("BTreeSet")
-                            || name.starts_with("VecDeque")
-                            || name == "String::new")
-                }
-                _ => false,
-            },
+            } if arguments.is_empty() => {
+                let type_name = match function {
+                    Expression::FieldAccess { object, .. } => match object {
+                        Expression::Identifier { name, .. } => Some(name.as_str()),
+                        _ => None,
+                    },
+                    Expression::Identifier { name, .. } => name
+                        .rsplit_once("::")
+                        .map(|(ty, _)| ty),
+                    _ => None,
+                };
+                type_name.is_some_and(|ty| {
+                    crate::codegen::rust::stdlib_method_traits::is_stdlib_default_empty_type(ty)
+                })
+            }
             _ => false,
         }
     }

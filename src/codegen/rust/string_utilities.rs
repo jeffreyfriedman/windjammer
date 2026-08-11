@@ -165,13 +165,49 @@ pub fn call_site_param_expects_owned_string(
     arg_index: usize,
 ) -> bool {
     let idx = sig.arg_param_index(arg_index);
+    // Runtime/`&str` formals (e.g. `strings::starts_with` prefix) must keep bare literals
+    // even when WJ meta still lists a plain owned `string` formal.
+    if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+        Some(sig),
+        arg_index,
+    ) {
+        return false;
+    }
     if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx) {
         return false;
+    }
+    if crate::ir::signature_bridge::call_site_expects_owned_pass(sig, idx) {
+        // Only treat as owned string when the formal is text — not bare Custom/Key, etc.
+        return sig
+            .formal_param_type(idx)
+            .or_else(|| sig.param_types.get(idx))
+            .is_some_and(|t| {
+                param_is_owned_string_type(t)
+                    || crate::codegen::rust::types::is_windjammer_text_type(t)
+            });
     }
     if sig.param_types.get(idx).is_some_and(|t| {
         param_is_rust_str_ref(t) || param_is_rust_string_ref(t)
     }) {
         return false;
+    }
+    // Plain WJ owned `string` formals: trust source formal + Owned contract over stale
+    // multipass `Reference(str)` in param_types (Objective::talk_to, Banner::message).
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+        sig, arg_index,
+    ) {
+        if matches!(
+            sig.param_ownership.get(idx),
+            Some(crate::analyzer::OwnershipMode::Owned)
+        ) {
+            return true;
+        }
+        if matches!(
+            crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
+            crate::analyzer::OwnershipMode::Owned,
+        ) {
+            return true;
+        }
     }
     if sig.param_types.get(idx).is_some_and(param_is_owned_string_type) {
         return true;
@@ -193,11 +229,8 @@ pub fn call_site_param_expects_owned_string(
                 .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
         }
     }
-    // Plain WJ `string` formals may emit `&str` — do not trust formal_param_types alone.
-    sig.formal_param_types
-        .get(idx)
+    sig.formal_param_type(idx)
         .is_some_and(param_is_owned_string_type)
-        && sig.param_types.get(idx).is_some_and(param_is_owned_string_type)
 }
 
 /// Bare string literals on type-qualified associated calls (`Column::new("lit")`) must
@@ -564,6 +597,11 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     };
 
     let idx = sig.arg_param_index(arg_index);
+    if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
+        if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
+            return true;
+        }
+    }
     if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx) {
         return false;
     }
@@ -583,12 +621,6 @@ pub fn string_literal_needs_owned_coercion_with_enum(
 
     if !crate::codegen::rust::types::is_windjammer_text_type(param_type) {
         return false;
-    }
-
-    if let (Some(m), Some(tn), Some(variants)) = (method, receiver_type, enum_variant_types) {
-        if enum_factory_string_param_needs_owned(variants, tn, m, arg_index) {
-            return true;
-        }
     }
 
     if param_is_rust_str_ref(param_type) {
@@ -647,6 +679,24 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     let Some(sig) = sig else {
         return;
     };
+
+    if matches!(
+        arg,
+        Expression::Literal {
+            value: Literal::String(_),
+            ..
+        }
+    ) && (arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()"))
+        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            sig,
+            sig.arg_param_index(arg_index),
+        )
+    {
+        while arg_str.starts_with('&') {
+            *arg_str = arg_str[1..].to_string();
+        }
+        return;
+    }
 
     let effective =
         if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
@@ -733,6 +783,18 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
             }
         )
     {
+        let pidx = sig.arg_param_index(arg_index);
+        if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(sig, arg_index)
+            || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+        {
+            let base = arg_str.trim_start_matches('&');
+            *arg_str = if base.ends_with(".to_string()") {
+                base.to_string()
+            } else {
+                format!("{base}.to_string()")
+            };
+            return;
+        }
         let base = arg_str.trim_start_matches('&');
         let owned = if base.ends_with(".to_string()") {
             base.to_string()
@@ -836,9 +898,13 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         }
     } else {
         // &String param: string literal → &"lit".to_string()
-        let is_string_ref_param = sig
-            .and_then(|s| s.param_type_for_arg(arg_index))
-            .is_some_and(param_is_rust_string_ref);
+        let is_string_ref_param = sig.is_some_and(|s| {
+            if call_site_param_expects_owned_string(s, arg_index) {
+                return false;
+            }
+            s.param_type_for_arg(arg_index)
+                .is_some_and(param_is_rust_string_ref)
+        });
         if is_string_ref_param {
             let base = arg_str.trim_start_matches('&');
             let base = if base.ends_with(".to_string()") {

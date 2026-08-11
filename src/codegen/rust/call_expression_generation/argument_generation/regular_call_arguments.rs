@@ -316,10 +316,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                             | Type::MutableReference(inner) => inner.as_ref(),
                                             other => other,
                                         };
-                                        gen.is_type_copy(bare)
-                                            && !crate::type_classification::is_copy_pass_by_value_formal(
-                                                bare,
-                                            )
+                                        crate::codegen::rust::call_site_borrow::bare_type_is_copy_aggregate_owned_formal(
+                                            bare,
+                                            |ty| gen.is_type_copy(ty),
+                                        )
                                     })
                             };
                             // Do not re-borrow after IR when this fn emitted an owned formal
@@ -540,9 +540,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &sig, pidx,
                             ) || (!emits_shared
-                                && crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                && (crate::ir::signature_bridge::call_site_expects_owned_pass(
                                     &sig, pidx,
-                                )));
+                                ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                    &sig, i,
+                                ))));
                         if force_owned
                             && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                                 &gen.signature_registry,
@@ -663,6 +665,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             .as_ref()
                             .map(|s| s.arg_param_index(i))
                             .unwrap_or(i);
+                        let sig_before_prefer = sig_for_lit.clone();
                         for challenger in [
                             post_ir_borrow_sig.as_ref(),
                             gen.global_signature_registry
@@ -698,7 +701,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 )
                             });
                         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
-                            sig_for_lit.as_ref(),
+                            sig_before_prefer.as_ref(),
                             i,
                             func_name.rsplit("::").next(),
                             func_name
@@ -708,7 +711,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             Some(&gen.enum_variant_types),
                             runtime_module,
                         ) || registry_expects_owned_string
-                            || sig_for_lit.as_ref().is_some_and(|s| {
+                            || sig_before_prefer.as_ref().is_some_and(|s| {
                                 crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
                                     s, i,
                                 )
@@ -990,6 +993,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 &sig, pidx,
                             ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
                                 &sig, pidx,
+                            ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                &sig, i,
                             ))
                             && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                                 &gen.signature_registry,
@@ -1083,6 +1088,25 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     || gen.str_ref_optimized_params.contains(name.as_str())
                                     || gen.inferred_borrowed_params.contains(name)
                         );
+                        let skip_borrow_finalize = matches!(
+                            arg,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) && (coerced.ends_with(".to_string()") || coerced.ends_with(".to_owned()"))
+                            && post_ir_borrow_sig
+                                .as_ref()
+                                .or(signature.as_ref())
+                                .is_some_and(|s| {
+                                    let pidx = s.arg_param_index(i);
+                                    crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                        s, pidx,
+                                    ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                        s, pidx,
+                                    )
+                                });
+                        if !skip_borrow_finalize {
                         crate::codegen::rust::string_utilities::finalize_borrowed_text_call_site_arg(
                             text_sig.as_ref(),
                             i,
@@ -1091,6 +1115,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &mut coerced,
                             arg_already_rust_ref,
                         );
+                        }
                         if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
                         {
                             let pidx = text_sig
@@ -1254,6 +1279,29 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             )
                             .to_string();
                         }
+                    }
+                    if matches!(
+                        arg,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) && coerced.starts_with('&')
+                        && coerced.ends_with(".to_string()")
+                        && (crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                            func_name,
+                        ) || post_ir_borrow_sig.as_ref().or(signature.as_ref()).is_some_and(
+                            |s| {
+                                let pidx = s.arg_param_index(i);
+                                crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                    s, pidx,
+                                ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    s, pidx,
+                                )
+                            },
+                        ))
+                    {
+                        coerced = coerced.trim_start_matches('&').to_string();
                     }
                     return vec![coerced];
                 }
@@ -2624,37 +2672,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     && arg_str.starts_with('&') && !arg_str.starts_with("&mut ")
                 {
                     arg_str = arg_str[1..].to_string();
-                }
-            }
-
-            if crate::codegen::rust::typed_lowering::is_typed_lowering_enabled() {
-                if let Some(ref sig) = signature {
-                    let pidx = sig.arg_param_index(i);
-                    let is_formal_copy = sig
-                        .formal_param_type(pidx)
-                        .is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                && gen.is_type_copy(t)
-                        });
-                    let receiver_type = crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
-                        .or_else(|| {
-                            func_name
-                                .rsplit_once("::")
-                                .map(|(rt, _)| rt)
-                        });
-                    let is_coll_key = crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
-                        sig,
-                        i,
-                        receiver_type,
-                    );
-                    crate::codegen::rust::typed_lowering::correct_legacy_output(
-                        sig,
-                        i,
-                        arg,
-                        &mut arg_str,
-                        is_formal_copy,
-                        is_coll_key,
-                    );
                 }
             }
 

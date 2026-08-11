@@ -414,13 +414,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 // AUTO-WRAP function pointers in iterator adapter methods (before IR call-site path).
-                if i == 0
-                    && crate::codegen::rust::stdlib_method_traits::method_is_closure_taking_qualified(
-                        method,
-                        receiver_type_name,
-                        &self.signature_registry,
-                    )
-                {
+                let recv_for_wrap = receiver_type_name
+                    .map(str::to_string)
+                    .or_else(|| self.mc_infer_method_receiver_type_name(object));
+                let closure_taking = crate::codegen::rust::stdlib_method_traits::method_is_closure_taking_qualified(
+                    method,
+                    recv_for_wrap.as_deref(),
+                    &self.signature_registry,
+                ) || crate::analyzer::stdlib_method_traits::consensus_closure_taking_method(
+                    method,
+                    &crate::analyzer::SignatureRegistry::stdlib(),
+                );
+                if i == 0 && closure_taking {
                     if let Expression::Identifier { name, .. } = arg_to_generate {
                         let is_fn_ptr_param = self.current_function_params.iter().any(|p| {
                             p.name == *name && matches!(p.type_, Type::FunctionPointer { .. })
@@ -584,34 +589,23 @@ impl<'ast> CodeGenerator<'ast> {
                                         fallback_pidx,
                                     )
                                 });
-                            let copy_aggregate_owned = |sig: &crate::analyzer::FunctionSignature,
-                                                        pidx: usize| {
-                                sig.formal_param_type(pidx).is_some_and(|t| {
-                                    let bare = match t {
-                                        Type::Reference(inner)
-                                        | Type::MutableReference(inner) => inner.as_ref(),
-                                        other => other,
-                                    };
-                                    // Stale Reference(Lsn) in formal_param_types must not
-                                    // block owned Copy-aggregate contracts (regression-060).
-                                    self.is_type_copy(bare)
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            bare,
-                                        )
-                                        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                            sig, pidx,
-                                        )
-                                })
-                            };
                             let emitted_owned = resolved_sig.as_ref().is_some_and(|sig| {
                                 let pidx = sig.arg_param_index(i);
                                 crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                     sig, pidx,
-                                ) || copy_aggregate_owned(sig, pidx)
+                                ) || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
+                                    sig,
+                                    pidx,
+                                    |t| self.is_type_copy(t),
+                                )
                             }) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &fallback_sig,
                                 fallback_pidx,
-                            ) || copy_aggregate_owned(&fallback_sig, fallback_pidx);
+                            ) || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
+                                &fallback_sig,
+                                fallback_pidx,
+                                |t| self.is_type_copy(t),
+                            );
                             // Owned emission beats stale analyzer/IR Ref (regression-060 Lsn).
                             expects_shared && !emitted_owned
                         };
@@ -619,22 +613,11 @@ impl<'ast> CodeGenerator<'ast> {
                             let contract = |sig: &crate::analyzer::FunctionSignature, pidx: usize| {
                                 crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                     sig, pidx,
-                                ) || sig.formal_param_type(pidx).is_some_and(|t| {
-                                    let bare = match t {
-                                        Type::Reference(inner)
-                                        | Type::MutableReference(inner) => inner.as_ref(),
-                                        other => other,
-                                    };
-                                    // Registry-aware Copy aggregates emit owned formals
-                                    // even when analyzer left Borrowed + Reference(T) (regression-060).
-                                    self.is_type_copy(bare)
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            bare,
-                                        )
-                                        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                            sig, pidx,
-                                        )
-                                })
+                                ) || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
+                                    sig,
+                                    pidx,
+                                    |t| self.is_type_copy(t),
+                                )
                             };
                             resolved_sig.as_ref().is_some_and(|sig| {
                                 contract(sig, sig.arg_param_index(i))
@@ -984,10 +967,10 @@ impl<'ast> CodeGenerator<'ast> {
                                         | Type::MutableReference(inner) => inner.as_ref(),
                                         other => other,
                                     };
-                                    self.is_type_copy(bare)
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            bare,
-                                        )
+                                    crate::codegen::rust::call_site_borrow::bare_type_is_copy_aggregate_owned_formal(
+                                        bare,
+                                        |ty| self.is_type_copy(ty),
+                                    )
                                 });
                             if caller_copy_aggregate
                                 && callee_copy_aggregate
@@ -1091,16 +1074,16 @@ impl<'ast> CodeGenerator<'ast> {
                                         | Type::MutableReference(inner) => inner.as_ref(),
                                         other => other,
                                     };
-                                    self.is_type_copy(bare)
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            bare,
-                                        )
+                                    crate::codegen::rust::call_site_borrow::bare_type_is_copy_aggregate_owned_formal(
+                                        bare,
+                                        |ty| self.is_type_copy(ty),
+                                    )
                                 });
                             let caller_copy = self.current_function_params.iter().any(|p| {
                                 p.name == *name
-                                    && self.is_type_copy(&p.type_)
-                                    && !crate::type_classification::is_copy_pass_by_value_formal(
+                                    && crate::codegen::rust::call_site_borrow::bare_type_is_copy_aggregate_owned_formal(
                                         &p.type_,
+                                        |ty| self.is_type_copy(ty),
                                     )
                             });
                             let is_set_or_map_key = i == 0
@@ -1179,14 +1162,18 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         ) && !coerced.ends_with(".to_string()")
                             && !coerced.ends_with(".to_owned()")
-                            && crate::codegen::rust::string_utilities::unresolved_instance_method_string_literal_needs_rust_owned_string(
-                                method,
-                                i,
-                                Some(&contract_sig),
-                                &self.signature_registry,
-                                self.global_signature_registry.as_deref(),
-                                receiver_rt.as_deref().or(receiver_type_name),
+                            && !crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                                &contract_sig, i,
                             )
+                            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                &contract_sig, pidx,
+                            )
+                            && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+                                &contract_sig, i,
+                            ) || contract_sig.param_type_for_arg(i).is_some_and(|t| {
+                                crate::codegen::rust::types::is_windjammer_text_type(t)
+                                    && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            }))
                         {
                             coerced = format!(
                                 "{}.to_string()",
@@ -1645,6 +1632,14 @@ impl<'ast> CodeGenerator<'ast> {
                         let needs_owned = (receiver_is_string_collection
                             && param_is_owned
                             && !method_takes_borrowed_arg)
+                            || effective_sig.as_ref().is_some_and(|sig| {
+                                let pi = sig.arg_param_index(i);
+                                crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+                                    sig, i,
+                                ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    sig, pi,
+                                )
+                            })
                             || crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
                             effective_sig.as_ref(),
                             i,
@@ -3143,28 +3138,6 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             arg_str = arg_str[1..].to_string();
                         }
-                    }
-                }
-
-                if !self.ir_cutover.call_sites
-                    && crate::codegen::rust::typed_lowering::is_typed_lowering_enabled()
-                {
-                    if let Some(ref sig) = sig_for_effective.cloned() {
-                        let pidx = sig.arg_param_index(i);
-                        let is_formal_copy = sig
-                            .formal_param_type(pidx)
-                            .is_some_and(|t| {
-                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                    && self.is_type_copy(t)
-                            });
-                        crate::codegen::rust::typed_lowering::correct_legacy_output(
-                            sig,
-                            i,
-                            arg_to_generate,
-                            &mut arg_str,
-                            is_formal_copy,
-                            is_collection_key_arg,
-                        );
                     }
                 }
 

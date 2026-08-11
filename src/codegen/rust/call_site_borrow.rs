@@ -111,8 +111,12 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
         return false;
     }
     // Registry/stdlib &str contracts (e.g. String::push_str) — param_types Reference(str)
-    // with Borrowed ownership.
-    if sig.param_types.get(param_idx).is_some_and(|t| {
+    // with Borrowed ownership. Plain WJ `string` user formals are handled above (return
+    // false): stale multipass `Reference(str)` + Borrowed must not force call-site `&`
+    // on owned movers like `Objective::talk_to(npc_name: string)`.
+    if !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) && sig.param_types.get(param_idx).is_some_and(|t| {
         crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
     }) && matches!(
         sig.param_ownership.get(param_idx),
@@ -281,6 +285,21 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
                     return false;
                 }
             }
+            if crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                || crate::codegen::rust::string_utilities::param_is_rust_string_ref(t)
+            {
+                if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    sig, param_idx,
+                ) {
+                    return false;
+                }
+                return sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx))
+                    .copied()
+                    == Some(true);
+            }
             true
         }
         _ => false,
@@ -312,11 +331,6 @@ pub(crate) fn expression_is_vec_new_constructor(expr: &Expression) -> bool {
         }
         _ => false,
     }
-}
-
-fn coerced_is_owned_vec_constructor(coerced: &str) -> bool {
-    coerced.starts_with("Vec::new()")
-        || (coerced.starts_with("Vec::<") && coerced.contains(">::new()"))
 }
 
 fn expression_is_owned_vec_at_call_site<'ast>(
@@ -359,9 +373,8 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
     if coerced.starts_with('&') {
         return coerced;
     }
-    if !expression_is_owned_vec_at_call_site(gen, arg_expr)
-        && !coerced_is_owned_vec_constructor(&coerced)
-    {
+    // AST/type-driven only — never string-prefix `Vec::new()` heuristics.
+    if !expression_is_owned_vec_at_call_site(gen, arg_expr) {
         return coerced;
     }
 
@@ -514,21 +527,6 @@ pub fn effective_ownership_for_call_arg(
     arg_index: usize,
 ) -> OwnershipMode {
     effective_param_ownership_for_arg(sig, arg_index)
-}
-
-/// Stale metadata: body/converged `Borrowed` on a bare owned **Copy** formal (e.g. MannequinConfig).
-/// Non-copy formals (Vec<AABB>) with converged borrow are real borrows — not stale.
-pub fn is_stale_borrow_on_owned_copy_formal(sig: &FunctionSignature, arg_index: usize) -> bool {
-    let param_idx = sig.arg_param_index(arg_index);
-    let ownership = effective_ownership_for_call_arg(sig, arg_index);
-    if ownership != OwnershipMode::Borrowed {
-        return false;
-    }
-    if !param_type_is_owned_non_text(sig, param_idx) {
-        return false;
-    }
-    sig.formal_param_type(param_idx)
-        .is_some_and(type_analysis_pure::is_copy_type)
 }
 
 fn is_collection_key_arg(
@@ -687,6 +685,39 @@ fn registry_param_types_indicate_shared_borrow(
     !is_copy_aggregate
 }
 
+/// Bare formal type is a Copy aggregate that emits by value (not `&T`).
+///
+/// Used to detect stale `Reference(Lsn)`-style metadata that must not force
+/// call-site `&` when the Rust formal is owned Copy (regression-060).
+pub fn bare_type_is_copy_aggregate_owned_formal(
+    bare: &Type,
+    is_type_copy: impl FnOnce(&Type) -> bool,
+) -> bool {
+    (is_type_copy(bare)
+        || matches!(
+            bare,
+            Type::Custom(name) if crate::type_classification::is_known_copy_aggregate(name)
+        ))
+        && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+}
+
+/// Signature formal slot is a Copy-aggregate owned contract (stale `&T` metadata ignored
+/// unless codegen recorded shared-ref emission).
+pub fn sig_formal_is_copy_aggregate_owned(
+    sig: &FunctionSignature,
+    param_idx: usize,
+    is_type_copy: impl FnOnce(&Type) -> bool,
+) -> bool {
+    sig.formal_param_type(param_idx).is_some_and(|t| {
+        let bare = match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        bare_type_is_copy_aggregate_owned_formal(bare, is_type_copy)
+            && !callee_emits_shared_rust_ref_param(sig, param_idx)
+    })
+}
+
 /// Decide call-site borrow lowering from effective ownership, formal types, and the argument.
 pub fn should_borrow_at_call_site(
     sig: &FunctionSignature,
@@ -764,7 +795,9 @@ pub fn should_borrow_at_call_site_with_copy_check(
     // Already allocated an owned String from a literal — never wrap in `&`
     // (`&"lit".to_string()`). Owned formals want the allocation bare; `&str`
     // formals should have kept the bare literal instead.
-    if expression_is_string_literal(arg_expr)
+    if (expression_is_string_literal(arg_expr)
+        || arg_str.ends_with(".to_string()")
+        || arg_str.ends_with(".to_owned()"))
         && (arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()"))
     {
         return CallSiteBorrowDecision::default();

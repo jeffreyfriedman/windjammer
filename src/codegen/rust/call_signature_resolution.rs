@@ -766,6 +766,25 @@ pub(crate) fn formal_is_plain_windjammer_string(
     })
 }
 
+/// Like [`formal_is_plain_windjammer_string`] but for a call-site argument index (accounts for `self`).
+///
+/// Method metadata sometimes stores `formal_param_types` without a `self` slot while
+/// `arg_param_index` still offsets by `self_receiver_slot_count()` — check both layouts.
+pub(crate) fn formal_is_plain_windjammer_string_for_call_arg(
+    sig: &FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    let pidx = sig.arg_param_index(arg_index);
+    if formal_is_plain_windjammer_string(sig, pidx) {
+        return true;
+    }
+    sig.has_self_receiver
+        && sig.formal_param_types.get(arg_index).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::codegen::rust::types::is_windjammer_text_type(t)
+        })
+}
+
 /// Determine effective ownership for a parameter at a call site.
 ///
 /// Resolution precedence:
@@ -1152,11 +1171,19 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
     if !is_type_qualified_associated_call(&sig.name) || sig.has_self_receiver {
         return false;
     }
-    // Body-converged &str
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+    {
+        return false;
+    }
+    // Body-converged &str — only when codegen/analyzer confirmed shared-ref emission.
+    // Stale `Reference(str)` on owned plain-WJ static factories must not force call-site borrow.
     if sig
         .param_types
         .get(param_idx)
         .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
     {
         return true;
     }
