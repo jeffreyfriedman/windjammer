@@ -799,17 +799,6 @@ impl<'ast> CodeGenerator<'ast> {
                             &qualified,
                             i,
                         );
-                        self.reconcile_post_ir_mut_borrow_and_owned_peel(
-                            &mut coerced,
-                            arg_to_generate,
-                            &qualified,
-                            i,
-                            &contract_sig,
-                            &self.signature_registry,
-                            receiver_rt.as_deref(),
-                            Some(arguments.len()),
-                            false,
-                        );
                         if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             &contract_sig,
                             pidx,
@@ -1045,33 +1034,39 @@ impl<'ast> CodeGenerator<'ast> {
                                 &mut coerced,
                             );
                         }
-                        // Collection-key finalize is inside `apply_ir_call_site_coercion`.
-                        // IR early-return skips Phase 3 — apply cross-crate builder
-                        // bare-lit → owned String here (empty_message("…") with no WJ sig).
+                        // Terminal IR reconcile: text/collection finalize + owned-lit peel
+                        // after method-specific patches (builder bare-lit → owned String).
+                        self.reconcile_post_ir_mut_borrow_and_owned_peel(
+                            &mut coerced,
+                            arg_to_generate,
+                            &qualified,
+                            i,
+                            &contract_sig,
+                            &self.signature_registry,
+                            receiver_rt.as_deref(),
+                            Some(arguments.len()),
+                            false,
+                        );
+                        // Cross-crate builders: empty/stub WJ sig after reconcile must still
+                        // auto-own bare string lits (signature-driven unresolved helper).
                         if matches!(
                             arg_to_generate,
                             Expression::Literal {
                                 value: Literal::String(_),
                                 ..
                             }
-                        ) && !coerced.ends_with(".to_string()")
-                            && !coerced.ends_with(".to_owned()")
-                            && !crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
-                                &contract_sig, i,
-                            )
-                            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                &contract_sig, pidx,
-                            )
-                            && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
-                                &contract_sig, i,
-                            ) || contract_sig.param_type_for_arg(i).is_some_and(|t| {
-                                crate::codegen::rust::types::is_windjammer_text_type(t)
-                                    && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            }))
-                        {
-                            coerced = format!(
-                                "{}.to_string()",
-                                coerced.trim_start_matches('&')
+                        ) && crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
+                            Some(&contract_sig),
+                            i,
+                            Some(method),
+                            receiver_rt.as_deref(),
+                            Some(&self.enum_variant_types),
+                            None,
+                        ) && !crate::codegen::rust::string_utilities::already_owned_string_expr(
+                            &coerced,
+                        ) {
+                            coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                                coerced.trim_start_matches('&'),
                             );
                         }
                         return coerced;
