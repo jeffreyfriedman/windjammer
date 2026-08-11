@@ -787,131 +787,26 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
-                    // Final owned peel immediately before IR early-return.
-                    // Prefer *any* candidate that confirms owned (defining-module refresh).
-                    // Stale analyzer stubs may still report `call_site_expects_shared_borrow`
-                    // from field-read Borrowed metadata — do not let that block peeling when
-                    // another candidate has an owned emission contract (dogfood `policy: Policy`).
-                    {
-                        let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-                        let refreshed_sig =
-                            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-                                post_ir_borrow_sig.clone().or_else(|| signature.clone()),
-                                func_name,
-                                i,
-                                gen.global_signature_registry.as_deref(),
-                                &gen.signature_registry,
-                            );
-                        let owned_candidates = [
-                            gen.signature_registry.get_signature(func_name),
-                            gen.signature_registry.get_signature(simple),
+                    // Multi-candidate owned peel + recursive same-fn strip (IR helper).
+                    let peel_sig = post_ir_borrow_sig.as_ref().or(signature.as_ref()).or_else(|| {
+                        gen.signature_registry.get_signature(func_name).or_else(|| {
                             gen.global_signature_registry
                                 .as_ref()
-                                .and_then(|g| g.get_signature(func_name)),
-                            gen.global_signature_registry
-                                .as_ref()
-                                .and_then(|g| g.get_signature(simple)),
-                            post_ir_borrow_sig.as_ref(),
-                            signature.as_ref(),
-                            refreshed_sig.as_ref(),
-                        ];
-                        let any_emitted_owned = owned_candidates.iter().flatten().any(|sig| {
-                            let pidx = sig.arg_param_index(i);
-                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                sig, pidx,
-                            )
-                        });
-                        let any_emits_shared = owned_candidates.iter().flatten().any(|sig| {
-                            let pidx = sig.arg_param_index(i);
-                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                sig, pidx,
-                            )
-                        });
-                        let any_expects_owned = owned_candidates.iter().flatten().any(|sig| {
-                            let pidx = sig.arg_param_index(i);
-                            crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
-                        });
-                        let any_expects_mut = owned_candidates.iter().flatten().any(|sig| {
-                            let pidx = sig.arg_param_index(i);
-                            matches!(
-                                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                                    sig, i,
-                                ),
-                                OwnershipMode::MutBorrowed,
-                            ) || sig.param_types.get(pidx).is_some_and(|t| {
-                                matches!(t, Type::MutableReference(_))
-                            })
-                        }) || gen
-                            .function_emitted_mut_arg_indices
-                            .get(func_name)
-                            .or_else(|| {
-                                func_name.rsplit("::").next().and_then(|simple| {
-                                    gen.function_emitted_mut_arg_indices.get(simple)
-                                })
-                            })
-                            .is_some_and(|indices| indices.contains(&i));
-                        let peel_owned = (any_emitted_owned
-                            || (!any_emits_shared && any_expects_owned))
-                            // Runtime-scanner borrow (json::get, subprocess::spawn) must
-                            // survive even when a layered WJ stub claims owned.
-                            && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-                                &gen.signature_registry,
-                                func_name,
-                                post_ir_borrow_sig.as_ref().or(signature.as_ref()),
-                                i,
-                            );
-                        let confirmed_shared_ref = refreshed_sig
-                            .as_ref()
-                            .or(post_ir_borrow_sig.as_ref())
-                            .is_some_and(|sig| {
-                                let pidx = sig.arg_param_index(i);
-                                crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                                    sig, pidx,
-                                )
-                            });
-                        // Owned emission wins over a stale Borrowed stub among layered
-                        // candidates (dogfood `policy: Policy`). Never peel `&mut` when any
-                        // candidate expects mut-borrow (fill_grid(grid: &mut VoxelGrid)).
-                        if peel_owned && !any_expects_mut && !confirmed_shared_ref {
-                            if coerced.starts_with("&mut ") {
-                                // Only strip `&mut` when owned contract is confirmed.
-                                if any_emitted_owned {
-                                    coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
-                                        &coerced,
-                                    )
-                                    .to_string();
-                                }
-                            } else if coerced.starts_with('&') && any_emitted_owned {
-                                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
-                                    &coerced,
-                                )
-                                .to_string();
-                            }
-                        }
-                    }
-                    // Same-function recursive call: if this fn emitted an owned formal for the
-                    // binding, strip stale `&` even when registry metadata still says Borrowed
-                    // (dogfood resolve_check / field-read keep-owned mismatch).
-                    if let Expression::Identifier { name, .. } = arg {
-                        let recursive = gen
-                            .current_function_name
-                            .as_deref()
-                            .is_some_and(|cur| {
-                                func_name == cur
-                                    || func_name.rsplit("::").next().is_some_and(|s| s == cur)
-                            });
-                        if recursive
-                            && gen.current_function_params.iter().any(|p| p.name == *name)
-                            && !gen.emitted_rust_ref_formals.contains(name)
-                            && !gen.str_ref_optimized_params.contains(name.as_str())
-                            && coerced.starts_with('&')
-                            && !coerced.starts_with("&mut ")
-                        {
-                            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
-                                &coerced,
-                            )
-                            .to_string();
-                        }
+                                .and_then(|g| g.get_signature(func_name))
+                        })
+                    });
+                    if let Some(sig) = peel_sig {
+                        gen.reconcile_post_ir_mut_borrow_and_owned_peel(
+                            &mut coerced,
+                            arg,
+                            func_name,
+                            i,
+                            sig,
+                            &gen.signature_registry,
+                            associated_receiver.as_deref(),
+                            Some(arguments.len()),
+                            has_ownership_collision,
+                        );
                     }
                     if matches!(
                         arg,
@@ -942,71 +837,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     false,
                     "IR call-site coercion must be total for non-extern callees when call_sites is on ({func_name})"
                 );
-                let callee_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                    signature.clone(),
-                    gen.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(func_name).cloned()),
-                    gen.signature_registry.get_signature(func_name).cloned(),
-                    func_name.rsplit("::").next().and_then(|simple| {
-                        gen.global_signature_registry
-                            .as_ref()
-                            .and_then(|g| g.get_signature(simple).cloned())
-                            .or_else(|| gen.signature_registry.get_signature(simple).cloned())
-                    }),
-                ]);
-                if let Some(sig) = callee_sig.as_ref() {
-                    let pidx = sig.arg_param_index(i);
-                    let owned_formal =
-                        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                            sig, pidx,
-                        ) || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx);
-                    let needs_mut = !owned_formal
-                        && (matches!(
-                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                                sig, i,
-                            ),
-                            OwnershipMode::MutBorrowed,
-                        ) || sig.param_types.get(pidx).is_some_and(|t| {
-                            matches!(t, Type::MutableReference(_))
-                        }));
-                    if !has_ownership_collision
-                        && needs_mut
-                        && crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(arg)
-                    {
-                        let mut coerced = arg_str.clone();
-                        if !coerced.starts_with("&mut ") {
-                            crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
-                                arg,
-                                &mut coerced,
-                                &gen.current_function_params,
-                                &gen.inferred_mut_borrowed_params,
-                            );
-                        }
-                        return vec![coerced];
-                    }
-                }
-                arg_str = gen.maybe_auto_clone_call_arg(arg, &arg_str, Some(func_name), Some(i));
-                if !arg_str.starts_with('&')
-                    && matches!(arg, Expression::Identifier { .. })
-                    && crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
-                        func_name,
-                    )
-                {
-                    if let (Some(rt), Some(method)) = (
-                        associated_receiver.as_deref(),
-                        func_name.rsplit_once("::").map(|(_, m)| m),
-                    ) {
-                        if gen.method_registry_arg_expects_shared_borrow(
-                            rt,
-                            method,
-                            i,
-                            arguments.len(),
-                        ) {
-                            arg_str = format!("&{arg_str}");
-                        }
-                    }
-                }
+                // Phase 5: never fall through to legacy ownership when call_sites is on.
+                // IR is total for known callees — emit prepared arg as-is rather than
+                // re-entering ~1.5k LOC of pre-IR heuristics.
+                return vec![arg_str];
             }
 
             // Auto-convert string literals to String for functions expecting owned String
