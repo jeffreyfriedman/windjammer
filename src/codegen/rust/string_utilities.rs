@@ -268,10 +268,23 @@ pub fn type_qualified_associated_string_literal_needs_rust_owned_string(
     if let Some(s) = resolved {
         return call_site_param_expects_owned_string(s, arg_index);
     }
-    // Unknown associated call with no metadata — do not guess owned literals.
-    // Boundary / cross-crate callees must supply signatures; rustc or boundary
-    // hard-errors catch gaps (no name-based ownership heuristics).
-    false
+    // No WJ / registry metadata for a type-qualified associated call (`Column::new("…")`).
+    // External Rust path-deps commonly take owned `String` at that boundary. Auto-own
+    // unless stdlib consensus says Pattern / `&str` for this associated simple name —
+    // call-shape driven (type-qualified + arg0), never method-name lists like `new`/`from`.
+    let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+    let receiver = qualified_name.rsplit_once("::").map(|(rt, _)| rt);
+    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+    if crate::codegen::rust::stdlib_method_traits::method_arg_is_string_pattern_qualified(
+        simple, receiver, &stdlib, arg_index,
+    ) || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
+        simple, receiver, &stdlib, arg_index,
+    ) || crate::codegen::rust::stdlib_method_traits::method_is_string_search_qualified(
+        simple, receiver, &stdlib,
+    ) {
+        return false;
+    }
+    true
 }
 
 /// Bare string literals on instance method calls (`table.empty_message("lit")`) must
@@ -318,8 +331,9 @@ pub fn unresolved_instance_method_string_literal_needs_rust_owned_string(
         return false;
     }
 
-    // Unknown instance method with no metadata — do not guess owned literals.
-    false
+    // External builders (`table.empty_message("…")`) with no WJ signature: auto-own
+    // at the Rust boundary. Stdlib Pattern/`&str` consensus already returned false.
+    true
 }
 
 /// Parameter type is `&String` — a reference to an owned String.
@@ -616,6 +630,18 @@ pub fn string_literal_needs_owned_coercion_with_enum(
                 }
             }
         }
+        // Empty / stub signature: treat like unresolved instance method
+        // (cross-crate builders — receiver may be unknown on chains).
+        if let Some(m) = method {
+            return unresolved_instance_method_string_literal_needs_rust_owned_string(
+                m,
+                arg_index,
+                None,
+                &crate::analyzer::SignatureRegistry::stdlib(),
+                None,
+                receiver_type,
+            );
+        }
         return false;
     };
 
@@ -716,7 +742,16 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     let callee_emits_rust_ref = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
         sig, param_idx,
     );
+    let param_types_say_shared_text = sig.param_types.get(param_idx).is_some_and(|t| {
+        param_is_rust_str_ref(t)
+            || matches!(
+                t,
+                Type::Reference(inner)
+                    if crate::codegen::rust::types::is_windjammer_text_type(inner)
+            )
+    });
     let callee_expects_rust_borrow = callee_emits_rust_ref
+        || param_types_say_shared_text
         || (!crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
             sig, param_idx,
         ) && (matches!(effective, OwnershipMode::Borrowed)
@@ -753,6 +788,14 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             && crate::codegen::rust::types::is_windjammer_text_type(t)
     }) && !callee_emits_rust_ref
+        && !sig.param_types.get(param_idx).is_some_and(|t| {
+            param_is_rust_str_ref(t)
+                || matches!(
+                    t,
+                    Type::Reference(inner)
+                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                )
+        })
     {
         return;
     }
@@ -1045,9 +1088,9 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_builder_method_literal_does_not_guess_owned() {
+    fn unresolved_builder_method_literal_auto_owns_without_wj_sig() {
         assert!(
-            !unresolved_instance_method_string_literal_needs_rust_owned_string(
+            unresolved_instance_method_string_literal_needs_rust_owned_string(
                 "empty_message",
                 0,
                 None,
@@ -1055,7 +1098,7 @@ mod tests {
                 None,
                 Some("Table"),
             ),
-            "missing signature must not guess owned literals"
+            "cross-crate builders without WJ meta must auto-own bare string lits"
         );
     }
 
@@ -1086,9 +1129,9 @@ mod tests {
     }
 
     #[test]
-    fn receiver_known_unresolved_builder_does_not_guess_owned() {
+    fn receiver_known_unresolved_builder_auto_owns_literal() {
         assert!(
-            !string_literal_needs_owned_coercion_with_enum(
+            string_literal_needs_owned_coercion_with_enum(
                 None,
                 0,
                 Some("empty_message"),
@@ -1096,12 +1139,12 @@ mod tests {
                 None,
                 None,
             ),
-            "receiver+method without sig must not guess owned coercion"
+            "receiver+method without WJ sig must auto-own builder string lits"
         );
     }
 
     #[test]
-    fn static_impl_borrowed_string_formal_does_not_coerce_identifiers_to_owned() {
+    fn static_impl_borrowed_string_formal_literals_still_auto_own() {
         use crate::analyzer::{FunctionSignature, OwnershipMode};
         let sig = FunctionSignature {
             name: "new".into(),
@@ -1116,8 +1159,10 @@ mod tests {
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
+        // Stale Borrowed on plain `String` must not suppress `.to_string()` for literals
+        // (store-forced Owned emission / cross-crate factories).
         assert!(
-            !string_literal_needs_owned_coercion_with_enum(
+            string_literal_needs_owned_coercion_with_enum(
                 Some(&sig),
                 0,
                 Some("new"),
@@ -1125,7 +1170,7 @@ mod tests {
                 None,
                 None,
             ),
-            "bare String + Borrowed static impl must not force owned coercion"
+            "plain String formals auto-own literals even with stale Borrowed ownership"
         );
     }
 
