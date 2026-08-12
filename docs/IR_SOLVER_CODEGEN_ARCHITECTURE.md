@@ -171,9 +171,10 @@ For every coercion rule or constraint change:
 - **Cross-crate bare lit auto-own:** type-qualified / unresolved-instance helpers default to owned when no Pattern/`&str` evidence (no `::new` name lists); empty stub sigs fall through to the same path.
 - **Prefer-shared enforce + copy-aggregate `&mut` peel in reconcile:** `enforce_ir_ownership_preserving_confirmed_shared_ref` and `peel_spurious_mut_borrow_on_owned_copy_aggregate` run at the start of `reconcile_post_ir_mut_borrow_and_owned_peel`; duplicated regular_call clusters removed; method IR mid-path enforce deleted (terminal reconcile owns the contract).
 - **Method/field-access post-IR tails in reconcile:** `peel_copy_aggregate_caller_into_owned_callee` (regression-060), match-arm readonly text borrow, Pattern/`&str` normalize, runtime-std WJ-owned/Rust-borrowed (`json::get` via signature, not module name), stub associated/instance auto-own, shared-ref strip. Field-access IR paths now call terminal reconcile. Debug collision logs no longer filter hardcoded callee names.
+- **Mixed-forwarder / owned-outer in reconcile:** `apply_post_ir_forwarder_owned_outer_and_reuse` uses IR `compute_coercion` plus shared forwarder helpers; method IR path no longer duplicates wants_ref clusters. `should_borrow_at_call_site` no longer takes a live method-name for ownership (unused `_method_name`).
 - **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test.rs`.
 
-Remaining: delete legacy `!call_sites` paths when opt-out is retired; fold remaining method mixed-forwarder / wants_ref clusters into IR coercion.
+Remaining: delete legacy `!call_sites` paths when opt-out is retired.
 
 ## Related Documentation
 
