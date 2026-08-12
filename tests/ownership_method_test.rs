@@ -386,12 +386,17 @@ impl Inventory {
 
     // The manually-written closure in count_not_matching should pass through as a closure.
     // Since it captures `predicate` from the enclosing scope, the compiler adds `move`.
+    // Filter yields `&Item` into owned `fn(Item)` — IR may insert `.clone()`.
     assert!(
         generated.contains("|e| !predicate(e)")
             || generated.contains("|e| !(predicate(e))")
+            || generated.contains("|e| !predicate(e.clone())")
+            || generated.contains("|e| !(predicate(e.clone()))")
             || generated.contains("move |e| !predicate(e)")
-            || generated.contains("move |e| !(predicate(e))"),
-        "Manually written closure should be preserved (with possible move). Generated:\n{}",
+            || generated.contains("move |e| !(predicate(e))")
+            || generated.contains("move |e| !predicate(e.clone())")
+            || generated.contains("move |e| !(predicate(e.clone()))"),
+        "Manually written closure should be preserved (with possible move/clone). Generated:\n{}",
         generated
     );
 }

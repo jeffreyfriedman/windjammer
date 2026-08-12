@@ -32,6 +32,44 @@ pub fn type_is_usize(ty: &Type) -> bool {
 ///
 /// Signature-driven: only runs when the resolved formal is `usize`. Skips when the
 /// argument is already usize-typed or already lowered with `as usize` / `_usize`.
+/// Undo a spurious `1_usize` / `n as usize` when the resolved formal is not `usize`
+/// (e.g. numeric inference applied Vec::insert to a HashMap key before codegen).
+pub fn strip_erroneous_usize_suffix_for_non_usize_formal(
+    arg: &Expression,
+    arg_str: &mut String,
+    formal: Option<&Type>,
+) {
+    if formal.is_some_and(type_is_usize) {
+        return;
+    }
+    match arg {
+        Expression::Literal {
+            value: Literal::Int(val),
+            ..
+        } => {
+            let expected = format!("{val}_usize");
+            if *arg_str == expected {
+                *arg_str = val.to_string();
+            }
+        }
+        Expression::Identifier { .. } => {
+            if let Some(base) = arg_str.strip_suffix(" as usize") {
+                *arg_str = base.to_string();
+            }
+        }
+        _ => {
+            if let Some(base) = arg_str
+                .strip_prefix('(')
+                .and_then(|s| s.strip_suffix(" as usize)"))
+            {
+                *arg_str = base.to_string();
+            } else if let Some(base) = arg_str.strip_suffix(" as usize") {
+                *arg_str = base.to_string();
+            }
+        }
+    }
+}
+
 pub fn coerce_arg_str_for_usize_formal(
     arg: &Expression,
     arg_str: &mut String,
@@ -45,6 +83,19 @@ pub fn coerce_arg_str_for_usize_formal(
         return;
     }
     if arg_str.contains(" as usize") || arg_str.ends_with("_usize") {
+        return;
+    }
+    // Never usize-cast text / constructed values. A wrong suffix signature
+    // (Vec::insert vs HashMap::insert) must not turn `"key".to_string()` into usize.
+    if matches!(
+        arg,
+        Expression::Literal {
+            value: Literal::String(_),
+            ..
+        }
+    ) || arg_str.contains(".to_string()")
+        || arg_str.contains("String::")
+    {
         return;
     }
     // Strip a stale signed cast from IR when WJ used to declare int capacity

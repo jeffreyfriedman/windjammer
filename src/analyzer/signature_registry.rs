@@ -514,6 +514,10 @@ impl SignatureRegistry {
 
     /// Find a signature matching the simple name with a specific argument count.
     /// Uses the method index for fast qualified-name lookup.
+    ///
+    /// When multiple distinct receivers share the same simple name + arg count
+    /// (`Vec::insert` / `HashMap::insert` / `VecDeque::insert`), returns `None`
+    /// so callers must resolve with a receiver type — never an arbitrary homonym.
     pub fn find_signature_by_name_and_arg_count(
         &self,
         name: &str,
@@ -530,6 +534,7 @@ impl SignatureRegistry {
             }
         }
         if let Some(keys) = self.method_index.get(name) {
+            let mut matches: Vec<&FunctionSignature> = Vec::new();
             for key in keys {
                 if let Some(sig) = self.signatures.get(key) {
                     let sig_args = if sig.has_self_receiver {
@@ -538,9 +543,15 @@ impl SignatureRegistry {
                         sig.param_ownership.len()
                     };
                     if sig_args == arg_count {
-                        return Some(sig);
+                        matches.push(sig);
                     }
                 }
+            }
+            if matches.len() == 1 {
+                return Some(matches[0]);
+            }
+            if matches.len() > 1 {
+                return None;
             }
         }
         self.global_fallback
@@ -606,9 +617,9 @@ impl SignatureRegistry {
                 }
             }
         }
-        self.global_fallback.as_ref().and_then(|g| {
-            g.find_delegation_callee(caller_qualified, method, arg_count)
-        })
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.find_delegation_callee(caller_qualified, method, arg_count))
     }
 
     /// Resolve `TypeName::method` for call-site borrow coercion when homonyms exist.
@@ -765,8 +776,8 @@ impl SignatureRegistry {
                             has_self_receiver,
                             is_extern: false,
                             emitted_rust_ref_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
+                            field_extract_params: None,
+                            forwarding_borrow_params: None,
                         };
                         let key = format!("{}::{}", decl.name, method.name);
                         registry.trait_method_keys.insert(key.clone());
@@ -951,8 +962,9 @@ impl SignatureRegistry {
                     let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
                     // String ↔ `&str` / `Reference(string)` is a codegen text-formal
                     // refinement (regression-049), not a cross-module type collision.
-                    let text_formal_refinement = Self::is_text_formal_type_refinement(existing, sig)
-                        || Self::is_text_formal_type_refinement(sig, existing);
+                    let text_formal_refinement =
+                        Self::is_text_formal_type_refinement(existing, sig)
+                            || Self::is_text_formal_type_refinement(sig, existing);
                     if !stub_like && !text_formal_refinement {
                         self.type_collision_keys.insert(name.clone());
                     }
@@ -978,8 +990,8 @@ impl SignatureRegistry {
                     }
                 }
                 if !codegen_refreshed {
-                // Keep converged dependency / multi-pass ownership over per-file stubs.
-                if crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(sig)
+                    // Keep converged dependency / multi-pass ownership over per-file stubs.
+                    if crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(sig)
                     && !crate::codegen::rust::signature_promotion::signature_is_declaration_stub_like(
                         existing,
                     )
@@ -989,24 +1001,24 @@ impl SignatureRegistry {
                 {
                     continue;
                 }
-                // Cross-file: caller analysis re-registers `Type::method` with declaration
-                // `Owned` metadata after the defining module already converged borrows
-                // (e.g. squad.wj `Squad::new` → &str, then caller.wj merge overwrites).
-                //
-                // Guard: if sig introduces borrows where existing has Owned, sig is a
-                // body-analysis refinement — always insert it (don't skip).
-                let sig_refines_with_borrows =
-                    sig.param_ownership.iter().enumerate().any(|(idx, o)| {
-                        if sig.has_self_receiver && idx == 0 {
-                            return false;
-                        }
-                        matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-                            && existing
-                                .param_ownership
-                                .get(idx)
-                                .is_some_and(|eo| matches!(eo, OwnershipMode::Owned))
-                    });
-                if !sig_refines_with_borrows
+                    // Cross-file: caller analysis re-registers `Type::method` with declaration
+                    // `Owned` metadata after the defining module already converged borrows
+                    // (e.g. squad.wj `Squad::new` → &str, then caller.wj merge overwrites).
+                    //
+                    // Guard: if sig introduces borrows where existing has Owned, sig is a
+                    // body-analysis refinement — always insert it (don't skip).
+                    let sig_refines_with_borrows =
+                        sig.param_ownership.iter().enumerate().any(|(idx, o)| {
+                            if sig.has_self_receiver && idx == 0 {
+                                return false;
+                            }
+                            matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                                && existing
+                                    .param_ownership
+                                    .get(idx)
+                                    .is_some_and(|eo| matches!(eo, OwnershipMode::Owned))
+                        });
+                    if !sig_refines_with_borrows
                     && (crate::codegen::rust::signature_promotion::prefer_converged_over_stub(
                         sig, existing,
                     ) || crate::codegen::rust::signature_promotion::global_has_borrowed_text_over_local_owned_stub(
@@ -1140,9 +1152,11 @@ mod tests {
             sig.param_ownership
         );
         assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed);
-        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
-            sig, 1
-        ));
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                sig, 1
+            )
+        );
     }
 
     #[test]
@@ -1157,16 +1171,18 @@ mod tests {
             sig.param_ownership
         );
         assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
-        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
-            sig, 0
-        ));
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                sig, 0
+            )
+        );
     }
 
     #[test]
     fn test_analyzed_json_get_keeps_runtime_borrow() {
+        use crate::analyzer::Analyzer;
         use crate::lexer::Lexer;
         use crate::parser::Parser;
-        use crate::analyzer::Analyzer;
 
         let source = r#"
 use std::json
@@ -1189,9 +1205,7 @@ pub fn parse_field(line: string) -> string {
         let program = parser.parse().unwrap();
         let mut analyzer = Analyzer::new();
         let (_, registry, _) = analyzer.analyze_program(&program).unwrap();
-        let sig = registry
-            .get_signature("json::get")
-            .expect("json::get");
+        let sig = registry.get_signature("json::get").expect("json::get");
         assert!(
             crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                 &registry,
@@ -1215,9 +1229,9 @@ pub fn parse_field(line: string) -> string {
 
     #[test]
     fn test_analyzed_subprocess_use_keeps_runtime_borrow_for_spawn() {
+        use crate::analyzer::Analyzer;
         use crate::lexer::Lexer;
         use crate::parser::Parser;
-        use crate::analyzer::Analyzer;
 
         let source = r#"
     use std::subprocess

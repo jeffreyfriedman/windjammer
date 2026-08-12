@@ -270,11 +270,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Associated functions: `TypeName::assoc()` (may parse as MethodCall).
                 // Signature-driven — same rules as Call(FieldAccess(Type, method)).
-                if let Expression::Identifier { name: type_name, .. } = &**object {
+                if let Expression::Identifier {
+                    name: type_name, ..
+                } = &**object
+                {
                     if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                        if let Some(ret) =
-                            self.infer_associated_fn_return_type(type_name, method)
-                        {
+                        if let Some(ret) = self.infer_associated_fn_return_type(type_name, method) {
                             return Some(ret);
                         }
                     }
@@ -391,9 +392,7 @@ impl<'ast> CodeGenerator<'ast> {
                         name: type_name, ..
                     } = object
                     {
-                        if let Some(ret) =
-                            self.infer_associated_fn_return_type(type_name, field)
-                        {
+                        if let Some(ret) = self.infer_associated_fn_return_type(type_name, field) {
                             return Some(ret);
                         }
                     }
@@ -413,7 +412,21 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 // Pattern: simple function call → "function_name"
+                // Also: collapsed `Type::assoc` path as a single Identifier (`HashMap::new`).
                 if let Expression::Identifier { name, .. } = function {
+                    if let Some((type_name, method)) = name.rsplit_once("::") {
+                        if type_name
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_uppercase())
+                        {
+                            if let Some(ret) =
+                                self.infer_associated_fn_return_type(type_name, method)
+                            {
+                                return Some(ret);
+                            }
+                        }
+                    }
                     if let Some(sig) = self.get_signature_with_global(name.as_str()) {
                         return sig.return_type.clone();
                     }
@@ -508,15 +521,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 ret.clone()
             }
-            Type::Option(inner) => Type::Option(Box::new(Self::substitute_stdlib_generics(
-                inner, receiver,
-            ))),
-            Type::Reference(inner) => Type::Reference(Box::new(Self::substitute_stdlib_generics(
-                inner, receiver,
-            ))),
-            Type::MutableReference(inner) => Type::MutableReference(Box::new(
-                Self::substitute_stdlib_generics(inner, receiver),
-            )),
+            Type::Option(inner) => {
+                Type::Option(Box::new(Self::substitute_stdlib_generics(inner, receiver)))
+            }
+            Type::Reference(inner) => {
+                Type::Reference(Box::new(Self::substitute_stdlib_generics(inner, receiver)))
+            }
+            Type::MutableReference(inner) => {
+                Type::MutableReference(Box::new(Self::substitute_stdlib_generics(inner, receiver)))
+            }
             other => other.clone(),
         }
     }

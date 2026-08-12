@@ -6067,28 +6067,11 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let Some(methods) = self.struct_method_ast_formal_param_types.get(struct_name) else {
-            // Fallback while AST formals are not yet registered for this impl.
-            let method_names = &self.current_impl_methods;
-            return method_names.len() >= 2
-                && method_names.iter().any(|m| {
-                    self.signature_registry
-                        .get_signature(&format!("{struct_name}::{m}"))
-                        .or_else(|| self.signature_registry.lookup_method(m))
-                        .is_some_and(|sig| {
-                            sig.formal_param_types.iter().any(|t| {
-                                matches!(t, Type::Custom(n) if n == type_name)
-                                    && !self.is_type_copy(t)
-                            }) || sig.param_types.iter().any(|t| {
-                                let bare = match t {
-                                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                                        inner.as_ref()
-                                    }
-                                    other => other,
-                                };
-                                matches!(bare, Type::Custom(n) if n == type_name)
-                            })
-                        })
-                });
+            // No AST formals yet — do NOT invent an owned-key facade from registry /
+            // engine metadata alone. Stale `Owned QuestId` on `is_quest_active` would
+            // otherwise force owned formals while the body only does `map.get(id)`
+            // (defining-module must converge to `&QuestId`).
+            return false;
         };
         let methods_with_owned_same_type = methods
             .values()
@@ -6115,6 +6098,14 @@ impl<'ast> CodeGenerator<'ast> {
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // Map/set key-only params must emit `&T` (HashMap::get `&K`) — never keep-owned.
+        if self.param_only_forwarded_to_collection_key_callee(
+            func.body.as_slice(),
+            &param.name,
+            func,
+        ) {
+            return false;
+        }
         self.struct_is_owned_engine_key_facade(struct_name, param)
             && !self.param_should_emit_borrowed_delegation_formal(param, func)
     }

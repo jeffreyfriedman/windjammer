@@ -112,25 +112,26 @@ fn apply_owned_string_literal_coercion<'ast>(
         }
         let runtime_module = func_name.split("::").next();
         // Prefer defining-module refreshed `&str` over stale analyzer stubs.
-        let mut sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-            gen.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(func_name).cloned()),
-            if allow_simple_fallback {
+        let mut sig =
+            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                 gen.global_signature_registry
                     .as_ref()
-                    .and_then(|g| g.get_signature(simple_name).cloned())
-            } else {
-                None
-            },
-            gen.signature_registry.get_signature(func_name).cloned(),
-            if allow_simple_fallback {
-                gen.signature_registry.get_signature(simple_name).cloned()
-            } else {
-                None
-            },
-            signature.clone(),
-        ]);
+                    .and_then(|g| g.get_signature(func_name).cloned()),
+                if allow_simple_fallback {
+                    gen.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple_name).cloned())
+                } else {
+                    None
+                },
+                gen.signature_registry.get_signature(func_name).cloned(),
+                if allow_simple_fallback {
+                    gen.signature_registry.get_signature(simple_name).cloned()
+                } else {
+                    None
+                },
+                signature.clone(),
+            ]);
         let pidx = sig.as_ref().map(|s| s.arg_param_index(i)).unwrap_or(i);
         for challenger in [
             gen.global_signature_registry
@@ -181,14 +182,18 @@ fn apply_owned_string_literal_coercion<'ast>(
             let owned_contract = matches!(
                 crate::codegen::rust::call_signature_resolution::effective_param_ownership(s, idx),
                 OwnershipMode::Owned,
-            ) || matches!(s.param_ownership.get(idx), Some(OwnershipMode::Owned));
+            ) || matches!(
+                s.param_ownership.get(idx),
+                Some(OwnershipMode::Owned)
+            );
             let not_str_ref = !s
                 .param_types
                 .get(idx)
                 .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
             text_formal && owned_contract && not_str_ref
         }) {
-            *arg_str = format!("{}.to_string()", arg_str.trim_start_matches('&'));
+            let base = arg_str.trim_start_matches('&');
+            *arg_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(base);
         }
     }
 }
@@ -425,19 +430,19 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
                 // Auto-convert string literals / &str slices to String for Option/Result
                 // wrappers when the payload is owned string (`Option<string>`, `Result<string, _>`).
-                let payload_wants_owned_string = match (&gen.current_function_return_type, func_name)
-                {
-                    (Some(Type::Option(inner)), "Some") => {
-                        crate::codegen::rust::string_utilities::type_is_owned_string(inner)
-                    }
-                    (Some(Type::Result(ok, _)), "Ok") => {
-                        crate::codegen::rust::string_utilities::type_is_owned_string(ok)
-                    }
-                    (Some(Type::Result(_, err)), "Err") => {
-                        crate::codegen::rust::string_utilities::type_is_owned_string(err)
-                    }
-                    _ => false,
-                };
+                let payload_wants_owned_string =
+                    match (&gen.current_function_return_type, func_name) {
+                        (Some(Type::Option(inner)), "Some") => {
+                            crate::codegen::rust::string_utilities::type_is_owned_string(inner)
+                        }
+                        (Some(Type::Result(ok, _)), "Ok") => {
+                            crate::codegen::rust::string_utilities::type_is_owned_string(ok)
+                        }
+                        (Some(Type::Result(_, err)), "Err") => {
+                            crate::codegen::rust::string_utilities::type_is_owned_string(err)
+                        }
+                        _ => false,
+                    };
                 if matches!(
                     arg,
                     Expression::Literal {
@@ -519,8 +524,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         let args = if let Some(suffix) = cast_suffix {
             if func_str.starts_with("Some::<") && arguments.len() == 1 {
                 let (_, inner) = &arguments[0];
-                if gen.expression_produces_usize(inner)
-                    || gen.infer_expression_type_is_usize(inner)
+                if gen.expression_produces_usize(inner) || gen.infer_expression_type_is_usize(inner)
                 {
                     args.into_iter()
                         .map(|a| format!("{a}{suffix}"))
@@ -589,9 +593,9 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     return_ownership: OwnershipMode::Owned,
                     has_self_receiver: false,
                     is_extern: false,
-            emitted_rust_ref_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
+                    emitted_rust_ref_params: None,
+                    field_extract_params: None,
+                    forwarding_borrow_params: None,
                 })
             } else {
                 None
@@ -729,7 +733,6 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     );
 
     // Legacy heuristic auto-borrow deleted (Phase 5): IR call-site coercion owns this.
-
 
     apply_callee_mut_borrow_to_call_args(gen, func_name, &signature, arguments, &mut args);
     apply_owned_string_literal_coercion(gen, func_name, &signature, arguments, &mut args);

@@ -36,9 +36,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let elem_from_return = match &self.current_function_return_type {
             Some(Type::Vec(inner)) if collection_name == "Vec" => Some(inner.as_ref().clone()),
-            Some(Type::Parameterized(b, args))
-                if b == collection_name && !args.is_empty() =>
-            {
+            Some(Type::Parameterized(b, args)) if b == collection_name && !args.is_empty() => {
                 Some(args[0].clone())
             }
             _ => None,
@@ -127,10 +125,7 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(current_scope) = self.local_variable_scopes.last_mut() {
                 current_scope.insert(name.to_string());
             }
-        } else if matches!(
-            pattern,
-            Pattern::Tuple(_) | Pattern::EnumVariant(_, _)
-        ) {
+        } else if matches!(pattern, Pattern::Tuple(_) | Pattern::EnumVariant(_, _)) {
             let mut bound = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut bound);
             if let Some(current_scope) = self.local_variable_scopes.last_mut() {
@@ -818,8 +813,7 @@ impl<'ast> CodeGenerator<'ast> {
             };
             let Some(binding) = binding else { continue };
             if let Some((_, ty)) = field_types.iter().find(|(k, _)| k == field_name) {
-                self.local_var_types
-                    .insert(binding.to_string(), ty.clone());
+                self.local_var_types.insert(binding.to_string(), ty.clone());
             }
         }
     }
