@@ -552,10 +552,10 @@ pub fn expression_supports_shared_borrow_at_call_site(
     ) {
         return true;
     }
-    // Constructor / factory rvalues (`QuestId::from_u32(n)`) borrow to `&T` formals.
+    // Constructor / factory rvalues (`QuestId::from_u32(n)`) and unary temps borrow to `&T`.
     if matches!(
         arg_expr,
-        Expression::Call { .. } | Expression::MethodCall { .. }
+        Expression::Call { .. } | Expression::MethodCall { .. } | Expression::Unary { .. }
     ) && !expression_is_copy_literal(arg_expr)
     {
         return true;

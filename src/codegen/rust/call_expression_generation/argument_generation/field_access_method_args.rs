@@ -60,8 +60,9 @@ fn coerce_usize_formal_arg<'ast>(
     );
 }
 
-/// `json::get(value, …)` and friends: WJ declares owned `Value`, Rust takes `&Value`.
-fn maybe_borrow_runtime_std_json_value_arg<'ast>(
+/// Runtime-std WJ-owned / Rust-borrowed slots (`json::get` `&Value`).
+/// Signature-driven via `runtime_std_param_needs_auto_borrow_resolved` — not module names.
+fn maybe_borrow_runtime_std_wj_owned_rust_borrowed_arg<'ast>(
     gen: &CodeGenerator<'ast>,
     qualified_name: &str,
     arg_index: usize,
@@ -69,13 +70,6 @@ fn maybe_borrow_runtime_std_json_value_arg<'ast>(
     mut arg_str: String,
 ) -> String {
     if arg_str.starts_with('&') {
-        return arg_str;
-    }
-    if arg_index != 0 {
-        return arg_str;
-    }
-    let module = qualified_name.split("::").next().unwrap_or("");
-    if module != "json" {
         return arg_str;
     }
     if !matches!(
@@ -90,7 +84,23 @@ fn maybe_borrow_runtime_std_json_value_arg<'ast>(
     ) {
         return arg_str;
     }
-    arg_str.insert(0, '&');
+    let local = gen.signature_registry.get_signature(qualified_name);
+    let needs = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+        &gen.signature_registry,
+        qualified_name,
+        local,
+        arg_index,
+    ) || gen.global_signature_registry.as_ref().is_some_and(|g| {
+        crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+            g,
+            qualified_name,
+            g.get_signature(qualified_name).or(local),
+            arg_index,
+        )
+    });
+    if needs {
+        arg_str.insert(0, '&');
+    }
     arg_str
 }
 
@@ -283,44 +293,17 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                             )
                         })
                         .unwrap_or_else(|| sig.clone());
-                    coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
-                        gen,
+                    gen.reconcile_post_ir_mut_borrow_and_owned_peel(
+                        &mut coerced,
+                        arg_to_generate,
+                        &qualified_name,
+                        i,
                         &effective_sig,
-                        i,
-                        arg_to_generate,
-                        coerced,
-                        type_name.as_deref(),
-                        Some(call_method),
-                        Some(arguments.len()),
-                    );
-                    coerced = maybe_borrow_runtime_std_json_value_arg(
-                        gen,
-                        &qualified_name,
-                        i,
-                        arg_to_generate,
-                        coerced,
-                    );
-                    gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut coerced);
-                    if matches!(
-                        arg_to_generate,
-                        Expression::Literal {
-                            value: Literal::String(_),
-                            ..
-                        }
-                    ) && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
-                        &qualified_name,
-                        i,
-                        Some(sig),
                         &gen.signature_registry,
-                        gen.global_signature_registry.as_deref(),
-                    ) && !coerced.ends_with(".to_string()")
-                        && !coerced.ends_with(".to_owned()")
-                    {
-                        coerced = format!(
-                            "{}.to_string()",
-                            coerced.trim_start_matches('&')
-                        );
-                    }
+                        type_name.as_deref(),
+                        Some(arguments.len()),
+                        false,
+                    );
                     coerce_usize_formal_arg(gen, sig, i, arg_to_generate, &mut coerced);
                     return vec![coerced];
                 }
@@ -654,7 +637,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                 false,
             );
 
-            arg_str = maybe_borrow_runtime_std_json_value_arg(
+            arg_str = maybe_borrow_runtime_std_wj_owned_rust_borrowed_arg(
                 gen,
                 &qualified_name,
                 i,
@@ -744,46 +727,17 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                     None,
                 ) {
                     if let Some(ref sig) = fallback_sig {
-                        coerced = crate::codegen::rust::call_site_borrow::maybe_borrow_owned_vec_local_for_ref_formal(
-                            gen,
-                            sig,
-                            i,
+                        gen.reconcile_post_ir_mut_borrow_and_owned_peel(
+                            &mut coerced,
                             arg_to_generate,
-                            coerced,
+                            &qualified_name,
+                            i,
+                            sig,
+                            &gen.signature_registry,
                             type_name.as_deref(),
-                            Some(call_method),
                             Some(arguments.len()),
+                            false,
                         );
-                    }
-                    coerced = maybe_borrow_runtime_std_json_value_arg(
-                        gen,
-                        &qualified_name,
-                        i,
-                        arg_to_generate,
-                        coerced,
-                    );
-                    gen.strip_stale_amp_on_already_ref_arg(arg_to_generate, &mut coerced);
-                    if matches!(
-                        arg_to_generate,
-                        Expression::Literal {
-                            value: Literal::String(_),
-                            ..
-                        }
-                    ) && crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
-                        &qualified_name,
-                        i,
-                        fallback_sig.as_ref(),
-                        &gen.signature_registry,
-                        gen.global_signature_registry.as_deref(),
-                    ) && !coerced.ends_with(".to_string()")
-                        && !coerced.ends_with(".to_owned()")
-                    {
-                        coerced = format!(
-                            "{}.to_string()",
-                            coerced.trim_start_matches('&')
-                        );
-                    }
-                    if let Some(ref sig) = fallback_sig {
                         coerce_usize_formal_arg(gen, sig, i, arg_to_generate, &mut coerced);
                     }
                     return coerced;
@@ -796,7 +750,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                 return arg_str;
             }
 
-            arg_str = maybe_borrow_runtime_std_json_value_arg(
+            arg_str = maybe_borrow_runtime_std_wj_owned_rust_borrowed_arg(
                 gen,
                 &qualified_name,
                 i,
