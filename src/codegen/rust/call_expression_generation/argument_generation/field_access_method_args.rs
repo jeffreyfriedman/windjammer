@@ -301,6 +301,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         &effective_sig,
                         &gen.signature_registry,
                         type_name.as_deref(),
+                        Some(call_obj),
                         Some(arguments.len()),
                         false,
                     );
@@ -735,6 +736,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             sig,
                             &gen.signature_registry,
                             type_name.as_deref(),
+                            Some(call_obj),
                             Some(arguments.len()),
                             false,
                         );

@@ -342,6 +342,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             sig,
                             &gen.signature_registry,
                             associated_receiver.as_deref(),
+                            None,
                             Some(arguments.len()),
                             has_ownership_collision,
                         );

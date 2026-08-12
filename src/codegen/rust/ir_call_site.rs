@@ -2432,6 +2432,7 @@ impl<'ast> CodeGenerator<'ast> {
         sig: &crate::analyzer::FunctionSignature,
         registry: &SignatureRegistry,
         receiver_type_name: Option<&str>,
+        receiver: Option<&Expression<'ast>>,
         user_arg_count: Option<usize>,
         has_ownership_collision: bool,
     ) {
@@ -2834,6 +2835,17 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.strip_stale_amp_on_already_ref_arg(arg_expr, coerced);
 
+        // Mixed-forwarder / owned-outer / reuse-clone / pure-forwarding: IR coercion
+        // for self-receiver calls, then shared helpers. Copy-aggregate peel runs after
+        // so `&through` into owned `Lsn` is still stripped (regression-060).
+        self.apply_post_ir_forwarder_owned_outer_and_reuse(
+            coerced,
+            arg_expr,
+            &text_sig,
+            arg_index,
+            receiver,
+        );
+
         // After shared-borrow reapply: Copy-aggregate caller → owned Copy-aggregate
         // callee must not keep stale `&` (regression-060).
         self.peel_copy_aggregate_caller_into_owned_callee(
@@ -3109,6 +3121,151 @@ impl<'ast> CodeGenerator<'ast> {
         if !coerced.starts_with('&') {
             *coerced = format!("&{coerced}");
         }
+    }
+
+    /// Signature-driven `(wants_shared_ref, wants_owned)` for a call-site slot.
+    /// Owned Copy-aggregate emission beats stale IR Ref (regression-060).
+    pub(crate) fn call_site_slot_wants_ref_and_owned(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+    ) -> (bool, bool) {
+        let pidx = sig.arg_param_index(arg_index);
+        let wants_owned = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            sig, pidx,
+        ) || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
+            sig,
+            pidx,
+            |t| self.is_type_copy(t),
+        );
+        let wants_ref = crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
+            && !wants_owned;
+        (wants_ref, wants_owned)
+    }
+
+    /// Mixed-forwarder / owned-outer / reuse-clone / pure-forwarding strip.
+    ///
+    /// Uses IR `compute_coercion` for self-receiver calls, then the shared forwarder
+    /// helpers. `receiver` is the method object (`None` for free-function calls).
+    pub(crate) fn apply_post_ir_forwarder_owned_outer_and_reuse(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+        receiver: Option<&Expression<'ast>>,
+    ) {
+        let (wants_ref, wants_owned) = self.call_site_slot_wants_ref_and_owned(sig, arg_index);
+        let pidx = sig.arg_param_index(arg_index);
+
+        if let (Some(object), Expression::Identifier { name, .. }) = (receiver, arg_expr) {
+            let receiver_is_self =
+                crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(object);
+            let caller_owned_param = self.current_function_params.iter().any(|p| {
+                p.name == *name && !self.emitted_rust_ref_formals.contains(name)
+            });
+            let is_mixed_forwarder = self.current_fn_mixed_forwarder_params.contains(name);
+            if receiver_is_self && (caller_owned_param || is_mixed_forwarder) {
+                let body: Vec<_> = self.current_function_body.iter().copied().collect();
+                let if_facade_param =
+                    self.param_used_in_if_with_condition_and_branches(&body, name);
+                let mixed_forward_ref =
+                    (is_mixed_forwarder || if_facade_param) && self.in_if_condition;
+                let actual = self.infer_call_arg_actual_safety_type(arg_expr, coerced.as_str());
+                let expected =
+                    crate::ir::signature_bridge::safety_type_from_signature_param(sig, pidx);
+                let kind = crate::ir::coercion::compute_coercion(&actual, &expected);
+                if mixed_forward_ref
+                    || (matches!(
+                        kind,
+                        crate::ir::coercion::CoercionKind::Borrow
+                            | crate::ir::coercion::CoercionKind::MutBorrow
+                    ) && !self.caller_owned_non_copy_formal(name)
+                        && !wants_owned)
+                {
+                    if coerced.ends_with(".clone()") {
+                        let base = coerced.trim_end_matches(".clone()").trim();
+                        *coerced = format!("&{base}");
+                    } else if !coerced.starts_with('&') {
+                        *coerced = format!("&{coerced}");
+                    }
+                } else if matches!(kind, crate::ir::coercion::CoercionKind::Identity)
+                    && coerced.starts_with('&')
+                    && !coerced.starts_with("&mut ")
+                    && self.caller_owned_non_copy_formal(name)
+                {
+                    *coerced = coerced.trim_start_matches('&').to_string();
+                } else if wants_owned
+                    && !mixed_forward_ref
+                    && !self.current_fn_forward_ref_if_params.contains(name)
+                    && coerced.starts_with('&')
+                    && !coerced.starts_with("&mut ")
+                {
+                    let base = coerced.trim_start_matches('&');
+                    let copy_aggregate = self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && self.is_type_copy(&p.type_)
+                            && !crate::type_classification::is_copy_pass_by_value_formal(
+                                &p.type_,
+                            )
+                    });
+                    *coerced = if copy_aggregate || base.ends_with(".clone()") {
+                        base.trim_end_matches(".clone()").trim().to_string()
+                    } else {
+                        format!("{base}.clone()")
+                    };
+                }
+            }
+            self.apply_forward_ref_and_mixed_forwarder_call_coercion(
+                coerced,
+                arg_expr,
+                Some(object),
+                wants_ref,
+                wants_owned,
+            );
+        }
+
+        self.finalize_owned_outer_formal_call_arg(coerced, arg_expr, wants_ref, wants_owned);
+
+        if wants_owned
+            && !wants_ref
+            && !coerced.ends_with(".clone()")
+            && !coerced.starts_with('&')
+        {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.borrowed_iterator_vars.contains(name)
+                    && !crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
+                        self.current_function_return_type.as_ref(),
+                    )
+                {
+                    *coerced = format!("{coerced}.clone()");
+                } else if !self.match_arm_bindings.contains(name.as_str()) {
+                    let needs_reuse_clone = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                        a.needs_clone(name, self.current_statement_idx).is_some()
+                    });
+                    let skip_self = receiver.is_some_and(|object| {
+                        crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                            object,
+                        )
+                    });
+                    if needs_reuse_clone
+                        && self.caller_owned_non_copy_formal(name)
+                        && !skip_self
+                    {
+                        *coerced = format!("{coerced}.clone()");
+                    }
+                }
+            }
+        }
+
+        self.maybe_pure_forwarding_strip_call_arg(
+            coerced,
+            arg_expr,
+            None,
+            None,
+            Some(arg_index),
+            None,
+        );
     }
 
     /// Peel `&` / `(&x)` when a Copy-aggregate caller binding is passed into an
