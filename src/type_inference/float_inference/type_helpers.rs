@@ -323,7 +323,19 @@ impl FloatInference {
         let receiver_type = self
             .infer_type_from_expression(object)
             .or_else(|| context_type.cloned())?;
-        let receiver_is_map = self.extract_map_key_type(&receiver_type).is_some();
+        // Bare `HashMap` must still block suffix fallback (Vec::insert).
+        let receiver_is_map = self.extract_map_key_type(&receiver_type).is_some()
+            || match &receiver_type {
+                Type::Custom(n) => {
+                    let base = n.split('<').next().unwrap_or(n);
+                    matches!(base, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                }
+                Type::Parameterized(base, _) => {
+                    let b = crate::type_inference::generic_type_base_name(base);
+                    matches!(b, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                }
+                _ => false,
+            };
 
         let (qualified, receiver_generics) = match &receiver_type {
             Type::Parameterized(base, type_params) => {
@@ -362,7 +374,9 @@ impl FloatInference {
             // Fill remaining single-letter generics from receiver shape (HashMap<K,V>, Vec<T>).
             for param in &mut out {
                 if let Type::Custom(name) = param {
-                    if name.len() == 1 && name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                    if name.len() == 1
+                        && name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                    {
                         match name.as_str() {
                             "V" => {
                                 if let Some(v) = self.extract_map_value_type(&receiver_type) {
@@ -411,7 +425,9 @@ impl FloatInference {
 
     fn extract_map_key_type(&self, ty: &Type) -> Option<Type> {
         match ty {
-            Type::Parameterized(name, args) if (name == "HashMap" || name == "BTreeMap") && !args.is_empty() => {
+            Type::Parameterized(name, args)
+                if (name == "HashMap" || name == "BTreeMap") && !args.is_empty() =>
+            {
                 Some(args[0].clone())
             }
             Type::Custom(name) if name.starts_with("HashMap<") || name.starts_with("BTreeMap<") => {
@@ -495,7 +511,7 @@ impl FloatInference {
     /// Determine the return type of a method call
     /// Returns Some(FloatType) if the method is known to return f32/f64, None otherwise
     fn determine_method_return_type(&self, object: &Expression, method: &str) -> Option<FloatType> {
-        use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+        use crate::analyzer::{stdlib_method_traits, SignatureRegistry};
 
         let registry = SignatureRegistry::stdlib();
 

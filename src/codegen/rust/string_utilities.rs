@@ -71,8 +71,7 @@ pub fn match_arm_needs_string_ascription(body: &Expression) -> bool {
 
 /// True when `ty` is Windjammer/Rust owned string (`string` / `String`).
 pub fn type_is_owned_string(ty: &Type) -> bool {
-    matches!(ty, Type::String)
-        || matches!(ty, Type::Custom(n) if n == "String" || n == "string")
+    matches!(ty, Type::String) || matches!(ty, Type::Custom(n) if n == "String" || n == "string")
 }
 
 /// True when a type slot ultimately needs an owned `String` payload.
@@ -98,22 +97,49 @@ pub fn return_type_expects_owned_string(ret: &Option<Type>) -> bool {
 
 /// Generated Rust already produces an owned `String` (no second conversion pass).
 pub fn already_owned_string_expr(expr_str: &str) -> bool {
-    expr_str.ends_with(".to_string()")
-        || expr_str.ends_with(".into()")
-        || expr_str.ends_with(".clone()")
-        || expr_str.starts_with("String::from(")
-        || expr_str == "String::new()"
+    let mut s = expr_str.trim();
+    while let Some(inner) = s.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        s = inner.trim();
+    }
+    // Redundant `String::from("…").to_string()` is still owned — treat as owned so
+    // callers do not append another conversion, and normalize in coerce.
+    if let Some(base) = s.strip_suffix(".to_string()") {
+        let base = base.trim();
+        if base.starts_with("String::from(") || base == "String::new()" {
+            return true;
+        }
+    }
+    s.ends_with(".to_string()")
+        || s.ends_with(".into()")
+        || s.ends_with(".clone()")
+        || s.starts_with("String::from(")
+        || s == "String::new()"
 }
 
 /// Idempotent: coerce a generated expression to owned `String` without `.to_string()` leakage.
 pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
-    if already_owned_string_expr(expr_str) {
-        return expr_str.to_string();
+    let mut s = expr_str.trim().to_string();
+    while let Some(inner) = s
+        .strip_prefix('(')
+        .and_then(|x| x.strip_suffix(')'))
+        .map(|x| x.trim().to_string())
+    {
+        s = inner;
     }
-    if expr_str.starts_with('"') {
-        return crate::codegen::rust::literals::string_literal_to_owned_rust(expr_str);
+    // Normalize `String::from("…").to_string()` → `String::from("…")`.
+    if let Some(base) = s.strip_suffix(".to_string()") {
+        let base = base.trim();
+        if base.starts_with("String::from(") || base == "String::new()" {
+            return base.to_string();
+        }
     }
-    format!("{}.to_string()", expr_str)
+    if already_owned_string_expr(&s) {
+        return s;
+    }
+    if s.starts_with('"') {
+        return crate::codegen::rust::literals::string_literal_to_owned_rust(&s);
+    }
+    format!("{s}.to_string()")
 }
 
 // =============================================================================
@@ -186,9 +212,11 @@ pub fn call_site_param_expects_owned_string(
                     || crate::codegen::rust::types::is_windjammer_text_type(t)
             });
     }
-    if sig.param_types.get(idx).is_some_and(|t| {
-        param_is_rust_str_ref(t) || param_is_rust_string_ref(t)
-    }) {
+    if sig
+        .param_types
+        .get(idx)
+        .is_some_and(|t| param_is_rust_str_ref(t) || param_is_rust_string_ref(t))
+    {
         return false;
     }
     // Plain WJ owned `string` formals: trust source formal + Owned contract over stale
@@ -209,7 +237,11 @@ pub fn call_site_param_expects_owned_string(
             return true;
         }
     }
-    if sig.param_types.get(idx).is_some_and(param_is_owned_string_type) {
+    if sig
+        .param_types
+        .get(idx)
+        .is_some_and(param_is_owned_string_type)
+    {
         return true;
     }
     if matches!(
@@ -412,18 +444,33 @@ pub fn normalize_owned_string_producer_for_str_ref_param(
     arg_expr: &crate::parser::Expression,
     arg_str: &mut String,
 ) {
-    if arg_str.starts_with('&') {
+    if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
+        // Peel `&String::from("lit")` / `"lit".to_string()` → bare `"lit"` for `&str`.
+        // Do not early-return on leading `&` — that blocked the peel and left
+        // `&String::from("…")` at method call sites (Blackboard::set_bool).
+        let mut s = arg_str.trim().to_string();
+        while s.starts_with('&') {
+            s = s[1..].trim().to_string();
+        }
+        if let Some(stripped) = s.strip_suffix(".to_string()") {
+            s = stripped.trim().to_string();
+        } else if let Some(stripped) = s.strip_suffix(".to_owned()") {
+            s = stripped.trim().to_string();
+        }
+        if let Some(inner) = s
+            .strip_prefix("String::from(")
+            .and_then(|rest| rest.strip_suffix(')'))
+        {
+            let lit = inner.trim();
+            if lit.starts_with('"') {
+                s = lit.to_string();
+            }
+        }
+        *arg_str = s;
         return;
     }
-    if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
-        if let Some(stripped) = arg_str.strip_suffix(".to_string()") {
-            *arg_str = stripped.to_string();
-        } else if let Some(stripped) = arg_str.strip_suffix(".to_owned()") {
-            *arg_str = stripped.to_string();
-        }
-        while arg_str.starts_with('&') {
-            *arg_str = arg_str[1..].to_string();
-        }
+    // Non-literals that already produce owned String need `&` for `&str` formals.
+    if arg_str.starts_with('&') {
         return;
     }
     if arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()") {
@@ -739,9 +786,8 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         };
 
     let param_idx = sig.arg_param_index(arg_index);
-    let callee_emits_rust_ref = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-        sig, param_idx,
-    );
+    let callee_emits_rust_ref =
+        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx);
     let param_types_say_shared_text = sig.param_types.get(param_idx).is_some_and(|t| {
         param_is_rust_str_ref(t)
             || matches!(
@@ -755,9 +801,10 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         || (!crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
             sig, param_idx,
         ) && (matches!(effective, OwnershipMode::Borrowed)
-            || sig.param_types.get(param_idx).is_some_and(|t| {
-                param_is_rust_str_ref(t) || matches!(t, Type::Reference(_))
-            })));
+            || sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| param_is_rust_str_ref(t) || matches!(t, Type::Reference(_)))));
     if !callee_expects_rust_borrow {
         return;
     }
@@ -805,7 +852,9 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
     // is correct for `HashMap<String, _>` — do not allocate.
     let receiver = receiver_type.or_else(|| sig.name.rsplit_once("::").map(|(rt, _)| rt));
     let is_collection_key_lookup =
-        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(sig, arg_index, receiver);
+        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            sig, arg_index, receiver,
+        );
     let param_is_amp_string = !is_collection_key_lookup
         && sig.param_types.get(param_idx).is_some_and(|t| {
             param_is_rust_string_ref(t)
@@ -827,23 +876,16 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         )
     {
         let pidx = sig.arg_param_index(arg_index);
-        if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(sig, arg_index)
-            || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+        if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+            sig, arg_index,
+        ) || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
         {
             let base = arg_str.trim_start_matches('&');
-            *arg_str = if base.ends_with(".to_string()") {
-                base.to_string()
-            } else {
-                format!("{base}.to_string()")
-            };
+            *arg_str = coerce_expr_to_owned_string(base);
             return;
         }
         let base = arg_str.trim_start_matches('&');
-        let owned = if base.ends_with(".to_string()") {
-            base.to_string()
-        } else {
-            format!("{base}.to_string()")
-        };
+        let owned = coerce_expr_to_owned_string(base);
         *arg_str = format!("&{owned}");
         return;
     }
@@ -933,9 +975,7 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         if !already_owned_string_expr(arg_str) {
             *arg_str = coerce_expr_to_owned_string(arg_str);
         }
-    } else if sig
-        .is_some_and(|s| call_site_param_expects_owned_string(s, arg_index))
-    {
+    } else if sig.is_some_and(|s| call_site_param_expects_owned_string(s, arg_index)) {
         if !already_owned_string_expr(arg_str) {
             *arg_str = coerce_expr_to_owned_string(arg_str);
         }
@@ -950,12 +990,12 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         });
         if is_string_ref_param {
             let base = arg_str.trim_start_matches('&');
-            let base = if base.ends_with(".to_string()") {
+            let owned = if already_owned_string_expr(base) {
                 base.to_string()
             } else {
-                format!("{}.to_string()", base)
+                coerce_expr_to_owned_string(base)
             };
-            *arg_str = format!("&{}", base);
+            *arg_str = format!("&{owned}");
             return;
         }
 
@@ -965,20 +1005,21 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
                 Some(
                     crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                         s, idx,
-                    ) || s.param_types.get(idx).is_some_and(param_is_rust_str_ref),
+                    ) || s.param_types.get(idx).is_some_and(param_is_rust_str_ref)
+                        || (s.has_self_receiver_slot()
+                            && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                s, idx,
+                            )
+                            && matches!(
+                                s.param_ownership.get(idx),
+                                Some(crate::analyzer::OwnershipMode::Borrowed)
+                            )),
                 )
             })
             .unwrap_or(false);
 
         if strip_to_string {
-            if arg_str.ends_with(".to_string()") {
-                *arg_str = arg_str[..arg_str.len() - 12].to_string();
-            } else if arg_str.ends_with(".into()") {
-                *arg_str = arg_str[..arg_str.len() - 7].to_string();
-            }
-            if arg_str.starts_with('&') {
-                *arg_str = arg_str.trim_start_matches('&').to_string();
-            }
+            normalize_owned_string_producer_for_str_ref_param(arg, arg_str);
         }
     }
 }
@@ -1238,7 +1279,14 @@ mod tests {
             location: None,
         };
         let mut arg_str = "squad_id.to_string()".to_string();
-        finalize_borrowed_text_call_site_arg(Some(&sig), 0, Some("Squad"), &arg, &mut arg_str, false);
+        finalize_borrowed_text_call_site_arg(
+            Some(&sig),
+            0,
+            Some("Squad"),
+            &arg,
+            &mut arg_str,
+            false,
+        );
         assert_eq!(arg_str, "&squad_id");
     }
 
@@ -1320,8 +1368,18 @@ mod tests {
             location: None,
         };
         let mut arg_str = "key".to_string();
-        finalize_borrowed_text_call_site_arg(Some(&sig), 0, Some("HashMap"), &arg, &mut arg_str, true);
-        assert_eq!(arg_str, "key", "&str formal must not get extra & at map lookup");
+        finalize_borrowed_text_call_site_arg(
+            Some(&sig),
+            0,
+            Some("HashMap"),
+            &arg,
+            &mut arg_str,
+            true,
+        );
+        assert_eq!(
+            arg_str, "key",
+            "&str formal must not get extra & at map lookup"
+        );
     }
 
     #[test]

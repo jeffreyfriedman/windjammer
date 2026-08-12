@@ -33,6 +33,10 @@ pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<Stri
     if matches!(leaf, "str" | "string" | "String") {
         push("String");
     }
+    // Windjammer `Map<K,V>` lowers to Rust `HashMap` — stdlib_meta keys are HashMap::*.
+    if matches!(leaf, "Map") {
+        push("HashMap");
+    }
     out
 }
 
@@ -185,10 +189,7 @@ pub fn map_option_mut_ref_method_name<'a>(
 }
 
 /// Whether the receiver type has a method returning `Option<&mut T>` (map `get_mut` sibling).
-pub fn map_has_get_mut_sibling(
-    receiver_type: Option<&str>,
-    registry: &SignatureRegistry,
-) -> bool {
+pub fn map_has_get_mut_sibling(receiver_type: Option<&str>, registry: &SignatureRegistry) -> bool {
     map_option_mut_ref_method_name(receiver_type, registry).is_some()
 }
 
@@ -432,8 +433,7 @@ fn owned_self_method_on(method: &str, parent: &str, registry: &SignatureRegistry
     let Some(sig) = lookup_sig(method, Some(parent), registry) else {
         return false;
     };
-    sig.has_self_receiver
-        && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
+    sig.has_self_receiver && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
 }
 
 /// WJ stdlib_meta declares these with borrowed `Option` receivers; Rust's by-value
@@ -445,19 +445,17 @@ pub fn option_adapter_needs_as_ref(method: &str, registry: &SignatureRegistry) -
     if !sig.has_self_receiver {
         return false;
     }
-    let borrowed_option_self = matches!(
-        sig.param_ownership.first(),
-        Some(OwnershipMode::Borrowed)
-    ) && sig.param_types.first().is_some_and(|t| {
-        matches!(
-            t,
-            Type::Reference(inner)
-                if matches!(
-                    inner.as_ref(),
-                    Type::Custom(n) if n == "Option" || n.starts_with("Option<")
-                ) || matches!(inner.as_ref(), Type::Option(_))
-        )
-    });
+    let borrowed_option_self = matches!(sig.param_ownership.first(), Some(OwnershipMode::Borrowed))
+        && sig.param_types.first().is_some_and(|t| {
+            matches!(
+                t,
+                Type::Reference(inner)
+                    if matches!(
+                        inner.as_ref(),
+                        Type::Custom(n) if n == "Option" || n.starts_with("Option<")
+                    ) || matches!(inner.as_ref(), Type::Option(_))
+            )
+        });
     borrowed_option_self && sig.param_types.get(1).is_some_and(is_closure_type)
 }
 
@@ -600,9 +598,7 @@ pub fn method_arg_needs_auto_borrow_at_index(
         lookup_sig(method, receiver_type, registry).or_else(|| lookup_suffix(method, registry));
     sig.is_some_and(|s| {
         let param_idx = s.arg_param_index(arg_index);
-        s.param_types
-            .get(param_idx)
-            .is_some_and(is_reference_type)
+        s.param_types.get(param_idx).is_some_and(is_reference_type)
             && matches!(
                 s.param_ownership.get(param_idx),
                 Some(OwnershipMode::Borrowed)
@@ -627,14 +623,9 @@ pub fn method_arg_expects_rust_str_ref_qualified(
 }
 
 /// Whether a method argument expects `&str` in Rust (from a resolved signature).
-pub fn method_arg_expects_rust_str_ref_from_sig(
-    sig: &FunctionSignature,
-    arg_index: usize,
-) -> bool {
+pub fn method_arg_expects_rust_str_ref_from_sig(sig: &FunctionSignature, arg_index: usize) -> bool {
     let idx = sig.arg_param_index(arg_index);
-    sig.param_types
-        .get(idx)
-        .is_some_and(is_str_reference)
+    sig.param_types.get(idx).is_some_and(is_str_reference)
 }
 
 /// Whether a method argument expects a shared borrow of element/key type (`&T`, not `&str`).
@@ -644,9 +635,10 @@ pub fn method_arg_expects_borrowed_reference_from_sig(
 ) -> bool {
     let idx = sig.arg_param_index(arg_index);
     matches!(sig.param_ownership.get(idx), Some(OwnershipMode::Borrowed))
-        && sig.param_types.get(idx).is_some_and(|t| {
-            matches!(t, Type::Reference(_)) && !is_str_reference(t)
-        })
+        && sig
+            .param_types
+            .get(idx)
+            .is_some_and(|t| matches!(t, Type::Reference(_)) && !is_str_reference(t))
 }
 
 /// Whether a method argument expects a shared borrow (from resolved signature + registry).
@@ -729,6 +721,11 @@ pub fn method_is_index_taking_qualified(
     registry: &SignatureRegistry,
 ) -> bool {
     method_is_capacity_cast_qualified(method, receiver_type, registry)
+}
+
+/// Iterator/adapter protocol: predicate closures receive `&T` (not owned `T`).
+pub fn method_predicate_closure_receives_ref(method: &str) -> bool {
+    crate::analyzer::stdlib_method_traits::method_predicate_closure_receives_ref(method)
 }
 
 /// Does this method take a closure/predicate as its first non-self argument?
@@ -950,7 +947,8 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
 ) -> bool {
-    if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(callee_name, sig, arg_index))
+    if signature
+        .is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(callee_name, sig, arg_index))
     {
         return true;
     }
@@ -1004,9 +1002,11 @@ pub fn callee_arg_expects_reference_param(
     use crate::parser::Type;
 
     let pidx = sig.arg_param_index(arg_index);
-    if sig.param_types.get(pidx).is_some_and(|t| {
-        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-    }) {
+    if sig
+        .param_types
+        .get(pidx)
+        .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+    {
         return true;
     }
     matches!(
@@ -1065,11 +1065,13 @@ pub fn runtime_std_call_arg_needs_auto_borrow(
     }
 
     let param_idx = signature.map(|s| s.arg_param_index(arg_index));
-    if let Some(ownership) = param_idx.and_then(|idx| {
-        signature.and_then(|s| s.param_ownership.get(idx).copied())
-    }) {
-        if matches!(ownership, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-            && is_runtime_std_module(module)
+    if let Some(ownership) =
+        param_idx.and_then(|idx| signature.and_then(|s| s.param_ownership.get(idx).copied()))
+    {
+        if matches!(
+            ownership,
+            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+        ) && is_runtime_std_module(module)
         {
             return true;
         }
@@ -1093,9 +1095,11 @@ pub fn runtime_or_str_ref_formal_skips_literal_owned(
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
         return false;
     }
-    if sig.param_types.get(pidx).is_some_and(|t| {
-        crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
-    }) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+    if sig
+        .param_types
+        .get(pidx)
+        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_owned_string_type(t))
+        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
     {
         return false;
     }
@@ -1133,11 +1137,7 @@ mod pattern_registry_tests {
             Some("String"),
             &reg
         ));
-        assert!(method_returns_iterable_qualified(
-            "iter",
-            Some("Vec"),
-            &reg
-        ));
+        assert!(method_returns_iterable_qualified("iter", Some("Vec"), &reg));
     }
 
     #[test]
@@ -1216,16 +1216,8 @@ mod pattern_registry_tests {
         reg.add_function("B::flip".into(), b);
 
         assert!(!consensus_mutates_receiver("flip", &reg));
-        assert!(method_mutates_receiver_qualified(
-            "flip",
-            Some("A"),
-            &reg
-        ));
-        assert!(!method_mutates_receiver_qualified(
-            "flip",
-            Some("B"),
-            &reg
-        ));
+        assert!(method_mutates_receiver_qualified("flip", Some("A"), &reg));
+        assert!(!method_mutates_receiver_qualified("flip", Some("B"), &reg));
     }
 
     #[test]
@@ -1292,7 +1284,11 @@ mod pattern_registry_tests {
                 .get_signature(&format!("HashSet::{method}"))
                 .unwrap_or_else(|| panic!("missing HashSet::{method} in stdlib_meta"));
             assert!(is_collection_key_lookup(sig, 0, Some("HashSet")));
-            assert!(!method_is_index_taking_qualified(method, Some("HashSet"), reg));
+            assert!(!method_is_index_taking_qualified(
+                method,
+                Some("HashSet"),
+                reg
+            ));
         }
     }
 

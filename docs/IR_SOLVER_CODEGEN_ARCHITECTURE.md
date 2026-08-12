@@ -115,10 +115,10 @@ Go and JavaScript backends run the same Analyzer + IrPipeline as Rust (parallel 
 | `clones` | Auto-clone annotations | `WJ_IR_CUTOVER_DISABLE_CLONES=1` |
 | `param_types` | Formal param types | `WJ_IR_CUTOVER_DISABLE_PARAM_TYPES=1` |
 | `str_ref` | `&str` optimization params | `WJ_IR_CUTOVER_DISABLE_STR_REF=1` |
-| `call_sites` | Call-site argument coercions | `WJ_IR_CUTOVER_DISABLE_CALL_SITES=1` |
+| `call_sites` | Call-site argument coercions | **always on** in `from_env()` (no env opt-out) |
 | `locals` | Local variable types | `WJ_IR_CUTOVER_DISABLE_LOCALS=1` |
 
-All production flags default **on** via `IrCutoverConfig::from_env()` (disable individually with the env vars above). The `Default` impl keeps flags **off** for unit tests that construct a bare `CodeGenerator` without env cutover.
+All production flags default **on** via `IrCutoverConfig::from_env()` (disable remaining flags individually with the env vars above). `call_sites` cannot be disabled in production — the `!call_sites` heuristic ownership tails have been deleted. The `Default` impl keeps flags **off** for unit tests that construct a bare `CodeGenerator` without env cutover.
 
 ## Shadow Validation
 
@@ -172,9 +172,8 @@ For every coercion rule or constraint change:
 - **Prefer-shared enforce + copy-aggregate `&mut` peel in reconcile:** `enforce_ir_ownership_preserving_confirmed_shared_ref` and `peel_spurious_mut_borrow_on_owned_copy_aggregate` run at the start of `reconcile_post_ir_mut_borrow_and_owned_peel`; duplicated regular_call clusters removed; method IR mid-path enforce deleted (terminal reconcile owns the contract).
 - **Method/field-access post-IR tails in reconcile:** `peel_copy_aggregate_caller_into_owned_callee` (regression-060), match-arm readonly text borrow, Pattern/`&str` normalize, runtime-std WJ-owned/Rust-borrowed (`json::get` via signature, not module name), stub associated/instance auto-own, shared-ref strip. Field-access IR paths now call terminal reconcile. Debug collision logs no longer filter hardcoded callee names.
 - **Mixed-forwarder / owned-outer in reconcile:** `apply_post_ir_forwarder_owned_outer_and_reuse` uses IR `compute_coercion` plus shared forwarder helpers; method IR path no longer duplicates wants_ref clusters. `should_borrow_at_call_site` no longer takes a live method-name for ownership (unused `_method_name`).
+- **Retired `!call_sites` opt-out (2026-08-11):** `from_env()` always sets `call_sites: true`. Deleted ~4k LOC of pre-IR ownership tails in method / regular-call / field-access argument generation. Numeric `usize` / int→float casts live in `apply_post_ir_numeric_formal_casts` (reconcile). Iterator predicate `&T` classification lives in `method_predicate_closure_receives_ref` (protocol, not ownership).
 - **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test.rs`.
-
-Remaining: delete legacy `!call_sites` paths when opt-out is retired.
 
 ## Related Documentation
 

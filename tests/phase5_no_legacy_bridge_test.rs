@@ -78,7 +78,10 @@ fn main() {
 }
 
 #[test]
-fn opt_out_call_sites_still_compiles_without_typed_lowering() {
+fn call_sites_off_still_emits_without_ir_coercion() {
+    // `Default` keeps `call_sites` off for isolated unit tests. Production
+    // `from_env()` always enables IR call-sites (no env opt-out; legacy
+    // heuristic tails have been deleted).
     let program = parse_program(
         r#"
 fn greet(s: string) {
@@ -103,6 +106,6 @@ fn main() {
     let output = gen.generate_program(&program, &analyzed);
     assert!(
         output.contains("fn greet") && output.contains("greet("),
-        "legacy opt-out path must still emit without typed_lowering bridge:\n{output}"
+        "call_sites-off path must still emit (prepared args, no IR coercion):\n{output}"
     );
 }

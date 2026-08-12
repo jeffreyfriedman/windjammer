@@ -259,7 +259,30 @@ impl IntInference {
         let receiver_type = self
             .infer_type_from_expression(object)
             .or_else(|| context_type.cloned())?;
-        let receiver_is_map = self.extract_map_key_type(&receiver_type).is_some();
+        // Bare `HashMap` (no type args yet) must still count as a map so we never
+        // fall through to suffix lookup (Vec::insert → usize key).
+        let receiver_is_map = self.extract_map_key_type(&receiver_type).is_some()
+            || match &receiver_type {
+                Type::Custom(n) => {
+                    let base = n.split('<').next().unwrap_or(n);
+                    matches!(base, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                }
+                Type::Parameterized(base, _) => {
+                    let b = crate::type_inference::generic_type_base_name(base);
+                    matches!(b, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                }
+                Type::Reference(inner) | Type::MutableReference(inner) => {
+                    self.extract_map_key_type(inner).is_some()
+                        || matches!(
+                            inner.as_ref(),
+                            Type::Custom(n) if {
+                                let base = n.split('<').next().unwrap_or(n.as_str());
+                                matches!(base, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                            }
+                        )
+                }
+                _ => false,
+            };
         let (qualified, receiver_generics) =
             self.qualified_method_key_and_generics(&receiver_type, method);
 
@@ -274,7 +297,9 @@ impl IntInference {
             };
             for param in &mut out {
                 if let Type::Custom(name) = param {
-                    if name.len() == 1 && name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                    if name.len() == 1
+                        && name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                    {
                         match name.as_str() {
                             "V" => {
                                 if let Some(v) = self.extract_map_value_type(&receiver_type) {

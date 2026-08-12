@@ -114,6 +114,16 @@ pub(crate) fn has_ownership_collision_for_call(
     if gen.has_explicit_ownership_collision_with_global(simple_name) {
         return true;
     }
+    // Simple-name ownership/type collision (e.g. two modules' `draw_text`) must
+    // block auto-borrow for `hud_render::draw_text` as well — check the simple
+    // name with the simple-name autoborrow policy, not the module-qualified key
+    // (lowercase module prefixes would otherwise skip the guard).
+    if (gen.has_collision_with_global(simple_name)
+        || gen.has_explicit_ownership_collision_with_global(simple_name))
+        && ownership_collision_blocks_autoborrow(simple_name)
+    {
+        return true;
+    }
     (gen.has_collision_with_global(func_name)
         || gen.has_explicit_ownership_collision_with_global(func_name))
         && ownership_collision_blocks_autoborrow(func_name)
@@ -533,12 +543,9 @@ pub fn resolve_method_for_call_site(
                             refreshed,
                         );
                     }
-                } else if let Some((_, refreshed)) = best_method_signature_for_receiver(
-                    g,
-                    receiver_type,
-                    method,
-                    arg_count,
-                ) {
+                } else if let Some((_, refreshed)) =
+                    best_method_signature_for_receiver(g, receiver_type, method, arg_count)
+                {
                     // Bare `Type::method` may have been filtered; module-qualified
                     // defining-module meta still carries `emitted_rust_ref_params`.
                     if refreshed.emitted_rust_ref_params.is_some() {
@@ -756,10 +763,7 @@ pub(crate) fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
     }
 }
 
-pub(crate) fn formal_is_plain_windjammer_string(
-    sig: &FunctionSignature,
-    param_idx: usize,
-) -> bool {
+pub(crate) fn formal_is_plain_windjammer_string(sig: &FunctionSignature, param_idx: usize) -> bool {
     sig.formal_param_type(param_idx).is_some_and(|t| {
         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             && crate::codegen::rust::types::is_windjammer_text_type(t)
@@ -815,9 +819,9 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                 && param_idx > 0
                 && formal_is_plain_windjammer_string(sig, param_idx)
                 && is_type_qualified_associated_call(&sig.name)
-                && sig.formal_param_type(param_idx).is_some_and(|t| {
-                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                })
+                && sig
+                    .formal_param_type(param_idx)
+                    .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
                 && matches!(
                     sig.param_ownership.get(param_idx),
                     Some(OwnershipMode::Owned)
@@ -884,13 +888,11 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
                         Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
                         other => other,
                     };
-                    let is_copy_aggregate = crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
-                        && !crate::type_classification::is_copy_pass_by_value_formal(bare);
+                    let is_copy_aggregate =
+                        crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+                            && !crate::type_classification::is_copy_pass_by_value_formal(bare);
                     if is_copy_aggregate
-                        && !matches!(
-                            formal,
-                            Type::Reference(_) | Type::MutableReference(_)
-                        )
+                        && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
                         && !matches!(
                             sig.param_ownership.get(param_idx),
                             Some(OwnershipMode::MutBorrowed)
@@ -940,9 +942,9 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         && param_idx > 0
         && formal_is_plain_windjammer_string(sig, param_idx)
         && is_type_qualified_associated_call(&sig.name)
-        && sig.formal_param_type(param_idx).is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        })
+        && sig
+            .formal_param_type(param_idx)
+            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
     {
         return OwnershipMode::Owned;
     }
@@ -1011,9 +1013,11 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
 
     // Plain `string` formals: honor body-inferred borrow only after codegen confirms `&str`.
     if formal_is_plain_windjammer_string(sig, param_idx) {
-        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-            flags.get(param_idx).copied() == Some(false)
-        }) {
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|flags| flags.get(param_idx).copied() == Some(false))
+        {
             return OwnershipMode::Owned;
         }
         if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
@@ -1147,10 +1151,7 @@ pub fn callee_user_arg_expects_mut_borrow(sig: &FunctionSignature, user_arg_inde
                 sig.param_ownership.get(pidx),
                 Some(OwnershipMode::MutBorrowed)
             )
-            && !matches!(
-                sig.param_types.get(pidx),
-                Some(Type::MutableReference(_))
-            )
+            && !matches!(sig.param_types.get(pidx), Some(Type::MutableReference(_)))
         {
             return false;
         }
@@ -1173,8 +1174,9 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
     }
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
-    ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
-    {
+    ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        sig, param_idx,
+    ) {
         return false;
     }
     // Body-converged &str — only when codegen/analyzer confirmed shared-ref emission.
@@ -1183,7 +1185,9 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
         .param_types
         .get(param_idx)
         .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            sig, param_idx,
+        )
     {
         return true;
     }
@@ -1220,9 +1224,11 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
         }
 
         // Codegen refresh recorded an emitted shared-ref formal — keep converged borrow.
-        if sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-            flags.get(idx).copied().unwrap_or(false)
-        }) {
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|flags| flags.get(idx).copied().unwrap_or(false))
+        {
             continue;
         }
 
@@ -1370,7 +1376,9 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
             // body-converged `Reference(T)` wraps on the param slot.
             if let Some(t) = sig.param_types.get(idx) {
                 let bare = match t {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
+                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                        inner.as_ref().clone()
+                    }
                     other => other.clone(),
                 };
                 if idx < sig.param_types.len() {
@@ -1568,9 +1576,9 @@ mod tests {
                 return_ownership: OwnershipMode::Owned,
                 has_self_receiver: false,
                 is_extern: false,
-            emitted_rust_ref_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
+                emitted_rust_ref_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
             },
         );
 
@@ -2090,22 +2098,30 @@ impl BuildFingerprint {
             1,
         );
         assert!(resolved, "registry should require borrow for spawn args");
-        let mut generator = CodeGenerator::new_for_module(registry.clone(), CompilationTarget::Rust);
-        assert!(generator.ir_cutover.call_sites, "call_sites cutover must be on");
-        let spawn_call = program.items.iter().find_map(|item| {
-            if let crate::parser::Item::Function { decl, .. } = item {
-                decl.body.iter().find_map(|stmt| {
-                    if let crate::parser::Statement::Expression { expr, .. } = stmt {
-                        if let crate::parser::Expression::Call { arguments, .. } = expr {
-                            return arguments.get(1).map(|(_, a)| *a);
+        let mut generator =
+            CodeGenerator::new_for_module(registry.clone(), CompilationTarget::Rust);
+        assert!(
+            generator.ir_cutover.call_sites,
+            "call_sites cutover must be on"
+        );
+        let spawn_call = program
+            .items
+            .iter()
+            .find_map(|item| {
+                if let crate::parser::Item::Function { decl, .. } = item {
+                    decl.body.iter().find_map(|stmt| {
+                        if let crate::parser::Statement::Expression { expr, .. } = stmt {
+                            if let crate::parser::Expression::Call { arguments, .. } = expr {
+                                return arguments.get(1).map(|(_, a)| *a);
+                            }
                         }
-                    }
+                        None
+                    })
+                } else {
                     None
-                })
-            } else {
-                None
-            }
-        }).expect("spawn call arg");
+                }
+            })
+            .expect("spawn call arg");
         let finished = generator.finish_runtime_std_call_arg(
             "subprocess::spawn",
             1,
@@ -2114,7 +2130,10 @@ impl BuildFingerprint {
             registry.get_signature("subprocess::spawn"),
             None,
         );
-        assert_eq!(finished, "&args", "finish_runtime_std_call_arg should borrow");
+        assert_eq!(
+            finished, "&args",
+            "finish_runtime_std_call_arg should borrow"
+        );
         let ir_coerced = generator.apply_ir_call_site_coercion(
             &registry,
             "subprocess::spawn",
@@ -2216,5 +2235,4 @@ pub fn parse_field(line: string) -> string {
         strip_collision_blocked_call_site_coercions(&mut s);
         assert_eq!(s, r#""recover""#);
     }
-
 }
