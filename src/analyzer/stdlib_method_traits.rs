@@ -98,7 +98,9 @@ pub(crate) fn decompose_collection_key_lookup<'ast>(
             method,
             arguments,
             ..
-        } if is_collection_key_method(method) => Some((object, method.as_str(), arguments.as_slice())),
+        } if is_collection_key_method(method) => {
+            Some((object, method.as_str(), arguments.as_slice()))
+        }
         crate::parser::Expression::Call {
             function,
             arguments,
@@ -333,8 +335,7 @@ pub fn option_owned_self_method(method: &str, registry: &SignatureRegistry) -> b
     let Some(sig) = lookup_sig(method, Some("Option"), registry) else {
         return false;
     };
-    sig.has_self_receiver
-        && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
+    sig.has_self_receiver && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
 }
 
 /// Peel `&T` / `&mut T` and return `"f32"` / `"f64"` for primitive float receivers.
@@ -369,9 +370,8 @@ pub fn method_preserves_float_receiver(
     let Some(float_name) = receiver_type.and_then(float_primitive_name) else {
         return false;
     };
-    lookup_sig(method, Some(float_name), registry).is_some_and(|sig| {
-        return_type_is_float(sig, float_name)
-    })
+    lookup_sig(method, Some(float_name), registry)
+        .is_some_and(|sig| return_type_is_float(sig, float_name))
 }
 
 /// True when the resolved float method has at least one parameter of the receiver float type
@@ -440,6 +440,27 @@ fn sig_is_closure_taking(sig: &FunctionSignature) -> bool {
     first_arg_type(sig).is_some_and(is_closure_type)
 }
 
+/// Iterator/adapter protocol: the predicate/visitor closure receives `&T`
+/// (not owned `T`). Distinct from `map`/`flat_map`/`filter_map`, which consume
+/// owned elements. This is language-level iterator semantics, not call-site
+/// argument ownership (see no-hardcoded-method-names exception for closure params).
+pub fn method_predicate_closure_receives_ref(method: &str) -> bool {
+    matches!(
+        method,
+        "retain"
+            | "filter"
+            | "any"
+            | "all"
+            | "find"
+            | "position"
+            | "rposition"
+            | "take_while"
+            | "skip_while"
+            | "partition"
+            | "inspect"
+    )
+}
+
 /// Unanimous closure-first-arg across all stdlib instance methods named `::{method}`.
 pub fn consensus_closure_taking_method(method: &str, registry: &SignatureRegistry) -> bool {
     let pattern = format!("::{method}");
@@ -460,7 +481,10 @@ pub fn consensus_closure_taking_method(method: &str, registry: &SignatureRegistr
 
 fn sig_is_membership_test(sig: &FunctionSignature) -> bool {
     sig.has_self_receiver
-        && sig.return_type.as_ref().is_some_and(|t| matches!(t, Type::Bool))
+        && sig
+            .return_type
+            .as_ref()
+            .is_some_and(|t| matches!(t, Type::Bool))
         && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
         && first_arg_type(sig).is_some_and(is_reference_type)
 }
@@ -536,9 +560,9 @@ fn return_type_is_string_like(sig: &FunctionSignature) -> bool {
             _ => false,
         }
     }
-    sig.return_type
-        .as_ref()
-        .is_some_and(|t| type_is_string_like(t) || matches!(t, Type::Option(inner) if type_is_string_like(inner)))
+    sig.return_type.as_ref().is_some_and(|t| {
+        type_is_string_like(t) || matches!(t, Type::Option(inner) if type_is_string_like(inner))
+    })
 }
 
 /// True when `method` is a String/`strings` runtime API (search, transform, module fn).
@@ -550,7 +574,10 @@ pub fn method_is_string_runtime_qualified(
     if method_is_string_search_qualified(method, receiver_type, registry) {
         return true;
     }
-    if registry.get_signature(&format!("strings::{method}")).is_some() {
+    if registry
+        .get_signature(&format!("strings::{method}"))
+        .is_some()
+    {
         return true;
     }
     for ty in ["String", "string", "str"] {

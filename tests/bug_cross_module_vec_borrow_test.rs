@@ -42,7 +42,11 @@ pub fn score(keys: Vec<i64>, vals: Vec<f64>, vertex: i64) -> f64 {
         .join("\n---\n");
 
     assert!(
-        generated.contains("graph_pr_f64_get(&keys") || generated.contains("graph_pr_f64_get(& keys"),
+        generated.contains("graph_pr_f64_get(&keys")
+            || generated.contains("graph_pr_f64_get(& keys")
+            // Formals already `&Vec<_>` — bare `keys` is the correct call-site shape.
+            || (generated.contains("keys: &Vec<")
+                && generated.contains("graph_pr_f64_get(keys")),
         "cross-module Vec helper must receive borrowed args. Generated:\n{}",
         generated
     );

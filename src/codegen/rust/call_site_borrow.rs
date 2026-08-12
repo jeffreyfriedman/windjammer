@@ -42,9 +42,11 @@ pub(crate) fn plain_string_formal_passes_owned_at_call_site(
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
-    ) && !sig.param_types.get(param_idx).is_some_and(|t| {
-        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-    }) {
+    ) && !sig
+        .param_types
+        .get(param_idx)
+        .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+    {
         return false;
     }
     // Free-function plain `string`: Owned analyzer contract → pass by value.
@@ -92,9 +94,10 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
         sig, param_idx,
     ) {
         if sig.is_extern
-            && sig.param_types.get(param_idx).is_some_and(|t| {
-                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-            })
+            && sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
             && matches!(
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -116,12 +119,15 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
     // on owned movers like `Objective::talk_to(npc_name: string)`.
     if !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
-    ) && sig.param_types.get(param_idx).is_some_and(|t| {
-        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-    }) && matches!(
-        sig.param_ownership.get(param_idx),
-        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-    ) {
+    ) && sig
+        .param_types
+        .get(param_idx)
+        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
+        && matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        )
+    {
         return true;
     }
     // Bare WJ Custom formals (`other: Lsn`, `key: Key`) emit owned Rust unless codegen
@@ -194,9 +200,10 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
             let analyzer_converged_borrow = matches!(
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-            ) && sig.param_types.get(param_idx).is_some_and(|t| {
-                matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            });
+            ) && sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
             // Non-Copy Custom with body-converged `&T` (Key, Value, QuestId, …) — trust borrow
             // only after codegen confirms shared-ref emission. Stale analyzer Reference+Borrowed
             // without refresh must not claim `&T` (Table::column builder forwards).
@@ -319,7 +326,12 @@ pub(crate) fn expression_is_vec_new_constructor(expr: &Expression) -> bool {
     if expression_is_vec_macro_literal(expr) {
         return true;
     }
-    let Expression::Call { function, arguments, .. } = expr else {
+    let Expression::Call {
+        function,
+        arguments,
+        ..
+    } = expr
+    else {
         return false;
     };
     if !arguments.is_empty() {
@@ -343,7 +355,9 @@ fn expression_is_owned_vec_at_call_site<'ast>(
     let Expression::Identifier { name, .. } = arg_expr else {
         return false;
     };
-    gen.local_var_types.get(name).is_some_and(type_is_vec_container)
+    gen.local_var_types
+        .get(name)
+        .is_some_and(type_is_vec_container)
         || gen
             .infer_expression_type(arg_expr)
             .is_some_and(|t| type_is_vec_container(&t))
@@ -351,12 +365,24 @@ fn expression_is_owned_vec_at_call_site<'ast>(
 
 fn callee_arg_expects_shared_vec_ref(sig: &FunctionSignature, arg_index: usize) -> bool {
     let pidx = sig.arg_param_index(arg_index);
+    // Owned emission wins over stale analyzer `Reference(Vec)` / Borrowed stubs.
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+        return false;
+    }
+    // Bare `Vec<T>` formals are owned — never auto-borrow at the call site.
+    if sig
+        .formal_param_type(pidx)
+        .or_else(|| sig.param_types.get(pidx))
+        .is_some_and(type_is_vec_container)
+    {
+        return false;
+    }
     if callee_emits_shared_rust_ref_param(sig, pidx) {
         return true;
     }
-    sig.param_types.get(pidx).is_some_and(|t| {
-        matches!(t, Type::Reference(inner) if type_is_vec_container(inner))
-    })
+    sig.param_types
+        .get(pidx)
+        .is_some_and(|t| matches!(t, Type::Reference(inner) if type_is_vec_container(inner)))
 }
 
 /// Borrow owned local `Vec` bindings when the converged callee formal is `&Vec<T>`.
@@ -434,7 +460,12 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
     arg_index: usize,
 ) -> bool {
     skip_stale_borrow_on_owned_user_free_fn_with_global(
-        registry, None, callee_name, call_sig, param_idx, arg_index,
+        registry,
+        None,
+        callee_name,
+        call_sig,
+        param_idx,
+        arg_index,
     )
 }
 
@@ -546,9 +577,7 @@ pub fn expression_supports_shared_borrow_at_call_site(
     }
     if matches!(
         arg_expr,
-        Expression::Identifier { .. }
-            | Expression::FieldAccess { .. }
-            | Expression::Index { .. }
+        Expression::Identifier { .. } | Expression::FieldAccess { .. } | Expression::Index { .. }
     ) {
         return true;
     }
@@ -562,12 +591,7 @@ pub fn expression_supports_shared_borrow_at_call_site(
     }
     // String concat / format temps: AST may still be Binary while emit text is
     // `_tempN` or `format!(...)` — both produce owned String borrowable as `&str`.
-    if arg_str.starts_with("_temp")
-        && arg_str
-            .chars()
-            .skip(5)
-            .all(|c| c.is_ascii_digit())
-    {
+    if arg_str.starts_with("_temp") && arg_str.chars().skip(5).all(|c| c.is_ascii_digit()) {
         return true;
     }
     if arg_str.contains("format!(") || matches!(arg_expr, Expression::Binary { .. }) {
@@ -759,8 +783,7 @@ pub fn should_borrow_at_call_site_with_copy_check(
     let effective = effective_ownership_for_call_arg(sig, arg_index);
     let is_collection_key = is_collection_key_arg(sig, arg_index, receiver_type);
 
-    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-    {
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         return CallSiteBorrowDecision::default();
     }
 
@@ -881,7 +904,7 @@ pub fn should_borrow_at_call_site_with_copy_check(
     }
 
     let callee_emits_rust_ref = callee_emits_shared_rust_ref_param(sig, param_idx);
-        // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
+    // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
     // Also must not suppress when param_types already encodes Reference(T) (registry wrap)
     // or codegen refresh recorded an emitted `&str`/`&T` formal (`emitted_rust_ref_params`).
     if matches!(
@@ -912,12 +935,10 @@ pub fn should_borrow_at_call_site_with_copy_check(
         return CallSiteBorrowDecision::default();
     }
 
-    let formal_plain_string = sig
-        .formal_param_type(param_idx)
-        .is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && types::is_windjammer_text_type(t)
-        });
+    let formal_plain_string = sig.formal_param_type(param_idx).is_some_and(|t| {
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            && types::is_windjammer_text_type(t)
+    });
     let param_expects_borrowed = if formal_plain_string {
         bridge_expects_shared
     } else {
@@ -927,9 +948,11 @@ pub fn should_borrow_at_call_site_with_copy_check(
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::Borrowed)
             )
-            || (sig.param_types.get(param_idx).is_some_and(|t| {
-                matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            }) && callee_emits_rust_ref
+            || (sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+                && callee_emits_rust_ref
                 && sig
                     .emitted_rust_ref_params
                     .as_ref()
@@ -1108,9 +1131,10 @@ pub(crate) fn format_temp_arg_pass_expr(
     if callee_emits_shared_rust_ref_param(sig, param_idx) {
         return format!("&{temp_name}");
     }
-    if sig.param_type_for_arg(arg_index).is_some_and(|t| {
-        string_utilities::param_is_rust_str_ref(t)
-    }) {
+    if sig
+        .param_type_for_arg(arg_index)
+        .is_some_and(|t| string_utilities::param_is_rust_str_ref(t))
+    {
         return format!("&{temp_name}");
     }
     let wants_owned_string = matches!(
@@ -1127,9 +1151,10 @@ pub(crate) fn format_temp_arg_pass_expr(
     if matches!(
         effective_param_ownership_for_arg(sig, arg_index),
         OwnershipMode::Borrowed
-    ) && sig.formal_param_type(param_idx).is_some_and(|t| {
-        types::is_windjammer_text_type(t)
-    }) {
+    ) && sig
+        .formal_param_type(param_idx)
+        .is_some_and(|t| types::is_windjammer_text_type(t))
+    {
         return format!("&{temp_name}");
     }
     // Converged plain text formal without owned emission → prefer borrow (readonly demotion).
@@ -1382,7 +1407,10 @@ fn bar(y: string) -> bool {
         };
         let decision =
             should_borrow_at_call_site(&sig, 0, &arg, "42", "append", false, Some("IntList"));
-        assert!(!decision.add_ref, "Copy scalar literal to owned param must not add &");
+        assert!(
+            !decision.add_ref,
+            "Copy scalar literal to owned param must not add &"
+        );
     }
 
     #[test]
@@ -1445,11 +1473,17 @@ fn bar(y: string) -> bool {
         );
         let sig = sig_with_formal(
             "get_user_name",
-            vec![Type::Reference(Box::new(map_ty)), Type::Custom("i64".into())],
-            vec![Type::Parameterized(
-                "HashMap".into(),
-                vec![Type::Custom("i64".into()), Type::String],
-            ), Type::Custom("i64".into())],
+            vec![
+                Type::Reference(Box::new(map_ty)),
+                Type::Custom("i64".into()),
+            ],
+            vec![
+                Type::Parameterized(
+                    "HashMap".into(),
+                    vec![Type::Custom("i64".into()), Type::String],
+                ),
+                Type::Custom("i64".into()),
+            ],
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             false,
         );
@@ -1457,8 +1491,12 @@ fn bar(y: string) -> bool {
             name: "users".into(),
             location: Default::default(),
         };
-        let decision = should_borrow_at_call_site(&sig, 0, &arg, "users", "get_user_name", false, None);
-        assert!(decision.add_ref, "Reference(HashMap) formal must borrow owned local");
+        let decision =
+            should_borrow_at_call_site(&sig, 0, &arg, "users", "get_user_name", false, None);
+        assert!(
+            decision.add_ref,
+            "Reference(HashMap) formal must borrow owned local"
+        );
     }
 
     #[test]
@@ -1482,11 +1520,7 @@ fn bar(y: string) -> bool {
                 Type::Custom("Catalog".into()),
                 Type::Int,
             ],
-            formal_param_types: vec![
-                Type::Custom("Self".into()),
-                Type::String,
-                Type::Int,
-            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String, Type::Int],
             param_ownership: vec![
                 OwnershipMode::MutBorrowed,
                 OwnershipMode::MutBorrowed,

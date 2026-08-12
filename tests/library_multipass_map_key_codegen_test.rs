@@ -212,9 +212,16 @@ fn test_library_multipass_loop_reused_graph_borrow() {
         .get("loop_query_runner.rs")
         .expect("loop_query_runner.rs generated");
 
+    let formal_borrowed = rs.contains("run_query(graph: &Graph")
+        || rs.contains("fn run_query(graph: &Graph")
+        || rs.contains("graph: &Graph");
+    let call_borrowed = rs.contains("run_query(&graph,") || rs.contains("run_query(& graph,");
+    let call_bare = rs.contains("run_query(graph,") || rs.contains("run_query(graph ,");
     assert!(
-        rs.contains("run_query(&graph,") || rs.contains("run_query(& graph,"),
-        "reused graph in loop must borrow for cross-module &Graph callee. Got:\n{rs}"
+        (formal_borrowed && call_bare && !call_borrowed)
+            || call_borrowed,
+        "reused graph in loop must borrow consistently for cross-module &Graph callee \
+         (formal_borrowed={formal_borrowed}, call_borrowed={call_borrowed}). Got:\n{rs}"
     );
     assert!(
         !rs.contains("graph.clone()"),

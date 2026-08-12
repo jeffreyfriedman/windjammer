@@ -1181,9 +1181,20 @@ impl<'ast> CodeGenerator<'ast> {
                             self.type_to_rust(&param.type_)
                         } else {
                             // Apply ownership from IR solver (or legacy analyzer when cutover off).
-                            let registry_ownership = self
-                                .get_signature_with_global(&func.name)
+                            let registry_sig = func
+                                .parent_type
+                                .as_ref()
+                                .map(|pt| format!("{pt}::{}", func.name))
+                                .and_then(|key| self.get_signature_with_global(&key).cloned())
+                                .or_else(|| self.get_signature_with_global(&func.name).cloned());
+                            let registry_ownership = registry_sig
+                                .as_ref()
                                 .and_then(|sig| sig.param_ownership.get(param_idx).copied());
+                            let registry_stale_engine_owned = registry_sig.as_ref().is_some_and(|sig| {
+                                crate::codegen::rust::signature_promotion::param_is_stale_engine_owned_stub(
+                                    sig, param_idx,
+                                )
+                            });
                             let mut ownership_mode = self
                                 .param_ownership_for_formal_demotion(&param.name, analyzed)
                                 .or_else(|| {
@@ -1192,7 +1203,39 @@ impl<'ast> CodeGenerator<'ast> {
                                 .or(registry_ownership)
                                 .unwrap_or(OwnershipMode::Owned);
 
-                            if self.param_is_single_arg_call_only_delegate(param, func)
+                            // Converged registry MutBorrowed/Borrowed beats stale analyzed Owned
+                            // (cross-module Copy passthrough: update_direction → normalize).
+                            // Never let stale engine Owned win over body Borrowed (QuestId keys).
+                            if let Some(reg) = registry_ownership {
+                                if matches!(
+                                    reg,
+                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                ) && matches!(ownership_mode, OwnershipMode::Owned)
+                                {
+                                    ownership_mode = reg;
+                                } else if matches!(reg, OwnershipMode::Owned)
+                                    && registry_stale_engine_owned
+                                    && matches!(
+                                        analyzed.inferred_ownership.get(&param.name),
+                                        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                                    )
+                                {
+                                    ownership_mode = analyzed.inferred_ownership[&param.name];
+                                }
+                            }
+
+                            // Single-arg forwarder: keep owned only when the callee truly
+                            // takes owned. Never clobber converged MutBorrowed/Borrowed
+                            // (cross-module Copy passthrough: update_direction → normalize).
+                            if !matches!(
+                                ownership_mode,
+                                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                            ) && self.param_is_single_arg_call_only_delegate(param, func)
+                                && !self.param_passed_to_mut_borrowing_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
                                 && (self.param_passed_to_owned_non_copy_method_arg(
                                     func.body.as_slice(),
                                     &param.name,
@@ -1340,6 +1383,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.type_,
                                     Type::Reference(_) | Type::MutableReference(_)
                                 )
+                                && !matches!(
+                                    ownership_mode,
+                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                )
                                 && (self.param_has_forward_ref_keep_owned(
                                     func.body.as_slice(),
                                     &param.name,
@@ -1359,7 +1406,17 @@ impl<'ast> CodeGenerator<'ast> {
 
                                 // Converged registry Owned wins over stale first-pass borrow hints
                                 // (e.g. imported Copy Vec3 with only field reads).
-                                if registry_ownership == Some(OwnershipMode::Owned) {
+                                // Stale engine Owned (QuestId on is_quest_active) must not beat
+                                // body-converged Borrowed map-key formals.
+                                if registry_ownership == Some(OwnershipMode::Owned)
+                                    && !registry_stale_engine_owned
+                                    && !matches!(
+                                        analyzed.inferred_ownership.get(&param.name),
+                                        Some(
+                                            OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                        )
+                                    )
+                                {
                                     ownership_mode = OwnershipMode::Owned;
                                     trace_own!(999, ownership_mode);
                                 }
@@ -1953,6 +2010,34 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
+                            // Terminal signature-driven restores — beat engine stubs /
+                            // keep-owned heuristics that would leave map keys Owned or
+                            // Copy passthrough formals as owned `mut T`.
+                            if param.name != "self"
+                                && !self.is_type_copy(&param.type_)
+                                && self.param_only_forwarded_to_collection_key_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                            {
+                                ownership_mode = OwnershipMode::Borrowed;
+                                self.inferred_borrowed_params.insert(param.name.clone());
+                            }
+                            if param.name != "self"
+                                && (self.param_passed_to_mut_borrowing_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ) || matches!(
+                                    registry_ownership,
+                                    Some(OwnershipMode::MutBorrowed)
+                                ))
+                            {
+                                ownership_mode = OwnershipMode::MutBorrowed;
+                                self.inferred_mut_borrowed_params.insert(param.name.clone());
+                            }
+
                             if _debug_formal {
                                 eprintln!("[FORMAL-FINAL] fn={} param={} ownership_mode={:?} formal_type={:?} param.is_mutable={} field_mutated={} param_passed_to_owned_self_method={}",
                                     func.name, param.name, ownership_mode, formal_type, param.is_mutable,
@@ -1993,6 +2078,15 @@ impl<'ast> CodeGenerator<'ast> {
                                         Type::Reference(_) | Type::MutableReference(_)
                                     );
                                     let prefer_owned_mut = bare_wj
+                                        && !matches!(
+                                            registry_ownership,
+                                            Some(OwnershipMode::MutBorrowed)
+                                        )
+                                        && !self.param_passed_to_mut_borrowing_callee(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        )
                                         && (self.param_only_forwards_to_emitted_owned_callees(
                                             func.body.as_slice(),
                                             &param.name,
