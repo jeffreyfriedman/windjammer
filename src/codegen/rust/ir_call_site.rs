@@ -2728,43 +2728,49 @@ impl<'ast> CodeGenerator<'ast> {
         // (ReBAC `contains_string(&out)` into `items: Vec<String>`).
         {
             let owned_pidx = text_sig.arg_param_index(arg_index);
+            let bare_is_vec = text_sig
+                .formal_param_type(owned_pidx)
+                .or_else(|| text_sig.param_types.get(owned_pidx))
+                .is_some_and(|t| {
+                    let bare = match t {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    matches!(bare, Type::Vec(_))
+                        || matches!(bare, Type::Parameterized(n, _) if n == "Vec")
+                });
+            let analyzer_borrows_vec = matches!(
+                text_sig.param_ownership.get(owned_pidx),
+                Some(
+                    crate::analyzer::OwnershipMode::Borrowed
+                        | crate::analyzer::OwnershipMode::MutBorrowed
+                )
+            );
             let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 &text_sig, owned_pidx,
             ) || (crate::ir::signature_bridge::call_site_expects_owned_pass(
                 &text_sig, owned_pidx,
-            )
+            ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &text_sig, owned_pidx,
+            )) || (bare_is_vec
                 && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                     &text_sig, owned_pidx,
-                ))
-                || (text_sig
-                    .formal_param_type(owned_pidx)
-                    .or_else(|| text_sig.param_types.get(owned_pidx))
-                    .is_some_and(|t| {
-                        let bare = match t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref()
-                            }
-                            other => other,
-                        };
-                        matches!(bare, Type::Vec(_))
-                            || matches!(bare, Type::Parameterized(n, _) if n == "Vec")
-                    })
-                    && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                        &text_sig, owned_pidx,
-                    )
-                    // True `&Vec<T>` formals keep the borrow; only peel when the Rust
-                    // formal is owned `Vec` (codegen) or WJ declared owned `Vec`.
-                    && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                        &text_sig, owned_pidx,
-                    ) || matches!(
-                        text_sig.param_ownership.get(owned_pidx),
-                        Some(crate::analyzer::OwnershipMode::Owned)
-                    ) || text_sig
-                        .formal_param_type(owned_pidx)
-                        .is_some_and(|t| {
-                            matches!(t, Type::Vec(_))
-                                || matches!(t, Type::Parameterized(n, _) if n == "Vec")
-                        })));
+                )
+                // Analyzer-Borrowed / IR shared-ref Vec formals keep `&walls`
+                // (cross-file `check_collisions`); bare WJ `Vec` alone is not owned.
+                && !analyzer_borrows_vec
+                && !crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                    &text_sig, owned_pidx,
+                )
+                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &text_sig, owned_pidx,
+                ) || matches!(
+                    text_sig.param_ownership.get(owned_pidx),
+                    Some(crate::analyzer::OwnershipMode::Owned)
+                ) || text_sig.formal_param_type(owned_pidx).is_some_and(|t| {
+                    matches!(t, Type::Vec(_))
+                        || matches!(t, Type::Parameterized(n, _) if n == "Vec")
+                })));
             if coerced.starts_with('&') && !coerced.starts_with("&mut ") && owned_slot {
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                     .to_string();

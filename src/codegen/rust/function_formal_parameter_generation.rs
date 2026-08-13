@@ -2024,7 +2024,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 ownership_mode = OwnershipMode::Borrowed;
                                 self.inferred_borrowed_params.insert(param.name.clone());
                             }
+                            // E0053: trait-impl formals already match the trait item above.
+                            // Stale registry MutBorrowed (self-slot index bleed, empty-body
+                            // stubs) must not rewrite owned Copy/non-self trait params to
+                            // `&mut T` (`set_camera(camera: CameraData)`).
                             if param.name != "self"
+                                && !self.in_trait_impl
                                 && (self.param_passed_to_mut_borrowing_callee(
                                     func.body.as_slice(),
                                     &param.name,
