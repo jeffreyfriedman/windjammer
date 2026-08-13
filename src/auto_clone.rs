@@ -85,6 +85,7 @@ impl AutoCloneAnalysis {
                         statement_idx: 0,
                         is_move: false,
                         in_loop: false,
+                        is_projection_parent: false,
                     },
                 );
             }
@@ -148,6 +149,7 @@ impl AutoCloneAnalysis {
                         kind: UsageKind::Definition,
                         is_move: false,
                         in_loop,
+                        is_projection_parent: false,
                     });
                 }
             }
@@ -444,6 +446,50 @@ impl AutoCloneAnalysis {
         UsageKind::Move
     }
 
+    /// Record that `expr` is only touched as the parent of a field projection
+    /// (`buf` inside `buf.scores`). Nested chains mark each identifier root once.
+    fn collect_field_projection_parent_usages(
+        expr: &Expression,
+        idx: usize,
+        in_loop: bool,
+        map: &mut HashMap<String, Vec<Usage>>,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                map.entry(name.clone()).or_default().push(Usage {
+                    statement_idx: idx,
+                    kind: UsageKind::Read,
+                    is_move: false,
+                    in_loop,
+                    is_projection_parent: true,
+                });
+            }
+            Expression::FieldAccess { object, .. } => {
+                if let Some(path) = Self::extract_expression_path(expr) {
+                    map.entry(path).or_default().push(Usage {
+                        statement_idx: idx,
+                        kind: UsageKind::Read,
+                        is_move: false,
+                        in_loop,
+                        is_projection_parent: true,
+                    });
+                }
+                Self::collect_field_projection_parent_usages(object, idx, in_loop, map, registry);
+            }
+            _ => {
+                Self::collect_usages_from_expression(
+                    expr,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
+            }
+        }
+    }
+
     /// Collect usages from an expression
     fn collect_usages_from_expression(
         expr: &Expression,
@@ -460,7 +506,8 @@ impl AutoCloneAnalysis {
                     kind,
                     is_move: kind == UsageKind::Move,
                     in_loop,
-                });
+                        is_projection_parent: false,
+                    });
             }
             Expression::FieldAccess { object, .. } => {
                 if let Some(path) = Self::extract_expression_path(expr) {
@@ -469,9 +516,13 @@ impl AutoCloneAnalysis {
                         kind,
                         is_move: kind == UsageKind::Move,
                         in_loop,
+                        is_projection_parent: false,
                     });
                 }
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
+                // Parent binding uses from `root.field` are not whole-root reuse.
+                Self::collect_field_projection_parent_usages(
+                    object, idx, in_loop, map, registry,
+                );
             }
             Expression::Call {
                 function,
@@ -509,6 +560,7 @@ impl AutoCloneAnalysis {
                         kind,
                         is_move: kind == UsageKind::Move,
                         in_loop,
+                        is_projection_parent: false,
                     });
                 }
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
@@ -539,6 +591,7 @@ impl AutoCloneAnalysis {
                         kind,
                         is_move: kind == UsageKind::Move,
                         in_loop,
+                        is_projection_parent: false,
                     });
                 }
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
@@ -627,7 +680,8 @@ impl AutoCloneAnalysis {
                     kind: UsageKind::Definition,
                     is_move: false,
                     in_loop,
-                });
+                        is_projection_parent: false,
+                    });
             }
             crate::parser::Pattern::Tuple(patterns) => {
                 for p in patterns {
@@ -798,8 +852,12 @@ impl AutoCloneAnalysis {
                 .collect();
 
             for field_move in &field_moves {
+                // Ignore projection-parent Reads (`buf` in later `buf.next`) — Rust allows
+                // moving distinct fields of an owned struct without cloning (WDB-096).
                 let root_used_later = root_usages.iter().any(|u| {
-                    u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx
+                    u.kind != UsageKind::Definition
+                        && !u.is_projection_parent
+                        && u.statement_idx > field_move.statement_idx
                 });
                 let field_used_later = field_usages.iter().any(|u| {
                     u.kind != UsageKind::Definition && u.statement_idx > field_move.statement_idx
@@ -1160,6 +1218,10 @@ struct Usage {
     kind: UsageKind,
     is_move: bool,
     in_loop: bool,
+    /// True when this use exists only because a field/index chain projected through
+    /// the binding (`buf` in `buf.scores`). Distinct field moves must not treat these
+    /// as whole-root reuse (WDB-096).
+    is_projection_parent: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1489,6 +1551,87 @@ mod tests {
 
         // Should NOT detect any clones needed
         assert!(analysis.needs_clone("x", 1).is_none());
+    }
+
+    #[test]
+    fn test_distinct_owned_field_moves_do_not_clone() {
+        // WDB-096: return_f64(buf.scores); return_f64(buf.next) — distinct fields.
+        let func = FunctionDecl {
+            name: "release".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "buf".to_string(),
+                pattern: None,
+                type_: Type::Custom("Buf".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "return_f64".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::FieldAccess {
+                                object: test_alloc_expr(Expression::Identifier {
+                                    name: "buf".to_string(),
+                                    location: None,
+                                }),
+                                field: "scores".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "return_f64".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::FieldAccess {
+                                object: test_alloc_expr(Expression::Identifier {
+                                    name: "buf".to_string(),
+                                    location: None,
+                                }),
+                                field: "next".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("buf.scores", 0).is_none(),
+            "distinct field move must not clone earlier field"
+        );
+        assert!(
+            analysis.needs_clone("buf.next", 1).is_none(),
+            "distinct field move must not clone later field"
+        );
     }
 
     #[test]
