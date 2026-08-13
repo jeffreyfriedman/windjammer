@@ -150,6 +150,14 @@ pub fn build_project_ext(
             &mut global_signatures,
             &mut analyzer,
         );
+        // External deps: also register `crate_key::fn` aliases for qualified calls (WDB-094).
+        if !external_paths.is_empty() {
+            crate::metadata::merge_external_crate_metadata_with_aliases(
+                &external_paths,
+                &mut global_signatures,
+                Some(&mut analyzer),
+            );
+        }
 
         for item in &program.items {
             match item {

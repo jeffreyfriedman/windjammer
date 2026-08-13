@@ -687,6 +687,30 @@ impl SignatureRegistry {
         }
     }
 
+    /// Register `crate_key::fn` aliases for every bare free-function signature.
+    ///
+    /// External crate metadata stores bare keys (`circuit_delta_from_edge_inserts`);
+    /// call sites may use `wdb_circuit::circuit_delta_from_edge_inserts`. Aliasing
+    /// keeps IR fail-closed exact-key lookup working without hardcoding API names
+    /// (WDB-094).
+    pub fn register_crate_prefix_aliases(&mut self, crate_key: &str) {
+        if crate_key.is_empty() || crate_key.contains("::") {
+            return;
+        }
+        let bare: Vec<(String, FunctionSignature)> = self
+            .signatures
+            .iter()
+            .filter(|(name, _)| !name.contains("::"))
+            .map(|(name, sig)| (name.clone(), sig.clone()))
+            .collect();
+        for (name, sig) in bare {
+            let qualified = format!("{crate_key}::{name}");
+            if !self.signatures.contains_key(&qualified) {
+                self.add_function(qualified, sig);
+            }
+        }
+    }
+
     /// Check if a signature's ownership has changed compared to a reference registry.
     pub fn ownership_changed(old: &FunctionSignature, new: &FunctionSignature) -> bool {
         old.param_ownership != new.param_ownership

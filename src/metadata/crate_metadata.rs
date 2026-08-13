@@ -269,6 +269,18 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
     copy_structs: &mut Vec<String>,
     all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
 ) {
+    merge_crate_metadata_file_with_alias(path, registry, copy_structs, all_struct_fields, None);
+}
+
+/// Like [`merge_crate_metadata_file`], and when `crate_alias` is set also registers
+/// `alias::fn` keys for each bare function (WDB-094 qualified external calls).
+pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
+    path: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    copy_structs: &mut Vec<String>,
+    all_struct_fields: &mut HashMap<String, Vec<Vec<String>>>,
+    crate_alias: Option<&str>,
+) {
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
     };
@@ -284,8 +296,9 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
             .push(field_types);
     }
     for (name, sig) in &crate_meta.functions {
-        if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
-            registry.add_function(name.clone(), a_sig);
+        let added = if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
+            registry.add_function(name.clone(), a_sig.clone());
+            Some(a_sig)
         } else if sig.is_extern {
             // Extern functions with no param_ownership still need registry entries
             // so the codegen can wrap calls in unsafe blocks.
@@ -303,22 +316,31 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
                 .return_type
                 .as_ref()
                 .and_then(|s| ModuleMetadata::deserialize_type(s));
-            registry.add_function(
-                name.clone(),
-                AnalyzerFunctionSignature {
-                    name: name.to_string(),
-                    param_types,
-                    formal_param_types,
-                    param_ownership,
-                    return_type,
-                    return_ownership: OwnershipMode::Owned,
-                    has_self_receiver: sig.has_self_receiver,
-                    is_extern: true,
-                    emitted_rust_ref_params: None,
-                    field_extract_params: None,
-            forwarding_borrow_params: None,
-                },
-            );
+            let a_sig = AnalyzerFunctionSignature {
+                name: name.to_string(),
+                param_types,
+                formal_param_types,
+                param_ownership,
+                return_type,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: sig.has_self_receiver,
+                is_extern: true,
+                emitted_rust_ref_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            };
+            registry.add_function(name.clone(), a_sig.clone());
+            Some(a_sig)
+        } else {
+            None
+        };
+        if let (Some(alias), Some(a_sig)) = (crate_alias, added) {
+            if !name.contains("::") && !alias.is_empty() {
+                let qualified = format!("{alias}::{name}");
+                if registry.get_signature(&qualified).is_none() {
+                    registry.add_function(qualified, a_sig);
+                }
+            }
         }
     }
 }

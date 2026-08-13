@@ -148,6 +148,36 @@ pub fn merge_wj_meta_signatures_and_copy_structs(
     }
 }
 
+/// Load each external dependency's `metadata.json` and register both bare and
+/// `crate_key::fn` signature keys so qualified call sites resolve under IR
+/// fail-closed (WDB-094).
+pub fn merge_external_crate_metadata_with_aliases(
+    external_paths: &HashMap<String, std::path::PathBuf>,
+    registry: &mut crate::analyzer::SignatureRegistry,
+    analyzer: Option<&mut crate::analyzer::Analyzer>,
+) {
+    let mut copy_structs = Vec::new();
+    let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    for (crate_key, path) in external_paths {
+        let Some(meta_path) = crate_metadata::resolve_metadata_json_path(path) else {
+            continue;
+        };
+        crate_metadata::merge_crate_metadata_file_with_alias(
+            &meta_path,
+            registry,
+            &mut copy_structs,
+            &mut all_struct_fields,
+            Some(crate_key.as_str()),
+        );
+    }
+    type_metadata::infer_copy_from_metadata_structs(&all_struct_fields, &mut copy_structs);
+    if let Some(analyzer) = analyzer {
+        for name in &copy_structs {
+            analyzer.register_copy_struct(name);
+        }
+    }
+}
+
 /// Load metadata from multiple root directories, merging all results.
 /// Used when cross-crate dependencies need to be resolved.
 pub fn merge_wj_meta_signatures_and_copy_structs_multi(
