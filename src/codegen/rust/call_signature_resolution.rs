@@ -2188,6 +2188,76 @@ fn game_update() {
     }
 
     #[test]
+    fn cross_file_dense_csr_borrow_via_layered_registry() {
+        use crate::analyzer::{Analyzer, OwnershipMode};
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+        use std::sync::Arc;
+
+        let file_a = r#"
+pub struct DenseCsr {
+    out_offsets: Vec<u32>,
+}
+pub fn graph_bfs_run_dense(csr: DenseCsr, source: i64) -> i64 {
+    (csr.out_offsets.len() as i64) + source
+}
+"#;
+        let mut lexer_a = Lexer::new(file_a);
+        let tokens_a = lexer_a.tokenize_with_locations();
+        let mut parser_a = Parser::new(tokens_a);
+        let program_a = parser_a.parse().unwrap();
+        let mut analyzer_a = Analyzer::new();
+        let (_, registry_a, _) = analyzer_a.analyze_program(&program_a).unwrap();
+        assert_eq!(
+            registry_a.get_signature("graph_bfs_run_dense").unwrap().param_ownership[0],
+            OwnershipMode::Borrowed
+        );
+        assert!(crate::ir::signature_bridge::call_site_expects_shared_borrow(
+            registry_a.get_signature("graph_bfs_run_dense").unwrap(),
+            0
+        ));
+
+        let file_b = r#"
+pub struct DenseCsr {
+    out_offsets: Vec<u32>,
+}
+pub fn make_csr() -> DenseCsr {
+    DenseCsr { out_offsets: Vec::new() }
+}
+pub fn run_bfs(source: i64) -> i64 {
+    let csr = make_csr()
+    graph_bfs_run_dense(csr, source)
+}
+"#;
+        let mut lexer_b = Lexer::new(file_b);
+        let tokens_b = lexer_b.tokenize_with_locations();
+        let mut parser_b = Parser::new(tokens_b);
+        let program_b = parser_b.parse().unwrap();
+        let mut analyzer_b = Analyzer::new();
+        let (analyzed, registry, _) = analyzer_b
+            .analyze_program_with_global_signatures(&program_b, &registry_a)
+            .unwrap();
+        let found = registry.get_signature("graph_bfs_run_dense").cloned().expect("sig");
+        assert!(
+            crate::ir::signature_bridge::call_site_expects_shared_borrow(&found, 0),
+            "merged sig must expect shared borrow"
+        );
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_global_signature_registry(Arc::new(registry_a));
+        let rs = codegen.generate_program(&program_b, &analyzed);
+        assert!(
+            rs.contains("graph_bfs_run_dense(&csr"),
+            "expected &csr. Got:\n{rs}"
+        );
+        assert!(
+            !rs.contains("graph_bfs_run_dense(csr.clone()"),
+            "must not clone into &DenseCsr. Got:\n{rs}"
+        );
+    }
+
+    #[test]
     fn trait_impl_copy_camera_stays_owned() {
         use crate::analyzer::Analyzer;
         use crate::codegen::rust::CodeGenerator;

@@ -611,3 +611,180 @@ pub(crate) fn collect_global_enum_variant_types_for_library(
 
     map
 }
+
+/// Modules imported via `use std::…` in source text.
+pub(crate) fn stdlib_modules_from_source(source: &str) -> HashSet<String> {
+    let mut stdlib_modules = HashSet::new();
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("use std::") {
+            if let Some(module) = rest.split("::").next() {
+                let module = module
+                    .split(|c: char| c == ';' || c == ' ' || c == '{')
+                    .next()
+                    .unwrap_or(module);
+                if !module.is_empty() {
+                    stdlib_modules.insert(module.to_string());
+                }
+            }
+        }
+    }
+    stdlib_modules
+}
+
+fn find_stdlib_dir_for_api_types() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("WINDJAMMER_STDLIB") {
+        let pb = PathBuf::from(p);
+        if pb.is_dir() {
+            return Some(pb);
+        }
+    }
+    let manifest_std = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std");
+    if manifest_std.is_dir() {
+        return Some(manifest_std);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let dev = parent.parent()?.parent()?.join("std");
+            if dev.is_dir() {
+                return Some(dev);
+            }
+        }
+    }
+    let cwd = PathBuf::from("./std");
+    if cwd.is_dir() {
+        return Some(cwd);
+    }
+    None
+}
+
+/// Rust module path for a Windjammer `std::{module}` that maps to `windjammer_runtime`.
+fn stdlib_module_rust_path(module: &str) -> Option<&'static str> {
+    match module {
+        "http" => Some("windjammer_runtime::http"),
+        "mime" => Some("windjammer_runtime::mime"),
+        "json" => Some("windjammer_runtime::json"),
+        "jwt" => Some("windjammer_runtime::jwt"),
+        "io" => Some("windjammer_runtime::io"),
+        "subprocess" => Some("windjammer_runtime::subprocess"),
+        "async" | "async_runtime" => Some("windjammer_runtime::async_runtime"),
+        "cli" => Some("windjammer_runtime::cli"),
+        "crypto" => Some("windjammer_runtime::crypto"),
+        "csv" => Some("windjammer_runtime::csv_mod"),
+        "db" => Some("windjammer_runtime::db"),
+        "log" => Some("windjammer_runtime::log_mod"),
+        "math" => Some("windjammer_runtime::math"),
+        "random" => Some("windjammer_runtime::random"),
+        "regex" => Some("windjammer_runtime::regex_mod"),
+        "strings" => Some("windjammer_runtime::strings"),
+        "testing" => Some("windjammer_runtime::testing"),
+        "time" => Some("windjammer_runtime::time"),
+        "fs" => Some("windjammer_runtime::fs"),
+        "env" => Some("windjammer_runtime::env"),
+        _ => None,
+    }
+}
+
+/// Parse imported `std/{module}.wj` files and return struct field types + unit/tuple
+/// enum variant payloads so single-file builds can coerce string literals into enum
+/// fields (`method: "GET"` → `HttpMethod::GET`) without hardcoding names.
+///
+/// Also returns type-name → fully-qualified Rust path for FQ emit when the WJ
+/// source only imports a sibling type (`ServerRequest` without `HttpMethod`).
+pub(crate) fn collect_stdlib_api_types_for_modules(
+    modules: &HashSet<String>,
+) -> (
+    HashMap<String, HashMap<String, crate::parser::Type>>,
+    HashMap<String, Vec<crate::parser::Type>>,
+    HashMap<String, String>,
+) {
+    use crate::parser::{EnumVariantData, Item};
+
+    let mut struct_fields: HashMap<String, HashMap<String, crate::parser::Type>> = HashMap::new();
+    let mut enum_variants: HashMap<String, Vec<crate::parser::Type>> = HashMap::new();
+    let mut type_rust_paths: HashMap<String, String> = HashMap::new();
+    let Some(stdlib_dir) = find_stdlib_dir_for_api_types() else {
+        return (struct_fields, enum_variants, type_rust_paths);
+    };
+
+    fn walk_items(
+        items: &[Item<'_>],
+        rust_mod: Option<&str>,
+        struct_fields: &mut HashMap<String, HashMap<String, crate::parser::Type>>,
+        enum_variants: &mut HashMap<String, Vec<crate::parser::Type>>,
+        type_rust_paths: &mut HashMap<String, String>,
+    ) {
+        for item in items {
+            match item {
+                Item::Struct { decl, .. } => {
+                    let mut fields = HashMap::new();
+                    for field in &decl.fields {
+                        fields.insert(field.name.clone(), field.field_type.clone());
+                    }
+                    struct_fields.insert(decl.name.clone(), fields);
+                    if let Some(rm) = rust_mod {
+                        type_rust_paths
+                            .insert(decl.name.clone(), format!("{rm}::{}", decl.name));
+                    }
+                }
+                Item::Enum { decl, .. } => {
+                    if let Some(rm) = rust_mod {
+                        type_rust_paths
+                            .insert(decl.name.clone(), format!("{rm}::{}", decl.name));
+                    }
+                    for variant in &decl.variants {
+                        let key = format!("{}::{}", decl.name, variant.name);
+                        let types = match &variant.data {
+                            EnumVariantData::Unit => Vec::new(),
+                            EnumVariantData::Tuple(ts) => ts.clone(),
+                            EnumVariantData::Struct(fs) => {
+                                fs.iter().map(|(_, t)| t.clone()).collect()
+                            }
+                        };
+                        enum_variants.insert(key, types);
+                    }
+                }
+                Item::Mod { items: inner, .. } => {
+                    walk_items(
+                        inner,
+                        rust_mod,
+                        struct_fields,
+                        enum_variants,
+                        type_rust_paths,
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
+    for module in modules {
+        // Skip pure Rust-passthrough modules that have no Windjammer API surface here.
+        if matches!(
+            module.as_str(),
+            "collections" | "cmp" | "ops" | "process"
+        ) {
+            continue;
+        }
+        let path = stdlib_dir.join(format!("{module}.wj"));
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut lexer = Lexer::new(&source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let Ok(program) = parser.parse() else {
+            continue;
+        };
+        let rust_mod = stdlib_module_rust_path(module);
+        walk_items(
+            &program.items,
+            rust_mod,
+            &mut struct_fields,
+            &mut enum_variants,
+            &mut type_rust_paths,
+        );
+    }
+
+    (struct_fields, enum_variants, type_rust_paths)
+}
