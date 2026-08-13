@@ -1084,10 +1084,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // Borrow coercion on `binding.clone()` → use `&binding` (clone-before-borrow is redundant).
+        // Borrow coercion on `binding.clone()` / `self.field.clone()` → `&binding` /
+        // `&self.field` (clone-before-borrow is redundant for shared-ref formals).
         if prepared_arg.ends_with(".clone()")
             && matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
-            && matches!(arg_expr, Expression::Identifier { .. })
+            && matches!(
+                arg_expr,
+                Expression::Identifier { .. } | Expression::FieldAccess { .. }
+            )
         {
             prepared_arg = prepared_arg.trim_end_matches(".clone()").to_string();
         }
@@ -4436,13 +4440,17 @@ impl<'ast> CodeGenerator<'ast> {
                 other => other,
             })
         {
+            // Copy aggregates without confirmed shared-ref emission usually stay owned
+            // (Lsn). Defer to the signature bridge so analyzer-Borrowed bare Custom that
+            // the bridge still marks Ref (WDB-097 DenseCsr; also when field layout is
+            // unknown and `is_type_copy` is a false positive) is not demoted to Identity.
             if self.is_type_copy(bare)
                 && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                 && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                     sig, pidx,
                 )
             {
-                return false;
+                return crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx);
             }
         }
         crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)

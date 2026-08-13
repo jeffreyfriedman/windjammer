@@ -1891,41 +1891,43 @@ impl<'ast> CodeGenerator<'ast> {
                                         analyzed.field_mutated_parameters.contains(&param.name),
                                         payload_stored, payload_forces_owned);
                                 }
-                                // Copy without local field/index writes: field-method calls alone
-                                // are not `&mut` mutations. But passthrough args (`shift_right(p)`)
-                                // must keep analyzer MutBorrowed — `param_passed_as_call_argument`
-                                // distinguishes that from false mut on Copy.
-                                let false_mut_on_copy = copy_aggregate
-                                    && !self.param_has_field_or_index_write(
-                                        func.body.as_slice(),
-                                        &param.name,
-                                    )
-                                    && !self.param_passed_as_call_argument(
-                                        func.body.as_slice(),
-                                        &param.name,
-                                        func,
-                                    )
-                                    && !self.param_is_direct_method_receiver(
-                                        func.body.as_slice(),
-                                        &param.name,
-                                    )
-                                    && !self.param_has_mut_method_via_field_projection(
-                                        func.body.as_slice(),
-                                        &param.name,
-                                    );
+                                // Without local field/index writes: field-method calls alone
+                                // are not `&mut` mutations (Copy AppDeps *and* non-Copy
+                                // `Writer { tag: string }` — post_journal_entry). Passthrough
+                                // args (`shift_right(p)`) must keep analyzer MutBorrowed —
+                                // `param_passed_as_call_argument` distinguishes that.
+                                let false_mut_on_field_methods = matches!(
+                                    &param.type_,
+                                    Type::Custom(_)
+                                ) && !crate::codegen::rust::types::is_windjammer_text_type(
+                                    &param.type_,
+                                ) && !self.param_has_field_or_index_write(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                ) && !self.param_passed_as_call_argument(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ) && !self.param_is_direct_method_receiver(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                ) && !self.param_has_mut_method_via_field_projection(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                );
                                 if _debug_formal {
-                                    eprintln!("[FORMAL-FMC] false_mut_on_copy={} field_write={} call_arg={} direct_recv={} field_proj_mut={}",
-                                        false_mut_on_copy,
+                                    eprintln!("[FORMAL-FMC] false_mut_on_field_methods={} field_write={} call_arg={} direct_recv={} field_proj_mut={}",
+                                        false_mut_on_field_methods,
                                         self.param_has_field_or_index_write(func.body.as_slice(), &param.name),
                                         self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func),
                                         self.param_is_direct_method_receiver(func.body.as_slice(), &param.name),
                                         self.param_has_mut_method_via_field_projection(func.body.as_slice(), &param.name));
                                 }
-                                if false_mut_on_copy
+                                if false_mut_on_field_methods
                                     && matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 {
                                     ownership_mode = OwnershipMode::Owned;
-                                } else if false_mut_on_copy
+                                } else if false_mut_on_field_methods
                                     && matches!(ownership_mode, OwnershipMode::Borrowed)
                                     && !self.inferred_borrowed_params.contains(&param.name)
                                     && !self.param_only_used_via_field_or_index_projection(
@@ -1934,7 +1936,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 {
                                     ownership_mode = OwnershipMode::Owned;
-                                } else if !false_mut_on_copy
+                                } else if !false_mut_on_field_methods
                                     && (matches!(analyzed_mode, Some(OwnershipMode::MutBorrowed))
                                         || (analyzed.mutated_parameters.contains(&param.name)
                                             && !analyzed.returned_parameters.contains(&param.name)))
@@ -2028,19 +2030,66 @@ impl<'ast> CodeGenerator<'ast> {
                             // Stale registry MutBorrowed (self-slot index bleed, empty-body
                             // stubs) must not rewrite owned Copy/non-self trait params to
                             // `&mut T` (`set_camera(camera: CameraData)`).
+                            // Custom aggregates demoted by readonly field-method false-mut
+                            // (reverse_entry / post_journal_entry) must not be re-mutated
+                            // solely from registry MutBorrowed.
+                            let false_mut_on_field_methods = matches!(&param.type_, Type::Custom(_))
+                                && !crate::codegen::rust::types::is_windjammer_text_type(
+                                    &param.type_,
+                                )
+                                && !analyzed.field_mutated_parameters.contains(&param.name)
+                                && !self.param_has_field_or_index_write(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
+                                && !self.param_has_mut_method_via_field_projection(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
+                                && !self.param_passed_as_call_argument(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                                && !self.param_is_direct_method_receiver(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                );
+                            // Forward-only owned callees (`create` → owned `post_journal_entry`)
+                            // must not be re-promoted to `&mut` from stale registry MutBorrowed.
+                            let forwards_to_owned = self.param_only_forwards_to_emitted_owned_callees(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            );
                             if param.name != "self"
                                 && !self.in_trait_impl
+                                && !forwards_to_owned
                                 && (self.param_passed_to_mut_borrowing_callee(
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
-                                ) || matches!(
+                                ) || (matches!(
                                     registry_ownership,
                                     Some(OwnershipMode::MutBorrowed)
-                                ))
+                                ) && !false_mut_on_field_methods))
                             {
                                 ownership_mode = OwnershipMode::MutBorrowed;
                                 self.inferred_mut_borrowed_params.insert(param.name.clone());
+                            }
+                            if forwards_to_owned
+                                && matches!(
+                                    ownership_mode,
+                                    OwnershipMode::MutBorrowed | OwnershipMode::Borrowed
+                                )
+                                && matches!(&param.type_, Type::Custom(_))
+                                && !crate::codegen::rust::types::is_windjammer_text_type(
+                                    &param.type_,
+                                )
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.inferred_mut_borrowed_params.remove(&param.name);
+                                self.inferred_borrowed_params.remove(&param.name);
                             }
 
                             if _debug_formal {
@@ -2083,10 +2132,6 @@ impl<'ast> CodeGenerator<'ast> {
                                         Type::Reference(_) | Type::MutableReference(_)
                                     );
                                     let prefer_owned_mut = bare_wj
-                                        && !matches!(
-                                            registry_ownership,
-                                            Some(OwnershipMode::MutBorrowed)
-                                        )
                                         && !self.param_passed_to_mut_borrowing_callee(
                                             func.body.as_slice(),
                                             &param.name,
@@ -2101,6 +2146,14 @@ impl<'ast> CodeGenerator<'ast> {
                                             &param.name,
                                             func,
                                         ) || self.param_is_owned_mut_field_method_facade(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        ))
+                                        && (!matches!(
+                                            registry_ownership,
+                                            Some(OwnershipMode::MutBorrowed)
+                                        ) || self.param_only_forwards_to_emitted_owned_callees(
                                             func.body.as_slice(),
                                             &param.name,
                                             func,
