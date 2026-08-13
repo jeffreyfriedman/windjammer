@@ -564,6 +564,44 @@ fn test_struct_literal_empty() {
 }
 
 #[test]
+fn test_empty_struct_literal_before_next_statement() {
+    // Regression: `Type{}` must not become Identifier + empty Block when another
+    // statement follows (`let r = Renderer{}` / `let message = ...`).
+    let source = r#"
+fn main() {
+    let renderer = Renderer{}
+    let message = 1
+}
+"#;
+    let mut lexer = Lexer::new(source);
+    let tokens = lexer.tokenize_with_locations();
+    let mut parser = Parser::new(tokens);
+    let program = parser.parse().expect("parse");
+    let body = program
+        .items
+        .iter()
+        .find_map(|item| {
+            if let Item::Function { decl, .. } = item {
+                Some(&decl.body)
+            } else {
+                None
+            }
+        })
+        .expect("main");
+    assert_eq!(body.len(), 2, "must not inject empty Block from Type{{}}. body={body:?}");
+    match body[0] {
+        Statement::Let {
+            value: Expression::StructLiteral { name, fields, .. },
+            ..
+        } => {
+            assert_eq!(name, "Renderer");
+            assert!(fields.is_empty());
+        }
+        other => panic!("expected StructLiteral let, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_struct_literal_with_fields() {
     let expr = parse_expr("Point { x: 1, y: 2 }");
     if let Expression::StructLiteral {

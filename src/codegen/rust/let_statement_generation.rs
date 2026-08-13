@@ -147,6 +147,13 @@ impl<'ast> CodeGenerator<'ast> {
                     Expression::StructLiteral {
                         name: struct_name, ..
                     } => Some(Type::Custom(struct_name.to_string())),
+                    // Unit-struct / type-path values: `let r = Renderer` (no braces).
+                    // CamelCase identifiers are type constructors, not locals.
+                    Expression::Identifier { name, .. }
+                        if name.starts_with(|c: char| c.is_ascii_uppercase()) =>
+                    {
+                        Some(Type::Custom(name.to_string()))
+                    }
                     // Literal types: let x = 25 → i32, let y = 3.14 → f32, let b = true → bool
                     Expression::Literal {
                         value: crate::parser::Literal::Int(_),
