@@ -4376,7 +4376,7 @@ impl<'ast> CodeGenerator<'ast> {
         arg_str.to_string()
     }
 
-    fn auto_clone_expr_path(expr: &Expression<'ast>) -> Option<String> {
+    pub(in crate::codegen::rust) fn auto_clone_expr_path(expr: &Expression<'ast>) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
             Expression::FieldAccess { object, field, .. } => {

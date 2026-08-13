@@ -102,26 +102,26 @@ pub fn distance(a: Point, b: Point) -> f32 {
 
 #[test]
 fn test_clone_still_needed_for_non_copy_type() {
-    // Ensure non-Copy types still get .clone() when needed
+    // Non-Copy field reused twice must clone (same-field partial move / E0382).
     let source = r#"
 pub struct Item {
     pub name: string,
     pub value: i32,
 }
 
-pub fn use_item_twice(item: Item) -> string {
-    let name = item.name
-    name
+pub fn use_item_twice(item: Item) -> (string, string) {
+    let a = item.name
+    let b = item.name
+    (a, b)
 }
 "#;
 
     let generated = test_utils::compile_single(source);
     println!("Generated:\n{}", generated);
 
-    // Item does NOT derive Copy (has String field) — .clone() IS expected
     assert!(
-        generated.contains(".clone()"),
-        "Non-Copy type should still use .clone() when needed.\nGenerated:\n{}",
+        generated.contains(".clone()") || generated.contains("name.clone()"),
+        "Non-Copy field reused twice must clone.\nGenerated:\n{}",
         generated
     );
 }

@@ -78,7 +78,12 @@ pub fn main() {}
 "#;
     let (result, compiles) = test_utils::compile_single_check(src);
     assert!(compiles, "Should compile. Generated:\n{}", result);
-    assert!(result.contains("d.value.clone()"));
+    // Owned `d` may move `d.value` into the new struct (preferred) or clone.
+    assert!(
+        result.contains("d.value.clone()") || result.contains("value: d.value"),
+        "field into owned struct literal: move or clone. Generated:\n{}",
+        result
+    );
     assert!(
         !result.contains("*d.value.clone()"),
         "clone() returns owned"
