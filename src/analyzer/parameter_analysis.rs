@@ -166,6 +166,13 @@ impl<'ast> Analyzer<'ast> {
             return Ok(OwnershipMode::Owned);
         }
 
+        // 2.5b Non-Copy field projected into a call/method arg is a partial move of the
+        // binding (`return_f64(buf.scores)`). Keep Owned so codegen can move fields
+        // without demoting to `&Buf` + `.clone()` (WDB-096).
+        if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body) {
+            return Ok(OwnershipMode::Owned);
+        }
+
         // 3. Check if parameter is stored in a struct or collection
         if self.is_stored_requiring_owned(param_name, param_type, body, registry) {
             return Ok(OwnershipMode::Owned);

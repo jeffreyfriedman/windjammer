@@ -365,15 +365,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// E0507 fix for `let x = self.field` behind borrowed self.
+    /// E0507 / E0382: field extract from a parameter.
     ///
-    /// Patterns recognized:
-    /// - `let prev = self.field; self.field = None`  → `let prev = self.field.take()`
-    /// - `let prev = self.field; self.field = Some(v)` → `let prev = self.field.replace(v)`
-    /// - `let mut x = self.field; …; self.field = x` (writeback on `&mut self`) → bare move
-    /// - Other non-Copy behind &self/&mut self → `.clone()`
-    ///
-    /// `let name = item.name` through an owned non-Copy param → `.clone()` (E0507).
+    /// Owned params may partially move distinct non-Copy fields (WDB-096). Only clone
+    /// when auto-clone reuse analysis says the field path is used again — never blind
+    /// `.clone()` on every owned-param field extract.
     pub(in crate::codegen::rust) fn apply_owned_param_field_extract_clone(
         &self,
         value: &Expression<'ast>,
@@ -403,7 +399,16 @@ impl<'ast> CodeGenerator<'ast> {
         if self.is_type_copy(&ty) || value_str.ends_with(".clone()") {
             return;
         }
-        *value_str = format!("{}.clone()", value_str);
+        let Some(path) = Self::auto_clone_expr_path(value) else {
+            return;
+        };
+        let needs = self
+            .auto_clone_analysis
+            .as_ref()
+            .is_some_and(|a| a.needs_clone(&path, self.current_statement_idx).is_some());
+        if needs {
+            *value_str = format!("{}.clone()", value_str);
+        }
     }
 
     pub(in crate::codegen::rust) fn apply_self_field_move_fix(

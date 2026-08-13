@@ -51,9 +51,15 @@ impl Writer {
 }
 "#;
     let generated = test_utils::compile_single(source);
+    // Prefer owned `Key` + move into the owned Vec formal (WDB-096). The older
+    // Borrowed-`&Key` + `.clone()` path remains valid if inference demotes.
+    let owned_move = generated.contains("key: Key")
+        && generated.contains("ffi_write(key.bytes)")
+        && !generated.contains("key.bytes.clone()");
+    let borrowed_clone = generated.contains("key.bytes.clone()");
     assert!(
-        generated.contains("key.bytes.clone()"),
-        "field moved from &Key must auto-clone for owned Vec<u8> extern param.\nGenerated:\n{generated}"
+        owned_move || borrowed_clone,
+        "field into owned Vec formal: owned Key move or &Key clone.\nGenerated:\n{generated}"
     );
     test_utils::verify_rust_compiles(&generated).expect("generated Rust should compile");
 }

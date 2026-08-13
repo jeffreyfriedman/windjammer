@@ -844,6 +844,198 @@ impl<'ast> Analyzer<'ast> {
             .any(|stmt| self.stmt_has_field_or_index_move_binding(param_name, stmt))
     }
 
+    /// True when a non-Copy `param.field` is passed as a call/method argument
+    /// (`return_f64(buf.scores)`). That is a partial move — keep the param Owned (WDB-096).
+    pub(crate) fn param_projects_non_copy_field_into_call_arg(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, stmt)
+        })
+    }
+
+    fn stmt_projects_non_copy_field_into_call_arg(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        stmt: &Statement,
+    ) -> bool {
+        match stmt {
+            Statement::Let { value, .. }
+            | Statement::Assignment { value, .. }
+            | Statement::Expression { expr: value, .. }
+            | Statement::Return {
+                value: Some(value), ..
+            } => self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, value),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, condition)
+                    || then_block.iter().any(|s| {
+                        self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, s)
+                    })
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| {
+                            self.stmt_projects_non_copy_field_into_call_arg(
+                                param_name, param_type, s,
+                            )
+                        })
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, condition)
+                    || body.iter().any(|s| {
+                        self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, s)
+                    })
+            }
+            Statement::For {
+                iterable, body, ..
+            } => {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, iterable)
+                    || body.iter().any(|s| {
+                        self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, s)
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, value)
+                    || arms.iter().any(|arm| {
+                        arm.guard.is_some_and(|g| {
+                            self.expr_projects_non_copy_field_into_call_arg(
+                                param_name, param_type, g,
+                            )
+                        }) || self.expr_projects_non_copy_field_into_call_arg(
+                            param_name,
+                            param_type,
+                            arm.body,
+                        )
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_projects_non_copy_field_into_call_arg(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression,
+    ) -> bool {
+        match expr {
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments.iter().any(|(_, arg)| {
+                    self.expr_is_non_copy_field_projection_from_param(param_name, param_type, arg)
+                        || self.expr_projects_non_copy_field_into_call_arg(
+                            param_name, param_type, arg,
+                        )
+                })
+            }
+            Expression::FieldAccess { object, .. }
+            | Expression::Index { object, .. }
+            | Expression::Unary { operand: object, .. }
+            | Expression::TryOp { expr: object, .. } => {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, object)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, left)
+                    || self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, right)
+            }
+            Expression::Tuple { elements, .. } => elements.iter().any(|e| {
+                self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, e)
+            }),
+            Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
+                self.expr_is_non_copy_field_projection_from_param(param_name, param_type, v)
+                    || self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, v)
+            }),
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, s)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expr_is_non_copy_field_projection_from_param(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression,
+    ) -> bool {
+        let Expression::FieldAccess { object, field, .. } = expr else {
+            return false;
+        };
+        if !matches!(&**object, Expression::Identifier { name, .. } if name == param_name) {
+            // Nested `param.a.b` — treat as projection if the root is the param and
+            // the final field type is non-Copy.
+            let Some(root) = Self::root_identifier_name(expr) else {
+                return false;
+            };
+            if root != param_name {
+                return false;
+            }
+            return self
+                .resolve_field_chain_type_from_param(param_type, expr)
+                .is_some_and(|ty| !self.is_copy_type(&ty));
+        }
+        let type_name = match param_type {
+            Type::Custom(n) => n.as_str(),
+            Type::Reference(inner) | Type::MutableReference(inner) => match &**inner {
+                Type::Custom(n) => n.as_str(),
+                _ => return !self.is_copy_type(param_type),
+            },
+            _ => return false,
+        };
+        let Some(fields) = self.lookup_struct_fields_for_type(type_name) else {
+            // Unknown struct layout — be conservative: non-Copy custom params projecting
+            // fields into calls keep Owned (safe; shared formals still auto-ref).
+            return !self.is_copy_type(param_type);
+        };
+        fields
+            .get(field.as_str())
+            .is_some_and(|ft| !self.is_copy_type(ft))
+    }
+
+    fn root_identifier_name(expr: &Expression<'_>) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::root_identifier_name(object)
+            }
+            _ => None,
+        }
+    }
+
+    fn resolve_field_chain_type_from_param(
+        &self,
+        param_type: &Type,
+        expr: &Expression,
+    ) -> Option<Type> {
+        match expr {
+            Expression::Identifier { .. } => Some(param_type.clone()),
+            Expression::FieldAccess { object, field, .. } => {
+                let parent_ty = self.resolve_field_chain_type_from_param(param_type, object)?;
+                let type_name = match parent_ty {
+                    Type::Custom(n) => n,
+                    Type::Reference(inner) | Type::MutableReference(inner) => match *inner {
+                        Type::Custom(n) => n,
+                        _ => return None,
+                    },
+                    _ => return None,
+                };
+                self.lookup_struct_fields_for_type(&type_name)?
+                    .get(field.as_str())
+                    .cloned()
+            }
+            _ => None,
+        }
+    }
+
     fn stmt_has_field_or_index_move_binding(&self, param_name: &str, stmt: &Statement) -> bool {
         match stmt {
             Statement::Let { value, .. } => {
