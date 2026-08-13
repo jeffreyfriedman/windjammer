@@ -2069,6 +2069,177 @@ impl BuildFingerprint {
         );
     }
 
+
+
+    #[test]
+    fn draw_text_borrows_owned_string_local() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+struct Renderer {}
+impl Renderer {
+    fn draw_text(self, text: string) {
+        println("{}", text)
+    }
+}
+fn main() {
+    let renderer = Renderer{}
+    let message = "Hello".to_string()
+    renderer.draw_text(message)
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        // Empty `Type{}` must parse as StructLiteral (not Identifier + empty Block).
+        let renderer_let = program.items.iter().find_map(|item| {
+            if let crate::parser::Item::Function { decl, .. } = item {
+                if decl.name == "main" {
+                    return decl.body.first();
+                }
+            }
+            None
+        });
+        assert!(
+            matches!(
+                renderer_let,
+                Some(crate::parser::Statement::Let {
+                    value: crate::parser::Expression::StructLiteral { name, fields, .. },
+                    ..
+                }) if name == "Renderer" && fields.is_empty()
+            ),
+            "Renderer{{}} must be StructLiteral, got {renderer_let:?}"
+        );
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
+        let rs = codegen.generate_program(&program, &analyzed);
+        assert!(
+            rs.contains("draw_text(&message)"),
+            "owned String local → &str formal must borrow. Got:\n{rs}"
+        );
+    }
+
+
+
+
+
+    #[test]
+    fn cross_file_walls_borrow_via_layered_registry() {
+        use crate::analyzer::{Analyzer, OwnershipMode};
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+        use std::sync::Arc;
+
+        let file_a = r#"
+struct AABB { min_x: f32, max_x: f32 }
+fn check_collisions(walls: Vec<AABB>) -> bool {
+    let mut i = 0
+    while i < walls.len() {
+        if walls[i].min_x > 0.0 { return true }
+        i = i + 1
+    }
+    false
+}
+"#;
+        let mut lexer_a = Lexer::new(file_a);
+        let tokens_a = lexer_a.tokenize_with_locations();
+        let mut parser_a = Parser::new(tokens_a);
+        let program_a = parser_a.parse().unwrap();
+        let mut analyzer_a = Analyzer::new();
+        let (_, registry_a, _) = analyzer_a.analyze_program(&program_a).unwrap();
+        assert_eq!(
+            registry_a.get_signature("check_collisions").unwrap().param_ownership[0],
+            OwnershipMode::Borrowed
+        );
+
+        let file_b = r#"
+struct AABB { min_x: f32, max_x: f32 }
+fn get_walls() -> Vec<AABB> { Vec::new() }
+fn game_update() {
+    let walls = get_walls()
+    let result = check_collisions(walls)
+}
+"#;
+        let mut lexer_b = Lexer::new(file_b);
+        let tokens_b = lexer_b.tokenize_with_locations();
+        let mut parser_b = Parser::new(tokens_b);
+        let program_b = parser_b.parse().unwrap();
+        let mut analyzer_b = Analyzer::new();
+        let (analyzed, registry, _) = analyzer_b
+            .analyze_program_with_global_signatures(&program_b, &registry_a)
+            .unwrap();
+        let found = registry.get_signature("check_collisions").cloned().expect("sig");
+        assert!(crate::ir::signature_bridge::call_site_expects_shared_borrow(&found, 0));
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_global_signature_registry(Arc::new(registry_a));
+        let rs = codegen.generate_program(&program_b, &analyzed);
+        assert!(
+            rs.contains("check_collisions(&walls)"),
+            "expected &walls. Got:\n{rs}"
+        );
+    }
+
+    #[test]
+    fn trait_impl_copy_camera_stays_owned() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+struct CameraData {
+    fov: f32
+    near: f32
+    far: f32
+}
+trait RenderPort {
+    fn set_camera(camera: CameraData)
+}
+struct VoxelRenderer {
+    active: bool
+}
+impl RenderPort for VoxelRenderer {
+    fn set_camera(camera: CameraData) {
+        self.active = true
+    }
+}
+struct Editor {
+    renderer: VoxelRenderer
+}
+impl Editor {
+    pub fn update_camera(self) {
+        let camera = CameraData { fov: 60.0, near: 0.1, far: 100.0 }
+        self.renderer.set_camera(camera)
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
+        let rs = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !rs.contains("_camera: &mut CameraData") && !rs.contains("camera: &mut CameraData"),
+            "CameraData must stay owned in trait impl. Got:\\n{rs}"
+        );
+        assert!(
+            rs.contains("set_camera(camera)") && !rs.contains("set_camera(&mut camera)"),
+            "call site must pass by value. Got:\\n{rs}"
+        );
+    }
+
     #[test]
     fn subprocess_spawn_codegen_auto_borrows_vec_args() {
         use crate::analyzer::Analyzer;

@@ -232,12 +232,14 @@ impl Parser {
 
                 let looks_like_struct_literal =
                     if looks_like_type && self.current_token() == &Token::LBrace {
-                        // Lookahead: check if the first token after { looks like a field name
-                        // followed by : or , or }
+                        // Lookahead: empty `Type{}`, `{ field: ... }`, `{ field, ... }`, or `{ field }`.
+                        // Empty `Type{}` must not require a Colon/Comma/RBrace *after* the closing
+                        // brace — the next token is often `let` / another statement
+                        // (`let r = Renderer{}` then `let message = ...`).
                         if self.position + 1 < self.tokens.len() {
                             match &self.tokens[self.position + 1].token {
-                                Token::Ident(_) | Token::RBrace => {
-                                    // Could be struct literal: { field: ... } or { field, ... } or { }
+                                Token::RBrace => true,
+                                Token::Ident(_) => {
                                     if self.position + 2 < self.tokens.len() {
                                         matches!(
                                             &self.tokens[self.position + 2].token,

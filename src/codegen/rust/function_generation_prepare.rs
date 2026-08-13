@@ -8569,9 +8569,14 @@ impl<'ast> CodeGenerator<'ast> {
         // (`Ability::activate(player: &mut PlayerState)` → `&mut self.player`).
         // Only trust formals that actually emitted `: &mut T` — analyzer MutBorrowed on
         // owned `mut deps: AppDeps` must not poison cross-module call sites.
+        // Always replace (including clear): a prior preregister/multipass may have
+        // recorded stale mut slots that this emission corrected to owned
+        // (`set_camera(camera: CameraData)` after a false MutBorrowed pass).
         let mut mut_arg_indices = std::collections::HashSet::new();
         mut_arg_indices.extend(self.current_fn_emitted_mut_arg_indices.iter().copied());
-        if !mut_arg_indices.is_empty() {
+        if mut_arg_indices.is_empty() {
+            self.function_emitted_mut_arg_indices.remove(&qualified);
+        } else {
             self.function_emitted_mut_arg_indices
                 .insert(qualified, mut_arg_indices);
         }

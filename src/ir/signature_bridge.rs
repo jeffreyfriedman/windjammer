@@ -251,8 +251,9 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     // regardless of body-convergence (which may set param_ownership to Borrowed).
     // Exceptions:
     // - `emitted_rust_ref_params == Some(true)` → shared-ref formal was actually emitted
-    // - analyzer Borrowed + `Reference(Vec)` with no owned-emission contract → trust borrow
-    // (cross-crate readonly `upload_svo(svo: Vec)` → `&Vec` at call sites)
+    // - analyzer Borrowed/MutBorrowed without an owned-emission record → trust borrow
+    //   (cross-file readonly `check_collisions(walls: Vec)` / `upload_svo(svo: Vec)`),
+    //   even when `param_types` still holds a bare `Vec` (no Reference wrap yet)
     if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
         if is_bare_vec_type(bare) || is_bare_map_type(bare) {
             let ref_emission = sig
@@ -268,16 +269,26 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             {
                 return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
             } else {
-                let analyzer_borrows = matches!(
-                    sig.param_ownership.get(param_idx),
-                    Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-                ) && sig.param_types.get(param_idx).is_some_and(|t| {
-                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                });
-                if !analyzer_borrows {
-                    return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+                let analyzer_mode = sig.param_ownership.get(param_idx).copied();
+                match analyzer_mode {
+                    Some(OwnershipMode::Borrowed) => {
+                        // Cross-file / pre-emission stubs keep bare `Vec` in param_types
+                        // while ownership is Borrowed — call sites still need `&walls`.
+                        return safety_type_from_parser_type(
+                            &Type::Reference(Box::new(bare.clone())),
+                            Some(OwnershipMode::Borrowed),
+                        );
+                    }
+                    Some(OwnershipMode::MutBorrowed) => {
+                        return safety_type_from_parser_type(
+                            &Type::MutableReference(Box::new(bare.clone())),
+                            Some(OwnershipMode::MutBorrowed),
+                        );
+                    }
+                    _ => {
+                        return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+                    }
                 }
-                // Fall through — treat as shared/mut borrow at the call site.
             }
         }
     }
@@ -881,6 +892,32 @@ fn is_plain_windjammer_string_type(ty: &Type) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn borrowed_bare_vec_expects_shared_ref_at_call_site() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Type;
+        let sig = FunctionSignature {
+            name: "check_collisions".into(),
+            param_types: vec![Type::Vec(Box::new(Type::Custom("AABB".into())))],
+            formal_param_types: vec![Type::Vec(Box::new(Type::Custom("AABB".into())))],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Bool),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let st = safety_type_from_signature_param(&sig, 0);
+        assert!(
+            matches!(st.ownership, OwnedType::Ref(_)),
+            "Borrowed bare Vec must be Ref at call sites, got {:?}",
+            st.ownership
+        );
+        assert!(call_site_expects_shared_borrow(&sig, 0));
+    }
+
     use super::*;
     use crate::analyzer::FunctionSignature;
 

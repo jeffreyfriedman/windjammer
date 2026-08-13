@@ -30,6 +30,8 @@ fn compile_with_external_sigs(source: &str, external_sigs: &SignatureRegistry) -
         .analyze_program_with_global_signatures(&program, external_sigs)
         .unwrap();
     let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+    // Match library multipass: layered local registry + explicit global for call-site IR.
+    codegen.set_global_signature_registry(std::sync::Arc::new(external_sigs.clone()));
     codegen.generate_program(&program, &analyzed_fns)
 }
 
