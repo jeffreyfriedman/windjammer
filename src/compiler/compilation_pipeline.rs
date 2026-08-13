@@ -238,6 +238,25 @@ pub fn build_project_ext(
         if !cross_crate_field_types.is_empty() {
             codegen.set_global_struct_field_types(cross_crate_field_types);
         }
+        // Single-file builds skip compiling `std::` modules; still register their
+        // struct/enum shapes so string→unit-enum field coercion works (HttpMethod).
+        if let Ok(source_text) = std::fs::read_to_string(file) {
+            let std_mods =
+                super::library_copy_registry::stdlib_modules_from_source(&source_text);
+            if !std_mods.is_empty() {
+                let (std_fields, std_variants, std_paths) =
+                    super::library_copy_registry::collect_stdlib_api_types_for_modules(&std_mods);
+                if !std_fields.is_empty() {
+                    codegen.set_global_struct_field_types(std_fields);
+                }
+                if !std_variants.is_empty() {
+                    codegen.set_global_enum_variant_types(std_variants);
+                }
+                if !std_paths.is_empty() {
+                    codegen.set_stdlib_type_rust_paths(std_paths);
+                }
+            }
+        }
 
         let output_file = if wj_files.len() > 1 && library {
             let base_path = if path.is_file() {

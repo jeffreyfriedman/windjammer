@@ -8,11 +8,61 @@
 //! - Index operations
 //! - Field access
 
-use crate::parser::{Expression, Type};
+use crate::parser::{Expression, Literal, Type};
 
 use super::{ast_utilities, float_type_utilities, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Coerce a string literal into a unit enum variant path when the field type is an enum
+    /// that declares that variant (`"GET"` → `HttpMethod::GET`). Registry-driven only.
+    pub(in crate::codegen::rust) fn coerce_string_literal_to_unit_enum_variant(
+        &self,
+        expr: &Expression<'ast>,
+        field_ty: &Type,
+    ) -> Option<String> {
+        let lit = match expr {
+            Expression::Literal {
+                value: Literal::String(s),
+                ..
+            } => s.as_str(),
+            _ => return None,
+        };
+        let enum_name = match field_ty {
+            Type::Custom(n) => n.as_str(),
+            Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                Type::Custom(n) => n.as_str(),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        // Exact variant name, then ASCII-uppercase (HTTP method literals).
+        let upper = lit.to_ascii_uppercase();
+        for candidate in [lit, upper.as_str()] {
+            if candidate.is_empty()
+                || !candidate
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            {
+                continue;
+            }
+            let key = format!("{enum_name}::{candidate}");
+            if self
+                .enum_variant_types
+                .get(&key)
+                .is_some_and(|payload| payload.is_empty())
+            {
+                // Prefer FQ path for stdlib enums so `use std::http::ServerRequest`
+                // alone still resolves `HttpMethod::GET` without a sibling import.
+                if let Some(fq_enum) = self.stdlib_type_rust_paths.get(enum_name) {
+                    return Some(format!("{fq_enum}::{candidate}"));
+                }
+                return Some(key);
+            }
+        }
+        None
+    }
+
     pub(in crate::codegen::rust) fn generate_tuple(
         &mut self,
         elements: &[&Expression<'ast>],
@@ -497,15 +547,28 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_struct_literal_field = prev_in_struct_field;
                 self.current_struct_field_name = prev_field_name;
 
-                // Auto-convert direct string literals that weren't already coerced
+                // Auto-convert direct string literals that weren't already coerced.
+                // Enum unit-variant fields (`method: HttpMethod`) coerce `"GET"` → `HttpMethod::GET`
+                // via the enum variant registry — never hardcode enum/method names.
                 if matches!(
                     expr,
                     Expression::Literal {
                         value: Literal::String(_),
                         ..
                     }
-                ) && !string_utilities::already_owned_string_expr(&expr_str) {
-                    expr_str = string_utilities::coerce_expr_to_owned_string(&expr_str);
+                ) {
+                    let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                    let enum_coerce = self
+                        .lookup_struct_field_types(struct_name)
+                        .and_then(|fields| fields.get(field_name))
+                        .and_then(|field_ty| {
+                            self.coerce_string_literal_to_unit_enum_variant(expr, field_ty)
+                        });
+                    if let Some(variant_path) = enum_coerce {
+                        expr_str = variant_path;
+                    } else if !string_utilities::already_owned_string_expr(&expr_str) {
+                        expr_str = string_utilities::coerce_expr_to_owned_string(&expr_str);
+                    }
                 }
 
                 // Auto-convert borrowed string parameters to owned String for struct fields.

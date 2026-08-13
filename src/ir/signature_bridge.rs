@@ -409,15 +409,17 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             {
                 if matches!(bare, Type::Custom(_)) {
                     // Bare Custom: shared-ref when codegen confirmed `&T`, or analyzer
-                    // converged Borrowed + Reference(T) for non-Copy (`MemoryEngine::put`).
-                    // Owned Copy aggregates (`other: Lsn`) must not inherit stale Borrowed (regression-060).
-                    if sig
+                    // Borrowed on a bare (non-Reference) formal for non-Copy (`DenseCsr`,
+                    // `QuestId`) — same cold-meta rule as Borrowed bare Vec (WDB-097).
+                    // Stale body-converged `Reference(T)` on *methods* without emission
+                    // (MemoryEngine::put) stays owned until codegen confirms `&T`.
+                    // Free-fn / bare-param Borrowed (`keys_equal`, DenseCsr) stay Ref.
+                    let emits_shared = sig
                         .emitted_rust_ref_params
                         .as_ref()
                         .and_then(|flags| flags.get(param_idx))
-                        .copied()
-                        == Some(true)
-                    {
+                        .copied();
+                    if emits_shared == Some(true) {
                         return safety_type_from_parser_type(
                             &Type::Reference(Box::new(bare.clone())),
                             Some(OwnershipMode::Borrowed),
@@ -425,14 +427,49 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                     }
                     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         sig, param_idx,
-                    ) {
+                    ) || emits_shared == Some(false)
+                    {
                         return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
                     }
-                    if sig.param_types.get(param_idx).is_some_and(|t| {
+                    if crate::codegen::rust::type_analysis::is_copy_type(bare)
+                        || matches!(
+                            bare,
+                            Type::Custom(name)
+                                if crate::type_classification::is_known_copy_aggregate(name)
+                        )
+                    {
+                        return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+                    }
+                    let param_is_bare_custom = sig
+                        .param_types
+                        .get(param_idx)
+                        .is_some_and(|t| matches!(t, Type::Custom(_)))
+                        || sig.param_types.get(param_idx).is_none();
+                    let param_is_ref_wrap = sig.param_types.get(param_idx).is_some_and(|t| {
                         matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    }) && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                        sig, param_idx,
-                    ) {
+                    });
+                    if param_is_bare_custom {
+                        return safety_type_from_parser_type(
+                            &Type::Reference(Box::new(bare.clone())),
+                            Some(OwnershipMode::Borrowed),
+                        );
+                    }
+                    if param_is_ref_wrap
+                        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            sig, param_idx,
+                        )
+                    {
+                        return safety_type_from_parser_type(
+                            &Type::Reference(Box::new(bare.clone())),
+                            Some(OwnershipMode::Borrowed),
+                        );
+                    }
+                    // Method + stale Reference wrap (put Key): owned until emission confirms.
+                    // Free functions with Reference wrap (keys_equal): shared borrow.
+                    if param_is_ref_wrap && sig.has_self_receiver {
+                        return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
+                    }
+                    if param_is_ref_wrap {
                         return safety_type_from_parser_type(
                             &Type::Reference(Box::new(bare.clone())),
                             Some(OwnershipMode::Borrowed),
@@ -649,9 +686,10 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                     return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
                 }
             }
-            // Bare non-text Custom without shared-ref emission: owned Rust formal
-            // (field-extract keep-owned / recursive ReBAC `policy: Policy`). Stale
-            // analyzer Borrowed must not become Ref → `&policy` at call sites.
+            // Bare non-text Custom without shared-ref emission:
+            // - confirmed owned emission (`false`) / Owned ownership → owned
+            // - analyzer Borrowed + bare param type → shared `&T` (WDB-097 DenseCsr)
+            // - stale Reference wrap (put Key / Policy) without emission → owned
             if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
                 if matches!(bare, Type::Custom(_))
                     && !is_plain_windjammer_string_type(bare)
@@ -662,6 +700,44 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                         .copied()
                         != Some(true)
                 {
+                    let emits_shared = sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(param_idx))
+                        .copied();
+                    let analyzer_borrows = matches!(
+                        sig.param_ownership.get(param_idx),
+                        Some(OwnershipMode::Borrowed)
+                    );
+                    let param_is_bare_custom = sig
+                        .param_types
+                        .get(param_idx)
+                        .is_some_and(|t| matches!(t, Type::Custom(_)));
+                    let param_is_ref_wrap = sig.param_types.get(param_idx).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    });
+                    let is_copy_aggregate = crate::codegen::rust::type_analysis::is_copy_type(bare)
+                        || matches!(
+                            bare,
+                            Type::Custom(name)
+                                if crate::type_classification::is_known_copy_aggregate(name)
+                        );
+                    if analyzer_borrows && emits_shared.is_none() && !is_copy_aggregate {
+                        // Method + stale Reference wrap → owned (MemoryEngine::put).
+                        // Otherwise Borrowed Custom → shared `&T` (DenseCsr / keys_equal).
+                        if sig.has_self_receiver && param_is_ref_wrap {
+                            return safety_type_from_parser_type(
+                                bare,
+                                Some(OwnershipMode::Owned),
+                            );
+                        }
+                        if param_is_bare_custom || param_is_ref_wrap {
+                            return safety_type_from_parser_type(
+                                &Type::Reference(Box::new(bare.clone())),
+                                Some(OwnershipMode::Borrowed),
+                            );
+                        }
+                    }
                     return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
                 }
             }
@@ -892,6 +968,32 @@ fn is_plain_windjammer_string_type(ty: &Type) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn borrowed_bare_dense_csr_expects_shared_ref_at_call_site() {
+        // WDB-097 cold meta: analyzer Borrowed + bare Custom, no emission flags.
+        let sig = FunctionSignature {
+            name: "graph_bfs_run_dense".into(),
+            param_types: vec![Type::Custom("DenseCsr".into()), Type::Custom("i64".into())],
+            formal_param_types: vec![
+                Type::Custom("DenseCsr".into()),
+                Type::Custom("i64".into()),
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("i64".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert!(
+            call_site_expects_shared_borrow(&sig, 0),
+            "Borrowed bare DenseCsr must be Ref at call sites, got {:?}",
+            safety_type_from_signature_param(&sig, 0).ownership
+        );
+    }
+
     #[test]
     fn borrowed_bare_vec_expects_shared_ref_at_call_site() {
         use crate::analyzer::{FunctionSignature, OwnershipMode};

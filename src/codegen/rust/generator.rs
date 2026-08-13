@@ -293,6 +293,9 @@ pub struct CodeGenerator<'ast> {
     // ENUM VARIANT TYPE TRACKING: Map "EnumName::VariantName" to field types
     // Enables string literal to String coercion in enum variant constructors
     pub(crate) enum_variant_types: std::collections::HashMap<String, Vec<Type>>,
+    /// Stdlib type name → fully-qualified Rust path (`HttpMethod` → `windjammer_runtime::http::HttpMethod`).
+    /// Used when string→unit-enum coercion must emit without a sibling `use`.
+    pub(crate) stdlib_type_rust_paths: std::collections::HashMap<String, String>,
     /// Struct-like enum variants: same key as `enum_variant_types`, preserves field names for
     /// `infer_match_bound_types` when matching on `&vec[i]` (Rust binds `&T` per field).
     pub(crate) enum_variant_struct_fields: std::collections::HashMap<String, Vec<(String, Type)>>,
@@ -581,6 +584,7 @@ impl<'ast> CodeGenerator<'ast> {
             stdlib_method_signatures:
                 crate::codegen::rust::stdlib_method_signatures::init_stdlib_method_signatures(),
             enum_variant_types: std::collections::HashMap::new(),
+            stdlib_type_rust_paths: std::collections::HashMap::new(),
             enum_variant_struct_fields: std::collections::HashMap::new(),
             library_source_root: None,
             global_signature_registry: None,
@@ -699,6 +703,14 @@ impl<'ast> CodeGenerator<'ast> {
         variant_types: std::collections::HashMap<String, Vec<crate::parser::Type>>,
     ) {
         self.enum_variant_types.extend(variant_types);
+    }
+
+    /// Register stdlib type → Rust path mappings for FQ enum/struct references.
+    pub fn set_stdlib_type_rust_paths(
+        &mut self,
+        paths: std::collections::HashMap<String, String>,
+    ) {
+        self.stdlib_type_rust_paths.extend(paths);
     }
 
     /// Look up a method signature by receiver type and method name
