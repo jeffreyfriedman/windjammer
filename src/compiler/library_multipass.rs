@@ -373,6 +373,12 @@ pub(crate) fn build_library_multipass(
                 &mut dep_struct_fields,
             );
         }
+        // Qualified `dep_crate::fn` call sites need crate-prefix aliases (WDB-094).
+        crate::metadata::merge_external_crate_metadata_with_aliases(
+            external_paths,
+            &mut dep_registry,
+            None,
+        );
         crate::metadata::infer_copy_from_metadata_structs_pub(
             &dep_struct_fields,
             &mut dep_copy_structs,
