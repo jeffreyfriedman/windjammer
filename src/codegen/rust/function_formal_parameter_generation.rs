@@ -1896,25 +1896,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 // `Writer { tag: string }` — post_journal_entry). Passthrough
                                 // args (`shift_right(p)`) must keep analyzer MutBorrowed —
                                 // `param_passed_as_call_argument` distinguishes that.
-                                let false_mut_on_field_methods = matches!(
-                                    &param.type_,
-                                    Type::Custom(_)
-                                ) && !crate::codegen::rust::types::is_windjammer_text_type(
-                                    &param.type_,
-                                ) && !self.param_has_field_or_index_write(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                ) && !self.param_passed_as_call_argument(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                    func,
-                                ) && !self.param_is_direct_method_receiver(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                ) && !self.param_has_mut_method_via_field_projection(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                );
+                                // Prefer IR when the solver already decided ownership.
+                                let false_mut_on_field_methods = self
+                                    .param_false_mut_from_readonly_field_methods(
+                                        param, func, analyzed, false,
+                                    );
                                 if _debug_formal {
                                     eprintln!("[FORMAL-FMC] false_mut_on_field_methods={} field_write={} call_arg={} direct_recv={} field_proj_mut={}",
                                         false_mut_on_field_methods,
@@ -2033,27 +2019,9 @@ impl<'ast> CodeGenerator<'ast> {
                             // Custom aggregates demoted by readonly field-method false-mut
                             // (reverse_entry / post_journal_entry) must not be re-mutated
                             // solely from registry MutBorrowed.
-                            let false_mut_on_field_methods = matches!(&param.type_, Type::Custom(_))
-                                && !crate::codegen::rust::types::is_windjammer_text_type(
-                                    &param.type_,
-                                )
-                                && !analyzed.field_mutated_parameters.contains(&param.name)
-                                && !self.param_has_field_or_index_write(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                )
-                                && !self.param_has_mut_method_via_field_projection(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                )
-                                && !self.param_passed_as_call_argument(
-                                    func.body.as_slice(),
-                                    &param.name,
-                                    func,
-                                )
-                                && !self.param_is_direct_method_receiver(
-                                    func.body.as_slice(),
-                                    &param.name,
+                            let false_mut_on_field_methods = self
+                                .param_false_mut_from_readonly_field_methods(
+                                    param, func, analyzed, true,
                                 );
                             // Forward-only owned callees (`create` → owned `post_journal_entry`)
                             // must not be re-promoted to `&mut` from stale registry MutBorrowed.

@@ -928,15 +928,13 @@ pub fn runtime_std_param_needs_auto_borrow(
 }
 
 fn runtime_std_module_arg_needs_rust_borrow(
-    callee_name: &str,
     sig: &crate::analyzer::FunctionSignature,
     arg_index: usize,
 ) -> bool {
-    if !runtime_wj_owned_rust_borrowed_param(sig, arg_index) {
-        return false;
-    }
-    let module = callee_name.split("::").next().unwrap_or("");
-    is_runtime_std_module(module)
+    // Signature-driven only: scanned Borrowed + WJ-owned formal. Do not gate on
+    // module-name lists (`is_runtime_std_module`) — that misses FFI wrappers and
+    // crate-prefixed runtime paths that still register Borrowed formals.
+    runtime_wj_owned_rust_borrowed_param(sig, arg_index)
 }
 
 /// Like [`runtime_std_param_needs_auto_borrow`], but when a layered registry shadows the
@@ -948,20 +946,20 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     arg_index: usize,
 ) -> bool {
     if signature
-        .is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(callee_name, sig, arg_index))
+        .is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index))
     {
         return true;
     }
     if let Some(reg_sig) = registry.get_signature(callee_name) {
         let already_checked = signature.is_some_and(|s| std::ptr::eq(s, reg_sig));
         if !already_checked
-            && runtime_std_module_arg_needs_rust_borrow(callee_name, reg_sig, arg_index)
+            && runtime_std_module_arg_needs_rust_borrow(reg_sig, arg_index)
         {
             return true;
         }
     }
     if let Some(baseline) = registry.get_fallback_signature(callee_name) {
-        if runtime_std_module_arg_needs_rust_borrow(callee_name, baseline, arg_index) {
+        if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
             return true;
         }
     }
@@ -1353,5 +1351,38 @@ mod pattern_registry_tests {
         let reg = SignatureRegistry::stdlib();
         assert!(!is_map_shared_get_call("get", Some("Holder"), reg));
         assert!(!map_has_get_mut_sibling(Some("Holder"), reg));
+    }
+
+    #[test]
+    fn runtime_borrow_is_signature_driven_not_module_name() {
+        let mut sig = FunctionSignature::default();
+        sig.name = "wdb_circuit::exists".into();
+        sig.param_types = vec![Type::String];
+        sig.formal_param_types = vec![Type::String];
+        sig.param_ownership = vec![OwnershipMode::Borrowed];
+        // Bare WJ string + analyzer Borrowed → Rust `&str` at the call site.
+        assert!(runtime_wj_owned_rust_borrowed_param(&sig, 0));
+        let mut reg = SignatureRegistry::empty();
+        reg.add_function(sig.name.clone(), sig.clone());
+        assert!(
+            runtime_std_param_needs_auto_borrow_resolved(
+                &reg,
+                "wdb_circuit::exists",
+                Some(&sig),
+                0
+            ),
+            "Borrowed WJ-owned formal must auto-borrow even when the qualifier is not a runtime std module"
+        );
+        let mut owned = sig.clone();
+        owned.param_ownership = vec![OwnershipMode::Owned];
+        assert!(!runtime_wj_owned_rust_borrowed_param(&owned, 0));
+        let mut owned_reg = SignatureRegistry::empty();
+        owned_reg.add_function(owned.name.clone(), owned.clone());
+        assert!(!runtime_std_param_needs_auto_borrow_resolved(
+            &owned_reg,
+            "wdb_circuit::exists",
+            Some(&owned),
+            0
+        ));
     }
 }

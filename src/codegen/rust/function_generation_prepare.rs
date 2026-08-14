@@ -6940,6 +6940,29 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when field-method calls on a Custom param are not real `&mut` mutations
+    /// (readonly `deps.writer.reverse` / Copy AppDeps). Body-walk only — IR
+    /// `ir_param_ownership_definitive` must win when the solver has a decision.
+    pub(in crate::codegen::rust) fn param_false_mut_from_readonly_field_methods(
+        &self,
+        param: &crate::parser::Parameter<'ast>,
+        func: &crate::parser::FunctionDecl<'ast>,
+        analyzed: &crate::analyzer::AnalyzedFunction<'_>,
+        require_no_field_mutated_set: bool,
+    ) -> bool {
+        matches!(&param.type_, crate::parser::Type::Custom(_))
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+            && (!require_no_field_mutated_set
+                || !analyzed.field_mutated_parameters.contains(&param.name))
+            && !self.param_has_field_or_index_write(func.body.as_slice(), &param.name)
+            && !self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func)
+            && !self.param_is_direct_method_receiver(func.body.as_slice(), &param.name)
+            && !self.param_has_mut_method_via_field_projection(
+                func.body.as_slice(),
+                &param.name,
+            )
+    }
+
     /// True when the body assigns through a field/index of `param_name` (`p.x = …`, `p[i] = …`).
     pub(in crate::codegen::rust) fn param_has_field_or_index_write(
         &self,
