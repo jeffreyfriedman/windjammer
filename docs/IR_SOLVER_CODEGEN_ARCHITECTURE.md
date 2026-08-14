@@ -174,6 +174,8 @@ For every coercion rule or constraint change:
 - **Mixed-forwarder / owned-outer in reconcile:** `apply_post_ir_forwarder_owned_outer_and_reuse` uses IR `compute_coercion` plus shared forwarder helpers; method IR path no longer duplicates wants_ref clusters. `should_borrow_at_call_site` no longer takes a live method-name for ownership (unused `_method_name`).
 - **Retired `!call_sites` opt-out (2026-08-11):** `from_env()` always sets `call_sites: true`. Deleted ~4k LOC of pre-IR ownership tails in method / regular-call / field-access argument generation. Numeric `usize` / int→float casts live in `apply_post_ir_numeric_formal_casts` (reconcile). Iterator predicate `&T` classification lives in `method_predicate_closure_receives_ref` (protocol, not ownership).
 - **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test.rs`.
+- **Signature-driven runtime borrow (2026-08-14):** `runtime_std_module_arg_needs_rust_borrow` no longer gates on `is_runtime_std_module` — Borrowed WJ-owned formals auto-borrow from scanned signatures even for crate-prefixed paths (`wdb_circuit::exists`). Unit gate: `runtime_borrow_is_signature_driven_not_module_name`.
+- **DRY formal false-mut:** `param_false_mut_from_readonly_field_methods` consolidates the duplicated Custom-aggregate readonly field-method demotion used by AppDeps / post_journal_entry formals.
 
 ## Related Documentation
 
