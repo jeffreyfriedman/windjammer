@@ -55,8 +55,7 @@ impl CapabilityLockFile {
     pub fn from_effect_sets(effect_sets: &std::collections::HashMap<String, EffectSet>) -> Self {
         let mut lock = Self::new();
         for (fn_name, effects) in effect_sets {
-            let effect_strings: BTreeSet<String> =
-                effects.iter().map(|e| e.to_string()).collect();
+            let effect_strings: BTreeSet<String> = effects.iter().map(|e| e.to_string()).collect();
             if !effect_strings.is_empty() {
                 lock.functions.insert(
                     fn_name.clone(),
@@ -99,10 +98,8 @@ impl CapabilityLockFile {
 
             match self.functions.get(fn_name) {
                 Some(locked) => {
-                    let added: Vec<String> = new_strings
-                        .difference(&locked.effects)
-                        .cloned()
-                        .collect();
+                    let added: Vec<String> =
+                        new_strings.difference(&locked.effects).cloned().collect();
                     if !added.is_empty() {
                         escalations.push(Escalation {
                             function: fn_name.clone(),
@@ -228,7 +225,9 @@ mod tests {
         assert!(report.has_escalations());
         assert_eq!(report.escalations.len(), 1);
         assert_eq!(report.escalations[0].function, "fetch");
-        assert!(report.escalations[0].new_effects.contains(&"fs_write".to_string()));
+        assert!(report.escalations[0]
+            .new_effects
+            .contains(&"fs_write".to_string()));
     }
 
     #[test]

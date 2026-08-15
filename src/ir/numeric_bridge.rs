@@ -138,8 +138,7 @@ impl UnifiedNumericInference {
             .set_external_crate_metadata_paths(paths);
         // Int domain must also see cross-crate formals (e.g. `double(x: i32)` via
         // `--use-build-dir` metadata) so literals emit `_i32` not default `_i64`.
-        self.int_collector
-            .set_external_crate_metadata_paths(paths);
+        self.int_collector.set_external_crate_metadata_paths(paths);
     }
 
     pub fn reset_imported_type_registry(&mut self) {

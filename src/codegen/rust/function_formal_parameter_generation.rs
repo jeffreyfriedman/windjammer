@@ -1575,6 +1575,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.type_,
                                     Type::Reference(_) | Type::MutableReference(_)
                                 )
+                                && !analyzed.returned_parameters.contains(&param.name)
                                 && !self.param_has_forward_ref_keep_owned(
                                     func.body.as_slice(),
                                     &param.name,
@@ -1588,6 +1589,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                                 && self.inferred_mut_borrowed_params.contains(&param.name)
                             {
+                                // Mutated+returned formals stay Owned (IR/solver lattice);
+                                // do not re-demote from `inferred_mut_borrowed_params`.
                                 ownership_mode = OwnershipMode::MutBorrowed;
                             }
 
@@ -1804,7 +1807,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.str_ref_optimized_params.remove(&param.name);
                             } else if let Some(ir_mode) = ir_borrow {
-                                if !discard_keep_owned {
+                                // E0053: trait formals already applied above — IR MutRef from
+                                // body mutation must not rewrite owned trait params to `&mut T`.
+                                if !discard_keep_owned && !self.in_trait_impl {
                                     ownership_mode = ir_mode;
                                 }
                             } else if (self.param_passed_to_slice_search_string_elem(

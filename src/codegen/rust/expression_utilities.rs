@@ -93,6 +93,13 @@ pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
     if is_rust_string_literal_text(expr_str) {
         return;
     }
+    // Owned values from clone/to_string deref-coerce into shared-ref formals.
+    if expr_str.ends_with(".clone()")
+        || expr_str.ends_with(".to_string()")
+        || expr_str.ends_with(".to_owned()")
+    {
+        return;
+    }
     if expr_needs_borrow_parentheses(expr_str) {
         *expr_str = format!("&({expr_str})");
     } else {

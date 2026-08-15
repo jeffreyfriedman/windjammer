@@ -297,13 +297,13 @@ pub fn method_mutates_receiver_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        return sig_mutates_receiver(sig);
-    }
-    if let Some(sig) = lookup_suffix(method, registry) {
-        return sig_mutates_receiver(sig);
-    }
-    consensus_mutates_receiver(method, registry)
+    // Delegate to analyzer — single source of truth (no wrong-type suffix when
+    // receiver type is known).
+    crate::analyzer::stdlib_method_traits::method_mutates_receiver_qualified(
+        method,
+        receiver_type,
+        registry,
+    )
 }
 
 /// Is this method definitely read-only (not `&mut self`)?
@@ -312,13 +312,11 @@ pub fn is_known_readonly_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        return sig_readonly_receiver(sig);
-    }
-    if let Some(sig) = lookup_suffix(method, registry) {
-        return sig_readonly_receiver(sig);
-    }
-    consensus_readonly_receiver(method, registry)
+    crate::analyzer::stdlib_method_traits::is_known_readonly_qualified(
+        method,
+        receiver_type,
+        registry,
+    )
 }
 
 /// Is this a known method in the stdlib signatures?
@@ -945,16 +943,12 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
 ) -> bool {
-    if signature
-        .is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index))
-    {
+    if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index)) {
         return true;
     }
     if let Some(reg_sig) = registry.get_signature(callee_name) {
         let already_checked = signature.is_some_and(|s| std::ptr::eq(s, reg_sig));
-        if !already_checked
-            && runtime_std_module_arg_needs_rust_borrow(reg_sig, arg_index)
-        {
+        if !already_checked && runtime_std_module_arg_needs_rust_borrow(reg_sig, arg_index) {
             return true;
         }
     }

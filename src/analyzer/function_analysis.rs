@@ -762,6 +762,7 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             if !self.is_copy_type(&param.type_)
+                && !returned_parameters.contains(&param.name)
                 && matches!(
                     self.infer_passthrough_ownership(
                         &param.name,
@@ -774,6 +775,8 @@ impl<'ast> Analyzer<'ast> {
                     Some(OwnershipMode::MutBorrowed)
                 )
             {
+                // Mutating method calls (`items.sort`) must not demote mutated+returned
+                // formals that reconcile already marked Owned.
                 inferred_ownership.insert(param.name.clone(), OwnershipMode::MutBorrowed);
             }
         }

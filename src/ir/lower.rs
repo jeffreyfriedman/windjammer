@@ -9,14 +9,14 @@ use crate::parser::{Expression, Literal, Pattern, Statement};
 
 /// Lower a function body to IR nodes (expression-level skeleton).
 pub fn lower_body(body: &[&Statement]) -> Vec<IrNode> {
-    body.iter()
-        .flat_map(|stmt| lower_statement(stmt))
-        .collect()
+    body.iter().flat_map(|stmt| lower_statement(stmt)).collect()
 }
 
 fn lower_statement(stmt: &Statement) -> Vec<IrNode> {
     match stmt {
-        Statement::Let { pattern, mutable, .. } => {
+        Statement::Let {
+            pattern, mutable, ..
+        } => {
             let name = pattern_binding_name(pattern).unwrap_or_else(|| "_".to_string());
             vec![IrNode {
                 kind: IrNodeKind::Let {
@@ -31,7 +31,11 @@ fn lower_statement(stmt: &Statement) -> Vec<IrNode> {
             .as_ref()
             .map(|e| vec![lower_expression(e)])
             .unwrap_or_default(),
-        Statement::If { then_block, else_block, .. } => {
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
             let mut nodes = lower_block(then_block);
             if let Some(else_b) = else_block {
                 nodes.extend(lower_block(else_b));
@@ -49,7 +53,10 @@ fn lower_statement(stmt: &Statement) -> Vec<IrNode> {
 }
 
 fn lower_block(block: &[&Statement]) -> Vec<IrNode> {
-    block.iter().flat_map(|stmt| lower_statement(stmt)).collect()
+    block
+        .iter()
+        .flat_map(|stmt| lower_statement(stmt))
+        .collect()
 }
 
 fn pattern_binding_name(pattern: &Pattern) -> Option<String> {
@@ -84,9 +91,7 @@ fn lower_expression(expr: &Expression) -> IrNode {
             }
         }
         Expression::MethodCall {
-            method,
-            arguments,
-            ..
+            method, arguments, ..
         } => IrNode {
             kind: IrNodeKind::Call {
                 callee: method.clone(),
@@ -140,6 +145,8 @@ mod tests {
             _ => panic!("expected function"),
         };
         let nodes = lower_body(&func.body);
-        assert!(nodes.iter().any(|n| matches!(n.kind, IrNodeKind::Call { .. })));
+        assert!(nodes
+            .iter()
+            .any(|n| matches!(n.kind, IrNodeKind::Call { .. })));
     }
 }

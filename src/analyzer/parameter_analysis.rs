@@ -369,8 +369,7 @@ impl<'ast> Analyzer<'ast> {
         // `through.value`) stay Owned. Formal generation keeps pass-by-value for
         // Copy aggregates (regression-060); demoting to Borrowed here made cross-module
         // call sites emit `&handle` into owned `BatchHandle` formals (types-crate).
-        if self.is_copy_type(param_type)
-            && self.is_field_access_only_param_usage(param_name, body)
+        if self.is_copy_type(param_type) && self.is_field_access_only_param_usage(param_name, body)
         {
             return Ok(OwnershipMode::Owned);
         }
@@ -400,6 +399,15 @@ impl<'ast> Analyzer<'ast> {
         if !self.is_copy_type(param_type)
             && matches!(param_type, Type::Custom(_))
             && self.param_projected_field_consumed_in_arithmetic(param_name, param_type, body)
+        {
+            return Ok(OwnershipMode::Owned);
+        }
+        // Composition facades (`deps.writer.append` on a user Custom port) stay Owned
+        // so callers can forward the bag by value. Data wrappers whose fields are
+        // stdlib collections (`csr.out_offsets.len()`) still Borrowed (WDB-097).
+        if !self.is_copy_type(param_type)
+            && matches!(param_type, Type::Custom(_))
+            && self.param_is_owned_custom_port_facade(param_name, body, registry, func)
         {
             return Ok(OwnershipMode::Owned);
         }
@@ -626,13 +634,7 @@ impl<'ast> Analyzer<'ast> {
                     .unwrap_or(name.as_str());
                 matches!(
                     base,
-                    "HashMap"
-                        | "BTreeMap"
-                        | "IndexMap"
-                        | "Map"
-                        | "HashSet"
-                        | "BTreeSet"
-                        | "Set"
+                    "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "HashSet" | "BTreeSet" | "Set"
                 )
             }
             _ => false,
@@ -740,9 +742,9 @@ impl<'ast> Analyzer<'ast> {
                     _ => self.expr_param_only_borrowed(param_name, value, false),
                 };
                 value_ok
-                    && arms.iter().all(|arm| {
-                        self.expr_param_only_borrowed(param_name, arm.body, false)
-                    })
+                    && arms
+                        .iter()
+                        .all(|arm| self.expr_param_only_borrowed(param_name, arm.body, false))
             }
             _ => true,
         }
@@ -897,6 +899,344 @@ impl<'ast> Analyzer<'ast> {
                         .iter()
                         .zip(args_b.iter())
                         .all(|(a, b)| self.types_equal(a, b))
+            }
+            _ => false,
+        }
+    }
+
+    /// True when every use of `param_name` is `param.field.method(...)` on a nested
+    /// user Custom type with shared (`&self`) receiver — AppDeps-style port bags.
+    fn param_is_owned_custom_port_facade(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut saw_port_method = false;
+        for stmt in body {
+            if !self.stmt_owned_custom_port_facade_ok(
+                param_name,
+                stmt,
+                registry,
+                func,
+                &mut saw_port_method,
+            ) {
+                return false;
+            }
+        }
+        saw_port_method
+    }
+
+    fn stmt_owned_custom_port_facade_ok(
+        &self,
+        param_name: &str,
+        stmt: &Statement<'ast>,
+        registry: &SignatureRegistry,
+        func: &FunctionDecl<'ast>,
+        saw_port_method: &mut bool,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_owned_custom_port_facade_ok(
+                param_name,
+                expr,
+                registry,
+                func,
+                saw_port_method,
+            ),
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    value,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && else_block.as_ref().is_none_or(|b| {
+                    b.iter().all(|s| {
+                        self.stmt_owned_custom_port_facade_ok(
+                            param_name,
+                            s,
+                            registry,
+                            func,
+                            saw_port_method,
+                        )
+                    })
+                })
+            }
+            Statement::Assignment { target, value, .. } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    target,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    value,
+                    registry,
+                    func,
+                    saw_port_method,
+                )
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    condition,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && then_block.iter().all(|s| {
+                    self.stmt_owned_custom_port_facade_ok(
+                        param_name,
+                        s,
+                        registry,
+                        func,
+                        saw_port_method,
+                    )
+                }) && else_block.as_ref().is_none_or(|b| {
+                    b.iter().all(|s| {
+                        self.stmt_owned_custom_port_facade_ok(
+                            param_name,
+                            s,
+                            registry,
+                            func,
+                            saw_port_method,
+                        )
+                    })
+                })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    condition,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && body.iter().all(|s| {
+                    self.stmt_owned_custom_port_facade_ok(
+                        param_name,
+                        s,
+                        registry,
+                        func,
+                        saw_port_method,
+                    )
+                })
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    iterable,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && body.iter().all(|s| {
+                    self.stmt_owned_custom_port_facade_ok(
+                        param_name,
+                        s,
+                        registry,
+                        func,
+                        saw_port_method,
+                    )
+                })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    value,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && arms.iter().all(|arm| {
+                    self.expr_owned_custom_port_facade_ok(
+                        param_name,
+                        arm.body,
+                        registry,
+                        func,
+                        saw_port_method,
+                    )
+                })
+            }
+            _ => true,
+        }
+    }
+
+    fn expr_owned_custom_port_facade_ok(
+        &self,
+        param_name: &str,
+        expr: &Expression<'ast>,
+        registry: &SignatureRegistry,
+        func: &FunctionDecl<'ast>,
+        saw_port_method: &mut bool,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if Self::expr_is_param_field_chain(object, param_name) {
+                    if !self.nested_field_is_shared_self_user_port(object, method, registry, func) {
+                        return false;
+                    }
+                    *saw_port_method = true;
+                    arguments.iter().all(|(_, arg)| {
+                        self.expr_owned_custom_port_facade_ok(
+                            param_name,
+                            arg,
+                            registry,
+                            func,
+                            saw_port_method,
+                        )
+                    })
+                } else {
+                    self.expr_owned_custom_port_facade_ok(
+                        param_name,
+                        object,
+                        registry,
+                        func,
+                        saw_port_method,
+                    ) && arguments.iter().all(|(_, arg)| {
+                        self.expr_owned_custom_port_facade_ok(
+                            param_name,
+                            arg,
+                            registry,
+                            func,
+                            saw_port_method,
+                        )
+                    })
+                }
+            }
+            Expression::Identifier { name, .. } if name == param_name => false,
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                if Self::expr_rooted_at_param(object, param_name) {
+                    false
+                } else {
+                    self.expr_owned_custom_port_facade_ok(
+                        param_name,
+                        object,
+                        registry,
+                        func,
+                        saw_port_method,
+                    )
+                }
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    function,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && arguments.iter().all(|(_, arg)| {
+                    self.expr_owned_custom_port_facade_ok(
+                        param_name,
+                        arg,
+                        registry,
+                        func,
+                        saw_port_method,
+                    )
+                })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    left,
+                    registry,
+                    func,
+                    saw_port_method,
+                ) && self.expr_owned_custom_port_facade_ok(
+                    param_name,
+                    right,
+                    registry,
+                    func,
+                    saw_port_method,
+                )
+            }
+            Expression::Unary { operand, .. } => self.expr_owned_custom_port_facade_ok(
+                param_name,
+                operand,
+                registry,
+                func,
+                saw_port_method,
+            ),
+            Expression::Block { statements, .. } => statements.iter().all(|s| {
+                self.stmt_owned_custom_port_facade_ok(
+                    param_name,
+                    s,
+                    registry,
+                    func,
+                    saw_port_method,
+                )
+            }),
+            _ => true,
+        }
+    }
+
+    fn nested_field_is_shared_self_user_port(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        registry: &SignatureRegistry,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let Some(recv) = self.infer_receiver_type_base(object, func) else {
+            return false;
+        };
+        if crate::type_classification::is_stdlib_collection_or_wrapper(&Type::Custom(recv.clone()))
+        {
+            return false;
+        }
+        let qname = format!("{}::{}", recv, method);
+        if let Some(sig) = registry
+            .get_signature(&qname)
+            .or_else(|| registry.lookup_method(&qname))
+            .or_else(|| registry.get_signature(method))
+        {
+            if sig.has_self_receiver {
+                return !matches!(
+                    sig.param_ownership.first(),
+                    Some(OwnershipMode::MutBorrowed)
+                );
+            }
+        }
+        !super::stdlib_method_traits::method_mutates_receiver_qualified(
+            method,
+            Some(recv.as_str()),
+            registry,
+        )
+    }
+
+    fn expr_is_param_field_chain(expr: &Expression<'ast>, param_name: &str) -> bool {
+        match expr {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::expr_rooted_at_param(object, param_name)
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_rooted_at_param(expr: &Expression<'ast>, param_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                Self::expr_rooted_at_param(object, param_name)
             }
             _ => false,
         }

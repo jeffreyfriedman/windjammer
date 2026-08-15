@@ -22,10 +22,8 @@ impl CompilationCostTracker {
 
     /// Recompute `total_time_ms` from phase timings.
     pub fn finalize(&mut self) {
-        self.total_time_ms = self.parse_time_ms
-            + self.analyze_time_ms
-            + self.ir_time_ms
-            + self.codegen_time_ms;
+        self.total_time_ms =
+            self.parse_time_ms + self.analyze_time_ms + self.ir_time_ms + self.codegen_time_ms;
     }
 
     /// Record a phase duration in milliseconds.

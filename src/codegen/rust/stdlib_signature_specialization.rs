@@ -46,7 +46,10 @@ fn collection_generic_subst(receiver_ty: &Type) -> Option<Vec<(String, Type)>> {
                 "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "OrderedMap" | "SlotMap"
                 | "ConcurrentMap" => {
                     let key = args.first()?.clone();
-                    let val = args.get(1).cloned().unwrap_or_else(|| Type::Custom("V".into()));
+                    let val = args
+                        .get(1)
+                        .cloned()
+                        .unwrap_or_else(|| Type::Custom("V".into()));
                     Some(vec![
                         ("K".into(), key),
                         ("V".into(), val),
@@ -58,9 +61,8 @@ fn collection_generic_subst(receiver_ty: &Type) -> Option<Vec<(String, Type)>> {
         }
         Type::Custom(name) => {
             // `Vec<String>` may appear as a single Custom name from type_to_name.
-            parse_angled_type_args(name).and_then(|(base, args)| {
-                collection_generic_subst(&Type::Parameterized(base, args))
-            })
+            parse_angled_type_args(name)
+                .and_then(|(base, args)| collection_generic_subst(&Type::Parameterized(base, args)))
         }
         _ => None,
     }
@@ -228,10 +230,7 @@ mod tests {
     #[test]
     fn specialize_vec_string_push_makes_owned_string_formal() {
         let mut sig = vec_push_sig();
-        specialize_signature_for_receiver(
-            &mut sig,
-            &Type::Vec(Box::new(Type::String)),
-        );
+        specialize_signature_for_receiver(&mut sig, &Type::Vec(Box::new(Type::String)));
         let idx = sig.arg_param_index(0);
         assert!(
             matches!(sig.param_types.get(idx), Some(Type::String)),
@@ -244,7 +243,6 @@ mod tests {
                 0,
                 Some("push"),
                 Some("Vec"),
-                None,
                 None,
             ),
             "specialized push must coerce string literals to owned String"
@@ -264,10 +262,7 @@ mod tests {
         .to_function_signature();
         specialize_signature_for_receiver(
             &mut sig,
-            &Type::Parameterized(
-                "HashMap".into(),
-                vec![Type::String, Type::Int],
-            ),
+            &Type::Parameterized("HashMap".into(), vec![Type::String, Type::Int]),
         );
         let key_idx = sig.arg_param_index(0);
         let val_idx = sig.arg_param_index(1);
@@ -278,7 +273,6 @@ mod tests {
             0,
             Some("insert"),
             Some("HashMap"),
-            None,
             None,
         ));
     }
