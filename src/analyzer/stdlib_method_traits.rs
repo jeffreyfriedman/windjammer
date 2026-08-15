@@ -266,8 +266,16 @@ pub fn method_mutates_receiver_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        return sig_mutates_receiver(sig);
+    if receiver_type.is_some() {
+        // Known receiver: only that type's signature (local, then stdlib).
+        // Never a unique `::{method}` from a *different* type.
+        if let Some(sig) = lookup_sig(method, receiver_type, registry) {
+            return sig_mutates_receiver(sig);
+        }
+        if let Some(sig) = lookup_sig(method, receiver_type, SignatureRegistry::stdlib()) {
+            return sig_mutates_receiver(sig);
+        }
+        return false;
     }
     if let Some(sig) = lookup_suffix(method, registry) {
         return sig_mutates_receiver(sig);
@@ -283,8 +291,14 @@ pub fn is_known_readonly_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-        return sig_readonly_receiver(sig);
+    if receiver_type.is_some() {
+        if let Some(sig) = lookup_sig(method, receiver_type, registry) {
+            return sig_readonly_receiver(sig);
+        }
+        if let Some(sig) = lookup_sig(method, receiver_type, SignatureRegistry::stdlib()) {
+            return sig_readonly_receiver(sig);
+        }
+        return false;
     }
     if let Some(sig) = lookup_suffix(method, registry) {
         return sig_readonly_receiver(sig);
@@ -702,7 +716,29 @@ mod tests {
     fn consensus_readonly_receiver_empty_registry_is_false() {
         let empty = SignatureRegistry::empty();
         assert!(!consensus_readonly_receiver("len", &empty));
-        assert!(!is_known_readonly_qualified("len", Some("Vec"), &empty));
+        // Known stdlib type still resolves via stdlib fallback, not empty-registry consensus.
+        assert!(is_known_readonly_qualified("len", Some("Vec"), &empty));
+        assert!(!is_known_readonly_qualified("len", Some("Writer"), &empty));
+    }
+
+    #[test]
+    fn qualified_lookup_uses_stdlib_when_local_registry_empty() {
+        let empty = SignatureRegistry::empty();
+        assert!(method_mutates_receiver_qualified(
+            "push",
+            Some("Vec"),
+            &empty
+        ));
+        assert!(!method_mutates_receiver_qualified(
+            "len",
+            Some("Vec"),
+            &empty
+        ));
+        assert!(!method_mutates_receiver_qualified(
+            "append",
+            Some("Writer"),
+            &empty
+        ));
     }
 
     #[test]

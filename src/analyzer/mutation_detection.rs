@@ -588,15 +588,10 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
 
-                    // Unqualified stdlib consensus (Vec::push etc.) when no type yet.
-                    if !qualified_attempted
-                        && super::stdlib_method_traits::method_mutates_receiver(method)
-                    {
-                        return true;
-                    }
-
                     // PRIORITY 1b: For chained field access (param.field.method()),
                     // resolve the intermediate field type and use it for qualified lookup.
+                    // Must run before unqualified mutating-name consensus so
+                    // `deps.writer.append` looks up `Writer::append`, not a stdlib `append`.
                     // Example: game_state.inventory.has_item() → resolve inventory to Inventory,
                     // then look up Inventory::has_item instead of GameState::has_item.
                     if let Some(receiver_type) =
@@ -624,8 +619,7 @@ impl<'ast> Analyzer<'ast> {
                                     {
                                         return true;
                                     }
-                                } else if sig.has_self_receiver && !sig.param_ownership.is_empty()
-                                {
+                                } else if sig.has_self_receiver && !sig.param_ownership.is_empty() {
                                     return false;
                                 }
                             }
@@ -652,10 +646,15 @@ impl<'ast> Analyzer<'ast> {
                     // The method may not be analyzed yet; multi-pass convergence
                     // will resolve it once the method IS registered.
                     // BUT: For stdlib types (Vec, HashMap, String), the heuristic
-                    // is always correct, so don't skip it.
+                    // is always correct, so don't skip it. Use the *field* type
+                    // (`grid.data: Vec` → Vec) not the outer param (`Grid`).
+                    let field_is_stdlib = self
+                        .resolve_field_chain_type_for_param(name, object, param_type_hint)
+                        .as_ref()
+                        .is_some_and(crate::type_classification::is_stdlib_collection_or_wrapper);
                     let is_stdlib_type = param_type_hint.is_some_and(|ty| {
                         crate::type_classification::is_stdlib_collection_or_wrapper(ty)
-                    });
+                    }) || field_is_stdlib;
                     if !qualified_attempted || is_stdlib_type {
                         if super::stdlib_method_traits::method_mutates_receiver(method) {
                             return true;
@@ -670,8 +669,7 @@ impl<'ast> Analyzer<'ast> {
                     if let Some(field_ty) =
                         self.resolve_field_chain_type_for_param(name, object, param_type_hint)
                     {
-                        if let Some(recv_name) = type_base_for_registry_lookup(&field_ty)
-                        {
+                        if let Some(recv_name) = type_base_for_registry_lookup(&field_ty) {
                             if super::stdlib_method_traits::is_known_readonly_qualified(
                                 method,
                                 Some(&recv_name),
@@ -1210,17 +1208,5 @@ impl<'ast> Analyzer<'ast> {
 }
 
 fn type_base_for_registry_lookup(ty: &Type) -> Option<String> {
-    match ty {
-        Type::Custom(name) => Some(name.split('<').next().unwrap_or(name).to_string()),
-        Type::Parameterized(base, _) => Some(base.clone()),
-        Type::Reference(inner) | Type::MutableReference(inner) => {
-            type_base_for_registry_lookup(inner)
-        }
-        Type::Float => Some("f32".into()),
-        Type::Int => Some("i32".into()),
-        Type::Uint => Some("usize".into()),
-        Type::Bool => Some("bool".into()),
-        Type::String => Some("string".into()),
-        _ => None,
-    }
+    crate::type_classification::type_to_registry_base(ty)
 }

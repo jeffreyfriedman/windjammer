@@ -110,7 +110,6 @@ fn apply_owned_string_literal_coercion<'ast>(
         {
             continue;
         }
-        let runtime_module = func_name.split("::").next();
         // Prefer defining-module refreshed `&str` over stale analyzer stubs.
         let mut sig =
             crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
@@ -170,7 +169,6 @@ fn apply_owned_string_literal_coercion<'ast>(
                 .next()
                 .filter(|q| q.chars().next().is_some_and(|c| c.is_ascii_uppercase())),
             Some(&gen.enum_variant_types),
-            runtime_module,
         ) || sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
             if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(s, idx) {
@@ -583,6 +581,18 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         _ => OwnershipMode::Owned,
                     })
                     .collect();
+                // Mirror Rust `fn(&str, …)` emission so call sites suppress field clones.
+                let emitted_rust_ref_params = Some(
+                    param_ownership
+                        .iter()
+                        .map(|o| {
+                            matches!(
+                                o,
+                                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                            )
+                        })
+                        .collect(),
+                );
 
                 Some(crate::analyzer::FunctionSignature {
                     name: func_name.to_string(),
@@ -593,7 +603,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     return_ownership: OwnershipMode::Owned,
                     has_self_receiver: false,
                     is_extern: false,
-                    emitted_rust_ref_params: None,
+                    emitted_rust_ref_params,
                     field_extract_params: None,
                     forwarding_borrow_params: None,
                 })

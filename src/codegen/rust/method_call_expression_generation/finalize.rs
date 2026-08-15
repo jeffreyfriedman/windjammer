@@ -18,8 +18,7 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
-        if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {
-        }
+        if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
         let mut obj_str = obj_str;
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);
@@ -195,7 +194,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 &mut arg_str,
                                 receiver_type_name.as_deref(),
                                 Some(&self.enum_variant_types),
-                                None,
                             );
                         }
                     }
@@ -1135,15 +1133,13 @@ impl<'ast> CodeGenerator<'ast> {
                     receiver_is_text,
                     &self.signature_registry,
                 );
-            if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {
-            }
+            if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
             if expects_pattern {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                     arg_expr,
                     arg_str,
                 );
-                if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {
-                }
+                if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
             }
         }
         if let Some(ref rt) = receiver_type_name {
@@ -1164,9 +1160,10 @@ impl<'ast> CodeGenerator<'ast> {
                         let pidx = sig.arg_param_index(i);
                         crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                             sig, pidx,
-                        ) || sig.param_types.get(pidx).is_some_and(|t| {
-                            matches!(t, Type::Reference(_))
-                        })
+                        ) || sig
+                            .param_types
+                            .get(pidx)
+                            .is_some_and(|t| matches!(t, Type::Reference(_)))
                     })
                     .unwrap_or(false)
                     || self.method_registry_arg_expects_shared_borrow(
@@ -1336,8 +1333,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Iterator adapters yielding `Option<&T>` when the function needs `Option<T>`.
         // Gated by iterator-chain detection + type equivalence (not method-name lists).
-        if self.find_needs_cloned_for_owned_return(object) && !base_expr.ends_with(".cloned()")
-        {
+        if self.find_needs_cloned_for_owned_return(object) && !base_expr.ends_with(".cloned()") {
             return format!("{}.cloned()", base_expr);
         }
 

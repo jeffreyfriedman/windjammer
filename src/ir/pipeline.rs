@@ -81,10 +81,7 @@ impl IrModule {
     ///
     /// Returns a list of capability violation diagnostics. Each violation
     /// identifies the function and the undeclared effect.
-    pub fn check_capabilities(
-        &self,
-        allowed: &EffectSet,
-    ) -> Vec<IrDiagnostic> {
+    pub fn check_capabilities(&self, allowed: &EffectSet) -> Vec<IrDiagnostic> {
         let mut violations = Vec::new();
         for (fn_name, fn_effects) in &self.effect_sets {
             for effect in fn_effects.iter() {
@@ -172,7 +169,11 @@ impl IrPipeline {
             Vec::new();
 
         for (i, af) in analyzed.iter().enumerate() {
-            let fc = constraint_gen::generate_constraints(af, Some(registry));
+            let fc = constraint_gen::generate_constraints_with_fields(
+                af,
+                Some(registry),
+                Some(&struct_field_types),
+            );
             total_constraints += fc.constraints.len();
 
             // Forward effect constraints to the domain solver.
@@ -257,9 +258,10 @@ impl IrPipeline {
                     let base = result.types.get(root_idx).and_then(|t| t.as_ref());
                     let own = result.ownership.get(root_idx).and_then(|o| o.as_ref());
                     if base.is_some() || own.is_some() {
-                        let entry = ir_fn.local_types.entry(local_name.clone()).or_insert_with(|| {
-                            SafetyType::owned(BaseType::Inferred)
-                        });
+                        let entry = ir_fn
+                            .local_types
+                            .entry(local_name.clone())
+                            .or_insert_with(|| SafetyType::owned(BaseType::Inferred));
                         if let Some(b) = base {
                             if *b != BaseType::Inferred {
                                 entry.base = b.clone();
@@ -280,12 +282,7 @@ impl IrPipeline {
         restore_owned_string_params_after_str_ref(&mut functions, analyzed);
         converge_impl_param_ownership(&mut functions, analyzed);
         finalize_ir_param_ownership_from_analyzer(&mut functions, analyzed);
-        propagate_delegation_ownership(
-            &mut functions,
-            analyzed,
-            registry,
-            &struct_field_types,
-        );
+        propagate_delegation_ownership(&mut functions, analyzed, registry, &struct_field_types);
         // Delegation may force Owned on wrappers; mutated non-returned params stay MutRef.
         restore_mutated_param_mutrefs(&mut functions, analyzed);
 
@@ -666,10 +663,7 @@ fn apply_analyzer_readonly_string_params_to_ir(
             let is_plain_string = matches!(param.type_, Type::String)
                 || matches!(&param.type_, Type::Custom(name) if name == "string");
             if !is_plain_string
-                || matches!(
-                    param.type_,
-                    Type::Reference(_) | Type::MutableReference(_)
-                )
+                || matches!(param.type_, Type::Reference(_) | Type::MutableReference(_))
             {
                 continue;
             }
@@ -717,13 +711,17 @@ fn restore_mutated_param_mutrefs(
     analyzed: &[crate::analyzer::AnalyzedFunction],
 ) {
     for (ir_fn, af) in functions.iter_mut().zip(analyzed.iter()) {
-        for param_name in af.mutated_parameters.iter().chain(ir_fn.mutated_params.iter()) {
+        for param_name in af
+            .mutated_parameters
+            .iter()
+            .chain(ir_fn.mutated_params.iter())
+        {
             if af.returned_parameters.contains(param_name) {
                 continue;
             }
-            if af.inferred_ownership.get(param_name) == Some(&OwnershipMode::Owned)
-                && !af.mutated_parameters.contains(param_name)
-            {
+            // Analyzer Owned wins (mutated+returned, identity transforms). Do not
+            // re-force MutRef after delegation solely because the body mutates.
+            if af.inferred_ownership.get(param_name) == Some(&OwnershipMode::Owned) {
                 continue;
             }
             if let Some(st) = ir_fn.param_types.get_mut(param_name) {
@@ -765,8 +763,7 @@ fn converge_impl_param_ownership(
             }
             if let Some(st) = ir_fn.param_types.get(&param.name) {
                 if matches!(st.ownership, OwnedType::Owned)
-                    && af.inferred_ownership.get(&param.name)
-                        == Some(&OwnershipMode::Owned)
+                    && af.inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned)
                 {
                     impl_owned_indices
                         .entry(parent.clone())
@@ -805,8 +802,6 @@ fn propagate_delegation_ownership(
     registry: &crate::analyzer::SignatureRegistry,
     struct_field_types: &HashMap<String, HashMap<String, crate::parser::Type>>,
 ) {
-    use crate::analyzer::OwnershipMode;
-
     for (caller_idx, af) in analyzed.iter().enumerate() {
         let Some((method, arg_names, receiver_type)) =
             extract_single_method_delegation(af.decl.body.as_slice(), &af.decl, struct_field_types)
@@ -817,9 +812,10 @@ fn propagate_delegation_ownership(
         let arg_count = arg_names.len();
         let mut owned_args: Vec<String> = Vec::new();
 
-        if let Some(callee_idx) = functions.iter().position(|f| {
-            f.name.ends_with(&format!("::{method}")) && &f.name != caller_name
-        }) {
+        if let Some(callee_idx) = functions
+            .iter()
+            .position(|f| f.name.ends_with(&format!("::{method}")) && &f.name != caller_name)
+        {
             let callee_ir = &functions[callee_idx];
             let callee_params: Vec<_> = analyzed[callee_idx]
                 .decl
@@ -845,9 +841,7 @@ fn propagate_delegation_ownership(
             {
                 collect_owned_delegation_args(sig, &arg_names, &mut owned_args);
             }
-        } else if let Some(sig) =
-            registry.find_delegation_callee(caller_name, &method, arg_count)
-        {
+        } else if let Some(sig) = registry.find_delegation_callee(caller_name, &method, arg_count) {
             collect_owned_delegation_args(sig, &arg_names, &mut owned_args);
         }
 
@@ -883,7 +877,7 @@ fn extract_single_method_delegation<'ast>(
     func: &crate::parser::ast::core::FunctionDecl<'ast>,
     struct_field_types: &HashMap<String, HashMap<String, crate::parser::Type>>,
 ) -> Option<(String, Vec<String>, Option<String>)> {
-    use crate::parser::ast::core::{Expression, Statement};
+    use crate::parser::ast::core::Expression;
     let expr = single_statement_expression(body)?;
     let Expression::MethodCall {
         method,
@@ -904,64 +898,15 @@ fn extract_single_method_delegation<'ast>(
             return None;
         }
     }
-    let receiver_type = infer_delegation_receiver_type(object, func, struct_field_types);
+    let receiver_type =
+        crate::ir::receiver_type::infer_receiver_type_name(object, func, struct_field_types);
     Some((method.clone(), arg_names, receiver_type))
-}
-
-fn infer_delegation_receiver_type<'ast>(
-    object: &crate::parser::ast::core::Expression<'ast>,
-    func: &crate::parser::ast::core::FunctionDecl<'ast>,
-    struct_field_types: &HashMap<String, HashMap<String, crate::parser::Type>>,
-) -> Option<String> {
-    use crate::parser::ast::core::Expression;
-    use crate::parser::Type;
-
-    fn strip_generics(name: &str) -> String {
-        name.split('<').next().unwrap_or(name).to_string()
-    }
-
-    fn type_to_struct_base(ty: &Type) -> Option<String> {
-        match ty {
-            Type::Custom(name) => Some(strip_generics(name)),
-            Type::Parameterized(base, _) => Some(strip_generics(base)),
-            Type::Reference(inner) | Type::MutableReference(inner) => type_to_struct_base(inner),
-            _ => None,
-        }
-    }
-
-    match object {
-        Expression::Identifier { name, .. } if name == "self" => func
-            .parent_type
-            .as_ref()
-            .map(|p| strip_generics(p)),
-        Expression::Identifier { name, .. } => func
-            .parameters
-            .iter()
-            .find(|p| &p.name == name)
-            .and_then(|p| type_to_struct_base(&p.type_)),
-        Expression::FieldAccess {
-            object: inner,
-            field,
-            ..
-        } => {
-            let inner_base = infer_delegation_receiver_type(inner, func, struct_field_types)?;
-            crate::type_inference::struct_field_registry::lookup_struct_field_map(
-                struct_field_types,
-                &inner_base,
-                &HashMap::new(),
-                &HashMap::new(),
-            )
-            .and_then(|fields| fields.get(field.as_str()))
-            .and_then(type_to_struct_base)
-        }
-        _ => None,
-    }
 }
 
 fn single_statement_expression<'a>(
     body: &[&'a crate::parser::ast::core::Statement<'a>],
 ) -> Option<&'a crate::parser::ast::core::Expression<'a>> {
-    use crate::parser::ast::core::{Expression, Statement};
+    use crate::parser::ast::core::Statement;
     match body.len() {
         0 => None,
         1 => match body[0] {
@@ -1086,7 +1031,10 @@ pub fn display(name: string) {}
         allowed.insert(Effect::FsWrite);
 
         let violations = module.check_capabilities(&allowed);
-        assert!(violations.is_empty(), "should pass with sufficient capabilities");
+        assert!(
+            violations.is_empty(),
+            "should pass with sufficient capabilities"
+        );
     }
 
     #[test]

@@ -85,6 +85,11 @@ impl<'ast> Analyzer<'ast> {
         self.global_struct_field_types = types;
     }
 
+    /// Cross-file / same-file struct field type registry (name → field → Type).
+    pub fn global_struct_field_types(&self) -> &HashMap<String, HashMap<String, Type>> {
+        self.global_struct_field_types.as_ref()
+    }
+
     /// Module paths for each struct name (enables `dialogue::tree::DialogueNodeTree` field lookup).
     /// Accepts Arc to enable O(1) sharing across many files without deep cloning.
     pub fn set_struct_defining_module_paths(

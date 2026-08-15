@@ -44,14 +44,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Structural type name used as `SignatureRegistry` keys (`Inventory`, `Merchant`, …).
     pub(crate) fn type_to_struct_base(ty: &Type) -> Option<String> {
-        match ty {
-            Type::Custom(name) => Some(Self::strip_type_generics(name)),
-            Type::Parameterized(base, _) => Some(Self::strip_type_generics(base)),
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                Self::type_to_struct_base(inner)
-            }
-            _ => None,
-        }
+        crate::type_classification::type_to_registry_base(ty)
     }
 
     /// Resolve the static type backing a method-call receiver (`self`, param, `self.field`, …).
@@ -231,7 +224,10 @@ impl<'ast> Analyzer<'ast> {
         self.collect_passthrough_calls(param_name, body, func, &mut passthrough_calls);
 
         if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
-            eprintln!("[PASSTHROUGH] fn={} param={} calls={:?}", current_func_name, param_name, passthrough_calls);
+            eprintln!(
+                "[PASSTHROUGH] fn={} param={} calls={:?}",
+                current_func_name, param_name, passthrough_calls
+            );
         }
 
         // Skip recursive calls to the current function to break circular ownership inference.
@@ -282,14 +278,19 @@ impl<'ast> Analyzer<'ast> {
                                 Some(s) => s,
                                 None => {
                                     if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
-                                        let matching: Vec<_> = registry.all_signatures()
-                                            .filter(|(k, _)| k.contains("clear") || k.contains("place") || k.contains("Cache"))
+                                        let matching: Vec<_> = registry
+                                            .all_signatures()
+                                            .filter(|(k, _)| {
+                                                k.contains("clear")
+                                                    || k.contains("place")
+                                                    || k.contains("Cache")
+                                            })
                                             .map(|(k, _)| k.clone())
                                             .collect();
                                         eprintln!("[PASSTHROUGH] fn={} callee={} NOT FOUND in registry (tried simple={}). Related keys: {:?}", current_func_name, func_name, simple, matching);
                                     }
                                     continue;
-                                },
+                                }
                             }
                         } else {
                             continue;
@@ -300,7 +301,10 @@ impl<'ast> Analyzer<'ast> {
                 }
             };
             if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
-                eprintln!("[PASSTHROUGH] fn={} callee={} found sig ownership={:?} has_self={}", current_func_name, func_name, sig.param_ownership, sig.has_self_receiver);
+                eprintln!(
+                    "[PASSTHROUGH] fn={} callee={} found sig ownership={:?} has_self={}",
+                    current_func_name, func_name, sig.param_ownership, sig.has_self_receiver
+                );
             }
             let adjusted_position = if sig.has_self_receiver {
                 *arg_position + 1
@@ -481,7 +485,9 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             }
-            Statement::Loop { body: loop_body, .. } => {
+            Statement::Loop {
+                body: loop_body, ..
+            } => {
                 for stmt in loop_body {
                     self.collect_method_calls_from_stmt(param_name, stmt, results);
                 }
@@ -826,7 +832,13 @@ impl<'ast> Analyzer<'ast> {
         let mut any_use = false;
         let mut bad_use = false;
         for stmt in body {
-            self.check_field_only_param_use_stmt(param_name, stmt, false, &mut any_use, &mut bad_use);
+            self.check_field_only_param_use_stmt(
+                param_name,
+                stmt,
+                false,
+                &mut any_use,
+                &mut bad_use,
+            );
             if bad_use {
                 return false;
             }
@@ -896,9 +908,7 @@ impl<'ast> Analyzer<'ast> {
                         self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, s)
                     })
             }
-            Statement::For {
-                iterable, body, ..
-            } => {
+            Statement::For { iterable, body, .. } => {
                 self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, iterable)
                     || body.iter().any(|s| {
                         self.stmt_projects_non_copy_field_into_call_arg(param_name, param_type, s)
@@ -912,9 +922,7 @@ impl<'ast> Analyzer<'ast> {
                                 param_name, param_type, g,
                             )
                         }) || self.expr_projects_non_copy_field_into_call_arg(
-                            param_name,
-                            param_type,
-                            arm.body,
+                            param_name, param_type, arm.body,
                         )
                     })
             }
@@ -932,20 +940,22 @@ impl<'ast> Analyzer<'ast> {
             Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
                 arguments.iter().any(|(_, arg)| {
                     self.expr_is_non_copy_field_projection_from_param(param_name, param_type, arg)
-                        || self.expr_projects_non_copy_field_into_call_arg(
-                            param_name, param_type, arg,
-                        )
+                        || self
+                            .expr_projects_non_copy_field_into_call_arg(param_name, param_type, arg)
                 })
             }
             Expression::FieldAccess { object, .. }
             | Expression::Index { object, .. }
-            | Expression::Unary { operand: object, .. }
+            | Expression::Unary {
+                operand: object, ..
+            }
             | Expression::TryOp { expr: object, .. } => {
                 self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, object)
             }
             Expression::Binary { left, right, .. } => {
                 self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, left)
-                    || self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, right)
+                    || self
+                        .expr_projects_non_copy_field_into_call_arg(param_name, param_type, right)
             }
             Expression::Tuple { elements, .. } => elements.iter().any(|e| {
                 self.expr_projects_non_copy_field_into_call_arg(param_name, param_type, e)
@@ -1038,9 +1048,7 @@ impl<'ast> Analyzer<'ast> {
 
     fn stmt_has_field_or_index_move_binding(&self, param_name: &str, stmt: &Statement) -> bool {
         match stmt {
-            Statement::Let { value, .. } => {
-                Self::expr_is_field_move_from_param(param_name, value)
-            }
+            Statement::Let { value, .. } => Self::expr_is_field_move_from_param(param_name, value),
             Statement::If {
                 then_block,
                 else_block,
@@ -1054,13 +1062,14 @@ impl<'ast> Analyzer<'ast> {
                             .any(|s| self.stmt_has_field_or_index_move_binding(param_name, s))
                     })
             }
-            Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
-                body.iter()
-                    .any(|s| self.stmt_has_field_or_index_move_binding(param_name, s))
-            }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                Self::expr_is_field_move_from_param(param_name, &arm.body)
-            }),
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .any(|s| self.stmt_has_field_or_index_move_binding(param_name, s)),
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| Self::expr_is_field_move_from_param(param_name, &arm.body)),
             _ => false,
         }
     }
@@ -1118,11 +1127,23 @@ impl<'ast> Analyzer<'ast> {
                     bad_use,
                 );
                 for s in then_block {
-                    self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                    self.check_field_only_param_use_stmt(
+                        param_name,
+                        s,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
                 }
                 if let Some(else_block) = else_block {
                     for s in else_block {
-                        self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                        self.check_field_only_param_use_stmt(
+                            param_name,
+                            s,
+                            in_field_chain,
+                            any_use,
+                            bad_use,
+                        );
                     }
                 }
             }
@@ -1164,7 +1185,13 @@ impl<'ast> Analyzer<'ast> {
                     bad_use,
                 );
                 for s in body {
-                    self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                    self.check_field_only_param_use_stmt(
+                        param_name,
+                        s,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
                 }
             }
             Statement::For { iterable, body, .. } => {
@@ -1176,7 +1203,13 @@ impl<'ast> Analyzer<'ast> {
                     bad_use,
                 );
                 for s in body {
-                    self.check_field_only_param_use_stmt(param_name, s, in_field_chain, any_use, bad_use);
+                    self.check_field_only_param_use_stmt(
+                        param_name,
+                        s,
+                        in_field_chain,
+                        any_use,
+                        bad_use,
+                    );
                 }
             }
             _ => {}
@@ -1235,9 +1268,7 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 if self.expr_is_identifier(object, param_name) {
                     *any_use = true;
@@ -1304,24 +1335,16 @@ impl<'ast> Analyzer<'ast> {
                     bad_use,
                 );
             }
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 // String concat (`+`) of `param.field` consumes projected non-Copy data
                 // (`deps.tag + ":"` → keep owned AppDeps). Numeric ops on Copy fields
                 // (`a.x - b.x`) stay readonly field-chain usage → borrowed Body.
                 use crate::parser::ast::operators::BinaryOp;
                 if matches!(op, BinaryOp::Add) {
-                    self.check_field_only_binary_operand(
-                        param_name,
-                        left,
-                        any_use,
-                        bad_use,
-                    );
-                    self.check_field_only_binary_operand(
-                        param_name,
-                        right,
-                        any_use,
-                        bad_use,
-                    );
+                    self.check_field_only_binary_operand(param_name, left, any_use, bad_use);
+                    self.check_field_only_binary_operand(param_name, right, any_use, bad_use);
                 } else {
                     self.check_field_only_param_use_expr(
                         param_name,
@@ -1396,7 +1419,9 @@ impl<'ast> Analyzer<'ast> {
             Expression::Identifier { name: n, .. } => n == name,
             Expression::FieldAccess { object, .. }
             | Expression::Index { object, .. }
-            | Expression::Unary { operand: object, .. }
+            | Expression::Unary {
+                operand: object, ..
+            }
             | Expression::TryOp { expr: object, .. }
             | Expression::Await { expr: object, .. }
             | Expression::Cast { expr: object, .. } => {

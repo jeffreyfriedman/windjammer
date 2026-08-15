@@ -197,7 +197,12 @@ impl SignatureRegistry {
 
         for dir in &candidates {
             if dir.is_dir() {
-                crate::metadata::merge_wj_meta_signatures_from_dir(dir, registry);
+                // Load ONLY files under stdlib_meta/. Do not use
+                // `merge_wj_meta_signatures_from_dir`, which also pulls the
+                // project `.wj-cache/` (including test fixtures like
+                // `MyRenderer::render`) and poisons unqualified consensus
+                // (`method_mutates_receiver("render")` → true).
+                crate::metadata::merge_wj_meta_signatures_from_dir_only(dir, registry);
                 return;
             }
         }
@@ -496,7 +501,9 @@ impl SignatureRegistry {
             .method_index
             .get(suffix)
             .map(|keys| {
+                let mut seen = std::collections::HashSet::new();
                 keys.iter()
+                    .filter(|k| seen.insert(k.as_str()))
                     .filter_map(|k| self.signatures.get(k).map(|sig| (k.as_str(), sig)))
                     .collect::<Vec<_>>()
             })

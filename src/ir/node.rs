@@ -33,12 +33,7 @@ pub fn ownership_mode_from_param_type(ty: &Type) -> OwnershipMode {
 /// Whether a parameter type should seed `Owned` before body/call-site analysis.
 pub fn param_ownership_seed_is_copy(ty: &Type) -> bool {
     match ty {
-        Type::Int
-        | Type::Int32
-        | Type::Uint
-        | Type::Float
-        | Type::Bool
-        | Type::String => true,
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
         Type::Custom(name) => matches!(
             name.as_str(),
             "i8" | "i16"
@@ -201,10 +196,8 @@ impl IrFunction {
     /// Bridge from the existing `AnalyzedFunction` — lossless conversion.
     /// Maps all analyzer data into typed IR representation.
     pub fn from_analyzed(analyzed: &AnalyzedFunction<'_>) -> Self {
-        let name = ir_function_name_from_decl(
-            &analyzed.decl.name,
-            analyzed.decl.parent_type.as_deref(),
-        );
+        let name =
+            ir_function_name_from_decl(&analyzed.decl.name, analyzed.decl.parent_type.as_deref());
 
         let mut region_counter: u32 = 1;
 
@@ -237,40 +230,38 @@ impl IrFunction {
                 let param_name = param.name.clone();
                 let mode = ownership_mode_from_param_type(&param.type_);
                 let analyzer_own = analyzed.inferred_ownership.get(&param_name).copied();
-                let mut ownership = if matches!(
-                    param.type_,
-                    Type::Reference(_) | Type::MutableReference(_)
-                ) {
-                    ownership_mode_to_owned_type(mode, &mut region_counter)
-                } else if param_ownership_seed_is_copy(&param.type_) {
-                    match analyzer_own {
-                        Some(crate::analyzer::OwnershipMode::Borrowed) => {
-                            let r = Region::fresh(region_counter);
-                            region_counter += 1;
-                            OwnedType::Ref(r)
+                let mut ownership =
+                    if matches!(param.type_, Type::Reference(_) | Type::MutableReference(_)) {
+                        ownership_mode_to_owned_type(mode, &mut region_counter)
+                    } else if param_ownership_seed_is_copy(&param.type_) {
+                        match analyzer_own {
+                            Some(crate::analyzer::OwnershipMode::Borrowed) => {
+                                let r = Region::fresh(region_counter);
+                                region_counter += 1;
+                                OwnedType::Ref(r)
+                            }
+                            Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
+                                let r = Region::fresh(region_counter);
+                                region_counter += 1;
+                                OwnedType::MutRef(r)
+                            }
+                            _ => OwnedType::Owned,
                         }
-                        Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
-                            let r = Region::fresh(region_counter);
-                            region_counter += 1;
-                            OwnedType::MutRef(r)
+                    } else {
+                        match analyzer_own {
+                            Some(crate::analyzer::OwnershipMode::Borrowed) => {
+                                let r = Region::fresh(region_counter);
+                                region_counter += 1;
+                                OwnedType::Ref(r)
+                            }
+                            Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
+                                let r = Region::fresh(region_counter);
+                                region_counter += 1;
+                                OwnedType::MutRef(r)
+                            }
+                            _ => OwnedType::Owned,
                         }
-                        _ => OwnedType::Owned,
-                    }
-                } else {
-                    match analyzer_own {
-                        Some(crate::analyzer::OwnershipMode::Borrowed) => {
-                            let r = Region::fresh(region_counter);
-                            region_counter += 1;
-                            OwnedType::Ref(r)
-                        }
-                        Some(crate::analyzer::OwnershipMode::MutBorrowed) => {
-                            let r = Region::fresh(region_counter);
-                            region_counter += 1;
-                            OwnedType::MutRef(r)
-                        }
-                        _ => OwnedType::Owned,
-                    }
-                };
+                    };
 
                 // Mutated parameters must be MutRef even if ownership inference lagged.
                 // Returned parameters stay owned (e.g. `mut clip: T` → `clip` at end of fn).

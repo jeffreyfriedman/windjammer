@@ -26,13 +26,14 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     );
     vec_methods.insert(
         "contains".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "Vec",
             "contains",
             vec![Type::Reference(Box::new(Type::Custom("T".to_string())))], // &T
             vec![OwnershipMode::Borrowed],
             Some(Type::Bool),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     vec_methods.insert(
@@ -62,15 +63,16 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     );
     vec_methods.insert(
         "get".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "Vec",
             "get",
             vec![Type::Custom("usize".to_string())],
             vec![OwnershipMode::Owned],
-            Some(Type::Option(Box::new(Type::Reference(Box::new(Type::Custom(
-                "T".to_string(),
-            )))))),
+            Some(Type::Option(Box::new(Type::Reference(Box::new(
+                Type::Custom("T".to_string()),
+            ))))),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     vec_methods.insert(
@@ -125,13 +127,14 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     );
     string_methods.insert(
         "contains".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "String",
             "contains",
             vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
             vec![OwnershipMode::Borrowed],
             Some(Type::Bool),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     string_methods.insert(
@@ -147,24 +150,26 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     );
     string_methods.insert(
         "starts_with".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "String",
             "starts_with",
             vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
             vec![OwnershipMode::Borrowed],
             Some(Type::Bool),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     string_methods.insert(
         "ends_with".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "String",
             "ends_with",
             vec![Type::Reference(Box::new(Type::Custom("str".to_string())))], // &str
             vec![OwnershipMode::Borrowed],
             Some(Type::Bool),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     map.insert("String".to_string(), string_methods);
@@ -173,7 +178,7 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     let mut hashmap_methods = HashMap::new();
     hashmap_methods.insert(
         "get".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "HashMap",
             "get",
             vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
@@ -182,6 +187,7 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
                 Type::Custom("V".to_string()),
             ))))),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     hashmap_methods.insert(
@@ -197,13 +203,14 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     );
     hashmap_methods.insert(
         "contains_key".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "HashMap",
             "contains_key",
             vec![Type::Reference(Box::new(Type::Custom("K".to_string())))], // &K
             vec![OwnershipMode::Borrowed],
             Some(Type::Bool),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     hashmap_methods.insert(
@@ -227,13 +234,14 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     let mut hashset_methods = HashMap::new();
     hashset_methods.insert(
         "contains".to_string(),
-        MethodSignature::new(
+        MethodSignature::with_self_ownership(
             "HashSet",
             "contains",
             vec![Type::Reference(Box::new(Type::Custom("T".to_string())))],
             vec![OwnershipMode::Borrowed],
             Some(Type::Bool),
             true,
+            OwnershipMode::Borrowed,
         ),
     );
     hashset_methods.insert(

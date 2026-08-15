@@ -585,16 +585,8 @@ pub fn enum_factory_string_param_needs_owned(
 pub fn string_literal_needs_to_string(
     sig: &crate::analyzer::FunctionSignature,
     arg_index: usize,
-    runtime_module: Option<&str>,
 ) -> bool {
-    string_literal_needs_owned_coercion_with_enum(
-        Some(sig),
-        arg_index,
-        None,
-        None,
-        None,
-        runtime_module,
-    )
+    string_literal_needs_owned_coercion_with_enum(Some(sig), arg_index, None, None, None)
 }
 
 /// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
@@ -603,7 +595,7 @@ pub fn string_literal_needs_owned_coercion(
     arg_index: usize,
     method: Option<&str>,
 ) -> bool {
-    string_literal_needs_owned_coercion_with_enum(sig, arg_index, method, None, None, None)
+    string_literal_needs_owned_coercion_with_enum(sig, arg_index, method, None, None)
 }
 
 /// Whether a string literal at this call site should become owned (`".to_string()"` / `into()`).
@@ -613,7 +605,6 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     method: Option<&str>,
     receiver_type: Option<&str>,
     enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
-    runtime_module: Option<&str>,
 ) -> bool {
     // Signature-driven: AsRef<&str> / `&str` runtime formals keep bare string literals.
     if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
@@ -621,7 +612,6 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     ) {
         return false;
     }
-    let _ = runtime_module;
 
     // Prefer signature: Pattern/`&str` formals stay bare (no method-name lists).
     if let Some(s) = sig {
@@ -950,7 +940,6 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
     arg_str: &mut String,
     receiver_type: Option<&str>,
     enum_variant_types: Option<&std::collections::HashMap<String, Vec<Type>>>,
-    runtime_module: Option<&str>,
 ) {
     let is_string_literal = matches!(
         arg,
@@ -969,7 +958,6 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         method,
         receiver_type,
         enum_variant_types,
-        runtime_module,
     );
     if needs_owned {
         if !already_owned_string_expr(arg_str) {
@@ -1112,7 +1100,6 @@ mod tests {
             Some("starts_with"),
             None,
             None,
-            None,
         ));
     }
 
@@ -1122,7 +1109,6 @@ mod tests {
             None,
             1,
             Some("starts_with"),
-            None,
             None,
             None,
         ));
@@ -1178,7 +1164,6 @@ mod tests {
                 Some("empty_message"),
                 Some("Table"),
                 None,
-                None,
             ),
             "receiver+method without WJ sig must auto-own builder string lits"
         );
@@ -1208,7 +1193,6 @@ mod tests {
                 0,
                 Some("new"),
                 Some("Squad"),
-                None,
                 None,
             ),
             "plain String formals auto-own literals even with stale Borrowed ownership"
@@ -1407,7 +1391,6 @@ mod tests {
                 0,
                 Some("new"),
                 Some("Squad"),
-                None,
                 None,
             ),
             "static impl new(&str) must not use blind new→owned heuristic"

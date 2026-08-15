@@ -1400,10 +1400,9 @@ fn method_is_mutating_on_receiver(
                 if let Some(upgrades) = receiver_upgrades {
                     if let Some(mode) = upgrades.get(&qname) {
                         return match mode {
-                            OwnershipMode::MutBorrowed => true,
-                            // Owned receiver at call site does not imply field mutation.
-                            OwnershipMode::Owned => false,
-                            _ => false,
+                            // Owned/`&mut self` on a field method mutates the parent value.
+                            OwnershipMode::MutBorrowed | OwnershipMode::Owned => true,
+                            OwnershipMode::Borrowed => false,
                         };
                     }
                 }
@@ -1411,9 +1410,8 @@ fn method_is_mutating_on_receiver(
                     if let Some(sig) = reg.get_signature(&qname) {
                         if let Some(mode) = sig.param_ownership.first() {
                             return match mode {
-                                OwnershipMode::MutBorrowed => true,
-                                OwnershipMode::Owned => false,
-                                _ => false,
+                                OwnershipMode::MutBorrowed | OwnershipMode::Owned => true,
+                                OwnershipMode::Borrowed => false,
                             };
                         }
                         if sig.has_self_receiver {
@@ -1428,7 +1426,12 @@ fn method_is_mutating_on_receiver(
                     receiver_upgrades,
                 );
             }
+            // `self.field.method` with unknown field type: use stdlib consensus
+            // (`Vec::push`) — never `ParentType::method` (qualified miss → false).
+            return crate::analyzer::stdlib_method_traits::method_mutates_receiver(method);
         }
+    } else if is_self_field_chain(receiver) {
+        return crate::analyzer::stdlib_method_traits::method_mutates_receiver(method);
     }
     method_is_mutating(method, registry, struct_name, receiver_upgrades)
 }

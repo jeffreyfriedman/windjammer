@@ -26,6 +26,7 @@ mod self_dispatch_for_loops;
 mod self_field_mutation;
 mod self_mutating_calls;
 mod self_return_and_consumption;
+mod section_render_ownership_test;
 mod signature_registry;
 pub mod simd_loops;
 pub mod stdlib_method_traits;
