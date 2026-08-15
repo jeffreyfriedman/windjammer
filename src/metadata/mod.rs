@@ -215,6 +215,24 @@ pub fn merge_wj_meta_signatures_and_copy_structs_multi(
     }
 }
 
+/// Load `*.wj.meta` from a single directory only — no `.wj-cache` side-load.
+///
+/// Used for the compiler's stdlib baseline so project/test caches cannot poison
+/// unqualified method consensus (`method_mutates_receiver("render")`).
+pub fn merge_wj_meta_signatures_from_dir_only(
+    root: &Path,
+    registry: &mut crate::analyzer::SignatureRegistry,
+) {
+    let mut copy_structs = Vec::new();
+    let mut all_struct_fields = HashMap::new();
+    merge_wj_meta_signatures_from_dir_inner(
+        root,
+        registry,
+        &mut copy_structs,
+        &mut all_struct_fields,
+    );
+}
+
 /// Public accessor for `merge_wj_meta_signatures_from_dir_inner` (used by compiler multipass).
 /// Scans both the cache directory and the source root for `.wj.meta` files.
 /// Loads the project-root `metadata.json` last as authoritative source.

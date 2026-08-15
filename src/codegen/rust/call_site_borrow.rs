@@ -815,13 +815,12 @@ pub fn should_borrow_at_call_site_with_copy_check(
         }
     }
 
-    // Already allocated an owned String from a literal — never wrap in `&`
-    // (`&"lit".to_string()`). Owned formals want the allocation bare; `&str`
-    // formals should have kept the bare literal instead.
-    if (expression_is_string_literal(arg_expr)
-        || arg_str.ends_with(".to_string()")
-        || arg_str.ends_with(".to_owned()"))
-        && (arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()"))
+    // Already an owned value — never wrap in `&` (`&"lit".to_string()`,
+    // `&stack.item.id.clone()`). Owned formals want the value bare; `&str`
+    // formals accept `String` via deref coercion without an extra `&`.
+    if arg_str.ends_with(".to_string()")
+        || arg_str.ends_with(".to_owned()")
+        || arg_str.ends_with(".clone()")
     {
         return CallSiteBorrowDecision::default();
     }

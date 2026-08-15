@@ -9,9 +9,9 @@
 //!   - NumericSolver results can be imported via `import_numeric_results`
 
 use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar};
-use crate::ir::safety_type::{BaseType, OwnedType};
 #[cfg(test)]
 use crate::ir::safety_type::Region;
+use crate::ir::safety_type::{BaseType, OwnedType};
 
 /// The result of solving a constraint set.
 #[derive(Debug)]
@@ -542,19 +542,13 @@ mod tests {
         let mut cs = ConstraintSet::new();
         let a = cs.fresh_var();
 
-        cs.add(Constraint::OwnershipIs(
-            a,
-            OwnedType::Ref(Region::fresh(1)),
-        ));
+        cs.add(Constraint::OwnershipIs(a, OwnedType::Ref(Region::fresh(1))));
 
         let solver = Solver::new(&cs);
         let result = solver.solve(&cs);
 
         assert!(result.diagnostics.is_empty());
-        assert_eq!(
-            result.ownership[0],
-            Some(OwnedType::Ref(Region::fresh(1)))
-        );
+        assert_eq!(result.ownership[0], Some(OwnedType::Ref(Region::fresh(1))));
     }
 
     #[test]

@@ -3,7 +3,9 @@
 //! Each pass transforms [`IrFunction`] metadata (and eventually IR nodes)
 //! while reporting estimated cost savings via [`CostDelta`].
 
-use crate::analyzer::{CowOptimization, DeferDropOptimization, EstimatedSize, SmallVecOptimization};
+use crate::analyzer::{
+    CowOptimization, DeferDropOptimization, EstimatedSize, SmallVecOptimization,
+};
 use crate::ir::node::IrFunction;
 
 /// Estimated change in compilation and runtime economics from a pass.

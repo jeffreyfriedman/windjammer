@@ -383,13 +383,14 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Some(sig) = self.get_signature_with_global(&qualified_name) {
                                 if sig.has_self_receiver {
                                     if let Some(ownership) = sig.param_ownership.first() {
-                                        if matches!(
+                                        // Signature is authoritative: only `&mut self`
+                                        // mutates in place. Do not fall through to name
+                                        // consensus (stdlib baseline must not poison
+                                        // user methods like `Section::render`).
+                                        return matches!(
                                             ownership,
                                             crate::analyzer::OwnershipMode::MutBorrowed
-                                                | crate::analyzer::OwnershipMode::Owned
-                                        ) {
-                                            return true;
-                                        }
+                                        );
                                     }
                                 }
                             }
@@ -406,13 +407,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             if sig.has_self_receiver {
                                                 if let Some(ownership) = sig.param_ownership.first()
                                                 {
-                                                    if matches!(
-                                                        ownership,
-                                                        crate::analyzer::OwnershipMode::MutBorrowed
-                                                            | crate::analyzer::OwnershipMode::Owned
-                                                    ) {
-                                                        return true;
-                                                    }
+                                                    return matches!(ownership, crate::analyzer::OwnershipMode::MutBorrowed);
                                                 }
                                             }
                                         }

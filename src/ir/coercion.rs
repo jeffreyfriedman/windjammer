@@ -140,7 +140,9 @@ pub fn enforce_ownership_contract_on_coerced_arg(
     actual: &SafetyType,
     expected: &SafetyType,
 ) {
-    enforce_ownership_contract_on_coerced_arg_with_force_owned(coerced, actual, expected, false, false, false);
+    enforce_ownership_contract_on_coerced_arg_with_force_owned(
+        coerced, actual, expected, false, false, false,
+    );
 }
 
 fn strip_rust_ref_expr(expr: &str) -> &str {
@@ -200,8 +202,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 .unwrap_or(inner);
             if inner.starts_with('*') {
                 *coerced = inner.to_string();
-            } else if is_copy_base(&expected.base)
-                && !matches!(expected.base, BaseType::Custom(_))
+            } else if is_copy_base(&expected.base) && !matches!(expected.base, BaseType::Custom(_))
             {
                 *coerced = format!("*{inner}");
             } else if coerced.starts_with("&mut ") {
@@ -213,10 +214,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
             return;
         }
     }
-    if allow_rust_auto_borrow
-        && coerced.starts_with('&')
-        && !coerced.starts_with("&mut ")
-    {
+    if allow_rust_auto_borrow && coerced.starts_with('&') && !coerced.starts_with("&mut ") {
         *coerced = coerced.trim_start_matches('&').to_string();
         return;
     }
@@ -236,6 +234,10 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         && !coerced.starts_with("&mut ")
         // Rust string literals are already `&str`; prefixing `&` yields `&&str`.
         && !crate::codegen::rust::expression_utilities::is_rust_string_literal_text(coerced)
+        // `.clone()` / `.to_string()` already own; `&str` formals deref-coerce.
+        && !coerced.ends_with(".clone()")
+        && !coerced.ends_with(".to_string()")
+        && !coerced.ends_with(".to_owned()")
     {
         *coerced = format!("&{coerced}");
         return;
@@ -244,10 +246,8 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     // Text `&x` was handled above (strip). Bare `through` where through: &T needs this.
     // Skip when the Rust text is already a field/index projection (`failure.status`) —
     // those Copy projections are values, not places that need `*`.
-    if matches!(
-        expected.ownership,
-        OwnedType::Owned | OwnedType::Copy
-    ) && matches!(actual.ownership, OwnedType::Ref(_))
+    if matches!(expected.ownership, OwnedType::Owned | OwnedType::Copy)
+        && matches!(actual.ownership, OwnedType::Ref(_))
         && !coerced.starts_with('&')
         && !coerced.starts_with('*')
         && !coerced.contains('.')
@@ -376,22 +376,14 @@ fn needs_numeric_cast(actual: &BaseType, expected: &BaseType) -> bool {
 fn is_signed_integer_base(base: &BaseType) -> bool {
     matches!(
         base,
-        BaseType::I8
-            | BaseType::I16
-            | BaseType::I32
-            | BaseType::I64
-            | BaseType::I128
+        BaseType::I8 | BaseType::I16 | BaseType::I32 | BaseType::I64 | BaseType::I128
     )
 }
 
 fn is_unsigned_integer_base(base: &BaseType) -> bool {
     matches!(
         base,
-        BaseType::U8
-            | BaseType::U16
-            | BaseType::U32
-            | BaseType::U64
-            | BaseType::U128
+        BaseType::U8 | BaseType::U16 | BaseType::U32 | BaseType::U64 | BaseType::U128
     )
 }
 
@@ -427,7 +419,10 @@ mod tests {
     fn string_literal_to_owned_string_needs_to_owned() {
         let actual = borrowed(BaseType::String);
         let expected = owned(BaseType::String);
-        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::ToOwnedString);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::ToOwnedString
+        );
     }
 
     #[test]
@@ -455,7 +450,10 @@ mod tests {
     fn borrowed_to_owned_string_needs_to_owned() {
         let actual = borrowed(BaseType::String);
         let expected = owned(BaseType::String);
-        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::ToOwnedString);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::ToOwnedString
+        );
     }
 
     #[test]
@@ -479,7 +477,10 @@ mod tests {
     fn owned_to_mut_borrowed_needs_mut_borrow() {
         let actual = owned(BaseType::Custom("Vec".into()));
         let expected = mut_borrowed(BaseType::Custom("Vec".into()));
-        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::MutBorrow);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::MutBorrow
+        );
     }
 
     #[test]

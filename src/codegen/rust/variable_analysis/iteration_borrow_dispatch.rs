@@ -178,24 +178,27 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         if let Some(iter_t) = self.infer_expression_type(iterable) {
             if let Some(elem) = Self::extract_iterator_element_type(&iter_t) {
-                if body
+                // Known element type: only that type's method signatures. Do not
+                // scan every `::{method}` in the registry (`Section::render` is
+                // `&self`; an unrelated `Foo::render` must not force `&mut` iter).
+                return body
                     .iter()
-                    .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, &elem))
-                {
-                    return true;
-                }
+                    .any(|s| self.stmt_contains_mut_dispatch_on_var(s, loop_var, &elem));
             }
         }
 
-        // Fallback: when element type inference fails, check if the loop body
-        // calls any method on the loop variable whose signature (from any type)
-        // has &mut self. This handles cases where metadata isn't available.
+        // Unknown element type: unique/consensus `&mut self`, not "any type
+        // has this method name".
         let mut methods_on_var = Vec::new();
         for stmt in body {
             Self::collect_methods_called_on(stmt, loop_var, &mut methods_on_var);
         }
         for method_name in &methods_on_var {
-            if self.any_signature_has_mut_self_for_method(method_name) {
+            if crate::analyzer::stdlib_method_traits::method_mutates_receiver_qualified(
+                method_name,
+                None,
+                &self.signature_registry,
+            ) {
                 return true;
             }
         }
@@ -277,6 +280,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    #[allow(dead_code)] // kept for trait-object mut-dispatch diagnostics
     fn any_signature_has_mut_self_for_method(&self, method_name: &str) -> bool {
         let suffix = format!("::{}", method_name);
         for (name, sig) in self.signature_registry.all_signatures() {

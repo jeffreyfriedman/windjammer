@@ -23,10 +23,16 @@ use crate::ir::node::{
 };
 use crate::ir::safety_type::{BaseType, Effect, EffectSet, ExecutionMode, OwnedType, Region};
 use crate::parser::ast::core::{Expression, Pattern, Statement};
-use crate::parser::ast::types::Type;
 use crate::parser::ast::literals::Literal;
 use crate::parser::ast::operators::BinaryOp;
+use crate::parser::ast::types::Type;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+
+fn empty_struct_field_types() -> &'static HashMap<String, HashMap<String, Type>> {
+    static EMPTY: OnceLock<HashMap<String, HashMap<String, Type>>> = OnceLock::new();
+    EMPTY.get_or_init(HashMap::new)
+}
 
 /// Maps between function entities and their constraint variables.
 #[derive(Debug, Clone)]
@@ -70,10 +76,16 @@ struct AstConstraintWalker<'a, 'ast> {
     execution_constraints: Vec<ExecutionConstraint>,
     /// Optional signature registry for call-site unification.
     registry: Option<&'a SignatureRegistry>,
+    /// Struct field types for resolving `deps.writer` → `Writer` (not outer `AppDeps`).
+    struct_field_types: Option<&'a HashMap<String, HashMap<String, Type>>>,
 }
 
 impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
-    fn new(analyzed: &'a AnalyzedFunction<'ast>, registry: Option<&'a SignatureRegistry>) -> Self {
+    fn new(
+        analyzed: &'a AnalyzedFunction<'ast>,
+        registry: Option<&'a SignatureRegistry>,
+        struct_field_types: Option<&'a HashMap<String, HashMap<String, Type>>>,
+    ) -> Self {
         let mut cs = ConstraintSet::new();
         let mut param_vars = HashMap::new();
         let mut region_counter: u32 = 1;
@@ -204,6 +216,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             taint_constraints: Vec::new(),
             execution_constraints: Vec::new(),
             registry,
+            struct_field_types,
         }
     }
 
@@ -235,8 +248,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Expression::Identifier { name, .. } => {
                 if in_payload {
                     if let Some(&var) = self.param_vars.get(name) {
-                        self.cs
-                            .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                        self.cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
                     }
                 }
             }
@@ -312,8 +324,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 self.cs.add(Constraint::OwnershipIs(expected_var, own));
             }
 
-            self.cs
-                .add(Constraint::TypeEquals(arg_var, expected_var));
+            self.cs.add(Constraint::TypeEquals(arg_var, expected_var));
         }
     }
 
@@ -373,29 +384,25 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     }
 
     /// Resolve the Windjammer type name of a method receiver for `Type::method` lookup.
+    /// Field projections (`deps.writer`) use the field's type, not the outer param.
     fn receiver_type_name_for_method(&self, object: &Expression<'ast>) -> Option<String> {
-        match object {
-            Expression::Identifier { name, .. } => self
-                .analyzed
-                .decl
-                .parameters
-                .iter()
-                .find(|p| p.name == *name)
-                .and_then(|p| Self::type_name_for_method_lookup(&p.type_)),
-            Expression::FieldAccess { object, .. } => self.receiver_type_name_for_method(object),
-            _ => None,
-        }
+        let fields = match self.struct_field_types {
+            Some(m) => m,
+            None => empty_struct_field_types(),
+        };
+        crate::ir::receiver_type::infer_receiver_type_name(object, &self.analyzed.decl, fields)
     }
 
-    fn type_name_for_method_lookup(ty: &Type) -> Option<String> {
-        match ty {
-            Type::Custom(name) => Some(name.clone()),
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                Self::type_name_for_method_lookup(inner)
-            }
-            Type::Vec(_) => Some("Vec".to_string()),
-            Type::String => Some("String".to_string()),
-            _ => None,
+    /// MutRef the root param of a method receiver (`c.increment()`, `deps.writer.push(...)`).
+    /// Readonly field methods must not MutRef the outer param.
+    fn emit_mutref_on_receiver_root(&mut self, object: &Expression<'ast>) {
+        let Some(root) = self.root_identifier(object) else {
+            return;
+        };
+        if let Some(&var) = self.param_vars.get(&root) {
+            let r = self.fresh_region();
+            self.cs
+                .add(Constraint::OwnershipIs(var, OwnedType::MutRef(r)));
         }
     }
 
@@ -410,15 +417,18 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             _ => Self::extract_callee_name(inner),
         };
         if let Some(callee) = callee {
-            let call_location = location.as_ref().map(|loc| CallLocation {
-                file: loc.file.to_string_lossy().into_owned(),
-                line: loc.line,
-                col: loc.column,
-            }).unwrap_or(CallLocation {
-                file: String::new(),
-                line: 0,
-                col: 0,
-            });
+            let call_location = location
+                .as_ref()
+                .map(|loc| CallLocation {
+                    file: loc.file.to_string_lossy().into_owned(),
+                    line: loc.line,
+                    col: loc.column,
+                })
+                .unwrap_or(CallLocation {
+                    file: String::new(),
+                    line: 0,
+                    col: 0,
+                });
             self.execution_constraints
                 .push(ExecutionConstraint::CallMode {
                     site: CallSite {
@@ -475,7 +485,9 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
             }
 
-            Statement::Const { type_, value, name, .. } => {
+            Statement::Const {
+                type_, value, name, ..
+            } => {
                 let val_var = self.walk_expression(value);
                 let var = self.resolve_var(name);
                 self.cs.add(Constraint::TypeEquals(var, val_var));
@@ -509,7 +521,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Statement::Return { value, .. } => {
                 if let Some(val) = value {
                     let val_var = self.walk_expression(val);
-                    self.cs.add(Constraint::TypeEquals(self.return_var, val_var));
+                    self.cs
+                        .add(Constraint::TypeEquals(self.return_var, val_var));
                 }
             }
 
@@ -588,9 +601,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 var
             }
 
-            Expression::Identifier { name, .. } => {
-                self.resolve_var(name)
-            }
+            Expression::Identifier { name, .. } => self.resolve_var(name),
 
             Expression::Binary {
                 left, op, right, ..
@@ -690,8 +701,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.emit_taint_for_call(&callee_name, &self.analyzed.decl.name.clone());
                 }
 
-                self.cs
-                    .add(Constraint::EffectsUnion(result, arg_vars));
+                self.cs.add(Constraint::EffectsUnion(result, arg_vars));
                 result
             }
 
@@ -721,7 +731,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 }
 
                 // Signature-driven receiver ownership: `Type::method` self mode wins.
-                // Fallback to the stdlib mutating-name set only when no signature exists.
+                // Unresolved methods use qualified stdlib consensus (receiver type + registry).
                 let qualified = match &receiver_type {
                     Some(ty) => format!("{}::{}", ty, method),
                     None => {
@@ -744,14 +754,16 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         && s.param_ownership
                             .first()
                             .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
-                });
-                if mut_self
-                    || (sig.is_none()
-                        && crate::analyzer::stdlib_method_traits::method_mutates_receiver(method))
-                {
-                    let r = self.fresh_region();
-                    self.cs
-                        .add(Constraint::OwnershipIs(obj_var, OwnedType::MutRef(r)));
+                }) || (sig.is_none()
+                    && self.registry.is_some_and(|reg| {
+                        crate::analyzer::stdlib_method_traits::method_mutates_receiver_qualified(
+                            method,
+                            receiver_type.as_deref(),
+                            reg,
+                        )
+                    }));
+                if mut_self {
+                    self.emit_mutref_on_receiver_root(object);
                 }
 
                 let result = self.cs.fresh_var();
@@ -770,8 +782,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
                 self.emit_taint_for_call(&qualified, &self.analyzed.decl.name.clone());
 
-                self.cs
-                    .add(Constraint::EffectsUnion(result, vec![obj_var]));
+                self.cs.add(Constraint::EffectsUnion(result, vec![obj_var]));
                 result
             }
 
@@ -798,8 +809,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                             .is_some_and(|p| param_ownership_seed_is_copy(&p.type_));
                         if readonly_borrow || copy_field_read {
                             let r = self.fresh_region();
-                            self.cs
-                                .add(Constraint::OwnershipIs(var, OwnedType::Ref(r)));
+                            self.cs.add(Constraint::OwnershipIs(var, OwnedType::Ref(r)));
                         }
                     }
                 }
@@ -873,8 +883,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 for elem in elements {
                     if let Expression::Identifier { name, .. } = elem {
                         if let Some(&var) = self.param_vars.get(name) {
-                            self.cs
-                                .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                            self.cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
                         }
                     }
                     self.walk_expression(elem);
@@ -933,9 +942,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 result
             }
 
-            Expression::ChannelSend {
-                channel, value, ..
-            } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 self.walk_expression(channel);
                 self.walk_expression(value);
                 let result = self.cs.fresh_var();
@@ -1037,9 +1044,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     fn emit_clone_constraints(&mut self) {
         for (var_name, count) in &self.owned_use_counts {
             if *count > 1 {
-                if let Some(var) = self.param_vars.get(var_name).copied().or_else(|| {
-                    self.local_vars.get(var_name).copied()
-                }) {
+                if let Some(var) = self
+                    .param_vars
+                    .get(var_name)
+                    .copied()
+                    .or_else(|| self.local_vars.get(var_name).copied())
+                {
                     self.cs.add(Constraint::NeedsClone(var));
                 }
             }
@@ -1106,8 +1116,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             if let Expression::FieldAccess { object, .. } = value {
                 if let Some(name) = self.root_identifier(object) {
                     if let Some(&var) = self.param_vars.get(&name) {
-                        self.cs
-                            .add(Constraint::OwnershipIs(var, OwnedType::Owned));
+                        self.cs.add(Constraint::OwnershipIs(var, OwnedType::Owned));
                     }
                 }
             }
@@ -1138,7 +1147,17 @@ pub fn generate_constraints(
     analyzed: &AnalyzedFunction<'_>,
     registry: Option<&SignatureRegistry>,
 ) -> FunctionConstraints {
-    let mut walker = AstConstraintWalker::new(analyzed, registry);
+    generate_constraints_with_fields(analyzed, registry, None)
+}
+
+/// Like [`generate_constraints`], with struct field types so field-method
+/// receivers resolve to the field type (`Writer`) not the outer param (`AppDeps`).
+pub fn generate_constraints_with_fields(
+    analyzed: &AnalyzedFunction<'_>,
+    registry: Option<&SignatureRegistry>,
+    struct_field_types: Option<&HashMap<String, HashMap<String, Type>>>,
+) -> FunctionConstraints {
+    let mut walker = AstConstraintWalker::new(analyzed, registry, struct_field_types);
     walker.walk_body();
     walker.emit_return_field_consumption_constraints();
     walker.emit_clone_constraints();
@@ -1178,12 +1197,17 @@ fn lookup_taint_source(qualified_name: &str) -> Option<crate::ir::taint::TaintSo
 /// Check if a call target is a dangerous sink requiring clean data.
 fn lookup_taint_sink(qualified_name: &str) -> Option<&'static str> {
     match qualified_name {
-        "db::query" | "std::db::query" | "db::execute" | "std::db::execute"
-        | "db::raw_query" | "std::db::raw_query" => Some("SQL query"),
-        "process::exec" | "std::process::exec" | "process::spawn" | "std::process::spawn"
-        | "process::command" | "std::process::command" => Some("shell command"),
-        "html::render" | "std::html::render" | "template::render"
-        | "std::template::render" => Some("HTML template"),
+        "db::query" | "std::db::query" | "db::execute" | "std::db::execute" | "db::raw_query"
+        | "std::db::raw_query" => Some("SQL query"),
+        "process::exec"
+        | "std::process::exec"
+        | "process::spawn"
+        | "std::process::spawn"
+        | "process::command"
+        | "std::process::command" => Some("shell command"),
+        "html::render" | "std::html::render" | "template::render" | "std::template::render" => {
+            Some("HTML template")
+        }
         "eval" | "std::eval" => Some("code evaluation"),
         "fs::write" | "std::fs::write" => Some("file write path"),
         _ => None,
@@ -1194,13 +1218,25 @@ fn lookup_taint_sink(qualified_name: &str) -> Option<&'static str> {
 fn lookup_sanitizer(qualified_name: &str) -> bool {
     matches!(
         qualified_name,
-        "sql_escape" | "std::sql::escape" | "sql::escape" | "sql::parameterize"
+        "sql_escape"
+            | "std::sql::escape"
+            | "sql::escape"
+            | "sql::parameterize"
             | "std::sql::parameterize"
-            | "html_escape" | "html::escape" | "std::html::escape"
-            | "shell_escape" | "shell::escape" | "std::shell::escape"
-            | "url_encode" | "url::encode" | "std::url::encode"
-            | "json_escape" | "json::escape" | "std::json::escape"
-            | "sanitize" | "std::sanitize"
+            | "html_escape"
+            | "html::escape"
+            | "std::html::escape"
+            | "shell_escape"
+            | "shell::escape"
+            | "std::shell::escape"
+            | "url_encode"
+            | "url::encode"
+            | "std::url::encode"
+            | "json_escape"
+            | "json::escape"
+            | "std::json::escape"
+            | "sanitize"
+            | "std::sanitize"
     )
 }
 
@@ -1209,13 +1245,24 @@ fn lookup_sanitizer(qualified_name: &str) -> bool {
 fn lookup_stdlib_effects(qualified_name: &str) -> Vec<Effect> {
     match qualified_name {
         // Filesystem
-        "std::fs::read" | "std::fs::read_to_string" | "std::fs::metadata"
-        | "std::fs::read_dir" | "std::fs::exists" | "fs::read" | "fs::read_to_string" => {
+        "std::fs::read"
+        | "std::fs::read_to_string"
+        | "std::fs::metadata"
+        | "std::fs::read_dir"
+        | "std::fs::exists"
+        | "fs::read"
+        | "fs::read_to_string" => {
             vec![Effect::FsRead]
         }
-        "std::fs::write" | "std::fs::create_dir" | "std::fs::create_dir_all"
-        | "std::fs::remove" | "std::fs::remove_dir" | "std::fs::copy" | "std::fs::rename"
-        | "fs::write" | "fs::create_dir" => vec![Effect::FsWrite],
+        "std::fs::write"
+        | "std::fs::create_dir"
+        | "std::fs::create_dir_all"
+        | "std::fs::remove"
+        | "std::fs::remove_dir"
+        | "std::fs::copy"
+        | "std::fs::rename"
+        | "fs::write"
+        | "fs::create_dir" => vec![Effect::FsWrite],
         // Network
         "std::http::get" | "std::http::post" | "std::http::put" | "std::http::delete"
         | "std::http::request" | "http::get" | "http::post" | "http::put" | "http::delete" => {
@@ -1225,8 +1272,11 @@ fn lookup_stdlib_effects(qualified_name: &str) -> Vec<Effect> {
             vec![Effect::NetIngress]
         }
         // Process
-        "std::process::spawn" | "std::process::exec" | "std::process::command"
-        | "process::spawn" | "process::exec" => vec![Effect::ProcessSpawn],
+        "std::process::spawn"
+        | "std::process::exec"
+        | "std::process::command"
+        | "process::spawn"
+        | "process::exec" => vec![Effect::ProcessSpawn],
         // Environment
         "std::env::get" | "std::env::var" | "env::get" | "env::var" => vec![Effect::EnvRead],
         "std::env::set" | "std::env::set_var" | "env::set" | "env::set_var" => {
@@ -1295,23 +1345,14 @@ fn emit_numeric_class_constraint(cs: &mut ConstraintSet, var: ConstraintVar, bas
 fn is_arithmetic_op(op: &BinaryOp) -> bool {
     matches!(
         op,
-        BinaryOp::Add
-            | BinaryOp::Sub
-            | BinaryOp::Mul
-            | BinaryOp::Div
-            | BinaryOp::Mod
+        BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
     )
 }
 
 fn is_comparison_op(op: &BinaryOp) -> bool {
     matches!(
         op,
-        BinaryOp::Eq
-            | BinaryOp::Ne
-            | BinaryOp::Lt
-            | BinaryOp::Le
-            | BinaryOp::Gt
-            | BinaryOp::Ge
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
     )
 }
 
@@ -1322,11 +1363,7 @@ fn is_logical_op(op: &BinaryOp) -> bool {
 fn is_bitwise_op(op: &BinaryOp) -> bool {
     matches!(
         op,
-        BinaryOp::BitAnd
-            | BinaryOp::BitOr
-            | BinaryOp::BitXor
-            | BinaryOp::Shl
-            | BinaryOp::Shr
+        BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr
     )
 }
 
@@ -1449,8 +1486,7 @@ pub fn assign() {
         let analyzed = analyze_source(source);
         let fc = generate_constraints(&analyzed[0], None);
 
-        let has_type_equals =
-            count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
+        let has_type_equals = count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
         assert!(
             has_type_equals >= 1,
             "should have TypeEquals for let bindings"
@@ -1463,8 +1499,7 @@ pub fn assign() {
         let analyzed = analyze_source(source);
         let fc = generate_constraints(&analyzed[0], None);
 
-        let has_type_equals =
-            count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
+        let has_type_equals = count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
         assert!(
             has_type_equals >= 1,
             "return statement should emit TypeEquals linking return var to value"
@@ -1514,10 +1549,7 @@ pub fn check(x: i32) -> i32 {
 
         let bool_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
-        assert!(
-            bool_count >= 1,
-            "if condition should emit TypeIs(Bool)"
-        );
+        assert!(bool_count >= 1, "if condition should emit TypeIs(Bool)");
     }
 
     #[test]
@@ -1580,8 +1612,9 @@ pub fn bump(mut c: Counter) {
         let analyzed = analyze_source(source);
         let fc = generate_constraints(&analyzed[0], None);
 
-        let string_count =
-            count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::String)));
+        let string_count = count_constraints(&fc, |c| {
+            matches!(c, Constraint::TypeIs(_, BaseType::String))
+        });
         assert!(
             string_count >= 1,
             "string literal should emit TypeIs(String)"
@@ -1603,10 +1636,7 @@ pub fn loop_fn() {
 
         let bool_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::Bool)));
-        assert!(
-            bool_count >= 1,
-            "while condition should emit TypeIs(Bool)"
-        );
+        assert!(bool_count >= 1, "while condition should emit TypeIs(Bool)");
     }
 
     #[test]
@@ -1619,8 +1649,7 @@ pub fn arr() {
         let analyzed = analyze_source(source);
         let fc = generate_constraints(&analyzed[0], None);
 
-        let type_equals_count =
-            count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
+        let type_equals_count = count_constraints(&fc, |c| matches!(c, Constraint::TypeEquals(..)));
         assert!(
             type_equals_count >= 2,
             "array elements should be unified pairwise (got {})",
@@ -1636,10 +1665,7 @@ pub fn arr() {
 
         let f64_count =
             count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::F64)));
-        assert!(
-            f64_count >= 1,
-            "cast should emit TypeIs for target type"
-        );
+        assert!(f64_count >= 1, "cast should emit TypeIs for target type");
     }
 
     #[test]
@@ -1657,6 +1683,100 @@ pub fn locals() {
         assert!(
             !fc.var_map.locals.is_empty(),
             "locals should be tracked in the var map"
+        );
+    }
+
+    #[test]
+    fn readonly_field_method_does_not_mutref_outer_param() {
+        let source = r#"
+pub struct Writer {
+    pub tag: string,
+}
+impl Writer {
+    fn append(self, line: string) -> string {
+        self.tag + ":" + line
+    }
+}
+pub struct AppDeps {
+    pub writer: Writer,
+}
+pub fn post_journal_entry(deps: AppDeps, tenant_slug: string, draft: string) -> string {
+    deps.writer.append(tenant_slug + ":" + draft)
+}
+"#;
+        let mut lexer = crate::lexer::Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = crate::analyzer::Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let post = analyzed
+            .iter()
+            .find(|f| f.decl.name == "post_journal_entry")
+            .unwrap();
+        assert_eq!(
+            post.inferred_ownership.get("deps"),
+            Some(&crate::analyzer::OwnershipMode::Owned),
+            "readonly Writer::append on AppDeps port must keep owned facade, not borrow"
+        );
+        let fc = generate_constraints_with_fields(
+            post,
+            Some(&registry),
+            Some(analyzer.global_struct_field_types()),
+        );
+        let deps_var = *fc.var_map.params.get("deps").expect("deps param var");
+        let mutref_on_deps = fc.constraints.iter().any(|c| {
+            matches!(
+                c,
+                Constraint::OwnershipIs(v, OwnedType::MutRef(_)) if *v == deps_var
+            )
+        });
+        assert!(
+            !mutref_on_deps,
+            "readonly field method Writer::append must not MutRef outer AppDeps param"
+        );
+    }
+
+    #[test]
+    fn mut_self_field_method_does_mutref_outer_param() {
+        let source = r#"
+pub struct Writer {
+    pub tag: string,
+}
+impl Writer {
+    fn set_tag(self, line: string) {
+        self.tag = line
+    }
+}
+pub struct AppDeps {
+    pub writer: Writer,
+}
+pub fn stamp(deps: AppDeps, line: string) {
+    deps.writer.set_tag(line)
+}
+"#;
+        let mut lexer = crate::lexer::Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = crate::analyzer::Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let stamp = analyzed.iter().find(|f| f.decl.name == "stamp").unwrap();
+        let fc = generate_constraints_with_fields(
+            stamp,
+            Some(&registry),
+            Some(analyzer.global_struct_field_types()),
+        );
+        let deps_var = *fc.var_map.params.get("deps").expect("deps param var");
+        let mutref_on_deps = fc.constraints.iter().any(|c| {
+            matches!(
+                c,
+                Constraint::OwnershipIs(v, OwnedType::MutRef(_)) if *v == deps_var
+            )
+        });
+        assert!(
+            mutref_on_deps,
+            "Writer::set_tag (&mut self) through deps.writer must MutRef outer AppDeps"
         );
     }
 }

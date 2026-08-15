@@ -422,6 +422,58 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         let aliases = self.simple_let_alias_ids_for_param(name, statements);
         self.match_arm_destructures_enum_subpatterns_in_stmts(&aliases, statements)
+            || self.let_struct_destructures_param_in_stmts(&aliases, statements)
+    }
+
+    /// `let Type { field, .. } = param` consumes `param` by value (Rust move into pattern).
+    pub(crate) fn let_struct_destructures_param_in_stmts(
+        &self,
+        aliases: &HashSet<String>,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Let { pattern, value, .. } => {
+                    if matches!(value, Expression::Identifier { name: id, .. } if aliases.contains(id))
+                        && self.pattern_has_field_bindings(pattern)
+                    {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.let_struct_destructures_param_in_stmts(aliases, then_block) {
+                        return true;
+                    }
+                    if let Some(else_b) = else_block {
+                        if self.let_struct_destructures_param_in_stmts(aliases, else_b) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if self.let_struct_destructures_param_in_stmts(aliases, body) {
+                        return true;
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            if self.let_struct_destructures_param_in_stmts(aliases, statements) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     pub(crate) fn match_arm_destructures_enum_subpatterns_in_stmts(

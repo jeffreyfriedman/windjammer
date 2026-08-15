@@ -182,6 +182,32 @@ pub fn is_stdlib_container(name: &str) -> bool {
     )
 }
 
+/// Registry / field-map type key for signature lookup.
+///
+/// `Vec<T>` → `Vec`, `&Foo` → `Foo`, `string` → `String`. Analyzer, IR, and
+/// codegen must use this instead of each matching a subset of `Type` variants.
+pub fn type_to_registry_base(ty: &crate::parser::ast::types::Type) -> Option<String> {
+    use crate::parser::ast::types::Type;
+    match ty {
+        Type::Custom(name) if name == "string" => Some("String".into()),
+        Type::Custom(name) | Type::Parameterized(name, _) => {
+            let base = name.split('<').next().unwrap_or(name);
+            Some(base.to_string())
+        }
+        Type::Reference(inner) | Type::MutableReference(inner) => type_to_registry_base(inner),
+        Type::Vec(_) => Some("Vec".into()),
+        Type::Option(_) => Some("Option".into()),
+        Type::Result(_, _) => Some("Result".into()),
+        Type::String => Some("String".into()),
+        Type::Array(_, _) => Some("Array".into()),
+        Type::Float => Some("f32".into()),
+        Type::Int | Type::Int32 => Some("i32".into()),
+        Type::Uint => Some("usize".into()),
+        Type::Bool => Some("bool".into()),
+        _ => None,
+    }
+}
+
 /// Returns true if the given `Type` is a stdlib container or wrapper.
 /// Used by mutation detection to decide whether known-mutating heuristics
 /// (like `push`, `insert`, `clear`) should apply even when a qualified
@@ -189,9 +215,17 @@ pub fn is_stdlib_container(name: &str) -> bool {
 pub fn is_stdlib_collection_or_wrapper(ty: &crate::parser::ast::types::Type) -> bool {
     use crate::parser::ast::types::Type;
     match ty {
-        Type::Vec(_) | Type::Option(_) | Type::Result(_, _) | Type::String => true,
-        Type::Parameterized(name, _) | Type::Custom(name) => is_stdlib_container(name),
-        Type::Array(_, _) => true,
+        Type::Reference(inner) | Type::MutableReference(inner) => {
+            is_stdlib_collection_or_wrapper(inner)
+        }
+        Type::Vec(_) | Type::Option(_) | Type::Result(_, _) | Type::String | Type::Array(_, _) => {
+            true
+        }
+        Type::Parameterized(name, _) | Type::Custom(name) => {
+            let base = name.split('<').next().unwrap_or(name);
+            let short = base.rsplit("::").next().unwrap_or(base);
+            is_stdlib_container(short)
+        }
         _ => false,
     }
 }
@@ -334,7 +368,7 @@ pub fn is_ownership_producing_method(name: &str) -> bool {
 /// with the receiver type — bare method names collide with struct builders (`Slider::max`).
 #[deprecated(note = "use method_preserves_float_receiver(method, receiver_type, registry)")]
 pub fn is_float_receiver_method(name: &str) -> bool {
-    use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+    use crate::analyzer::{stdlib_method_traits, SignatureRegistry};
     use crate::parser::Type;
     // Legacy callers without receiver context: only true for unambiguous f32/f64 methods.
     for float in ["f32", "f64"] {
@@ -403,6 +437,45 @@ mod tests {
     }
 
     #[test]
+    fn type_to_registry_base_covers_stdlib_containers() {
+        use crate::parser::ast::types::Type;
+        assert_eq!(
+            type_to_registry_base(&Type::Vec(Box::new(Type::Int))),
+            Some("Vec".into())
+        );
+        assert_eq!(
+            type_to_registry_base(&Type::Option(Box::new(Type::Int))),
+            Some("Option".into())
+        );
+        assert_eq!(
+            type_to_registry_base(&Type::Parameterized("HashMap".into(), vec![])),
+            Some("HashMap".into())
+        );
+        assert_eq!(
+            type_to_registry_base(&Type::Reference(Box::new(Type::Vec(Box::new(Type::Int))))),
+            Some("Vec".into())
+        );
+        assert_eq!(type_to_registry_base(&Type::String), Some("String".into()));
+        assert_eq!(
+            type_to_registry_base(&Type::Custom("string".into())),
+            Some("String".into())
+        );
+        assert_eq!(
+            type_to_registry_base(&Type::Custom("Grid".into())),
+            Some("Grid".into())
+        );
+        assert!(is_stdlib_collection_or_wrapper(&Type::Vec(Box::new(
+            Type::Int
+        ))));
+        assert!(is_stdlib_collection_or_wrapper(&Type::Reference(Box::new(
+            Type::Vec(Box::new(Type::Int))
+        ))));
+        assert!(!is_stdlib_collection_or_wrapper(&Type::Custom(
+            "AppDeps".into()
+        )));
+    }
+
+    #[test]
     fn test_trait_classification() {
         assert!(is_consuming_operator_trait("Add"));
         assert!(is_consuming_operator_trait("std::ops::Sub"));
@@ -435,22 +508,30 @@ mod tests {
 
     #[test]
     fn test_float_methods() {
-        use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+        use crate::analyzer::{stdlib_method_traits, SignatureRegistry};
         use crate::parser::Type;
         let reg = SignatureRegistry::stdlib();
         let f32_ty = Type::Custom("f32".into());
         assert!(stdlib_method_traits::method_preserves_float_receiver(
-            "clamp", Some(&f32_ty), reg
+            "clamp",
+            Some(&f32_ty),
+            reg
         ));
         assert!(stdlib_method_traits::method_preserves_float_receiver(
-            "sin", Some(&f32_ty), reg
+            "sin",
+            Some(&f32_ty),
+            reg
         ));
         assert!(!stdlib_method_traits::method_preserves_float_receiver(
-            "push", Some(&f32_ty), reg
+            "push",
+            Some(&f32_ty),
+            reg
         ));
         let slider = Type::Custom("Slider".into());
         assert!(!stdlib_method_traits::method_preserves_float_receiver(
-            "max", Some(&slider), reg
+            "max",
+            Some(&slider),
+            reg
         ));
     }
 

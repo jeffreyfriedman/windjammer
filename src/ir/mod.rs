@@ -19,11 +19,11 @@
 pub mod annotations;
 pub mod capability_lock;
 pub mod capability_profiles;
-pub mod context;
 pub mod coercion;
-pub mod cost_model;
 pub mod constraint_gen;
 pub mod constraints;
+pub mod context;
+pub mod cost_model;
 pub mod effects;
 pub mod execution;
 pub mod lower;
@@ -33,6 +33,7 @@ pub mod numeric_solver;
 pub mod numeric_types;
 pub mod optimizations;
 pub mod pipeline;
+pub mod receiver_type;
 pub mod safety_type;
 pub mod shadow;
 pub mod signature_bridge;
@@ -45,11 +46,14 @@ pub use capability_profiles::{
     all_profiles, build_tool, database, file_processor, http_client, parser, profile_by_name,
     CapabilityProfile, TrustLevel,
 };
-pub use cost_model::{CompilationCostTracker, CompilationPhase};
-pub use constraint_gen::{generate_constraints, generate_module_constraints, FunctionConstraints};
+pub use coercion::{compute_coercion, enforce_ownership_contract_on_coerced_arg, CoercionKind};
+pub use constraint_gen::{
+    generate_constraints, generate_constraints_with_fields, generate_module_constraints,
+    FunctionConstraints,
+};
 pub use constraints::{Constraint, ConstraintSet, ConstraintVar};
 pub use context::{analyze_and_lower, IrContext};
-pub use coercion::{compute_coercion, enforce_ownership_contract_on_coerced_arg, CoercionKind};
+pub use cost_model::{CompilationCostTracker, CompilationPhase};
 pub use effects::{EffectConstraint, EffectSolver, EffectSolverResult};
 pub use execution::{ExecutionConstraint, ExecutionValidator};
 pub use lower::lower_body;
@@ -70,5 +74,5 @@ pub use signature_bridge::{
     safety_type_from_ir_binding, safety_type_from_parser_type, safety_type_from_signature_param,
 };
 pub use solver::{CloneRequirements, Solver, SolverResult};
-pub use target_encodings::{apply_coercion, encode_call_argument, Target};
 pub use taint::{TaintConstraint, TaintSolver, TaintSolverResult, TaintVar};
+pub use target_encodings::{apply_coercion, encode_call_argument, Target};

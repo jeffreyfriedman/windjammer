@@ -229,22 +229,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Extract a type name from a Type enum (for signature lookup)
     pub(in crate::codegen::rust) fn type_to_name(type_: &Type) -> Option<String> {
-        match type_ {
-            // WJ `string` / `String` must resolve to the stdlib registry key "String" so
-            // `infer_type_name` can find e.g. `String::contains` (Pattern/&str) signatures.
-            Type::String => Some("String".to_string()),
-            Type::Custom(name) if name == "string" => Some("String".to_string()),
-            Type::Custom(name) => Some(name.clone()),
-            Type::Parameterized(name, _) => Some(name.clone()),
-            Type::Reference(inner) | Type::MutableReference(inner) => Self::type_to_name(inner),
-            // TDD FIX: Handle stdlib container types for method signature lookup
-            // Without this, self.dense (Vec<T>) can't resolve to "Vec" for Vec::remove lookup
-            Type::Vec(_) => Some("Vec".to_string()),
-            Type::Option(_) => Some("Option".to_string()),
-            Type::Result(_, _) => Some("Result".to_string()),
-            Type::Array(_, _) => Some("Array".to_string()),
-            _ => None,
-        }
+        crate::type_classification::type_to_registry_base(type_)
     }
 
     /// Extract the element type from an iterable type.
@@ -257,6 +242,19 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Array(inner, _) => Some(inner.as_ref().clone()),
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 Self::extract_iterator_element_type(inner)
+            }
+            // `Vec<T>` / `HashSet<T>` may be `Parameterized` depending on parse path.
+            Type::Parameterized(name, args) if !args.is_empty() => {
+                let base = name.split('<').next().unwrap_or(name.as_str());
+                let short = base.rsplit("::").next().unwrap_or(base);
+                if matches!(
+                    short,
+                    "Vec" | "VecDeque" | "LinkedList" | "HashSet" | "BTreeSet" | "BinaryHeap"
+                ) {
+                    Some(args[0].clone())
+                } else {
+                    None
+                }
             }
             _ => None,
         }

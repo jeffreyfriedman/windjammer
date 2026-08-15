@@ -21,6 +21,8 @@ pub struct MethodSignature {
     pub return_type: Option<Type>,
     /// Whether method has a self receiver (vs. static method)
     pub has_self_receiver: bool,
+    /// Ownership of `self` when `has_self_receiver` (never invent `&mut self`).
+    pub self_ownership: OwnershipMode,
     /// WJ-owned params that only forward to borrowing callees (`has_key` → `get`).
     pub forwarding_borrow_params: Vec<bool>,
     /// Codegen-converged Rust ref formals per user param (excluding `self`).
@@ -45,7 +47,8 @@ impl MethodSignature {
             let self_ty = Type::Custom(self.receiver_type.clone());
             param_types.insert(0, self_ty.clone());
             formal_param_types.insert(0, self_ty);
-            param_ownership.insert(0, OwnershipMode::MutBorrowed);
+            // Use recorded self ownership — never invent MutBorrowed for `&self` methods.
+            param_ownership.insert(0, self.self_ownership);
             forwarding_borrow_params.insert(0, false);
             if let Some(ref mut flags) = emitted_rust_ref_params {
                 flags.insert(0, false);
@@ -75,6 +78,33 @@ impl MethodSignature {
         return_type: Option<Type>,
         has_self_receiver: bool,
     ) -> Self {
+        // Stdlib table uses `new` for both `&mut self` and `&self` methods; default
+        // MutBorrowed preserves prior mutating-method behavior. Readonly stdlib
+        // entries must call `with_self_ownership(Borrowed)`.
+        Self::with_self_ownership(
+            receiver_type,
+            method_name,
+            param_types,
+            param_ownership,
+            return_type,
+            has_self_receiver,
+            if has_self_receiver {
+                OwnershipMode::MutBorrowed
+            } else {
+                OwnershipMode::Owned
+            },
+        )
+    }
+
+    pub fn with_self_ownership(
+        receiver_type: impl Into<String>,
+        method_name: impl Into<String>,
+        param_types: Vec<Type>,
+        param_ownership: Vec<OwnershipMode>,
+        return_type: Option<Type>,
+        has_self_receiver: bool,
+        self_ownership: OwnershipMode,
+    ) -> Self {
         Self {
             receiver_type: receiver_type.into(),
             method_name: method_name.into(),
@@ -83,6 +113,7 @@ impl MethodSignature {
             param_ownership,
             return_type,
             has_self_receiver,
+            self_ownership,
             forwarding_borrow_params: Vec::new(),
             emitted_rust_ref_params: None,
             string_ref_string_formal_params: None,
@@ -105,6 +136,7 @@ mod tests {
             param_ownership: vec![OwnershipMode::Owned],
             return_type: None,
             has_self_receiver: true,
+            self_ownership: OwnershipMode::Borrowed,
             forwarding_borrow_params: Vec::new(),
             emitted_rust_ref_params: None,
             string_ref_string_formal_params: None,
