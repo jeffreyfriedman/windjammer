@@ -263,7 +263,13 @@ fn rewrite_bin_crate_imports(code: String, source_root: &Path, is_crate_root_mai
     if !is_crate_root_main {
         return code;
     }
-    let lib_name = crate::cargo_toml::infer_project_name_from(source_root).replace('-', "_");
+    // Only rewrite when `wj.toml` / `game.toml` names the package. Directory-name
+    // fallback invents `tmpXXXX` for tempfile integration trees; those builds are
+    // verified as a single lib crate and must keep `use crate::`.
+    let Some(lib_name) = crate::cargo_toml::infer_configured_package_name(source_root) else {
+        return code;
+    };
+    let lib_name = lib_name.replace('-', "_");
     code.replace("use crate::", &format!("use {}::", lib_name))
 }
 

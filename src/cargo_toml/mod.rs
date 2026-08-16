@@ -160,6 +160,7 @@ pub fn generate_single_file_cargo_toml(
 }
 
 pub use toml_generation::generate_wasm_cargo_toml;
+pub use toml_generation::infer_configured_package_name;
 pub use toml_generation::infer_project_name_from;
 
 pub(crate) use dependency_management::{find_windjammer_runtime_path, path_to_toml_string};
@@ -224,7 +225,22 @@ mod tests {
         .unwrap();
 
         assert_eq!(infer_project_name(&temp), "my-cool-engine");
+        assert_eq!(
+            infer_configured_package_name(&temp).as_deref(),
+            Some("my-cool-engine")
+        );
 
+        fs::remove_dir_all(&temp).ok();
+    }
+
+    #[test]
+    fn test_infer_configured_package_name_none_without_toml() {
+        let temp = std::env::temp_dir().join("wj_infer_no_toml_cfg");
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp).unwrap();
+        assert!(infer_configured_package_name(&temp).is_none());
+        // Directory fallback still works for Cargo.toml package naming.
+        assert_eq!(infer_project_name(&temp), "wj_infer_no_toml_cfg");
         fs::remove_dir_all(&temp).ok();
     }
 
