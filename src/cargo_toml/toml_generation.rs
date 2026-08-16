@@ -361,8 +361,12 @@ pub fn infer_project_name_from(source_dir: &Path) -> String {
     infer_project_name(source_dir)
 }
 
-pub(crate) fn infer_project_name(source_dir: &Path) -> String {
-    // Check wj.toml, then game.toml, in source_dir and parent
+/// Package name from `wj.toml` / `game.toml` only — no directory-name fallback.
+///
+/// Used for bin `use crate::` → `use {lib}::` rewrite. Temp/integration trees without a
+/// config must keep `use crate::` (single-crate verify harnesses and type-registry
+/// builds). Directory fallback would invent `tmpXXXX` crate names that do not exist.
+pub fn infer_configured_package_name(source_dir: &Path) -> Option<String> {
     let config_files = ["wj.toml", "game.toml"];
     let dirs_to_check: Vec<&Path> = {
         let mut v = vec![source_dir];
@@ -375,14 +379,22 @@ pub(crate) fn infer_project_name(source_dir: &Path) -> String {
     for dir in &dirs_to_check {
         for config_name in &config_files {
             let config_path = dir.join(config_name);
-            if config_path.exists() {
-                if let Ok(content) = fs::read_to_string(&config_path) {
-                    if let Some(name) = extract_package_name_from_toml(&content) {
-                        return name;
-                    }
+            if !config_path.exists() {
+                continue;
+            }
+            if let Ok(content) = fs::read_to_string(&config_path) {
+                if let Some(name) = extract_package_name_from_toml(&content) {
+                    return Some(name);
                 }
             }
         }
+    }
+    None
+}
+
+pub(crate) fn infer_project_name(source_dir: &Path) -> String {
+    if let Some(name) = infer_configured_package_name(source_dir) {
+        return name;
     }
 
     // Fallback: use directory name instead of hardcoding "windjammer"
