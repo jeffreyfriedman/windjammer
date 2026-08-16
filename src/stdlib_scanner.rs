@@ -6,18 +6,35 @@ use crate::parser::Type;
 use std::fs;
 use std::path::Path;
 
+/// Resolve `windjammer-runtime/src` for signature scanning.
+///
+/// Must not depend on process CWD: `wj build` / `wj test` run from user packages
+/// (ecosystem seeds, apps). CWD-relative `crates/windjammer-runtime/src` only works
+/// inside the compiler repo and silently falls back to incomplete signatures otherwise
+/// (e.g. `strings::join` → spurious `parts.clone()` into `&[String]`).
+pub(crate) fn resolve_runtime_src_for_scan() -> Option<std::path::PathBuf> {
+    let from_finder = crate::cargo_toml::find_windjammer_runtime_path().join("src");
+    if from_finder.is_dir() {
+        return Some(from_finder);
+    }
+    // Dev convenience when CWD is the windjammer crate root.
+    let cwd_relative = Path::new("crates/windjammer-runtime/src");
+    if cwd_relative.is_dir() {
+        return Some(cwd_relative.to_path_buf());
+    }
+    None
+}
+
 /// Scan windjammer-runtime source files and populate the registry
 pub fn populate_runtime_signatures(registry: &mut SignatureRegistry) -> Result<(), String> {
-    let runtime_path = Path::new("crates/windjammer-runtime/src");
-
-    if !runtime_path.exists() {
-        // If runtime source isn't available (e.g., when installed via cargo),
+    let Some(runtime_path) = resolve_runtime_src_for_scan() else {
+        // If runtime source isn't available (e.g., incomplete install),
         // fall back to hardcoded signatures
         return populate_fallback_signatures(registry);
-    }
+    };
 
     // Scan all .rs files in runtime
-    scan_directory(runtime_path, registry)?;
+    scan_directory(&runtime_path, registry)?;
 
     Ok(())
 }
@@ -437,6 +454,12 @@ fn parse_one_rust_param_type(param: &str, asref_str_type_params: &[String]) -> T
 }
 
 fn parse_owned_rust_type_name(ty: &str) -> Type {
+    let ty = ty.trim();
+    // `&[T]` arrives here as `[T]` after the shared-ref `&` strip in `parse_one_rust_param_type`.
+    // Represent slices as `Vec<T>` so prefer_shared_ref / call-site borrow match WJ `Vec`.
+    if let Some(inner) = ty.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+        return Type::Vec(Box::new(parse_owned_rust_type_name(inner.trim())));
+    }
     let base = ty.split('<').next().unwrap_or(ty).trim();
     match base {
         "String" | "str" => Type::String,
@@ -577,12 +600,73 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         strings_split_signature("strings::split"),
     );
 
+    // strings::join(parts: &[String], delimiter: &str) — must stay Borrowed so WJ
+    // `Vec<string>` args become `&parts` / bare `&Vec` deref, never `parts.clone()`.
+    registry.add_function(
+        "strings::join".to_string(),
+        FunctionSignature {
+            name: "strings::join".to_string(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Vec(Box::new(Type::String)))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![],
+            param_ownership: vec![Borrowed, Borrowed],
+            return_type: Some(Type::String),
+            return_ownership: Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        },
+    );
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolve_runtime_src_finds_compiler_runtime_not_cwd() {
+        let resolved = resolve_runtime_src_for_scan();
+        assert!(
+            resolved.as_ref().is_some_and(|p| p.join("strings.rs").exists()),
+            "must locate windjammer-runtime/src/strings.rs via compiler install path, got {resolved:?}"
+        );
+    }
+
+    #[test]
+    fn parse_slice_param_as_reference_vec() {
+        let ty = parse_one_rust_param_type("parts: &[String]", &[]);
+        assert!(
+            matches!(
+                ty,
+                Type::Reference(ref inner) if matches!(**inner, Type::Vec(ref v) if matches!(**v, Type::String))
+            ),
+            "expected Reference(Vec(String)), got {ty:?}"
+        );
+    }
+
+    #[test]
+    fn strings_join_scan_marks_parts_borrowed_slice() {
+        let line = "pub fn join(parts: &[String], delimiter: &str) -> String {";
+        let sig = parse_function_signature(line, "strings").unwrap();
+        assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
+        assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed);
+        assert_eq!(sig.emitted_rust_ref_params, Some(vec![true, true]));
+        assert!(
+            matches!(
+                &sig.param_types[0],
+                Type::Reference(inner) if matches!(**inner, Type::Vec(ref v) if matches!(**v, Type::String))
+            ),
+            "join parts must be Reference(Vec(String)), got {:?}",
+            sig.param_types[0]
+        );
+    }
 
     #[test]
     fn test_parse_function_signature() {

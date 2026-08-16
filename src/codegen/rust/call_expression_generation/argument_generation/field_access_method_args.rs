@@ -4,18 +4,23 @@ use crate::parser::*;
 
 use super::super::super::{expression_utilities, CodeGenerator};
 
+/// Callee key for IR call-site coercion on `Call(FieldAccess)` dispatch.
+///
+/// Must not invent `local_var::method` from lowercase identifiers — that falsely
+/// trips module-boundary fail-closed (`missing boundary signature for after::find`).
+/// Delegate to the shared Type/module-qualified helper used by MethodCall lowering.
 fn module_qualified_call_name(
     type_name: &Option<String>,
     call_method: &str,
     call_obj: &Expression,
+    is_imported_runtime_std_module: impl Fn(&str) -> bool,
 ) -> String {
-    if let Some(tn) = type_name {
-        format!("{tn}::{call_method}")
-    } else if let Expression::Identifier { name, .. } = call_obj {
-        format!("{name}::{call_method}")
-    } else {
-        call_method.to_string()
-    }
+    crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+        type_name.as_deref(),
+        call_obj,
+        call_method,
+        is_imported_runtime_std_module,
+    )
 }
 
 pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
@@ -28,7 +33,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     _runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
-    let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
+    let qualified_name = module_qualified_call_name(type_name, call_method, call_obj, |name| {
+        gen.is_imported_runtime_std_module(name)
+    });
     arguments
         .iter()
         .enumerate()
@@ -95,7 +102,9 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
     _runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
-    let qualified_name = module_qualified_call_name(type_name, call_method, call_obj);
+    let qualified_name = module_qualified_call_name(type_name, call_method, call_obj, |name| {
+        gen.is_imported_runtime_std_module(name)
+    });
     let fallback_sig = type_name
         .as_ref()
         .and_then(|tn| {
