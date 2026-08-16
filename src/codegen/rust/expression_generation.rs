@@ -510,6 +510,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Owned/`string` formal metadata must not block FieldAccess borrow when codegen
         // confirmed the callee emits `&str` / shared ref (regression-049 `replay_all(self.path)`).
+        // Exception: owned plain WJ `string` contracts (trait authenticate) always pass by value.
+        let owned_plain_string_formal = method_signature.as_ref().is_some_and(|sig| {
+            crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                sig, sig_param_idx,
+            ) || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                sig, sig_param_idx,
+            ) && matches!(
+                sig.param_ownership.get(sig_param_idx),
+                Some(OwnershipMode::Owned)
+            ))
+                || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, sig_param_idx)
+        });
+        if owned_plain_string_formal {
+            return arg_str;
+        }
         let callee_confirmed_shared_ref = method_signature.as_ref().is_some_and(|sig| {
             crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 sig, sig_param_idx,

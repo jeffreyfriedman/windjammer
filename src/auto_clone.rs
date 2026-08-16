@@ -1340,6 +1340,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
             field_extract_params: Some(vec![true]),
             forwarding_borrow_params: None,
         };
@@ -1788,6 +1789,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: Some(vec![true]),
             forwarding_borrow_params: None,
         };
@@ -1976,6 +1978,7 @@ mod tests {
                 has_self_receiver: true,
                 is_extern: false,
                 emitted_rust_ref_params: Some(vec![true, true]),
+                string_ref_string_formal_params: None,
                 field_extract_params: None,
                 forwarding_borrow_params: None,
             },
@@ -2006,6 +2009,7 @@ mod tests {
                 has_self_receiver: true,
                 is_extern: false,
                 emitted_rust_ref_params: Some(vec![true, false, false]),
+                string_ref_string_formal_params: None,
                 field_extract_params: None,
                 forwarding_borrow_params: None,
             },

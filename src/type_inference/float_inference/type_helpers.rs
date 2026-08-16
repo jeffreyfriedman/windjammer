@@ -12,10 +12,15 @@ impl FloatInference {
                     op,
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
                 ) {
-                    let left_ty = self.infer_type_from_expression(left)?;
-                    let right_ty = self.infer_type_from_expression(right)?;
-                    if left_ty == right_ty {
-                        return Some(left_ty);
+                    let left_ty = self.infer_type_from_expression(left);
+                    let right_ty = self.infer_type_from_expression(right);
+                    match (left_ty, right_ty) {
+                        (Some(l), Some(r)) if l == r => return Some(l),
+                        // Typed float ± untyped literal (0.001 / 1.0): keep the typed side so
+                        // `.floor().min(...)` chains resolve without HashMap suffix fallback.
+                        (Some(l), None) if self.extract_float_type(&l).is_some() => return Some(l),
+                        (None, Some(r)) if self.extract_float_type(&r).is_some() => return Some(r),
+                        _ => {}
                     }
                 }
                 None
@@ -413,14 +418,23 @@ impl FloatInference {
             return None;
         }
 
-        self.function_signatures
+        // Suffix fallback must be deterministic: ambiguous `::{method}` matches (e.g. f32::min
+        // vs f64::min) must not depend on HashMap iteration order.
+        let mut matches: Vec<Vec<Type>> = self
+            .function_signatures
             .iter()
             .filter(|(func_name, (params, _))| {
                 func_name.split("::").last() == Some(method)
                     && (params.len() == arg_count + 1 || params.len() == arg_count)
             })
             .map(|(_, (params, _))| substitute(params.clone()))
-            .next()
+            .collect();
+        matches.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+        matches.dedup();
+        if matches.len() == 1 {
+            return matches.pop();
+        }
+        None
     }
 
     fn extract_map_key_type(&self, ty: &Type) -> Option<Type> {

@@ -1495,6 +1495,7 @@ impl<'ast> Analyzer<'ast> {
             has_self_receiver,
             is_extern: func.decl.is_extern,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params,
             forwarding_borrow_params: None,
         }

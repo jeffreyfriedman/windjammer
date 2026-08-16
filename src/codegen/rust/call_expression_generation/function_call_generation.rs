@@ -52,16 +52,9 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
         }
         let needs_mut = emitted_indices.is_some_and(|indices| indices.contains(&i))
             || registry_sig.as_ref().is_some_and(|sig| {
-                let pidx = sig.arg_param_index(i);
-                sig.param_types
-                    .get(pidx)
-                    .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-                    || matches!(
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            sig, i,
-                        ),
-                        OwnershipMode::MutBorrowed,
-                    )
+                crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                    sig, i,
+                )
             });
         if needs_mut && !arg_str.starts_with("&mut ") {
             if let Expression::Identifier { name, .. } = arg_expr {
@@ -158,6 +151,21 @@ fn apply_owned_string_literal_coercion<'ast>(
             sig.as_ref(),
             i,
         ) {
+            continue;
+        }
+        // `@string_ref` / `&String`: `"lit"` → `&"lit".to_string()`.
+        let is_string_ref_formal = sig.as_ref().is_some_and(|s| {
+            s.string_ref_string_formal_for_arg(i)
+                || s.param_type_for_arg(i)
+                    .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref)
+                || s.formal_param_type_for_arg(i)
+                    .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref)
+        });
+        if is_string_ref_formal {
+            let base = arg_str.trim_start_matches('&');
+            let owned =
+                crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(base);
+            *arg_str = format!("&{owned}");
             continue;
         }
         if crate::codegen::rust::string_utilities::string_literal_needs_owned_coercion_with_enum(
@@ -604,6 +612,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     has_self_receiver: false,
                     is_extern: false,
                     emitted_rust_ref_params,
+                    string_ref_string_formal_params: None,
                     field_extract_params: None,
                     forwarding_borrow_params: None,
                 })

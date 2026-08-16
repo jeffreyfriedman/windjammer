@@ -41,6 +41,7 @@ fn owned_string_sig(name: &str) -> FunctionSignature {
         has_self_receiver: false,
         is_extern: false,
         emitted_rust_ref_params: Some(vec![false]),
+        string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     }

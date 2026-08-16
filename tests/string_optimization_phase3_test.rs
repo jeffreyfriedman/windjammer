@@ -77,7 +77,8 @@ fn main() {
 
     // String literal must be converted
     assert!(
-        generated.contains(r#"log(&"Hello".to_string())"#),
+        generated.contains(r#"log(&"Hello".to_string())"#)
+            || generated.contains(r#"log(&String::from("Hello"))"#),
         "Expected converted string literal with &String param. Generated:\n{}",
         generated
     );

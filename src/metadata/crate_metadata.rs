@@ -326,6 +326,7 @@ pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
                 has_self_receiver: sig.has_self_receiver,
                 is_extern: true,
                 emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
                 field_extract_params: None,
                 forwarding_borrow_params: None,
             };

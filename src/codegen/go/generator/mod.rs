@@ -143,7 +143,48 @@ impl GoGenerator {
                 Some(base.to_string())
             }
             Type::Parameterized(base, _) => Some(base.clone()),
+            Type::Vec(_) => Some("Vec".to_string()),
+            Type::Array(_, _) => Some("Vec".to_string()),
+            Type::Reference(inner) | Type::MutableReference(inner) => self.type_name_hint(inner),
             _ => None,
+        }
+    }
+
+    /// Infer a local type hint from an initializer (signature/constructor shaped, not method lists).
+    fn infer_local_type_hint_from_value(&self, value: &Expression) -> Option<String> {
+        match value {
+            Expression::MacroInvocation { name, .. } if name == "vec" || name == "Vec" => {
+                Some("Vec".to_string())
+            }
+            Expression::StructLiteral { name, .. } => Some(name.clone()),
+            Expression::Call { function, .. } => match &**function {
+                Expression::Identifier { name, .. } => {
+                    // `Vec::new` / `HashMap::with_capacity` → receiver type base
+                    name.rsplit_once("::").map(|(ty, _)| {
+                        ty.split('<').next().unwrap_or(ty).to_string()
+                    })
+                }
+                Expression::FieldAccess { object, .. } => {
+                    // Desugared `Type::ctor` as FieldAccess
+                    if let Expression::Identifier { name, .. } = &**object {
+                        Some(name.split('<').next().unwrap_or(name).to_string())
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn record_local_type_hint(&mut self, name: &str, ty: Option<&Type>, value: &Expression) {
+        if let Some(hint) = ty.and_then(|t| self.type_name_hint(t)) {
+            self.local_type_hints.insert(name.to_string(), hint);
+            return;
+        }
+        if let Some(hint) = self.infer_local_type_hint_from_value(value) {
+            self.local_type_hints.insert(name.to_string(), hint);
         }
     }
 

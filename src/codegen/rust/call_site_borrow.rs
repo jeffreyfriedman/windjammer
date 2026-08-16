@@ -490,6 +490,19 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return true;
         }
+        // Codegen recorded owned `String` emission — peel even when analyzer ownership
+        // is still Borrowed (`build_html(name: String)`).
+        if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            sig, pidx,
+        ) && sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(false)
+        {
+            return true;
+        }
         if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
             sig, pidx,
         ) && matches!(
@@ -895,10 +908,8 @@ pub fn should_borrow_at_call_site_with_copy_check(
 
     // Plain owned `string` formals pass by value until codegen confirms an emitted `&str` formal.
     // Stale multipass `Reference(str)` / Borrowed metadata must not add `&` (circular deps).
-    if plain_string_formal_passes_owned_at_call_site(sig, param_idx)
-        && !is_collection_key
-        && !matches!(arg_expr, Expression::FieldAccess { .. })
-    {
+    // Includes FieldAccess (`request.email` → owned trait `string`) — never force `&field`.
+    if plain_string_formal_passes_owned_at_call_site(sig, param_idx) && !is_collection_key {
         return CallSiteBorrowDecision::default();
     }
 
@@ -906,6 +917,7 @@ pub fn should_borrow_at_call_site_with_copy_check(
     // Stale Owned metadata must not suppress map/set key auto-borrow (`HashMap::get(&k)`).
     // Also must not suppress when param_types already encodes Reference(T) (registry wrap)
     // or codegen refresh recorded an emitted `&str`/`&T` formal (`emitted_rust_ref_params`).
+    // FieldAccess into owned string formals must also pass by value (trait authenticate).
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Owned)
@@ -920,7 +932,6 @@ pub fn should_borrow_at_call_site_with_copy_check(
             .param_types
             .get(param_idx)
             .is_none_or(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
-        && !matches!(arg_expr, Expression::FieldAccess { .. })
     {
         return CallSiteBorrowDecision::default();
     }
@@ -1190,6 +1201,7 @@ mod tests {
             has_self_receiver: has_self,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
@@ -1530,6 +1542,7 @@ fn bar(y: string) -> bool {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };

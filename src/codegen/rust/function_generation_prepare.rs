@@ -706,6 +706,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if func.parameters.iter().any(|p| {
                     p.name == *param_name
+                        && crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
+                        && !analyzed.mutated_parameters.contains(param_name)
+                        && !analyzed.field_mutated_parameters.contains(param_name)
+                }) {
+                    continue;
+                }
+                if func.parameters.iter().any(|p| {
+                    p.name == *param_name
                         && self.is_type_copy(&p.type_)
                         && !crate::type_classification::is_copy_pass_by_value_formal(&p.type_)
                 }) {
@@ -2454,6 +2462,7 @@ impl<'ast> CodeGenerator<'ast> {
                     sig.param_ownership[param_idx] = crate::analyzer::OwnershipMode::Borrowed;
                 }
             } else if self.inferred_mut_borrowed_params.contains(&param.name)
+                && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                 && !matches!(sig.param_types[param_idx], Type::MutableReference(_))
             {
                 sig.param_types[param_idx] = Type::MutableReference(Box::new(param.type_.clone()));
@@ -9188,5 +9197,38 @@ impl<'ast> CodeGenerator<'ast> {
             user_param_idx += 1;
         }
         updated.emitted_rust_ref_params = Some(emitted);
+
+        // Record `&String` formals (`@string_ref` / Phase-2 Vec::contains) separately from `&str`.
+        let mut string_ref_flags = vec![false; updated.param_ownership.len()];
+        let mut user_param_idx = 0;
+        let mut emitted_idx = 0;
+        for param in &func.parameters {
+            if param.name == "self" {
+                if emitted_idx < emitted_param_strings.len() {
+                    emitted_idx += 1;
+                }
+                continue;
+            }
+            let reg_idx = if updated.has_self_receiver {
+                user_param_idx + 1
+            } else {
+                user_param_idx
+            };
+            if reg_idx < string_ref_flags.len() {
+                let emitted_formal = emitted_param_strings
+                    .get(emitted_idx)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                let decorator_string_ref = param.decorators.iter().any(|d| d.name == "string_ref");
+                let emitted_string_ref = emitted_formal.contains(": &String")
+                    || emitted_formal.contains(": &'a String");
+                string_ref_flags[reg_idx] = decorator_string_ref || emitted_string_ref;
+            }
+            if emitted_idx < emitted_param_strings.len() {
+                emitted_idx += 1;
+            }
+            user_param_idx += 1;
+        }
+        updated.string_ref_string_formal_params = Some(string_ref_flags);
     }
 }

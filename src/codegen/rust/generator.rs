@@ -1962,6 +1962,10 @@ impl<'ast> CodeGenerator<'ast> {
         if self.collection_key_owned_params.contains(name.as_str()) {
             return;
         }
+        // `&mut T` is not a shared ref — keep `query(&sql)` reborrows into AsRef/&str.
+        if self.identifier_already_mut_ref(name) {
+            return;
+        }
         let text_borrowed_formal = self.inferred_borrowed_params.contains(name.as_str())
             && self.current_function_params.iter().any(|p| {
                 p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
@@ -1976,6 +1980,11 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn identifier_already_ref(&self, name: &str) -> bool {
+        // `&mut T` is not a shared ref. Callers that mean "any ref" must also check
+        // `identifier_already_mut_ref`. Treating mut as shared suppresses `query(&sql)`.
+        if self.identifier_already_mut_ref(name) {
+            return false;
+        }
         // Emitted Rust `&T` formals always generate as references — even for mixed
         // forwarders that keep an owned outer formal elsewhere in the call graph.
         if self.emitted_rust_ref_formals.contains(name) {
@@ -2001,9 +2010,14 @@ impl<'ast> CodeGenerator<'ast> {
                 // Read-only WJ `string` keys demoted to `&str` / `&String` are already
                 // shared refs — do not wait solely on emitted_rust_ref (avoids
                 // `map.get(&key)` → `&&str` when the formal is `key: &str`).
+                // MutBorrowed text (`sql: &mut String`) is NOT a shared ref — AsRef/&str
+                // callees still need `query(&sql)`.
                 if crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                     && !self.collection_key_owned_params.contains(name)
                 {
+                    if self.inferred_mut_borrowed_params.contains(name) {
+                        return false;
+                    }
                     return true;
                 }
                 return false;
@@ -2040,19 +2054,15 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return true;
         }
-        if self.inferred_mut_borrowed_params.contains(name) {
-            return true;
-        }
         self.current_function_params.iter().any(|p| {
             p.name == name
-                && (matches!(
-                    p.ownership,
-                    crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
-                ) || crate::codegen::rust::types::param_generates_as_rust_ref(
-                    &p.type_,
-                    &p.name,
-                    &self.inferred_borrowed_params,
-                ))
+                && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                    || matches!(&p.type_, Type::Reference(_))
+                    || (crate::codegen::rust::types::param_generates_as_rust_ref(
+                        &p.type_,
+                        &p.name,
+                        &self.inferred_borrowed_params,
+                    ) && !matches!(&p.type_, Type::MutableReference(_))))
         })
     }
 
@@ -2885,6 +2895,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// HashSet/HashMap loop elements are `&T` — deref when callee expects owned Copy scalar.
+    ///
+    /// Never emit `*binding.clone()`: `&Copy::clone` autoderefs to owned Copy, so a leading
+    /// `*` would deref the owned value (E0614). Strip redundant `.clone()` then emit `*binding`.
     pub(crate) fn normalize_borrowed_iter_elem_for_owned_copy_scalar(
         &self,
         arg_expr: &Expression<'ast>,
@@ -2912,10 +2925,20 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 crate::type_classification::is_copy_pass_by_value_formal(bare)
             });
-        if wants_owned_copy_scalar && !coerced.starts_with('*') && !coerced.starts_with('&') {
-            return format!("*{coerced}");
+        if !wants_owned_copy_scalar {
+            return coerced.to_string();
         }
-        coerced.to_string()
+        let mut base = coerced.to_string();
+        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut base);
+        if let Some(rest) = base.strip_prefix("&mut ") {
+            base = rest.to_string();
+        } else if let Some(rest) = base.strip_prefix('&') {
+            base = rest.to_string();
+        }
+        if base.starts_with('*') {
+            return base;
+        }
+        format!("*{base}")
     }
 
     /// Whether a binding (param, local, or implicit struct field) is Copy.
@@ -3017,6 +3040,15 @@ impl<'ast> CodeGenerator<'ast> {
             && crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
                 self.current_function_return_type.as_ref(),
             )
+        {
+            return arg_str.to_string();
+        }
+
+        // Borrowed iterator elements that are Copy scalars (`&i64` from HashSet)
+        // must not get `.clone()` — IR deref (`*post`) owns the value; `*post.clone()`
+        // is E0614 because `&T::clone` autoderefs to owned T.
+        if self.borrowed_iterator_vars.contains(name)
+            && self.binding_is_copy_pass_by_value_scalar(name)
         {
             return arg_str.to_string();
         }
