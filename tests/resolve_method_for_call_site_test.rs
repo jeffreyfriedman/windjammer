@@ -24,6 +24,7 @@ fn mannequin_engine_stub() -> FunctionSignature {
         has_self_receiver: false,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     }
@@ -40,6 +41,7 @@ fn mannequin_body_borrow() -> FunctionSignature {
         has_self_receiver: false,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     }
@@ -56,6 +58,7 @@ fn mannequin_owned_formal() -> FunctionSignature {
         has_self_receiver: false,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     }
@@ -146,6 +149,7 @@ fn quest_engine_stub() -> FunctionSignature {
         has_self_receiver: true,
         is_extern: false,
         emitted_rust_ref_params: None,
+        string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     }
@@ -168,6 +172,7 @@ fn quest_converged_borrow() -> FunctionSignature {
         has_self_receiver: true,
         is_extern: false,
         emitted_rust_ref_params: None,
+        string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     }

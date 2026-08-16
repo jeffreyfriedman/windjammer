@@ -5,12 +5,13 @@ impl GoGenerator {
                 pattern,
                 mutable,
                 value,
-                type_: _,
+                type_,
                 ..
             } => {
                 let indent = self.indent();
                 let var_name = self.pattern_to_go(pattern);
                 let mut value_str = self.generate_expression(value);
+                self.record_local_type_hint(&var_name, type_.as_ref(), value);
 
                 let is_bare_int_literal = matches!(
                     value,

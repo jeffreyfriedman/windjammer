@@ -545,6 +545,9 @@ pub(crate) fn merge_codegen_refresh_metadata(
         return;
     };
     into.emitted_rust_ref_params = Some(flags.clone());
+    if let Some(ref string_ref) = from.string_ref_string_formal_params {
+        into.string_ref_string_formal_params = Some(string_ref.clone());
+    }
     for idx in 0..flags.len().min(into.param_types.len()) {
         match flags.get(idx).copied() {
             Some(false) => {
@@ -595,7 +598,25 @@ pub(crate) fn merge_codegen_refresh_metadata(
                 }
             }
             Some(true) => {
-                if let Some(formal) = into.formal_param_type(idx) {
+                // Prefer `&String` when the refresh source recorded `@string_ref` / Phase-2.
+                let string_ref_formal = from
+                    .string_ref_string_formal_params
+                    .as_ref()
+                    .and_then(|f| f.get(idx).copied())
+                    == Some(true)
+                    || from
+                        .param_types
+                        .get(idx)
+                        .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref);
+                if string_ref_formal {
+                    into.param_types[idx] = Type::Reference(Box::new(Type::String));
+                    while into.formal_param_types.len() <= idx {
+                        into.formal_param_types.push(Type::String);
+                    }
+                    if idx < into.formal_param_types.len() {
+                        into.formal_param_types[idx] = Type::Reference(Box::new(Type::String));
+                    }
+                } else if let Some(formal) = into.formal_param_type(idx) {
                     if !matches!(
                         into.param_types.get(idx),
                         Some(Type::Reference(_) | Type::MutableReference(_))
@@ -630,7 +651,7 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
 }
 
 pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) -> bool {
-    sig.param_ownership.iter().enumerate().any(|(idx, own)| {
+    sig.param_ownership.iter().enumerate().any(|(idx, _own)| {
         if sig.has_self_receiver && idx == 0 {
             return false;
         }
@@ -677,13 +698,17 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
                 ) {
                     return false;
                 }
-                // Shared `&T` with codegen-confirmed non-ref emission slot still borrows
-                // at call sites until param_types converge to Reference(T).
+                // Plain WJ `string` with codegen-confirmed non-ref emission is owned
+                // `String` even when analyzer ownership is still Borrowed (stale multipass
+                // `build_html(name: String)` — peel `&name`). Non-text shared formals
+                // still borrow until `param_types` converge to `Reference(T)`.
                 if matches!(
                     sig.param_ownership.get(param_idx),
                     Some(OwnershipMode::Borrowed)
                 ) {
-                    return false;
+                    return crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                        sig, param_idx,
+                    );
                 }
                 return !param_type_is_borrowed_text(sig, param_idx);
             }
@@ -1044,7 +1069,28 @@ pub(crate) fn prefer_shared_ref_signature(
     {
         return Some(pref);
     }
+    // Runtime-scanned `&str`/`AsRef<str>` (empty WJ formal_param_types + Reference(str) + emitted)
+    // must beat WJ std stubs that recorded owned `String` emission for the same API.
+    // Body-converged trait demotions keep a plain WJ `string` formal — those must NOT
+    // beat an owned preferred contract (`authenticate(email: string)`).
+    //
+    // Note: `formal_param_type()` falls back to `param_types` when formals are empty, so
+    // runtime scans must be detected via `formal_param_types.is_empty()`, not `is_none()`.
+    let challenger_runtime_str_ref = challenger.formal_param_types.is_empty()
+        && challenger
+            .param_types
+            .get(param_idx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+        && challenger
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(true);
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
+        if challenger_runtime_str_ref {
+            return Some(challenger.clone());
+        }
         return Some(pref);
     }
     if param_is_stale_engine_owned_stub(&pref, param_idx)
@@ -1058,17 +1104,26 @@ pub(crate) fn prefer_shared_ref_signature(
     // shared-ref emission. Analyzer Borrowed + `&str` on a plain WJ `string` formal
     // (trait methods like `authenticate(email: string)`) must not beat the owned AST
     // contract — otherwise call sites emit `&field` into owned `String` formals.
+    // Exception: runtime scanner text refs (above) already returned challenger.
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         &pref, param_idx,
     ) || bare_formal_is_vec_or_map(&pref, param_idx)
     {
+        // Do not let body-converged `&str` on the *same* plain WJ formal steal owned
+        // trait/user contracts. Only accept challengers that are not also plain-WJ-string
+        // formals (runtime / explicit `&str` registry), or that already passed the
+        // runtime_str_ref gate above.
         let challenger_codegen_shared = challenger
             .emitted_rust_ref_params
             .as_ref()
             .and_then(|flags| flags.get(param_idx))
             .copied()
             == Some(true);
-        if challenger_codegen_shared {
+        let challenger_also_plain_wj_string =
+            crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                challenger, param_idx,
+            );
+        if challenger_codegen_shared && !challenger_also_plain_wj_string {
             return Some(challenger.clone());
         }
         return Some(pref);
@@ -1109,15 +1164,31 @@ pub(crate) fn refresh_call_site_signature_for_arg(
         local.get_signature(simple).cloned(),
         initial.clone(),
     ]);
+    // WJ `.wj` stubs shadow scanned runtime APIs in `signatures`. Challenge with the
+    // runtime baseline (`get_fallback_signature`) so `&str`/`AsRef<str>` beat owned
+    // `string` emission for literals (`strings::join`, `contains`, `Connection::query`).
     for challenger in [
         global.and_then(|g| g.get_signature(callee_name)),
         global.and_then(|g| g.get_signature(simple)),
+        global.and_then(|g| g.get_fallback_signature(callee_name)),
+        global.and_then(|g| g.get_fallback_signature(simple)),
         local.get_signature(callee_name),
         local.get_signature(simple),
+        local.get_fallback_signature(callee_name),
+        local.get_fallback_signature(simple),
     ] {
         refreshed = prefer_shared_ref_signature(refreshed, challenger, pidx);
     }
-    refreshed.or(initial)
+    let mut out = refreshed.or(initial)?;
+    // Trait owned `string` must win over body-converged `&str` after prefer-shared.
+    if let Some(g) = global {
+        let method = simple;
+        crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+            g, method, &mut out,
+        );
+        out = crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(out);
+    }
+    Some(out)
 }
 
 /// Prefer converged global signatures over per-file declaration stubs at call sites.
@@ -1315,4 +1386,223 @@ pub fn param_type_is_owned_non_text(sig: &FunctionSignature, param_idx: usize) -
             && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
             && !crate::codegen::rust::types::is_windjammer_text_type(t)
     })
+}
+
+#[cfg(test)]
+mod prefer_shared_runtime_tests {
+    use super::*;
+    use crate::analyzer::{FunctionSignature, OwnershipMode};
+    use crate::parser::Type;
+
+    fn wj_owned_join() -> FunctionSignature {
+        FunctionSignature {
+            name: "strings::join".into(),
+            param_types: vec![
+                Type::Vec(Box::new(Type::String)),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Vec(Box::new(Type::String)),
+                Type::String,
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    fn runtime_join() -> FunctionSignature {
+        FunctionSignature {
+            name: "strings::join".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Vec(Box::new(Type::String)))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    #[test]
+    fn prefer_shared_ref_picks_runtime_connection_query_over_wj_owned_sql() {
+        let wj = FunctionSignature {
+            name: "Connection::query".into(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::Vec(Box::new(Type::String)),
+            ],
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::Vec(Box::new(Type::String)),
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+        let runtime = stdlib
+            .get_signature("Connection::query")
+            .expect("runtime Connection::query must be scanned into stdlib fallback");
+        let sql_idx = wj.arg_param_index(0);
+        let merged = prefer_shared_ref_signature(Some(wj), Some(runtime), sql_idx)
+            .expect("prefer_shared");
+        assert!(
+            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &merged, sql_idx
+            ),
+            "runtime AsRef/&str must win over WJ owned sql; got {:?}",
+            merged.param_types.get(sql_idx)
+        );
+        assert!(
+            merged
+                .param_types
+                .get(sql_idx)
+                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref),
+            "sql slot must be Reference(str), got {:?}",
+            merged.param_types.get(sql_idx)
+        );
+    }
+
+    #[test]
+    fn prefer_shared_ref_picks_runtime_str_over_wj_owned_emission() {
+        let preferred = Some(wj_owned_join());
+        let runtime = runtime_join();
+        let merged = prefer_shared_ref_signature(preferred, Some(&runtime), 1).unwrap();
+        assert_eq!(
+            merged.emitted_rust_ref_params.as_ref().unwrap()[1],
+            true,
+            "runtime &str delimiter must beat WJ owned emission"
+        );
+        assert!(matches!(
+            &merged.param_types[1],
+            Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+        ));
+    }
+
+    #[test]
+    fn dump_strings_join_sigs() {
+        let reg = crate::analyzer::SignatureRegistry::stdlib();
+        let primary = reg.get_signature("strings::join").expect("join");
+        eprintln!(
+            "JOIN ownership={:?} emitted={:?} param_types={:?} formal={:?} expects_owned={}",
+            primary.param_ownership,
+            primary.emitted_rust_ref_params,
+            primary.param_types,
+            primary.formal_param_types,
+            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(&primary, 1)
+        );
+        assert!(
+            !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &primary, 1
+            ),
+            "stdlib join delimiter must not expect owned"
+        );
+        assert!(
+            !crate::codegen::rust::string_utilities::string_literal_needs_to_string(&primary, 1),
+            "string_literal_needs_to_string must be false for join delimiter"
+        );
+        let expected = crate::ir::signature_bridge::safety_type_from_signature_param(&primary, 1);
+        eprintln!("EXPECTED_OWN={:?}", expected.ownership);
+        assert!(
+            matches!(expected.ownership, crate::ir::safety_type::OwnedType::Ref(_)),
+            "expected Ref for join delimiter, got {:?}",
+            expected.ownership
+        );
+    }
+
+    #[test]
+    fn codegen_strings_join_literal_stays_bare() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        // Return form: return-owned string coerce must not leak into call args.
+        let source = r#"
+use std::strings
+pub fn exercise(parts: Vec<string>) -> string {
+    strings.join(parts, "-")
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_global_signature_registry(std::sync::Arc::new(
+            crate::analyzer::SignatureRegistry::stdlib().clone(),
+        ));
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !generated.contains("\"-\".to_string()"),
+            "join delimiter must stay bare &str (not Vec::join owned). Got:\n{generated}"
+        );
+        assert!(
+            generated.contains("strings::join"),
+            "must lower as strings::join, not a stdlib type method. Got:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn refresh_join_delimiter_uses_runtime_fallback_from_stdlib() {
+        let reg = crate::analyzer::SignatureRegistry::stdlib();
+        // Simulate WJ-owned shadow (meta / analyzed std.wj).
+        let mut local = crate::analyzer::SignatureRegistry::layered(std::sync::Arc::new(
+            reg.clone(),
+        ));
+        local.add_function("strings::join".into(), wj_owned_join());
+        let refreshed = refresh_call_site_signature_for_arg(
+            Some(wj_owned_join()),
+            "strings::join",
+            1,
+            Some(&local),
+            &local,
+        )
+        .expect("refresh");
+        assert_eq!(
+            refreshed
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|f| f.get(1))
+                .copied(),
+            Some(true),
+            "refresh must prefer runtime &str delimiter. Got {:?}",
+            refreshed
+        );
+        assert!(
+            !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &refreshed, 1
+            ),
+            "delimiter must not expect owned String"
+        );
+    }
 }

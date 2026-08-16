@@ -179,6 +179,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
     let param_ownership = parse_parameters(&params_str, &asref_str_type_params);
     let emitted_rust_ref_params =
         parse_emitted_rust_ref_flags(&params_str, &asref_str_type_params);
+    let param_types = parse_param_types(&params_str, &asref_str_type_params);
     let has_self_receiver = first_param_is_self_receiver(&params_str);
 
     // Build full name with module prefix
@@ -186,7 +187,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
 
     Some(FunctionSignature {
         name: full_name,
-        param_types: vec![], // TODO: Extract from Rust AST
+        param_types,
         formal_param_types: vec![],
         param_ownership,
         return_type: None,                      // TODO: Extract from Rust AST
@@ -194,6 +195,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         has_self_receiver,
         is_extern: false,
         emitted_rust_ref_params,
+        string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     })
@@ -380,6 +382,79 @@ fn parse_emitted_rust_ref_flags(
     )
 }
 
+/// Best-effort Rust formal → WJ `Type` for IR/call-site coercion (signature-driven).
+///
+/// Maps `&str` / `AsRef<str>` / `S: AsRef<str>` to `Reference(str)`, `&mut T` / `&T` to
+/// references, and common owned formals (`String`, `Vec<String>`, …) to owned types.
+fn parse_param_types(params_str: &str, asref_str_type_params: &[String]) -> Vec<Type> {
+    if params_str.trim().is_empty() {
+        return Vec::new();
+    }
+    split_top_level_commas(params_str)
+        .into_iter()
+        .map(|param| parse_one_rust_param_type(param.trim(), asref_str_type_params))
+        .collect()
+}
+
+fn parse_one_rust_param_type(param: &str, asref_str_type_params: &[String]) -> Type {
+    let ty = param
+        .rsplit(':')
+        .next()
+        .unwrap_or(param)
+        .trim();
+
+    if ty == "self" || ty == "&self" || ty.starts_with("&self") {
+        return Type::Reference(Box::new(Type::Custom("Self".into())));
+    }
+    if ty == "&mut self" || ty.starts_with("&mut self") {
+        return Type::MutableReference(Box::new(Type::Custom("Self".into())));
+    }
+    if ty == "mut self" || ty.starts_with("mut self") {
+        return Type::Custom("Self".into());
+    }
+
+    if ty.contains("AsRef<str>")
+        || param_is_asref_str_type_param(param, asref_str_type_params)
+        || ty == "&str"
+        || ty.starts_with("&str")
+    {
+        return Type::Reference(Box::new(Type::Custom("str".into())));
+    }
+
+    if let Some(inner) = ty.strip_prefix("&mut ") {
+        return Type::MutableReference(Box::new(parse_owned_rust_type_name(inner.trim())));
+    }
+    if let Some(inner) = ty.strip_prefix('&') {
+        return Type::Reference(Box::new(parse_owned_rust_type_name(inner.trim())));
+    }
+    if let Some(inner) = ty.strip_prefix("impl ") {
+        if inner.contains("AsRef<str>") {
+            return Type::Reference(Box::new(Type::Custom("str".into())));
+        }
+        return parse_owned_rust_type_name(inner.trim());
+    }
+    parse_owned_rust_type_name(ty)
+}
+
+fn parse_owned_rust_type_name(ty: &str) -> Type {
+    let base = ty.split('<').next().unwrap_or(ty).trim();
+    match base {
+        "String" | "str" => Type::String,
+        "bool" => Type::Bool,
+        "i32" | "i64" | "isize" | "u32" | "u64" | "usize" | "f32" | "f64" => {
+            Type::Custom(base.to_string())
+        }
+        "Vec" => {
+            if let Some(inner) = ty.strip_prefix("Vec<").and_then(|s| s.strip_suffix('>')) {
+                Type::Vec(Box::new(parse_owned_rust_type_name(inner.trim())))
+            } else {
+                Type::Vec(Box::new(Type::Custom("Unknown".into())))
+            }
+        }
+        _ => Type::Custom(base.to_string()),
+    }
+}
+
 fn strings_split_signature(name: &str) -> FunctionSignature {
     FunctionSignature {
         name: name.to_string(),
@@ -391,6 +466,7 @@ fn strings_split_signature(name: &str) -> FunctionSignature {
         has_self_receiver: false,
         is_extern: false,
         emitted_rust_ref_params: Some(vec![true, true]),
+        string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     }
@@ -414,6 +490,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         },
@@ -432,6 +509,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         },
@@ -449,6 +527,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         },
@@ -466,6 +545,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         },
@@ -483,6 +563,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         },
@@ -576,6 +657,34 @@ mod tests {
         );
         assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
         assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed);
+        assert!(
+            matches!(
+                &sig.param_types[0],
+                Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+            ),
+            "AsRef<str> must populate Reference(str), got {:?}",
+            sig.param_types[0]
+        );
+        assert!(
+            matches!(
+                &sig.param_types[1],
+                Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+            ),
+            "&str must populate Reference(str), got {:?}",
+            sig.param_types[1]
+        );
+    }
+
+    #[test]
+    fn connection_query_param_types_mark_sql_as_str_ref() {
+        let line =
+            "pub fn query(&self, sql: impl AsRef<str>, params: Vec<String>) -> Result<Vec<Row>, String> {";
+        let sig = parse_function_signature(line, "db").unwrap();
+        assert!(matches!(
+            &sig.param_types[1],
+            Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+        ));
+        assert!(matches!(&sig.param_types[2], Type::Vec(inner) if matches!(**inner, Type::String)));
     }
 
     #[test]

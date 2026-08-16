@@ -27,6 +27,20 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Ecosystem seed
+
+Public apps/packages live in the sibling repo `windjammer-ecosystem`
+([README](../windjammer-ecosystem/README.md), [AGENTS.md](../windjammer-ecosystem/AGENTS.md)).
+
+When a seed app hits a compiler bug:
+
+1. Keep the **idiomatic** ecosystem shape (e.g. flat `src/lib.wj` + `use crate::fn` from `tests/`).
+2. Do **not** ask the seed to nest modules, avoid `HashMap::get`, or add `ffi/` to paper over codegen.
+3. Add a minimal failing repro under `tests/` here (see `package_flat_lib_wj_test_exports_test.rs`).
+4. Fix via signatures / IR / solver — no method-name heuristics — then resume the seed.
+
+Game, WindjammerDB, and finance remain separate dogfoods; seed bugs still get TDD fixes in this tree.
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.

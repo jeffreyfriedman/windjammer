@@ -659,6 +659,16 @@ impl<'ast> CodeGenerator<'ast> {
         {
             sig = refreshed;
         }
+        // Body-converged `&str` refresh must not undo trait owned `string` contracts
+        // (`authenticate(email: string)` → never `&request.email`).
+        if let Some(global) = self.global_signature_registry.as_ref() {
+            crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                global,
+                method_simple,
+                &mut sig,
+            );
+            sig = crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(sig);
+        }
 
         let mut param_idx = sig.arg_param_index(arg_index);
         let mut expected = safety_type_from_signature_param(&sig, param_idx);
@@ -2673,7 +2683,30 @@ impl<'ast> CodeGenerator<'ast> {
                 coerced.clone(),
                 false,
             );
-            if !coerced.starts_with('&')
+            // Owned plain WJ `string` formals (trait `authenticate(email: string)`) must
+            // receive field moves/clones — never force `&request.email` from stale
+            // body-converged `&str` emission on the impl.
+            let owned_plain_string =
+                crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                    &text_sig, pidx,
+                ) || crate::ir::signature_bridge::call_site_expects_owned_pass(&text_sig, pidx)
+                    || (matches!(
+                        text_sig.param_ownership.get(pidx),
+                        Some(crate::analyzer::OwnershipMode::Owned)
+                    ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                        &text_sig, pidx,
+                    ))
+                    || self.global_signature_registry.as_ref().is_some_and(|g| {
+                        crate::codegen::rust::call_signature_resolution::global_trait_owned_plain_string_arg(
+                            g, simple, arg_index,
+                        )
+                    });
+            if owned_plain_string && coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                *coerced =
+                    crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
+            }
+            if !owned_plain_string
+                && !coerced.starts_with('&')
                 && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                     &text_sig, pidx,
                 )
@@ -3459,7 +3492,11 @@ impl<'ast> CodeGenerator<'ast> {
         if wants_owned && !wants_ref && !coerced.ends_with(".clone()") && !coerced.starts_with('&')
         {
             if let Expression::Identifier { name, .. } = arg_expr {
+                // `&Copy` loop elems already owned via `*binding` — never append `.clone()`
+                // (`*post.clone()` is E0614: clone autoderefs to i64).
                 if self.borrowed_iterator_vars.contains(name)
+                    && !coerced.starts_with('*')
+                    && !self.binding_is_copy_pass_by_value_scalar(name)
                     && !crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
                         self.current_function_return_type.as_ref(),
                     )
@@ -4054,9 +4091,16 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|t| self.is_type_copy(t))
                 || self
                     .infer_expression_type(arg_expr)
-                    .is_some_and(|t| self.is_type_copy(&t));
+                    .is_some_and(|t| self.is_type_copy(&t))
+                || self.binding_is_copy_pass_by_value_scalar(name);
             if is_copy {
-                return format!("*{}", &coerced[1..]);
+                // `&binding.clone()` → `*binding` (never `*binding.clone()`, E0614 on Copy).
+                let mut core = coerced[1..].to_string();
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut core);
+                if core.starts_with('*') {
+                    return core;
+                }
+                return format!("*{core}");
             }
             return coerced[1..].to_string();
         }
@@ -4100,7 +4144,7 @@ impl<'ast> CodeGenerator<'ast> {
             arg_expr,
             Expression::Unary {
                 op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
-                operand,
+                operand: _,
                 ..
             }
         ) {

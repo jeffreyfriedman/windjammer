@@ -30,6 +30,7 @@ fn test_mannequin_generate_formal_owned_call_site_owned() {
         has_self_receiver: false,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     };
@@ -59,6 +60,7 @@ fn test_vec_bare_formal_honors_converged_borrow() {
         has_self_receiver: false,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     };
@@ -88,6 +90,7 @@ fn test_quest_id_converged_formal_bare_call_site_borrowed() {
         has_self_receiver: true,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     };
@@ -130,6 +133,7 @@ fn test_quest_id_bare_param_types_borrowed_ownership_at_call_site() {
         has_self_receiver: true,
         is_extern: false,
         emitted_rust_ref_params: None,
+        string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
     };
@@ -208,6 +212,7 @@ fn formal_param_type_falls_back_to_param_types_when_empty() {
         has_self_receiver: false,
         is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
     forwarding_borrow_params: None,
     };
@@ -234,6 +239,7 @@ fn metadata_import_populates_formal_param_types_from_params() {
         parent_type: Some("QuestManager".into()),
         param_ownership: vec!["Borrowed".into(), "Borrowed".into()],
         emitted_rust_ref_params: None,
+        string_ref_string_formal_params: None,
         has_self_receiver: true,
         is_extern: false,
     };

@@ -43,14 +43,10 @@ pub enum ResolutionMethod {
 /// Module-qualified user calls (`draw::draw_text`) disambiguate homonyms — keep auto-borrow.
 /// Unqualified calls still respect global ownership-collision guards.
 pub(crate) fn ownership_collision_blocks_autoborrow(callee_name: &str) -> bool {
-    if let Some((qualifier, _rest)) = callee_name.rsplit_once("::") {
-        if qualifier
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
-        {
-            return false;
-        }
+    // Any `Module::method` or `Type::method` path is disambiguated — do not strip
+    // auto-borrows. Bare `query` still blocks (http::query vs Connection::query).
+    if callee_name.contains("::") {
+        return false;
     }
     true
 }
@@ -1129,9 +1125,22 @@ pub fn effective_param_ownership_for_arg(
     effective_param_ownership(sig, idx)
 }
 
+/// Whether a formal type is `*mut T` (FFI out-param / mutable raw pointer).
+pub fn param_type_is_mutable_raw_pointer(ty: &Type) -> bool {
+    matches!(ty, Type::RawPointer { mutable: true, .. })
+}
+
 /// Whether resolved callee metadata expects `&mut T` for a user argument index.
 pub fn callee_user_arg_expects_mut_borrow(sig: &FunctionSignature, user_arg_index: usize) -> bool {
     let pidx = sig.arg_param_index(user_arg_index);
+    if sig
+        .param_types
+        .get(pidx)
+        .or_else(|| sig.formal_param_type(pidx))
+        .is_some_and(param_type_is_mutable_raw_pointer)
+    {
+        return true;
+    }
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
         return false;
     }
@@ -1455,6 +1464,7 @@ mod tests {
             has_self_receiver: has_self,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
@@ -1473,6 +1483,7 @@ mod tests {
             has_self_receiver: has_self,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
@@ -1577,6 +1588,7 @@ mod tests {
                 has_self_receiver: false,
                 is_extern: false,
                 emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
                 field_extract_params: None,
                 forwarding_borrow_params: None,
             },
@@ -1595,6 +1607,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1626,6 +1639,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1654,6 +1668,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1688,6 +1703,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1695,6 +1711,51 @@ mod tests {
             effective_param_ownership_for_arg(&sig, 0),
             OwnershipMode::Owned,
             "plain string trait formal must pass owned String at call site"
+        );
+    }
+
+    #[test]
+    fn callee_user_arg_expects_mut_borrow_for_mutable_raw_pointer_formal() {
+        let sig = FunctionSignature {
+            name: "get_value".into(),
+            param_types: vec![Type::RawPointer {
+                mutable: true,
+                pointee: Box::new(Type::Float),
+            }],
+            formal_param_types: vec![Type::RawPointer {
+                mutable: true,
+                pointee: Box::new(Type::Float),
+            }],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: true,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert!(
+            callee_user_arg_expects_mut_borrow(&sig, 0),
+            "*mut T extern formals must request &mut at call sites"
+        );
+        assert!(
+            !callee_user_arg_expects_mut_borrow(
+                &FunctionSignature {
+                    param_types: vec![Type::RawPointer {
+                        mutable: false,
+                        pointee: Box::new(Type::Float),
+                    }],
+                    formal_param_types: vec![Type::RawPointer {
+                        mutable: false,
+                        pointee: Box::new(Type::Float),
+                    }],
+                    ..sig
+                },
+                0
+            ),
+            "*const T must not request &mut"
         );
     }
 
@@ -1832,6 +1893,7 @@ impl BuildFingerprint {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1858,6 +1920,7 @@ impl BuildFingerprint {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1884,6 +1947,7 @@ impl BuildFingerprint {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1909,6 +1973,7 @@ impl BuildFingerprint {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1934,6 +1999,7 @@ impl BuildFingerprint {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1972,6 +2038,7 @@ impl BuildFingerprint {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };

@@ -823,25 +823,27 @@ pub fn is_closure_taking_method(method: &str) -> bool {
     method_is_closure_taking_qualified(method, None, SignatureRegistry::stdlib())
 }
 
-/// Module names from `use std::…` that map to `windjammer_runtime::*` imports.
-/// Build `Module::method` for signature/IR lookup at module-style call sites.
+/// Build `Module::method` / `Type::method` for signature/IR lookup at call sites.
+///
+/// Runtime std modules (`strings::join`) must win over an inferred/stdlib type
+/// receiver (`Vec`) — unique method-name → type guesses are not authoritative.
 pub fn module_qualified_method_name(
     receiver_type_name: Option<&str>,
     object: &Expression,
     method: &str,
     is_imported_runtime_std_module: impl Fn(&str) -> bool,
 ) -> String {
+    if let Expression::Identifier { name, .. } = object {
+        if is_imported_runtime_std_module(name) || is_runtime_std_module(name) {
+            return format!("{name}::{method}");
+        }
+        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+            return format!("{name}::{method}");
+        }
+    }
     if let Some(tn) = receiver_type_name {
         if tn.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
             return format!("{tn}::{method}");
-        }
-    }
-    if let Expression::Identifier { name, .. } = object {
-        if is_imported_runtime_std_module(name)
-            || is_runtime_std_module(name)
-            || name.chars().next().is_some_and(|c| c.is_uppercase())
-        {
-            return format!("{name}::{method}");
         }
     }
     method.to_string()
@@ -929,9 +931,43 @@ fn runtime_std_module_arg_needs_rust_borrow(
     sig: &crate::analyzer::FunctionSignature,
     arg_index: usize,
 ) -> bool {
-    // Signature-driven only: scanned Borrowed + WJ-owned formal. Do not gate on
-    // module-name lists (`is_runtime_std_module`) — that misses FFI wrappers and
-    // crate-prefixed runtime paths that still register Borrowed formals.
+    let pidx = sig.arg_param_index(arg_index);
+    // Codegen-recorded owned emission wins over stale analyzer Borrowed — user
+    // `build_html(name: String)` must peel `&name`, not treat Borrowed as AsRef.
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+        return false;
+    }
+    // `emitted_rust_ref_params[idx] == false` + plain WJ `string` is owned `String` at
+    // Rust even when analyzer ownership is still Borrowed (stale multipass). Do not
+    // treat that as a runtime AsRef/`&str` contract — peel `&` at the call site.
+    if sig
+        .emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(pidx))
+        .copied()
+        == Some(false)
+        && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            sig, pidx,
+        )
+    {
+        return false;
+    }
+    // Explicit scanned/emitted shared text / AsRef contract.
+    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+        && sig.param_types.get(pidx).is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                || crate::codegen::rust::types::is_windjammer_text_type(match t {
+                    crate::parser::Type::Reference(inner)
+                    | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                })
+        })
+    {
+        return true;
+    }
+    // Borrowed + WJ-owned formal (no owned-emission record): keep auto-borrow for
+    // cross-crate / body-demoted `&str` contracts (`wdb_circuit::exists`). Owned
+    // emission (`Some(false)` above) already returned false.
     runtime_wj_owned_rust_borrowed_param(sig, arg_index)
 }
 
@@ -953,6 +989,20 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
         }
     }
     if let Some(baseline) = registry.get_fallback_signature(callee_name) {
+        if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
+            return true;
+        }
+    }
+    // Local codegen registries may not layer `global_fallback`; still consult the
+    // shared stdlib/runtime scan. Use the full callee key only — bare `query` would
+    // collide across modules (http vs Connection).
+    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+    if let Some(baseline) = stdlib.get_signature(callee_name) {
+        if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
+            return true;
+        }
+    }
+    if let Some(baseline) = stdlib.get_fallback_signature(callee_name) {
         if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
             return true;
         }
@@ -1075,6 +1125,8 @@ pub fn runtime_std_call_arg_needs_auto_borrow(
 }
 
 /// Signature-driven: string literals must stay bare (`&str`) at this runtime/stdlib formal.
+///
+/// Does **not** apply to `&String` (`@string_ref`) — those need `&"lit".to_string()`.
 pub fn runtime_or_str_ref_formal_skips_literal_owned(
     sig: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
@@ -1087,6 +1139,18 @@ pub fn runtime_or_str_ref_formal_skips_literal_owned(
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
         return false;
     }
+    // `&String` is a shared ref but still needs owned-literal conversion.
+    if sig.string_ref_string_formal_for_arg(arg_index)
+        || sig
+            .param_types
+            .get(pidx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref)
+        || sig
+            .formal_param_type(pidx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref)
+    {
+        return false;
+    }
     if sig
         .param_types
         .get(pidx)
@@ -1097,7 +1161,11 @@ pub fn runtime_or_str_ref_formal_skips_literal_owned(
     }
     runtime_wj_owned_rust_borrowed_param(sig, arg_index)
         || method_arg_expects_rust_str_ref_from_sig(sig, arg_index)
-        || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+        || (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+            && !sig
+                .param_types
+                .get(pidx)
+                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref))
 }
 
 #[cfg(test)]
@@ -1378,5 +1446,23 @@ mod pattern_registry_tests {
             Some(&owned),
             0
         ));
+    }
+
+    #[test]
+    fn owned_string_emission_does_not_force_runtime_borrow() {
+        use crate::parser::Type;
+        let mut sig = FunctionSignature::default();
+        sig.name = "build_html".into();
+        sig.param_types = vec![Type::String, Type::String];
+        sig.formal_param_types = vec![Type::String, Type::String];
+        // Stale analyzer Borrowed must not beat codegen-owned `String` emission.
+        sig.param_ownership = vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed];
+        sig.emitted_rust_ref_params = Some(vec![false, false]);
+        let mut reg = SignatureRegistry::empty();
+        reg.add_function(sig.name.clone(), sig.clone());
+        assert!(
+            !runtime_std_param_needs_auto_borrow_resolved(&reg, "build_html", Some(&sig), 0),
+            "owned String emission must peel `&name`, not keep AsRef-style borrow"
+        );
     }
 }

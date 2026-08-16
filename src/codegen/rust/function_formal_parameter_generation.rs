@@ -2065,6 +2065,21 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                             }
 
+                            // Copy pass-by-value scalars (`bool`/`int`/`float`): read-only
+                            // formals stay owned. IR/registry can spuriously assign MutBorrowed
+                            // for params used only in `if cond` (method if-else assignment).
+                            if param.name != "self"
+                                && crate::type_classification::is_copy_pass_by_value_formal(
+                                    &param.type_,
+                                )
+                                && !analyzed.mutated_parameters.contains(&param.name)
+                                && !analyzed.field_mutated_parameters.contains(&param.name)
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.inferred_mut_borrowed_params.remove(&param.name);
+                                self.inferred_borrowed_params.remove(&param.name);
+                            }
+
                             if _debug_formal {
                                 eprintln!("[FORMAL-FINAL] fn={} param={} ownership_mode={:?} formal_type={:?} param.is_mutable={} field_mutated={} param_passed_to_owned_self_method={}",
                                     func.name, param.name, ownership_mode, formal_type, param.is_mutable,
@@ -2314,20 +2329,27 @@ impl<'ast> CodeGenerator<'ast> {
                     type_str
                 };
 
-                // Copy scalars (`int`/`float`/`bool`): never emit shared `&T` formals.
+                // Copy scalars (`int`/`float`/`bool`): never emit `&T` / read-only `&mut T`.
                 // Copy aggregates: strip spurious readonly `&T` from field reads; keep `&mut T`
                 // for direct mutation and passthrough to mutating callees.
                 if param.name != "self"
                     && type_str.starts_with('&')
+                    && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                    && !analyzed.mutated_parameters.contains(&param.name)
+                    && !analyzed.field_mutated_parameters.contains(&param.name)
+                {
+                    type_str = self.type_to_rust(&param.type_);
+                } else if param.name != "self"
+                    && type_str.starts_with('&')
                     && !type_str.starts_with("&mut ")
-                    && (crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
-                        || (self.is_type_copy(&param.type_)
-                            && !crate::analyzer::field_enum_borrow::param_only_used_as_field_enum_match_scrutinee(
-                                &param.name,
-                                func.body.as_slice(),
-                            )
-                            && !self.inferred_borrowed_params.contains(&param.name)
-                            && !self.emitted_rust_ref_formals.contains(&param.name)))
+                    && (self.is_type_copy(&param.type_)
+                        && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                        && !crate::analyzer::field_enum_borrow::param_only_used_as_field_enum_match_scrutinee(
+                            &param.name,
+                            func.body.as_slice(),
+                        )
+                        && !self.inferred_borrowed_params.contains(&param.name)
+                        && !self.emitted_rust_ref_formals.contains(&param.name))
                 {
                     type_str = self.type_to_rust(&param.type_);
                 }

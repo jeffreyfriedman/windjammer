@@ -319,13 +319,36 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     }
 
     // Registry-emitted shared-ref contract (text and converged `Reference(T)` formals).
+    // Runtime-scanned sigs often have empty `param_types`/`formal_param_types` but still
+    // set `emitted_rust_ref_params` + Borrowed (`&str` / `AsRef<str>`) — treat as String Ref
+    // only when types are absent or already text; never force String Ref over `&Custom`.
     if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx) {
+        if let Some(ty) = sig.param_types.get(param_idx) {
+            if crate::codegen::rust::string_utilities::param_is_rust_string_ref(ty) {
+                return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
+            }
+            if crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty) {
+                return SafetyType {
+                    base: BaseType::String,
+                    ownership: OwnedType::Ref(Region::fresh(3)),
+                    effects: EffectSet::pure(),
+                    taint: TaintStatus::Clean,
+                    const_eval: crate::ir::safety_type::ConstEval::Runtime,
+                    exec_mode: None,
+                };
+            }
+            if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
+                return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
+            }
+        }
         if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
             sig, param_idx,
-        ) || sig
-            .param_types
-            .get(param_idx)
-            .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
+        ) || (sig.param_types.get(param_idx).is_none()
+            && sig.formal_param_type(param_idx).is_none()
+            && matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed)
+            ))
         {
             return SafetyType {
                 base: BaseType::String,
@@ -335,11 +358,6 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 const_eval: crate::ir::safety_type::ConstEval::Runtime,
                 exec_mode: None,
             };
-        }
-        if let Some(ty) = sig.param_types.get(param_idx) {
-            if matches!(ty, Type::Reference(_) | Type::MutableReference(_)) {
-                return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
-            }
         }
     }
 
@@ -993,6 +1011,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1017,6 +1036,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1043,6 +1063,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
@@ -1071,6 +1092,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1105,6 +1127,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1137,6 +1160,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1165,6 +1189,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1184,6 +1209,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1208,6 +1234,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1229,6 +1256,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1250,6 +1278,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1276,6 +1305,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1303,6 +1333,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };

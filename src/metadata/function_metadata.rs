@@ -50,6 +50,10 @@ pub struct FunctionSignature {
     #[serde(default)]
     pub emitted_rust_ref_params: Option<Vec<bool>>,
 
+    /// Per-param flags: `true` when codegen emitted `&String` (`@string_ref`).
+    #[serde(default)]
+    pub string_ref_string_formal_params: Option<Vec<bool>>,
+
     /// True when the signature includes a `self` receiver (matches analyzer `has_self_receiver`)
     #[serde(default)]
     pub has_self_receiver: bool,
@@ -89,6 +93,7 @@ pub fn metadata_function_sig_from_analyzer(
             .map(|o| format!("{:?}", o))
             .collect(),
         emitted_rust_ref_params: sig.emitted_rust_ref_params.clone(),
+        string_ref_string_formal_params: sig.string_ref_string_formal_params.clone(),
         has_self_receiver: sig.has_self_receiver,
         is_extern: sig.is_extern,
     }
@@ -163,8 +168,9 @@ pub fn try_analyzer_signature_from_metadata(
         has_self_receiver: meta_sig.has_self_receiver,
         is_extern: meta_sig.is_extern,
         emitted_rust_ref_params: meta_sig.emitted_rust_ref_params.clone(),
+        string_ref_string_formal_params: meta_sig.string_ref_string_formal_params.clone(),
         field_extract_params: None,
-            forwarding_borrow_params: None,
+        forwarding_borrow_params: None,
     })
 }
 

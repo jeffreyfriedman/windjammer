@@ -973,8 +973,11 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
             if call_site_param_expects_owned_string(s, arg_index) {
                 return false;
             }
-            s.param_type_for_arg(arg_index)
-                .is_some_and(param_is_rust_string_ref)
+            s.string_ref_string_formal_for_arg(arg_index)
+                || s.param_type_for_arg(arg_index)
+                    .is_some_and(param_is_rust_string_ref)
+                || s.formal_param_type_for_arg(arg_index)
+                    .is_some_and(param_is_rust_string_ref)
         });
         if is_string_ref_param {
             let base = arg_str.trim_start_matches('&');
@@ -990,6 +993,13 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         let strip_to_string = sig
             .and_then(|s| {
                 let idx = s.arg_param_index(arg_index);
+                if s.string_ref_string_formal_for_arg(arg_index)
+                    || s.param_types
+                        .get(idx)
+                        .is_some_and(param_is_rust_string_ref)
+                {
+                    return Some(false);
+                }
                 Some(
                     crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                         s, idx,
@@ -1182,6 +1192,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1217,6 +1228,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1255,6 +1267,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1293,6 +1306,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1344,6 +1358,7 @@ mod tests {
             has_self_receiver: true,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1382,6 +1397,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
