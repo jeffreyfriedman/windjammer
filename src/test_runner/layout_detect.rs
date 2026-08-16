@@ -127,7 +127,11 @@ fn read_toml_lib_path(content: &str) -> Option<String> {
     None
 }
 
-/// Enable `--module-file` when the project uses `mod.wj` / multi-file layout.
+/// Enable `--module-file` when the project uses `mod.wj` multi-module layout.
+///
+/// Flat `src/lib.wj` is a crate root, not a module-file project. Inferring
+/// `--module-file` from `lib.wj` alone caused `wj test` to build a missing
+/// `src/mod.wj`, produce no library `Cargo.toml`, and skip `use crate::` rewrite.
 fn infer_module_file(project_root: &Path, opts: &mut TestRunOptions) {
     if opts.module_file {
         return;
@@ -137,7 +141,7 @@ fn infer_module_file(project_root: &Path, opts: &mut TestRunOptions) {
         return;
     }
     let src = project_root.join("src");
-    if src.join("mod.wj").exists() || src.join("lib.wj").exists() {
+    if src.join("mod.wj").exists() {
         opts.module_file = true;
     }
 }
@@ -218,5 +222,33 @@ path = "build/lib.rs"
             Some(Path::new("build"))
         );
         assert!(opts.use_project_cargo);
+    }
+
+    #[test]
+    fn flat_lib_wj_does_not_infer_module_file() {
+        // Idiomatic single-file packages use src/lib.wj (crate root), not mod.wj.
+        // Inferring --module-file made wj test build a missing src/mod.wj and skip
+        // the library Cargo.toml / use-crate rewrite (ecosystem wj-dotenv).
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/lib.wj"), "pub fn parse() {}\n").unwrap();
+        let mut opts = TestRunOptions::default();
+        apply_inferred_test_options(root, &mut opts);
+        assert!(
+            !opts.module_file,
+            "flat src/lib.wj must not enable --module-file"
+        );
+    }
+
+    #[test]
+    fn mod_wj_infers_module_file() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/mod.wj"), "pub mod domain\n").unwrap();
+        let mut opts = TestRunOptions::default();
+        apply_inferred_test_options(root, &mut opts);
+        assert!(opts.module_file);
     }
 }

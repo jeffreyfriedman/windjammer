@@ -183,8 +183,19 @@ fn best_module_qualified_suffix_match(
         }
     };
 
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        consider(key, sig);
+    // Prefer method-index: suffix is `::{Type}::{method}` or `::{method}` — index by
+    // the trailing method segment so we never scan the full registry.
+    let method_leaf = suffix.rsplit("::").next().unwrap_or(suffix.trim_start_matches(':'));
+    if let Some(keys) = registry.method_keys_for(method_leaf) {
+        for key in keys {
+            if let Some(sig) = registry.get_signature(key) {
+                consider(key, sig);
+            }
+        }
+    } else {
+        for (key, sig) in registry.all_signatures_for_suffix_search() {
+            consider(key, sig);
+        }
     }
     best.map(|(key, sig, _, _, _)| (key, sig))
 }
