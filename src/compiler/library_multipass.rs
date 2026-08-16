@@ -1211,7 +1211,16 @@ pub(crate) fn build_library_multipass(
                 );
             }
 
-            let mut codegen = CodeGenerator::new_for_module(full_registry, target);
+            // Crate-root main.wj is the binary entry ([[bin]]), not a library module.
+            // Using new_for_module skipped `fn main` and injected `use super::*`.
+            let is_crate_root_main = file.file_name().and_then(|n| n.to_str()) == Some("main.wj")
+                && file.parent().is_some_and(|p| p == src_base.as_path());
+
+            let mut codegen = if is_crate_root_main {
+                CodeGenerator::new(full_registry, target)
+            } else {
+                CodeGenerator::new_for_module(full_registry, target)
+            };
             codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
             codegen.merge_function_emitted_mut_arg_indices(&accumulated_emitted_mut_arg_indices);
             codegen.set_copy_types_registry((*global_copy_structs).clone());
@@ -1244,6 +1253,13 @@ pub(crate) fn build_library_multipass(
                 &dep_roots,
                 Some(dep_epoch_snapshot),
             )?;
+
+            // Bin + lib package: `use crate::` in main must resolve via the lib crate name.
+            if is_crate_root_main {
+                let lib_name =
+                    crate::cargo_toml::infer_project_name_from(&src_base).replace('-', "_");
+                rewrite_bin_crate_imports_to_lib(&analysis.output_file, &lib_name)?;
+            }
 
             let reg = std::sync::Arc::make_mut(&mut final_global_registry);
             reg.merge(&codegen.signature_registry);
@@ -1526,4 +1542,17 @@ fn run_parallel_numeric_inference(
     }
     global.finish_solve();
     global
+}
+
+/// Rewrite `use crate::…` in a binary `main.rs` so it resolves against the package lib.
+fn rewrite_bin_crate_imports_to_lib(main_rs: &Path, lib_name: &str) -> Result<()> {
+    if !main_rs.exists() {
+        return Ok(());
+    }
+    let content = std::fs::read_to_string(main_rs)?;
+    let updated = content.replace("use crate::", &format!("use {}::", lib_name));
+    if updated != content {
+        std::fs::write(main_rs, updated)?;
+    }
+    Ok(())
 }

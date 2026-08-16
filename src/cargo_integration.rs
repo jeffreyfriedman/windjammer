@@ -536,7 +536,14 @@ pub fn create_cargo_toml_with_deps(
     let has_lib_rs = output_dir.join("lib.rs").exists();
     let has_main_rs = output_dir.join("main.rs").exists();
 
-    let lib_or_bin_section = if has_lib_rs {
+    // Multi-file CLI: domain modules live in [lib]; src/main.wj is [[bin]].
+    // Emitting only [lib] left main.rs orphaned (no cargo run target).
+    let lib_or_bin_section = if has_lib_rs && has_main_rs {
+        format!(
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
+            lib_name_normalized, project_name
+        )
+    } else if has_lib_rs {
         // Library project - generate [lib] section
         format!(
             "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n",

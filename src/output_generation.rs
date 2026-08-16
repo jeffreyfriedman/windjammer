@@ -109,7 +109,10 @@ pub(crate) fn generate_main_rust_code<'ast>(
         let mut generator_signatures = module_compiler.global_signatures.clone();
         generator_signatures.merge(signatures);
 
-        let mut generator = if is_multi_file_project {
+        let is_crate_root_main = input_path.file_name().and_then(|n| n.to_str()) == Some("main.wj")
+            && input_path.parent() == Some(source_root);
+
+        let mut generator = if is_multi_file_project && !is_crate_root_main {
             codegen::CodeGenerator::new_for_module(generator_signatures, target)
         } else {
             codegen::CodeGenerator::new(generator_signatures, target)
@@ -133,6 +136,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         }
 
         let result = generator.generate_program(program, analyzed);
+        let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
 
         if is_multi_file_project {
             generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
@@ -172,7 +176,9 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
     let mut generator_signatures = module_compiler.global_signatures.clone();
     generator_signatures.merge(signatures);
-    let mut generator = if is_multi_file_project {
+    let is_crate_root_main = input_path.file_name().and_then(|n| n.to_str()) == Some("main.wj")
+        && input_path.parent() == Some(source_root);
+    let mut generator = if is_multi_file_project && !is_crate_root_main {
         codegen::CodeGenerator::new_for_module(generator_signatures, target)
     } else {
         codegen::CodeGenerator::new(generator_signatures, target)
@@ -236,6 +242,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
 
     let result = generator.generate_program(program, analyzed);
+    let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
 
     if is_multi_file_project {
         generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
@@ -250,6 +257,14 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
 
     Ok(MainCodegenOutcome::RustCode(result))
+}
+
+fn rewrite_bin_crate_imports(code: String, source_root: &Path, is_crate_root_main: bool) -> String {
+    if !is_crate_root_main {
+        return code;
+    }
+    let lib_name = crate::cargo_toml::infer_project_name_from(source_root).replace('-', "_");
+    code.replace("use crate::", &format!("use {}::", lib_name))
 }
 
 #[allow(clippy::too_many_arguments)] // Mirrors `generate_main_rust_code` callers
