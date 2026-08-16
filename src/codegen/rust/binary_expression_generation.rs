@@ -120,10 +120,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
         );
 
-        // When true, the usize/len() comparison path below casts the usize/.len() side to `i64`.
-        // Skip general int promotion so we never double-cast (e.g. `(len as i64) as u32`).
-        // Only when the non-len operand is a signed / Windjammer `int` — not `usize`.
-        let usize_cmp_cast_will_apply = is_comparison
+        // When true, the usize/len() comparison or arithmetic path below casts the usize/.len()
+        // side to `i64`. Skip general int promotion so we never double-cast
+        // (e.g. `(len as i64) as u32`). Only when the other operand is signed / Windjammer
+        // `int` — not `usize` or an untyped int literal (Rust infers `usize` next to `.len()`).
+        let usize_signed_int_cast_will_apply = (is_comparison || is_arithmetic)
             && ((left_is_usize
                 && !right_is_usize
                 && !right_is_int_literal
@@ -221,36 +222,36 @@ impl<'ast> CodeGenerator<'ast> {
         // Restore previous suppress state
         self.suppress_borrowed_clone = prev_suppress;
 
-        // WINDJAMMER PHILOSOPHY: Auto-cast int/usize in comparisons
-        // When comparing int (i64) with usize, automatically cast to make it work.
+        // WINDJAMMER PHILOSOPHY: Auto-cast int/usize in comparisons and arithmetic.
+        // When comparing or operating on int (i64) with usize, cast the usize side to i64.
         //
         // CORRECTNESS: Always cast the usize/.len() side to i64, NOT the int side to usize.
         // Casting i64 → usize is UNSAFE for negative values (wraps to a huge usize).
         // Casting usize → i64 is safe for lengths that fit in i64 (practical vectors).
         //
-        // For int literals compared to usize: Rust infers the literal type from context
-        // (no cast needed): `items.len() > 0` stays as-is.
+        // For int literals next to usize: Rust infers the literal type from context
+        // (no cast needed): `items.len() > 0`, `items.len() - 1` stay as-is.
         //
         // Examples:
-        // - int < items.len()  →  int < (items.len() as i64)
-        // - items.len() > int  →  (items.len() as i64) > int
-        // - usize < items.len() → no cast (both usize)
-        if is_comparison
-            && left_is_usize
-            && !right_is_usize
-            && !right_is_int_literal
-            && self.comparison_other_side_needs_len_as_i64(right)
-        {
-            (left_str, right_str) =
-                super::type_casting::cast_for_usize_binary_op(&left_str, &right_str, true, false);
-        } else if is_comparison
-            && right_is_usize
-            && !left_is_usize
-            && !left_is_int_literal
-            && self.comparison_other_side_needs_len_as_i64(left)
-        {
-            (left_str, right_str) =
-                super::type_casting::cast_for_usize_binary_op(&left_str, &right_str, false, true);
+        // - int < items.len()       →  int < (items.len() as i64)
+        // - (done * 100) / total    →  (done * 100) / (total as i64)  when total is usize
+        // - usize < items.len()     →  no cast (both usize)
+        if usize_signed_int_cast_will_apply {
+            if left_is_usize {
+                (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
+                    &left_str,
+                    &right_str,
+                    true,
+                    false,
+                );
+            } else {
+                (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
+                    &left_str,
+                    &right_str,
+                    false,
+                    true,
+                );
+            }
         }
         // If both are usize: no cast (usize == usize is fine)
         // If neither is usize: no cast (i64 == i64 is fine)
@@ -275,7 +276,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Mixed concrete integer types (e.g. u32 vs i32): Rust needs explicit `as T`.
         // Only when int inference has resolved BOTH sides and they differ.
         // Skip if the usize/len() heuristic already cast one operand to usize.
-        if !usize_cmp_cast_will_apply {
+        if !usize_signed_int_cast_will_apply {
             // `usize`/`len()` ± untyped literal: Rust infers the literal as `usize` — do not
             // rewrite to `1_usize as i64` etc.
             let skip_int_promotion_usize_arith_untyped_lit = is_arithmetic

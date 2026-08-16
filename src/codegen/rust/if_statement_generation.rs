@@ -40,6 +40,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Auto-deref borrowed bool in if-condition: `if r` where r: &bool → `if *r`
         let cond_str = if let Expression::Identifier { name, .. } = condition {
             if self.inferred_borrowed_params.contains(name.as_str())
+                || self.inferred_mut_borrowed_params.contains(name)
                 || self.borrowed_iterator_vars.contains(name)
             {
                 let inferred_type = self.infer_expression_type(condition);

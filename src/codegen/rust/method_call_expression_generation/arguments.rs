@@ -353,28 +353,30 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 if self.ir_cutover.call_sites {
-                    let receiver_for_ir = receiver_type_name
-                        .map(str::to_string)
-                        .or_else(|| self.mc_infer_method_receiver_type_name(object))
-                        .or_else(|| {
-                            sig_for_effective.as_ref().and_then(|sig| {
-                                crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
-                                    .map(str::to_string)
+                    // Never invent a receiver type from a unique stdlib method-name hit
+                    // (`join` → `Vec`). That mis-binds `strings::join` to `Vec::join` and
+                    // owns `&str` literals. Prefer inferred/sig receivers only.
+                    let object_is_runtime_std_module = matches!(
+                        object,
+                        Expression::Identifier { name, .. }
+                            if self.is_imported_runtime_std_module(name)
+                                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
+                                    name
+                                )
+                    );
+                    let receiver_for_ir = if object_is_runtime_std_module {
+                        None
+                    } else {
+                        receiver_type_name
+                            .map(str::to_string)
+                            .or_else(|| self.mc_infer_method_receiver_type_name(object))
+                            .or_else(|| {
+                                sig_for_effective.as_ref().and_then(|sig| {
+                                    crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
+                                        .map(str::to_string)
+                                })
                             })
-                        })
-                        .or_else(|| {
-                            let hits: Vec<String> = self
-                                .stdlib_method_signatures
-                                .iter()
-                                .filter(|(_, methods)| methods.contains_key(method))
-                                .map(|(ty, _)| ty.clone())
-                                .collect();
-                            if hits.len() == 1 {
-                                Some(hits[0].clone())
-                            } else {
-                                None
-                            }
-                        });
+                    };
                     let qualified_callee =
                         crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
                             receiver_for_ir.as_deref(),
@@ -428,10 +430,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                             }
                         }
-                        let qualified = receiver_rt
-                            .as_deref()
-                            .map(|rt| format!("{rt}::{method}"))
-                            .unwrap_or_else(|| method.to_string());
                         coerced = self.normalize_owned_copy_match_binding_call_arg(
                             arg_to_generate,
                             &coerced,
@@ -445,10 +443,12 @@ impl<'ast> CodeGenerator<'ast> {
                         // Terminal IR reconcile owns prefer-shared enforce, copy-aggregate
                         // peel, mixed-forwarder / owned-outer, match-arm text, pattern/`&str`,
                         // runtime-std borrow, stub auto-own, and shared-ref strip.
+                        // Use `qualified_callee` (same key as apply_ir) so runtime fallback
+                        // lookup finds `Connection::query`, not bare `query`.
                         self.reconcile_post_ir_mut_borrow_and_owned_peel(
                             &mut coerced,
                             arg_to_generate,
-                            &qualified,
+                            &qualified_callee,
                             i,
                             &contract_sig,
                             &self.signature_registry,

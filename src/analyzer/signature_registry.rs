@@ -35,6 +35,9 @@ pub struct FunctionSignature {
     pub is_extern: bool,
     /// Codegen refresh: `true` when generated Rust emits `&T` for this param index.
     pub emitted_rust_ref_params: Option<Vec<bool>>,
+    /// Codegen refresh: `true` when the emitted formal is `&String` (`@string_ref`),
+    /// distinct from `&str` (Phase-2 / readonly text).
+    pub string_ref_string_formal_params: Option<Vec<bool>>,
     /// Callee params returned via field extraction only (`key.bytes`); not a full move for callers.
     pub field_extract_params: Option<Vec<bool>>,
     /// WJ-owned formal that only forwards the param to a borrowing callee (`has_key` → `get`).
@@ -53,6 +56,7 @@ impl Default for FunctionSignature {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
@@ -108,6 +112,15 @@ impl FunctionSignature {
     pub fn formal_param_type_for_arg(&self, arg_index: usize) -> Option<&Type> {
         self.formal_param_type(self.arg_param_index(arg_index))
     }
+
+    /// True when codegen recorded an `&String` (`@string_ref`) formal for this arg.
+    pub fn string_ref_string_formal_for_arg(&self, arg_index: usize) -> bool {
+        let idx = self.arg_param_index(arg_index);
+        self.string_ref_string_formal_params
+            .as_ref()
+            .and_then(|flags| flags.get(idx).copied())
+            == Some(true)
+    }
 }
 
 static STDLIB_BASELINE: OnceLock<SignatureRegistry> = OnceLock::new();
@@ -139,7 +152,11 @@ impl SignatureRegistry {
     /// reading stdlib / meta signatures — avoids cloning the full HashMap.
     pub fn stdlib() -> &'static SignatureRegistry {
         STDLIB_BASELINE.get_or_init(|| {
-            let mut registry = SignatureRegistry {
+            // Runtime Rust APIs (`&str` / `AsRef<str>`) live in the fallback layer so
+            // WJ `.wj` / stdlib_meta stubs that declare owned `string` can shadow them
+            // in `signatures` without erasing the borrow contract — call sites consult
+            // `get_fallback_signature` via prefer_shared_ref.
+            let mut runtime = SignatureRegistry {
                 signatures: HashMap::new(),
                 type_collision_keys: HashSet::new(),
                 ownership_collision_keys: HashSet::new(),
@@ -148,11 +165,13 @@ impl SignatureRegistry {
                 global_fallback: None,
             };
 
-            if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut registry) {
+            if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut runtime) {
                 eprintln!("Warning: Failed to scan runtime signatures: {}", e);
                 eprintln!("Continuing with empty registry - may generate incorrect borrows");
             }
 
+            let mut registry =
+                SignatureRegistry::layered(std::sync::Arc::new(runtime));
             Self::load_stdlib_meta(&mut registry);
             super::primitive_float_signatures::register_primitive_float_signatures(&mut registry);
             registry
@@ -807,6 +826,7 @@ impl SignatureRegistry {
                             has_self_receiver,
                             is_extern: false,
                             emitted_rust_ref_params: None,
+                            string_ref_string_formal_params: None,
                             field_extract_params: None,
                             forwarding_borrow_params: None,
                         };
@@ -855,6 +875,7 @@ impl SignatureRegistry {
             has_self_receiver,
             is_extern: func.is_extern,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
@@ -1135,6 +1156,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
@@ -1148,6 +1170,7 @@ mod tests {
             has_self_receiver: false,
             is_extern: false,
             emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
             field_extract_params: None,
             forwarding_borrow_params: None,
         };

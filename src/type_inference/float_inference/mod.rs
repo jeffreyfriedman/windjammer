@@ -570,3 +570,64 @@ fn foo(g: HashMap<(i32, i32), f32>) -> i32 {
         );
     }
 }
+
+#[cfg(test)]
+mod tile_bounds_multi_fn_tests {
+    use crate::lexer::Lexer;
+    use crate::parser_impl::Parser;
+    use crate::type_inference::FloatInference;
+
+    fn infer(src: &str) -> FloatInference {
+        let mut lexer = Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut fi = FloatInference::new();
+        fi.set_debug_source(src);
+        fi.infer_program(&program);
+        fi
+    }
+
+    #[test]
+    fn single_fn_tile_bounds_ok() {
+        let src = r#"
+pub fn check_bounds(x: f32, width: f32, tile_size: f32, map_width: f32) -> u32 {
+    let right_tile = ((x + width - 0.001) / tile_size).floor().min(map_width - 1.0) as u32
+    right_tile
+}
+"#;
+        let fi = infer(src);
+        assert!(fi.errors.is_empty(), "errors: {:?}", fi.errors);
+    }
+
+    #[test]
+    fn two_fn_tile_bounds_ok() {
+        let src = r#"
+pub fn check_bounds(x: f32, width: f32, tile_size: f32, map_width: f32) -> u32 {
+    let right_tile = ((x + width - 0.001) / tile_size).floor().min(map_width - 1.0) as u32
+    right_tile
+}
+
+pub fn other() {}
+"#;
+        let fi = infer(src);
+        assert!(fi.errors.is_empty(), "errors: {:?}", fi.errors);
+    }
+
+    #[test]
+    fn tile_bounds_with_call_site_literals_ok() {
+        let src = r#"
+pub fn check_bounds(x: f32, width: f32, tile_size: f32, map_width: f32) -> u32 {
+    let right_tile = ((x + width - 0.001) / tile_size).floor().min(map_width - 1.0) as u32
+    right_tile
+}
+
+pub fn test_tile_index_near_map_edge() {
+    let t = check_bounds(95.5, 1.2, 1.0, 100.0)
+    assert_eq(t, 96u32)
+}
+"#;
+        let fi = infer(src);
+        assert!(fi.errors.is_empty(), "errors: {:?}", fi.errors);
+    }
+}

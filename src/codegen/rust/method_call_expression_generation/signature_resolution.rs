@@ -139,6 +139,32 @@ impl<'ast> CodeGenerator<'ast> {
                 .map(finalize_call_site_signature);
         }
 
+        // Runtime std modules (`strings::join`): resolve `module::method` before any
+        // bare-method suffix match (`join` → `Vec::join`), which invents the wrong API.
+        if let Expression::Identifier { name, .. } = object {
+            if self.is_imported_runtime_std_module(name)
+                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name)
+            {
+                let qualified = format!("{name}::{method}");
+                if let Some(sig) = self
+                    .get_signature_with_global(&qualified)
+                    .cloned()
+                    .or_else(|| {
+                        self.global_signature_registry()
+                            .and_then(|g| g.get_fallback_signature(&qualified).cloned())
+                    })
+                    .or_else(|| self.signature_registry.get_fallback_signature(&qualified).cloned())
+                {
+                    if crate::codegen::rust::call_signature_resolution::validate_arg_count(
+                        &sig,
+                        arguments.len(),
+                    ) {
+                        return Some(finalize_call_site_signature(sig));
+                    }
+                }
+            }
+        }
+
         // Never homonym-guess `Type::method` when the receiver is a field access — e.g.
         // `self.quest_manager.is_quest_active` must not resolve to `DialogueState::is_quest_active`.
         if matches!(object, Expression::FieldAccess { .. }) {

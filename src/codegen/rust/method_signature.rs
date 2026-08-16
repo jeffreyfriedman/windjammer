@@ -27,7 +27,7 @@ pub struct MethodSignature {
     pub forwarding_borrow_params: Vec<bool>,
     /// Codegen-converged Rust ref formals per user param (excluding `self`).
     pub emitted_rust_ref_params: Option<Vec<bool>>,
-    /// Callee param needs `&String` (Vec<String>::contains / binary_search), not `&str`.
+    /// Callee param needs `&String` (`@string_ref` / Vec<String>::contains), not `&str`.
     pub string_ref_string_formal_params: Option<Vec<bool>>,
 }
 
@@ -64,6 +64,15 @@ impl MethodSignature {
             has_self_receiver: self.has_self_receiver,
             is_extern: false,
             emitted_rust_ref_params,
+            string_ref_string_formal_params: {
+                let mut flags = self.string_ref_string_formal_params.clone();
+                if self.has_self_receiver {
+                    if let Some(ref mut f) = flags {
+                        f.insert(0, false);
+                    }
+                }
+                flags
+            },
             field_extract_params: None,
             forwarding_borrow_params: Some(forwarding_borrow_params),
         }
