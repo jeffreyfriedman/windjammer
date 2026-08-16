@@ -1255,10 +1255,15 @@ pub(crate) fn build_library_multipass(
             )?;
 
             // Bin + lib package: `use crate::` in main must resolve via the lib crate name.
+            // Skip when there is no configured package name (temp/integration trees keep
+            // `use crate::` for single-crate cargo-check harnesses).
             if is_crate_root_main {
-                let lib_name =
-                    crate::cargo_toml::infer_project_name_from(&src_base).replace('-', "_");
-                rewrite_bin_crate_imports_to_lib(&analysis.output_file, &lib_name)?;
+                if let Some(lib_name) =
+                    crate::cargo_toml::infer_configured_package_name(&src_base)
+                {
+                    let lib_name = lib_name.replace('-', "_");
+                    rewrite_bin_crate_imports_to_lib(&analysis.output_file, &lib_name)?;
+                }
             }
 
             let reg = std::sync::Arc::make_mut(&mut final_global_registry);
