@@ -261,7 +261,9 @@ pub fn strip_main_functions(output_dir: &Path) -> anyhow::Result<()> {
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                if file_name.ends_with(".rs") && file_name != "mod.rs" {
+                // Never strip the crate binary entry point — multi-file CLIs keep
+                // domain modules in the lib and `fn main` in main.rs ([[bin]]).
+                if file_name.ends_with(".rs") && file_name != "mod.rs" && file_name != "main.rs" {
                     let content = fs::read_to_string(&path)?;
 
                     let mut new_lines = Vec::new();

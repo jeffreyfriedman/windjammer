@@ -71,8 +71,19 @@ pub fn generate_single_file_cargo_toml(
     let project_name = infer_project_name(source_dir);
     let lib_name = project_name.replace('-', "_"); // Rust lib names can't have hyphens
 
-    let lib_or_bin_section = if has_lib_rs {
+    // Multi-file CLI: keep domain in [lib] and wire src/main.wj as [[bin]].
+    let lib_or_bin_section = if has_lib_rs && has_main_rs {
+        format!(
+            "[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
+            lib_name, project_name
+        )
+    } else if has_lib_rs {
         format!("[lib]\nname = \"{}\"\npath = \"lib.rs\"\n\n", lib_name)
+    } else if has_mod_rs && has_main_rs {
+        format!(
+            "[lib]\nname = \"{}\"\npath = \"mod.rs\"\n\n[[bin]]\nname = \"{}\"\npath = \"main.rs\"\n\n",
+            lib_name, project_name
+        )
     } else if has_mod_rs {
         format!("[lib]\nname = \"{}\"\npath = \"mod.rs\"\n\n", lib_name)
     } else if has_main_rs {
