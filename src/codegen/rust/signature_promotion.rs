@@ -1355,9 +1355,15 @@ pub(crate) fn best_method_signature_for_receiver(
             consider(&exact, sig);
         }
     }
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&suffix) || key.ends_with(&leaf_suffix) {
-            consider(key, sig);
+    // Indexed by bare method name — O(matching keys), not O(registry size).
+    // Full-map suffix scans blow RSS/time on engine builds (80k+ signatures).
+    if let Some(keys) = registry.method_keys_for(method) {
+        for key in keys {
+            if key.ends_with(&suffix) || key.ends_with(&leaf_suffix) {
+                if let Some(sig) = registry.get_signature(key) {
+                    consider(key, sig);
+                }
+            }
         }
     }
 
@@ -1603,6 +1609,42 @@ pub fn exercise(parts: Vec<string>) -> string {
                 &refreshed, 1
             ),
             "delimiter must not expect owned String"
+        );
+    }
+
+    #[test]
+    fn codegen_strings_join_vec_arg_must_not_clone() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+use std::strings
+pub fn join_tail(parts: Vec<string>) -> string {
+    strings.join(parts, "=")
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_global_signature_registry(std::sync::Arc::new(
+            crate::analyzer::SignatureRegistry::stdlib().clone(),
+        ));
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !generated.contains("parts.clone()"),
+            "Vec into strings::join(&[String]) must not clone (runtime module ≠ Type::method). Got:\n{generated}"
+        );
+        assert!(
+            generated.contains("strings::join(&parts")
+                || generated.contains("strings::join(parts,"),
+            "expected shared borrow into join. Got:\n{generated}"
         );
     }
 }

@@ -345,9 +345,8 @@ fn detect_and_compile_library(
     );
 
     // Prefer mod.wj entry (excludes main.wj binary) when present — matches `wj build src/mod.wj`.
+    // Never point at a missing mod.wj (e.g. `--module-file` on a flat lib.wj package).
     let build_entry = if src_dir.join("mod.wj").exists() {
-        src_dir.join("mod.wj")
-    } else if opts.module_file {
         src_dir.join("mod.wj")
     } else {
         src_dir.clone()

@@ -161,7 +161,10 @@ impl<'ast> CodeGenerator<'ast> {
         // Module-qualified free calls without an exact registry key: fail closed.
         // Do not coerce from cross-module homonyms or guess ownership. Inline `mod`
         // callees may register only the bare name — allow that fallback.
-        if Self::is_module_boundary_callee(callee_name)
+        // Method calls supply a receiver type — never treat them as module boundaries
+        // even if a buggy callee key looks like `local_var::method`.
+        if receiver_type_name.is_none()
+            && Self::is_module_boundary_callee(callee_name)
             && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     callee_name,
@@ -270,75 +273,88 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if let Some((receiver_ty, method)) = callee_name.rsplit_once("::") {
-            let arg_count = user_arg_count.unwrap_or(arg_index + 1);
-            let inferred_recv = receiver_type_name.and_then(|rt| {
-                crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
-                    Some(rt),
-                    None,
-                    self.current_function_return_type.as_ref(),
-                )
-            });
-            if let Some(method_sig) = self.resolve_method_function_signature_specialized(
-                receiver_ty,
-                method,
-                arg_count,
-                inferred_recv.as_ref(),
+            // Only Type::method (uppercase receiver). Runtime modules (`strings::join`)
+            // and lowercase module paths must keep the free-function / prefer-shared sig —
+            // resolving `strings` as a type picks Vec::join-style owned contracts and
+            // forces `parts.clone()` into `&[String]` formals (flat lib.wj / wj test).
+            if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                callee_name,
             ) {
-                let prefer_method = sig.as_ref().is_none_or(|local| {
-                    let local_idx = local.arg_param_index(arg_index);
-                    let method_idx = method_sig.arg_param_index(arg_index);
-                    // Keep local owned / Copy-aggregate contracts over stale method Ref wraps
-                    // (regression-060 `other: Lsn` must not become `&through` via method_ref prefer).
-                    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                        local, local_idx,
-                    ) {
-                        return false;
-                    }
-                    if local.formal_param_type(local_idx).is_some_and(|t| {
-                        let bare = match t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref()
-                            }
-                            other => other,
-                        };
-                        self.is_type_copy(bare)
-                            && !crate::type_classification::is_copy_pass_by_value_formal(bare)
-                    }) {
-                        return false;
-                    }
-                    let local_ref = local
-                        .param_types
-                        .get(local_idx)
-                        .is_some_and(|t| matches!(t, Type::Reference(_)));
-                    let method_idx = method_sig.arg_param_index(arg_index);
-                    let copy_aggregate_method = method_sig.formal_param_type(method_idx).is_some_and(|t| {
-                        let bare = match t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                            other => other,
-                        };
-                        self.is_type_copy(bare)
-                            && !crate::type_classification::is_copy_pass_by_value_formal(bare)
-                    });
-                    let method_emits_shared =
-                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                let arg_count = user_arg_count.unwrap_or(arg_index + 1);
+                let inferred_recv = receiver_type_name.and_then(|rt| {
+                    crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                        Some(rt),
+                        None,
+                        self.current_function_return_type.as_ref(),
+                    )
+                });
+                if let Some(method_sig) = self.resolve_method_function_signature_specialized(
+                    receiver_ty,
+                    method,
+                    arg_count,
+                    inferred_recv.as_ref(),
+                ) {
+                    let prefer_method = sig.as_ref().is_none_or(|local| {
+                        let local_idx = local.arg_param_index(arg_index);
+                        let method_idx = method_sig.arg_param_index(arg_index);
+                        // Keep local owned / Copy-aggregate contracts over stale method Ref wraps
+                        // (regression-060 `other: Lsn` must not become `&through` via method_ref prefer).
+                        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            local, local_idx,
+                        ) {
+                            return false;
+                        }
+                        if local.formal_param_type(local_idx).is_some_and(|t| {
+                            let bare = match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    inner.as_ref()
+                                }
+                                other => other,
+                            };
+                            self.is_type_copy(bare)
+                                && !crate::type_classification::is_copy_pass_by_value_formal(bare)
+                        }) {
+                            return false;
+                        }
+                        let local_ref = local
+                            .param_types
+                            .get(local_idx)
+                            .is_some_and(|t| matches!(t, Type::Reference(_)));
+                        let method_idx = method_sig.arg_param_index(arg_index);
+                        let copy_aggregate_method = method_sig
+                            .formal_param_type(method_idx)
+                            .is_some_and(|t| {
+                                let bare = match t {
+                                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                                        inner.as_ref()
+                                    }
+                                    other => other,
+                                };
+                                self.is_type_copy(bare)
+                                    && !crate::type_classification::is_copy_pass_by_value_formal(
+                                        bare,
+                                    )
+                            });
+                        let method_emits_shared = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                             &method_sig, method_idx,
                         );
-                    let local_owned = matches!(
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership(
-                            local, local_idx,
-                        ),
-                        crate::analyzer::OwnershipMode::Owned
+                        let local_owned = matches!(
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                                local, local_idx,
+                            ),
+                            crate::analyzer::OwnershipMode::Owned
+                        );
+                        (method_emits_shared && !local_ref && !copy_aggregate_method)
+                            || (local_owned && method_emits_shared && !copy_aggregate_method)
+                    }) || crate::codegen::rust::signature_promotion::method_registry_reflects_emitted_owned(
+                        &method_sig,
+                    ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &method_sig,
+                        method_sig.arg_param_index(arg_index),
                     );
-                    ((method_emits_shared && !local_ref && !copy_aggregate_method)
-                        || (local_owned && method_emits_shared && !copy_aggregate_method))
-                }) || crate::codegen::rust::signature_promotion::method_registry_reflects_emitted_owned(
-                    &method_sig,
-                ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    &method_sig,
-                    method_sig.arg_param_index(arg_index),
-                );
-                if prefer_method {
-                    sig = Some(method_sig);
+                    if prefer_method {
+                        sig = Some(method_sig);
+                    }
                 }
             }
         }
@@ -346,7 +362,9 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(global) = self.global_signature_registry.as_ref() {
             if let Some(global_sig) = global.get_signature(callee_name) {
                 let global_idx = global_sig.arg_param_index(arg_index);
-                let method_registry_owned = callee_name.rsplit_once("::").is_some_and(
+                let method_registry_owned = crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                    callee_name,
+                ) && callee_name.rsplit_once("::").is_some_and(
                     |(receiver_ty, method)| {
                         let arg_count = user_arg_count.unwrap_or(arg_index + 1);
                         self.resolve_method_function_signature(receiver_ty, method, arg_count)
