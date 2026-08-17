@@ -237,12 +237,28 @@ impl<'ast> CodeGenerator<'ast> {
                     self.import_aliases.insert("Map".to_string());
                 }
                 if path.first().is_some_and(|p| p == "std") {
-                    if path.len() >= 2
-                        && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
-                            &path[1],
-                        )
-                    {
-                        self.runtime_std_module_imports.insert(path[1].clone());
+                    if path.len() >= 2 {
+                        let module = &path[1];
+                        // Track WJ runtime modules from `use std::…`. Prefer the
+                        // known-runtime list, and also accept bare `use std::foo`
+                        // (path length 2) for lowercase modules that are not Rust
+                        // crates (`collections`, `sync`, …) — covers `process`,
+                        // `path`, etc. without growing a method-name heuristic list.
+                        let known = crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
+                            module,
+                        );
+                        let bare_std_module = path.len() == 2
+                            && module
+                                .chars()
+                                .next()
+                                .is_some_and(|c| c.is_ascii_lowercase())
+                            && !matches!(
+                                module.as_str(),
+                                "collections" | "sync" | "ops" | "cmp" | "fmt"
+                            );
+                        if known || bare_std_module {
+                            self.runtime_std_module_imports.insert(module.clone());
+                        }
                     }
                 }
                 // Track modules imported from `ffi` paths so calls through them

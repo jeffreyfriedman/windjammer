@@ -84,11 +84,21 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     });
 
     let runtime_module = match call_obj {
-        Expression::Identifier { name, .. }
-            if gen.is_imported_runtime_std_module(name)
-                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name) =>
-        {
-            Some(name.as_str())
+        Expression::Identifier { name, .. } => {
+            let listed = gen.is_imported_runtime_std_module(name)
+                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name);
+            let key = format!("{name}::{call_method}");
+            let registry = gen
+                .global_signature_registry()
+                .unwrap_or(&gen.signature_registry);
+            // `get_signature` walks the runtime fallback layer; `get_fallback_signature`
+            // only returns when a WJ stub shadows the same key.
+            let scanned = registry.get_signature(&key).is_some();
+            if listed || scanned {
+                Some(name.as_str())
+            } else {
+                None
+            }
         }
         _ => None,
     };
@@ -301,11 +311,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     }
 
     // Type constructors: Vec::new(), HashMap::with_capacity() — not instance methods.
+    // Runtime std modules (`http.get`, `process.exit`) use path `::` when the
+    // identifier is an imported/scanned module (signature `{module}::{method}`).
     let separator = match call_obj {
         Expression::Identifier { name, .. } => {
             if CodeGenerator::is_enum_variant_qualified_path(name)
                 || name.chars().next().is_some_and(|c| c.is_uppercase())
-                || gen.is_imported_runtime_std_module(name)
+                || runtime_module.is_some()
             {
                 "::"
             } else {
