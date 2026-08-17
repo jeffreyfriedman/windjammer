@@ -52,7 +52,7 @@ impl HttpMethod {
 //===============================================
 
 struct Response {
-    status: int,
+    status: u16,
 }
 
 struct RequestBuilder {
@@ -110,8 +110,8 @@ impl Response {
         Err("Not yet implemented")
     }
     
-    fn status_code(self) -> int {
-        // Wraps: response.status().as_u16()
+    fn status_code(self) -> u16 {
+        // Wraps: response.status_code() (HTTP status is 16-bit)
         self.status
     }
     
@@ -235,7 +235,7 @@ struct Router {
 }
 
 struct ServerResponse {
-    status: int,
+    status: u16,
     headers: Vec<(string, string)>,
     body: string,
     binary_body: Option<Vec<u8>>,
@@ -344,7 +344,7 @@ impl Request {
 // ServerResponse - Build Responses
 
 impl ServerResponse {
-    fn new(status: int, body: string) -> ServerResponse {
+    fn new(status: u16, body: string) -> ServerResponse {
         ServerResponse {
             status: status,
             headers: vec![],
@@ -434,7 +434,7 @@ impl ServerResponse {
         }
     }
 
-    fn error(status: int, message: string) -> ServerResponse {
+    fn error(status: u16, message: string) -> ServerResponse {
         ServerResponse {
             status: status,
             headers: vec![("Content-Type", "text/plain")],
@@ -443,7 +443,7 @@ impl ServerResponse {
         }
     }
 
-    fn binary(status: int, data: Vec<u8>) -> ServerResponse {
+    fn binary(status: u16, data: Vec<u8>) -> ServerResponse {
         ServerResponse {
             status: status,
             headers: vec![],
@@ -470,7 +470,7 @@ impl ServerResponse {
         }
     }
     
-    fn with_status(status: int, body: string) -> ServerResponse {
+    fn with_status(status: u16, body: string) -> ServerResponse {
         ServerResponse {
             status: status,
             body: body,

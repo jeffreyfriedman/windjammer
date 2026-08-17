@@ -277,21 +277,24 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
                 // Blackboard-style keys: forward only to readonly `&str` callees (`find_index`).
-                // Runtime AsRef modules (`strings::substring`, `db::connect`, …) keep owned
-                // WJ `string` so callers pass by value (CSV while-index / std_db gates).
+                // Runtime AsRef<str> (`strings::`, `db::`) keep owned WJ `string` (CSV gates).
+                // Runtime AsRef<Path> (`fs::`) demote so write→load→remove can reuse paths.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
-                    && self.param_only_forwards_to_borrowed_text_callees(
+                    && (self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
-                    && !self.param_asref_runtime_forces_owned_formal(
+                    ) || (self.param_only_forwards_to_borrowed_text_callees(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )
+                    ) && !self.param_asref_runtime_forces_owned_formal(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )))
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());
