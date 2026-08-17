@@ -690,7 +690,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         self.emit_call_site_constraints(&sig, &arg_vars);
                     }
 
-                    let callee_effects = lookup_stdlib_effects(&callee_name);
+                    let callee_effects =
+                        crate::ir::effects::effects_for_runtime_callee(&callee_name);
                     if !callee_effects.is_empty() {
                         self.cs.add(Constraint::HasEffects(
                             result,
@@ -772,7 +773,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     self.emit_call_site_constraints(sig, &arg_vars);
                 }
 
-                let callee_effects = lookup_stdlib_effects(&qualified);
+                let callee_effects = crate::ir::effects::effects_for_runtime_callee(&qualified);
                 if !callee_effects.is_empty() {
                     self.cs.add(Constraint::HasEffects(
                         obj_var,
@@ -1168,50 +1169,53 @@ pub fn generate_constraints_with_fields(
 /// Check if a call target is a known taint source.
 fn lookup_taint_source(qualified_name: &str) -> Option<crate::ir::taint::TaintSourceKind> {
     use crate::ir::taint::TaintSourceKind;
-    match qualified_name {
-        "http::request::body" | "std::http::request::body" | "request::body" => {
-            Some(TaintSourceKind::HttpRequestBody)
-        }
-        "http::request::query" | "std::http::request::query" | "request::query" => {
-            Some(TaintSourceKind::HttpRequestQuery)
-        }
-        "http::request::headers" | "std::http::request::headers" | "request::headers" => {
-            Some(TaintSourceKind::HttpRequestHeader)
-        }
-        "std::env::get" | "std::env::var" | "env::get" | "env::var" => {
-            Some(TaintSourceKind::EnvironmentVariable)
-        }
-        "std::io::stdin" | "io::stdin" | "std::io::read_line" | "io::read_line" => {
-            Some(TaintSourceKind::UserInput)
-        }
-        "std::fs::read" | "std::fs::read_to_string" | "fs::read" | "fs::read_to_string" => {
-            Some(TaintSourceKind::FileContents)
-        }
-        "std::db::query" | "db::query" | "std::db::fetch" | "db::fetch" => {
-            Some(TaintSourceKind::DatabaseRow)
-        }
-        _ => None,
+    if qualified_name.contains("request::body") {
+        return Some(TaintSourceKind::HttpRequestBody);
     }
+    if qualified_name.contains("request::query") {
+        return Some(TaintSourceKind::HttpRequestQuery);
+    }
+    if qualified_name.contains("request::headers") {
+        return Some(TaintSourceKind::HttpRequestHeader);
+    }
+    let effects = crate::ir::effects::effects_for_runtime_callee(qualified_name);
+    let module = crate::ir::effects::runtime_module_segment(qualified_name);
+    if module == "env" && effects.contains(&Effect::EnvRead) {
+        return Some(TaintSourceKind::EnvironmentVariable);
+    }
+    if module == "fs" && effects.contains(&Effect::FsRead) {
+        return Some(TaintSourceKind::FileContents);
+    }
+    if module == "db" && effects.contains(&Effect::NetEgress) {
+        return Some(TaintSourceKind::DatabaseRow);
+    }
+    if module == "io" {
+        let registry = crate::analyzer::SignatureRegistry::stdlib();
+        let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+        let sig = registry
+            .get_signature(qualified_name)
+            .or_else(|| registry.get_signature(&format!("{module}::{simple}")));
+        if sig.is_some_and(|s| !matches!(s.return_type, Some(crate::parser::Type::Bool))) {
+            return Some(TaintSourceKind::UserInput);
+        }
+    }
+    None
 }
 
 /// Check if a call target is a dangerous sink requiring clean data.
 fn lookup_taint_sink(qualified_name: &str) -> Option<&'static str> {
-    match qualified_name {
-        "db::query" | "std::db::query" | "db::execute" | "std::db::execute" | "db::raw_query"
-        | "std::db::raw_query" => Some("SQL query"),
-        "process::exec"
-        | "std::process::exec"
-        | "process::spawn"
-        | "std::process::spawn"
-        | "process::command"
-        | "std::process::command" => Some("shell command"),
-        "html::render" | "std::html::render" | "template::render" | "std::template::render" => {
-            Some("HTML template")
-        }
-        "eval" | "std::eval" => Some("code evaluation"),
-        "fs::write" | "std::fs::write" => Some("file write path"),
-        _ => None,
+    let effects = crate::ir::effects::effects_for_runtime_callee(qualified_name);
+    let module = crate::ir::effects::runtime_module_segment(qualified_name);
+    if effects.contains(&Effect::ProcessSpawn) {
+        return Some("shell command");
     }
+    if effects.contains(&Effect::FsWrite) {
+        return Some("file write path");
+    }
+    if module == "db" && effects.contains(&Effect::NetEgress) {
+        return Some("SQL query");
+    }
+    None
 }
 
 /// Check if a call target is a known sanitizer.
@@ -1238,58 +1242,6 @@ fn lookup_sanitizer(qualified_name: &str) -> bool {
             | "sanitize"
             | "std::sanitize"
     )
-}
-
-/// Look up stdlib effects for a given qualified function name.
-/// Returns the set of effects the function directly performs.
-fn lookup_stdlib_effects(qualified_name: &str) -> Vec<Effect> {
-    match qualified_name {
-        // Filesystem
-        "std::fs::read"
-        | "std::fs::read_to_string"
-        | "std::fs::metadata"
-        | "std::fs::read_dir"
-        | "std::fs::exists"
-        | "fs::read"
-        | "fs::read_to_string" => {
-            vec![Effect::FsRead]
-        }
-        "std::fs::write"
-        | "std::fs::create_dir"
-        | "std::fs::create_dir_all"
-        | "std::fs::remove"
-        | "std::fs::remove_dir"
-        | "std::fs::copy"
-        | "std::fs::rename"
-        | "fs::write"
-        | "fs::create_dir" => vec![Effect::FsWrite],
-        // Network
-        "std::http::get" | "std::http::post" | "std::http::put" | "std::http::delete"
-        | "std::http::request" | "http::get" | "http::post" | "http::put" | "http::delete" => {
-            vec![Effect::NetEgress]
-        }
-        "std::http::listen" | "std::http::serve" | "http::listen" | "http::serve" => {
-            vec![Effect::NetIngress]
-        }
-        // Process
-        "std::process::spawn"
-        | "std::process::exec"
-        | "std::process::command"
-        | "process::spawn"
-        | "process::exec" => vec![Effect::ProcessSpawn],
-        // Environment
-        "std::env::get" | "std::env::var" | "env::get" | "env::var" => vec![Effect::EnvRead],
-        "std::env::set" | "std::env::set_var" | "env::set" | "env::set_var" => {
-            vec![Effect::EnvWrite]
-        }
-        // Database (implies network)
-        "std::db::query" | "std::db::execute" | "db::query" | "db::execute" => {
-            vec![Effect::NetEgress]
-        }
-        // FFI
-        "std::ffi::call" | "ffi::call" => vec![Effect::Ffi],
-        _ => vec![],
-    }
 }
 
 /// Map a literal value to its base type.

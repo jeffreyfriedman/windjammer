@@ -26,131 +26,45 @@ impl CodeGenerator<'_> {
             if module_name.ends_with("::Map") || module_name == "map::Map" {
                 return Some("use std::collections::HashMap as Map;\n".to_string());
             }
-            return Some(format!("use std::collections::{};\n", module_name.replace("map::", "collections::")));
+            return Some(format!(
+                "use std::collections::{};\n",
+                module_name.replace("map::", "collections::")
+            ));
         }
 
-        // Handle Rust stdlib modules that should NOT be mapped to windjammer_runtime
-        // These are native Rust modules that should be used directly
-        if module_base.starts_with("collections")
-            || module_base.starts_with("cmp")
-            || module_base.starts_with("ops")
-            || module_base == "ops"
-        {
-            // TDD FIX: Pass through to Rust's std library with alias support
-            if let Some(alias_name) = alias {
-                return Some(format!("use std::{} as {};\n", module_name, alias_name));
+        let kind = crate::codegen::rust::stdlib_method_traits::classify_wj_std_import(module_base);
+        match kind {
+            crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Skip => {
+                return Some(String::new());
             }
-            return Some(format!("use std::{};\n", module_name));
-        }
-
-        // Handle UI framework - skip explicit import (handled by implicit imports)
-        if module_base == "ui" || module_base.starts_with("ui::") {
-            return Some(String::new());
-        }
-
-        // Handle Game framework - skip explicit import (handled by implicit imports)
-        if module_base == "game" || module_base.starts_with("game::") {
-            return Some(String::new());
-        }
-
-        // Handle Tauri framework - skip explicit import (functions are generated inline)
-        if module_base == "tauri" || module_base.starts_with("tauri::") {
-            return Some(String::new());
-        }
-
-        // Windjammer std::fs wraps windjammer_runtime (not Rust std::fs).
-        if module_base == "fs" || module_base.starts_with("fs::") {
-            return Some("use windjammer_runtime::fs;\n".to_string());
-        }
-
-        // Rust std modules: pass through as `use std::process`, etc.
-        // `std::env` maps to windjammer_runtime (cross-backend get/get_or).
-        if module_base == "process"
-            || module_base.starts_with("process::")
-        {
-            return Some(format!("use std::{};\n", module_name));
-        }
-
-        if module_base == "env" || module_base.starts_with("env::") {
-            return Some("use windjammer_runtime::env;\n".to_string());
-        }
-
-        // Platform APIs with no Rust std equivalent - skip (http maps to windjammer_runtime below)
-        if module_base == "dialog"
-            || module_base.starts_with("dialog::")
-            || module_base == "encoding"
-            || module_base.starts_with("encoding::")
-            || module_base == "compute"
-            || module_base.starts_with("compute::")
-            || module_base == "net"
-            || module_base.starts_with("net::")
-            || module_base == "storage"
-            || module_base.starts_with("storage::")
-        {
-            return Some(String::new());
-        }
-
-        // Map to windjammer_runtime (all stdlib modules are now implemented!)
-        let rust_import = match module_base {
-            // Core modules
-            "http" => "windjammer_runtime::http",
-            "mime" => "windjammer_runtime::mime",
-            "json" => "windjammer_runtime::json",
-            "jwt" => "windjammer_runtime::jwt",
-            "io" => "windjammer_runtime::io",
-            "subprocess" => "windjammer_runtime::subprocess",
-
-            // Additional modules
-            "async" | "async_runtime" => "windjammer_runtime::async_runtime",
-            "cli" => "windjammer_runtime::cli",
-            "crypto" => "windjammer_runtime::crypto",
-            "csv" => "windjammer_runtime::csv_mod",
-            "db" => "windjammer_runtime::db",
-            "log" => "windjammer_runtime::log_mod",
-            "math" => "windjammer_runtime::math",
-            "random" => "windjammer_runtime::random",
-            "regex" => "windjammer_runtime::regex_mod",
-            "strings" => "windjammer_runtime::strings",
-            "testing" => "windjammer_runtime::testing",
-            "time" => "windjammer_runtime::time",
-            "game" => "windjammer_runtime::game",
-
-            _ => {
-                // Unknown module - try windjammer_runtime
-                return Some(format!("use windjammer_runtime::{};\n", module_name));
-            }
-        };
-
-        if let Some(alias_name) = alias {
-            return Some(format!("use {} as {};\n", rust_import, alias_name));
-        }
-
-        // For _mod suffixed modules (log_mod, regex_mod), alias back to the original name
-        // AND import any public types they export
-        if rust_import.ends_with("_mod") {
-            let original_name = rust_import
-                .strip_suffix("_mod")
-                .and_then(|s| s.split("::").last())
-                .unwrap_or(rust_import);
-
-            let mut result = format!("use {} as {};\n", rust_import, original_name);
-
-            // Import types for modules that export them
-            match original_name {
-                "regex" => {
-                    result.push_str(&format!("use {}::Regex;\n", rust_import));
+            crate::codegen::rust::stdlib_method_traits::WjStdImportKind::RustStd => {
+                if let Some(alias_name) = alias {
+                    return Some(format!("use std::{} as {};\n", module_name, alias_name));
                 }
-                "time" => {
-                    result.push_str(&format!("use {}::{{Duration, Instant}};\n", rust_import));
-                }
-                _ => {}
+                return Some(format!("use std::{};\n", module_name));
             }
-
-            return Some(result);
+            crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime { rust_stem } => {
+                let rust_import = format!("windjammer_runtime::{rust_stem}");
+                if let Some(alias_name) = alias {
+                    return Some(format!("use {} as {};\n", rust_import, alias_name));
+                }
+                if rust_stem.ends_with("_mod") || rust_stem.ends_with("_runtime") {
+                    let original_name = rust_stem
+                        .strip_suffix("_mod")
+                        .or_else(|| rust_stem.strip_suffix("_runtime"))
+                        .unwrap_or(&rust_stem);
+                    let mut result = format!("use {} as {};\n", rust_import, original_name);
+                    let registry = crate::analyzer::SignatureRegistry::stdlib();
+                    for ty in registry.runtime_exported_types_for_module(original_name) {
+                        result.push_str(&format!("use {rust_import}::{ty};\n"));
+                    }
+                    return Some(result);
+                }
+                let rest = module_name
+                    .strip_prefix(module_base.split("::").next().unwrap_or(module_base))
+                    .unwrap_or("");
+                return Some(format!("use {rust_import}{rest};\n"));
+            }
         }
-        // Preserve `::*` glob suffix from the Windjammer import
-        let glob_suffix = module_name.strip_prefix(module_base).unwrap_or("");
-        // Import the module (glob or qualified) to match the Windjammer `use` form
-        Some(format!("use {}{};\n", rust_import, glob_suffix))
     }
 }

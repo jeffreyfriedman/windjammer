@@ -73,6 +73,8 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
         return Ok(());
     }
 
+    registry.register_runtime_file_stem(module_name);
+
     // Track `impl Type { ... }` so methods register as both `module::fn` and `Type::fn`
     // (call sites resolve `Connection::query`, not only `db::query`).
     let mut current_impl: Option<String> = None;
@@ -81,6 +83,11 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
 
     for line in content.lines() {
         let trimmed = line.trim();
+        if brace_depth == 0 {
+            if let Some(type_name) = parse_exported_type_name(trimmed) {
+                registry.register_runtime_exported_type(module_name, &type_name);
+            }
+        }
         if let Some(type_name) = parse_impl_type_name(trimmed) {
             current_impl = Some(type_name);
             // Depth after this line's braces is assigned below; mark entry depth.
@@ -119,7 +126,7 @@ fn register_scanned_runtime_signature(
         .map(|(_, m)| m.to_string())
         .unwrap_or_else(|| sig.name.clone());
     registry.add_function(sig.name.clone(), sig.clone());
-    registry.register_runtime_std_module(module_name);
+    registry.register_runtime_file_stem(module_name);
     // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
     if let Some(short) = module_name.strip_suffix("_mod") {
         let mut aliased = sig.clone();
@@ -191,6 +198,41 @@ fn is_wj_std_module_stem(stem: &str) -> bool {
     !stem.ends_with("_test") && stem != "test_simple" && stem != "basic_test"
 }
 
+/// `pub struct Foo` / `pub enum Bar` / `pub use path::Baz` / `pub use path::Qux as Alias`.
+fn parse_exported_type_name(trimmed: &str) -> Option<String> {
+    let ident_from = |rest: &str| {
+        let name = rest
+            .split(|c: char| c == '<' || c == '{' || c == '(' || c == ';' || c.is_whitespace())
+            .next()
+            .unwrap_or("")
+            .trim();
+        if name.is_empty() || !name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+            None
+        } else {
+            Some(name.to_string())
+        }
+    };
+    if let Some(rest) = trimmed.strip_prefix("pub struct ") {
+        return ident_from(rest);
+    }
+    if let Some(rest) = trimmed.strip_prefix("pub enum ") {
+        return ident_from(rest);
+    }
+    if let Some(rest) = trimmed.strip_prefix("pub use ") {
+        let rest = rest.trim_end_matches(';').trim();
+        if rest.contains('{') || rest.ends_with('*') {
+            return None;
+        }
+        let name = if let Some((_, alias)) = rest.split_once(" as ") {
+            alias.trim()
+        } else {
+            rest.rsplit("::").next().unwrap_or(rest).trim()
+        };
+        return ident_from(name);
+    }
+    None
+}
+
 /// `impl Connection` / `impl Connection {` / `impl<'a> Connection` → `Connection`.
 fn parse_impl_type_name(trimmed: &str) -> Option<String> {
     let rest = trimmed.strip_prefix("impl")?;
@@ -243,7 +285,8 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
     }
 
     let after_fn = line.strip_prefix("pub fn ")?;
-    let (func_name, generics_str, params_str) = extract_rust_fn_name_generics_and_params(after_fn)?;
+    let (func_name, generics_str, params_str, after_params) =
+        extract_rust_fn_name_generics_and_params(after_fn)?;
 
     // Type params bounded `S: AsRef<_>` (runtime fs/strings/db helpers) borrow at call sites.
     let asref_borrow_type_params = asref_borrow_generic_type_params(&generics_str);
@@ -268,7 +311,7 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         param_types,
         formal_param_types: vec![],
         param_ownership,
-        return_type: None,                      // TODO: Extract from Rust AST
+        return_type: parse_return_type_after_params(&after_params),
         return_ownership: OwnershipMode::Owned, // Default
         has_self_receiver,
         is_extern: false,
@@ -288,8 +331,10 @@ fn first_param_is_self_receiver(params_str: &str) -> bool {
         || first.starts_with("mut self:")
 }
 
-/// Strip `name<'a>` / `name<T>` generics and extract `(name, generics, params)`.
-fn extract_rust_fn_name_generics_and_params(after_fn: &str) -> Option<(String, String, String)> {
+/// Strip `name<'a>` / `name<T>` generics and extract `(name, generics, params, after_params)`.
+fn extract_rust_fn_name_generics_and_params(
+    after_fn: &str,
+) -> Option<(String, String, String, String)> {
     let name_end = after_fn.find(|c| c == '<' || c == '(')?;
     let func_name = after_fn[..name_end].trim().to_string();
     let mut rest = &after_fn[name_end..];
@@ -337,6 +382,7 @@ fn extract_rust_fn_name_generics_and_params(after_fn: &str) -> Option<(String, S
         func_name,
         generics_str,
         rest[params_start..params_end].to_string(),
+        rest[params_end + 1..].to_string(),
     ))
 }
 
@@ -568,8 +614,52 @@ fn parse_one_rust_param_type(
     parse_owned_rust_type_name(ty)
 }
 
+fn parse_return_type_after_params(after_params: &str) -> Option<Type> {
+    let rest = after_params.trim();
+    let rest = rest.strip_prefix("->")?.trim();
+    let ty = rest
+        .split('{')
+        .next()
+        .unwrap_or(rest)
+        .split("where")
+        .next()
+        .unwrap_or(rest)
+        .trim();
+    if ty.is_empty() || ty == "!" {
+        return None;
+    }
+    Some(parse_owned_rust_type_name(ty))
+}
+
+fn parse_generic_args(ty: &str) -> Option<Vec<Type>> {
+    let start = ty.find('<')?;
+    let inner = ty[start + 1..].strip_suffix('>')?;
+    let mut args = Vec::new();
+    let mut depth = 0i32;
+    let mut start_arg = 0;
+    for (i, c) in inner.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => {
+                args.push(parse_owned_rust_type_name(inner[start_arg..i].trim()));
+                start_arg = i + 1;
+            }
+            _ => {}
+        }
+    }
+    let last = inner[start_arg..].trim();
+    if !last.is_empty() {
+        args.push(parse_owned_rust_type_name(last));
+    }
+    Some(args)
+}
+
 fn parse_owned_rust_type_name(ty: &str) -> Type {
     let ty = ty.trim();
+    if ty == "()" {
+        return Type::Tuple(vec![]);
+    }
     // `&[T]` arrives here as `[T]` after the shared-ref `&` strip in `parse_one_rust_param_type`.
     // Represent slices as `Vec<T>` so prefer_shared_ref / call-site borrow match WJ `Vec`.
     if let Some(inner) = ty.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
@@ -587,6 +677,14 @@ fn parse_owned_rust_type_name(ty: &str) -> Type {
                 Type::Vec(Box::new(parse_owned_rust_type_name(inner.trim())))
             } else {
                 Type::Vec(Box::new(Type::Custom("Unknown".into())))
+            }
+        }
+        "Result" => {
+            let args = parse_generic_args(ty).unwrap_or_default();
+            match args.as_slice() {
+                [ok, err] => Type::Result(Box::new(ok.clone()), Box::new(err.clone())),
+                [ok] => Type::Result(Box::new(ok.clone()), Box::new(Type::String)),
+                _ => Type::Custom("Result".into()),
             }
         }
         _ => Type::Custom(base.to_string()),
@@ -757,6 +855,43 @@ mod tests {
     }
 
     #[test]
+    fn fs_write_scan_records_result_unit_return_type() {
+        let line =
+            "pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(), String> {";
+        let sig = parse_function_signature(line, "fs").unwrap();
+        assert!(
+            matches!(
+                &sig.return_type,
+                Some(Type::Result(ok, err))
+                    if matches!(**ok, Type::Tuple(ref el) if el.is_empty())
+                        && matches!(**err, Type::String)
+            ),
+            "fs::write must scan Result<(), String>, got {:?}",
+            sig.return_type
+        );
+    }
+
+    #[test]
+    fn csv_wj_name_maps_to_csv_mod_rust_stem() {
+        let stem = crate::analyzer::SignatureRegistry::stdlib().runtime_rust_stem("csv");
+        assert_eq!(
+            stem,
+            Some("csv_mod"),
+            "WJ std::csv must map to scanned rust stem csv_mod, got {stem:?}"
+        );
+        assert_eq!(
+            crate::analyzer::SignatureRegistry::stdlib().runtime_rust_stem("async"),
+            Some("async_runtime")
+        );
+        let regex_types =
+            crate::analyzer::SignatureRegistry::stdlib().runtime_exported_types_for_module("regex");
+        assert!(
+            regex_types.iter().any(|t| *t == "Regex"),
+            "regex_mod pub use Regex must be a scanned export, got {regex_types:?}"
+        );
+    }
+
+    #[test]
     fn scanned_runtime_modules_are_not_a_hardcoded_name_list() {
         use crate::codegen::rust::stdlib_method_traits::{
             is_runtime_std_module, runtime_std_module_for_type,
@@ -784,6 +919,30 @@ mod tests {
         assert!(!is_runtime_std_module("harness"));
         assert!(!is_runtime_std_module("server"));
         assert!(runtime_std_module_for_type("OptEconLedger").is_none());
+        use crate::codegen::rust::stdlib_method_traits::{classify_wj_std_import, WjStdImportKind};
+        assert!(
+            matches!(
+                classify_wj_std_import("csv"),
+                WjStdImportKind::Runtime { rust_stem } if rust_stem == "csv_mod"
+            ),
+            "csv import must use scanned csv_mod stem"
+        );
+        assert!(matches!(
+            classify_wj_std_import("process"),
+            WjStdImportKind::Runtime { rust_stem } if rust_stem == "process"
+        ));
+        assert!(matches!(
+            classify_wj_std_import("collections"),
+            WjStdImportKind::RustStd
+        ));
+        assert!(
+            matches!(classify_wj_std_import("fmt"), WjStdImportKind::RustStd),
+            "rustc std modules without a runtime .rs file stay `use std::fmt`"
+        );
+        assert!(
+            matches!(classify_wj_std_import("dialog"), WjStdImportKind::Skip),
+            "WJ-only std/*.wj with no runtime file must not emit windjammer_runtime::dialog"
+        );
     }
 
     #[test]
