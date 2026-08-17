@@ -287,9 +287,10 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
-                    && !self.param_only_forwarded_to_asref_str_runtime(
+                    && !self.param_asref_runtime_forces_owned_formal(
                         func.body.as_slice(),
                         &param.name,
+                        func,
                     )
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
@@ -325,13 +326,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // variants). Those stay Owned.
                 let payload_forces_owned = payload_forces_owned
                     && (!borrow_delegation || payload_stored);
-                // Runtime AsRef modules keep owned `string` + call-site borrow.
+                // Runtime AsRef modules keep owned `string` + call-site borrow only when
+                // callees do not already expect a borrow (fs AsRef<Path> demotes).
                 let asref_runtime_keep_owned = crate::codegen::rust::types::is_windjammer_text_type(
                     &param.type_,
                 ) && !analyzed.str_ref_optimizable_params.contains(&param.name)
-                    && self.param_only_forwarded_to_asref_str_runtime(
+                    && self.param_asref_runtime_forces_owned_formal(
                     func.body.as_slice(),
                     &param.name,
+                    func,
                 );
                 if asref_runtime_keep_owned {
                     self.str_ref_optimized_params.remove(&param.name);
@@ -1949,11 +1952,12 @@ impl<'ast> CodeGenerator<'ast> {
                             // Free functions included (wal `replay_all(path)`).
                             // Discard-only `let _ = path` / `let _ = (path, …)` also demote — analyzer
                             // often keeps Owned for the move-into-discard, which must not win here.
-                            // Runtime AsRef modules (`db.connect`, …): keep owned `String` + `&`
-                            // at the call site (std_db_call_site_borrow_test).
-                            let asref_fwd = self.param_only_forwarded_to_asref_str_runtime(
+                            // Runtime AsRef modules: keep owned `String` + `&` at the call
+                            // site only when callees do not already expect a borrow.
+                            let asref_fwd = self.param_asref_runtime_forces_owned_formal(
                                 func.body.as_slice(),
                                 &param.name,
+                                func,
                             );
                             let str_ref_ok = (self.str_ref_optimized_params.contains(&param.name)
                                 || analyzed.str_ref_optimizable_params.contains(&param.name)

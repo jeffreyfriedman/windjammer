@@ -1078,6 +1078,13 @@ pub fn finalize_collection_key_call_site_arg(
         return;
     }
     if expression_is_string_literal(arg_expr) || expression_is_copy_literal(arg_expr) {
+        // Match arms that bind `HashMap<string, _>` may blanket-own every string
+        // literal (`.to_string()`). Collection key lookups still want `&str`.
+        if expression_is_string_literal(arg_expr) {
+            crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                arg_expr, arg_str,
+            );
+        }
         return;
     }
     if let Expression::Cast { type_, .. } = arg_expr {
