@@ -8,6 +8,10 @@
 //! Taint propagates through assignments, function returns, and region sharing.
 //! The solver catches violations at compile time with full provenance traces.
 
+use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
+use crate::ir::effects::{effects_for_runtime_callee, runtime_module_segment};
+use crate::ir::safety_type::Effect;
+use crate::parser::Type;
 use std::collections::HashMap;
 
 /// Identifier for a value in the taint analysis.
@@ -224,60 +228,185 @@ pub enum TaintErrorKind {
     TaintedSink,
 }
 
-/// Standard library taint source declarations.
+fn resolve_runtime_sig<'a>(
+    registry: &'a SignatureRegistry,
+    qualified_name: &str,
+) -> Option<&'a FunctionSignature> {
+    let module = runtime_module_segment(qualified_name);
+    let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+    registry
+        .get_signature(qualified_name)
+        .or_else(|| registry.get_signature(&format!("{module}::{simple}")))
+        .or_else(|| registry.get_signature(&format!("std::{module}::{simple}")))
+        .or_else(|| {
+            qualified_name
+                .rsplit_once("::")
+                .and_then(|(ty, method)| registry.get_signature(&format!("{ty}::{method}")))
+        })
+}
+
+fn is_borrowed_text_param(sig: &FunctionSignature, arg_index: usize) -> bool {
+    let idx = sig.arg_param_index(arg_index);
+    sig.param_ownership
+        .get(idx)
+        .is_some_and(|o| matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed))
+        && sig.param_types.get(idx).is_some_and(|t| {
+            matches!(
+                t,
+                Type::String | Type::Reference(_) | Type::MutableReference(_)
+            )
+        })
+}
+
+fn returns_owned_text(sig: &FunctionSignature) -> bool {
+    match sig.return_type.as_ref() {
+        Some(Type::String) => true,
+        Some(Type::Result(ok, _)) => matches!(**ok, Type::String | Type::Custom(_)),
+        _ => false,
+    }
+}
+
+/// HTTP request field accessors on scanned `ServerRequest` impls.
+fn http_request_field_source(method: &str) -> Option<TaintSourceKind> {
+    if method.starts_with("body") {
+        return Some(TaintSourceKind::HttpRequestBody);
+    }
+    if method.starts_with("query") {
+        return Some(TaintSourceKind::HttpRequestQuery);
+    }
+    if method == "header" || method.starts_with("header") {
+        return Some(TaintSourceKind::HttpRequestHeader);
+    }
+    None
+}
+
+fn type_is_http_request_type(registry: &SignatureRegistry, type_name: &str) -> bool {
+    let base = type_name.rsplit("::").next().unwrap_or(type_name);
+    base == "ServerRequest" || registry.runtime_module_for_type(base) == Some("http")
+}
+
+/// Taint source for a runtime / std callee (signature + effects, not a function-name list).
+pub fn taint_source_for_callee(qualified_name: &str) -> Option<TaintSourceKind> {
+    let registry = SignatureRegistry::stdlib();
+    let sig = resolve_runtime_sig(&registry, qualified_name);
+
+    if let Some((receiver, method)) = qualified_name.rsplit_once("::") {
+        if type_is_http_request_type(&registry, receiver) {
+            if let Some(kind) = http_request_field_source(method) {
+                return Some(kind);
+            }
+        }
+    }
+
+    let effects = effects_for_runtime_callee(qualified_name);
+    let module = runtime_module_segment(qualified_name);
+    if module == "env" && effects.contains(&Effect::EnvRead) {
+        return Some(TaintSourceKind::EnvironmentVariable);
+    }
+    if module == "fs" && effects.contains(&Effect::FsRead) {
+        return Some(TaintSourceKind::FileContents);
+    }
+    if module == "db" && effects.contains(&Effect::NetEgress) {
+        return Some(TaintSourceKind::DatabaseRow);
+    }
+    if module == "io" {
+        if sig.is_some_and(|s| !matches!(s.return_type, Some(Type::Bool))) {
+            return Some(TaintSourceKind::UserInput);
+        }
+    }
+    None
+}
+
+/// Dangerous sink description for a callee (derived from scanned effects).
+pub fn taint_sink_for_callee(qualified_name: &str) -> Option<&'static str> {
+    let effects = effects_for_runtime_callee(qualified_name);
+    let module = runtime_module_segment(qualified_name);
+    if effects.contains(&Effect::ProcessSpawn) {
+        return Some("shell command");
+    }
+    if effects.contains(&Effect::FsWrite) {
+        return Some("file write path");
+    }
+    if module == "db" && effects.contains(&Effect::NetEgress) {
+        return Some("SQL query");
+    }
+    None
+}
+
+/// Sanitizer naming pattern (suffix/verb), not a flat function-name table.
+fn sanitizer_simple_name(simple: &str) -> bool {
+    matches!(simple, "escape" | "parameterize" | "sanitize" | "encode")
+        || simple.ends_with("_escape")
+        || simple.ends_with("_encode")
+        || simple.ends_with("escape")
+        || simple.ends_with("encode")
+}
+
+/// True when a scanned signature is a text-in / text-out transform with no dangerous effects.
+pub fn is_sanitizer_callee(qualified_name: &str) -> bool {
+    let registry = SignatureRegistry::stdlib();
+    let Some(sig) = resolve_runtime_sig(&registry, qualified_name) else {
+        return false;
+    };
+    let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+    if !sanitizer_simple_name(simple) {
+        return false;
+    }
+    if !is_borrowed_text_param(sig, 0) || !returns_owned_text(sig) {
+        return false;
+    }
+    let effects = effects_for_runtime_callee(qualified_name);
+    !effects.iter().any(|e| {
+        matches!(
+            e,
+            Effect::ProcessSpawn
+                | Effect::FsWrite
+                | Effect::FsRead
+                | Effect::NetEgress
+                | Effect::NetIngress
+        )
+    })
+}
+
+/// Standard library taint source declarations from scanned runtime signatures.
 pub fn stdlib_taint_sources() -> Vec<TaintConstraint> {
-    vec![
-        TaintConstraint::IsSource {
-            var: TaintVar::new("http.request.body"),
-            source_kind: TaintSourceKind::HttpRequestBody,
-        },
-        TaintConstraint::IsSource {
-            var: TaintVar::new("http.request.query"),
-            source_kind: TaintSourceKind::HttpRequestQuery,
-        },
-        TaintConstraint::IsSource {
-            var: TaintVar::new("http.request.headers"),
-            source_kind: TaintSourceKind::HttpRequestHeader,
-        },
-        TaintConstraint::IsSource {
-            var: TaintVar::new("env.var"),
-            source_kind: TaintSourceKind::EnvironmentVariable,
-        },
-    ]
+    let registry = SignatureRegistry::stdlib();
+    let mut out = Vec::new();
+    for (name, _sig) in registry.all_signatures_for_suffix_search() {
+        if let Some(kind) = taint_source_for_callee(name) {
+            out.push(TaintConstraint::IsSource {
+                var: TaintVar::new(name.clone()),
+                source_kind: kind.clone(),
+            });
+            if !name.starts_with("std::") {
+                out.push(TaintConstraint::IsSource {
+                    var: TaintVar::new(format!("std::{name}")),
+                    source_kind: kind,
+                });
+            }
+        }
+    }
+    out
 }
 
-/// Standard library sanitizer declarations.
-pub fn stdlib_sanitizers() -> Vec<(&'static str, &'static str)> {
-    vec![
-        ("sql_escape", "SQL injection"),
-        ("html_escape", "XSS"),
-        ("shell_escape", "command injection"),
-        ("url_encode", "URL injection"),
-        ("json_escape", "JSON injection"),
-    ]
-}
-
-/// Standard library dangerous sink declarations.
-/// These sinks require clean (non-tainted) data.
+/// Standard library dangerous sink declarations (effect-driven).
 pub fn stdlib_sinks() -> Vec<TaintConstraint> {
-    vec![
-        TaintConstraint::RequiresClean {
-            var: TaintVar::new("std::db::query::arg0"),
-            sink: "SQL query (std::db::query)".into(),
-        },
-        TaintConstraint::RequiresClean {
-            var: TaintVar::new("std::db::execute::arg0"),
-            sink: "SQL execute (std::db::execute)".into(),
-        },
-        TaintConstraint::RequiresClean {
-            var: TaintVar::new("std::process::exec::arg0"),
-            sink: "shell command (std::process::exec)".into(),
-        },
-        TaintConstraint::RequiresClean {
-            var: TaintVar::new("std::html::render::arg0"),
-            sink: "HTML template (std::html::render)".into(),
-        },
-    ]
+    let registry = SignatureRegistry::stdlib();
+    let mut out = Vec::new();
+    for (name, _sig) in registry.all_signatures_for_suffix_search() {
+        if let Some(desc) = taint_sink_for_callee(name) {
+            out.push(TaintConstraint::RequiresClean {
+                var: TaintVar::new(format!("{name}::arg0")),
+                sink: format!("{name} ({desc})"),
+            });
+        }
+    }
+    out
+}
+
+/// Legacy helper — prefer [`is_sanitizer_callee`].
+pub fn stdlib_sanitizers() -> Vec<(&'static str, &'static str)> {
+    vec![]
 }
 
 #[cfg(test)]
@@ -428,6 +557,30 @@ mod tests {
     #[test]
     fn test_stdlib_sources_load() {
         let sources = stdlib_taint_sources();
-        assert!(sources.len() >= 4);
+        assert!(
+            sources.len() >= 4,
+            "scanned runtime must declare multiple taint sources, got {}",
+            sources.len()
+        );
+    }
+
+    #[test]
+    fn scanned_server_request_body_and_regex_escape_classify() {
+        assert_eq!(
+            taint_source_for_callee("ServerRequest::body_string"),
+            Some(TaintSourceKind::HttpRequestBody)
+        );
+        assert_eq!(
+            taint_source_for_callee("ServerRequest::query_param"),
+            Some(TaintSourceKind::HttpRequestQuery)
+        );
+        assert!(
+            is_sanitizer_callee("regex::escape") || is_sanitizer_callee("regex_mod::escape"),
+            "regex escape must be signature-driven sanitizer"
+        );
+        assert!(
+            taint_sink_for_callee("process::run").is_some(),
+            "process::run must be effect-driven sink"
+        );
     }
 }
