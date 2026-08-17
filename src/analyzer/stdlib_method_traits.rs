@@ -15,36 +15,6 @@ const MAP_KEY: &[&str] = &["remove", "contains_key", "get", "get_mut", "get_key_
 
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
 
-const COMMON_STDLIB_NAMES: &[&str] = &[
-    "push",
-    "pop",
-    "insert",
-    "remove",
-    "clear",
-    "get",
-    "get_mut",
-    "set",
-    "len",
-    "is_empty",
-    "contains",
-    "contains_key",
-    "first",
-    "last",
-    "iter",
-    "keys",
-    "values",
-    "clone",
-    "to_string",
-    "starts_with",
-    "ends_with",
-    "binary_search",
-    "add",
-    "to_le_bytes",
-    "to_be_bytes",
-    "from_le_bytes",
-    "from_be_bytes",
-];
-
 // ── Inline fallbacks ─────────────────────────────────────────────────────
 
 /// Unqualified fallback: unanimous `MutBorrowed` self across stdlib `::{method}` keys.
@@ -144,7 +114,7 @@ fn lookup_unqualified<'a>(
     method: &str,
     registry: &'a SignatureRegistry,
 ) -> Option<&'a FunctionSignature> {
-    if COMMON_STDLIB_NAMES.contains(&method) {
+    if registry.has_method_name_collision(method) {
         return None;
     }
     registry.get_signature(method)

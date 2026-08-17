@@ -659,28 +659,11 @@ fn find_stdlib_dir_for_api_types() -> Option<PathBuf> {
 }
 
 /// Rust module path for a Windjammer `std::{module}` that maps to `windjammer_runtime`.
-fn stdlib_module_rust_path(module: &str) -> Option<&'static str> {
-    match module {
-        "http" => Some("windjammer_runtime::http"),
-        "mime" => Some("windjammer_runtime::mime"),
-        "json" => Some("windjammer_runtime::json"),
-        "jwt" => Some("windjammer_runtime::jwt"),
-        "io" => Some("windjammer_runtime::io"),
-        "subprocess" => Some("windjammer_runtime::subprocess"),
-        "async" | "async_runtime" => Some("windjammer_runtime::async_runtime"),
-        "cli" => Some("windjammer_runtime::cli"),
-        "crypto" => Some("windjammer_runtime::crypto"),
-        "csv" => Some("windjammer_runtime::csv_mod"),
-        "db" => Some("windjammer_runtime::db"),
-        "log" => Some("windjammer_runtime::log_mod"),
-        "math" => Some("windjammer_runtime::math"),
-        "random" => Some("windjammer_runtime::random"),
-        "regex" => Some("windjammer_runtime::regex_mod"),
-        "strings" => Some("windjammer_runtime::strings"),
-        "testing" => Some("windjammer_runtime::testing"),
-        "time" => Some("windjammer_runtime::time"),
-        "fs" => Some("windjammer_runtime::fs"),
-        "env" => Some("windjammer_runtime::env"),
+fn stdlib_module_rust_path(module: &str) -> Option<String> {
+    match crate::codegen::rust::stdlib_method_traits::classify_wj_std_import(module) {
+        crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime { rust_stem } => {
+            Some(format!("windjammer_runtime::{rust_stem}"))
+        }
         _ => None,
     }
 }
@@ -723,14 +706,12 @@ pub(crate) fn collect_stdlib_api_types_for_modules(
                     }
                     struct_fields.insert(decl.name.clone(), fields);
                     if let Some(rm) = rust_mod {
-                        type_rust_paths
-                            .insert(decl.name.clone(), format!("{rm}::{}", decl.name));
+                        type_rust_paths.insert(decl.name.clone(), format!("{rm}::{}", decl.name));
                     }
                 }
                 Item::Enum { decl, .. } => {
                     if let Some(rm) = rust_mod {
-                        type_rust_paths
-                            .insert(decl.name.clone(), format!("{rm}::{}", decl.name));
+                        type_rust_paths.insert(decl.name.clone(), format!("{rm}::{}", decl.name));
                     }
                     for variant in &decl.variants {
                         let key = format!("{}::{}", decl.name, variant.name);
@@ -760,10 +741,7 @@ pub(crate) fn collect_stdlib_api_types_for_modules(
 
     for module in modules {
         // Skip pure Rust-passthrough modules that have no Windjammer API surface here.
-        if matches!(
-            module.as_str(),
-            "collections" | "cmp" | "ops" | "process"
-        ) {
+        if matches!(module.as_str(), "collections" | "cmp" | "ops" | "process") {
             continue;
         }
         let path = stdlib_dir.join(format!("{module}.wj"));
@@ -779,7 +757,7 @@ pub(crate) fn collect_stdlib_api_types_for_modules(
         let rust_mod = stdlib_module_rust_path(module);
         walk_items(
             &program.items,
-            rust_mod,
+            rust_mod.as_deref(),
             &mut struct_fields,
             &mut enum_variants,
             &mut type_rust_paths,

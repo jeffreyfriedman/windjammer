@@ -5,8 +5,141 @@
 //! the call graph automatically. The application manifest declares allowed
 //! effects; violations are compile errors.
 
+use crate::analyzer::{FunctionSignature, SignatureRegistry};
 use crate::ir::safety_type::{Effect, EffectSet};
+use crate::parser::Type;
 use std::collections::{HashMap, HashSet};
+
+/// Standard library effect declarations from scanned runtime signatures.
+///
+/// Module membership comes from the signature registry (not a function-name list).
+/// Read vs write / ingress vs egress is derived from param and return types.
+pub fn stdlib_effect_declarations() -> Vec<EffectConstraint> {
+    let registry = SignatureRegistry::stdlib();
+    let mut out = Vec::new();
+    for (name, sig) in registry.all_signatures_for_suffix_search() {
+        let module = runtime_module_segment(name);
+        if module
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
+        {
+            continue;
+        }
+        if !registry.has_runtime_std_module(module) {
+            continue;
+        }
+        for effect in classify_module_effects(module, Some(sig)) {
+            out.push(EffectConstraint::Performs {
+                function: name.clone(),
+                effect: effect.clone(),
+            });
+            if !name.starts_with("std::") {
+                out.push(EffectConstraint::Performs {
+                    function: format!("std::{name}"),
+                    effect,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Effects for a runtime std callee (`fs::copy`, `std::process::run`, `http::get`).
+pub fn effects_for_runtime_callee(qualified_name: &str) -> Vec<Effect> {
+    let registry = SignatureRegistry::stdlib();
+    let module = runtime_module_segment(qualified_name);
+    if !registry.has_runtime_std_module(module) {
+        return vec![];
+    }
+    let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+    let sig = registry
+        .get_signature(qualified_name)
+        .or_else(|| registry.get_signature(&format!("{module}::{simple}")))
+        .or_else(|| registry.get_signature(&format!("std::{module}::{simple}")));
+    classify_module_effects(module, sig)
+}
+
+pub(crate) fn runtime_module_segment(name: &str) -> &str {
+    let mut parts = name.split("::");
+    match (parts.next(), parts.next()) {
+        (Some("std"), Some(m)) => m,
+        (Some(m), _) => m,
+        _ => name,
+    }
+}
+
+fn classify_module_effects(module: &str, sig: Option<&FunctionSignature>) -> Vec<Effect> {
+    match module {
+        "fs" => vec![fs_effect(sig)],
+        "http" => http_effects(sig),
+        "process" | "subprocess" => vec![Effect::ProcessSpawn],
+        "env" => vec![env_effect(sig)],
+        "db" => vec![Effect::NetEgress],
+        "ffi" => vec![Effect::Ffi],
+        _ => vec![],
+    }
+}
+
+fn is_unit_type(ty: &Type) -> bool {
+    matches!(ty, Type::Tuple(el) if el.is_empty())
+}
+
+fn is_path_param(ty: &Type) -> bool {
+    match ty {
+        Type::Reference(inner) | Type::MutableReference(inner) => is_path_param(inner),
+        Type::Custom(n) => n == "Path" || n.ends_with("::Path"),
+        _ => false,
+    }
+}
+
+fn fs_effect(sig: Option<&FunctionSignature>) -> Effect {
+    let Some(sig) = sig else {
+        return Effect::FsRead;
+    };
+    let path_params = sig.param_types.iter().filter(|t| is_path_param(t)).count();
+    if path_params >= 2 {
+        return Effect::FsWrite;
+    }
+    match &sig.return_type {
+        Some(Type::Result(ok, _)) if is_unit_type(ok) => Effect::FsWrite,
+        Some(ty) if is_unit_type(ty) => Effect::FsWrite,
+        _ => Effect::FsRead,
+    }
+}
+
+fn http_effects(sig: Option<&FunctionSignature>) -> Vec<Effect> {
+    let Some(sig) = sig else {
+        return vec![Effect::NetEgress];
+    };
+    if sig
+        .param_types
+        .iter()
+        .any(|t| matches!(t, Type::FunctionPointer { .. }))
+    {
+        return vec![Effect::NetIngress];
+    }
+    match &sig.return_type {
+        Some(Type::Result(ok, _)) if is_unit_type(ok) => vec![Effect::NetIngress],
+        Some(ty) if is_unit_type(ty) => vec![Effect::NetIngress],
+        Some(Type::Custom(n)) if n == "HashMap" || n == "BTreeMap" || n == "Map" => vec![],
+        Some(Type::Parameterized(base, _))
+            if matches!(base.as_str(), "HashMap" | "BTreeMap" | "Map") =>
+        {
+            vec![]
+        }
+        Some(Type::Bool) | Some(Type::String) | Some(Type::Int) => vec![],
+        _ => vec![Effect::NetEgress],
+    }
+}
+
+fn env_effect(sig: Option<&FunctionSignature>) -> Effect {
+    match sig.and_then(|s| s.return_type.as_ref()) {
+        None => Effect::EnvWrite,
+        Some(ty) if is_unit_type(ty) => Effect::EnvWrite,
+        _ => Effect::EnvRead,
+    }
+}
 
 /// An effect constraint for the solver.
 #[derive(Debug, Clone)]
@@ -168,70 +301,6 @@ pub enum EffectErrorKind {
     ManifestViolation,
 }
 
-/// Standard library effect declarations.
-/// These define which stdlib functions have which effects.
-pub fn stdlib_effect_declarations() -> Vec<EffectConstraint> {
-    vec![
-        // Filesystem
-        EffectConstraint::Performs {
-            function: "std::fs::read".into(),
-            effect: Effect::FsRead,
-        },
-        EffectConstraint::Performs {
-            function: "std::fs::write".into(),
-            effect: Effect::FsWrite,
-        },
-        EffectConstraint::Performs {
-            function: "std::fs::read_to_string".into(),
-            effect: Effect::FsRead,
-        },
-        EffectConstraint::Performs {
-            function: "std::fs::create_dir".into(),
-            effect: Effect::FsWrite,
-        },
-        // Network
-        EffectConstraint::Performs {
-            function: "std::http::get".into(),
-            effect: Effect::NetEgress,
-        },
-        EffectConstraint::Performs {
-            function: "std::http::post".into(),
-            effect: Effect::NetEgress,
-        },
-        EffectConstraint::Performs {
-            function: "std::http::listen".into(),
-            effect: Effect::NetIngress,
-        },
-        // Process
-        EffectConstraint::Performs {
-            function: "std::process::spawn".into(),
-            effect: Effect::ProcessSpawn,
-        },
-        EffectConstraint::Performs {
-            function: "std::process::exec".into(),
-            effect: Effect::ProcessSpawn,
-        },
-        // Environment
-        EffectConstraint::Performs {
-            function: "std::env::get".into(),
-            effect: Effect::EnvRead,
-        },
-        EffectConstraint::Performs {
-            function: "std::env::set".into(),
-            effect: Effect::EnvWrite,
-        },
-        // Database
-        EffectConstraint::Performs {
-            function: "std::db::query".into(),
-            effect: Effect::NetEgress,
-        },
-        EffectConstraint::Performs {
-            function: "std::db::execute".into(),
-            effect: Effect::NetEgress,
-        },
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,5 +445,30 @@ mod tests {
     fn test_stdlib_declarations_load() {
         let decls = stdlib_effect_declarations();
         assert!(decls.len() >= 10);
+    }
+
+    #[test]
+    fn scanned_process_run_and_fs_copy_declare_effects() {
+        let decls = stdlib_effect_declarations();
+        let has = |name: &str, want: Effect| {
+            decls.iter().any(|c| {
+                matches!(
+                    c,
+                    EffectConstraint::Performs { function, effect }
+                        if (function == name
+                            || function == &format!("std::{name}")
+                            || function.ends_with(&format!("::{name}")))
+                            && *effect == want
+                )
+            })
+        };
+        assert!(
+            has("process::run", Effect::ProcessSpawn) || has("run", Effect::ProcessSpawn),
+            "process::run must be ProcessSpawn from scanned runtime, not a spawn/exec name list. decls={decls:?}"
+        );
+        assert!(
+            has("fs::copy", Effect::FsWrite) || has("copy", Effect::FsWrite),
+            "fs::copy must be FsWrite from signature shape (two Path params), not a function-name list"
+        );
     }
 }
