@@ -850,31 +850,26 @@ pub fn module_qualified_method_name(
     method.to_string()
 }
 
+/// Scanned WJ `std::module` name (runtime `.rs` stem + `_mod`/`_runtime` aliases + `std/*.wj`).
 pub fn is_runtime_std_module(name: &str) -> bool {
-    matches!(
-        name,
-        "http"
-            | "server"
-            | "strings"
-            | "json"
-            | "jwt"
-            | "time"
-            | "math"
-            | "random"
-            | "mime"
-            | "subprocess"
-            | "async_runtime"
-            | "async"
-            | "cli"
-            | "crypto"
-            | "csv"
-            | "db"
-            | "regex"
-            | "testing"
-            | "game"
-            | "env"
-            | "fs"
-    )
+    SignatureRegistry::stdlib().has_runtime_std_module(name)
+}
+
+/// Any `::` segment is a scanned runtime std module (`std::db::connect`, `db::connect`).
+pub fn callee_path_is_runtime_std(name: &str) -> bool {
+    name.split("::").any(is_runtime_std_module)
+}
+
+/// `Connection` / `&Connection` — scanned impl type that lives in a runtime module.
+pub fn type_is_runtime_asref_receiver(ty: &Type) -> bool {
+    let bare = match ty {
+        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+        other => other,
+    };
+    match bare {
+        Type::Custom(tn) => runtime_std_module_for_type(tn).is_some(),
+        _ => false,
+    }
 }
 
 /// Module segment of a callee path: `strings`, `strings::substring`, `std::strings::len`.
@@ -887,13 +882,9 @@ pub fn runtime_module_segment_from_callee_path(name: &str) -> &str {
     }
 }
 
-/// Stdlib struct types that lower to a `windjammer_runtime` module (receiver type → module).
+/// Stdlib struct types that lower to a `windjammer_runtime` module (scanned `impl Type`).
 pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
-    let base = type_name.rsplit("::").next().unwrap_or(type_name);
-    match base {
-        "Connection" | "Row" | "DatabaseType" => Some("db"),
-        _ => None,
-    }
+    SignatureRegistry::stdlib().runtime_module_for_type(type_name)
 }
 
 /// Scanned runtime Rust signature borrows this arg while the WJ formal is still owned.

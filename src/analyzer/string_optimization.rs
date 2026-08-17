@@ -100,6 +100,7 @@ impl<'ast> Analyzer<'ast> {
                     && self.param_only_forwarded_to_asref_str_runtime_modules(
                         &param.name,
                         &func.body,
+                        func,
                     )
                 {
                     continue;
@@ -134,25 +135,31 @@ impl<'ast> Analyzer<'ast> {
 
     /// True when `param_name` appears as the LHS of a `+` binary expression
     /// (string concatenation consumes the LHS — needs owned String, not &str).
-    pub(crate) fn param_is_string_concat_lhs(
-        &self,
-        param_name: &str,
-        body: &[&Statement],
-    ) -> bool {
-        body.iter().any(|stmt| self.stmt_has_param_as_concat_lhs(param_name, stmt))
+    pub(crate) fn param_is_string_concat_lhs(&self, param_name: &str, body: &[&Statement]) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_has_param_as_concat_lhs(param_name, stmt))
     }
 
     fn stmt_has_param_as_concat_lhs(&self, param_name: &str, stmt: &Statement) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
-                self.expr_has_param_as_concat_lhs(param_name, expr)
-            }
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_has_param_as_concat_lhs(param_name, expr),
             Statement::Let { value, .. } => self.expr_has_param_as_concat_lhs(param_name, value),
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.expr_has_param_as_concat_lhs(param_name, condition)
-                    || then_block.iter().any(|s| self.stmt_has_param_as_concat_lhs(param_name, s))
+                    || then_block
+                        .iter()
+                        .any(|s| self.stmt_has_param_as_concat_lhs(param_name, s))
                     || else_block.as_ref().is_some_and(|b| {
-                        b.iter().any(|s| self.stmt_has_param_as_concat_lhs(param_name, s))
+                        b.iter()
+                            .any(|s| self.stmt_has_param_as_concat_lhs(param_name, s))
                     })
             }
             _ => false,
@@ -161,7 +168,9 @@ impl<'ast> Analyzer<'ast> {
 
     fn expr_has_param_as_concat_lhs(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 if matches!(op, crate::parser::BinaryOp::Add) {
                     if let Expression::Identifier { name, .. } = &**left {
                         if name == param_name {
@@ -317,9 +326,7 @@ impl<'ast> Analyzer<'ast> {
                         let _ = is_self_method;
 
                         if super::stdlib_method_traits::method_is_slice_search_qualified(
-                            method,
-                            None,
-                            registry,
+                            method, None, registry,
                         ) && idx == 0
                         {
                             return true;
@@ -682,10 +689,11 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         body: &[&Statement],
+        func: &FunctionDecl,
     ) -> bool {
         let mut saw = false;
         for stmt in body {
-            if !self.statement_asref_runtime_forward(param_name, stmt, &mut saw) {
+            if !self.statement_asref_runtime_forward(param_name, stmt, &mut saw, func) {
                 return false;
             }
         }
@@ -697,17 +705,20 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         stmt: &Statement,
         saw: &mut bool,
+        func: &FunctionDecl,
     ) -> bool {
         match stmt {
             Statement::Expression { expr, .. }
             | Statement::Return {
                 value: Some(expr), ..
-            } => self.expr_asref_runtime_forward(param_name, expr, saw),
-            Statement::Let { value, else_block, .. } => {
-                self.expr_asref_runtime_forward(param_name, value, saw)
+            } => self.expr_asref_runtime_forward(param_name, expr, saw, func),
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expr_asref_runtime_forward(param_name, value, saw, func)
                     && else_block.as_ref().map_or(true, |b| {
                         b.iter()
-                            .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                            .all(|s| self.statement_asref_runtime_forward(param_name, s, saw, func))
                     })
             }
             Statement::If {
@@ -716,30 +727,32 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                self.expr_asref_runtime_forward(param_name, condition, saw)
+                self.expr_asref_runtime_forward(param_name, condition, saw, func)
                     && then_block
                         .iter()
-                        .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                        .all(|s| self.statement_asref_runtime_forward(param_name, s, saw, func))
                     && else_block.as_ref().map_or(true, |b| {
                         b.iter()
-                            .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                            .all(|s| self.statement_asref_runtime_forward(param_name, s, saw, func))
                     })
             }
             Statement::Match { value, arms, .. } => {
-                self.expr_asref_runtime_forward(param_name, value, saw)
-                    && arms
-                        .iter()
-                        .all(|arm| self.expr_asref_runtime_forward(param_name, &arm.body, saw))
+                self.expr_asref_runtime_forward(param_name, value, saw, func)
+                    && arms.iter().all(|arm| {
+                        self.expr_asref_runtime_forward(param_name, &arm.body, saw, func)
+                    })
             }
-            Statement::While { body, condition, .. } => {
-                self.expr_asref_runtime_forward(param_name, condition, saw)
+            Statement::While {
+                body, condition, ..
+            } => {
+                self.expr_asref_runtime_forward(param_name, condition, saw, func)
                     && body
                         .iter()
-                        .all(|s| self.statement_asref_runtime_forward(param_name, s, saw))
+                        .all(|s| self.statement_asref_runtime_forward(param_name, s, saw, func))
             }
             Statement::For { body, .. } | Statement::Loop { body, .. } => body
                 .iter()
-                .all(|s| self.statement_asref_runtime_forward(param_name, s, saw)),
+                .all(|s| self.statement_asref_runtime_forward(param_name, s, saw, func)),
             _ => true,
         }
     }
@@ -749,17 +762,18 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         expr: &Expression,
         saw: &mut bool,
+        func: &FunctionDecl,
     ) -> bool {
-        // Bare module (`strings`) or qualified callee path (`strings::substring`,
-        // `std::strings::len`) — shared with codegen via `is_runtime_std_module`.
-        let is_asref_module = |name: &str| {
-            let module =
-                crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
-                    name,
-                );
-            crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
-                || name.ends_with("::db")
-                || name.contains("db::")
+        // Scanned runtime modules (`strings`, `std::db::connect`) or typed receivers
+        // (`client: Connection`) — never a variable-name list (`conn`) or `db::` substring.
+        let receiver_ok = |name: &str| {
+            crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(name)
+                || func.parameters.iter().any(|p| {
+                    p.name == name
+                        && crate::codegen::rust::stdlib_method_traits::type_is_runtime_asref_receiver(
+                            &p.type_,
+                        )
+                })
         };
         let arg_is_param = |arg: &Expression| {
             matches!(arg, Expression::Identifier { name, .. } if name == param_name)
@@ -774,30 +788,23 @@ impl<'ast> Analyzer<'ast> {
         };
         match expr {
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 for (_, arg) in arguments {
                     if arg_is_param(arg) {
                         *saw = true;
                         let recv_ok = match &**object {
-                            Expression::Identifier { name, .. } => {
-                                is_asref_module(name) || name == "conn"
-                            }
-                            _ => {
-                                // `conn.query(sql, …)` — Connection methods take &str.
-                                true
-                            }
+                            Expression::Identifier { name, .. } => receiver_ok(name),
+                            _ => true,
                         };
                         if !recv_ok {
                             return false;
                         }
-                    } else if !self.expr_asref_runtime_forward(param_name, arg, saw) {
+                    } else if !self.expr_asref_runtime_forward(param_name, arg, saw, func) {
                         return false;
                     }
                 }
-                self.expr_asref_runtime_forward(param_name, object, saw)
+                self.expr_asref_runtime_forward(param_name, object, saw, func)
             }
             Expression::Call {
                 function,
@@ -810,39 +817,37 @@ impl<'ast> Analyzer<'ast> {
                         let ok = match &**function {
                             Expression::FieldAccess { object, .. } => matches!(
                                 &**object,
-                                Expression::Identifier { name, .. }
-                                    if is_asref_module(name) || name == "conn"
+                                Expression::Identifier { name, .. } if receiver_ok(name)
                             ),
-                            // Qualified paths lower as `Identifier("strings::substring")`.
-                            Expression::Identifier { name, .. } => {
-                                is_asref_module(name) || name == "conn"
-                            }
+                            Expression::Identifier { name, .. } => receiver_ok(name),
                             _ => false,
                         };
                         if !ok {
                             return false;
                         }
-                    } else if !self.expr_asref_runtime_forward(param_name, arg, saw) {
+                    } else if !self.expr_asref_runtime_forward(param_name, arg, saw, func) {
                         return false;
                     }
                 }
-                self.expr_asref_runtime_forward(param_name, function, saw)
+                self.expr_asref_runtime_forward(param_name, function, saw, func)
             }
             Expression::Identifier { name, .. } if name == param_name => false,
             Expression::Binary { left, right, .. } => {
-                self.expr_asref_runtime_forward(param_name, left, saw)
-                    && self.expr_asref_runtime_forward(param_name, right, saw)
+                self.expr_asref_runtime_forward(param_name, left, saw, func)
+                    && self.expr_asref_runtime_forward(param_name, right, saw, func)
             }
             Expression::Unary { operand, .. }
-            | Expression::FieldAccess { object: operand, .. }
+            | Expression::FieldAccess {
+                object: operand, ..
+            }
             | Expression::TryOp { expr: operand, .. }
             | Expression::Await { expr: operand, .. }
             | Expression::Cast { expr: operand, .. } => {
-                self.expr_asref_runtime_forward(param_name, operand, saw)
+                self.expr_asref_runtime_forward(param_name, operand, saw, func)
             }
             Expression::Block { statements, .. } => statements
                 .iter()
-                .all(|s| self.statement_asref_runtime_forward(param_name, s, saw)),
+                .all(|s| self.statement_asref_runtime_forward(param_name, s, saw, func)),
             Expression::StructLiteral { fields, .. } => {
                 // Constructing owned values from the param is not an AsRef forward.
                 !fields
@@ -851,9 +856,7 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::MacroInvocation { args, .. } => {
                 // `vec![tenant]` needs owned String — not an AsRef-only forward.
-                !args
-                    .iter()
-                    .any(|a| self.expr_mentions_param(param_name, a))
+                !args.iter().any(|a| self.expr_mentions_param(param_name, a))
             }
             _ => true,
         }
@@ -863,7 +866,9 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
             Expression::Unary { operand, .. }
-            | Expression::FieldAccess { object: operand, .. }
+            | Expression::FieldAccess {
+                object: operand, ..
+            }
             | Expression::TryOp { expr: operand, .. }
             | Expression::Await { expr: operand, .. }
             | Expression::Cast { expr: operand, .. } => {
@@ -873,7 +878,11 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_mentions_param(param_name, left)
                     || self.expr_mentions_param(param_name, right)
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expr_mentions_param(param_name, function)
                     || arguments
                         .iter()
@@ -887,9 +896,9 @@ impl<'ast> Analyzer<'ast> {
                         .iter()
                         .any(|(_, a)| self.expr_mentions_param(param_name, a))
             }
-            Expression::MacroInvocation { args, .. } => args
-                .iter()
-                .any(|a| self.expr_mentions_param(param_name, a)),
+            Expression::MacroInvocation { args, .. } => {
+                args.iter().any(|a| self.expr_mentions_param(param_name, a))
+            }
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
                 .any(|(_, e)| self.expr_mentions_param(param_name, e)),
@@ -913,9 +922,8 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 // Identity return (`return message`) or owned forward (`return error_json(message)`).
                 self.expr_is_param_or_ref_to_param(param_name, expr)
-                    || self.expr_forwards_param_as_owned_pass_through(
-                        param_name, expr, registry, func,
-                    )
+                    || self
+                        .expr_forwards_param_as_owned_pass_through(param_name, expr, registry, func)
             }
             Statement::Expression { expr, .. } => {
                 self.expr_forwards_param_as_owned_pass_through(param_name, expr, registry, func)
@@ -941,9 +949,7 @@ impl<'ast> Analyzer<'ast> {
                 })
             }
             Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expr_forwards_param_as_owned_pass_through(
-                    param_name, arm.body, registry, func,
-                )
+                self.expr_forwards_param_as_owned_pass_through(param_name, arm.body, registry, func)
             }),
             _ => false,
         }
@@ -967,8 +973,7 @@ impl<'ast> Analyzer<'ast> {
                     if !self.expr_is_param_or_ref_to_param(param_name, arg) {
                         continue;
                     }
-                    let method_key =
-                        self.qualified_method_registry_key(object, method, func);
+                    let method_key = self.qualified_method_registry_key(object, method, func);
                     let sig = registry
                         .lookup_method(&method_key)
                         .or_else(|| registry.get_signature(&method_key));
@@ -984,7 +989,11 @@ impl<'ast> Analyzer<'ast> {
                 }
                 false
             }
-            Expression::Call { function, arguments, .. } => arguments.iter().any(|(_, arg)| {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => arguments.iter().any(|(_, arg)| {
                 if !self.expr_is_param_or_ref_to_param(param_name, arg) {
                     return self.expr_forwards_param_as_owned_pass_through(
                         param_name, arg, registry, func,
@@ -1024,10 +1033,14 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Binary { left, right, .. } => {
                 self.expr_forwards_param_as_owned_pass_through(param_name, left, registry, func)
-                    || self.expr_forwards_param_as_owned_pass_through(param_name, right, registry, func)
+                    || self.expr_forwards_param_as_owned_pass_through(
+                        param_name, right, registry, func,
+                    )
             }
             Expression::Unary { operand, .. }
-            | Expression::FieldAccess { object: operand, .. }
+            | Expression::FieldAccess {
+                object: operand, ..
+            }
             | Expression::TryOp { expr: operand, .. }
             | Expression::Await { expr: operand, .. }
             | Expression::Cast { expr: operand, .. } => {
@@ -1123,7 +1136,11 @@ impl<'ast> Analyzer<'ast> {
         expr: &Expression,
     ) -> bool {
         match expr {
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 let is_strings = self.call_expr_is_string_runtime(function);
                 for (_, arg) in arguments {
                     if self.expr_is_param_or_ref_to_param(param_name, arg) && is_strings {
@@ -1153,7 +1170,8 @@ impl<'ast> Analyzer<'ast> {
                             method,
                             Some("String"),
                             reg,
-                        ) || Self::method_is_string_runtime(method, Some("String"), reg))
+                        )
+                            || Self::method_is_string_runtime(method, Some("String"), reg))
                     {
                         return true;
                     }
@@ -1170,8 +1188,9 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expr_uses_param_in_string_runtime_module(param_name, operand)
             }
-            Expression::Block { statements, .. } => self
-                .block_uses_param_in_string_runtime_module(param_name, statements),
+            Expression::Block { statements, .. } => {
+                self.block_uses_param_in_string_runtime_module(param_name, statements)
+            }
             _ => false,
         }
     }
@@ -1290,7 +1309,13 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         let mut key_uses = 0usize;
         let mut other_uses = 0usize;
-        self.collect_qualified_map_get_key_uses(body, param_name, func, &mut key_uses, &mut other_uses);
+        self.collect_qualified_map_get_key_uses(
+            body,
+            param_name,
+            func,
+            &mut key_uses,
+            &mut other_uses,
+        );
         key_uses > 0 && other_uses == 0
     }
 
@@ -1323,15 +1348,21 @@ impl<'ast> Analyzer<'ast> {
                     expr, param_name, func, key_uses, other_uses,
                 );
             }
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 self.expression_collect_qualified_map_get_key_uses(
                     value, param_name, func, key_uses, other_uses,
                 );
                 if let Some(b) = else_block {
-                    self.collect_qualified_map_get_key_uses(b, param_name, func, key_uses, other_uses);
+                    self.collect_qualified_map_get_key_uses(
+                        b, param_name, func, key_uses, other_uses,
+                    );
                 }
             }
-            Statement::Return { value: Some(expr), .. } => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 self.expression_collect_qualified_map_get_key_uses(
                     expr, param_name, func, key_uses, other_uses,
                 );
@@ -1345,9 +1376,13 @@ impl<'ast> Analyzer<'ast> {
                 self.expression_collect_qualified_map_get_key_uses(
                     condition, param_name, func, key_uses, other_uses,
                 );
-                self.collect_qualified_map_get_key_uses(then_block, param_name, func, key_uses, other_uses);
+                self.collect_qualified_map_get_key_uses(
+                    then_block, param_name, func, key_uses, other_uses,
+                );
                 if let Some(b) = else_block {
-                    self.collect_qualified_map_get_key_uses(b, param_name, func, key_uses, other_uses);
+                    self.collect_qualified_map_get_key_uses(
+                        b, param_name, func, key_uses, other_uses,
+                    );
                 }
             }
             Statement::Match { value, arms, .. } => {
@@ -1360,17 +1395,23 @@ impl<'ast> Analyzer<'ast> {
                     );
                 }
             }
-            Statement::While { body, condition, .. } => {
+            Statement::While {
+                body, condition, ..
+            } => {
                 self.expression_collect_qualified_map_get_key_uses(
                     condition, param_name, func, key_uses, other_uses,
                 );
-                self.collect_qualified_map_get_key_uses(body, param_name, func, key_uses, other_uses);
+                self.collect_qualified_map_get_key_uses(
+                    body, param_name, func, key_uses, other_uses,
+                );
             }
             Statement::For { body, iterable, .. } => {
                 self.expression_collect_qualified_map_get_key_uses(
                     iterable, param_name, func, key_uses, other_uses,
                 );
-                self.collect_qualified_map_get_key_uses(body, param_name, func, key_uses, other_uses);
+                self.collect_qualified_map_get_key_uses(
+                    body, param_name, func, key_uses, other_uses,
+                );
             }
             _ => {}
         }
@@ -1403,7 +1444,9 @@ impl<'ast> Analyzer<'ast> {
                 object, param_name, func, key_uses, other_uses,
             );
             for (_, arg) in arguments {
-                self.expression_collect_qualified_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+                self.expression_collect_qualified_map_get_key_uses(
+                    *arg, param_name, func, key_uses, other_uses,
+                );
             }
             return;
         }
@@ -1433,15 +1476,23 @@ impl<'ast> Analyzer<'ast> {
                     object, param_name, func, key_uses, other_uses,
                 );
                 for (_, arg) in arguments {
-                    self.expression_collect_qualified_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+                    self.expression_collect_qualified_map_get_key_uses(
+                        *arg, param_name, func, key_uses, other_uses,
+                    );
                 }
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expression_collect_qualified_map_get_key_uses(
                     function, param_name, func, key_uses, other_uses,
                 );
                 for (_, arg) in arguments {
-                    self.expression_collect_qualified_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+                    self.expression_collect_qualified_map_get_key_uses(
+                        *arg, param_name, func, key_uses, other_uses,
+                    );
                 }
             }
             Expression::Binary { left, right, .. } => {
@@ -1471,7 +1522,9 @@ impl<'ast> Analyzer<'ast> {
                 );
             }
             Expression::Block { statements, .. } => {
-                self.collect_qualified_map_get_key_uses(statements, param_name, func, key_uses, other_uses);
+                self.collect_qualified_map_get_key_uses(
+                    statements, param_name, func, key_uses, other_uses,
+                );
             }
             _ => {}
         }
@@ -1483,7 +1536,10 @@ impl<'ast> Analyzer<'ast> {
         func: &'a FunctionDecl,
     ) -> Option<&'a Type> {
         if let Expression::Identifier { name, .. } = object {
-            func.parameters.iter().find(|p| p.name == *name).map(|p| &p.type_)
+            func.parameters
+                .iter()
+                .find(|p| p.name == *name)
+                .map(|p| &p.type_)
         } else {
             None
         }
@@ -1498,9 +1554,7 @@ impl<'ast> Analyzer<'ast> {
         other_uses: &mut usize,
     ) {
         for stmt in body {
-            self.statement_collect_map_get_key_uses(
-                stmt, param_name, func, key_uses, other_uses,
-            );
+            self.statement_collect_map_get_key_uses(stmt, param_name, func, key_uses, other_uses);
         }
     }
 
@@ -1518,7 +1572,9 @@ impl<'ast> Analyzer<'ast> {
                     expr, param_name, func, key_uses, other_uses,
                 );
             }
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 self.expression_collect_map_get_key_uses(
                     value, param_name, func, key_uses, other_uses,
                 );
@@ -1526,7 +1582,9 @@ impl<'ast> Analyzer<'ast> {
                     self.collect_map_get_key_uses(b, param_name, func, key_uses, other_uses);
                 }
             }
-            Statement::Return { value: Some(expr), .. } => {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
                 self.expression_collect_map_get_key_uses(
                     expr, param_name, func, key_uses, other_uses,
                 );
@@ -1555,7 +1613,9 @@ impl<'ast> Analyzer<'ast> {
                     );
                 }
             }
-            Statement::While { body, condition, .. } => {
+            Statement::While {
+                body, condition, ..
+            } => {
                 self.expression_collect_map_get_key_uses(
                     condition, param_name, func, key_uses, other_uses,
                 );
@@ -1585,9 +1645,7 @@ impl<'ast> Analyzer<'ast> {
             for (i, (_, arg)) in arguments.iter().enumerate() {
                 if self.expr_is_identifier(*arg, param_name) {
                     let receiver = self.receiver_type_name_from_expr(object, func);
-                    if i == 0
-                        && super::stdlib_method_traits::is_map_receiver(receiver.as_deref())
-                    {
+                    if i == 0 && super::stdlib_method_traits::is_map_receiver(receiver.as_deref()) {
                         *key_uses += 1;
                     } else {
                         *other_uses += 1;
@@ -1598,7 +1656,9 @@ impl<'ast> Analyzer<'ast> {
                 object, param_name, func, key_uses, other_uses,
             );
             for (_, arg) in arguments {
-                self.expression_collect_map_get_key_uses(*arg, param_name, func, key_uses, other_uses);
+                self.expression_collect_map_get_key_uses(
+                    *arg, param_name, func, key_uses, other_uses,
+                );
             }
             return;
         }
@@ -1631,7 +1691,11 @@ impl<'ast> Analyzer<'ast> {
                     );
                 }
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expression_collect_map_get_key_uses(
                     function, param_name, func, key_uses, other_uses,
                 );
@@ -1680,8 +1744,10 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl,
     ) -> Option<String> {
         if let Expression::Identifier { name, .. } = object {
-            func.parameters.iter().find(|p| p.name == *name).and_then(|p| {
-                match &p.type_ {
+            func.parameters
+                .iter()
+                .find(|p| p.name == *name)
+                .and_then(|p| match &p.type_ {
                     Type::Custom(n) => Some(n.clone()),
                     Type::Parameterized(base, _) => Some(base.clone()),
                     Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -1692,8 +1758,7 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                     _ => None,
-                }
-            })
+                })
         } else {
             None
         }

@@ -35,6 +35,8 @@ pub fn populate_runtime_signatures(registry: &mut SignatureRegistry) -> Result<(
 
     // Scan all .rs files in runtime
     scan_directory(&runtime_path, registry)?;
+    register_wj_std_module_names(registry);
+    register_runtime_modules_from_signature_keys(registry);
 
     Ok(())
 }
@@ -96,12 +98,7 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
         }
 
         if let Some(sig) = parse_function_signature(trimmed, module_name) {
-            register_scanned_runtime_signature(
-                registry,
-                module_name,
-                sig,
-                current_impl.as_deref(),
-            );
+            register_scanned_runtime_signature(registry, module_name, sig, current_impl.as_deref());
         }
     }
 
@@ -122,17 +119,76 @@ fn register_scanned_runtime_signature(
         .map(|(_, m)| m.to_string())
         .unwrap_or_else(|| sig.name.clone());
     registry.add_function(sig.name.clone(), sig.clone());
+    registry.register_runtime_std_module(module_name);
     // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
     if let Some(short) = module_name.strip_suffix("_mod") {
         let mut aliased = sig.clone();
         aliased.name = format!("{short}::{method_name}");
         registry.add_function(aliased.name.clone(), aliased);
+        registry.register_runtime_std_module(short);
     }
     if let Some(ty) = current_impl {
         let mut typed = sig;
         typed.name = format!("{ty}::{method_name}");
         registry.add_function(typed.name.clone(), typed);
+        registry.register_runtime_type_module(ty, module_name);
     }
+}
+
+/// Lowercase `module::fn` keys (and `_mod` / `_runtime` aliases) → runtime module set.
+fn register_runtime_modules_from_signature_keys(registry: &mut SignatureRegistry) {
+    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
+    for name in keys {
+        if let Some((module, _)) = name.split_once("::") {
+            if module
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase())
+            {
+                registry.register_runtime_std_module(module);
+            }
+        }
+    }
+}
+
+/// WJ `std/*.wj` and `std/*/mod.wj` stems (`async`, `process`, …) so aliases that
+/// have no matching runtime file stem still classify as runtime std modules.
+fn register_wj_std_module_names(registry: &mut SignatureRegistry) {
+    let candidates = [
+        Path::new("std").to_path_buf(),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
+    ];
+    for dir in &candidates {
+        if !dir.is_dir() {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.join("mod.wj").is_file() {
+                    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                        if is_wj_std_module_stem(name) {
+                            registry.register_runtime_std_module(name);
+                        }
+                    }
+                }
+            } else if path.extension().and_then(|s| s.to_str()) == Some("wj") {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    if is_wj_std_module_stem(stem) {
+                        registry.register_runtime_std_module(stem);
+                    }
+                }
+            }
+        }
+        return;
+    }
+}
+
+fn is_wj_std_module_stem(stem: &str) -> bool {
+    !stem.ends_with("_test") && stem != "test_simple" && stem != "basic_test"
 }
 
 /// `impl Connection` / `impl Connection {` / `impl<'a> Connection` → `Connection`.
@@ -225,10 +281,8 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
 
 fn first_param_is_self_receiver(params_str: &str) -> bool {
     let first = params_str.split(',').next().unwrap_or("").trim();
-    matches!(
-        first,
-        "self" | "&self" | "&mut self" | "mut self"
-    ) || first.starts_with("self:")
+    matches!(first, "self" | "&self" | "&mut self" | "mut self")
+        || first.starts_with("self:")
         || first.starts_with("&self")
         || first.starts_with("&mut self")
         || first.starts_with("mut self:")
@@ -331,16 +385,8 @@ fn asref_borrow_bounds(generics_str: &str) -> Vec<(String, String)> {
         let Some(target) = asref_target_type_name(clause) else {
             continue;
         };
-        let name = clause
-            .split([':', '+'])
-            .next()
-            .unwrap_or("")
-            .trim();
-        if !name.is_empty()
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
+        let name = clause.split([':', '+']).next().unwrap_or("").trim();
+        if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             out.push((name.to_string(), target.to_string()));
         }
     }
@@ -383,9 +429,7 @@ fn param_type_name(param: &str) -> Option<&str> {
 }
 
 fn param_is_asref_borrow_type_param(param: &str, asref_borrow_type_params: &[String]) -> bool {
-    param_type_name(param).is_some_and(|ty| {
-        asref_borrow_type_params.iter().any(|p| p == ty)
-    })
+    param_type_name(param).is_some_and(|ty| asref_borrow_type_params.iter().any(|p| p == ty))
 }
 
 fn param_is_asref_path_type_param(param: &str, asref_path_type_params: &[String]) -> bool {
@@ -394,8 +438,7 @@ fn param_is_asref_path_type_param(param: &str, asref_path_type_params: &[String]
 
 fn param_has_asref_borrow_contract(param: &str, asref_borrow_type_params: &[String]) -> bool {
     // Signature-driven: any `AsRef<_>` (Path, str, [u8], …) or generic with that bound.
-    param.contains("AsRef<")
-        || param_is_asref_borrow_type_param(param, asref_borrow_type_params)
+    param.contains("AsRef<") || param_is_asref_borrow_type_param(param, asref_borrow_type_params)
 }
 
 fn param_has_asref_path_contract(param: &str, asref_path_type_params: &[String]) -> bool {
@@ -403,10 +446,7 @@ fn param_has_asref_path_contract(param: &str, asref_path_type_params: &[String])
         || param_is_asref_path_type_param(param, asref_path_type_params)
 }
 
-fn parse_parameters(
-    params_str: &str,
-    asref_borrow_type_params: &[String],
-) -> Vec<OwnershipMode> {
+fn parse_parameters(params_str: &str, asref_borrow_type_params: &[String]) -> Vec<OwnershipMode> {
     if params_str.trim().is_empty() {
         return Vec::new();
     }
@@ -486,11 +526,7 @@ fn parse_one_rust_param_type(
     asref_borrow_type_params: &[String],
     asref_path_type_params: &[String],
 ) -> Type {
-    let ty = param
-        .rsplit(':')
-        .next()
-        .unwrap_or(param)
-        .trim();
+    let ty = param.rsplit(':').next().unwrap_or(param).trim();
 
     if ty == "self" || ty == "&self" || ty.starts_with("&self") {
         return Type::Reference(Box::new(Type::Custom("Self".into())));
@@ -702,6 +738,9 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
         },
     );
 
+    register_wj_std_module_names(registry);
+    register_runtime_modules_from_signature_keys(registry);
+
     Ok(())
 }
 
@@ -715,6 +754,36 @@ mod tests {
         let sig = parse_function_signature(line, "process").unwrap();
         assert_eq!(sig.name, "process::exit");
         assert_eq!(sig.param_ownership, vec![OwnershipMode::Owned]);
+    }
+
+    #[test]
+    fn scanned_runtime_modules_are_not_a_hardcoded_name_list() {
+        use crate::codegen::rust::stdlib_method_traits::{
+            is_runtime_std_module, runtime_std_module_for_type,
+        };
+
+        // File stems from windjammer-runtime/src — including modules historically
+        // omitted from the hand-maintained list (`process`, `io`, `path`, `log`).
+        for module in [
+            "process", "io", "path", "http", "strings", "db", "fs", "log", "csv",
+        ] {
+            assert!(
+                is_runtime_std_module(module),
+                "{module} must be a scanned runtime std module"
+            );
+        }
+        // WJ `use std::async` aliases `async_runtime.rs` (`_runtime` / std/async.wj).
+        assert!(
+            is_runtime_std_module("async") && is_runtime_std_module("async_runtime"),
+            "async / async_runtime must both be runtime modules"
+        );
+        // `impl Connection` / `impl Row` in db.rs — not a hardcoded type table.
+        assert_eq!(runtime_std_module_for_type("Connection"), Some("db"));
+        assert_eq!(runtime_std_module_for_type("Row"), Some("db"));
+        // User / unknown names must not match.
+        assert!(!is_runtime_std_module("harness"));
+        assert!(!is_runtime_std_module("server"));
+        assert!(runtime_std_module_for_type("OptEconLedger").is_none());
     }
 
     #[test]
@@ -779,9 +848,11 @@ mod tests {
             "AsRef<[u8]> still maps to shared-ref str contract for WJ string, got {:?}",
             sig.param_types[1]
         );
-        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
-            &sig, 0
-        ));
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                &sig, 0
+            )
+        );
     }
 
     #[test]
@@ -827,7 +898,7 @@ mod tests {
         assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed); // &self
         assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed); // AsRef<str>
         assert_eq!(sig.param_ownership[2], OwnershipMode::Owned); // Vec<String>
-        // User arg 1 (params) must map to Owned — not sql's Borrowed (off-by-one without self).
+                                                                  // User arg 1 (params) must map to Owned — not sql's Borrowed (off-by-one without self).
         assert_eq!(
             sig.param_ownership[sig.arg_param_index(1)],
             OwnershipMode::Owned
@@ -909,8 +980,10 @@ mod tests {
             .get_signature("csv::parse")
             .expect("csv_mod must alias to csv::parse");
         assert_eq!(aliased.param_ownership[0], OwnershipMode::Borrowed);
-        assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
-            aliased, 0
-        ));
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                aliased, 0
+            )
+        );
     }
 }
