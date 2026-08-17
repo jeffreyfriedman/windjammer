@@ -85,16 +85,9 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
 
     let runtime_module = match call_obj {
         Expression::Identifier { name, .. } => {
-            let listed = gen.is_imported_runtime_std_module(name)
-                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name);
-            let key = format!("{name}::{call_method}");
-            let registry = gen
-                .global_signature_registry()
-                .unwrap_or(&gen.signature_registry);
-            // `get_signature` walks the runtime fallback layer; `get_fallback_signature`
-            // only returns when a WJ stub shadows the same key.
-            let scanned = registry.get_signature(&key).is_some();
-            if listed || scanned {
+            // Only imported `use std::…` modules — never bare-name list matches
+            // (`json` / `server` locals must not become `json::` / `server::`).
+            if gen.is_imported_runtime_std_module(name) {
                 Some(name.as_str())
             } else {
                 None

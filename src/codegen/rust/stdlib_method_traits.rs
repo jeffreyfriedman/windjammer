@@ -825,8 +825,9 @@ pub fn is_closure_taking_method(method: &str) -> bool {
 
 /// Build `Module::method` / `Type::method` for signature/IR lookup at call sites.
 ///
-/// Runtime std modules (`strings::join`) must win over an inferred/stdlib type
-/// receiver (`Vec`) — unique method-name → type guesses are not authoritative.
+/// Only treat an identifier as a runtime module when it was imported (`use std::…`).
+/// Never match bare lowercase names against a hardcoded/scanned module list — locals
+/// named `json` / `server` must stay instance method calls (`json.find`, `server.serve`).
 pub fn module_qualified_method_name(
     receiver_type_name: Option<&str>,
     object: &Expression,
@@ -834,7 +835,7 @@ pub fn module_qualified_method_name(
     is_imported_runtime_std_module: impl Fn(&str) -> bool,
 ) -> String {
     if let Expression::Identifier { name, .. } = object {
-        if is_imported_runtime_std_module(name) || is_runtime_std_module(name) {
+        if is_imported_runtime_std_module(name) {
             return format!("{name}::{method}");
         }
         if name.chars().next().is_some_and(|c| c.is_uppercase()) {

@@ -360,9 +360,6 @@ impl<'ast> CodeGenerator<'ast> {
                         object,
                         Expression::Identifier { name, .. }
                             if self.is_imported_runtime_std_module(name)
-                                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
-                                    name
-                                )
                     );
                     let receiver_for_ir = if object_is_runtime_std_module {
                         None
