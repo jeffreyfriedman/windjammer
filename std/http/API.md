@@ -43,7 +43,7 @@ impl RequestBuilder {
 
 ```windjammer
 struct Response {
-    status: int,
+    status: u16,
     headers: HashMap<string, string>,
     body: string,
 }
