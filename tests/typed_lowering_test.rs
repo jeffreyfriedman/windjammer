@@ -227,10 +227,7 @@ fn main() {
 // Class 6: Spurious .clone() on generic types without Clone bound
 // ============================================================================
 
-// Known bug: auto_clone_analysis adds .clone() to generic T without Clone bound.
-// This will be fixed as part of Phase 5 (remove legacy heuristic code).
 #[test]
-#[ignore = "pre-existing bug: auto_clone adds .clone() to unconstrained generic T"]
 fn class6_no_clone_on_moved_generic() {
     let rust = build_wj_to_rust("class6_generic_no_clone", r#"
 struct Pool<T> {

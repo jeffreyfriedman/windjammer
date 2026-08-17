@@ -7037,9 +7037,6 @@ impl<'ast> CodeGenerator<'ast> {
                         &**object,
                         Expression::Identifier { name, .. }
                             if self.is_imported_runtime_std_module(name)
-                                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
-                                    name,
-                                )
                                 || self.param_type_is_asref_runtime_receiver(name)
                     );
                 for (_, arg) in arguments {
@@ -7139,9 +7136,6 @@ impl<'ast> CodeGenerator<'ast> {
                 &**object,
                 Expression::Identifier { name, .. }
                     if self.is_imported_runtime_std_module(name)
-                        || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
-                            name,
-                        )
                         || self.param_type_is_asref_runtime_receiver(name)
             ),
             Expression::Identifier { name, .. } => {
@@ -7151,9 +7145,9 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                         name,
                     );
-                name.contains("db::")
-                    || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
-                    || self.is_imported_runtime_std_module(module)
+                name.contains("::")
+                    && (crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
+                        || self.is_imported_runtime_std_module(module))
             }
             _ => false,
         }
