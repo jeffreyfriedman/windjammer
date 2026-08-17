@@ -7032,7 +7032,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .and_then(
                         crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type,
                     )
-                    .is_some_and(crate::codegen::rust::stdlib_method_traits::is_runtime_std_module)
+                    .is_some()
                     || matches!(
                         &**object,
                         Expression::Identifier { name, .. }
@@ -7139,39 +7139,25 @@ impl<'ast> CodeGenerator<'ast> {
                         || self.param_type_is_asref_runtime_receiver(name)
             ),
             Expression::Identifier { name, .. } => {
-                // Qualified paths lower as `Identifier("strings::substring")` /
-                // `Identifier("std::strings::len")` — extract the runtime module segment.
-                let module =
-                    crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
-                        name,
-                    );
-                name.contains("::")
-                    && (crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
-                        || self.is_imported_runtime_std_module(module))
+                crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(name)
+                    || name.contains("::")
+                        && self.is_imported_runtime_std_module(
+                            crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+                                name,
+                            ),
+                        )
             }
             _ => false,
         }
     }
 
-    /// `conn: Connection` (or `&Connection`) — method receiver for AsRef<&str> db APIs.
+    /// Typed receiver for scanned runtime AsRef APIs (`client: Connection`), not a name list.
     fn param_type_is_asref_runtime_receiver(&self, name: &str) -> bool {
         self.current_function_params
             .iter()
             .find(|p| p.name == name)
             .is_some_and(|p| {
-                let bare = match &p.type_ {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                    other => other,
-                };
-                match bare {
-                    Type::Custom(tn) => {
-                        crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type(tn)
-                            .is_some_and(
-                                crate::codegen::rust::stdlib_method_traits::is_runtime_std_module,
-                            )
-                    }
-                    _ => false,
-                }
+                crate::codegen::rust::stdlib_method_traits::type_is_runtime_asref_receiver(&p.type_)
             })
     }
 
@@ -9269,8 +9255,8 @@ impl<'ast> CodeGenerator<'ast> {
                     .map(|s| s.as_str())
                     .unwrap_or("");
                 let decorator_string_ref = param.decorators.iter().any(|d| d.name == "string_ref");
-                let emitted_string_ref = emitted_formal.contains(": &String")
-                    || emitted_formal.contains(": &'a String");
+                let emitted_string_ref =
+                    emitted_formal.contains(": &String") || emitted_formal.contains(": &'a String");
                 string_ref_flags[reg_idx] = decorator_string_ref || emitted_string_ref;
             }
             if emitted_idx < emitted_param_strings.len() {

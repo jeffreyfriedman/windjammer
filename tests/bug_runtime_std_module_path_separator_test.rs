@@ -39,6 +39,27 @@ pub fn die() {
 }
 
 #[test]
+fn io_is_terminal_emits_path_separator_for_unlisted_scanned_module() {
+    let generated = test_utils::compile_single(
+        r#"
+use std::io
+
+pub fn tty() -> bool {
+    io.is_terminal()
+}
+"#,
+    );
+    assert!(
+        generated.contains("io::is_terminal()"),
+        "scanned io module (not a hardcoded name) must emit path :: :\n{generated}"
+    );
+    assert!(
+        !generated.contains("io.is_terminal("),
+        "must not emit instance-method dot for scanned runtime std module:\n{generated}"
+    );
+}
+
+#[test]
 fn http_get_emits_path_separator() {
     let generated = test_utils::compile_single(
         r#"

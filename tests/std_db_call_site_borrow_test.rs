@@ -75,3 +75,30 @@ pub fn run_query(conn: Connection, sql: string, tenant: string) -> int {
     );
     // cargo check skipped: db feature requires libsqlite3-sys native build
 }
+
+/// Receiver type (`Connection`), not the parameter name `conn`, drives AsRef borrow.
+#[test]
+fn std_db_query_borrows_owned_sql_for_connection_param_not_named_conn() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "adapter.wj",
+        r#"
+use std::db
+
+pub fn run_query(client: Connection, sql: string, tenant: string) -> int {
+    match client.query(sql, vec![tenant]) {
+        Ok(rows) => rows.len(),
+        Err(_) => 0,
+    }
+}
+"#,
+    );
+    test.add_file("mod.wj", "pub mod adapter");
+
+    let map = test.compile().expect("compile");
+    let rs = map.get("adapter.rs").expect("adapter.rs");
+    assert!(
+        rs.contains("query(&sql") || rs.contains("query( &sql"),
+        "Connection-typed receiver (any name) must borrow sql. Got:\n{rs}"
+    );
+}

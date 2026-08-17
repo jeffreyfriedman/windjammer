@@ -280,11 +280,7 @@ impl<'ast> Analyzer<'ast> {
                     } else if func.parent_type.is_some()
                         && !self.is_copy_type(&param.type_)
                         && self.is_field_access_only_param_usage(&param.name, &func.body)
-                        && !self.is_only_hashmap_lookup_key_param(
-                            &param.name,
-                            &func.body,
-                            func,
-                        )
+                        && !self.is_only_hashmap_lookup_key_param(&param.name, &func.body, func)
                     {
                         // Read-only field chains (e.g. key.bytes.len()) → &Key at API and registry.
                         self.infer_parameter_ownership(
@@ -298,11 +294,7 @@ impl<'ast> Analyzer<'ast> {
                         )?
                     } else if func.parent_type.is_none()
                         && self.is_field_access_only_param_usage(&param.name, &func.body)
-                        && !self.is_only_hashmap_lookup_key_param(
-                            &param.name,
-                            &func.body,
-                            func,
-                        )
+                        && !self.is_only_hashmap_lookup_key_param(&param.name, &func.body, func)
                     {
                         // Free helpers (e.g. replay_to_lsn, keys_equal) with readonly field
                         // access emit borrowed formals; IR/analyzer stay aligned.
@@ -553,7 +545,8 @@ impl<'ast> Analyzer<'ast> {
             let string_optimizations = self.detect_string_optimizations(func);
             let assignment_optimizations = self.detect_assignment_optimizations(func);
             let defer_drop_optimizations = self.detect_defer_drop_opportunities(func, registry);
-            let auto_clone_analysis = AutoCloneAnalysis::analyze_function_with_registry(func, Some(registry));
+            let auto_clone_analysis =
+                AutoCloneAnalysis::analyze_function_with_registry(func, Some(registry));
 
             self.track_mutations(&func.body, registry);
             let mutated_variables = self.mutated_variables.clone();
@@ -669,6 +662,7 @@ impl<'ast> Analyzer<'ast> {
                     if self.param_only_forwarded_to_asref_str_runtime_modules(
                         &param.name,
                         &func.body,
+                        func,
                     ) {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                         str_ref_optimizable_params.remove(&param.name);
@@ -750,6 +744,7 @@ impl<'ast> Analyzer<'ast> {
                         && self.param_only_forwarded_to_asref_str_runtime_modules(
                             &param.name,
                             &func.body,
+                            func,
                         )
                     {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
@@ -1170,8 +1165,8 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             if func.mutated_parameters.contains(&param.name) {
-                let owned_explicit_mut = param.is_mutable
-                    && !func.field_mutated_parameters.contains(&param.name);
+                let owned_explicit_mut =
+                    param.is_mutable && !func.field_mutated_parameters.contains(&param.name);
                 if let Some(slot) = param_ownership.get_mut(idx) {
                     *slot = if owned_explicit_mut {
                         OwnershipMode::Owned
@@ -1227,10 +1222,7 @@ impl<'ast> Analyzer<'ast> {
                     }
                     continue;
                 }
-                if matches!(
-                    param_ownership.get(idx),
-                    Some(OwnershipMode::MutBorrowed)
-                ) {
+                if matches!(param_ownership.get(idx), Some(OwnershipMode::MutBorrowed)) {
                     param_types[idx] = PType::MutableReference(Box::new(formal.clone()));
                     continue;
                 }
@@ -1292,7 +1284,9 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             match own {
-                OwnershipMode::Borrowed if !matches!(param_types.get(idx), Some(PType::Reference(_))) => {
+                OwnershipMode::Borrowed
+                    if !matches!(param_types.get(idx), Some(PType::Reference(_))) =>
+                {
                     param_types[idx] = PType::Reference(Box::new(formal.clone()));
                 }
                 OwnershipMode::MutBorrowed
@@ -1465,9 +1459,7 @@ impl<'ast> Analyzer<'ast> {
                         PType::Reference(Box::new(ty.clone()))
                     };
                 }
-                OwnershipMode::MutBorrowed
-                    if !matches!(ty, PType::MutableReference(_)) =>
-                {
+                OwnershipMode::MutBorrowed if !matches!(ty, PType::MutableReference(_)) => {
                     *ty = PType::MutableReference(Box::new(ty.clone()));
                 }
                 _ => {}
