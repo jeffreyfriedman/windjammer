@@ -139,12 +139,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .map(finalize_call_site_signature);
         }
 
-        // Runtime std modules (`strings::join`): resolve `module::method` before any
-        // bare-method suffix match (`join` → `Vec::join`), which invents the wrong API.
+        // Runtime std modules (`strings::join`): resolve `module::method` only when the
+        // identifier was imported (`use std::strings`). Bare names like `json` / `server`
+        // are often locals — never treat them as modules from a hardcoded list.
         if let Expression::Identifier { name, .. } = object {
-            if self.is_imported_runtime_std_module(name)
-                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name)
-            {
+            if self.is_imported_runtime_std_module(name) {
                 let qualified = format!("{name}::{method}");
                 if let Some(sig) = self
                     .get_signature_with_global(&qualified)
