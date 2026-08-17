@@ -850,6 +850,39 @@ pub fn module_qualified_method_name(
     method.to_string()
 }
 
+/// How a WJ `use std::{module}` should lower to Rust.
+pub enum WjStdImportKind {
+    /// Native Rust std (`collections` HashMap, `cmp`, `ops`).
+    RustStd,
+    /// Framework / platform modules with no crate-level `use` line.
+    Skip,
+    /// `windjammer_runtime::{rust_stem}` (`csv` → `csv_mod`).
+    Runtime { rust_stem: String },
+}
+
+/// Scan-driven import class for a WJ std module base (`csv`, `http`, `fs::write` → `fs`).
+///
+/// - Runtime `.rs` stem → `windjammer_runtime::{stem}`
+/// - Native rust std overlay (`collections` HashMap, `cmp`, `ops`)
+/// - WJ-only `std/*.wj` with no runtime file (dialog, net, …) → skip crate `use`
+/// - Otherwise rustc `std::{module}` (`fmt`, `sync`, …)
+pub fn classify_wj_std_import(module_base: &str) -> WjStdImportKind {
+    let base = module_base.split("::").next().unwrap_or(module_base);
+    if matches!(base, "collections" | "cmp" | "ops") {
+        return WjStdImportKind::RustStd;
+    }
+    let registry = SignatureRegistry::stdlib();
+    if let Some(stem) = registry.runtime_rust_stem(base) {
+        return WjStdImportKind::Runtime {
+            rust_stem: stem.to_string(),
+        };
+    }
+    if registry.has_runtime_std_module(base) {
+        return WjStdImportKind::Skip;
+    }
+    WjStdImportKind::RustStd
+}
+
 /// Scanned WJ `std::module` name (runtime `.rs` stem + `_mod`/`_runtime` aliases + `std/*.wj`).
 pub fn is_runtime_std_module(name: &str) -> bool {
     SignatureRegistry::stdlib().has_runtime_std_module(name)

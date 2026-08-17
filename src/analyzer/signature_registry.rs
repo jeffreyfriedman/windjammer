@@ -140,8 +140,13 @@ pub struct SignatureRegistry {
     /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
     /// `csv_mod.rs`, `async` from `async_runtime.rs`) — never a hand-maintained list.
     runtime_std_modules: HashSet<String>,
+    /// WJ module name → rust file stem (`csv` → `csv_mod`, `http` → `http`).
+    /// Only populated from scanned `windjammer-runtime/src/*.rs` files, not `std/*.wj`.
+    runtime_std_rust_stems: HashMap<String, String>,
     /// Scanned `impl Type` in a runtime module file → WJ module (`Connection` → `db`).
     runtime_type_modules: HashMap<String, String>,
+    /// Public types exported by a runtime module (`regex` → `Regex` from `pub use`).
+    runtime_exported_types: HashMap<String, Vec<String>>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
     global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
 }
@@ -188,7 +193,9 @@ impl SignatureRegistry {
             method_index: HashMap::new(),
             trait_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
+            runtime_std_rust_stems: HashMap::new(),
             runtime_type_modules: HashMap::new(),
+            runtime_exported_types: HashMap::new(),
             global_fallback: None,
         }
     }
@@ -201,16 +208,39 @@ impl SignatureRegistry {
     }
 
     /// Record a scanned WJ `std::module` name (`csv_mod` also registers `csv`).
-    pub fn register_runtime_std_module(&mut self, name: &str) {
-        if name.is_empty() {
+    /// Identity only — does not map import paths to `windjammer_runtime::{stem}`.
+    pub fn register_runtime_std_module(&mut self, rust_stem: &str) {
+        if rust_stem.is_empty() {
             return;
         }
-        self.runtime_std_modules.insert(name.to_string());
-        if let Some(short) = name.strip_suffix("_mod") {
+        self.runtime_std_modules.insert(rust_stem.to_string());
+        if let Some(short) = rust_stem.strip_suffix("_mod") {
             self.runtime_std_modules.insert(short.to_string());
         }
-        if let Some(short) = name.strip_suffix("_runtime") {
+        if let Some(short) = rust_stem.strip_suffix("_runtime") {
             self.runtime_std_modules.insert(short.to_string());
+        }
+    }
+
+    /// Record a runtime `.rs` file stem used for `use windjammer_runtime::{stem}`.
+    pub fn register_runtime_file_stem(&mut self, rust_stem: &str) {
+        self.register_runtime_std_module(rust_stem);
+        self.insert_runtime_rust_stem(rust_stem, rust_stem);
+        if let Some(short) = rust_stem.strip_suffix("_mod") {
+            self.insert_runtime_rust_stem(short, rust_stem);
+        }
+        if let Some(short) = rust_stem.strip_suffix("_runtime") {
+            self.insert_runtime_rust_stem(short, rust_stem);
+        }
+    }
+
+    fn insert_runtime_rust_stem(&mut self, wj_name: &str, rust_stem: &str) {
+        match self.runtime_std_rust_stems.get(wj_name) {
+            Some(existing) if existing.len() >= rust_stem.len() => {}
+            _ => {
+                self.runtime_std_rust_stems
+                    .insert(wj_name.to_string(), rust_stem.to_string());
+            }
         }
     }
 
@@ -226,6 +256,44 @@ impl SignatureRegistry {
         self.runtime_type_modules
             .insert(type_name.to_string(), wj.to_string());
         self.register_runtime_std_module(module);
+        self.register_runtime_exported_type(module, type_name);
+    }
+
+    /// Record a public type (`pub struct` / `pub enum` / `pub use …::T`) on a runtime module.
+    pub fn register_runtime_exported_type(&mut self, module: &str, type_name: &str) {
+        let wj = module
+            .strip_suffix("_mod")
+            .or_else(|| module.strip_suffix("_runtime"))
+            .unwrap_or(module);
+        if type_name.is_empty() || wj.is_empty() {
+            return;
+        }
+        if !type_name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
+        {
+            return;
+        }
+        for key in [wj, module] {
+            let entry = self
+                .runtime_exported_types
+                .entry(key.to_string())
+                .or_default();
+            if !entry.iter().any(|t| t == type_name) {
+                entry.push(type_name.to_string());
+            }
+        }
+    }
+
+    /// Runtime rust file stem for a WJ `std::module` (`csv` → `csv_mod`).
+    pub fn runtime_rust_stem(&self, wj_name: &str) -> Option<&str> {
+        if let Some(s) = self.runtime_std_rust_stems.get(wj_name) {
+            return Some(s.as_str());
+        }
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.runtime_rust_stem(wj_name))
     }
 
     /// True when `name` is a scanned WJ runtime std module (not a user module).
@@ -247,6 +315,22 @@ impl SignatureRegistry {
         self.global_fallback
             .as_ref()
             .and_then(|g| g.runtime_module_for_type(type_name))
+    }
+
+    /// Public types exported by a scanned runtime module (`regex` → `["Regex"]`).
+    pub fn runtime_exported_types_for_module(&self, wj_name: &str) -> Vec<&str> {
+        let mut out: Vec<&str> = Vec::new();
+        if let Some(types) = self.runtime_exported_types.get(wj_name) {
+            out.extend(types.iter().map(String::as_str));
+        }
+        if let Some(g) = &self.global_fallback {
+            for t in g.runtime_exported_types_for_module(wj_name) {
+                if !out.contains(&t) {
+                    out.push(t);
+                }
+            }
+        }
+        out
     }
 
     fn load_stdlib_meta(registry: &mut Self) {
@@ -1143,8 +1227,21 @@ impl SignatureRegistry {
             .extend(other.trait_method_keys.iter().cloned());
         self.runtime_std_modules
             .extend(other.runtime_std_modules.iter().cloned());
+        self.runtime_std_rust_stems
+            .extend(other.runtime_std_rust_stems.clone());
         self.runtime_type_modules
             .extend(other.runtime_type_modules.clone());
+        for (module, types) in &other.runtime_exported_types {
+            let entry = self
+                .runtime_exported_types
+                .entry(module.clone())
+                .or_default();
+            for t in types {
+                if !entry.contains(t) {
+                    entry.push(t.clone());
+                }
+            }
+        }
     }
 
     /// Collect only signatures whose ownership differs from `base`.

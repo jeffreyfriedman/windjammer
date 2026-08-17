@@ -248,6 +248,9 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             self.runtime_std_module_imports.insert(module.clone());
                         }
+                        if module == "json" {
+                            self.needs_serde_imports = true;
+                        }
                     }
                 }
                 // Track modules imported from `ffi` paths so calls through them
@@ -265,10 +268,6 @@ impl<'ast> CodeGenerator<'ast> {
             if let Item::Use { path, .. } = item {
                 // Path is ["std", "json"] for "use std::json"
                 let path_str = path.join("::");
-                if (path_str.starts_with("std::") || path_str == "std") && path_str.contains("json")
-                {
-                    self.needs_serde_imports = true;
-                }
                 // If user already imports HashMap/HashSet from std::collections, mark them
                 if path_str.contains("HashMap") {
                     self.needs_hashmap_import = true;

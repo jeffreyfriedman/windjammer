@@ -75,10 +75,24 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(i, e)| {
+                // Tuple elements are owned values unless the slot type is a reference.
+                // Index of `Vec<String>` must clone (`parts[0].clone()`), not move or
+                // strip `&parts[0]` back to a move (E0507).
+                let expects_ref = return_tuple_types
+                    .as_ref()
+                    .and_then(|types| types.get(i))
+                    .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+                let prev_owned = self.in_owned_value_context;
+                if !expects_ref {
+                    self.in_owned_value_context = true;
+                }
                 let mut s = self.generate_expression(e);
+                self.in_owned_value_context = prev_owned;
                 if let Some(ref tuple_types) = return_tuple_types {
                     if let Some(expected) = tuple_types.get(i) {
-                        if !matches!(expected, Type::Reference(_) | Type::MutableReference(_)) {
+                        if !matches!(expected, Type::Reference(_) | Type::MutableReference(_))
+                            && !matches!(e, Expression::Index { .. })
+                        {
                             if let Some(stripped) = s.strip_prefix("&mut ") {
                                 s = stripped.to_string();
                             } else if let Some(stripped) = s.strip_prefix("& ") {
