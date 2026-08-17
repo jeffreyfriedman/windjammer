@@ -64,7 +64,7 @@ pub struct ServerRequest {
 #### `ServerResponse`
 ```windjammer
 pub struct ServerResponse {
-    pub status: int,
+    pub status: u16,
     pub headers: Vec<(string, string)>,
     pub body: string,
     pub binary_body: Option<Vec<u8>>,  // For images, WASM, etc.
