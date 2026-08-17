@@ -1133,8 +1133,22 @@ impl<'ast> CodeGenerator<'ast> {
                     receiver_is_text,
                     &self.signature_registry,
                 );
+            let expects_collection_key =
+                crate::codegen::rust::stdlib_method_traits::method_is_map_key_qualified(
+                    method,
+                    receiver_type_name.as_deref(),
+                    &self.signature_registry,
+                ) || resolved_signature.as_ref().or(method_signature.as_ref()).is_some_and(
+                    |sig| {
+                        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                            sig,
+                            i,
+                            receiver_type_name.as_deref(),
+                        )
+                    },
+                );
             if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
-            if expects_pattern {
+            if expects_pattern || expects_collection_key {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                     arg_expr,
                     arg_str,

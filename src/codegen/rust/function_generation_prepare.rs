@@ -1456,10 +1456,14 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
-            // Runtime AsRef<&str> forwards keep owned WJ `string` formals (call sites
-            // pass by value; the body borrows into `strings::` / `db::` / …).
+            // Runtime AsRef<&str> forwards keep owned WJ `string` formals only when
+            // callee signatures do not already expect a borrow (fs AsRef<Path> demotes).
             if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                && self.param_only_forwarded_to_asref_str_runtime(func.body.as_slice(), &param.name)
+                && self.param_asref_runtime_forces_owned_formal(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
             {
                 self.inferred_borrowed_params.remove(&param.name);
                 self.str_ref_optimized_params.remove(&param.name);
@@ -2273,11 +2277,13 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
                     // Enum/struct payload stores keep Owned — never demote to `&String`+clone.
                     && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
-                    // AsRef runtime forwards keep owned WJ `string` (CSV while-index gate).
+                    // AsRef runtime forwards keep owned WJ `string` only when callees
+                    // do not already expect a borrow (CSV while-index vs fs AsRef<Path>).
                     && !(crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                        && self.param_only_forwarded_to_asref_str_runtime(
+                        && self.param_asref_runtime_forces_owned_formal(
                             func.body.as_slice(),
                             &param.name,
+                            func,
                         ))
                 {
                     ownership = crate::analyzer::OwnershipMode::Borrowed;
@@ -6806,9 +6812,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// True when every use of `param_name` is forwarding into a runtime AsRef<&str>
-    /// module (`db`, `env`, …). Those APIs keep owned WJ `string` formals and borrow
-    /// at the call site (`db::connect(&url)`).
+    /// True when every use of `param_name` is forwarding into a runtime AsRef module
+    /// (`db`, `env`, `fs`, `strings`, …). Historically those kept owned WJ `string`
+    /// formals and borrowed only at the call site.
     pub(in crate::codegen::rust) fn param_only_forwarded_to_asref_str_runtime(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -6822,6 +6828,20 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         saw_forward
+    }
+
+    /// Runtime AsRef forwards must keep an owned formal only when callee signatures
+    /// do **not** already expect a borrow (`AsRef<Path>`, `&str`, …). When every
+    /// forward is signature-borrowed (e.g. `fs::read_to_string`), demote the formal
+    /// so callers can reuse the path (`wj-dotenv` write → load → remove).
+    pub(in crate::codegen::rust) fn param_asref_runtime_forces_owned_formal(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        self.param_only_forwarded_to_asref_str_runtime(body, param_name)
+            && !self.param_only_forwards_to_borrowed_text_callees(body, param_name, func)
     }
 
     fn statement_param_only_asref_runtime_forward(
@@ -8360,6 +8380,11 @@ impl<'ast> CodeGenerator<'ast> {
         let pidx = sig.arg_param_index(arg_index);
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return false;
+        }
+        if crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+            sig, arg_index,
+        ) {
+            return true;
         }
         if sig
             .param_types

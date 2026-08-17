@@ -23,14 +23,8 @@ impl<'ast> CodeGenerator<'ast> {
         function: &Expression<'ast>,
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
-        let func_name = ast_utilities::extract_function_name(function);
-
-        if let Some(done) =
-            stdlib_call_generation::try_early_stdio_and_test_dispatch(self, function, arguments)
-        {
-            return done;
-        }
-
+        // Match scrutinees parse `fs.write(...)` as Call(FieldAccess), not MethodCall.
+        // Lower FieldAccess before macro dispatch so `write` is not mistaken for `write!`.
         if let Expression::FieldAccess {
             object: call_obj,
             field: ref call_method,
@@ -43,6 +37,14 @@ impl<'ast> CodeGenerator<'ast> {
                 call_method,
                 arguments,
             );
+        }
+
+        let func_name = ast_utilities::extract_function_name(function);
+
+        if let Some(done) =
+            stdlib_call_generation::try_early_stdio_and_test_dispatch(self, function, arguments)
+        {
+            return done;
         }
 
         function_call_generation::generate_plain_function_call(
