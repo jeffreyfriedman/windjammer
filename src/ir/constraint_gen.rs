@@ -21,7 +21,7 @@ use crate::ir::node::{
     ir_function_name_from_decl, ownership_mode_from_param_type, ownership_mode_to_owned_type,
     param_ownership_seed_is_copy, parser_type_to_base_type,
 };
-use crate::ir::safety_type::{BaseType, Effect, EffectSet, ExecutionMode, OwnedType, Region};
+use crate::ir::safety_type::{BaseType, EffectSet, ExecutionMode, OwnedType, Region};
 use crate::parser::ast::core::{Expression, Pattern, Statement};
 use crate::parser::ast::literals::Literal;
 use crate::parser::ast::operators::BinaryOp;
@@ -1080,7 +1080,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
     fn emit_taint_for_call(&mut self, callee_name: &str, fn_name: &str) {
         use crate::ir::taint::{TaintConstraint, TaintVar};
 
-        if let Some(source_kind) = lookup_taint_source(callee_name) {
+        if let Some(source_kind) = crate::ir::taint::taint_source_for_callee(callee_name) {
             let var_name = format!("{}::{}", fn_name, callee_name);
             self.taint_constraints.push(TaintConstraint::IsSource {
                 var: TaintVar::new(&var_name),
@@ -1088,7 +1088,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             });
         }
 
-        if let Some(sink_desc) = lookup_taint_sink(callee_name) {
+        if let Some(sink_desc) = crate::ir::taint::taint_sink_for_callee(callee_name) {
             let var_name = format!("{}::arg0", callee_name);
             self.taint_constraints.push(TaintConstraint::RequiresClean {
                 var: TaintVar::new(&var_name),
@@ -1096,7 +1096,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             });
         }
 
-        if lookup_sanitizer(callee_name) {
+        if crate::ir::taint::is_sanitizer_callee(callee_name) {
             let input_name = format!("{}::input", callee_name);
             let output_name = format!("{}::output", callee_name);
             self.taint_constraints.push(TaintConstraint::Sanitizes {
@@ -1164,84 +1164,6 @@ pub fn generate_constraints_with_fields(
     walker.emit_clone_constraints();
     walker.emit_mutation_constraints();
     walker.finish()
-}
-
-/// Check if a call target is a known taint source.
-fn lookup_taint_source(qualified_name: &str) -> Option<crate::ir::taint::TaintSourceKind> {
-    use crate::ir::taint::TaintSourceKind;
-    if qualified_name.contains("request::body") {
-        return Some(TaintSourceKind::HttpRequestBody);
-    }
-    if qualified_name.contains("request::query") {
-        return Some(TaintSourceKind::HttpRequestQuery);
-    }
-    if qualified_name.contains("request::headers") {
-        return Some(TaintSourceKind::HttpRequestHeader);
-    }
-    let effects = crate::ir::effects::effects_for_runtime_callee(qualified_name);
-    let module = crate::ir::effects::runtime_module_segment(qualified_name);
-    if module == "env" && effects.contains(&Effect::EnvRead) {
-        return Some(TaintSourceKind::EnvironmentVariable);
-    }
-    if module == "fs" && effects.contains(&Effect::FsRead) {
-        return Some(TaintSourceKind::FileContents);
-    }
-    if module == "db" && effects.contains(&Effect::NetEgress) {
-        return Some(TaintSourceKind::DatabaseRow);
-    }
-    if module == "io" {
-        let registry = crate::analyzer::SignatureRegistry::stdlib();
-        let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
-        let sig = registry
-            .get_signature(qualified_name)
-            .or_else(|| registry.get_signature(&format!("{module}::{simple}")));
-        if sig.is_some_and(|s| !matches!(s.return_type, Some(crate::parser::Type::Bool))) {
-            return Some(TaintSourceKind::UserInput);
-        }
-    }
-    None
-}
-
-/// Check if a call target is a dangerous sink requiring clean data.
-fn lookup_taint_sink(qualified_name: &str) -> Option<&'static str> {
-    let effects = crate::ir::effects::effects_for_runtime_callee(qualified_name);
-    let module = crate::ir::effects::runtime_module_segment(qualified_name);
-    if effects.contains(&Effect::ProcessSpawn) {
-        return Some("shell command");
-    }
-    if effects.contains(&Effect::FsWrite) {
-        return Some("file write path");
-    }
-    if module == "db" && effects.contains(&Effect::NetEgress) {
-        return Some("SQL query");
-    }
-    None
-}
-
-/// Check if a call target is a known sanitizer.
-fn lookup_sanitizer(qualified_name: &str) -> bool {
-    matches!(
-        qualified_name,
-        "sql_escape"
-            | "std::sql::escape"
-            | "sql::escape"
-            | "sql::parameterize"
-            | "std::sql::parameterize"
-            | "html_escape"
-            | "html::escape"
-            | "std::html::escape"
-            | "shell_escape"
-            | "shell::escape"
-            | "std::shell::escape"
-            | "url_encode"
-            | "url::encode"
-            | "std::url::encode"
-            | "json_escape"
-            | "json::escape"
-            | "std::json::escape"
-            | "sanitize"
-            | "std::sanitize"
-    )
 }
 
 /// Map a literal value to its base type.
