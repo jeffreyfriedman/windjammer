@@ -897,8 +897,10 @@ pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
 
 /// Scanned runtime Rust signature borrows this arg while the WJ formal is still owned.
 ///
-/// Driven by `stdlib_scanner` / registry `param_ownership` (e.g. `subprocess::spawn`'s
-/// `&str`, `json::get`'s `&Value`) — never by method or module name lists.
+/// Driven by `stdlib_scanner` / registry `param_ownership` and `emitted_rust_ref_params`
+/// (e.g. `AsRef<Path>`, `AsRef<str>`, `&str` on runtime helpers) — never by method or
+/// module name lists. Scanner maps AsRef contracts to `Reference(str)` in `param_types`,
+/// so the emitted-ref flag is the reliable signal that WJ still passes owned `string`.
 pub fn runtime_wj_owned_rust_borrowed_param(
     sig: &crate::analyzer::FunctionSignature,
     arg_index: usize,
@@ -913,6 +915,15 @@ pub fn runtime_wj_owned_rust_borrowed_param(
     );
     if !scanned_borrow {
         return false;
+    }
+    if sig
+        .emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(pidx))
+        .copied()
+        == Some(true)
+    {
+        return true;
     }
     sig.formal_param_type(pidx)
         .or_else(|| sig.param_types.get(pidx))
