@@ -710,6 +710,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn process_exit_scan_registers_module_path() {
+        let line = "pub fn exit(code: i32) -> ! {";
+        let sig = parse_function_signature(line, "process").unwrap();
+        assert_eq!(sig.name, "process::exit");
+        assert_eq!(sig.param_ownership, vec![OwnershipMode::Owned]);
+    }
+
+    #[test]
     fn resolve_runtime_src_finds_compiler_runtime_not_cwd() {
         let resolved = resolve_runtime_src_for_scan();
         assert!(
