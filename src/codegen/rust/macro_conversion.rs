@@ -147,10 +147,15 @@ impl<'ast> CodeGenerator<'ast> {
         ))
     }
 
-    /// Use windjammer_runtime::io for print builtins when the compilation unit links
-    /// the runtime (stdlib imports). Standalone `--no-cargo` snippets keep `println!`.
+    /// Use windjammer_runtime::io for print builtins when this unit already links
+    /// the runtime (`use std::http`, `use std::io`, …). Rust-std passthrough imports
+    /// (`use std::collections::HashMap`, `use std::process`) must keep `println!`
+    /// so `--no-cargo` rustc snippets compile without the runtime crate.
     pub(in crate::codegen::rust) fn should_use_runtime_io(&self) -> bool {
-        !self.runtime_std_module_imports.is_empty()
+        self.runtime_std_module_imports.iter().any(|m| {
+            self.try_generate_std_import_use(&format!("std::{m}"), None)
+                .is_some_and(|u| u.contains("windjammer_runtime"))
+        })
     }
 
     /// Map Windjammer print builtins to windjammer_runtime::io (no Rust `println!` leakage).

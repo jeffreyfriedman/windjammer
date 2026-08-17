@@ -137,6 +137,11 @@ pub struct SignatureRegistry {
     /// Used by `apply_trait_owned_string_call_site_contracts` to avoid matching
     /// unrelated impl methods with the same name suffix.
     trait_method_keys: HashSet<String>,
+    /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
+    /// `csv_mod.rs`, `async` from `async_runtime.rs`) — never a hand-maintained list.
+    runtime_std_modules: HashSet<String>,
+    /// Scanned `impl Type` in a runtime module file → WJ module (`Connection` → `db`).
+    runtime_type_modules: HashMap<String, String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
     global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
 }
@@ -156,22 +161,14 @@ impl SignatureRegistry {
             // WJ `.wj` / stdlib_meta stubs that declare owned `string` can shadow them
             // in `signatures` without erasing the borrow contract — call sites consult
             // `get_fallback_signature` via prefer_shared_ref.
-            let mut runtime = SignatureRegistry {
-                signatures: HashMap::new(),
-                type_collision_keys: HashSet::new(),
-                ownership_collision_keys: HashSet::new(),
-                method_index: HashMap::new(),
-                trait_method_keys: HashSet::new(),
-                global_fallback: None,
-            };
+            let mut runtime = SignatureRegistry::empty();
 
             if let Err(e) = crate::stdlib_scanner::populate_runtime_signatures(&mut runtime) {
                 eprintln!("Warning: Failed to scan runtime signatures: {}", e);
                 eprintln!("Continuing with empty registry - may generate incorrect borrows");
             }
 
-            let mut registry =
-                SignatureRegistry::layered(std::sync::Arc::new(runtime));
+            let mut registry = SignatureRegistry::layered(std::sync::Arc::new(runtime));
             Self::load_stdlib_meta(&mut registry);
             super::primitive_float_signatures::register_primitive_float_signatures(&mut registry);
             registry
@@ -190,20 +187,66 @@ impl SignatureRegistry {
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
             trait_method_keys: HashSet::new(),
+            runtime_std_modules: HashSet::new(),
+            runtime_type_modules: HashMap::new(),
             global_fallback: None,
         }
     }
 
     /// Local registry with read-through to a shared global registry (O(1) setup vs full clone).
     pub fn layered(global: std::sync::Arc<SignatureRegistry>) -> Self {
-        SignatureRegistry {
-            signatures: HashMap::new(),
-            type_collision_keys: HashSet::new(),
-            ownership_collision_keys: HashSet::new(),
-            method_index: HashMap::new(),
-            trait_method_keys: HashSet::new(),
-            global_fallback: Some(global),
+        let mut registry = Self::empty();
+        registry.global_fallback = Some(global);
+        registry
+    }
+
+    /// Record a scanned WJ `std::module` name (`csv_mod` also registers `csv`).
+    pub fn register_runtime_std_module(&mut self, name: &str) {
+        if name.is_empty() {
+            return;
         }
+        self.runtime_std_modules.insert(name.to_string());
+        if let Some(short) = name.strip_suffix("_mod") {
+            self.runtime_std_modules.insert(short.to_string());
+        }
+        if let Some(short) = name.strip_suffix("_runtime") {
+            self.runtime_std_modules.insert(short.to_string());
+        }
+    }
+
+    /// Record `impl Type` from a runtime module file (`Connection` in `db.rs` → `db`).
+    pub fn register_runtime_type_module(&mut self, type_name: &str, module: &str) {
+        let wj = module
+            .strip_suffix("_mod")
+            .or_else(|| module.strip_suffix("_runtime"))
+            .unwrap_or(module);
+        if type_name.is_empty() || wj.is_empty() {
+            return;
+        }
+        self.runtime_type_modules
+            .insert(type_name.to_string(), wj.to_string());
+        self.register_runtime_std_module(module);
+    }
+
+    /// True when `name` is a scanned WJ runtime std module (not a user module).
+    pub fn has_runtime_std_module(&self, name: &str) -> bool {
+        if self.runtime_std_modules.contains(name) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.has_runtime_std_module(name))
+    }
+
+    /// Runtime module for a scanned impl type (`Connection` → `db`).
+    pub fn runtime_module_for_type(&self, type_name: &str) -> Option<&str> {
+        let base = type_name.rsplit("::").next().unwrap_or(type_name);
+        if let Some(m) = self.runtime_type_modules.get(base) {
+            return Some(m.as_str());
+        }
+        self.global_fallback
+            .as_ref()
+            .and_then(|g| g.runtime_module_for_type(type_name))
     }
 
     fn load_stdlib_meta(registry: &mut Self) {
@@ -1098,6 +1141,10 @@ impl SignatureRegistry {
             .extend(other.ownership_collision_keys.iter().cloned());
         self.trait_method_keys
             .extend(other.trait_method_keys.iter().cloned());
+        self.runtime_std_modules
+            .extend(other.runtime_std_modules.iter().cloned());
+        self.runtime_type_modules
+            .extend(other.runtime_type_modules.clone());
     }
 
     /// Collect only signatures whose ownership differs from `base`.

@@ -239,24 +239,13 @@ impl<'ast> CodeGenerator<'ast> {
                 if path.first().is_some_and(|p| p == "std") {
                     if path.len() >= 2 {
                         let module = &path[1];
-                        // Track WJ runtime modules from `use std::…`. Prefer the
-                        // known-runtime list, and also accept bare `use std::foo`
-                        // (path length 2) for lowercase modules that are not Rust
-                        // crates (`collections`, `sync`, …) — covers `process`,
-                        // `path`, etc. without growing a method-name heuristic list.
-                        let known = crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
-                            module,
-                        );
-                        let bare_std_module = path.len() == 2
-                            && module
-                                .chars()
-                                .next()
-                                .is_some_and(|c| c.is_ascii_lowercase())
-                            && !matches!(
-                                module.as_str(),
-                                "collections" | "sync" | "ops" | "cmp" | "fmt"
-                            );
-                        if known || bare_std_module {
+                        // Any lowercase `use std::foo` — import tracking, not a name list.
+                        // Locals are never treated as modules (see `is_imported_runtime_std_module`).
+                        if module
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_lowercase())
+                        {
                             self.runtime_std_module_imports.insert(module.clone());
                         }
                     }
@@ -493,9 +482,7 @@ impl<'ast> CodeGenerator<'ast> {
                     ));
                 }
                 Item::Macro {
-                    doc_comment,
-                    expr,
-                    ..
+                    doc_comment, expr, ..
                 } => {
                     if let Some(doc) = doc_comment {
                         for line in doc.lines() {
@@ -535,9 +522,10 @@ impl<'ast> CodeGenerator<'ast> {
         // Preregister free-function formals BEFORE impl blocks so methods that call
         // later free fns (e.g. WalWriter::replay_all_records → replay_all) see converged
         // `&str` / borrowed contracts instead of stale owned stubs (regression-057/058/060).
-        for analyzed_func in analyzed.iter().filter(|af| {
-            !impl_methods.contains(&af.decl.name) && !af.decl.is_extern
-        }) {
+        for analyzed_func in analyzed
+            .iter()
+            .filter(|af| !impl_methods.contains(&af.decl.name) && !af.decl.is_extern)
+        {
             self.preregister_function_formals_in_registry(analyzed_func);
         }
 
@@ -700,12 +688,10 @@ impl<'ast> CodeGenerator<'ast> {
                     && !(self.is_module && af.decl.name == "main")
             })
             .collect();
-        top_level_funcs.sort_by(|a, b| {
-            match (a.decl.name.as_str(), b.decl.name.as_str()) {
-                ("main", _) => std::cmp::Ordering::Greater,
-                (_, "main") => std::cmp::Ordering::Less,
-                _ => std::cmp::Ordering::Equal,
-            }
+        top_level_funcs.sort_by(|a, b| match (a.decl.name.as_str(), b.decl.name.as_str()) {
+            ("main", _) => std::cmp::Ordering::Greater,
+            (_, "main") => std::cmp::Ordering::Less,
+            _ => std::cmp::Ordering::Equal,
         });
         for analyzed_func in &top_level_funcs {
             self.preregister_function_formals_in_registry(analyzed_func);
@@ -733,9 +719,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // `@test(setup=..., teardown=...)` emits `with_setup_teardown(...)` — auto-import it.
         let needs_setup_teardown = analyzed.iter().any(|af| {
-            af.decl.decorators.iter().any(|d| {
-                d.name == "test" && !d.arguments.is_empty()
-            })
+            af.decl
+                .decorators
+                .iter()
+                .any(|d| d.name == "test" && !d.arguments.is_empty())
         });
 
         // Check for property testing decorators and collect max parameter count
