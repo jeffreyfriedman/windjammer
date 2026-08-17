@@ -6830,10 +6830,9 @@ impl<'ast> CodeGenerator<'ast> {
         saw_forward
     }
 
-    /// Runtime AsRef forwards must keep an owned formal only when callee signatures
-    /// do **not** already expect a borrow (`AsRef<Path>`, `&str`, …). When every
-    /// forward is signature-borrowed (e.g. `fs::read_to_string`), demote the formal
-    /// so callers can reuse the path (`wj-dotenv` write → load → remove).
+    /// Runtime AsRef\<str\> forwards (`strings::`, `db::`, …) keep owned WJ `string`
+    /// formals + call-site borrow. AsRef\<Path\> forwards (`fs::`) demote the formal so
+    /// callers can reuse the path (`write → load → remove`) without clones.
     pub(in crate::codegen::rust) fn param_asref_runtime_forces_owned_formal(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -6841,7 +6840,38 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
     ) -> bool {
         self.param_only_forwarded_to_asref_str_runtime(body, param_name)
-            && !self.param_only_forwards_to_borrowed_text_callees(body, param_name, func)
+            && !self.param_only_forwards_to_path_asref_callees(body, param_name, func)
+    }
+
+    /// True when every forward of `param_name` is into a scanned `AsRef<Path>` formal
+    /// (`Reference(Path)` in the signature registry).
+    pub(in crate::codegen::rust) fn param_only_forwards_to_path_asref_callees(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_only_used_as_call_argument(body, param_name, func) {
+            return false;
+        }
+        let mut saw_site = false;
+        let mut all_path_asref = true;
+        let mut visit = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
+            saw_site = true;
+            let pidx = sig.arg_param_index(arg_index);
+            let is_path = sig.param_types.get(pidx).is_some_and(|t| {
+                matches!(
+                    t,
+                    Type::Reference(inner)
+                        if matches!(**inner, Type::Custom(ref n) if n == "Path" || n.ends_with("::Path"))
+                )
+            });
+            if !is_path {
+                all_path_asref = false;
+            }
+        };
+        self.for_each_param_call_argument_site(body, param_name, func, &mut visit);
+        saw_site && all_path_asref
     }
 
     fn statement_param_only_asref_runtime_forward(

@@ -93,6 +93,33 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         _ => None,
     };
 
+    // `json.parse(...)` / `fs.write(...)` are Call(FieldAccess) with a module receiver —
+    // type inference often yields no receiver type, so resolve `module::method` directly.
+    let method_signature = method_signature.or_else(|| {
+        let module = runtime_module?;
+        let key = format!("{module}::{call_method}");
+        let registry = gen
+            .global_signature_registry()
+            .unwrap_or(&gen.signature_registry);
+        // Prefer runtime scanner fallback (`&str`) over WJ-owned stubs for the same key.
+        let baseline = registry
+            .get_fallback_signature(&key)
+            .or_else(|| registry.get_signature(&key))?;
+        let mut sig = baseline.clone();
+        if let Some(local) = registry.get_signature(&key) {
+            if let Some(preferred) =
+                crate::codegen::rust::signature_promotion::prefer_shared_ref_signature(
+                    Some(local.clone()),
+                    Some(&sig),
+                    0,
+                )
+            {
+                sig = preferred;
+            }
+        }
+        Some(call_signature_resolution::finalize_call_site_signature(sig))
+    });
+
     let mut args: Vec<String> = {
         let prev_float = gen.push_float_method_argument_context(call_method, call_obj);
         let built = if let Some(ref sig) = method_signature {
@@ -122,6 +149,10 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
 
     // Runtime std modules where WJ declares owned aggregates but Rust takes references.
     if let Expression::Identifier { name: obj_name, .. } = call_obj {
+        let registry = gen
+            .global_signature_registry()
+            .unwrap_or(&gen.signature_registry);
+        let callee_key = format!("{obj_name}::{call_method}");
         for (i, arg_str) in args.iter_mut().enumerate() {
             if arg_str.starts_with('&') {
                 continue;
@@ -141,13 +172,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             ) {
                 continue;
             }
-            if let Some(ref sig) = method_signature {
-                if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow(
-                    Some(sig),
-                    i,
-                ) {
-                    *arg_str = format!("&{arg_str}");
-                }
+            if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                registry,
+                &callee_key,
+                method_signature.as_ref(),
+                i,
+            ) {
+                *arg_str = format!("&{arg_str}");
             }
         }
     }

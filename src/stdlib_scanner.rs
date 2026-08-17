@@ -191,12 +191,17 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
 
     // Type params bounded `S: AsRef<_>` (runtime fs/strings/db helpers) borrow at call sites.
     let asref_borrow_type_params = asref_borrow_generic_type_params(&generics_str);
+    let asref_path_type_params = asref_path_type_params(&generics_str);
 
     // Parse parameter ownership
     let param_ownership = parse_parameters(&params_str, &asref_borrow_type_params);
     let emitted_rust_ref_params =
         parse_emitted_rust_ref_flags(&params_str, &asref_borrow_type_params);
-    let param_types = parse_param_types(&params_str, &asref_borrow_type_params);
+    let param_types = parse_param_types(
+        &params_str,
+        &asref_borrow_type_params,
+        &asref_path_type_params,
+    );
     let has_self_receiver = first_param_is_self_receiver(&params_str);
 
     // Build full name with module prefix
@@ -281,21 +286,51 @@ fn extract_rust_fn_name_generics_and_params(after_fn: &str) -> Option<(String, S
     ))
 }
 
+fn asref_target_type_name(clause_or_param: &str) -> Option<&str> {
+    let start = clause_or_param.find("AsRef<")?;
+    let rest = &clause_or_param[start + "AsRef<".len()..];
+    let mut depth = 1i32;
+    for (i, c) in rest.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(rest[..i].trim());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn is_asref_path_target(target: &str) -> bool {
+    target == "Path" || target.ends_with("::Path")
+}
+
 /// Type parameters with an `AsRef<_>` bound that accepts borrowed inputs at call sites.
 ///
 /// Runtime helpers use `fn write<P: AsRef<Path>>(path: P)` / `fn len<S: AsRef<str>>(s: S)` —
 /// the borrow contract is on the generic bound, not the formal (`path: P` alone looks owned).
 fn asref_borrow_generic_type_params(generics_str: &str) -> Vec<String> {
+    asref_borrow_bounds(generics_str)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
+}
+
+/// `(type_param, AsRef target)` pairs from fn generics (`P` → `Path`, `S` → `str`).
+fn asref_borrow_bounds(generics_str: &str) -> Vec<(String, String)> {
     if generics_str.is_empty() {
         return Vec::new();
     }
     let mut out = Vec::new();
     for clause in split_top_level_commas(generics_str) {
         let clause = clause.trim();
-        // Any `AsRef<…>` bound (Path, str, [u8], …) — not a hardcoded target-type list.
-        if !clause.contains("AsRef<") {
+        let Some(target) = asref_target_type_name(clause) else {
             continue;
-        }
+        };
         let name = clause
             .split([':', '+'])
             .next()
@@ -306,10 +341,17 @@ fn asref_borrow_generic_type_params(generics_str: &str) -> Vec<String> {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
-            out.push(name.to_string());
+            out.push((name.to_string(), target.to_string()));
         }
     }
     out
+}
+
+fn asref_path_type_params(generics_str: &str) -> Vec<String> {
+    asref_borrow_bounds(generics_str)
+        .into_iter()
+        .filter_map(|(name, target)| is_asref_path_target(&target).then_some(name))
+        .collect()
 }
 
 fn split_top_level_commas(s: &str) -> Vec<&str> {
@@ -346,13 +388,25 @@ fn param_is_asref_borrow_type_param(param: &str, asref_borrow_type_params: &[Str
     })
 }
 
+fn param_is_asref_path_type_param(param: &str, asref_path_type_params: &[String]) -> bool {
+    param_type_name(param).is_some_and(|ty| asref_path_type_params.iter().any(|p| p == ty))
+}
+
 fn param_has_asref_borrow_contract(param: &str, asref_borrow_type_params: &[String]) -> bool {
     // Signature-driven: any `AsRef<_>` (Path, str, [u8], …) or generic with that bound.
     param.contains("AsRef<")
         || param_is_asref_borrow_type_param(param, asref_borrow_type_params)
 }
 
-fn parse_parameters(params_str: &str, asref_borrow_type_params: &[String]) -> Vec<OwnershipMode> {
+fn param_has_asref_path_contract(param: &str, asref_path_type_params: &[String]) -> bool {
+    asref_target_type_name(param).is_some_and(is_asref_path_target)
+        || param_is_asref_path_type_param(param, asref_path_type_params)
+}
+
+fn parse_parameters(
+    params_str: &str,
+    asref_borrow_type_params: &[String],
+) -> Vec<OwnershipMode> {
     if params_str.trim().is_empty() {
         return Vec::new();
     }
@@ -405,19 +459,33 @@ fn parse_emitted_rust_ref_flags(
 
 /// Best-effort Rust formal → WJ `Type` for IR/call-site coercion (signature-driven).
 ///
-/// Maps `&str` / `AsRef<_>` / `S: AsRef<_>` to `Reference(str)`, `&mut T` / `&T` to
-/// references, and common owned formals (`String`, `Vec<String>`, …) to owned types.
-fn parse_param_types(params_str: &str, asref_borrow_type_params: &[String]) -> Vec<Type> {
+/// Maps `&str` / `AsRef<str>` to `Reference(str)`, `AsRef<Path>` to `Reference(Path)`,
+/// and common owned formals (`String`, `Vec<String>`, …) to owned types.
+fn parse_param_types(
+    params_str: &str,
+    asref_borrow_type_params: &[String],
+    asref_path_type_params: &[String],
+) -> Vec<Type> {
     if params_str.trim().is_empty() {
         return Vec::new();
     }
     split_top_level_commas(params_str)
         .into_iter()
-        .map(|param| parse_one_rust_param_type(param.trim(), asref_borrow_type_params))
+        .map(|param| {
+            parse_one_rust_param_type(
+                param.trim(),
+                asref_borrow_type_params,
+                asref_path_type_params,
+            )
+        })
         .collect()
 }
 
-fn parse_one_rust_param_type(param: &str, asref_borrow_type_params: &[String]) -> Type {
+fn parse_one_rust_param_type(
+    param: &str,
+    asref_borrow_type_params: &[String],
+    asref_path_type_params: &[String],
+) -> Type {
     let ty = param
         .rsplit(':')
         .next()
@@ -434,7 +502,11 @@ fn parse_one_rust_param_type(param: &str, asref_borrow_type_params: &[String]) -
         return Type::Custom("Self".into());
     }
 
-    // Path/str/[u8] AsRef contracts accept borrowed Windjammer `string` at call sites.
+    // Distinguish Path vs str AsRef so formals can demote only for Path reuse
+    // (`fs::write` → `fs::read`) while `strings::` / `db::` keep owned WJ `string`.
+    if param_has_asref_path_contract(param, asref_path_type_params) {
+        return Type::Reference(Box::new(Type::Custom("Path".into())));
+    }
     if param_has_asref_borrow_contract(param, asref_borrow_type_params)
         || ty == "&str"
         || ty.starts_with("&str")
@@ -449,6 +521,9 @@ fn parse_one_rust_param_type(param: &str, asref_borrow_type_params: &[String]) -
         return Type::Reference(Box::new(parse_owned_rust_type_name(inner.trim())));
     }
     if let Some(inner) = ty.strip_prefix("impl ") {
+        if param_has_asref_path_contract(inner, &[]) {
+            return Type::Reference(Box::new(Type::Custom("Path".into())));
+        }
         if param_has_asref_borrow_contract(inner, &[]) {
             return Type::Reference(Box::new(Type::Custom("str".into())));
         }
@@ -645,7 +720,7 @@ mod tests {
 
     #[test]
     fn parse_slice_param_as_reference_vec() {
-        let ty = parse_one_rust_param_type("parts: &[String]", &[]);
+        let ty = parse_one_rust_param_type("parts: &[String]", &[], &[]);
         assert!(
             matches!(
                 ty,
@@ -680,6 +755,22 @@ mod tests {
         assert_eq!(sig.param_ownership[0], OwnershipMode::Borrowed);
         assert_eq!(sig.param_ownership[1], OwnershipMode::Borrowed);
         assert_eq!(sig.emitted_rust_ref_params, Some(vec![true, true]));
+        assert!(
+            matches!(
+                &sig.param_types[0],
+                Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "Path")
+            ),
+            "AsRef<Path> must map to Reference(Path), got {:?}",
+            sig.param_types[0]
+        );
+        assert!(
+            matches!(
+                &sig.param_types[1],
+                Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+            ),
+            "AsRef<[u8]> still maps to shared-ref str contract for WJ string, got {:?}",
+            sig.param_types[1]
+        );
         assert!(crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
             &sig, 0
         ));
