@@ -141,15 +141,8 @@ impl<'ast> Analyzer<'ast> {
                 // Check if calling a method on self (not self.field, just self)
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
-                        // THE WINDJAMMER WAY: Check if this method requires &mut self
-                        // 1. Check hardcoded stdlib mutating methods
-                        if self.is_mutating_method(method) {
-                            return true;
-                        }
-
                         // User-defined methods in the current impl block take priority
                         // over stdlib name collisions (e.g., Logger::log vs f64::log).
-                        // Check current_impl_functions BEFORE the known-readonly gate.
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
                                 if self.function_modifies_self_fields_recursive(
@@ -173,24 +166,20 @@ impl<'ast> Analyzer<'ast> {
                             }
                         }
 
-                        // Registry stores unqualified method names; unrelated types' `len`/`get`/...
-                        // can collide (e.g. safe_buffers::len as &mut self). Read-only std patterns
-                        // must never be treated as mutating via that alias.
-                        if !Self::is_known_readonly_method(method) {
-                            // Check signature registry (has analyzed ownership from previous passes)
-                            if let Some(reg) = registry {
-                                if let Some(sig) = reg.get_signature(method) {
-                                    if sig.has_self_receiver {
-                                        if let Some(&ownership) = sig.param_ownership.first() {
-                                            if matches!(
-                                                ownership,
-                                                super::OwnershipMode::MutBorrowed
-                                            ) {
-                                                return true;
-                                            }
-                                        }
-                                    }
-                                }
+                        if let Some(reg) = registry {
+                            let receiver = self
+                                .self_impl_context
+                                .as_ref()
+                                .map(|ctx| ctx.impl_type_base.as_str());
+                            if super::stdlib_method_traits::is_known_readonly_qualified(
+                                method, receiver, reg,
+                            ) {
+                                return false;
+                            }
+                            if super::stdlib_method_traits::method_mutates_receiver_qualified(
+                                method, receiver, reg,
+                            ) {
+                                return true;
                             }
                         }
                     }
@@ -284,7 +273,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if object.method() is a self.field[.subfield...].method() pattern
-    /// where method requires &mut self. Checks both stdlib list and signature registry.
+    /// where method requires &mut self — type-qualified signature lookup only.
     pub(crate) fn expression_is_self_field_mutating_method_call(
         &self,
         object: &Expression<'ast>,
@@ -292,20 +281,14 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
         visited: &mut HashSet<String>,
     ) -> bool {
-        let traces = self.expression_traces_to_self(object);
-        if !traces {
+        if !self.expression_traces_to_self(object) {
             return false;
         }
 
-        if Self::is_known_readonly_method(method) {
+        let Some(reg) = registry else {
             return false;
-        }
+        };
 
-        if self.is_mutating_method(method) {
-            return true;
-        }
-
-        // Check methods in current impl block (same-file, different struct)
         if let Some(impl_functions) = &self.current_impl_functions {
             if let Some(called_func) = impl_functions.get(method) {
                 if self.function_modifies_self_fields_recursive(called_func, registry, visited) {
@@ -314,80 +297,44 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
-        // Cross-type registry lookup: if the method exists in the registry
-        // and takes &mut self, it's a mutating call
-        if let Some(reg) = registry {
-            if let Some(sig) = reg.get_signature(method) {
-                if sig.has_self_receiver {
-                    if let Some(&ownership) = sig.param_ownership.first() {
-                        if matches!(ownership, super::OwnershipMode::MutBorrowed) {
-                            return true;
-                        }
-                    }
-                }
-            }
+        let receiver_base = self.self_field_call_receiver_type_base(object);
+        let Some(base) = receiver_base else {
+            return false;
+        };
+
+        if super::stdlib_method_traits::is_known_readonly_qualified(method, Some(&base), reg) {
+            return false;
+        }
+        if super::stdlib_method_traits::method_mutates_receiver_qualified(
+            method,
+            Some(&base),
+            reg,
+        ) {
+            return true;
         }
 
-        // Dogfooding: `self.patrol.update_wait()` must resolve `PatrolConfig::update_wait`, not another
-        // type's `update_wait` from the unqualified registry / same-impl map.
-        if let (Some(ctx), Some(reg)) = (&self.self_impl_context, registry) {
-            if let Some(receiver_ty) = self.static_value_type_of_self_rooted_expr(
-                ctx.program(),
-                &ctx.impl_type_base,
-                object,
-            ) {
-                if let Some(base) = Self::type_base_for_qualified_sig_lookup(&receiver_ty) {
-                    let key = format!("{}::{}", base, method);
-                    if let Some(sig) = reg.get_signature(&key) {
-                        if sig.has_self_receiver {
-                            if let Some(&ownership) = sig.param_ownership.first() {
-                                if matches!(ownership, super::OwnershipMode::MutBorrowed) {
-                                    return true;
-                                }
-                            }
-                        }
-                        // When metadata lacks self_receiver/ownership info but the
-                        // method matches a known mutating name pattern, trust that.
-                        if !sig.has_self_receiver && sig.param_ownership.is_empty() {
-                            if super::stdlib_method_traits::method_mutates_receiver(method) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        reg.get_signature(&format!("{base}::{method}"))
+            .is_some_and(|sig| {
+                sig.has_self_receiver
+                    && matches!(
+                        sig.param_ownership.first(),
+                        Some(super::OwnershipMode::MutBorrowed)
+                    )
+            })
+    }
 
-        // Also check self.struct_field_types for the field type when
-        // self_impl_context / static_value_type_of_self_rooted_expr fails.
-        // This handles common patterns like self.player_controller.update(dt).
-        if let (Some(ctx), Some(reg)) = (&self.self_impl_context, registry) {
-            if let Some(field_name) = Self::extract_direct_self_field_name(object) {
-                if let Some(field_type) =
-                    self.struct_field_types_lookup(&ctx.impl_type_base, &field_name)
-                {
-                    if let Some(base) = Self::type_base_for_qualified_sig_lookup(&field_type) {
-                        let key = format!("{}::{}", base, method);
-                        if let Some(sig) = reg.get_signature(&key) {
-                            if sig.has_self_receiver {
-                                if let Some(&ownership) = sig.param_ownership.first() {
-                                    if matches!(ownership, super::OwnershipMode::MutBorrowed) {
-                                        return true;
-                                    }
-                                }
-                            }
-                            if !sig.has_self_receiver && sig.param_ownership.is_empty() {
-                                if super::stdlib_method_traits::method_mutates_receiver(method) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    fn self_field_call_receiver_type_base(&self, object: &Expression) -> Option<String> {
+        let ctx = self.self_impl_context.as_ref()?;
+        if let Some(receiver_ty) = self.static_value_type_of_self_rooted_expr(
+            ctx.program(),
+            &ctx.impl_type_base,
+            object,
+        ) {
+            return Self::type_base_for_qualified_sig_lookup(&receiver_ty);
         }
-
-        false
+        let field_name = Self::extract_direct_self_field_name(object)?;
+        let field_type = self.struct_field_types_lookup(&ctx.impl_type_base, &field_name)?;
+        Self::type_base_for_qualified_sig_lookup(&field_type)
     }
 
     /// Extract the field name from `self.field` or `self.field.subfield...`.
