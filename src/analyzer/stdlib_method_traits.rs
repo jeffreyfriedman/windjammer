@@ -352,6 +352,43 @@ pub fn method_call_mutates_receiver(
     method_mutates_receiver_qualified(method, receiver_type_base, registry)
 }
 
+fn sig_consumes_receiver(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
+}
+
+/// True when the method takes owned `self` (consumes the receiver).
+pub fn method_call_consumes_receiver(
+    method: &str,
+    receiver_type_base: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if let Some(ty) = receiver_type_base {
+        if let Some(sig) = lookup_sig(method, Some(ty), registry) {
+            if sig.has_self_receiver {
+                return sig_consumes_receiver(sig);
+            }
+        }
+        if let Some(sig) = lookup_sig(method, Some(ty), SignatureRegistry::stdlib()) {
+            if sig.has_self_receiver {
+                return sig_consumes_receiver(sig);
+            }
+        }
+        return false;
+    }
+    if let Some(sig) = lookup_suffix(method, registry) {
+        if sig.has_self_receiver && sig_consumes_receiver(sig) {
+            return true;
+        }
+    }
+    if let Some(sig) = lookup_unqualified(method, registry) {
+        if sig.has_self_receiver {
+            return sig_consumes_receiver(sig);
+        }
+    }
+    false
+}
+
 pub fn is_known_readonly_qualified(
     method: &str,
     receiver_type: Option<&str>,
