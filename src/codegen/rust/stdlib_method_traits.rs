@@ -19,25 +19,7 @@ pub use crate::analyzer::stdlib_method_traits::{
 /// Windjammer `string`/`str`/`&str` receivers lower to Rust `&str` at call sites,
 /// but stdlib metadata registers text methods on `String` (e.g. `String::find`).
 pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<String> {
-    let base = receiver_type.split('<').next().unwrap_or(receiver_type);
-    let leaf = base.rsplit("::").next().unwrap_or(base);
-    let mut out = Vec::new();
-    let mut push = |s: &str| {
-        if !s.is_empty() && !out.iter().any(|x| x == s) {
-            out.push(s.to_string());
-        }
-    };
-    push(receiver_type);
-    push(base);
-    push(leaf);
-    if matches!(leaf, "str" | "string" | "String") {
-        push("String");
-    }
-    // Windjammer `Map<K,V>` lowers to Rust `HashMap` — stdlib_meta keys are HashMap::*.
-    if matches!(leaf, "Map") {
-        push("HashMap");
-    }
-    out
+    crate::analyzer::stdlib_method_traits::stdlib_receiver_lookup_candidates(receiver_type)
 }
 
 /// Attempt a type-qualified signature lookup, trying multiple receiver type
@@ -47,15 +29,7 @@ fn lookup_sig<'a>(
     receiver_type: Option<&str>,
     registry: &'a SignatureRegistry,
 ) -> Option<&'a FunctionSignature> {
-    if let Some(ty) = receiver_type {
-        for candidate in stdlib_receiver_lookup_candidates(ty) {
-            let qualified = format!("{candidate}::{method}");
-            if let Some(sig) = registry.get_signature(&qualified) {
-                return Some(sig);
-            }
-        }
-    }
-    None
+    crate::analyzer::stdlib_method_traits::lookup_method_signature(method, receiver_type, registry)
 }
 
 /// Suffix lookup fallback: finds signatures registered as `Type::method`
@@ -297,11 +271,21 @@ pub fn method_mutates_receiver_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    // Delegate to analyzer — single source of truth (no wrong-type suffix when
-    // receiver type is known).
     crate::analyzer::stdlib_method_traits::method_mutates_receiver_qualified(
         method,
         receiver_type,
+        registry,
+    )
+}
+
+pub fn method_call_mutates_receiver(
+    method: &str,
+    receiver_type_base: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+        method,
+        receiver_type_base,
         registry,
     )
 }

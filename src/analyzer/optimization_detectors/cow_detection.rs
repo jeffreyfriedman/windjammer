@@ -110,9 +110,13 @@ impl<'ast> Analyzer<'ast> {
                     expr: Expression::MethodCall { object, method, .. },
                     ..
                 } => {
-                    if let Expression::Identifier { name, .. } = object {
-                        if name == var_name && self.is_mutating_method(method) {
-                            return true;
+                    if let Expression::Identifier { name, .. } = &**object {
+                        if name == var_name {
+                            return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                                method,
+                                None,
+                                crate::analyzer::SignatureRegistry::stdlib(),
+                            );
                         }
                     }
                 }
@@ -121,9 +125,5 @@ impl<'ast> Analyzer<'ast> {
             }
         }
         false
-    }
-
-    pub(in crate::analyzer) fn is_mutating_method(&self, method: &str) -> bool {
-        super::super::stdlib_method_traits::method_mutates_receiver(method)
     }
 }

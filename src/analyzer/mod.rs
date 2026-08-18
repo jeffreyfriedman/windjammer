@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 mod borrow_analysis;
 mod cache_locality;
+pub(crate) mod field_enum_borrow;
 mod forbidden_patterns;
 mod function_analysis;
 mod generic_analysis;
@@ -19,6 +20,7 @@ mod parameter_analysis;
 mod passthrough_inference;
 mod primitive_float_signatures;
 mod program_initialization;
+mod section_render_ownership_test;
 mod self_access_and_option_refs;
 mod self_analysis;
 mod self_binding_mutation;
@@ -26,7 +28,6 @@ mod self_dispatch_for_loops;
 mod self_field_mutation;
 mod self_mutating_calls;
 mod self_return_and_consumption;
-mod section_render_ownership_test;
 mod signature_registry;
 pub mod simd_loops;
 pub mod stdlib_method_traits;
@@ -34,7 +35,6 @@ mod string_optimization;
 mod trait_analysis;
 mod type_checking;
 pub mod type_collector;
-pub(crate) mod field_enum_borrow;
 mod usage_tracking;
 
 pub use signature_registry::{FunctionSignature, SignatureRegistry};
@@ -382,28 +382,26 @@ mod tests {
     }
 
     #[test]
-    fn test_is_mutating_method() {
-        let analyzer = Analyzer::new();
+    fn test_mutating_method_stdlib_consensus() {
+        use crate::analyzer::stdlib_method_traits::method_mutates_receiver;
 
-        // Currently recognized mutating methods
-        assert!(analyzer.is_mutating_method("push"));
-        assert!(analyzer.is_mutating_method("push_str"));
-        assert!(analyzer.is_mutating_method("pop"));
-        assert!(analyzer.is_mutating_method("insert"));
-        assert!(analyzer.is_mutating_method("remove"));
-        assert!(analyzer.is_mutating_method("clear"));
-        assert!(analyzer.is_mutating_method("append"));
-        assert!(analyzer.is_mutating_method("take"));
-        assert!(analyzer.is_mutating_method("get_or_insert"));
+        assert!(method_mutates_receiver("push"));
+        assert!(method_mutates_receiver("push_str"));
+        assert!(method_mutates_receiver("pop"));
+        assert!(method_mutates_receiver("insert"));
+        assert!(method_mutates_receiver("remove"));
+        assert!(method_mutates_receiver("clear"));
+        assert!(method_mutates_receiver("append"));
+        assert!(method_mutates_receiver("take"));
+        assert!(method_mutates_receiver("get_or_insert"));
         // `replace` is MutBorrowed on Option but Borrowed on String — unqualified consensus is false.
-        assert!(!analyzer.is_mutating_method("replace"));
+        assert!(!method_mutates_receiver("replace"));
 
-        // Non-mutating methods
-        assert!(!analyzer.is_mutating_method("len"));
-        assert!(!analyzer.is_mutating_method("is_empty"));
-        assert!(!analyzer.is_mutating_method("get"));
-        assert!(!analyzer.is_mutating_method("iter"));
-        assert!(!analyzer.is_mutating_method("clone"));
+        assert!(!method_mutates_receiver("len"));
+        assert!(!method_mutates_receiver("is_empty"));
+        assert!(!method_mutates_receiver("get"));
+        assert!(!method_mutates_receiver("iter"));
+        assert!(!method_mutates_receiver("clone"));
     }
 
     #[test]

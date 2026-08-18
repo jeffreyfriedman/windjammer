@@ -337,15 +337,12 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == id {
-                        let mut_via_sig = registry.is_some_and(|reg| {
-                            reg.get_signature(method).is_some_and(|sig| {
-                                sig.has_self_receiver
-                                    && sig.param_ownership.first()
-                                        == Some(&super::OwnershipMode::MutBorrowed)
-                            })
-                        });
-                        if mut_via_sig || self.is_mutating_method(method) {
-                            return true;
+                        if let Some(reg) = registry {
+                            if super::stdlib_method_traits::method_call_mutates_receiver(
+                                method, None, reg,
+                            ) {
+                                return true;
+                            }
                         }
                     }
                 }

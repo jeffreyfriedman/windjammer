@@ -379,20 +379,14 @@ impl<'ast> CodeGenerator<'ast> {
                             .or_else(|| self.infer_local_var_type_from_body(var_name));
 
                         if let Some(ref type_name) = type_name {
-                            let qualified_name = format!("{}::{}", type_name, method);
-                            if let Some(sig) = self.get_signature_with_global(&qualified_name) {
-                                if sig.has_self_receiver {
-                                    if let Some(ownership) = sig.param_ownership.first() {
-                                        // Signature is authoritative: only `&mut self`
-                                        // mutates in place. Do not fall through to name
-                                        // consensus (stdlib baseline must not poison
-                                        // user methods like `Section::render`).
-                                        return matches!(
-                                            ownership,
-                                            crate::analyzer::OwnershipMode::MutBorrowed
-                                        );
-                                    }
-                                }
+                            let base = type_name.split('<').next().unwrap_or(type_name.as_str());
+                            let short = base.rsplit("::").next().unwrap_or(base);
+                            if crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                                method,
+                                Some(short),
+                                &self.signature_registry,
+                            ) {
+                                return true;
                             }
 
                             // Generic type param: resolve trait bounds
@@ -407,17 +401,24 @@ impl<'ast> CodeGenerator<'ast> {
                                             if sig.has_self_receiver {
                                                 if let Some(ownership) = sig.param_ownership.first()
                                                 {
-                                                    return matches!(ownership, crate::analyzer::OwnershipMode::MutBorrowed);
+                                                    return matches!(
+                                                        ownership,
+                                                        crate::analyzer::OwnershipMode::MutBorrowed
+                                                    );
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
+                            return false;
                         }
 
-                        // PRIORITY 2: Fallback to method_registry for stdlib methods
-                        if self.is_mutating_method(method) {
+                        if crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                            method,
+                            None,
+                            &self.signature_registry,
+                        ) {
                             return true;
                         }
                     }
@@ -464,12 +465,6 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
-    }
-
-    pub(crate) fn is_mutating_method(&self, method: &str) -> bool {
-        // Stdlib consensus fallback; prefer method_mutates_receiver_qualified when
-        // receiver type is known (see expression_mutates_variable_field priority paths).
-        crate::codegen::rust::stdlib_method_traits::method_mutates_receiver(method)
     }
 
     pub(crate) fn variable_is_only_field_accessed(&self, var_name: &str) -> bool {
