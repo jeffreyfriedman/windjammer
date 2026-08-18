@@ -147,6 +147,10 @@ pub struct SignatureRegistry {
     runtime_type_modules: HashMap<String, String>,
     /// Public types exported by a runtime module (`regex` → `Regex` from `pub use`).
     runtime_exported_types: HashMap<String, Vec<String>>,
+    /// Scanned `pub struct` fields (`ServerRequest` → `[("query", "HashMap<…>"), …]`).
+    runtime_type_fields: HashMap<String, Vec<(String, String)>>,
+    /// Qualified callees marked `wj-taint: sanitizer` in scanned runtime source.
+    taint_sanitizer_callees: HashSet<String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
     global_fallback: Option<std::sync::Arc<SignatureRegistry>>,
 }
@@ -196,6 +200,8 @@ impl SignatureRegistry {
             runtime_std_rust_stems: HashMap::new(),
             runtime_type_modules: HashMap::new(),
             runtime_exported_types: HashMap::new(),
+            runtime_type_fields: HashMap::new(),
+            taint_sanitizer_callees: HashSet::new(),
             global_fallback: None,
         }
     }
@@ -331,6 +337,59 @@ impl SignatureRegistry {
             }
         }
         out
+    }
+
+    /// Record scanned struct fields for a runtime type.
+    pub fn register_runtime_type_fields(&mut self, type_name: &str, fields: Vec<(String, String)>) {
+        if type_name.is_empty() || fields.is_empty() {
+            return;
+        }
+        self.runtime_type_fields
+            .insert(type_name.to_string(), fields);
+    }
+
+    /// Scanned fields of a runtime struct (`ServerRequest` → query/headers/body).
+    pub fn runtime_type_fields(&self, type_name: &str) -> &[(String, String)] {
+        let base = type_name.rsplit("::").next().unwrap_or(type_name);
+        if let Some(f) = self.runtime_type_fields.get(base) {
+            return f.as_slice();
+        }
+        self.global_fallback
+            .as_ref()
+            .map(|g| g.runtime_type_fields(type_name))
+            .unwrap_or(&[])
+    }
+
+    /// Mark a scanned callee as a taint sanitizer (`/// wj-taint: sanitizer`).
+    pub fn register_taint_sanitizer(&mut self, qualified_name: &str) {
+        if qualified_name.is_empty() {
+            return;
+        }
+        self.taint_sanitizer_callees
+            .insert(qualified_name.to_string());
+        if !qualified_name.starts_with("std::") {
+            self.taint_sanitizer_callees
+                .insert(format!("std::{qualified_name}"));
+        }
+    }
+
+    /// True when the callee was scanned as a taint sanitizer.
+    pub fn is_taint_sanitizer(&self, qualified_name: &str) -> bool {
+        if self.taint_sanitizer_callees.contains(qualified_name) {
+            return true;
+        }
+        let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+        let suffix = format!("::{simple}");
+        if self
+            .taint_sanitizer_callees
+            .iter()
+            .any(|k| k == qualified_name || k.ends_with(&suffix))
+        {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.is_taint_sanitizer(qualified_name))
     }
 
     fn load_stdlib_meta(registry: &mut Self) {
@@ -1242,6 +1301,13 @@ impl SignatureRegistry {
                 }
             }
         }
+        for (ty, fields) in &other.runtime_type_fields {
+            self.runtime_type_fields
+                .entry(ty.clone())
+                .or_insert_with(|| fields.clone());
+        }
+        self.taint_sanitizer_callees
+            .extend(other.taint_sanitizer_callees.iter().cloned());
     }
 
     /// Collect only signatures whose ownership differs from `base`.

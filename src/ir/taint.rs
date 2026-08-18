@@ -266,23 +266,48 @@ fn returns_owned_text(sig: &FunctionSignature) -> bool {
     }
 }
 
-/// HTTP request field accessors on scanned `ServerRequest` impls.
-fn http_request_field_source(method: &str) -> Option<TaintSourceKind> {
-    if method.starts_with("body") {
-        return Some(TaintSourceKind::HttpRequestBody);
+/// HTTP request field accessors: match scanned struct fields, not a method-name table.
+fn http_request_field_source(
+    registry: &SignatureRegistry,
+    type_name: &str,
+    method: &str,
+) -> Option<TaintSourceKind> {
+    let fields = registry.runtime_type_fields(type_name);
+    if !is_http_request_shape(fields) {
+        return None;
     }
-    if method.starts_with("query") {
-        return Some(TaintSourceKind::HttpRequestQuery);
-    }
-    if method == "header" || method.starts_with("header") {
-        return Some(TaintSourceKind::HttpRequestHeader);
+    for (field, _ty) in fields {
+        if method_projects_request_field(method, field) {
+            if let Some(kind) = taint_kind_from_request_field(field) {
+                return Some(kind);
+            }
+        }
     }
     None
 }
 
+fn is_http_request_shape(fields: &[(String, String)]) -> bool {
+    let names: Vec<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
+    names.contains(&"query") || (names.contains(&"path") && names.contains(&"body"))
+}
+
+fn method_projects_request_field(method: &str, field: &str) -> bool {
+    method == field || method.starts_with(field) || field.starts_with(method)
+}
+
+/// Inbound HTTP request field roles from scanned struct schema (not callee names).
+fn taint_kind_from_request_field(field: &str) -> Option<TaintSourceKind> {
+    match field {
+        "body" => Some(TaintSourceKind::HttpRequestBody),
+        "query" => Some(TaintSourceKind::HttpRequestQuery),
+        "headers" => Some(TaintSourceKind::HttpRequestHeader),
+        _ => None,
+    }
+}
+
 fn type_is_http_request_type(registry: &SignatureRegistry, type_name: &str) -> bool {
     let base = type_name.rsplit("::").next().unwrap_or(type_name);
-    base == "ServerRequest" || registry.runtime_module_for_type(base) == Some("http")
+    is_http_request_shape(registry.runtime_type_fields(base))
 }
 
 /// Taint source for a runtime / std callee (signature + effects, not a function-name list).
@@ -292,7 +317,7 @@ pub fn taint_source_for_callee(qualified_name: &str) -> Option<TaintSourceKind> 
 
     if let Some((receiver, method)) = qualified_name.rsplit_once("::") {
         if type_is_http_request_type(&registry, receiver) {
-            if let Some(kind) = http_request_field_source(method) {
+            if let Some(kind) = http_request_field_source(&registry, receiver, method) {
                 return Some(kind);
             }
         }
@@ -333,25 +358,15 @@ pub fn taint_sink_for_callee(qualified_name: &str) -> Option<&'static str> {
     None
 }
 
-/// Sanitizer naming pattern (suffix/verb), not a flat function-name table.
-fn sanitizer_simple_name(simple: &str) -> bool {
-    matches!(simple, "escape" | "parameterize" | "sanitize" | "encode")
-        || simple.ends_with("_escape")
-        || simple.ends_with("_encode")
-        || simple.ends_with("escape")
-        || simple.ends_with("encode")
-}
-
-/// True when a scanned signature is a text-in / text-out transform with no dangerous effects.
+/// True when a scanned signature is a text-in / text-out transform marked as a sanitizer.
 pub fn is_sanitizer_callee(qualified_name: &str) -> bool {
     let registry = SignatureRegistry::stdlib();
+    if !registry.is_taint_sanitizer(qualified_name) {
+        return false;
+    }
     let Some(sig) = resolve_runtime_sig(&registry, qualified_name) else {
         return false;
     };
-    let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
-    if !sanitizer_simple_name(simple) {
-        return false;
-    }
     if !is_borrowed_text_param(sig, 0) || !returns_owned_text(sig) {
         return false;
     }
@@ -576,7 +591,19 @@ mod tests {
         );
         assert!(
             is_sanitizer_callee("regex::escape") || is_sanitizer_callee("regex_mod::escape"),
-            "regex escape must be signature-driven sanitizer"
+            "regex escape must be scanned wj-taint sanitizer"
+        );
+        assert!(
+            !is_sanitizer_callee("strings::trim") && !is_sanitizer_callee("strings::to_uppercase"),
+            "plain string transforms must not be sanitizers without wj-taint annotation"
+        );
+        assert_eq!(
+            taint_source_for_callee("Request::query_param"),
+            Some(TaintSourceKind::HttpRequestQuery)
+        );
+        assert!(
+            taint_source_for_callee("ServerResponse::ok").is_none(),
+            "HTTP response constructors are not request taint sources"
         );
         assert!(
             taint_sink_for_callee("process::run").is_some(),
