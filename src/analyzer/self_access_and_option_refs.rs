@@ -164,17 +164,17 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                if let Expression::Identifier { name, .. } = &**function {
-                    if name == "is_available" || name.ends_with("::is_available") {
-                        return arguments.iter().enumerate().any(|(i, (_, a))| {
-                            self.expression_is_self_field_access(a)
-                                && reg
-                                    .get_signature(name)
-                                    .or_else(|| reg.get_signature("Choice::is_available"))
-                                    .and_then(|sig| sig.param_ownership.get(i))
-                                    .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
-                        });
-                    }
+                if let Some(func_name) = self.extract_function_name(function) {
+                    let impl_ty = self
+                        .self_impl_context
+                        .as_ref()
+                        .map(|c| c.impl_type_base.as_str());
+                    return arguments.iter().enumerate().any(|(i, (_, a))| {
+                        self.expression_is_self_field_access(a)
+                            && super::stdlib_method_traits::callable_arg_expects_mut_borrow(
+                                &func_name, impl_ty, i, true, reg,
+                            )
+                    });
                 }
                 false
             }
@@ -278,45 +278,24 @@ impl<'ast> Analyzer<'ast> {
         arg_idx: usize,
         reg: &super::SignatureRegistry,
     ) -> bool {
-        let sig = self
-            .resolve_method_signature_for_receiver(receiver, method, reg)
-            .or_else(|| reg.get_signature(method))
-            .or_else(|| reg.get_signature(&format!("Choice::{}", method)));
-        let Some(sig) = sig else {
-            return false;
-        };
-        let param_idx = if sig.has_self_receiver {
-            arg_idx + 1
-        } else {
-            arg_idx
-        };
-        sig.param_ownership
-            .get(param_idx)
-            .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
+        super::stdlib_method_traits::callable_arg_expects_mut_borrow(
+            method,
+            self.receiver_type_base_for_method_object(receiver)
+                .as_deref(),
+            arg_idx,
+            false,
+            reg,
+        )
     }
 
-    /// Type-qualified method lookup for `self.field.method` receivers.
-    fn resolve_method_signature_for_receiver<'a>(
-        &self,
-        receiver: &Expression,
-        method: &str,
-        reg: &'a super::SignatureRegistry,
-    ) -> Option<&'a super::FunctionSignature> {
-        if let Some(ctx) = &self.self_impl_context {
-            if let Some(receiver_ty) = self.static_value_type_of_self_rooted_expr(
-                ctx.program(),
-                &ctx.impl_type_base,
-                receiver,
-            ) {
-                if let Some(base) = Self::type_base_for_qualified_sig_lookup(&receiver_ty) {
-                    let key = format!("{}::{}", base, method);
-                    if let Some(sig) = reg.get_signature(&key) {
-                        return Some(sig);
-                    }
-                }
-            }
-        }
-        None
+    fn receiver_type_base_for_method_object(&self, receiver: &Expression) -> Option<String> {
+        let ctx = self.self_impl_context.as_ref()?;
+        let receiver_ty = self.static_value_type_of_self_rooted_expr(
+            ctx.program(),
+            &ctx.impl_type_base,
+            receiver,
+        )?;
+        Self::type_base_for_qualified_sig_lookup(&receiver_ty)
     }
 
     pub(crate) fn expr_calls_mut_self_method_on_identifier(

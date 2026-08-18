@@ -819,11 +819,6 @@ pub fn is_self_field_get_call(
     )
 }
 
-/// Check if a method name is known to be read-only (no mutation).
-pub fn is_known_readonly_method_name(method: &str) -> bool {
-    crate::analyzer::stdlib_method_traits::is_known_readonly(method)
-}
-
 /// Check if a statement contains a match/if-let that binds a get-result
 /// variable and mutates the bound value.
 fn match_or_if_let_mutates_get_binding(
@@ -1340,20 +1335,16 @@ pub fn expression_modifies_self(
                     crate::codegen::rust::ast_utilities::extract_function_name(function);
                 if !func_name.is_empty() {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
-                        if is_self_field_chain(arg) {
-                            let sig = reg.get_signature(&func_name).or_else(|| {
-                                struct_name.and_then(|sn| {
-                                    reg.get_signature(&format!("{}::{}", sn, func_name))
-                                })
-                            });
-                            if let Some(sig) = sig {
-                                let param_idx = if sig.has_self_receiver { i + 1 } else { i };
-                                if sig.param_ownership.get(param_idx).is_some_and(|o| {
-                                    *o == crate::analyzer::OwnershipMode::MutBorrowed
-                                }) {
-                                    return true;
-                                }
-                            }
+                        if is_self_field_chain(arg)
+                            && crate::analyzer::stdlib_method_traits::callable_arg_expects_mut_borrow(
+                                &func_name,
+                                struct_name,
+                                i,
+                                true,
+                                reg,
+                            )
+                        {
+                            return true;
                         }
                     }
                 }

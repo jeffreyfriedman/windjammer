@@ -158,6 +158,57 @@ fn lookup_suffix<'a>(
     registry.find_unique_signature_ending_with(method)
 }
 
+/// Look up a free function or `Type::method` without hardcoding type names.
+///
+/// Order: qualified receiver → exact key → unique `::{name}` suffix.
+pub(crate) fn lookup_callable_signature<'a>(
+    name: &str,
+    receiver_type: Option<&str>,
+    registry: &'a SignatureRegistry,
+) -> Option<&'a FunctionSignature> {
+    let simple = name.rsplit("::").next().unwrap_or(name);
+    if let Some(sig) = lookup_sig(simple, receiver_type, registry) {
+        return Some(sig);
+    }
+    if let Some(sig) = registry.get_signature(name) {
+        if !sig.param_ownership.is_empty() {
+            return Some(sig);
+        }
+    }
+    if name != simple {
+        if !registry.has_collision(simple) {
+            if let Some(sig) = registry.get_signature(simple) {
+                if !sig.param_ownership.is_empty() {
+                    return Some(sig);
+                }
+            }
+        }
+    }
+    lookup_suffix(simple, registry)
+}
+
+/// Whether call-site argument `arg_idx` is `&mut`.
+///
+/// `args_include_receiver` is true for `Call` (UFCS / free functions: every
+/// source argument is in the list). Method calls omit `self`, so pass false.
+pub(crate) fn callable_arg_expects_mut_borrow(
+    name: &str,
+    receiver_type: Option<&str>,
+    arg_idx: usize,
+    args_include_receiver: bool,
+    registry: &SignatureRegistry,
+) -> bool {
+    let Some(sig) = lookup_callable_signature(name, receiver_type, registry) else {
+        return false;
+    };
+    let mode = if args_include_receiver {
+        sig.param_ownership.get(arg_idx)
+    } else {
+        sig.param_ownership_for_arg(arg_idx)
+    };
+    mode.is_some_and(|o| *o == OwnershipMode::MutBorrowed)
+}
+
 fn return_type_is(sig: &FunctionSignature, pred: impl Fn(&Type) -> bool) -> bool {
     sig.return_type.as_ref().is_some_and(pred)
 }
@@ -353,8 +404,7 @@ pub fn method_call_mutates_receiver(
 }
 
 fn sig_consumes_receiver(sig: &FunctionSignature) -> bool {
-    sig.has_self_receiver
-        && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
+    sig.has_self_receiver && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
 }
 
 /// True when the method takes owned `self` (consumes the receiver).
@@ -818,6 +868,33 @@ mod tests {
             "push",
             Some("alloc::vec::Vec<i32>"),
             reg
+        ));
+    }
+
+    #[test]
+    fn lookup_callable_does_not_hardcode_type_names() {
+        let mut reg = SignatureRegistry::empty();
+        let mut sig = FunctionSignature::default();
+        sig.name = "Offer::can_take".into();
+        sig.param_ownership = vec![OwnershipMode::Borrowed, OwnershipMode::MutBorrowed];
+        sig.has_self_receiver = true;
+        reg.add_function("Offer::can_take".into(), sig);
+
+        assert!(lookup_callable_signature("can_take", Some("Offer"), &reg).is_some());
+        assert!(lookup_callable_signature("can_take", None, &reg).is_some());
+        assert!(callable_arg_expects_mut_borrow(
+            "can_take",
+            Some("Offer"),
+            0,
+            false,
+            &reg
+        ));
+        assert!(!callable_arg_expects_mut_borrow(
+            "can_take",
+            Some("Offer"),
+            0,
+            true,
+            &reg
         ));
     }
 

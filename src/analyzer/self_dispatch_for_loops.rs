@@ -277,11 +277,15 @@ impl<'ast> Analyzer<'ast> {
             Type::TraitObject(trait_name) => self
                 .trait_method_self_ownership_lookup(trait_name, method)
                 .is_some_and(|o| o == super::OwnershipMode::MutBorrowed),
-            Type::Custom(type_name) => registry
-                .and_then(|r| r.get_signature(&format!("{}::{}", type_name, method)))
-                .filter(|s| s.has_self_receiver)
-                .and_then(|s| s.param_ownership.first().copied())
-                .is_some_and(|o| o == super::OwnershipMode::MutBorrowed),
+            Type::Custom(type_name) | Type::Parameterized(type_name, _) => {
+                registry.is_some_and(|r| {
+                    super::stdlib_method_traits::method_call_mutates_receiver(
+                        method,
+                        Some(type_name.as_str()),
+                        r,
+                    )
+                })
+            }
             _ => false,
         }
     }

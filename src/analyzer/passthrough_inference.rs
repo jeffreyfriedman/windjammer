@@ -384,16 +384,11 @@ impl<'ast> Analyzer<'ast> {
         for method_name in &method_calls {
             // PRIORITY: Type-qualified lookup (e.g. MannequinCache::clear)
             // prevents collision with Vec::clear, HashMap::clear, etc.
-            let sig = type_base
-                .as_ref()
-                .and_then(|base| registry.get_signature(&format!("{}::{}", base, method_name)))
-                .or_else(|| {
-                    if !registry.has_collision(method_name) {
-                        registry.get_signature(method_name)
-                    } else {
-                        None
-                    }
-                });
+            let sig = super::stdlib_method_traits::lookup_callable_signature(
+                method_name,
+                type_base.as_deref(),
+                registry,
+            );
             if let Some(sig) = sig {
                 if let Some(&self_ownership) = sig.param_ownership.first() {
                     max_mode = Some(match max_mode {
