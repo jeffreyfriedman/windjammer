@@ -280,35 +280,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    #[allow(dead_code)] // kept for trait-object mut-dispatch diagnostics
-    fn any_signature_has_mut_self_for_method(&self, method_name: &str) -> bool {
-        let suffix = format!("::{}", method_name);
-        for (name, sig) in self.signature_registry.all_signatures() {
-            if name.ends_with(&suffix) && sig.has_self_receiver {
-                if sig
-                    .param_ownership
-                    .first()
-                    .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
-                {
-                    return true;
-                }
-            }
-        }
-        // Also check analyzed trait methods
-        for (_trait_name, methods) in &self.analyzed_trait_methods {
-            if let Some(af) = methods.get(method_name) {
-                if af
-                    .inferred_ownership
-                    .get("self")
-                    .is_some_and(|o| *o == crate::analyzer::OwnershipMode::MutBorrowed)
-                {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     fn peel_dispatch_element_type(ty: &Type) -> &Type {
         match ty {
             Type::Parameterized(name, args) if Self::type_base_is_box(name) && args.len() == 1 => {
@@ -361,12 +332,14 @@ impl<'ast> CodeGenerator<'ast> {
             Type::TraitObject(trait_name) => self
                 .trait_method_self_ownership_for_loop(trait_name, method)
                 .is_some_and(|o| o == crate::analyzer::OwnershipMode::MutBorrowed),
-            Type::Custom(type_name) => self
-                .signature_registry
-                .get_signature(&format!("{}::{}", type_name, method))
-                .filter(|s| s.has_self_receiver)
-                .and_then(|s| s.param_ownership.first().copied())
-                .is_some_and(|o| o == crate::analyzer::OwnershipMode::MutBorrowed),
+            Type::Custom(type_name) | Type::Parameterized(type_name, _) => {
+                let base = type_name.split('<').next().unwrap_or(type_name.as_str());
+                crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                    method,
+                    Some(base),
+                    &self.signature_registry,
+                )
+            }
             _ => false,
         }
     }

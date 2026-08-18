@@ -239,7 +239,7 @@ impl<'ast> Analyzer<'ast> {
         // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need
         // &mut self — do not infer Borrowed for the receiver. Scoped to `?` only so
         // unknown methods on typed params still default to borrowed (multi-pass refines).
-        if self.has_potentially_mutating_method_call_in_tryop(param_name, body) {
+        if self.has_potentially_mutating_method_call_in_tryop(param_name, body, registry, param_type) {
             return Ok(OwnershipMode::MutBorrowed);
         }
 

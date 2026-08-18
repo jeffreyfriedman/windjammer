@@ -676,8 +676,214 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Check if the parameter is the receiver of method calls that could potentially mutate.
-    /// Returns true if there are method calls on the parameter that aren't known to be read-only.
-    /// This catches patterns like `loader.load(...)` where .load() could require &mut self.
+    /// Returns true when registry lookup shows mutation or the method is not consensus-read-only.
+    pub(super) fn has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+        param_type: &Type,
+    ) -> bool {
+        for stmt in statements {
+            if self.stmt_has_potentially_mutating_method_call_in_tryop(
+                name, stmt, registry, param_type,
+            ) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn stmt_has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        stmt: &Statement<'ast>,
+        registry: &SignatureRegistry,
+        param_type: &Type,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } => self
+                .expr_has_potentially_mutating_method_call_in_tryop(
+                    name, expr, registry, param_type,
+                ),
+            Statement::Let { value, .. } => self.expr_has_potentially_mutating_method_call_in_tryop(
+                name, value, registry, param_type,
+            ),
+            Statement::Return { value: Some(v), .. } => self
+                .expr_has_potentially_mutating_method_call_in_tryop(
+                    name, v, registry, param_type,
+                ),
+            Statement::Assignment { value, .. } => self
+                .expr_has_potentially_mutating_method_call_in_tryop(
+                    name, value, registry, param_type,
+                ),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(
+                    name, condition, registry, param_type,
+                ) || self.has_potentially_mutating_method_call_in_tryop(
+                    name, then_block, registry, param_type,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.has_potentially_mutating_method_call_in_tryop(
+                        name, b, registry, param_type,
+                    )
+                })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(
+                    name, condition, registry, param_type,
+                ) || self.has_potentially_mutating_method_call_in_tryop(
+                    name, body, registry, param_type,
+                )
+            }
+            Statement::Loop { body, .. } | Statement::For { body, .. } => self
+                .has_potentially_mutating_method_call_in_tryop(
+                    name, body, registry, param_type,
+                ),
+            Statement::Match { value, arms, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(
+                    name, value, registry, param_type,
+                ) || arms.iter().any(|arm| {
+                    self.expr_has_potentially_mutating_method_call_in_tryop(
+                        name, arm.body, registry, param_type,
+                    )
+                })
+            }
+            _ => false,
+        }
+    }
+
+    /// True when `param.method()` (or `param.field…method()`) under `?` may need `&mut self`.
+    fn param_receiver_method_might_mutate(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        object: &Expression<'ast>,
+        method: &str,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        if !self.is_in_receiver_chain(param_name, object) {
+            return false;
+        }
+        let receiver_base =
+            self.receiver_type_base_for_param_method_call(param_name, object, Some(param_type));
+        if super::stdlib_method_traits::method_call_mutates_receiver(
+            method,
+            receiver_base.as_deref(),
+            registry,
+        ) {
+            return true;
+        }
+        if super::stdlib_method_traits::method_call_consumes_receiver(
+            method,
+            receiver_base.as_deref(),
+            registry,
+        ) {
+            return true;
+        }
+        // Type-qualified readonly must agree with stdlib-only consensus before we allow
+        // `&T` on the param under `?`. User types (e.g. `AssetLoader::load`) must not
+        // define stdlib-wide readonly consensus by themselves.
+        if super::stdlib_method_traits::is_known_readonly_qualified(
+            method,
+            receiver_base.as_deref(),
+            registry,
+        ) && super::stdlib_method_traits::is_known_readonly(method)
+        {
+            return false;
+        }
+        !super::stdlib_method_traits::is_known_readonly(method)
+    }
+
+    fn expr_has_potentially_mutating_method_call_in_tryop(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+        registry: &SignatureRegistry,
+        param_type: &Type,
+    ) -> bool {
+        match expr {
+            Expression::TryOp { expr: inner, .. } => {
+                self.expr_under_tryop_might_mutate_param(name, inner, registry, param_type)
+            }
+            Expression::Block { statements, .. } => self
+                .has_potentially_mutating_method_call_in_tryop(
+                    name, statements, registry, param_type,
+                ),
+            Expression::Binary { left, right, .. } => {
+                self.expr_has_potentially_mutating_method_call_in_tryop(
+                    name, left, registry, param_type,
+                ) || self.expr_has_potentially_mutating_method_call_in_tryop(
+                    name, right, registry, param_type,
+                )
+            }
+            Expression::Unary { operand, .. } => self
+                .expr_has_potentially_mutating_method_call_in_tryop(
+                    name, operand, registry, param_type,
+                ),
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expr_has_potentially_mutating_method_call_in_tryop(
+                    name, arg, registry, param_type,
+                )
+            }),
+            _ => false,
+        }
+    }
+
+    /// Recurse into the scrutinee of `?` — method calls here may need `&mut self`.
+    fn expr_under_tryop_might_mutate_param(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+        registry: &SignatureRegistry,
+        param_type: &Type,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if self.param_receiver_method_might_mutate(
+                    name, param_type, object, method, registry,
+                ) {
+                    return true;
+                }
+                self.expr_under_tryop_might_mutate_param(name, object, registry, param_type)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_under_tryop_might_mutate_param(
+                            name, arg, registry, param_type,
+                        )
+                    })
+            }
+            Expression::TryOp { expr: inner, .. } => self
+                .expr_under_tryop_might_mutate_param(name, inner, registry, param_type),
+            Expression::Block { statements, .. } => self
+                .has_potentially_mutating_method_call_in_tryop(
+                    name, statements, registry, param_type,
+                ),
+            Expression::Binary { left, right, .. } => {
+                self.expr_under_tryop_might_mutate_param(name, left, registry, param_type)
+                    || self.expr_under_tryop_might_mutate_param(name, right, registry, param_type)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_under_tryop_might_mutate_param(name, operand, registry, param_type)
+            }
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expr_under_tryop_might_mutate_param(name, arg, registry, param_type)
+            }),
+            _ => false,
+        }
+    }
+
+    /// Legacy entry: non-tryop potentially-mutating scan (unused externally; kept for recursion).
     pub(super) fn has_potentially_mutating_method_call(
         &self,
         name: &str,
@@ -793,93 +999,6 @@ impl<'ast> Analyzer<'ast> {
             // TDD FIX: TryOp wraps expressions with `?` (error propagation).
             Expression::TryOp { expr, .. } => {
                 self.expr_has_potentially_mutating_method_call(name, expr)
-            }
-            _ => false,
-        }
-    }
-
-    /// Like [`Self::has_potentially_mutating_method_call`] but only for calls under `?`.
-    /// Example: `loader.load(...)?` must not leave `loader` as `&T` when `.load()` may need &mut.
-    pub(super) fn has_potentially_mutating_method_call_in_tryop(
-        &self,
-        name: &str,
-        statements: &[&'ast Statement<'ast>],
-    ) -> bool {
-        for stmt in statements {
-            if self.stmt_has_potentially_mutating_method_call_in_tryop(name, stmt) {
-                return true;
-            }
-        }
-        false
-    }
-
-    pub(crate) fn stmt_has_potentially_mutating_method_call_in_tryop(
-        &self,
-        name: &str,
-        stmt: &Statement<'ast>,
-    ) -> bool {
-        match stmt {
-            Statement::Expression { expr, .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, expr)
-            }
-            Statement::Let { value, .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
-            }
-            Statement::Return { value: Some(v), .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, v)
-            }
-            Statement::Assignment { value, .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, condition)
-                    || self.has_potentially_mutating_method_call_in_tryop(name, then_block)
-                    || else_block.as_ref().is_some_and(|b| {
-                        self.has_potentially_mutating_method_call_in_tryop(name, b)
-                    })
-            }
-            Statement::While {
-                condition, body, ..
-            } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, condition)
-                    || self.has_potentially_mutating_method_call_in_tryop(name, body)
-            }
-            Statement::Loop { body, .. } | Statement::For { body, .. } => {
-                self.has_potentially_mutating_method_call_in_tryop(name, body)
-            }
-            Statement::Match { value, arms, .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, value)
-                    || arms.iter().any(|arm| {
-                        self.expr_has_potentially_mutating_method_call_in_tryop(name, arm.body)
-                    })
-            }
-            _ => false,
-        }
-    }
-
-    pub(crate) fn expr_has_potentially_mutating_method_call_in_tryop(
-        &self,
-        name: &str,
-        expr: &Expression<'ast>,
-    ) -> bool {
-        match expr {
-            Expression::TryOp { expr, .. } => {
-                self.expr_has_potentially_mutating_method_call(name, expr)
-            }
-            Expression::Block { statements, .. } => {
-                self.has_potentially_mutating_method_call_in_tryop(name, statements)
-            }
-            Expression::Binary { left, right, .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, left)
-                    || self.expr_has_potentially_mutating_method_call_in_tryop(name, right)
-            }
-            Expression::Unary { operand, .. } => {
-                self.expr_has_potentially_mutating_method_call_in_tryop(name, operand)
             }
             _ => false,
         }

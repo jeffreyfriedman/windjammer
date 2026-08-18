@@ -251,18 +251,19 @@ impl<'ast> Analyzer<'ast> {
         registry: &'a SignatureRegistry,
     ) -> Option<&'a FunctionSignature> {
         if let Some(ty) = receiver_type {
-            let base = ty.split('<').next().unwrap_or(ty);
-            let short = base.rsplit("::").next().unwrap_or(base);
-            for candidate in [base, short] {
-                if let Some(sig) = registry.get_signature(&format!("{candidate}::{method}")) {
-                    return Some(sig);
-                }
+            if let Some(sig) = crate::analyzer::stdlib_method_traits::lookup_method_signature(
+                method, Some(ty), registry,
+            ) {
+                return Some(sig);
             }
         }
         let _ = arg_count;
-        registry
-            .get_signature(method)
-            .or_else(|| registry.find_unique_signature_ending_with(method))
+        if !registry.has_collision(method) {
+            if let Some(sig) = registry.get_signature(method) {
+                return Some(sig);
+            }
+        }
+        registry.find_unique_signature_ending_with(method)
     }
 
     fn consensus_collection_owned_store(
