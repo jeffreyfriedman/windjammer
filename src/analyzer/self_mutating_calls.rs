@@ -1,5 +1,5 @@
 //! Detection of method calls that require `&mut self` (statements and expressions).
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::parser::*;
 
@@ -90,6 +90,7 @@ impl<'ast> Analyzer<'ast> {
                                 && self.body_calls_mutating_method_on_vars(
                                     arm.body,
                                     &bound_vars,
+                                    &self.infer_match_arm_binding_type_bases(value, &arm.pattern),
                                     registry,
                                     visited,
                                 )
@@ -153,9 +154,11 @@ impl<'ast> Analyzer<'ast> {
                                     return true;
                                 }
                                 if let Some(reg) = registry {
-                                    let callee_self =
-                                        self.infer_impl_self_receiver_ownership_inner(
-                                            called_func, reg, visited,
+                                    let callee_self = self
+                                        .infer_impl_self_receiver_ownership_inner(
+                                            called_func,
+                                            reg,
+                                            visited,
                                         );
                                     return matches!(
                                         callee_self,
@@ -298,38 +301,18 @@ impl<'ast> Analyzer<'ast> {
         }
 
         let receiver_base = self.self_field_call_receiver_type_base(object);
-        let Some(base) = receiver_base else {
-            return false;
-        };
-
-        if super::stdlib_method_traits::is_known_readonly_qualified(method, Some(&base), reg) {
-            return false;
-        }
-        if super::stdlib_method_traits::method_mutates_receiver_qualified(
+        super::stdlib_method_traits::method_call_mutates_receiver(
             method,
-            Some(&base),
+            receiver_base.as_deref(),
             reg,
-        ) {
-            return true;
-        }
-
-        reg.get_signature(&format!("{base}::{method}"))
-            .is_some_and(|sig| {
-                sig.has_self_receiver
-                    && matches!(
-                        sig.param_ownership.first(),
-                        Some(super::OwnershipMode::MutBorrowed)
-                    )
-            })
+        )
     }
 
-    fn self_field_call_receiver_type_base(&self, object: &Expression) -> Option<String> {
+    pub(crate) fn self_field_call_receiver_type_base(&self, object: &Expression) -> Option<String> {
         let ctx = self.self_impl_context.as_ref()?;
-        if let Some(receiver_ty) = self.static_value_type_of_self_rooted_expr(
-            ctx.program(),
-            &ctx.impl_type_base,
-            object,
-        ) {
+        if let Some(receiver_ty) =
+            self.static_value_type_of_self_rooted_expr(ctx.program(), &ctx.impl_type_base, object)
+        {
             return Self::type_base_for_qualified_sig_lookup(&receiver_ty);
         }
         let field_name = Self::extract_direct_self_field_name(object)?;
@@ -415,12 +398,99 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// Infer registry lookup bases for variables bound in a match arm pattern when the
+    /// scrutinee is rooted at `self` (field access or index).
+    fn infer_match_arm_binding_type_bases(
+        &self,
+        scrutinee: &Expression<'ast>,
+        pattern: &Pattern,
+    ) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        let Some(ctx) = self.self_impl_context.as_ref() else {
+            return out;
+        };
+        let Some(mut scrutinee_ty) = self.static_value_type_of_self_rooted_expr(
+            ctx.program(),
+            &ctx.impl_type_base,
+            scrutinee,
+        ) else {
+            return out;
+        };
+        while matches!(scrutinee_ty, Type::Reference(_) | Type::MutableReference(_)) {
+            scrutinee_ty = match scrutinee_ty {
+                Type::Reference(inner) | Type::MutableReference(inner) => *inner,
+                other => other,
+            };
+        }
+        Self::collect_pattern_binding_type_bases(pattern, &scrutinee_ty, &mut out);
+        out
+    }
+
+    fn collect_pattern_binding_type_bases(
+        pattern: &Pattern,
+        scrutinee_ty: &Type,
+        out: &mut HashMap<String, String>,
+    ) {
+        use crate::parser::EnumPatternBinding;
+        match pattern {
+            Pattern::EnumVariant(variant, EnumPatternBinding::Single(name))
+                if variant == "Some" || variant.ends_with("::Some") =>
+            {
+                if let Type::Option(inner) = scrutinee_ty {
+                    if let Some(base) = Self::type_base_for_qualified_sig_lookup(inner) {
+                        out.insert(name.clone(), base);
+                    }
+                }
+            }
+            Pattern::EnumVariant(_, EnumPatternBinding::Tuple(pats)) => {
+                if let Type::Tuple(types) = scrutinee_ty {
+                    for (pat, ty) in pats.iter().zip(types.iter()) {
+                        Self::collect_pattern_binding_type_bases(pat, ty, out);
+                    }
+                }
+            }
+            Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _)) => {
+                // Struct-like enum variants need variant field metadata the analyzer
+                // pass does not yet hold; multipass + qualified lookup on the bound
+                // ident still runs when the binding type can be inferred later.
+            }
+            Pattern::Identifier(name) => {
+                if let Some(base) = Self::type_base_for_qualified_sig_lookup(scrutinee_ty) {
+                    out.insert(name.clone(), base);
+                }
+            }
+            Pattern::MutBinding(name) | Pattern::Ref(name) | Pattern::RefMut(name) => {
+                if let Some(base) = Self::type_base_for_qualified_sig_lookup(scrutinee_ty) {
+                    out.insert(name.clone(), base);
+                }
+            }
+            Pattern::Tuple(pats) => {
+                if let Type::Tuple(types) = scrutinee_ty {
+                    for (pat, ty) in pats.iter().zip(types.iter()) {
+                        Self::collect_pattern_binding_type_bases(pat, ty, out);
+                    }
+                }
+            }
+            Pattern::Or(alts) => {
+                for alt in alts {
+                    Self::collect_pattern_binding_type_bases(alt, scrutinee_ty, out);
+                }
+            }
+            Pattern::Reference(inner) => {
+                let ref_ty = Type::Reference(Box::new(scrutinee_ty.clone()));
+                Self::collect_pattern_binding_type_bases(inner, &ref_ty, out);
+            }
+            _ => {}
+        }
+    }
+
     /// Check if an expression tree contains method calls on any of the given
     /// variable names where the method requires `&mut self`.
     fn body_calls_mutating_method_on_vars(
         &self,
         expr: &Expression<'ast>,
         var_names: &[String],
+        binding_type_bases: &HashMap<String, String>,
         registry: Option<&super::SignatureRegistry>,
         visited: &mut HashSet<String>,
     ) -> bool {
@@ -433,50 +503,85 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if var_names.contains(name) {
-                        if self.is_mutating_method(method) {
-                            return true;
-                        }
-                        if !Self::is_known_readonly_method(method) {
-                            if let Some(reg) = registry {
-                                let suffix = format!("::{}", method);
-                                for (key, sig) in reg.all_signatures() {
-                                    if key.ends_with(&suffix)
-                                        && sig.has_self_receiver
-                                        && sig.param_ownership.first().is_some_and(|o| {
-                                            matches!(o, super::OwnershipMode::MutBorrowed)
-                                        })
-                                    {
-                                        return true;
-                                    }
-                                }
+                        if let Some(reg) = registry {
+                            let receiver_base = binding_type_bases.get(name).map(String::as_str);
+                            if super::stdlib_method_traits::method_call_mutates_receiver(
+                                method,
+                                receiver_base,
+                                reg,
+                            ) {
+                                return true;
                             }
                         }
                     }
                 }
-                self.body_calls_mutating_method_on_vars(object, var_names, registry, visited)
-                    || arguments.iter().any(|(_, arg)| {
-                        self.body_calls_mutating_method_on_vars(arg, var_names, registry, visited)
-                    })
+                self.body_calls_mutating_method_on_vars(
+                    object,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                ) || arguments.iter().any(|(_, arg)| {
+                    self.body_calls_mutating_method_on_vars(
+                        arg,
+                        var_names,
+                        binding_type_bases,
+                        registry,
+                        visited,
+                    )
+                })
             }
-            Expression::Block { statements, .. } => statements
-                .iter()
-                .any(|s| self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)),
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.stmt_calls_mutating_method_on_vars(
+                    s,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                )
+            }),
             Expression::Call {
                 arguments,
                 function,
                 ..
             } => {
-                self.body_calls_mutating_method_on_vars(function, var_names, registry, visited)
-                    || arguments.iter().any(|(_, arg)| {
-                        self.body_calls_mutating_method_on_vars(arg, var_names, registry, visited)
-                    })
+                self.body_calls_mutating_method_on_vars(
+                    function,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                ) || arguments.iter().any(|(_, arg)| {
+                    self.body_calls_mutating_method_on_vars(
+                        arg,
+                        var_names,
+                        binding_type_bases,
+                        registry,
+                        visited,
+                    )
+                })
             }
-            Expression::Unary { operand, .. } => {
-                self.body_calls_mutating_method_on_vars(operand, var_names, registry, visited)
-            }
+            Expression::Unary { operand, .. } => self.body_calls_mutating_method_on_vars(
+                operand,
+                var_names,
+                binding_type_bases,
+                registry,
+                visited,
+            ),
             Expression::Binary { left, right, .. } => {
-                self.body_calls_mutating_method_on_vars(left, var_names, registry, visited)
-                    || self.body_calls_mutating_method_on_vars(right, var_names, registry, visited)
+                self.body_calls_mutating_method_on_vars(
+                    left,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                ) || self.body_calls_mutating_method_on_vars(
+                    right,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                )
             }
             _ => false,
         }
@@ -486,31 +591,58 @@ impl<'ast> Analyzer<'ast> {
         &self,
         stmt: &Statement<'_>,
         var_names: &[String],
+        binding_type_bases: &HashMap<String, String>,
         registry: Option<&super::SignatureRegistry>,
         visited: &mut HashSet<String>,
     ) -> bool {
         match stmt {
-            Statement::Expression { expr, .. } => {
-                self.body_calls_mutating_method_on_vars(expr, var_names, registry, visited)
-            }
+            Statement::Expression { expr, .. } => self.body_calls_mutating_method_on_vars(
+                expr,
+                var_names,
+                binding_type_bases,
+                registry,
+                visited,
+            ),
             Statement::If {
                 condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                self.body_calls_mutating_method_on_vars(condition, var_names, registry, visited)
-                    || then_block.iter().any(|s| {
-                        self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)
+                self.body_calls_mutating_method_on_vars(
+                    condition,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                ) || then_block.iter().any(|s| {
+                    self.stmt_calls_mutating_method_on_vars(
+                        s,
+                        var_names,
+                        binding_type_bases,
+                        registry,
+                        visited,
+                    )
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        self.stmt_calls_mutating_method_on_vars(
+                            s,
+                            var_names,
+                            binding_type_bases,
+                            registry,
+                            visited,
+                        )
                     })
-                    || else_block.as_ref().is_some_and(|b| {
-                        b.iter().any(|s| {
-                            self.stmt_calls_mutating_method_on_vars(s, var_names, registry, visited)
-                        })
-                    })
+                })
             }
             Statement::Return { value, .. } => value.is_some_and(|v| {
-                self.body_calls_mutating_method_on_vars(v, var_names, registry, visited)
+                self.body_calls_mutating_method_on_vars(
+                    v,
+                    var_names,
+                    binding_type_bases,
+                    registry,
+                    visited,
+                )
             }),
             _ => false,
         }

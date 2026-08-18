@@ -448,7 +448,11 @@ fn expression_only_clones(
         crate::codegen::rust::stdlib_method_traits::method_is_storage_qualified(
             method, None, registry,
         ) || crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
-            method, None, i, arguments.len(), registry,
+            method,
+            None,
+            i,
+            arguments.len(),
+            registry,
         )
     })
 }
@@ -1426,12 +1430,30 @@ fn method_is_mutating_on_receiver(
                     receiver_upgrades,
                 );
             }
-            // `self.field.method` with unknown field type: use stdlib consensus
-            // (`Vec::push`) — never `ParentType::method` (qualified miss → false).
-            return crate::analyzer::stdlib_method_traits::method_mutates_receiver(method);
+            // `self.field.method` with unknown field type: last-resort signature
+            // consensus — never `ParentType::method` (qualified miss → false).
+            if let Some(reg) = registry {
+                return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                    method, None, reg,
+                );
+            }
+            return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                method,
+                None,
+                SignatureRegistry::stdlib(),
+            );
         }
     } else if is_self_field_chain(receiver) {
-        return crate::analyzer::stdlib_method_traits::method_mutates_receiver(method);
+        if let Some(reg) = registry {
+            return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                method, None, reg,
+            );
+        }
+        return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+            method,
+            None,
+            SignatureRegistry::stdlib(),
+        );
     }
     method_is_mutating(method, registry, struct_name, receiver_upgrades)
 }
@@ -1450,20 +1472,19 @@ pub(crate) fn method_is_mutating(
     struct_name: Option<&str>,
     receiver_upgrades: Option<&std::collections::HashMap<String, crate::analyzer::OwnershipMode>>,
 ) -> bool {
-    if crate::analyzer::stdlib_method_traits::is_known_readonly(method) {
-        return false;
-    }
-    // Prefer type-qualified registry lookup; fall back to stdlib consensus only
-    // when no receiver type / registry is available (or lookup misses).
-    let stdlib_mutates = match registry {
-        Some(reg) => super::stdlib_method_traits::method_mutates_receiver_qualified(
+    let mutates = match registry {
+        Some(reg) => crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
             method,
             struct_name,
             reg,
         ),
-        None => super::stdlib_method_traits::method_mutates_receiver(method),
+        None => crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+            method,
+            struct_name,
+            SignatureRegistry::stdlib(),
+        ),
     };
-    if stdlib_mutates {
+    if mutates {
         return true;
     }
 
@@ -1471,48 +1492,12 @@ pub(crate) fn method_is_mutating(
         let qualified = format!("{}::{}", ctx, method);
         if let Some(upgrades) = receiver_upgrades {
             if let Some(mode) = upgrades.get(&qualified) {
-                return match mode {
-                    OwnershipMode::MutBorrowed => true,
-                    OwnershipMode::Owned => false,
-                    _ => false,
-                };
+                return matches!(mode, OwnershipMode::MutBorrowed);
             }
-        }
-    }
-
-    if let Some(reg) = registry {
-        if let Some(ctx) = struct_name {
-            let qualified = format!("{}::{}", ctx, method);
-            if let Some(sig) = reg.get_signature(&qualified) {
-                if let Some(mode) = sig.param_ownership.first() {
-                    return match mode {
-                        OwnershipMode::MutBorrowed => true,
-                        OwnershipMode::Owned => false,
-                        _ => false,
-                    };
-                }
-                return false;
-            }
-            return false;
-        }
-        if let Some(sig) = lookup_method_in_registry(reg, method) {
-            return sig.has_self_receiver
-                && sig.param_ownership.first() == Some(&OwnershipMode::MutBorrowed);
         }
     }
 
     false
-}
-
-/// Look up a method in the signature registry by suffix match.
-/// Only used as a conservative fallback when the struct context is unknown.
-/// Returns Some if ANY type's method with this name exists — conservative for
-/// mutation checks (false positive is safe, false negative is not).
-fn lookup_method_in_registry<'a>(
-    registry: &'a SignatureRegistry,
-    method: &str,
-) -> Option<&'a crate::analyzer::FunctionSignature> {
-    registry.lookup_method(method)
 }
 
 pub(crate) fn is_self_field_chain(expr: &Expression) -> bool {
@@ -1689,7 +1674,11 @@ pub fn expression_mutates_fields(ctx: &AnalysisContext, expr: &Expression) -> bo
             if expression_is_field_access(ctx, object)
                 || expression_is_self_field_index_access(ctx, object)
             {
-                super::stdlib_method_traits::method_mutates_receiver(method)
+                crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+                    method,
+                    None,
+                    SignatureRegistry::stdlib(),
+                )
             } else {
                 false
             }

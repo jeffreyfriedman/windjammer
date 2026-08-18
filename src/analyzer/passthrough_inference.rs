@@ -174,6 +174,17 @@ impl<'ast> Analyzer<'ast> {
                 operand,
                 ..
             } => self.static_value_type_of_self_rooted_expr(_program, impl_type_base, operand),
+            Expression::Index { object, .. } => {
+                let base =
+                    self.static_value_type_of_self_rooted_expr(_program, impl_type_base, object)?;
+                match &base {
+                    Type::Vec(inner) | Type::Array(inner, _) => Some((**inner).clone()),
+                    Type::Parameterized(name, params) if name == "Vec" && !params.is_empty() => {
+                        Some(params[0].clone())
+                    }
+                    _ => None,
+                }
+            }
             _ => None,
         }
     }

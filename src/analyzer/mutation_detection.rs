@@ -272,14 +272,13 @@ impl<'ast> Analyzer<'ast> {
         }
         if let Expression::MethodCall { object, method, .. } = expr {
             if self.is_in_receiver_chain(binding, object) {
-                let receiver_type = self
-                    .resolve_field_chain_type_for_param(binding, object, None)
-                    .and_then(|ty| type_base_for_registry_lookup(&ty));
-                return super::stdlib_method_traits::method_mutates_receiver_qualified(
+                let receiver_base =
+                    self.receiver_type_base_for_param_method_call(binding, object, None);
+                return super::stdlib_method_traits::method_call_mutates_receiver(
                     method,
-                    receiver_type.as_deref(),
+                    receiver_base.as_deref(),
                     registry,
-                ) || super::stdlib_method_traits::method_mutates_receiver(method);
+                );
             }
         }
         false
@@ -534,6 +533,24 @@ impl<'ast> Analyzer<'ast> {
         false
     }
 
+    /// Resolve the registry type base for `param_name.method()` or `param_name.field...method()`.
+    fn receiver_type_base_for_param_method_call(
+        &self,
+        param_name: &str,
+        object: &Expression,
+        param_type_hint: Option<&Type>,
+    ) -> Option<String> {
+        if let Expression::Identifier { name: recv, .. } = object {
+            if recv == param_name {
+                if let Some(ty) = param_type_hint {
+                    return type_base_for_registry_lookup(ty);
+                }
+            }
+        }
+        self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)
+            .and_then(|ty| type_base_for_registry_lookup(&ty))
+    }
+
     pub(crate) fn has_mutable_method_call(
         &self,
         name: &str,
@@ -544,174 +561,21 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::MethodCall { object, method, .. } => {
                 if self.is_in_receiver_chain(name, object) {
-                    // PRIORITY 1: Type-qualified registry / stdlib consensus when we know
-                    // the receiver type (avoids expanding method-name lists).
-                    let mut qualified_attempted = false;
-                    if let Expression::Identifier { name: recv, .. } = &**object {
-                        if recv == name {
-                            if let Some(param_ty) = param_type_hint {
-                                if let Type::Custom(type_name) = param_ty {
-                                    qualified_attempted = true;
-                                    if super::stdlib_method_traits::method_mutates_receiver_qualified(
-                                        method,
-                                        Some(type_name.as_str()),
-                                        registry,
-                                    ) {
-                                        return true;
-                                    }
-                                    if let Some(sig) = registry
-                                        .get_signature(&format!("{}::{}", type_name, method))
-                                    {
-                                        if sig.has_self_receiver {
-                                            if let Some(mode) = sig.param_ownership.first() {
-                                                return matches!(mode, OwnershipMode::MutBorrowed);
-                                            }
-                                        }
-                                        // Stale metadata may have has_self_receiver=false for
-                                        // methods that do take self. Fall through to heuristics
-                                        // instead of returning false.
-                                        if !sig.has_self_receiver && sig.param_ownership.is_empty()
-                                        {
-                                            if super::stdlib_method_traits::method_mutates_receiver(
-                                                method,
-                                            ) {
-                                                return true;
-                                            }
-                                        } else if sig.has_self_receiver
-                                            && !sig.param_ownership.is_empty()
-                                        {
-                                            return false;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    let receiver_base = self.receiver_type_base_for_param_method_call(
+                        name,
+                        object,
+                        param_type_hint,
+                    );
+                    if super::stdlib_method_traits::method_call_mutates_receiver(
+                        method,
+                        receiver_base.as_deref(),
+                        registry,
+                    ) {
+                        return true;
                     }
-
-                    // PRIORITY 1b: For chained field access (param.field.method()),
-                    // resolve the intermediate field type and use it for qualified lookup.
-                    // Must run before unqualified mutating-name consensus so
-                    // `deps.writer.append` looks up `Writer::append`, not a stdlib `append`.
-                    // Example: game_state.inventory.has_item() → resolve inventory to Inventory,
-                    // then look up Inventory::has_item instead of GameState::has_item.
-                    if let Some(receiver_type) =
-                        self.resolve_field_chain_type_for_param(name, object, param_type_hint)
-                    {
-                        if let Some(recv_type_name) = type_base_for_registry_lookup(&receiver_type)
-                        {
-                            qualified_attempted = true;
-                            if super::stdlib_method_traits::method_mutates_receiver_qualified(
-                                method,
-                                Some(&recv_type_name),
-                                registry,
-                            ) {
-                                return true;
-                            }
-                            let qname = format!("{}::{}", recv_type_name, method);
-                            if let Some(sig) = registry.get_signature(&qname) {
-                                if sig.has_self_receiver {
-                                    if let Some(mode) = sig.param_ownership.first() {
-                                        return matches!(mode, OwnershipMode::MutBorrowed);
-                                    }
-                                }
-                                if !sig.has_self_receiver && sig.param_ownership.is_empty() {
-                                    if super::stdlib_method_traits::method_mutates_receiver(method)
-                                    {
-                                        return true;
-                                    }
-                                } else if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-
-                    // PRIORITY 2: Unqualified lookup (only when no collision).
-                    if !registry.has_collision(method) {
-                        if let Some(sig) = registry.get_signature(method) {
-                            if sig.has_self_receiver {
-                                if let Some(mode) = sig.param_ownership.first() {
-                                    if matches!(mode, OwnershipMode::MutBorrowed) {
-                                        return true;
-                                    }
-                                    return false;
-                                }
-                            }
-                            return false;
-                        }
-                    }
-
-                    // When we attempted a type-qualified lookup for a USER type
-                    // but the method wasn't found, skip the generic heuristic.
-                    // The method may not be analyzed yet; multi-pass convergence
-                    // will resolve it once the method IS registered.
-                    // BUT: For stdlib types (Vec, HashMap, String), the heuristic
-                    // is always correct, so don't skip it. Use the *field* type
-                    // (`grid.data: Vec` → Vec) not the outer param (`Grid`).
-                    let field_is_stdlib = self
-                        .resolve_field_chain_type_for_param(name, object, param_type_hint)
-                        .as_ref()
-                        .is_some_and(crate::type_classification::is_stdlib_collection_or_wrapper);
-                    let is_stdlib_type = param_type_hint.is_some_and(|ty| {
-                        crate::type_classification::is_stdlib_collection_or_wrapper(ty)
-                    }) || field_is_stdlib;
-                    if !qualified_attempted || is_stdlib_type {
-                        if super::stdlib_method_traits::method_mutates_receiver(method) {
-                            return true;
-                        }
-                    }
-
-                    if super::stdlib_method_traits::is_known_readonly(method) {
+                    if receiver_base.is_some() {
                         return false;
                     }
-
-                    // Copy field receiver: readonly methods on copy fields do not mutate the root binding.
-                    if let Some(field_ty) =
-                        self.resolve_field_chain_type_for_param(name, object, param_type_hint)
-                    {
-                        if let Some(recv_name) = type_base_for_registry_lookup(&field_ty) {
-                            if super::stdlib_method_traits::is_known_readonly_qualified(
-                                method,
-                                Some(&recv_name),
-                                registry,
-                            ) {
-                                return false;
-                            }
-                            if !super::stdlib_method_traits::method_mutates_receiver_qualified(
-                                method,
-                                Some(&recv_name),
-                                registry,
-                            ) && self.is_copy_type(&field_ty)
-                            {
-                                return false;
-                            }
-                        } else if self.is_copy_type(&field_ty) {
-                            if super::stdlib_method_traits::method_mutates_receiver(method) {
-                                return true;
-                            }
-                            return false;
-                        }
-                    }
-
-                    // Fallback: unique qualified method lookup (any type with this method).
-                    if let Expression::Identifier { name: recv, .. } = &**object {
-                        if recv == name {
-                            if let Some(sig) = Self::unique_qualified_method_sig(registry, method) {
-                                if sig.has_self_receiver {
-                                    if let Some(mode) = sig.param_ownership.first() {
-                                        return matches!(mode, OwnershipMode::MutBorrowed);
-                                    }
-                                }
-                                return false;
-                            }
-                        }
-                    }
-
-                    // UNKNOWN METHOD: When we attempted a type-qualified lookup
-                    // (had a type hint) but the method wasn't in the registry,
-                    // assume non-mutation and rely on multi-pass convergence.
-                    // Without a type hint, conservatively assume mutation only when
-                    // stdlib heuristics already failed to classify the method.
                     if param_type_hint.is_none() {
                         return true;
                     }
@@ -1184,26 +1048,6 @@ impl<'ast> Analyzer<'ast> {
             }
             _ => {}
         }
-    }
-
-    /// When exactly one registry entry matches `Type::method`, trust its self ownership.
-    fn unique_qualified_method_sig<'a>(
-        registry: &'a SignatureRegistry,
-        method: &str,
-    ) -> Option<&'a FunctionSignature> {
-        if registry.has_collision(method) {
-            return None;
-        }
-        let pattern = format!("::{}", method);
-        let mut matches = registry
-            .signatures
-            .iter()
-            .filter(|(key, _)| key.ends_with(&pattern));
-        let first = matches.next()?;
-        if matches.next().is_some() {
-            return None;
-        }
-        Some(first.1)
     }
 }
 

@@ -14,6 +14,31 @@ use super::{FunctionSignature, OwnershipMode, SignatureRegistry};
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
 const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
 
+/// Receiver type names to try for `Type::method` registry lookup.
+///
+/// Handles generics (`HashMap<K,V>`), module prefixes (`std::collections::HashMap`),
+/// and stdlib aliases (`Map` → `HashMap`, `string` → `String`).
+pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<String> {
+    let base = receiver_type.split('<').next().unwrap_or(receiver_type);
+    let leaf = base.rsplit("::").next().unwrap_or(base);
+    let mut out = Vec::new();
+    let mut push = |s: &str| {
+        if !s.is_empty() && !out.iter().any(|x| x == s) {
+            out.push(s.to_string());
+        }
+    };
+    push(receiver_type);
+    push(base);
+    push(leaf);
+    if matches!(leaf, "str" | "string" | "String") {
+        push("String");
+    }
+    if matches!(leaf, "Map") {
+        push("HashMap");
+    }
+    out
+}
+
 // ── Inline fallbacks ─────────────────────────────────────────────────────
 
 /// Unqualified fallback: unanimous `MutBorrowed` self across stdlib `::{method}` keys.
@@ -87,20 +112,28 @@ pub(crate) fn decompose_collection_key_lookup<'ast>(
 
 // ── SignatureRegistry helpers ────────────────────────────────────────────
 
+pub(crate) fn lookup_method_signature<'a>(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &'a SignatureRegistry,
+) -> Option<&'a FunctionSignature> {
+    lookup_sig(method, receiver_type, registry)
+}
+
 fn lookup_sig<'a>(
     method: &str,
     receiver_type: Option<&str>,
     registry: &'a SignatureRegistry,
 ) -> Option<&'a FunctionSignature> {
     if let Some(ty) = receiver_type {
-        let base = ty.split('<').next().unwrap_or(ty);
-        let qualified = format!("{}::{}", base, method);
-        if let Some(sig) = registry.get_signature(&qualified) {
-            return Some(sig);
-        }
-        if base != ty {
-            let qualified_full = format!("{}::{}", ty, method);
-            if let Some(sig) = registry.get_signature(&qualified_full) {
+        for candidate in stdlib_receiver_lookup_candidates(ty) {
+            let qualified = format!("{}::{}", candidate, method);
+            if let Some(sig) = registry.get_signature(&qualified) {
+                // Declaration stubs (empty ownership) must not shadow stdlib
+                // `Type::method` keys — continue so callers can consult fallback.
+                if sig.param_ownership.is_empty() {
+                    continue;
+                }
                 return Some(sig);
             }
         }
@@ -275,21 +308,48 @@ pub fn method_mutates_receiver_qualified(
     if receiver_type.is_some() {
         // Known receiver: only that type's signature (local, then stdlib).
         // Never a unique `::{method}` from a *different* type.
+        // Incomplete / associated-fn stubs (no `&self`/`&mut self`) must not
+        // shadow the stdlib instance method.
         if let Some(sig) = lookup_sig(method, receiver_type, registry) {
-            return sig_mutates_receiver(sig);
+            if sig.has_self_receiver {
+                return sig_mutates_receiver(sig);
+            }
         }
         if let Some(sig) = lookup_sig(method, receiver_type, SignatureRegistry::stdlib()) {
-            return sig_mutates_receiver(sig);
+            if sig.has_self_receiver {
+                return sig_mutates_receiver(sig);
+            }
         }
         return false;
     }
     if let Some(sig) = lookup_suffix(method, registry) {
-        return sig_mutates_receiver(sig);
+        if sig.has_self_receiver {
+            return sig_mutates_receiver(sig);
+        }
     }
     if let Some(sig) = lookup_unqualified(method, registry) {
-        return sig_mutates_receiver(sig);
+        if sig.has_self_receiver {
+            return sig_mutates_receiver(sig);
+        }
     }
-    consensus_mutates_receiver(method, registry)
+    if consensus_mutates_receiver(method, registry) {
+        return true;
+    }
+    consensus_mutates_receiver(method, SignatureRegistry::stdlib())
+}
+
+/// Signature-driven mutation check for `receiver.method()`.
+///
+/// When `receiver_type_base` is `Some`, only that type's signature counts (no
+/// unqualified stdlib consensus). When `None`, uses unique qualified match then
+/// suffix/unqualified consensus. Mixed-ownership names (e.g. `replace`) do not
+/// consensus-mutate.
+pub fn method_call_mutates_receiver(
+    method: &str,
+    receiver_type_base: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    method_mutates_receiver_qualified(method, receiver_type_base, registry)
 }
 
 pub fn is_known_readonly_qualified(
@@ -684,6 +744,44 @@ mod tests {
         assert!(is_set_lookup_method("contains"));
         assert!(is_set_lookup_method("remove"));
         assert!(!is_set_lookup_method("insert"));
+    }
+
+    #[test]
+    fn method_call_mutates_receiver_qualified_user_type_no_consensus_poison() {
+        let mut reg = SignatureRegistry::empty();
+        let mut sig = FunctionSignature::default();
+        sig.name = "Section::render".into();
+        sig.param_ownership = vec![OwnershipMode::Borrowed];
+        sig.has_self_receiver = true;
+        reg.add_function("Section::render".into(), sig);
+        assert!(!method_call_mutates_receiver(
+            "render",
+            Some("Section"),
+            &reg
+        ));
+        assert!(!method_call_mutates_receiver("render", None, &reg));
+    }
+
+    #[test]
+    fn method_call_mutates_hashmap_remove_with_qualified_path() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(method_call_mutates_receiver("remove", Some("HashMap"), reg));
+        assert!(method_call_mutates_receiver(
+            "remove",
+            Some("std::collections::HashMap"),
+            reg
+        ));
+        assert!(method_call_mutates_receiver(
+            "remove",
+            Some("HashMap<i32, Transform>"),
+            reg
+        ));
+        assert!(method_call_mutates_receiver("push", Some("Vec"), reg));
+        assert!(method_call_mutates_receiver(
+            "push",
+            Some("alloc::vec::Vec<i32>"),
+            reg
+        ));
     }
 
     #[test]
