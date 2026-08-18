@@ -11,9 +11,8 @@ use super::{FunctionSignature, OwnershipMode, SignatureRegistry};
 // Mutating/readonly-receiver detection is signature-driven (see consensus_*).
 // Do not reintroduce method-name lists for ownership decisions.
 
-const MAP_KEY: &[&str] = &["remove", "contains_key", "get", "get_mut", "get_key_value"];
-
 const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
+const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
 
 // ── Inline fallbacks ─────────────────────────────────────────────────────
 
@@ -28,14 +27,13 @@ pub fn is_known_readonly(method: &str) -> bool {
 }
 
 pub fn is_map_key_method(method: &str) -> bool {
-    MAP_KEY.contains(&method)
+    method_is_map_key_qualified(method, None, SignatureRegistry::stdlib())
 }
 
-/// HashSet/BTreeSet lookup method names — AST / trait-identity only
-/// (see [`decompose_collection_key_lookup`]). Ownership decisions must use
-/// signature `param_ownership` / codegen qualified helpers, not this list.
+/// HashSet/BTreeSet lookup — signature-driven (borrowed first arg on set types).
+/// Ownership decisions must use `param_ownership` / codegen qualified helpers.
 pub fn is_set_lookup_method(method: &str) -> bool {
-    matches!(method, "contains" | "remove")
+    method_is_set_lookup_qualified(method, None, SignatureRegistry::stdlib())
 }
 
 /// Map or set key-lookup method name — for AST decomposition of lookup shapes.
@@ -171,6 +169,44 @@ pub(crate) fn is_map_receiver(receiver_type: Option<&str>) -> bool {
         let base = ty.split('<').next().unwrap_or(ty);
         let short = base.rsplit("::").next().unwrap_or(base);
         MAP_TYPES.contains(&short)
+    })
+}
+
+fn is_set_receiver(receiver_type: Option<&str>) -> bool {
+    receiver_type.is_some_and(|ty| {
+        let base = ty.split('<').next().unwrap_or(ty);
+        let short = base.rsplit("::").next().unwrap_or(base);
+        SET_TYPES.contains(&short)
+    })
+}
+
+fn method_matches_borrowed_key_on_types(
+    method: &str,
+    receiver_type: Option<&str>,
+    type_names: &[&str],
+    is_receiver: impl Fn(Option<&str>) -> bool,
+    registry: &SignatureRegistry,
+) -> bool {
+    if !is_receiver(receiver_type) {
+        if receiver_type.is_some() {
+            return false;
+        }
+        for ty in type_names {
+            if let Some(sig) = lookup_sig(method, Some(ty), registry) {
+                if sig.has_self_receiver
+                    && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
+                    && first_arg_type(sig).is_some_and(is_reference_type)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    lookup_sig(method, receiver_type, registry).is_some_and(|s| {
+        s.has_self_receiver
+            && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
+            && first_arg_type(s).is_some_and(is_reference_type)
     })
 }
 
@@ -598,29 +634,27 @@ pub fn method_is_map_key_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
-    if !is_map_receiver(receiver_type) {
-        if receiver_type.is_some() {
-            return false;
-        }
-        for map_ty in MAP_TYPES {
-            if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
-                if sig.has_self_receiver
-                    && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
-                {
-                    if first_arg_type(sig).is_some_and(is_reference_type) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-    let sig = lookup_sig(method, receiver_type, registry);
-    sig.is_some_and(|s| {
-        s.has_self_receiver
-            && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
-            && first_arg_type(s).is_some_and(is_reference_type)
-    })
+    method_matches_borrowed_key_on_types(
+        method,
+        receiver_type,
+        MAP_TYPES,
+        is_map_receiver,
+        registry,
+    )
+}
+
+pub fn method_is_set_lookup_qualified(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    method_matches_borrowed_key_on_types(
+        method,
+        receiver_type,
+        SET_TYPES,
+        is_set_receiver,
+        registry,
+    )
 }
 
 pub fn method_is_slice_search_qualified(
@@ -640,6 +674,17 @@ pub fn method_is_slice_search_qualified(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn map_and_set_key_methods_are_signature_driven() {
+        assert!(is_map_key_method("get"));
+        assert!(is_map_key_method("contains_key"));
+        assert!(!is_map_key_method("push"));
+        assert!(!is_map_key_method("insert"));
+        assert!(is_set_lookup_method("contains"));
+        assert!(is_set_lookup_method("remove"));
+        assert!(!is_set_lookup_method("insert"));
+    }
 
     #[test]
     fn method_mutates_receiver_stdlib_consensus() {
