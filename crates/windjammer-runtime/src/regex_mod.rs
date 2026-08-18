@@ -41,7 +41,8 @@ pub fn compile_with_flags(pattern: &str, flags: &str) -> Result<Regex, String> {
     builder.build().map_err(|e| e.to_string())
 }
 
-/// Escape special regex characters in a string
+/// Escape special regex characters in a string.
+/// wj-taint: sanitizer
 pub fn escape(text: &str) -> String {
     regex::escape(text)
 }

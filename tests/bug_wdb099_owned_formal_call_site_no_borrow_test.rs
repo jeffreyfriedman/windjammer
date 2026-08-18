@@ -169,11 +169,8 @@ fn wdb099_owned_struct_and_vec_formals_must_not_borrow_at_call_site() {
 }
 
 /// Gate C: owned aggregate struct at suite call site (Wave1OptLiveClaims pattern).
-///
-/// Run: `cargo test --release --test all wdb099_owned_claims_struct -- --ignored --nocapture`
-/// Expected (until multipass fixes struct-field call sites): FAIL on `&claims`.
+/// Passing on main wj 0.50.0 (2026-08-17); keep live so PRE-style over-borrow cannot regress.
 #[test]
-#[ignore = "WDB-099 Gate C: main wj over-borrows owned struct at suite_verdict call site"]
 fn wdb099_owned_claims_struct_must_not_borrow_at_call_site() {
     let (mod_wj, claims, suite_src) = wdb099_struct_field_sources();
     let mut test = MultiFileTest::new();

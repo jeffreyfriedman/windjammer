@@ -345,61 +345,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .as_ref()
                             .is_some_and(|t| self.is_type_copy(t));
                         if !is_copy {
-                            // Type inference failed — fall back to name heuristic
-                            // Fields like x, y, z, width, height are almost always Copy
-                            // Fallback: field names that are universally numeric
-                            // primitives across all domains (coordinates, dimensions,
-                            // color channels, booleans). No game-specific names here.
-                            let is_likely_copy_field = matches!(
-                                field,
-                                "x" | "y"
-                                    | "z"
-                                    | "w"
-                                    | "width"
-                                    | "height"
-                                    | "depth"
-                                    | "r"
-                                    | "g"
-                                    | "b"
-                                    | "a"
-                                    | "left"
-                                    | "right"
-                                    | "top"
-                                    | "bottom"
-                                    | "min"
-                                    | "max"
-                                    | "offset"
-                                    | "scale"
-                                    | "speed"
-                                    | "time"
-                                    | "delta"
-                                    | "angle"
-                                    | "radius"
-                                    | "distance"
-                                    | "visible"
-                                    | "enabled"
-                                    | "active"
-                                    | "selected"
-                                    | "focused"
-                                    | "id"
-                                    | "kind"
-                                    | "priority"
-                                    | "level"
-                                    | "len"
-                                    | "count"
-                                    | "size"
-                                    | "index"
-                                    | "idx"
-                                    | "vx"
-                                    | "vy"
-                                    | "vz"
-                                    | "dx"
-                                    | "dy"
-                                    | "dz"
-                            );
-                            if !is_likely_copy_field {
-                                return format!("{}.clone()", base_expr);
-                            }
+                            return format!("{}.clone()", base_expr);
                         }
                     }
                 }
@@ -416,7 +362,7 @@ impl<'ast> CodeGenerator<'ast> {
         //      (e.g., stack.item.stats.armor → don't clone item, Rust auto-derefs through &)
         // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
         // TDD FIX: Don't clone when generating call arguments (Call handler applies ownership)
-        // WINDJAMMER PHILOSOPHY: Use type inference first, fall back to name heuristics
+        // WINDJAMMER PHILOSOPHY: type-driven Copy detection only — never field-name lists.
         if !self.generating_assignment_target
             && !self.suppress_borrowed_clone
             && !self.in_explicit_clone_call

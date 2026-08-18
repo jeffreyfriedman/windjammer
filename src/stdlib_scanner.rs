@@ -80,18 +80,46 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
     let mut current_impl: Option<String> = None;
     let mut brace_depth: i32 = 0;
     let mut impl_depth: Option<i32> = None;
+    let mut pending_sanitizer = false;
+    let mut current_struct: Option<String> = None;
+    let mut struct_fields: Vec<(String, String)> = Vec::new();
+    let mut struct_body_depth: Option<i32> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
+        if is_wj_taint_sanitizer_comment(trimmed) {
+            pending_sanitizer = true;
+        } else if !trimmed.is_empty()
+            && !trimmed.starts_with("//")
+            && !trimmed.starts_with("///")
+            && !trimmed.starts_with("#[")
+            && parse_function_signature(trimmed, module_name).is_none()
+        {
+            pending_sanitizer = false;
+        }
+
         if brace_depth == 0 {
             if let Some(type_name) = parse_exported_type_name(trimmed) {
                 registry.register_runtime_exported_type(module_name, &type_name);
+            }
+            if current_struct.is_none() {
+                if let Some(struct_name) = parse_named_struct_start(trimmed) {
+                    current_struct = Some(struct_name);
+                    struct_fields.clear();
+                    struct_body_depth = None;
+                }
             }
         }
         if let Some(type_name) = parse_impl_type_name(trimmed) {
             current_impl = Some(type_name);
             // Depth after this line's braces is assigned below; mark entry depth.
             impl_depth = Some(brace_depth);
+        }
+
+        if current_struct.is_some() {
+            if let Some(field) = parse_pub_struct_field(trimmed) {
+                struct_fields.push(field);
+            }
         }
 
         let opens = line.chars().filter(|&c| c == '{').count() as i32;
@@ -103,9 +131,29 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
                 impl_depth = None;
             }
         }
+        if current_struct.is_some() && struct_body_depth.is_none() && brace_depth > 0 {
+            struct_body_depth = Some(brace_depth);
+        }
+        if let Some(body_depth) = struct_body_depth {
+            if brace_depth < body_depth {
+                if let Some(name) = current_struct.take() {
+                    registry
+                        .register_runtime_type_fields(&name, std::mem::take(&mut struct_fields));
+                }
+                struct_body_depth = None;
+            }
+        }
 
         if let Some(sig) = parse_function_signature(trimmed, module_name) {
-            register_scanned_runtime_signature(registry, module_name, sig, current_impl.as_deref());
+            let mark_sanitizer = pending_sanitizer;
+            pending_sanitizer = false;
+            register_scanned_runtime_signature(
+                registry,
+                module_name,
+                sig,
+                current_impl.as_deref(),
+                mark_sanitizer,
+            );
         }
     }
 
@@ -119,27 +167,92 @@ fn register_scanned_runtime_signature(
     module_name: &str,
     sig: FunctionSignature,
     current_impl: Option<&str>,
+    mark_sanitizer: bool,
 ) {
     let method_name = sig
         .name
         .rsplit_once("::")
         .map(|(_, m)| m.to_string())
         .unwrap_or_else(|| sig.name.clone());
+    if mark_sanitizer {
+        registry.register_taint_sanitizer(&sig.name);
+    }
     registry.add_function(sig.name.clone(), sig.clone());
     registry.register_runtime_file_stem(module_name);
     // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
     if let Some(short) = module_name.strip_suffix("_mod") {
         let mut aliased = sig.clone();
         aliased.name = format!("{short}::{method_name}");
+        if mark_sanitizer {
+            registry.register_taint_sanitizer(&aliased.name);
+        }
         registry.add_function(aliased.name.clone(), aliased);
         registry.register_runtime_std_module(short);
     }
     if let Some(ty) = current_impl {
         let mut typed = sig;
         typed.name = format!("{ty}::{method_name}");
+        if mark_sanitizer {
+            registry.register_taint_sanitizer(&typed.name);
+        }
         registry.add_function(typed.name.clone(), typed);
         registry.register_runtime_type_module(ty, module_name);
     }
+}
+
+fn is_wj_taint_sanitizer_comment(trimmed: &str) -> bool {
+    let body = trimmed
+        .strip_prefix("///")
+        .or_else(|| trimmed.strip_prefix("//"))
+        .unwrap_or("")
+        .trim();
+    body.eq_ignore_ascii_case("wj-taint: sanitizer") || body.contains("wj-taint: sanitizer")
+}
+
+fn parse_named_struct_start(trimmed: &str) -> Option<String> {
+    let rest = trimmed.strip_prefix("pub struct ")?;
+    if rest.contains('(') {
+        return None;
+    }
+    let name = rest
+        .split(|c: char| c == '<' || c == '{' || c.is_whitespace())
+        .next()
+        .unwrap_or("")
+        .trim();
+    if name.is_empty() || !name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        return None;
+    }
+    Some(name.to_string())
+}
+
+fn parse_pub_struct_field(trimmed: &str) -> Option<(String, String)> {
+    let rest = trimmed.strip_prefix("pub ")?;
+    if rest.starts_with("fn ")
+        || rest.starts_with("struct ")
+        || rest.starts_with("enum ")
+        || rest.starts_with("use ")
+        || rest.starts_with("const ")
+        || rest.starts_with("type ")
+        || rest.starts_with("impl ")
+        || rest.starts_with("async ")
+    {
+        return None;
+    }
+    let (name, ty) = rest.split_once(':')?;
+    let name = name.trim();
+    if name.is_empty()
+        || !name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+    {
+        return None;
+    }
+    let ty = ty.trim().trim_end_matches(',').trim();
+    if ty.is_empty() {
+        return None;
+    }
+    Some((name.to_string(), ty.to_string()))
 }
 
 /// Lowercase `module::fn` keys (and `_mod` / `_runtime` aliases) → runtime module set.
@@ -915,6 +1028,20 @@ mod tests {
         // `impl Connection` / `impl Row` in db.rs — not a hardcoded type table.
         assert_eq!(runtime_std_module_for_type("Connection"), Some("db"));
         assert_eq!(runtime_std_module_for_type("Row"), Some("db"));
+        let req_fields =
+            crate::analyzer::SignatureRegistry::stdlib().runtime_type_fields("ServerRequest");
+        assert!(
+            req_fields.iter().any(|(n, _)| n == "query")
+                && req_fields.iter().any(|(n, _)| n == "body")
+                && req_fields.iter().any(|(n, _)| n == "headers"),
+            "ServerRequest fields must be scanned, got {req_fields:?}"
+        );
+        assert!(
+            crate::analyzer::SignatureRegistry::stdlib().is_taint_sanitizer("regex::escape")
+                || crate::analyzer::SignatureRegistry::stdlib()
+                    .is_taint_sanitizer("regex_mod::escape"),
+            "regex escape must be a scanned wj-taint sanitizer"
+        );
         // User / unknown names must not match.
         assert!(!is_runtime_std_module("harness"));
         assert!(!is_runtime_std_module("server"));
@@ -1134,7 +1261,7 @@ mod tests {
             "csv_mod",
         )
         .unwrap();
-        register_scanned_runtime_signature(&mut reg, "csv_mod", sig, None);
+        register_scanned_runtime_signature(&mut reg, "csv_mod", sig, None, false);
         let aliased = reg
             .get_signature("csv::parse")
             .expect("csv_mod must alias to csv::parse");

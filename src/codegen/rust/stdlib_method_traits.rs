@@ -795,10 +795,7 @@ pub fn method_mutates_receiver(method: &str) -> bool {
 /// Ownership / borrow decisions must use [`method_is_map_key_qualified`],
 /// [`method_arg_expects_borrowed_reference_qualified`], or [`is_collection_key_lookup`].
 pub fn is_map_key_method(method: &str) -> bool {
-    matches!(
-        method,
-        "get" | "get_mut" | "contains_key" | "remove" | "get_key_value"
-    )
+    crate::analyzer::stdlib_method_traits::is_map_key_method(method)
 }
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.
