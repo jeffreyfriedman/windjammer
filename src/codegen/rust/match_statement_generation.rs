@@ -622,8 +622,12 @@ impl<'ast> CodeGenerator<'ast> {
                 || self.match_arms_call_self_method(arms));
         let use_copied_borrow_break =
             needs_borrow_break && self.match_borrow_break_yields_ref_copy_binding(value);
+        let use_cloned_borrow_break = needs_borrow_break
+            && !use_copied_borrow_break
+            && self.match_borrow_break_yields_cloned_option(value);
         let use_owned_copy_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
+            && !use_cloned_borrow_break
             && !option_reassigns
             && self.match_borrow_break_yields_owned_copy_option(value);
         // Owned-option borrow-break is for method returns (`self.network.poll()` →
@@ -631,17 +635,20 @@ impl<'ast> CodeGenerator<'ast> {
         // mut / ref-mut arms and scrutinee reassignment do not overlap borrows.
         let use_owned_option_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
+            && !use_cloned_borrow_break
             && !use_owned_copy_borrow_break
             && !option_reassigns
             && !self.match_scrutinee_is_self_field(value)
             && self.match_borrow_break_yields_owned_option(value);
         let use_owned_clone_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
+            && !use_cloned_borrow_break
             && !use_owned_copy_borrow_break
             && !use_owned_option_borrow_break
             && (self.match_borrow_break_yields_owned_clone(value) || option_reassigns);
         let borrow_break_as_ref = needs_borrow_break
             && !use_copied_borrow_break
+            && !use_cloned_borrow_break
             && !use_owned_copy_borrow_break
             && !use_owned_option_borrow_break
             && !use_owned_clone_borrow_break;
@@ -668,6 +675,18 @@ impl<'ast> CodeGenerator<'ast> {
                     value_str.clone()
                 } else {
                     format!("{}.copied()", value_str)
+                };
+                output.push_str(&format!(
+                    "let __match_borrow_break = {};\n",
+                    borrowed
+                ));
+                output.push_str(&self.indent());
+                output.push_str("match __match_borrow_break");
+            } else if use_cloned_borrow_break {
+                let borrowed = if value_str.ends_with(".cloned()") {
+                    value_str.clone()
+                } else {
+                    format!("{}.cloned()", value_str)
                 };
                 output.push_str(&format!(
                     "let __match_borrow_break = {};\n",
@@ -714,6 +733,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.indent_level += 1;
 
         let match_binds_refs = if use_copied_borrow_break
+            || use_cloned_borrow_break
             || use_owned_copy_borrow_break
             || use_owned_option_borrow_break
             || use_owned_clone_borrow_break
@@ -768,6 +788,7 @@ impl<'ast> CodeGenerator<'ast> {
                 false
             };
         if use_copied_borrow_break
+            || use_cloned_borrow_break
             || use_owned_copy_borrow_break
             || use_owned_clone_borrow_break
             || use_copied_option
@@ -780,6 +801,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Same for `match __match_borrow_break.as_ref() { ... }`.
         // Owned borrow-break clones match on owned enum values — never ref-bindings.
         let scrutinee_prefix_binds_refs = if use_copied_borrow_break
+            || use_cloned_borrow_break
             || use_owned_copy_borrow_break
             || use_owned_clone_borrow_break
             || use_copied_option
@@ -802,6 +824,7 @@ impl<'ast> CodeGenerator<'ast> {
             let scrutinee_is_ref_for_upgrade = if use_owned_clone_borrow_break
                 || use_owned_copy_borrow_break
                 || use_copied_borrow_break
+                || use_cloned_borrow_break
                 || use_owned_option_borrow_break
             {
                 false
@@ -915,7 +938,7 @@ impl<'ast> CodeGenerator<'ast> {
             let mut match_bound_type_entries: Vec<(String, Type)> =
                 if use_owned_clone_borrow_break || use_owned_copy_borrow_break {
                     self.infer_match_bound_types_owned(value, &arm.pattern)
-                } else if use_copied_borrow_break {
+                } else if use_copied_borrow_break || use_cloned_borrow_break {
                     self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
                 } else {
                     self.infer_match_bound_types(value, &arm.pattern)
@@ -923,6 +946,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Wrap binding types with the ref kind matching the
             // generated scrutinee prefix (see if-let equivalent above).
             let skip_ref_wrap_on_bound_types = use_copied_borrow_break
+                || use_cloned_borrow_break
                 || use_owned_copy_borrow_break
                 || use_owned_clone_borrow_break;
             if !skip_ref_wrap_on_bound_types && match_scrutinee_ref_prefix == "&mut " {
