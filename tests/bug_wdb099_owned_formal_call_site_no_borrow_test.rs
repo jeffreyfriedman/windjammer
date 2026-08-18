@@ -105,6 +105,52 @@ fn assert_consumer_no_overborrow(consumer: &str) {
     );
 }
 
+fn wdb099_struct_field_sources() -> (&'static str, &'static str, &'static str) {
+    (
+        r#"
+pub mod claims
+pub mod suite
+"#,
+        r#"
+pub struct Wave1OptLiveClaims {
+    pub claim_ready: bool,
+}
+
+pub fn wave1_opt_live_claims_cap(ready: bool) -> Wave1OptLiveClaims {
+    Wave1OptLiveClaims { claim_ready: ready }
+}
+"#,
+        r#"
+use crate::claims::Wave1OptLiveClaims
+use crate::claims::wave1_opt_live_claims_cap
+
+pub fn wave1_opt_live_row_publishable(claim_ready: bool) -> bool {
+    claim_ready
+}
+
+pub fn wave1_opt_live_suite_verdict(claims: Wave1OptLiveClaims) -> bool {
+    wave1_opt_live_row_publishable(claims.claim_ready)
+}
+
+pub fn wave1_opt_live_suite_test() -> bool {
+    let claims = wave1_opt_live_claims_cap(true)
+    wave1_opt_live_suite_verdict(claims)
+}
+"#,
+    )
+}
+
+fn assert_suite_no_overborrow(suite: &str) {
+    assert!(
+        !suite.contains("wave1_opt_live_suite_verdict(&claims)"),
+        "WDB-099 Gate C: owned Wave1OptLiveClaims formal must not receive &claims. Got:\n{suite}"
+    );
+    assert!(
+        suite.contains("wave1_opt_live_suite_verdict(claims)"),
+        "expected move of claims into owned suite formal. Got:\n{suite}"
+    );
+}
+
 #[test]
 fn wdb099_owned_struct_and_vec_formals_must_not_borrow_at_call_site() {
     let (mod_wj, harness, consumer_src) = wdb099_sources();
@@ -120,6 +166,26 @@ fn wdb099_owned_struct_and_vec_formals_must_not_borrow_at_call_site() {
         .get("consumer.rs")
         .expect("consumer.rs must be generated");
     assert_consumer_no_overborrow(consumer);
+}
+
+/// Gate C: owned aggregate struct at suite call site (Wave1OptLiveClaims pattern).
+///
+/// Run: `cargo test --release --test all wdb099_owned_claims_struct -- --ignored --nocapture`
+/// Expected (until multipass fixes struct-field call sites): FAIL on `&claims`.
+#[test]
+#[ignore = "WDB-099 Gate C: main wj over-borrows owned struct at suite_verdict call site"]
+fn wdb099_owned_claims_struct_must_not_borrow_at_call_site() {
+    let (mod_wj, claims, suite_src) = wdb099_struct_field_sources();
+    let mut test = MultiFileTest::new();
+    test.add_file("mod.wj", mod_wj);
+    test.add_file("claims.wj", claims);
+    test.add_file("suite.wj", suite_src);
+
+    let map = test
+        .compile()
+        .expect("WDB-099 Gate C multipass compile should succeed");
+    let suite = map.get("suite.rs").expect("suite.rs must be generated");
+    assert_suite_no_overborrow(suite);
 }
 
 /// Failing repro against the WindjammerDB dogfood PRE binary (when present).
