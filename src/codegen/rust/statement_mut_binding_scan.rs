@@ -105,7 +105,11 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn codegen_method_likely_mutates_receiver(&self, method: &str) -> bool {
-        super::stdlib_method_traits::method_mutates_receiver(method)
+        crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+            method,
+            None,
+            &self.signature_registry,
+        )
     }
 
     /// Like `expr_binding_receives_mutating_method_call` but also consults
@@ -266,7 +270,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Check if a method on the given type is known to mutate its receiver,
-    /// preferring signature registry (type-qualified) over stdlib consensus.
+    /// preferring signature registry (type-qualified) over unqualified consensus.
     fn method_mutates_via_registry_or_sig(&self, method: &str, receiver_type: &Type) -> bool {
         let type_name = match receiver_type {
             Type::Custom(name) => Some(name.as_str()),
@@ -279,20 +283,16 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(tn) = type_name {
             let base = tn.split('<').next().unwrap_or(tn);
             let short = base.rsplit("::").next().unwrap_or(base);
-            if super::stdlib_method_traits::method_mutates_receiver_qualified(
+            return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
                 method,
                 Some(short),
                 &self.signature_registry,
-            ) {
-                return true;
-            }
-            let qualified = format!("{short}::{method}");
-            if let Some(sig) = self.get_signature_with_global(&qualified) {
-                if sig.has_self_receiver && !sig.param_ownership.is_empty() {
-                    return sig.param_ownership[0] == crate::analyzer::OwnershipMode::MutBorrowed;
-                }
-            }
+            );
         }
-        super::stdlib_method_traits::method_mutates_receiver(method)
+        crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
+            method,
+            None,
+            &self.signature_registry,
+        )
     }
 }

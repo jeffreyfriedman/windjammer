@@ -647,16 +647,24 @@ impl SignatureRegistry {
     /// Local signatures plus global fallback entries not shadowed locally.
     /// Used by call resolution step 5c on layered registries so module-qualified
     /// keys like `quick_start::voxel_scene::VoxelScene::new` remain visible.
+    /// Local signatures plus all fallback-chain entries not shadowed locally.
+    /// Nested `layered` registries (file → crate → stdlib) must be fully visible
+    /// so suffix consensus sees `HashMap::remove` / `Vec::push`.
     pub fn all_signatures_for_suffix_search(
         &self,
     ) -> impl Iterator<Item = (&String, &FunctionSignature)> {
-        let local = self.signatures.iter();
-        let global = self.global_fallback.as_ref().into_iter().flat_map(|g| {
-            g.signatures
-                .iter()
-                .filter(|(k, _)| !self.signatures.contains_key(*k))
-        });
-        local.chain(global)
+        let mut out = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut current = Some(self);
+        while let Some(reg) = current {
+            for (k, v) in &reg.signatures {
+                if seen.insert(k.as_str()) {
+                    out.push((k, v));
+                }
+            }
+            current = reg.global_fallback.as_deref();
+        }
+        out.into_iter()
     }
 
     /// Look up a method by name, trying exact match first then falling back to

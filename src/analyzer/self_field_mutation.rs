@@ -165,23 +165,28 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                let is_field = self.expression_is_self_field_access(object);
-                let is_mut_method = self.is_mutating_method(method);
-                if is_field && is_mut_method {
-                    return true;
-                }
-
-                if self.expression_is_self_field_index_access(object)
-                    && self.is_mutating_method(method)
-                {
-                    return true;
+                if let Some(reg) = registry {
+                    let receiver_base = match &**object {
+                        Expression::Identifier { name, .. } if name == "self" => self
+                            .self_impl_context
+                            .as_ref()
+                            .map(|ctx| ctx.impl_type_base.clone()),
+                        _ if self.expression_traces_to_self(object) => {
+                            self.self_field_call_receiver_type_base(object)
+                        }
+                        _ => None,
+                    };
+                    if super::stdlib_method_traits::method_call_mutates_receiver(
+                        method,
+                        receiver_base.as_deref(),
+                        reg,
+                    ) {
+                        return true;
+                    }
                 }
 
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
-                        if self.is_mutating_method(method) {
-                            return true;
-                        }
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
                                 return self.function_modifies_self_fields_recursive(
@@ -189,38 +194,6 @@ impl<'ast> Analyzer<'ast> {
                                     registry,
                                     visited,
                                 );
-                            }
-                        }
-                        if !Self::is_known_readonly_method(method) {
-                            if let Some(reg) = registry {
-                                if let Some(sig) = reg.get_signature(method) {
-                                    if sig.has_self_receiver {
-                                        if let Some(&ownership) = sig.param_ownership.first() {
-                                            if matches!(
-                                                ownership,
-                                                super::OwnershipMode::MutBorrowed
-                                            ) {
-                                                return true;
-                                            }
-                                        }
-                                    }
-                                }
-                                // Qualified lookup for self.method() using impl type
-                                if let Some(ctx) = &self.self_impl_context {
-                                    let qkey = format!("{}::{}", ctx.impl_type_base, method);
-                                    if let Some(sig) = reg.get_signature(&qkey) {
-                                        if sig.has_self_receiver {
-                                            if let Some(&ownership) = sig.param_ownership.first() {
-                                                if matches!(
-                                                    ownership,
-                                                    super::OwnershipMode::MutBorrowed
-                                                ) {
-                                                    return true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
