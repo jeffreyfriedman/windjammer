@@ -351,7 +351,11 @@ impl<'ast> Analyzer<'ast> {
                         // hits unrelated constructors in the registry.
                         let method_sig = if let Expression::Identifier { name, .. } = &**object {
                             if name.starts_with(|c: char| c.is_ascii_uppercase()) {
-                                registry.get_signature(&format!("{}::{}", name, method))
+                                super::stdlib_method_traits::lookup_method_signature(
+                                    method,
+                                    Some(name.as_str()),
+                                    registry,
+                                )
                             } else {
                                 None
                             }
