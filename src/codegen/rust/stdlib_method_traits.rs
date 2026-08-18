@@ -1284,7 +1284,8 @@ mod pattern_registry_tests {
     fn consensus_mutates_receiver_empty_registry_is_false() {
         let empty = SignatureRegistry::empty();
         assert!(!consensus_mutates_receiver("push", &empty));
-        assert!(!method_mutates_receiver_qualified(
+        // Qualified stdlib types still resolve via stdlib baseline fallback.
+        assert!(method_mutates_receiver_qualified(
             "push",
             Some("Vec"),
             &empty
@@ -1317,7 +1318,7 @@ mod pattern_registry_tests {
     fn consensus_readonly_receiver_empty_registry_is_false() {
         let empty = SignatureRegistry::empty();
         assert!(!consensus_readonly_receiver("len", &empty));
-        assert!(!is_known_readonly_qualified("len", Some("Vec"), &empty));
+        assert!(is_known_readonly_qualified("len", Some("Vec"), &empty));
     }
 
     #[test]
