@@ -250,19 +250,12 @@ impl<'ast> Analyzer<'ast> {
         arg_idx: usize,
         reg: &super::SignatureRegistry,
     ) -> bool {
-        let sig = reg
-            .get_signature(func_name)
-            .or_else(|| reg.get_signature(&format!("Self::{}", func_name)));
-        let Some(sig) = sig else {
-            return false;
-        };
-        let param_idx = if sig.has_self_receiver {
-            arg_idx + 1
-        } else {
-            arg_idx
-        };
-        sig.param_ownership
-            .get(param_idx)
-            .is_some_and(|o| *o == super::OwnershipMode::MutBorrowed)
+        let impl_ty = self
+            .self_impl_context
+            .as_ref()
+            .map(|c| c.impl_type_base.as_str());
+        super::stdlib_method_traits::callable_arg_expects_mut_borrow(
+            func_name, impl_ty, arg_idx, true, reg,
+        )
     }
 }

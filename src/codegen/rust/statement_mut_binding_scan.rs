@@ -281,11 +281,9 @@ impl<'ast> CodeGenerator<'ast> {
             _ => None,
         };
         if let Some(tn) = type_name {
-            let base = tn.split('<').next().unwrap_or(tn);
-            let short = base.rsplit("::").next().unwrap_or(base);
             return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
                 method,
-                Some(short),
+                Some(tn),
                 &self.signature_registry,
             );
         }
