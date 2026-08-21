@@ -292,38 +292,43 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => None,
                 };
 
-                // Unified signature resolution for immut path.
+                // Unified signature resolution for immut path (global + imported-runtime homonyms).
                 let receiver_type = match function {
                     Expression::FieldAccess { object, .. } => self.infer_type_name(object),
                     _ => None,
                 };
 
-                let resolved_sig = func_name.and_then(|name| {
-                    crate::codegen::rust::call_signature_resolution::resolve_call_signature(
-                        &self.signature_registry,
-                        name,
-                        receiver_type.as_deref(),
-                        arguments.len(),
-                        &self.module_alias_map,
-                        self.library_source_root.as_ref().and_then(|root| {
-                            if self.current_wj_file.as_os_str().is_empty() {
-                                None
-                            } else {
-                                crate::analyzer::type_collector::wj_file_to_module_path(
-                                    root,
-                                    &self.current_wj_file,
-                                )
-                                .map(|parts| parts.join("::"))
-                            }
-                        })
-                        .as_deref(),
-                    )
-                    .filter(|r| {
-                        !matches!(
-                            r.resolution_method,
-                            crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
+                let resolved_sig = match function {
+                    Expression::Identifier { name, .. } => self
+                        .resolve_call_signature_with_global(name, None, arguments.len()),
+                    Expression::FieldAccess { object, field, .. } => {
+                        if let Expression::Identifier {
+                            name: type_name, ..
+                        } = &**object
+                        {
+                            let qname = format!("{}::{}", type_name, field);
+                            self.resolve_call_signature_with_global(
+                                &qname,
+                                receiver_type.as_deref(),
+                                arguments.len(),
+                            )
+                        } else {
+                            None
+                        }
+                    }
+                    _ => func_name.and_then(|name| {
+                        self.resolve_call_signature_with_global(
+                            name,
+                            receiver_type.as_deref(),
+                            arguments.len(),
                         )
-                    })
+                    }),
+                }
+                .filter(|r| {
+                    !matches!(
+                        r.resolution_method,
+                        crate::codegen::rust::call_signature_resolution::ResolutionMethod::ArgCountValidated
+                    )
                 });
 
                 let param_types: Option<Vec<Type>> =

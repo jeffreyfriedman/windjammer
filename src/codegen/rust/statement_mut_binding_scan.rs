@@ -70,7 +70,9 @@ impl<'ast> CodeGenerator<'ast> {
                 .any(|s| self.statement_binding_mut_method_scan(s, binding)),
             Expression::MethodCall { object, method, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
-                    if name == binding && self.codegen_method_likely_mutates_receiver(method) {
+                    if name == binding
+                        && self.codegen_method_likely_mutates_receiver(method, binding)
+                    {
                         return true;
                     }
                 }
@@ -90,7 +92,9 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 if let Expression::FieldAccess { object, field, .. } = &**function {
                     if let Expression::Identifier { name, .. } = &**object {
-                        if name == binding && self.codegen_method_likely_mutates_receiver(field) {
+                        if name == binding
+                            && self.codegen_method_likely_mutates_receiver(field, binding)
+                        {
                             return true;
                         }
                     }
@@ -104,10 +108,26 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn codegen_method_likely_mutates_receiver(&self, method: &str) -> bool {
+    fn binding_type_base_for_mut_check(&self, binding: &str) -> Option<String> {
+        self.local_var_types
+            .get(binding)
+            .and_then(|ty| crate::type_classification::type_to_registry_base(ty))
+            .or_else(|| {
+                self.current_function_params
+                    .iter()
+                    .find(|p| p.name == binding)
+                    .and_then(|p| crate::type_classification::type_to_registry_base(&p.type_))
+            })
+    }
+
+    fn codegen_method_likely_mutates_receiver(&self, method: &str, binding: &str) -> bool {
+        let Some(receiver_base) = self.binding_type_base_for_mut_check(binding) else {
+            // Unknown binding type: defer to type-aware path; never unqualified consensus.
+            return false;
+        };
         crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
             method,
-            None,
+            Some(receiver_base.as_str()),
             &self.signature_registry,
         )
     }
@@ -287,10 +307,6 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.signature_registry,
             );
         }
-        crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
-            method,
-            None,
-            &self.signature_registry,
-        )
+        false
     }
 }

@@ -25,6 +25,14 @@ impl<'ast> CodeGenerator<'ast> {
         if self.function_returns_self_type(func) {
             return true;
         }
+        // Mutate-then-rebuild (`self.fields.push(x); Type { fields: self.fields }`) is a
+        // consuming builder, not a snapshot. Check mutation/moves before the clone-factory path.
+        if self.function_modifies_self(func)
+            || super::self_analysis::function_return_moves_self_fields(func)
+            || super::self_analysis::function_flows_self_through_local(func)
+        {
+            return true;
+        }
         if super::self_analysis::function_returns_new_instance_from_self_fields(
             func,
             Some(&self.signature_registry),
@@ -33,15 +41,6 @@ impl<'ast> CodeGenerator<'ast> {
             // Non-Copy: field-read rebuild is snapshot/clone (`&self`). Copy types use
             // cheap by-value receivers for consuming transforms like `double(self) -> Point`.
             return self.current_struct_is_copy();
-        }
-        if super::self_analysis::function_flows_self_through_local(func) {
-            return true;
-        }
-        if self.function_modifies_self(func) {
-            return true;
-        }
-        if super::self_analysis::function_return_moves_self_fields(func) {
-            return true;
         }
         false
     }

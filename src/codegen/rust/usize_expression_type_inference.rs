@@ -64,9 +64,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Used for auto-casting between i32 and usize in comparisons
     pub(crate) fn expression_produces_usize(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::MethodCall {
-                object, method, ..
-            } => {
+            Expression::MethodCall { object, method, .. } => {
                 let obj_ty = self.infer_expression_type(object);
                 let recv = obj_ty.as_ref().and_then(Self::type_to_name);
                 if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
@@ -93,10 +91,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.method_call_rust_emits_usize(expr) {
                     return true;
                 }
-                if let Expression::FieldAccess {
-                    object, field, ..
-                } = function
-                {
+                if let Expression::FieldAccess { object, field, .. } = function {
                     if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
                         field,
                         self.infer_expression_type(object)
@@ -305,8 +300,7 @@ impl<'ast> CodeGenerator<'ast> {
                             let inner_is_usize = self.expression_produces_usize(inner)
                                 || self.infer_expression_type_is_usize(inner);
                             if inner_is_usize {
-                                let cast_suffix =
-                                    if t == "i32" { " as i32" } else { " as i64" };
+                                let cast_suffix = if t == "i32" { " as i32" } else { " as i64" };
                                 if expr_str.starts_with("Some(") && expr_str.ends_with(')') {
                                     let inner_part =
                                         expr_str[5..expr_str.len().saturating_sub(1)].trim();
@@ -321,16 +315,14 @@ impl<'ast> CodeGenerator<'ast> {
                                 if expr_str.starts_with("Some::<") {
                                     if let Some(open_paren) = expr_str.rfind('(') {
                                         if expr_str.ends_with(')') {
-                                            let inner_part = expr_str
-                                                [open_paren + 1..expr_str.len() - 1]
-                                                .trim();
+                                            let inner_part =
+                                                expr_str[open_paren + 1..expr_str.len() - 1].trim();
                                             let base = inner_part
                                                 .strip_suffix(".clone()")
                                                 .unwrap_or(inner_part)
                                                 .trim();
                                             let prefix = &expr_str[..=open_paren];
-                                            *expr_str =
-                                                format!("{prefix}{base}{cast_suffix})");
+                                            *expr_str = format!("{prefix}{base}{cast_suffix})");
                                             return;
                                         }
                                     }
@@ -386,14 +378,18 @@ impl<'ast> CodeGenerator<'ast> {
         if returns_usize(recv.as_deref()) {
             return true;
         }
-        // `&str` / slice temps share String/Vec size APIs in Rust (`usize`).
-        if returns_usize(Some("String")) || returns_usize(Some("Vec")) {
-            return true;
-        }
+        // Text receivers share `String::{len,…}` usize APIs.
         if obj_ty
             .as_ref()
             .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
             && returns_usize(Some("String"))
+        {
+            return true;
+        }
+        if obj_ty
+            .as_ref()
+            .is_some_and(|t| crate::type_classification::type_is_vec_container(t))
+            && returns_usize(Some("Vec"))
         {
             return true;
         }
@@ -407,6 +403,8 @@ impl<'ast> CodeGenerator<'ast> {
                 return true;
             }
         }
+        // Unknown receiver: registry consensus only — never invent usize from
+        // hardcoded String/Vec method-name fallbacks.
         returns_usize(None)
     }
 

@@ -232,10 +232,8 @@ pub fn is_stdlib_collection_or_wrapper(ty: &crate::parser::ast::types::Type) -> 
 
 /// Large collection types (high heap allocation cost, never Copy).
 pub fn is_large_collection(name: &str) -> bool {
-    matches!(
-        name,
-        "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet" | "IndexMap"
-    )
+    // Maps/sets (including IndexMap) — not Vec/medium collections.
+    is_map_or_set_type_name(name)
 }
 
 /// Medium-sized collection types.
@@ -243,14 +241,131 @@ pub fn is_medium_collection(name: &str) -> bool {
     matches!(name, "Vec" | "VecDeque" | "LinkedList")
 }
 
+/// Map receiver leaf names (stdlib trait classification only — not ownership).
+pub const MAP_TYPE_NAMES: &[&str] = &[
+    "HashMap",
+    "BTreeMap",
+    "IndexMap",
+    "Map",
+    "OrderedMap",
+    "SlotMap",
+    "ConcurrentMap",
+];
+
+/// Set receiver leaf names (stdlib trait classification only — not ownership).
+pub const SET_TYPE_NAMES: &[&str] = &["HashSet", "BTreeSet", "Set"];
+
+/// Containers whose generic `str` slots emit owned `String` in Rust
+/// (`HashMap<str, str>` → `HashMap<String, String>`).
+pub const OWNED_STR_SLOT_CONTAINER_NAMES: &[&str] = &[
+    "HashMap",
+    "BTreeMap",
+    "BTreeSet",
+    "HashSet",
+    "Map",
+    "OrderedMap",
+    "SlotMap",
+    "ConcurrentMap",
+];
+
+/// Leaf type name from a possibly qualified or generic type string.
+pub fn type_name_leaf(name: &str) -> &str {
+    let base = name.split('<').next().unwrap_or(name);
+    base.rsplit("::").next().unwrap_or(base)
+}
+
 /// Map/associative container types.
 pub fn is_map_type(name: &str) -> bool {
-    matches!(name, "HashMap" | "BTreeMap" | "IndexMap" | "Map")
+    MAP_TYPE_NAMES.contains(&name)
+}
+
+/// Map/associative container type (handles generics and module paths).
+pub fn is_map_type_name(name: &str) -> bool {
+    is_map_type(type_name_leaf(name))
+}
+
+/// Set container type (handles generics and module paths).
+pub fn is_set_type_name(name: &str) -> bool {
+    SET_TYPE_NAMES.contains(&type_name_leaf(name))
+}
+
+/// Map or set container (handles generics and module paths).
+pub fn is_map_or_set_type_name(name: &str) -> bool {
+    is_map_type_name(name) || is_set_type_name(name)
+}
+
+/// Vec / VecDeque / LinkedList / map / set — stdlib collection receivers.
+pub fn is_stdlib_collection_type_name(name: &str) -> bool {
+    let leaf = type_name_leaf(name);
+    is_map_or_set_type_name(name) || is_medium_collection(leaf)
+}
+
+/// Collect turbofish targets (`Vec`, maps, sets).
+pub fn is_collect_turbofish_target_base(name: &str) -> bool {
+    let leaf = type_name_leaf(name);
+    leaf == "Vec" || is_map_or_set_type_name(name)
+}
+
+/// Generic containers that store `str` slots as owned `String` in Rust emit.
+pub fn is_owned_str_slot_container(name: &str) -> bool {
+    OWNED_STR_SLOT_CONTAINER_NAMES.contains(&type_name_leaf(name))
+}
+
+/// Stdlib types whose zero-arg empty constructor clears to `Default` (writeback take).
+pub fn is_stdlib_default_empty_type(name: &str) -> bool {
+    let short = type_name_leaf(name);
+    is_map_type(short) || is_set_type_name(name) || matches!(short, "Vec" | "VecDeque" | "String")
 }
 
 /// Heap-owning types that are never Copy.
 pub fn is_heap_container(name: &str) -> bool {
-    matches!(name, "Vec" | "HashMap" | "String")
+    let leaf = type_name_leaf(name);
+    leaf == "String" || leaf == "Vec" || is_map_type_name(leaf)
+}
+
+/// Stdlib wrapper return/param bases (Vec, maps, sets, Option, Result) — not custom owned payloads.
+///
+/// Used when deciding whether a formal argument is *stored into* a user composite return
+/// (`QuestId::new(id)` stores `id`) vs passed into a stdlib wrapper (`Vec::push`).
+pub fn is_stdlib_wrapper_type_base(base: &str) -> bool {
+    let leaf = type_name_leaf(base);
+    is_map_type(leaf)
+        || is_set_type_name(base)
+        || matches!(leaf, "Vec" | "VecDeque" | "Option" | "Result")
+}
+
+/// `Vec` / `Vec<_>` container (AST `Type` form).
+pub fn type_is_vec_container(ty: &crate::parser::ast::types::Type) -> bool {
+    use crate::parser::ast::types::Type;
+    match ty {
+        Type::Vec(_) => true,
+        Type::Parameterized(name, _) => type_name_leaf(name) == "Vec",
+        Type::Reference(inner) | Type::MutableReference(inner) => type_is_vec_container(inner),
+        _ => false,
+    }
+}
+
+/// Single-element iterable containers (`Vec`, sets, queues) — first type arg is the item.
+pub fn is_single_elem_iterable_base(name: &str) -> bool {
+    let leaf = type_name_leaf(name);
+    is_medium_collection(leaf)
+        || is_set_type_name(name)
+        || matches!(leaf, "BinaryHeap" | "IndexSet" | "SmallVec")
+}
+
+/// Receivers that store owned method args into a collection / string buffer.
+pub fn is_collection_storage_receiver(name: &str) -> bool {
+    let leaf = type_name_leaf(name);
+    is_stdlib_collection_type_name(name)
+        || matches!(leaf, "BinaryHeap" | "IndexSet" | "String" | "string")
+}
+
+/// Stdlib bases safe for `std::mem::take` (implement `Default`).
+pub fn is_mem_take_stdlib_base(name: &str) -> bool {
+    let leaf = type_name_leaf(name);
+    is_stdlib_default_empty_type(name)
+        || matches!(leaf, "Option" | "Box")
+        || is_map_or_set_type_name(name)
 }
 
 // =============================================================================
@@ -274,6 +389,60 @@ pub fn has_significant_drop(name: &str) -> bool {
             | "RwLockReadGuard"
             | "RwLockWriteGuard"
     )
+}
+
+/// Language-level owned-text conversion methods (WJ `.string()` / Rust `.to_string()`).
+///
+/// These are syntax sugar for owned `String`, not ownership oracles for arbitrary APIs.
+pub fn is_language_level_owned_string_convert(method: &str) -> bool {
+    matches!(method, "string" | "to_string")
+}
+
+/// Explicit `.clone()` in WJ source is Rust leakage (lint W0005) — stripped at codegen.
+///
+/// Not an ownership oracle; only identifies the language-level clone sugar so call sites
+/// share one predicate instead of scattering `method == "clone"`.
+pub fn is_language_level_explicit_clone(method: &str) -> bool {
+    method == "clone"
+}
+
+/// Macros that build an owned `String` from arguments (WJ interpolation → `format!`).
+pub fn is_language_level_owned_string_macro(name: &str) -> bool {
+    matches!(name, "format")
+}
+
+/// Language-level Option/Result constructors that wrap a payload (`None` has none).
+pub fn is_option_result_payload_constructor(name: &str) -> bool {
+    matches!(name, "Some" | "Ok" | "Err")
+}
+
+/// Option/Result constructors including unit `None`.
+pub fn is_option_result_constructor(name: &str) -> bool {
+    is_option_result_payload_constructor(name) || name == "None"
+}
+
+/// `Type::Variant` — PascalCase after `::` (enum variant, not `Type::new`).
+pub fn is_enum_variant_constructor_path(qualified_name: &str) -> bool {
+    qualified_name.rfind("::").is_some_and(|pos| {
+        qualified_name[pos + 2..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
+    })
+}
+
+/// Free-fn / `Type::Variant` call target that stores arguments as owned payload.
+pub fn is_language_level_payload_call_name(name: &str) -> bool {
+    is_option_result_payload_constructor(name) || is_enum_variant_constructor_path(name)
+}
+
+/// MethodCall name that stores arguments (`Some`/`Ok`/`Err` or PascalCase variant).
+pub fn is_language_level_payload_method(method: &str) -> bool {
+    is_option_result_payload_constructor(method)
+        || method
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
 }
 
 // =============================================================================
@@ -337,32 +506,14 @@ pub fn is_ref_receiver_trait(name: &str) -> bool {
 // Constructor / Factory Names
 // =============================================================================
 
-/// Common constructor / factory method names (no `self` receiver).
-pub fn is_constructor_name(name: &str) -> bool {
-    matches!(
-        name,
-        "new"
-            | "default"
-            | "from"
-            | "from_str"
-            | "from_bytes"
-            | "with_capacity"
-            | "empty"
-            | "zero"
-            | "one"
-    )
-}
+// Associated functions are return-type driven (`-> Self` / trait name) — do not
+// hardcode factory names (`new` / `default` / …) for ownership or associated-fn detection.
 
 // =============================================================================
-// Method Classification (ownership-producing methods)
+// Method Classification
 // =============================================================================
 
-/// DEPRECATED: prefer signature-registry return `Self` / ownership (not method spelling).
-#[deprecated(note = "use method_is_type_preserving_qualified from stdlib_method_traits")]
-#[allow(dead_code)]
-pub fn is_ownership_producing_method(name: &str) -> bool {
-    matches!(name, "clone" | "to_owned" | "to_string" | "into_iter")
-}
+// Ownership-producing methods are signature-registry driven (`method_is_type_preserving_qualified`).
 
 /// DEPRECATED: use [`crate::analyzer::stdlib_method_traits::method_preserves_float_receiver`]
 /// with the receiver type — bare method names collide with struct builders (`Slider::max`).
@@ -437,6 +588,31 @@ mod tests {
     }
 
     #[test]
+    fn test_map_set_collection_helpers() {
+        assert!(is_map_type_name("std::collections::HashMap<K,V>"));
+        assert!(is_map_type_name("OrderedMap"));
+        assert!(is_set_type_name("BTreeSet"));
+        assert!(is_map_or_set_type_name("Set"));
+        assert!(is_stdlib_collection_type_name("VecDeque"));
+        assert!(is_collect_turbofish_target_base("HashMap"));
+        assert!(is_owned_str_slot_container("ConcurrentMap"));
+        assert!(is_stdlib_wrapper_type_base("Option"));
+        assert!(!is_stdlib_wrapper_type_base("QuestId"));
+        assert!(is_large_collection("IndexMap"));
+        assert!(!is_large_collection("Vec"));
+        assert!(is_collection_storage_receiver("String"));
+        assert!(is_mem_take_stdlib_base("Box"));
+        assert!(is_single_elem_iterable_base("BinaryHeap"));
+        use crate::parser::ast::types::Type;
+        assert!(type_is_vec_container(&Type::Vec(Box::new(Type::Int))));
+        assert!(type_is_vec_container(&Type::Parameterized(
+            "Vec".into(),
+            vec![Type::Int]
+        )));
+        assert!(!type_is_vec_container(&Type::Custom("HashMap".into())));
+    }
+
+    #[test]
     fn type_to_registry_base_covers_stdlib_containers() {
         use crate::parser::ast::types::Type;
         assert_eq!(
@@ -491,14 +667,6 @@ mod tests {
     }
 
     #[test]
-    fn test_constructor_names() {
-        assert!(is_constructor_name("new"));
-        assert!(is_constructor_name("default"));
-        assert!(is_constructor_name("from"));
-        assert!(!is_constructor_name("update"));
-    }
-
-    #[test]
     fn test_prelude_or_primitive() {
         assert!(is_prelude_or_primitive("i32"));
         assert!(is_prelude_or_primitive("String"));
@@ -540,5 +708,25 @@ mod tests {
         assert!(has_significant_drop("Mutex"));
         assert!(has_significant_drop("File"));
         assert!(!has_significant_drop("Vec"));
+    }
+
+    #[test]
+    fn language_level_payload_constructors() {
+        assert!(is_option_result_payload_constructor("Some"));
+        assert!(is_language_level_payload_call_name("ObjectiveType::Kill"));
+        assert!(!is_language_level_payload_call_name("Kill"));
+        assert!(!is_enum_variant_constructor_path("FpsCamera::collides"));
+        assert!(is_language_level_payload_method("KillEnemies"));
+        assert!(!is_language_level_payload_method("depenetrate"));
+    }
+
+    #[test]
+    fn map_and_set_type_name_helpers() {
+        assert!(is_map_type_name("std::collections::HashMap<K,V>"));
+        assert!(is_map_type_name("Map"));
+        assert!(is_set_type_name("HashSet<String>"));
+        assert!(is_stdlib_default_empty_type("Vec"));
+        assert!(is_stdlib_default_empty_type("HashMap"));
+        assert!(!is_stdlib_default_empty_type("Mutex"));
     }
 }

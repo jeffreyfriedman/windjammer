@@ -6,10 +6,10 @@
 use crate::error::SourceLocation;
 use crate::linter::{LintCategory, LintCollector, LintDiagnostic, LintLevel};
 use crate::parser::ast::core::{Expression, FunctionDecl, Item, Parameter, Program, Statement};
-use crate::parser::Literal;
 use crate::parser::ast::operators::UnaryOp;
 use crate::parser::ast::types::Type;
 use crate::parser::ast::OwnershipHint;
+use crate::parser::Literal;
 use crate::source_map::Location;
 
 /// Convert AST location to error SourceLocation
@@ -246,7 +246,9 @@ impl<'ast> RustLeakageLinter<'ast> {
                 }
 
                 // W0005: .clone() - Rust leakage, compiler handles cloning automatically
-                if method == "clone" && arguments.is_empty() {
+                if crate::type_classification::is_language_level_explicit_clone(method)
+                    && arguments.is_empty()
+                {
                     let loc = to_source_location(location.clone(), &self.default_file);
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0005".to_string(),

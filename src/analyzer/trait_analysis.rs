@@ -354,17 +354,15 @@ impl<'ast> Analyzer<'ast> {
         // Receiver strength comes from body analysis and impl merging — never from void-return
         // defaults or method names.
         //
-        // Associated functions (constructors / `fn make() -> Self`): no receiver in Rust.
-        // Detect by: common factory names, `-> Self`, or `-> TraitName` for the trait being defined.
+        // Associated functions: no receiver in Rust. Detect from return type
+        // (`-> Self` / `-> TraitName`), not factory method names.
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");
-        let is_named_constructor = crate::type_classification::is_constructor_name(&func.name);
         let returns_associated_type = matches!(
             &func.return_type,
             Some(Type::Custom(name))
                 if name == "Self" || trait_name.is_some_and(|t| t == name.as_str())
         );
-        let is_associated_fn =
-            !has_explicit_self && (is_named_constructor || returns_associated_type);
+        let is_associated_fn = !has_explicit_self && returns_associated_type;
         if !analyzed.inferred_ownership.contains_key("self") && !is_associated_fn {
             let receiver = if trait_name.is_some() {
                 self.infer_trait_self_receiver(func, registry, trait_method_returns_self)
@@ -403,8 +401,8 @@ impl<'ast> Analyzer<'ast> {
         registry: &SignatureRegistry,
     ) -> bool {
         let mut visited = std::collections::HashSet::new();
-        func.body.iter().any(|stmt| {
-            self.statement_modifies_self_fields(stmt, Some(registry), &mut visited)
-        })
+        func.body
+            .iter()
+            .any(|stmt| self.statement_modifies_self_fields(stmt, Some(registry), &mut visited))
     }
 }

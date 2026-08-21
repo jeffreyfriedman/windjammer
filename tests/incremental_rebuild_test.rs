@@ -220,3 +220,44 @@ fn test_compute_reanalysis_set_all_dirty_without_meta() {
     let set = compute_reanalysis_set(&sources, &src, dir.path(), 0, &graph);
     assert_eq!(set.len(), 1);
 }
+
+#[test]
+fn submodule_mod_decl_before_parent_and_importers() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir_all(src.join("domain")).unwrap();
+    fs::create_dir_all(src.join("adapters")).unwrap();
+
+    let domain_mod = src.join("domain/mod.wj");
+    let domain_render = src.join("domain/render.wj");
+    let adapters_fs = src.join("adapters/fs_site.wj");
+    fs::write(&domain_mod, "pub mod render\npub use render::generate_page\n").unwrap();
+    fs::write(&domain_render, "pub fn generate_page(path: string, markdown: string) -> string { markdown }\n").unwrap();
+    fs::write(&adapters_fs, "use crate::domain::generate_page\npub fn load(path: string, md: string) -> string { generate_page(path, md) }\n").unwrap();
+
+    // Alphabetical discovery would put adapters before domain/render — sort must still
+    // codegen render before fs_site.
+    let sources = vec![
+        (adapters_fs.clone(), fs::read_to_string(&adapters_fs).unwrap()),
+        (domain_mod.clone(), fs::read_to_string(&domain_mod).unwrap()),
+        (domain_render.clone(), fs::read_to_string(&domain_render).unwrap()),
+    ];
+    let mut parsers = Vec::new();
+    let mut programs = Vec::new();
+    for (file, source) in &sources {
+        let (parser, program) = parse_file(file, source);
+        parsers.push(parser);
+        programs.push(program);
+    }
+    let _keep = parsers;
+    let graph = DependencyGraph::build(&sources, &programs, &src);
+    let sorted = graph.sort_indices_for_codegen(&[0, 1, 2]);
+    let render_pos = sorted.iter().position(|&i| i == 2).expect("render");
+    let mod_pos = sorted.iter().position(|&i| i == 1).expect("mod");
+    let fs_pos = sorted.iter().position(|&i| i == 0).expect("fs");
+    assert!(
+        render_pos < mod_pos && mod_pos < fs_pos,
+        "expected render → domain/mod → fs_site, got {:?}",
+        sorted
+    );
+}

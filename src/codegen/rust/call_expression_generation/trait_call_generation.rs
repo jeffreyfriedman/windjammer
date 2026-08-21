@@ -33,10 +33,11 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     let mut obj_str = gen.generate_expression(call_obj);
     gen.in_explicit_clone_call = prev_explicit_clone;
 
-    // Strip redundant auto-clone before an explicit type-preserving `.clone()`.
-    if call_method == "clone" && obj_str.ends_with(".clone()") {
-        obj_str = obj_str[..obj_str.len() - 8].to_string();
-    }
+    // Strip redundant auto-clone before an explicit language-level `.clone()`.
+    crate::codegen::rust::string_utilities::strip_redundant_auto_clone_before_explicit_clone(
+        &mut obj_str,
+        call_method,
+    );
 
     // Prefer converged signature_registry (Owned consumers like MannequinMesh::generate)
     // over per-body method_signatures_by_type (may infer Borrowed when a formal is reused

@@ -400,7 +400,7 @@ impl<'ast> Analyzer<'ast> {
 
     /// Infer registry lookup bases for variables bound in a match arm pattern when the
     /// scrutinee is rooted at `self` (field access or index).
-    fn infer_match_arm_binding_type_bases(
+    pub(crate) fn infer_match_arm_binding_type_bases(
         &self,
         scrutinee: &Expression<'ast>,
         pattern: &Pattern,

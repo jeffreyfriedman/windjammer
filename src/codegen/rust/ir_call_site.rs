@@ -685,8 +685,13 @@ impl<'ast> CodeGenerator<'ast> {
                 method_simple,
                 &mut sig,
             );
-            sig = crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(sig);
+            sig =
+                crate::codegen::rust::call_signature_resolution::finalize_call_site_signature(sig);
         }
+        crate::codegen::rust::signature_promotion::restore_stdlib_collection_key_contract(
+            &mut sig,
+            Some(callee_name),
+        );
 
         let mut param_idx = sig.arg_param_index(arg_index);
         let mut expected = safety_type_from_signature_param(&sig, param_idx);
@@ -719,21 +724,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // Match-arm owned String payloads borrow as &str at readonly text callees even when
-        // preregister skipped `emitted_rust_ref_params` (unused string formals, forward refs).
+        // Match-arm owned String payloads borrow as &str at *shared-ref* text callees.
+        // Owned WJ `string` formals (`generate_page(markdown: string)`) must still move.
         if let Expression::Identifier { name, .. } = arg_expr {
             if self.match_arm_bindings.contains(name.as_str()) {
-                let formal_is_text = sig
-                    .formal_param_type(param_idx)
-                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
-                    || sig.param_types.get(param_idx).is_some_and(|t| {
-                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            || matches!(t, Type::Reference(_))
-                    })
-                    || crate::ir::signature_bridge::call_site_expects_shared_borrow(
-                        &sig, param_idx,
-                    );
-                if formal_is_text {
+                let expects_shared_text = crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                    &sig, param_idx,
+                ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                ) || sig.param_types.get(param_idx).is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                });
+                if expects_shared_text {
                     expected.base = BaseType::String;
                     expected.ownership = OwnedType::Ref(Region::fresh(12));
                 }
@@ -1972,20 +1974,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // Match-arm owned String payloads: readonly text callees want `&binding`, not `.clone()`.
+        // Match-arm owned String payloads: shared-ref text callees want `&binding`.
+        // Owned WJ `string` formals must keep the move (no `&`).
         if let Expression::Identifier { name, .. } = arg_expr {
             if self.match_arm_bindings.contains(name.as_str()) {
-                let formal_is_text = sig
-                    .formal_param_type(param_idx)
-                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
-                    || sig.param_types.get(param_idx).is_some_and(|t| {
-                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            || matches!(t, Type::Reference(_))
-                    })
-                    || crate::ir::signature_bridge::call_site_expects_shared_borrow(
-                        &sig, param_idx,
-                    );
-                if formal_is_text {
+                let expects_shared_text = crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                    &sig, param_idx,
+                ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                ) || sig.param_types.get(param_idx).is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                });
+                if expects_shared_text {
                     if coerced.ends_with(".clone()") {
                         coerced = coerced[..coerced.len() - ".clone()".len()].to_string();
                     }
@@ -2008,9 +2008,6 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(stripped) = coerced.strip_suffix(".to_string()") {
                 coerced = stripped.to_string();
             }
-        }
-        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some() {
-            eprintln!("WJ_DEBUG_COLLISION_BORROW final callee={callee_name} coerced={coerced}");
         }
         // `&str` / `&String` caller bindings → owned `String` formals need `.to_string()`
         // (types-crate `batch_column_i64(name: &str)` → `ArrowBatch::column_i64(name: String)`).
@@ -2225,10 +2222,14 @@ impl<'ast> CodeGenerator<'ast> {
                 if out.ends_with(".clone()") {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut out);
                 }
-                let formal_is_text = sig
-                    .formal_param_type(param_idx)
-                    .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t));
-                if formal_is_text && !out.starts_with('&') {
+                let expects_shared_text = crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                    sig, param_idx,
+                ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    sig, param_idx,
+                ) || sig.param_types.get(param_idx).is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                });
+                if expects_shared_text && !out.starts_with('&') {
                     out = format!("&{out}");
                 }
                 return out;
@@ -2720,8 +2721,9 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     });
             if owned_plain_string && coerced.starts_with('&') && !coerced.starts_with("&mut ") {
-                *coerced =
-                    crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
+                *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                    coerced,
+                );
             }
             if !owned_plain_string
                 && !coerced.starts_with('&')
@@ -3366,8 +3368,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Match-arm bindings into readonly text / `&str` formals keep a shared borrow
-    /// (no `.clone()`, no owned pass). Signature-driven.
+    /// Match-arm bindings into shared-ref text / `&str` formals keep a shared borrow
+    /// (no `.clone()`, no owned pass). Owned `string` formals must move — do not
+    /// treat bare `Type::String` as readonly (multipass match-Ok → owned helper).
     fn ensure_shared_borrow_on_match_arm_readonly_text(
         &self,
         coerced: &mut String,
@@ -3382,18 +3385,16 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         let pidx = sig.arg_param_index(arg_index);
-        let readonly_text = sig
-            .formal_param_type(pidx)
-            .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(t))
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return;
+        }
+        let wants_shared = crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
+            || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
             || sig.param_types.get(pidx).is_some_and(|t| {
                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                     || matches!(t, Type::Reference(_))
-            })
-            || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
-            || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                sig, pidx,
-            );
-        if !readonly_text {
+            });
+        if !wants_shared {
             return;
         }
         if coerced.ends_with(".clone()") {

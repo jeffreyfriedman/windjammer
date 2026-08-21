@@ -83,11 +83,7 @@ fn split_wj_top_level_commas(s: &str) -> Vec<&str> {
 /// Whether generic args to this container should use [`type_to_rust_mapped_owned_str_slot`] for
 /// `str` (e.g. `HashMap<str, str>` → `HashMap<String, String>`).
 fn parameterized_base_uses_owned_str_slots(base: &str) -> bool {
-    matches!(
-        base,
-        "HashMap" | "BTreeMap" | "BTreeSet" | "HashSet" | "Map" | "OrderedMap" | "SlotMap"
-            | "ConcurrentMap"
-    )
+    crate::type_classification::is_owned_str_slot_container(base)
 }
 
 /// Convert a Windjammer type to its Rust equivalent
@@ -479,12 +475,18 @@ pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
 /// Whether a function return type is `Vec<&T>` / `Vec<&mut T>` (either AST shape).
 pub(crate) fn return_type_is_vec_of_shared_refs(rt: Option<&Type>) -> bool {
     match rt {
-        Some(Type::Vec(inner)) => {
-            matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
-        }
-        Some(Type::Parameterized(base, args)) if base == "Vec" && args.len() == 1 => {
-            matches!(args[0], Type::Reference(_) | Type::MutableReference(_))
-        }
+        Some(ty) if crate::type_classification::type_is_vec_container(ty) => match ty {
+            Type::Vec(inner) => {
+                matches!(**inner, Type::Reference(_) | Type::MutableReference(_))
+            }
+            Type::Parameterized(_, args) if args.len() == 1 => {
+                matches!(args[0], Type::Reference(_) | Type::MutableReference(_))
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                return_type_is_vec_of_shared_refs(Some(inner))
+            }
+            _ => false,
+        },
         _ => false,
     }
 }

@@ -1023,45 +1023,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // Enum variant paths parse as one identifier: `ShaderFile::HiZCull.to_path()`
                 if Self::is_enum_variant_qualified_path(name) {
                     "."
+                } else if self.identifier_is_static_call_root(name) {
+                    "::" // Vec::new(), std::fs::read(), tokio::spawn()
                 } else {
-                    // Check for known module/crate names that should use ::
-                    // Note: Avoid common variable names like "path", "config" which are used as variables
-                    // Only unambiguous module/type names — never short names used as variables (io, log, fs, …).
-                    let known_modules = [
-                        "std",
-                        "serde_json",
-                        "serde",
-                        "tokio",
-                        "reqwest",
-                        "sqlx",
-                        "chrono",
-                        "sha2",
-                        "bcrypt",
-                        "base64",
-                        "rand",
-                        "Vec",
-                        "String",
-                        "Option",
-                        "Result",
-                        "Box",
-                        "Arc",
-                        "Mutex",
-                        "Utc",
-                        "Local",
-                        "DEFAULT_COST",
-                    ];
-
-                    // Type, `Self`, or module (uppercase) vs variable (lowercase)
-                    if name == "Self"
-                        || name.chars().next().is_some_and(|c| c.is_uppercase())
-                        || name.contains('.')
-                        || known_modules.contains(&name.as_str())
-                        || self.is_imported_runtime_std_module(name)
-                    {
-                        "::" // Vec::new(), std::fs::read(), serde_json::to_string()
-                    } else {
-                        "." // x.abs(), value.method()
-                    }
+                    "." // x.abs(), value.method()
                 }
             }
             Expression::FieldAccess { ref object, .. } => {
@@ -1073,7 +1038,11 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         "." // ShaderFile::HiZCull.to_path() → (ShaderFile::HiZCull).to_path()
                     }
-                    Expression::Identifier { name, .. } if name == "std" => "::",
+                    Expression::Identifier { name, .. }
+                        if self.identifier_is_static_call_root(name) =>
+                    {
+                        "::" // std::fs::read(), module paths
+                    }
                     _ => ".", // self.field.method()
                 }
             }
@@ -1089,23 +1058,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Explicit `.clone()` in WJ source is Rust leakage (W0005). Strip it and emit the
         // receiver; auto-clone on move+reuse still runs elsewhere in codegen.
-        if method == "clone" && arguments.is_empty() {
-            // Borrowed Windjammer `string` parameters lower to `&str`. `.clone()` on `&str`
-            // is still `&str`, but users mean an owned copy → emit `.to_string()`.
-            if let Expression::Identifier { name, .. } = object {
-                if self.inferred_borrowed_params.contains(name.as_str())
-                    && self
-                        .current_function_params
-                        .iter()
-                        .find(|p| p.name == *name)
-                        .is_some_and(|p| {
-                            crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                        })
-                {
-                    return format!("{}.to_string()", obj_str);
-                }
-            }
-            return obj_str;
+        if crate::type_classification::is_language_level_explicit_clone(method)
+            && arguments.is_empty()
+        {
+            return crate::codegen::rust::string_utilities::lower_explicit_clone_call(
+                object,
+                &obj_str,
+                &self.inferred_borrowed_params,
+                &self.current_function_params,
+            );
         }
 
         // UI FRAMEWORK: Check if we need to add .to_vnode() for .child() methods
@@ -1138,15 +1099,16 @@ impl<'ast> CodeGenerator<'ast> {
                     method,
                     receiver_type_name.as_deref(),
                     &self.signature_registry,
-                ) || resolved_signature.as_ref().or(method_signature.as_ref()).is_some_and(
-                    |sig| {
+                ) || resolved_signature
+                    .as_ref()
+                    .or(method_signature.as_ref())
+                    .is_some_and(|sig| {
                         crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
                             sig,
                             i,
                             receiver_type_name.as_deref(),
                         )
-                    },
-                );
+                    });
             if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
             if expects_pattern || expects_collection_key {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
@@ -1196,39 +1158,70 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     continue;
                 }
-                let is_vec_local = self.local_var_types.get(name).is_some_and(|t| {
-                    matches!(t, Type::Vec(_))
-                        || matches!(t, Type::Parameterized(n, _) if n == "Vec")
-                }) || self.infer_expression_type(arg_expr).is_some_and(|t| {
-                    matches!(t, Type::Vec(_))
-                        || matches!(t, Type::Parameterized(n, _) if n == "Vec")
-                });
-                if is_vec_local {
+                let is_owned_collection_local =
+                    self.local_var_types.get(name).is_some_and(|t| {
+                        crate::type_classification::type_is_vec_container(t)
+                            || matches!(
+                                t,
+                                Type::Parameterized(n, _)
+                                    if crate::type_classification::is_stdlib_collection_type_name(n)
+                            )
+                    }) || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                        crate::type_classification::type_is_vec_container(&t)
+                            || matches!(
+                                &t,
+                                Type::Parameterized(n, _)
+                                    if crate::type_classification::is_stdlib_collection_type_name(n)
+                            )
+                    });
+                if is_owned_collection_local {
                     *arg_str = format!("&{arg_str}");
                 }
             }
         }
 
-        // WINDJAMMER STDLIB → RUST TRANSLATION
-        // Some Windjammer methods don't exist in Rust and need translation.
-        //
-        // `into_iter()` on a borrowed `&Vec<T>` yields `&T`; use `.iter().copied()` /
-        // `.iter().cloned()` so downstream `filter`/`find`/`collect` see owned items.
-        if method == "into_iter" && arguments.is_empty() {
-            if let Some(elem_ty) = self.infer_borrowed_collection_element_type(object) {
-                let prev_field_access = self.in_field_access_object;
-                self.in_field_access_object = true;
-                let mut recv_str = self.generate_expression(object);
-                self.in_field_access_object = prev_field_access;
-                if recv_str.starts_with("&mut ") {
-                    recv_str = recv_str["&mut ".len()..].to_string();
-                } else if recv_str.starts_with('&') {
-                    recv_str = recv_str[1..].to_string();
+        // Consuming iterable adapters on a borrowed receiver (`&Vec` / `&mut self`
+        // field) yield references; rewrite to `.iter().copied()/cloned()` so
+        // downstream adapters see owned items. Signature-driven via
+        // `method_returns_iterable_qualified` + owned-self meta (covers `into_iter`).
+        if arguments.is_empty()
+            && crate::codegen::rust::stdlib_method_traits::method_returns_iterable_qualified(
+                method,
+                receiver_type_name.as_deref(),
+                &self.signature_registry,
+            )
+        {
+            let consumes_receiver = resolved_signature
+                .as_ref()
+                .or(method_signature.as_ref())
+                .is_some_and(|sig| {
+                    sig.has_self_receiver
+                        && matches!(
+                            sig.param_ownership.first(),
+                            Some(crate::analyzer::OwnershipMode::Owned)
+                        )
+                })
+                || crate::analyzer::stdlib_method_traits::method_call_consumes_receiver(
+                    method,
+                    receiver_type_name.as_deref(),
+                    &self.signature_registry,
+                );
+            if consumes_receiver {
+                if let Some(elem_ty) = self.infer_borrowed_collection_element_type(object) {
+                    let prev_field_access = self.in_field_access_object;
+                    self.in_field_access_object = true;
+                    let mut recv_str = self.generate_expression(object);
+                    self.in_field_access_object = prev_field_access;
+                    if recv_str.starts_with("&mut ") {
+                        recv_str = recv_str["&mut ".len()..].to_string();
+                    } else if recv_str.starts_with('&') {
+                        recv_str = recv_str[1..].to_string();
+                    }
+                    if self.is_type_copy(&elem_ty) {
+                        return format!("{recv_str}.iter().copied()");
+                    }
+                    return format!("{recv_str}.iter().cloned()");
                 }
-                if self.is_type_copy(&elem_ty) {
-                    return format!("{recv_str}.iter().copied()");
-                }
-                return format!("{recv_str}.iter().cloned()");
             }
         }
 
@@ -1356,15 +1349,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// `Type::Variant` in expressions is parsed as a single qualified identifier, not FieldAccess.
     pub(in crate::codegen::rust) fn is_enum_variant_qualified_path(name: &str) -> bool {
-        let mut parts = name.split("::");
-        let type_name = parts.next();
-        let variant = parts.next();
-        parts.next().is_none()
-            && type_name.is_some_and(|t| t.chars().next().is_some_and(|c| c.is_uppercase()))
-            && variant.is_some_and(|v| {
-                !v.is_empty()
-                    && !v.starts_with('<')
-                    && v.chars().all(|c| c.is_alphanumeric() || c == '_')
-            })
+        crate::type_classification::is_enum_variant_constructor_path(name)
+            && name.matches("::").count() == 1
     }
 }

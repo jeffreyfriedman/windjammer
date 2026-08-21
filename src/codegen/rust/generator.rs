@@ -320,6 +320,9 @@ pub struct CodeGenerator<'ast> {
     /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
     /// Used to emit `module::fn` instead of `module.fn` for free functions.
     pub(crate) runtime_std_module_imports: std::collections::HashSet<String>,
+    /// First segment of non-`std`/`crate`/`super`/`self` `use` paths (`tokio`, `axum`, `serde`).
+    /// MethodCall on these identifiers uses `::`, not a hardcoded crate-name list.
+    pub(crate) imported_path_roots: std::collections::HashSet<String>,
     /// Simple names of all extern (FFI) functions across all modules.
     /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
     pub(crate) extern_function_names: std::collections::HashSet<String>,
@@ -448,6 +451,69 @@ impl<'ast> CodeGenerator<'ast> {
             return self.runtime_std_module_imports.contains(original);
         }
         false
+    }
+
+    /// Bare `error` after `use std::log` → `log_mod::error` when that import uniquely provides it.
+    pub(in crate::codegen::rust) fn imported_runtime_qualified_callee(
+        &self,
+        func_name: &str,
+    ) -> Option<String> {
+        use crate::analyzer::stdlib_method_traits::unique_imported_runtime_callee_key;
+        let imports = &self.runtime_std_module_imports;
+        unique_imported_runtime_callee_key(func_name, imports, &self.signature_registry)
+            .or_else(|| {
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| unique_imported_runtime_callee_key(func_name, imports, g))
+            })
+            .or_else(|| {
+                unique_imported_runtime_callee_key(
+                    func_name,
+                    imports,
+                    crate::analyzer::SignatureRegistry::stdlib(),
+                )
+            })
+    }
+
+    /// Bare `error()` after `use std::log::*` must use `log::error` / `log_mod::error`,
+    /// not a colliding runtime homonym (`http::error`, `dialog::error`).
+    pub(in crate::codegen::rust) fn imported_runtime_std_signature(
+        &self,
+        registry: &crate::analyzer::SignatureRegistry,
+        callee_name: &str,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let key = self.imported_runtime_qualified_callee(callee_name)?;
+        registry.get_signature(&key).cloned().or_else(|| {
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(&key).cloned())
+        })
+    }
+
+    /// True when `name` is a parameter, `let` binding, or match-arm binding in the current fn.
+    pub(in crate::codegen::rust) fn identifier_is_local_binding(&self, name: &str) -> bool {
+        self.local_var_types.contains_key(name)
+            || self.match_arm_bindings.contains(name)
+            || self.current_function_params.iter().any(|p| p.name == name)
+    }
+
+    /// Identifier should use `::` for associated/static calls (`tokio::spawn`, `Vec::new`).
+    /// Import- and declaration-driven — not a crate/method name list.
+    pub(in crate::codegen::rust) fn identifier_is_static_call_root(&self, name: &str) -> bool {
+        if self.identifier_is_local_binding(name) {
+            return false;
+        }
+        if name == "std" || name == "Self" || name.contains('.') {
+            return true;
+        }
+        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+            return true;
+        }
+        self.is_imported_runtime_std_module(name)
+            || self.imported_path_roots.contains(name)
+            || self.inline_module_names.contains(name)
+            || self.module_alias_map.contains_key(name)
+            || self.ffi_module_aliases.contains(name)
     }
 
     /// Single-file inline `mod gpu { … }` callees (`gpu::load_shader`) — registry cannot
@@ -593,6 +659,7 @@ impl<'ast> CodeGenerator<'ast> {
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
             runtime_std_module_imports: std::collections::HashSet::new(),
+            imported_path_roots: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
@@ -706,10 +773,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Register stdlib type → Rust path mappings for FQ enum/struct references.
-    pub fn set_stdlib_type_rust_paths(
-        &mut self,
-        paths: std::collections::HashMap<String, String>,
-    ) {
+    pub fn set_stdlib_type_rust_paths(&mut self, paths: std::collections::HashMap<String, String>) {
         self.stdlib_type_rust_paths.extend(paths);
     }
 
@@ -1500,6 +1564,8 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type: Option<&str>,
         arg_count: usize,
     ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
+        let owned_name = self.imported_runtime_qualified_callee(func_name);
+        let func_name = owned_name.as_deref().unwrap_or(func_name);
         let caller_module = self.library_source_root.as_ref().and_then(|root| {
             if self.current_wj_file.as_os_str().is_empty() {
                 None
@@ -2435,9 +2501,10 @@ impl<'ast> CodeGenerator<'ast> {
             // Reuse after the condition requires `.clone()`, not `&`.
             if callee_wants_owned && !callee_wants_shared_borrow {
                 if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
-                    *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
-                        coerced,
-                    );
+                    *coerced =
+                        crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                            coerced,
+                        );
                 } else if !coerced.ends_with(".clone()")
                     && !coerced.starts_with("&mut ")
                     && (self.current_fn_forward_ref_if_params.contains(name)
@@ -2481,12 +2548,8 @@ impl<'ast> CodeGenerator<'ast> {
             && !callee_wants_shared_borrow
             && (coerced.starts_with("&mut ") || coerced.starts_with('&'))
         {
-            if let Expression::Identifier { name, .. } = arg_expr {
-                if self.match_arm_bindings.contains(name.as_str()) && !coerced.starts_with("&mut ")
-                {
-                    return;
-                }
-            }
+            // Match-arm bindings into owned formals must move (strip `&`), same as
+            // other owned slots — do not preserve a stale shared borrow.
             *coerced =
                 crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(coerced);
         } else if callee_wants_owned
@@ -3457,6 +3520,37 @@ mod tests {
         assert!(!config.call_sites);
         assert!(!config.locals);
         assert!(!config.all_enabled());
+    }
+
+    #[test]
+    fn static_call_root_is_import_driven_not_crate_name_list() {
+        let mut gen = CodeGenerator::new(SignatureRegistry::empty(), CompilationTarget::Rust);
+        assert!(gen.identifier_is_static_call_root("Vec"));
+        assert!(gen.identifier_is_static_call_root("std"));
+        assert!(
+            !gen.identifier_is_static_call_root("tokio"),
+            "unimported crate names must not be a hardcoded module list"
+        );
+        gen.imported_path_roots.insert("tokio".into());
+        assert!(gen.identifier_is_static_call_root("tokio"));
+        assert!(
+            !gen.identifier_is_static_call_root("log"),
+            "short names used as locals must stay instance receivers until imported"
+        );
+        gen.runtime_std_module_imports.insert("log".into());
+        assert!(gen.identifier_is_static_call_root("log"));
+    }
+
+    #[test]
+    fn static_call_root_imported_module_shadowed_by_local_binding() {
+        let mut gen = CodeGenerator::new(SignatureRegistry::empty(), CompilationTarget::Rust);
+        gen.imported_path_roots.insert("tree".into());
+        assert!(gen.identifier_is_static_call_root("tree"));
+        gen.match_arm_bindings.insert("tree".into());
+        assert!(
+            !gen.identifier_is_static_call_root("tree"),
+            "if let Some(tree) must use . not :: even when tree is an imported module path"
+        );
     }
 
     #[test]

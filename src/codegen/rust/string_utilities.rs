@@ -160,7 +160,7 @@ pub fn is_genuine_non_literal_to_string_conversion(arg: &Expression) -> bool {
     matches!(
         arg,
         Expression::MethodCall { object, method, .. }
-            if (method.as_str() == "to_string" || method.as_str() == "string")
+            if crate::type_classification::is_language_level_owned_string_convert(method)
                 && !matches!(
                     &**object,
                     Expression::Literal {
@@ -1037,17 +1037,19 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
         return false;
     }
     let ident_name: Option<&str> = match expr {
-        Expression::MethodCall { method, object, .. } if method == "clone" => match &**object {
-            Expression::Identifier { name, .. } => Some(name.as_str()),
-            _ => None,
-        },
+        Expression::MethodCall { method, object, .. }
+            if crate::type_classification::is_language_level_explicit_clone(method) =>
+        {
+            match &**object {
+                Expression::Identifier { name, .. } => Some(name.as_str()),
+                _ => None,
+            }
+        }
         _ => None,
     };
     if let Some(name) = ident_name {
         let is_string_type = function_params.iter().any(|p| {
-            p.name == name
-                && (matches!(p.type_, Type::String)
-                    || matches!(p.type_, Type::Custom(ref n) if n == "string"))
+            p.name == name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
         });
         let is_borrowed = borrowed_params.contains(name);
         if is_borrowed && is_string_type {
@@ -1056,6 +1058,36 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
         }
     }
     false
+}
+
+/// Strip a trailing auto-inserted `.clone()` when the source call is itself an explicit
+/// language-level `.clone()` (avoids `x.clone().clone()`).
+pub fn strip_redundant_auto_clone_before_explicit_clone(obj_str: &mut String, method: &str) {
+    if crate::type_classification::is_language_level_explicit_clone(method)
+        && obj_str.ends_with(".clone()")
+    {
+        obj_str.truncate(obj_str.len() - ".clone()".len());
+    }
+}
+
+/// W0005: explicit WJ `.clone()` is stripped; borrowed WJ `string` (`&str`) needs
+/// `.to_string()` because `&str::clone` stays `&str`.
+pub fn lower_explicit_clone_call<'ast>(
+    object: &Expression<'ast>,
+    obj_str: &str,
+    borrowed_params: &std::collections::HashSet<String>,
+    function_params: &[crate::parser::Parameter<'ast>],
+) -> String {
+    if let Expression::Identifier { name, .. } = object {
+        if borrowed_params.contains(name.as_str())
+            && function_params.iter().any(|p| {
+                p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+            })
+        {
+            return format!("{}.to_string()", obj_str);
+        }
+    }
+    obj_str.to_string()
 }
 
 /// Append `.as_str()` when matching an owned `String` against string-literal patterns.

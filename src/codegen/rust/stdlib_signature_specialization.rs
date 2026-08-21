@@ -38,25 +38,24 @@ fn collection_generic_subst(receiver_ty: &Type) -> Option<Vec<(String, Type)>> {
         ]),
         Type::Parameterized(name, args) => {
             let base = name.split('<').next().unwrap_or(name.as_str());
-            match base {
-                "Vec" | "VecDeque" | "LinkedList" | "HashSet" | "BTreeSet" | "Set" => {
-                    let elem = args.first()?.clone();
-                    Some(vec![("T".into(), elem.clone()), ("E".into(), elem)])
-                }
-                "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "OrderedMap" | "SlotMap"
-                | "ConcurrentMap" => {
-                    let key = args.first()?.clone();
-                    let val = args
-                        .get(1)
-                        .cloned()
-                        .unwrap_or_else(|| Type::Custom("V".into()));
-                    Some(vec![
-                        ("K".into(), key),
-                        ("V".into(), val),
-                        ("T".into(), args.first()?.clone()),
-                    ])
-                }
-                _ => None,
+            if crate::type_classification::is_medium_collection(base)
+                || crate::type_classification::is_set_type_name(base)
+            {
+                let elem = args.first()?.clone();
+                Some(vec![("T".into(), elem.clone()), ("E".into(), elem)])
+            } else if crate::type_classification::is_map_type_name(base) {
+                let key = args.first()?.clone();
+                let val = args
+                    .get(1)
+                    .cloned()
+                    .unwrap_or_else(|| Type::Custom("V".into()));
+                Some(vec![
+                    ("K".into(), key),
+                    ("V".into(), val),
+                    ("T".into(), args.first()?.clone()),
+                ])
+            } else {
+                None
             }
         }
         Type::Custom(name) => {
@@ -187,13 +186,8 @@ pub fn receiver_type_from_name_and_hint(
                 ("Vec", Type::Parameterized(n, _)) if n == "Vec" => Some(ret.clone()),
                 (map, Type::Parameterized(n, _))
                     if map == n
-                        || (matches!(
-                            map,
-                            "HashMap" | "Map" | "BTreeMap" | "IndexMap" | "OrderedMap"
-                        ) && matches!(
-                            n.as_str(),
-                            "HashMap" | "Map" | "BTreeMap" | "IndexMap" | "OrderedMap"
-                        )) =>
+                        || (crate::type_classification::is_map_type_name(map)
+                            && crate::type_classification::is_map_type_name(n)) =>
                 {
                     Some(ret.clone())
                 }

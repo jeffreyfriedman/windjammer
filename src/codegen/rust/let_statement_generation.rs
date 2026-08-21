@@ -21,10 +21,17 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> Option<Type> {
         let base = self.infer_expression_type(value)?;
         let collection_name = match &base {
-            Type::Custom(n) if n == "Vec" || n == "HashSet" => Some(n.as_str()),
+            Type::Custom(n)
+                if crate::type_classification::is_single_elem_iterable_base(n)
+                    || crate::type_classification::is_set_type_name(n) =>
+            {
+                Some(n.as_str())
+            }
             Type::Vec(_) => return Some(base),
             Type::Parameterized(base_name, args)
-                if (base_name == "Vec" || base_name == "HashSet") && args.is_empty() =>
+                if (crate::type_classification::is_single_elem_iterable_base(base_name)
+                    || crate::type_classification::is_set_type_name(base_name))
+                    && args.is_empty() =>
             {
                 Some(base_name.as_str())
             }
@@ -35,7 +42,11 @@ impl<'ast> CodeGenerator<'ast> {
         };
 
         let elem_from_return = match &self.current_function_return_type {
-            Some(Type::Vec(inner)) if collection_name == "Vec" => Some(inner.as_ref().clone()),
+            Some(Type::Vec(inner))
+                if crate::type_classification::is_single_elem_iterable_base(collection_name) =>
+            {
+                Some(inner.as_ref().clone())
+            }
             Some(Type::Parameterized(b, args)) if b == collection_name && !args.is_empty() => {
                 Some(args[0].clone())
             }
@@ -47,11 +58,13 @@ impl<'ast> CodeGenerator<'ast> {
             None
         };
         if let Some(inner) = elem_from_return.or(elem_from_push) {
-            return Some(if collection_name == "Vec" {
-                Type::Vec(Box::new(inner))
-            } else {
-                Type::Parameterized(collection_name.to_string(), vec![inner])
-            });
+            return Some(
+                if crate::type_classification::type_name_leaf(collection_name) == "Vec" {
+                    Type::Vec(Box::new(inner))
+                } else {
+                    Type::Parameterized(collection_name.to_string(), vec![inner])
+                },
+            );
         }
         Some(base)
     }
@@ -246,18 +259,14 @@ impl<'ast> CodeGenerator<'ast> {
                     self.assignment_float_target_type = Some(t.clone());
                 }
                 let prev_suppress_turbo = self.suppress_collection_turbofish;
-                let suppress_turbofish_here = matches!(t, Type::Vec(_))
-                    || matches!(
-                        t,
-                        Type::Parameterized(base, _)
-                            if base == "HashSet" || base == "HashMap"
-                    );
+                let suppress_turbofish_here =
+                    crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t);
                 if suppress_turbofish_here {
                     self.suppress_collection_turbofish = true;
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                if crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t) {
+                if suppress_turbofish_here {
                     self.collect_target_type = Some(t.clone());
                 }
 
@@ -449,17 +458,14 @@ impl<'ast> CodeGenerator<'ast> {
                     self.assignment_float_target_type = Some(t.clone());
                 }
                 let prev_suppress_turbo = self.suppress_collection_turbofish;
-                let suppress_turbofish_here = matches!(t, Type::Vec(_))
-                    || matches!(
-                        t,
-                        Type::Parameterized(base, _) if base == "HashSet" || base == "HashMap"
-                    );
+                let suppress_turbofish_here =
+                    crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t);
                 if suppress_turbofish_here {
                     self.suppress_collection_turbofish = true;
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                if crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t) {
+                if suppress_turbofish_here {
                     self.collect_target_type = Some(t.clone());
                 }
 

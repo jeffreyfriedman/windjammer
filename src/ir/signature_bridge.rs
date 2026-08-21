@@ -46,17 +46,14 @@ pub fn safety_type_from_parser_type(ty: &Type, fallback_mode: Option<OwnershipMo
 }
 
 fn is_bare_vec_type(ty: &Type) -> bool {
-    matches!(ty, Type::Vec(_)) || matches!(ty, Type::Parameterized(name, _) if name == "Vec")
+    crate::type_classification::type_is_vec_container(ty)
 }
 
 fn is_bare_map_type(ty: &Type) -> bool {
     match ty {
         Type::Parameterized(name, _) => {
-            let base = name.split('<').next().unwrap_or(name.as_str());
-            matches!(
-                base,
-                "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "HashSet" | "BTreeSet" | "Set"
-            )
+            crate::type_classification::is_map_type_name(name)
+                || crate::type_classification::is_set_type_name(name)
         }
         _ => false,
     }
@@ -436,8 +433,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 };
             }
             if !crate::type_classification::is_copy_pass_by_value_formal(bare)
-                && !matches!(bare, Type::Vec(_))
-                && !matches!(bare, Type::Parameterized(ref name, _) if name == "Vec")
+                && !is_bare_vec_type(bare)
                 && !is_bare_map_type(bare)
             {
                 if matches!(bare, Type::Custom(_)) {

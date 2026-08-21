@@ -18,10 +18,7 @@ pub(crate) fn type_is_collect_turbofish_target(ty: &Type) -> bool {
     match ty {
         Type::Vec(_) => true,
         Type::Parameterized(base, _) => {
-            matches!(
-                base.as_str(),
-                "Vec" | "HashSet" | "HashMap" | "BTreeMap" | "BTreeSet"
-            )
+            crate::type_classification::is_collect_turbofish_target_base(base)
         }
         _ => false,
     }
@@ -31,7 +28,10 @@ pub(crate) fn type_is_collect_turbofish_target(ty: &Type) -> bool {
 pub(crate) fn collect_target_element_type(ty: &Type) -> Option<Type> {
     match ty {
         Type::Vec(inner) => Some(inner.as_ref().clone()),
-        Type::Parameterized(base, args) if base == "Vec" && args.len() == 1 => {
+        Type::Parameterized(base, args)
+            if crate::type_classification::is_single_elem_iterable_base(base)
+                && args.len() == 1 =>
+        {
             Some(args[0].clone())
         }
         _ => None,
@@ -50,25 +50,16 @@ fn types_equivalent_for_collect(a: &Type, b: &Type) -> bool {
 }
 
 fn iterator_item_needs_owned_adapter(iter_item: &Type, target_elem: &Type) -> bool {
-    matches!(
-        iter_item,
-        Type::Reference(_) | Type::MutableReference(_)
-    ) && !matches!(
-        target_elem,
-        Type::Reference(_) | Type::MutableReference(_)
-    ) && types_equivalent_for_collect(iter_item, target_elem)
+    matches!(iter_item, Type::Reference(_) | Type::MutableReference(_))
+        && !matches!(target_elem, Type::Reference(_) | Type::MutableReference(_))
+        && types_equivalent_for_collect(iter_item, target_elem)
 }
 
 /// Borrowed text iterator items (`&str`, `&String`) collected into `Vec<string>` need `Vec<_>`,
 /// not `collect::<Vec<String>>()`, when the consumer can coerce per element (e.g. a for-loop).
-fn iterator_collect_should_use_inferred_vec(
-    iter_item: &Type,
-    target_elem: &Type,
-) -> bool {
-    matches!(
-        iter_item,
-        Type::Reference(_) | Type::MutableReference(_)
-    ) && crate::codegen::rust::types::is_windjammer_text_type(target_elem)
+fn iterator_collect_should_use_inferred_vec(iter_item: &Type, target_elem: &Type) -> bool {
+    matches!(iter_item, Type::Reference(_) | Type::MutableReference(_))
+        && crate::codegen::rust::types::is_windjammer_text_type(target_elem)
         && crate::codegen::rust::types::is_windjammer_text_type(peel_type_reference(iter_item))
         && !types_equivalent_for_collect(iter_item, target_elem)
 }
@@ -394,8 +385,7 @@ impl CodeGenerator<'_> {
                         recv.as_deref(),
                         &self.signature_registry,
                     )
-                }
-                {
+                } {
                     return self.infer_iterator_item_type_at_expr(object);
                 }
 
@@ -436,14 +426,11 @@ impl CodeGenerator<'_> {
         collect_receiver: &Expression,
     ) -> (String, String) {
         let iter_item = self.infer_iterator_item_type_at_expr(collect_receiver);
-        let target_ty = self
-            .collect_target_type
-            .as_ref()
-            .or_else(|| {
-                self.current_function_return_type
-                    .as_ref()
-                    .filter(|t| type_is_collect_turbofish_target(t))
-            });
+        let target_ty = self.collect_target_type.as_ref().or_else(|| {
+            self.current_function_return_type
+                .as_ref()
+                .filter(|t| type_is_collect_turbofish_target(t))
+        });
         let target_elem = target_ty
             .as_ref()
             .and_then(|t| collect_target_element_type(t));
@@ -459,9 +446,9 @@ impl CodeGenerator<'_> {
                     peel_type_reference(iter),
                 ) {
                     ".copied()".to_string()
-                } else if crate::codegen::rust::types::is_windjammer_text_type(
-                    peel_type_reference(iter),
-                ) {
+                } else if crate::codegen::rust::types::is_windjammer_text_type(peel_type_reference(
+                    iter,
+                )) {
                     ".map(|s| s.to_string())".to_string()
                 } else {
                     ".cloned()".to_string()
@@ -512,10 +499,8 @@ impl CodeGenerator<'_> {
         let Some(iter_item) = self.infer_iterator_item_type_at_expr(find_receiver_chain) else {
             return false;
         };
-        matches!(
-            iter_item,
-            Type::Reference(_) | Type::MutableReference(_)
-        ) && types_equivalent_for_collect(&iter_item, inner)
+        matches!(iter_item, Type::Reference(_) | Type::MutableReference(_))
+            && types_equivalent_for_collect(&iter_item, inner)
     }
 
     fn expr_is_iterator_adapter_chain(expr: &Expression) -> bool {
@@ -546,15 +531,13 @@ impl CodeGenerator<'_> {
         object: &Expression,
     ) -> Option<Type> {
         let recv_ty = self.infer_expression_type(object)?;
-        let is_borrowed = matches!(
-            recv_ty,
-            Type::Reference(_) | Type::MutableReference(_)
-        ) || matches!(
-            object,
-            Expression::Identifier { name, .. }
-                if self.inferred_borrowed_params.contains(name)
-                    || self.inferred_mut_borrowed_params.contains(name)
-        );
+        let is_borrowed = matches!(recv_ty, Type::Reference(_) | Type::MutableReference(_))
+            || matches!(
+                object,
+                Expression::Identifier { name, .. }
+                    if self.inferred_borrowed_params.contains(name)
+                        || self.inferred_mut_borrowed_params.contains(name)
+            );
         if !is_borrowed {
             return None;
         }

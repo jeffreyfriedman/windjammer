@@ -49,6 +49,11 @@ impl CodeGenerator<'_> {
                     return Some(format!("use {} as {};\n", rust_import, alias_name));
                 }
                 if rust_stem.ends_with("_mod") || rust_stem.ends_with("_runtime") {
+                    // `use std::log::*` must glob the runtime module (functions + types).
+                    // Alias-only `use log_mod as log` leaves `info()` / `init_with_level()` out of scope.
+                    if module_name.ends_with("::*") {
+                        return Some(format!("use {rust_import}::*;\n"));
+                    }
                     let original_name = rust_stem
                         .strip_suffix("_mod")
                         .or_else(|| rust_stem.strip_suffix("_runtime"))

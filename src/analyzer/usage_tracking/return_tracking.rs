@@ -18,11 +18,7 @@ impl<'ast> Analyzer<'ast> {
         !self.is_whole_binding_returned(name, statements)
     }
 
-    fn is_whole_binding_returned(
-        &self,
-        name: &str,
-        statements: &[&'ast Statement<'ast>],
-    ) -> bool {
+    fn is_whole_binding_returned(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
         let len = statements.len();
         for (i, stmt) in statements.iter().enumerate() {
             let is_last = i == len - 1;
@@ -87,9 +83,7 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
-                    let is_enum_constructor = Self::looks_like_enum_variant_constructor(fn_name);
-                    if is_known_wrapper || is_enum_constructor {
+                    if crate::type_classification::is_language_level_payload_call_name(fn_name) {
                         for (_label, arg) in arguments {
                             if self.expression_returns_whole_binding(name, arg) {
                                 return true;
@@ -188,10 +182,7 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
-                    let is_known_wrapper = matches!(fn_name.as_str(), "Some" | "Ok" | "Err");
-                    let is_enum_constructor = Self::looks_like_enum_variant_constructor(fn_name);
-
-                    if is_known_wrapper || is_enum_constructor {
+                    if crate::type_classification::is_language_level_payload_call_name(fn_name) {
                         for (_label, arg) in arguments {
                             if self.expression_uses_identifier(name, arg) {
                                 return true;
@@ -210,6 +201,17 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 false
+            }
+
+            // WJ `"…${param}…"` / `format!(…)` — only a *direct* identifier arg is
+            // moved into the owned String. Nested uses (`data.len()`, `obj.field`) are reads.
+            Expression::MacroInvocation {
+                name: macro_name,
+                args,
+                ..
+            } if crate::type_classification::is_language_level_owned_string_macro(macro_name) => {
+                args.iter()
+                    .any(|arg| matches!(arg, Expression::Identifier { name: id, .. } if id == name))
             }
 
             // Returning `param.field` moves the field out of an owned parameter (consumes `param`)

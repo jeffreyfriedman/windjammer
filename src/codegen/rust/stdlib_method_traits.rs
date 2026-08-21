@@ -167,24 +167,15 @@ pub fn map_has_get_mut_sibling(receiver_type: Option<&str>, registry: &Signature
     map_option_mut_ref_method_name(receiver_type, registry).is_some()
 }
 
-// ── Map type constants ───────────────────────────────────────────────────
-
-const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
-const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
+// ── Map / set type classification (shared with analyzer) ─────────────────
 
 pub fn is_set_type_name(name: &str) -> bool {
-    let base = name.split('<').next().unwrap_or(name);
-    let short = base.rsplit("::").next().unwrap_or(base);
-    SET_TYPES.contains(&short)
+    crate::type_classification::is_set_type_name(name)
 }
 
 /// Stdlib types whose zero-arg empty ctor clears to Default (writeback take).
 pub fn is_stdlib_default_empty_type(name: &str) -> bool {
-    let base = name.split('<').next().unwrap_or(name);
-    let short = base.rsplit("::").next().unwrap_or(base);
-    is_map_type_name(short)
-        || is_set_type_name(short)
-        || matches!(short, "Vec" | "VecDeque" | "String")
+    crate::type_classification::is_stdlib_default_empty_type(name)
 }
 
 pub fn is_set_type(ty: &crate::parser::Type) -> bool {
@@ -585,7 +576,7 @@ pub fn method_is_map_key_qualified(
         if receiver_type.is_some() {
             return false;
         }
-        for map_ty in MAP_TYPES {
+        for map_ty in crate::type_classification::MAP_TYPE_NAMES {
             if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
                 if sig.has_self_receiver
                     && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
@@ -723,9 +714,7 @@ pub fn is_map_key_method(method: &str) -> bool {
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.
 pub fn is_map_type_name(name: &str) -> bool {
-    let base = name.split('<').next().unwrap_or(name);
-    let short = base.rsplit("::").next().unwrap_or(base);
-    matches!(short, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+    crate::type_classification::is_map_type_name(name)
 }
 
 pub fn is_map_type(ty: &crate::parser::Type) -> bool {
@@ -801,6 +790,38 @@ pub fn classify_wj_std_import(module_base: &str) -> WjStdImportKind {
         return WjStdImportKind::Skip;
     }
     WjStdImportKind::RustStd
+}
+
+/// Rust `use` line for a scanned runtime stem (`csv` → `csv_mod`, `log` → `log_mod`).
+///
+/// Globs and subpaths import the stem directly (`log_mod::*`, `log_mod::info`).
+/// Bare `use std::log` aliases `_mod`/`_runtime` stems so `log::info` still works.
+pub fn format_runtime_std_use(module_name: &str, rust_stem: &str, alias: Option<&str>) -> String {
+    let rust_import = format!("windjammer_runtime::{rust_stem}");
+    if let Some(alias_name) = alias {
+        return format!("use {rust_import} as {alias_name};\n");
+    }
+    let wj_first = module_name
+        .strip_suffix("::*")
+        .unwrap_or(module_name)
+        .split("::")
+        .next()
+        .unwrap_or(module_name);
+    let rest = module_name.strip_prefix(wj_first).unwrap_or("");
+    let renamed = rust_stem.ends_with("_mod") || rust_stem.ends_with("_runtime");
+    if renamed && rest.is_empty() {
+        let original_name = rust_stem
+            .strip_suffix("_mod")
+            .or_else(|| rust_stem.strip_suffix("_runtime"))
+            .unwrap_or(rust_stem);
+        let mut result = format!("use {rust_import} as {original_name};\n");
+        let registry = SignatureRegistry::stdlib();
+        for ty in registry.runtime_exported_types_for_module(original_name) {
+            result.push_str(&format!("use {rust_import}::{ty};\n"));
+        }
+        return result;
+    }
+    format!("use {rust_import}{rest};\n")
 }
 
 /// Scanned WJ `std::module` name (runtime `.rs` stem + `_mod`/`_runtime` aliases + `std/*.wj`).
@@ -976,10 +997,17 @@ pub fn is_collection_key_lookup(
     if arg_index != 0 {
         return false;
     }
-    let Some(rt) = receiver_type else {
+    let receiver_base = receiver_type
+        .map(|rt| rt.split('<').next().unwrap_or(rt))
+        .or_else(|| {
+            sig.name.rsplit_once("::").map(|(ty, _)| {
+                let bare = ty.rsplit("::").next().unwrap_or(ty);
+                bare.split('<').next().unwrap_or(bare)
+            })
+        });
+    let Some(base) = receiver_base else {
         return false;
     };
-    let base = rt.split('<').next().unwrap_or(rt);
     if !is_map_type_name(base) && !is_set_type_name(base) {
         return false;
     }
@@ -1288,6 +1316,32 @@ mod pattern_registry_tests {
         let reg = SignatureRegistry::stdlib();
         assert!(!is_map_shared_get_call("get", Some("Holder"), reg));
         assert!(!map_has_get_mut_sibling(Some("Holder"), reg));
+    }
+
+    #[test]
+    fn runtime_std_glob_imports_renamed_stem_items() {
+        assert_eq!(
+            format_runtime_std_use("log::*", "log_mod", None),
+            "use windjammer_runtime::log_mod::*;\n"
+        );
+        assert_eq!(
+            format_runtime_std_use("csv::*", "csv_mod", None),
+            "use windjammer_runtime::csv_mod::*;\n"
+        );
+        assert_eq!(
+            format_runtime_std_use("http::*", "http", None),
+            "use windjammer_runtime::http::*;\n"
+        );
+        assert_eq!(
+            format_runtime_std_use("log::info", "log_mod", None),
+            "use windjammer_runtime::log_mod::info;\n"
+        );
+        let bare = format_runtime_std_use("log", "log_mod", None);
+        assert!(
+            bare.contains("use windjammer_runtime::log_mod as log;"),
+            "bare std::log must still alias the module: {bare}"
+        );
+        assert!(!bare.contains("log_mod::*;"));
     }
 
     #[test]

@@ -281,8 +281,12 @@ impl TypeAnalyzer {
             }
             Type::Tuple(types) => types.iter().all(|t| self.has_default(t)),
             Type::Parameterized(base, args) => {
-                // Vec, Option, Box, etc. have Default if their type params do
-                if matches!(base.as_str(), "Vec" | "Option" | "Box") {
+                // Stdlib containers/wrappers have Default when their type params do.
+                if crate::type_classification::is_single_elem_iterable_base(base)
+                    || matches!(base.as_str(), "Option" | "Box")
+                    || crate::type_classification::is_map_type_name(base)
+                    || crate::type_classification::is_set_type_name(base)
+                {
                     args.iter().all(|arg| self.has_default(arg))
                 } else {
                     false

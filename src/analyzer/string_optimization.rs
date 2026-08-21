@@ -124,6 +124,11 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
 
+                // Returned text construction (`"${path}"` / `format!`) consumes owned String.
+                if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                    continue;
+                }
+
                 if !needs_string_ref {
                     optimizable.insert(param.name.clone());
                 }
@@ -193,6 +198,11 @@ impl<'ast> Analyzer<'ast> {
         body: &[&Statement],
         registry: &super::SignatureRegistry,
     ) -> bool {
+        // Moved into a composite or returned as owned `String`. `&String` / `&str`
+        // lowering would fight the store/return.
+        if self.string_param_consumed_owned(param_name, body, registry) {
+            return false;
+        }
         for stmt in body {
             if self.statement_uses_param_in_string_ref_context(param_name, stmt, registry) {
                 return true;
@@ -450,11 +460,10 @@ impl<'ast> Analyzer<'ast> {
                     // their arguments. Detect enum variants vs module-qualified fn
                     // calls: enum variants have an uppercase final component.
                     let is_enum_variant =
-                        matches!(fn_name.as_str(), "Some" | "None" | "Ok" | "Err")
-                            || (fn_name.contains("::") && {
-                                let last = fn_name.rsplit("::").next().unwrap_or("");
-                                last.starts_with(|c: char| c.is_uppercase())
-                            });
+                        crate::type_classification::is_option_result_constructor(fn_name)
+                            || crate::type_classification::is_enum_variant_constructor_path(
+                                fn_name,
+                            );
 
                     if is_enum_variant {
                         for arg in arguments.iter() {
@@ -1429,15 +1438,24 @@ impl<'ast> Analyzer<'ast> {
         key_uses: &mut usize,
         other_uses: &mut usize,
     ) {
-        if let Some((object, _method, arguments)) =
+        if let Some((object, method, arguments)) =
             super::stdlib_method_traits::decompose_collection_key_lookup(expr)
         {
-            let qualified_receiver = self
-                .receiver_param_type_from_expr(object, func)
-                .is_some_and(super::stdlib_method_traits::is_qualified_map_type);
+            let receiver_ty = self.receiver_param_type_from_expr(object, func);
+            let qualified_receiver =
+                receiver_ty.is_some_and(super::stdlib_method_traits::is_qualified_collection_type);
+            let receiver_base =
+                receiver_ty.and_then(crate::type_classification::type_to_registry_base);
             for (i, (_, arg)) in arguments.iter().enumerate() {
                 if self.expr_is_identifier(*arg, param_name) {
-                    if i == 0 && qualified_receiver {
+                    if qualified_receiver
+                        && super::stdlib_method_traits::is_collection_key_arg_on_receiver(
+                            method,
+                            i,
+                            receiver_base.as_deref(),
+                            super::SignatureRegistry::stdlib(),
+                        )
+                    {
                         *key_uses += 1;
                     } else {
                         *other_uses += 1;
@@ -1463,12 +1481,19 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 let qualified_receiver = self
                     .receiver_param_type_from_expr(object, func)
-                    .is_some_and(super::stdlib_method_traits::is_qualified_map_type);
+                    .is_some_and(super::stdlib_method_traits::is_qualified_collection_type);
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(*arg, param_name) {
-                        if super::stdlib_method_traits::is_map_key_method(method)
-                            && i == 0
-                            && qualified_receiver
+                        let receiver = self
+                            .receiver_param_type_from_expr(object, func)
+                            .and_then(|t| crate::type_classification::type_to_registry_base(t));
+                        if qualified_receiver
+                            && super::stdlib_method_traits::is_collection_key_arg_on_receiver(
+                                method,
+                                i,
+                                receiver.as_deref(),
+                                super::SignatureRegistry::stdlib(),
+                            )
                         {
                             *key_uses += 1;
                         } else {
@@ -1534,7 +1559,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn receiver_param_type_from_expr<'a>(
+    pub(crate) fn receiver_param_type_from_expr<'a>(
         &self,
         object: &'a Expression,
         func: &'a FunctionDecl,
@@ -1643,13 +1668,18 @@ impl<'ast> Analyzer<'ast> {
         key_uses: &mut usize,
         other_uses: &mut usize,
     ) {
-        if let Some((object, _method, arguments)) =
+        if let Some((object, method, arguments)) =
             super::stdlib_method_traits::decompose_collection_key_lookup(expr)
         {
             for (i, (_, arg)) in arguments.iter().enumerate() {
                 if self.expr_is_identifier(*arg, param_name) {
                     let receiver = self.receiver_type_name_from_expr(object, func);
-                    if i == 0 && super::stdlib_method_traits::is_map_receiver(receiver.as_deref()) {
+                    if super::stdlib_method_traits::is_collection_key_arg_on_receiver(
+                        method,
+                        i,
+                        receiver.as_deref(),
+                        super::SignatureRegistry::stdlib(),
+                    ) {
                         *key_uses += 1;
                     } else {
                         *other_uses += 1;
@@ -1676,10 +1706,12 @@ impl<'ast> Analyzer<'ast> {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(*arg, param_name) {
                         let receiver = self.receiver_type_name_from_expr(object, func);
-                        if super::stdlib_method_traits::is_map_key_method(method)
-                            && i == 0
-                            && super::stdlib_method_traits::is_map_receiver(receiver.as_deref())
-                        {
+                        if super::stdlib_method_traits::is_collection_key_arg_on_receiver(
+                            method,
+                            i,
+                            receiver.as_deref(),
+                            super::SignatureRegistry::stdlib(),
+                        ) {
                             *key_uses += 1;
                         } else {
                             *other_uses += 1;
@@ -1742,7 +1774,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn receiver_type_name_from_expr(
+    pub(crate) fn receiver_type_name_from_expr(
         &self,
         object: &Expression,
         func: &FunctionDecl,

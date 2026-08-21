@@ -23,30 +23,21 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Language-level payload stores: `Some`/`Ok`/`Err` and PascalCase enum variant constructors.
-    fn is_language_level_call_payload_store(function: &Expression) -> bool {
+    pub(crate) fn is_language_level_call_payload_store(function: &Expression) -> bool {
         match function {
             Expression::Identifier { name, .. } => {
-                matches!(name.as_str(), "Some" | "Ok" | "Err")
-                    || Self::looks_like_enum_variant_constructor(name)
+                crate::type_classification::is_language_level_payload_call_name(name)
             }
             Expression::FieldAccess { field, .. } => {
-                matches!(field.as_str(), "Some" | "Ok" | "Err")
-                    || field
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_uppercase())
+                crate::type_classification::is_language_level_payload_method(field)
             }
             _ => false,
         }
     }
 
     /// `Type::Variant(...)` lowers as MethodCall with a PascalCase method name.
-    fn is_language_level_method_payload_store(method: &str) -> bool {
-        matches!(method, "Some" | "Ok" | "Err")
-            || method
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_uppercase())
+    pub(crate) fn is_language_level_method_payload_store(method: &str) -> bool {
+        crate::type_classification::is_language_level_payload_method(method)
     }
 
     fn resolve_callee_signature<'a>(
@@ -73,8 +64,20 @@ impl<'ast> Analyzer<'ast> {
         match ret {
             Type::Custom(name) => !matches!(
                 name.as_str(),
-                "string" | "str" | "String" | "bool" | "i32" | "i64" | "u32" | "u64" | "f32"
-                    | "f64" | "usize" | "isize" | "char" | "()"
+                "string"
+                    | "str"
+                    | "String"
+                    | "bool"
+                    | "i32"
+                    | "i64"
+                    | "u32"
+                    | "u64"
+                    | "f32"
+                    | "f64"
+                    | "usize"
+                    | "isize"
+                    | "char"
+                    | "()"
             ),
             Type::Parameterized(base, _) => Self::return_type_stores_owned_payload_base(base),
             Type::Option(inner) | Type::Result(inner, _) => {
@@ -85,17 +88,16 @@ impl<'ast> Analyzer<'ast> {
     }
 
     fn return_type_stores_owned_payload_base(base: &str) -> bool {
-        !matches!(
-            base,
-            "Vec" | "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "Option" | "Result"
-        )
+        !crate::type_classification::is_stdlib_wrapper_type_base(base)
     }
 
     fn same_payload_type(a: &Type, b: &Type) -> bool {
         match (a, b) {
             (Type::Custom(na), Type::Custom(nb)) => na == nb,
             (Type::String, Type::String) => true,
-            (Type::Int, Type::Int) | (Type::Int32, Type::Int32) | (Type::Float, Type::Float)
+            (Type::Int, Type::Int)
+            | (Type::Int32, Type::Int32)
+            | (Type::Float, Type::Float)
             | (Type::Bool, Type::Bool) => true,
             (Type::Vec(i_a), Type::Vec(i_b)) | (Type::Option(i_a), Type::Option(i_b)) => {
                 Self::same_payload_type(i_a, i_b)
@@ -112,10 +114,7 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn formal_stores_into_composite_return(
-        sig: &FunctionSignature,
-        arg_index: usize,
-    ) -> bool {
+    fn formal_stores_into_composite_return(sig: &FunctionSignature, arg_index: usize) -> bool {
         let Some(formal_ty) = sig.formal_param_type_for_arg(arg_index) else {
             return false;
         };
@@ -144,8 +143,10 @@ impl<'ast> Analyzer<'ast> {
         let Some(sig) = Self::resolve_callee_signature(&name, arg_count, false, registry) else {
             return false;
         };
-        matches!(sig.param_ownership_for_arg(arg_index), Some(OwnershipMode::Owned))
-            && Self::formal_stores_into_composite_return(sig, arg_index)
+        matches!(
+            sig.param_ownership_for_arg(arg_index),
+            Some(OwnershipMode::Owned)
+        ) && Self::formal_stores_into_composite_return(sig, arg_index)
     }
 
     /// Owned argument is stored into the callee's return composite.
@@ -193,23 +194,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     fn is_collection_receiver_type(name: &str) -> bool {
-        matches!(
-            name,
-            "Vec"
-                | "VecDeque"
-                | "LinkedList"
-                | "HashMap"
-                | "BTreeMap"
-                | "HashSet"
-                | "BTreeSet"
-                | "BinaryHeap"
-                | "IndexMap"
-                | "IndexSet"
-                | "Map"
-                | "Set"
-                | "String"
-                | "string"
-        )
+        crate::type_classification::is_collection_storage_receiver(name)
     }
 
     /// True when method-call argument `arg_index` is stored into an owned formal (signature-driven).
@@ -252,7 +237,9 @@ impl<'ast> Analyzer<'ast> {
     ) -> Option<&'a FunctionSignature> {
         if let Some(ty) = receiver_type {
             if let Some(sig) = crate::analyzer::stdlib_method_traits::lookup_method_signature(
-                method, Some(ty), registry,
+                method,
+                Some(ty),
+                registry,
             ) {
                 return Some(sig);
             }
@@ -315,7 +302,9 @@ impl<'ast> Analyzer<'ast> {
 
     fn receiver_type_name_for_storage(object: &Expression) -> Option<String> {
         match object {
-            Expression::Identifier { name, .. } if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) => {
+            Expression::Identifier { name, .. }
+                if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) =>
+            {
                 Some(name.clone())
             }
             Expression::FieldAccess { object, .. } => Self::receiver_type_name_for_storage(object),
@@ -436,8 +425,7 @@ impl<'ast> Analyzer<'ast> {
                         if self.expression_stores_identifier(name, value, registry) {
                             return true;
                         }
-                        if matches!(value, Expression::Identifier { name: id, .. } if id == name)
-                        {
+                        if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
                             return true;
                         }
                     }
@@ -531,6 +519,18 @@ impl<'ast> Analyzer<'ast> {
         true
     }
 
+    /// String formals moved into a composite or returned must stay owned `String`.
+    pub(crate) fn string_param_consumed_owned(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) -> bool {
+        self.is_stored(name, statements, registry)
+            || self.is_returned(name, statements)
+            || self.param_is_consumed_into_return(name, statements)
+    }
+
     fn is_only_stored_via_bare_struct_literal_field(
         &self,
         name: &str,
@@ -617,7 +617,9 @@ impl<'ast> Analyzer<'ast> {
             Statement::Expression { expr, .. } => {
                 self.expression_stores_identifier(name, expr, registry)
             }
-            Statement::Let { value, .. } => self.expression_stores_identifier(name, value, registry),
+            Statement::Let { value, .. } => {
+                self.expression_stores_identifier(name, value, registry)
+            }
             Statement::Assignment { value, .. } => {
                 self.expression_stores_identifier(name, value, registry)
             }
@@ -702,10 +704,9 @@ impl<'ast> Analyzer<'ast> {
                     Expression::Identifier { name: fn_name, .. } => {
                         Self::looks_like_enum_variant_constructor(fn_name)
                     }
-                    Expression::FieldAccess { field, .. } => field
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_uppercase()),
+                    Expression::FieldAccess { field, .. } => {
+                        field.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                    }
                     _ => false,
                 };
 
@@ -776,15 +777,7 @@ impl<'ast> Analyzer<'ast> {
     /// (e.g., Option::Some, Color::Custom), while methods use snake_case
     /// (e.g., FpsCamera::collides_aabb, Vec3::new).
     pub(crate) fn looks_like_enum_variant_constructor(qualified_name: &str) -> bool {
-        if let Some(pos) = qualified_name.rfind("::") {
-            let after_colons = &qualified_name[pos + 2..];
-            after_colons
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_ascii_uppercase())
-        } else {
-            false
-        }
+        crate::type_classification::is_enum_variant_constructor_path(qualified_name)
     }
 
     pub(crate) fn struct_field_is_text_type(&self, struct_name: &str, field_name: &str) -> bool {
@@ -1151,7 +1144,9 @@ impl Merchant {
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
         let inv = analyzed
             .iter()
-            .find(|f| f.decl.name == "add_item" && f.decl.parent_type.as_deref() == Some("Inventory"))
+            .find(|f| {
+                f.decl.name == "add_item" && f.decl.parent_type.as_deref() == Some("Inventory")
+            })
             .expect("Inventory::add_item");
         let mode = inv
             .inferred_ownership
@@ -1186,10 +1181,7 @@ impl ItemStack {
         let program = parse_program(src);
         let mut analyzer = Analyzer::new();
         let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
-        let new_fn = analyzed
-            .iter()
-            .find(|f| f.decl.name == "new")
-            .expect("new");
+        let new_fn = analyzed.iter().find(|f| f.decl.name == "new").expect("new");
         let mode = new_fn
             .inferred_ownership
             .get("item")

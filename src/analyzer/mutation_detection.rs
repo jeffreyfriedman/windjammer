@@ -779,18 +779,16 @@ impl<'ast> Analyzer<'ast> {
         ) {
             return true;
         }
-        // Type-qualified readonly must agree with stdlib-only consensus before we allow
-        // `&T` on the param under `?`. User types (e.g. `AssetLoader::load`) must not
-        // define stdlib-wide readonly consensus by themselves.
+        // Type-qualified readonly wins — do not require unqualified stdlib consensus
+        // (user `AssetLoader::load` must not be poisoned by missing `::{load}` consensus).
         if super::stdlib_method_traits::is_known_readonly_qualified(
             method,
             receiver_base.as_deref(),
             registry,
-        ) && super::stdlib_method_traits::is_known_readonly(method)
-        {
+        ) {
             return false;
         }
-        !super::stdlib_method_traits::is_known_readonly(method)
+        false
     }
 
     fn expr_has_potentially_mutating_method_call_in_tryop(

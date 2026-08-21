@@ -165,28 +165,24 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                if let Some(reg) = registry {
-                    let receiver_base = match &**object {
-                        Expression::Identifier { name, .. } if name == "self" => self
-                            .self_impl_context
-                            .as_ref()
-                            .map(|ctx| ctx.impl_type_base.clone()),
-                        _ if self.expression_traces_to_self(object) => {
-                            self.self_field_call_receiver_type_base(object)
-                        }
-                        _ => None,
-                    };
-                    if super::stdlib_method_traits::method_call_mutates_receiver(
-                        method,
-                        receiver_base.as_deref(),
-                        reg,
-                    ) {
-                        return true;
-                    }
-                }
-
+                // Signature lookup only when the receiver is `self` or traces to `self`.
+                // Locals (`out.push(self.slot)`) must not inherit unqualified stdlib
+                // mutating consensus for `push`/`insert`/….
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == "self" {
+                        if let Some(reg) = registry {
+                            let receiver_base = self
+                                .self_impl_context
+                                .as_ref()
+                                .map(|ctx| ctx.impl_type_base.clone());
+                            if super::stdlib_method_traits::method_call_mutates_receiver(
+                                method,
+                                receiver_base.as_deref(),
+                                reg,
+                            ) {
+                                return true;
+                            }
+                        }
                         if let Some(impl_functions) = &self.current_impl_functions {
                             if let Some(called_func) = impl_functions.get(method) {
                                 return self.function_modifies_self_fields_recursive(
@@ -257,5 +253,53 @@ impl<'ast> Analyzer<'ast> {
         super::stdlib_method_traits::callable_arg_expects_mut_borrow(
             func_name, impl_ty, arg_idx, true, reg,
         )
+    }
+}
+
+#[cfg(test)]
+mod local_push_does_not_mutate_self_tests {
+    use crate::analyzer::{Analyzer, OwnershipMode};
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse_program(src: &str) -> crate::parser::Program<'static> {
+        let mut lexer = Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        parser.parse().expect("parse")
+    }
+
+    #[test]
+    fn local_vec_push_of_self_field_keeps_self_borrowed() {
+        let src = r#"
+pub struct MaterialPalette {
+    pub slot: f32,
+}
+
+impl MaterialPalette {
+    pub fn to_gpu_buffer(self) -> Vec<f32> {
+        let mut out = Vec::new()
+        out.push(self.slot)
+        out
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
+        let func = analyzed
+            .iter()
+            .find(|f| f.decl.name == "to_gpu_buffer")
+            .expect("to_gpu_buffer");
+        let mode = func
+            .inferred_ownership
+            .get("self")
+            .copied()
+            .expect("self ownership");
+        assert_eq!(
+            mode,
+            OwnershipMode::Borrowed,
+            "local Vec::push must not infer &mut self; got {mode:?}"
+        );
     }
 }
