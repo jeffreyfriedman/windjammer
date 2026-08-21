@@ -239,7 +239,9 @@ impl<'ast> Analyzer<'ast> {
         // 6c. TryOp-wrapped non-readonly method calls (e.g. `loader.load()?`) may need
         // &mut self — do not infer Borrowed for the receiver. Scoped to `?` only so
         // unknown methods on typed params still default to borrowed (multi-pass refines).
-        if self.has_potentially_mutating_method_call_in_tryop(param_name, body, registry, param_type) {
+        if self
+            .has_potentially_mutating_method_call_in_tryop(param_name, body, registry, param_type)
+        {
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -416,9 +418,7 @@ impl<'ast> Analyzer<'ast> {
         // to Borrowed solely because the body is `Err("not implemented")` — that made
         // call sites emit `&vec![...]` (E0308). Broader unused non-text stays Borrowed
         // so readonly field/format uses still demote (`object: &SceneObject`).
-        if matches!(param_type, Type::Vec(_))
-            || matches!(param_type, Type::Parameterized(name, _) if name == "Vec")
-        {
+        if crate::type_classification::type_is_vec_container(param_type) {
             if !body
                 .iter()
                 .any(|stmt| self.statement_uses_identifier(param_name, stmt))
@@ -625,17 +625,7 @@ impl<'ast> Analyzer<'ast> {
     fn is_map_or_set_collection_param_type(param_type: &Type) -> bool {
         match param_type {
             Type::Parameterized(name, _) => {
-                let base = name
-                    .split('<')
-                    .next()
-                    .unwrap_or(name.as_str())
-                    .rsplit("::")
-                    .next()
-                    .unwrap_or(name.as_str());
-                matches!(
-                    base,
-                    "HashMap" | "BTreeMap" | "IndexMap" | "Map" | "HashSet" | "BTreeSet" | "Set"
-                )
+                crate::type_classification::is_map_or_set_type_name(name)
             }
             _ => false,
         }
@@ -645,26 +635,7 @@ impl<'ast> Analyzer<'ast> {
         match param_type {
             Type::Vec(_) => true,
             Type::Parameterized(name, _) => {
-                let base = name
-                    .split('<')
-                    .next()
-                    .unwrap_or(name.as_str())
-                    .rsplit("::")
-                    .next()
-                    .unwrap_or(name.as_str());
-                matches!(
-                    base,
-                    "HashMap"
-                        | "BTreeMap"
-                        | "IndexMap"
-                        | "Map"
-                        | "HashSet"
-                        | "BTreeSet"
-                        | "Set"
-                        | "Vec"
-                        | "VecDeque"
-                        | "LinkedList"
-                )
+                crate::type_classification::is_stdlib_collection_type_name(name)
             }
             _ => false,
         }

@@ -323,6 +323,15 @@ impl SignatureRegistry {
             .and_then(|g| g.runtime_module_for_type(type_name))
     }
 
+    /// Fully-qualified Rust path for a scanned runtime type
+    /// (`HttpMethod` → `windjammer_runtime::http::HttpMethod`).
+    pub fn runtime_rust_path_for_type(&self, type_name: &str) -> Option<String> {
+        let module = self.runtime_module_for_type(type_name)?;
+        let stem = self.runtime_rust_stem(module).unwrap_or(module);
+        let base = type_name.rsplit("::").next().unwrap_or(type_name);
+        Some(format!("windjammer_runtime::{stem}::{base}"))
+    }
+
     /// Public types exported by a scanned runtime module (`regex` → `["Regex"]`).
     pub fn runtime_exported_types_for_module(&self, wj_name: &str) -> Vec<&str> {
         let mut out: Vec<&str> = Vec::new();
@@ -415,6 +424,15 @@ impl SignatureRegistry {
 
     pub fn add_function(&mut self, name: String, sig: FunctionSignature) {
         if let Some(existing) = self.signatures.get(&name) {
+            // `http::post` (module path) vs `Router::post` (Type::method): free functions
+            // win under lowercase module keys. Self methods keep `Type::method` only.
+            let module_path_key = name.contains("::")
+                && !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                    &name,
+                );
+            if module_path_key && !existing.has_self_receiver && sig.has_self_receiver {
+                return;
+            }
             if existing.param_types != sig.param_types {
                 // Empty-param runtime/stdlib stubs (e.g. `Config::new()`) are
                 // intentionally shadowed by user-defined constructors — not
@@ -442,18 +460,22 @@ impl SignatureRegistry {
             // between different modules. Only `merge()` flags cross-registry
             // ownership collisions.
             if name.contains("::") && existing.has_self_receiver && !sig.has_self_receiver {
-                // Declaration stubs may incorrectly include synthetic `self`; direct impl
-                // static methods must be able to replace them for Self:: call-site lowering.
-                let existing_is_declaration_stub = existing
-                    .param_ownership
-                    .iter()
-                    .all(|o| matches!(o, OwnershipMode::Owned))
-                    && !existing
-                        .param_types
+                if module_path_key {
+                    // Free function replaces a Self method wrongly stored under module::.
+                } else {
+                    // Declaration stubs may incorrectly include synthetic `self`; direct impl
+                    // static methods must be able to replace them for Self:: call-site lowering.
+                    let existing_is_declaration_stub = existing
+                        .param_ownership
                         .iter()
-                        .any(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
-                if !existing_is_declaration_stub {
-                    return;
+                        .all(|o| matches!(o, OwnershipMode::Owned))
+                        && !existing
+                            .param_types
+                            .iter()
+                            .any(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+                    if !existing_is_declaration_stub {
+                        return;
+                    }
                 }
             }
         }
@@ -1283,6 +1305,15 @@ impl SignatureRegistry {
                     .entry(suffix)
                     .or_default()
                     .push(name.clone());
+            }
+            // Never let a bare-Owned stub replace stdlib/meta `&T` key contracts
+            // (`HashMap::get(key: &K)` poisoned by `std/collections.wj` `key: K`).
+            if let Some(existing) = self.signatures.get(name) {
+                if crate::codegen::rust::signature_promotion::existing_has_stronger_shared_ref_contract(
+                    existing, sig,
+                ) {
+                    continue;
+                }
             }
             self.signatures.insert(name.clone(), sig.clone());
         }

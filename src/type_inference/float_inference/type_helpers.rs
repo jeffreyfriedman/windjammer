@@ -210,7 +210,7 @@ impl FloatInference {
         match ty {
             Type::Parameterized(name, type_args) => {
                 let base = crate::type_inference::generic_type_base_name(name);
-                if matches!(base, "HashMap" | "Map" | "BTreeMap") && type_args.len() >= 2 {
+                if crate::type_classification::is_map_type_name(base) && type_args.len() >= 2 {
                     Some(type_args[1].clone())
                 } else {
                     None
@@ -218,7 +218,7 @@ impl FloatInference {
             }
             Type::Custom(name) if name.contains('<') => {
                 let base = name.split('<').next().unwrap_or(name);
-                if matches!(base, "HashMap" | "BTreeMap" | "Map") {
+                if crate::type_classification::is_map_type_name(base) {
                     if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
                         let inner = &name[start + 1..end];
                         let value = inner.split(',').nth(1)?.trim();
@@ -249,17 +249,15 @@ impl FloatInference {
         self.extract_map_value_type(ty)
     }
 
-    /// TDD FIX: Extract element type T from Vec<T>
+    /// TDD FIX: Extract element type T from Vec<T> / VecDeque<T> / similar.
     fn extract_vec_element_type(&self, ty: &Type) -> Option<Type> {
         match ty {
             Type::Vec(inner) => Some((**inner).clone()),
-            Type::Parameterized(name, type_args) if name == "Vec" => {
-                // Vec<T> has 1 type argument
-                if !type_args.is_empty() {
-                    Some(type_args[0].clone())
-                } else {
-                    None
-                }
+            Type::Parameterized(name, type_args)
+                if crate::type_classification::is_single_elem_iterable_base(name)
+                    && !type_args.is_empty() =>
+            {
+                Some(type_args[0].clone())
             }
             _ => None,
         }
@@ -333,11 +331,11 @@ impl FloatInference {
             || match &receiver_type {
                 Type::Custom(n) => {
                     let base = n.split('<').next().unwrap_or(n);
-                    matches!(base, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                    crate::type_classification::is_map_type_name(base)
                 }
                 Type::Parameterized(base, _) => {
                     let b = crate::type_inference::generic_type_base_name(base);
-                    matches!(b, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                    crate::type_classification::is_map_type_name(b)
                 }
                 _ => false,
             };
@@ -440,11 +438,18 @@ impl FloatInference {
     fn extract_map_key_type(&self, ty: &Type) -> Option<Type> {
         match ty {
             Type::Parameterized(name, args)
-                if (name == "HashMap" || name == "BTreeMap") && !args.is_empty() =>
+                if crate::type_classification::is_map_type_name(name) && !args.is_empty() =>
             {
                 Some(args[0].clone())
             }
-            Type::Custom(name) if name.starts_with("HashMap<") || name.starts_with("BTreeMap<") => {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.extract_map_key_type(inner)
+            }
+            Type::Custom(name)
+                if crate::type_classification::is_map_type_name(
+                    name.split('<').next().unwrap_or(name),
+                ) && name.contains('<') =>
+            {
                 if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
                     let inner = &name[start + 1..end];
                     let first = inner.split(',').next()?.trim();

@@ -210,8 +210,7 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Match { value, arms, .. } => {
                 if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
                     if let Expression::MethodCall { method, .. } = value {
-                        if method == "find" {
-                        }
+                        if method == "find" {}
                     }
                 }
                 self.generate_match_statement(value, arms)
@@ -480,9 +479,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         if root_is_mut
-            && binding_name.is_some_and(|b| {
-                self.block_writes_back_field_to_binding(&field_path, b)
-            })
+            && binding_name.is_some_and(|b| self.block_writes_back_field_to_binding(&field_path, b))
         {
             // Extract-assign writeback behind `&mut`: cannot bare-move (E0507).
             // Prefer `mem::take` when the field type derives/implements Default
@@ -532,31 +529,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Empty stdlib collection / `String` constructors — Default-empty clears for writeback.
     /// Type-driven via [`is_stdlib_default_empty_type`]; not an ownership/coercion heuristic.
     fn expression_is_empty_default_constructor(&self, expr: &Expression<'_>) -> bool {
-        if crate::codegen::rust::call_site_borrow::expression_is_vec_new_constructor(expr) {
-            return true;
-        }
-        match expr {
-            Expression::Call {
-                function,
-                arguments,
-                ..
-            } if arguments.is_empty() => {
-                let type_name = match function {
-                    Expression::FieldAccess { object, .. } => match object {
-                        Expression::Identifier { name, .. } => Some(name.as_str()),
-                        _ => None,
-                    },
-                    Expression::Identifier { name, .. } => name
-                        .rsplit_once("::")
-                        .map(|(ty, _)| ty),
-                    _ => None,
-                };
-                type_name.is_some_and(|ty| {
-                    crate::codegen::rust::stdlib_method_traits::is_stdlib_default_empty_type(ty)
-                })
-            }
-            _ => false,
-        }
+        crate::codegen::rust::call_site_borrow::expression_is_stdlib_empty_default_constructor(expr)
     }
 
     /// Call-arg writeback behind `&mut self`: `let r = f(self.field); self.field = r.sub`.
@@ -606,8 +579,7 @@ impl<'ast> CodeGenerator<'ast> {
             base.truncate(base.len() - ".clone()".len());
         }
         let base = base.trim_start_matches('&').trim().to_string();
-        if self.inferred_mut_borrowed_params.contains("self") && self.type_supports_mem_take(&ty)
-        {
+        if self.inferred_mut_borrowed_params.contains("self") && self.type_supports_mem_take(&ty) {
             Some(format!("std::mem::take(&mut {base})"))
         } else {
             Some(format!("{base}.clone()"))
@@ -617,16 +589,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// True when `ty` is safe for `std::mem::take` (Default in std or auto-derived).
     pub(in crate::codegen::rust) fn type_supports_mem_take(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int
-            | Type::Int32
-            | Type::Uint
-            | Type::Float
-            | Type::Bool
-            | Type::String => true,
+            Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String => true,
             Type::Vec(_) | Type::Option(_) => true,
             Type::Tuple(elems) => elems.iter().all(|t| self.type_supports_mem_take(t)),
             Type::Parameterized(base, args)
-                if matches!(base.as_str(), "Vec" | "Option" | "Box" | "HashMap" | "HashSet") =>
+                if crate::type_classification::is_mem_take_stdlib_base(base) =>
             {
                 args.iter().all(|a| self.type_supports_mem_take(a))
             }
@@ -678,8 +645,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // `self.field = binding` or `self.field = binding.subfield` (call writeback).
                 let value_path = self.extract_field_access_path_string(value);
-                value_path == binding
-                    || value_path.starts_with(&format!("{binding}."))
+                value_path == binding || value_path.starts_with(&format!("{binding}."))
             }
             Statement::If {
                 then_block,
@@ -1024,11 +990,7 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if let Some(Type::Option(inner)) = self.infer_expression_type(scrutinee) {
-            return self.binding_receives_mutating_call_with_sig_check(
-                arm.body,
-                b,
-                inner.as_ref(),
-            );
+            return self.binding_receives_mutating_call_with_sig_check(arm.body, b, inner.as_ref());
         }
         false
     }
@@ -1144,7 +1106,12 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         arms: &[crate::parser::MatchArm<'ast>],
     ) -> bool {
-        let ctx = self_analysis::AnalysisContext::new(&[], &self.current_struct_fields);
+        let ctx = self_analysis::AnalysisContext::new(&[], &self.current_struct_fields)
+            .with_field_type_lookup(
+                self.current_struct_name.as_deref(),
+                Some(&self.struct_field_types),
+                Some(&self.signature_registry),
+            );
         arms.iter()
             .any(|arm| self_analysis::expression_mutates_fields(&ctx, arm.body))
     }
@@ -1224,12 +1191,7 @@ impl<'ast> CodeGenerator<'ast> {
         match expr {
             Expression::MethodCall { object, method, .. } => Some((*object, method.as_str())),
             Expression::Call {
-                function:
-                    Expression::FieldAccess {
-                        object,
-                        field,
-                        ..
-                    },
+                function: Expression::FieldAccess { object, field, .. },
                 ..
             } => Some((*object, field.as_str())),
             _ => None,

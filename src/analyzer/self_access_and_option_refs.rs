@@ -110,9 +110,9 @@ impl<'ast> Analyzer<'ast> {
         match stmt {
             Statement::Match { value, arms, .. } => {
                 self.expression_is_self_field_access(value)
-                    && arms
-                        .iter()
-                        .any(|arm| self.match_arm_some_calls_mut_method_on_binding(arm, registry))
+                    && arms.iter().any(|arm| {
+                        self.match_arm_some_calls_mut_method_on_binding(value, arm, registry)
+                    })
             }
             Statement::If {
                 condition,
@@ -188,6 +188,7 @@ impl<'ast> Analyzer<'ast> {
 
     pub(crate) fn match_arm_some_calls_mut_method_on_binding(
         &self,
+        scrutinee: &Expression,
         arm: &MatchArm,
         registry: Option<&super::SignatureRegistry>,
     ) -> bool {
@@ -201,8 +202,13 @@ impl<'ast> Analyzer<'ast> {
         if !is_some_arm {
             return false;
         }
-        self.expr_calls_mut_self_method_on_identifier(arm.body, binding, registry)
-            || self.binding_passed_as_mut_method_argument(arm.body, binding, registry)
+        let binding_types = self.infer_match_arm_binding_type_bases(scrutinee, &arm.pattern);
+        self.expr_calls_mut_self_method_on_identifier(
+            arm.body,
+            binding,
+            registry,
+            Some(&binding_types),
+        ) || self.binding_passed_as_mut_method_argument(arm.body, binding, registry)
     }
 
     /// `if let Some(world) = self.world { choice.is_available(world, …) }` needs `&mut self`.
@@ -303,10 +309,11 @@ impl<'ast> Analyzer<'ast> {
         expr: &Expression,
         id: &str,
         registry: Option<&super::SignatureRegistry>,
+        binding_type_bases: Option<&std::collections::HashMap<String, String>>,
     ) -> bool {
         match expr {
             Expression::Block { statements, .. } => {
-                self.block_expr_calls_mut_self_on_id(statements.as_slice(), id, registry)
+                self.block_expr_calls_mut_self_on_id(statements.as_slice(), id, registry, binding_type_bases)
             }
             Expression::MethodCall {
                 object,
@@ -317,29 +324,59 @@ impl<'ast> Analyzer<'ast> {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == id {
                         if let Some(reg) = registry {
+                            let receiver_base =
+                                binding_type_bases.and_then(|m| m.get(id).map(String::as_str));
                             if super::stdlib_method_traits::method_call_mutates_receiver(
-                                method, None, reg,
+                                method,
+                                receiver_base,
+                                reg,
                             ) {
                                 return true;
                             }
                         }
                     }
                 }
-                self.expr_calls_mut_self_method_on_identifier(object, id, registry)
-                    || arguments.iter().any(|(_, a)| {
-                        self.expr_calls_mut_self_method_on_identifier(a, id, registry)
-                    })
+                self.expr_calls_mut_self_method_on_identifier(
+                    object,
+                    id,
+                    registry,
+                    binding_type_bases,
+                ) || arguments.iter().any(|(_, a)| {
+                    self.expr_calls_mut_self_method_on_identifier(
+                        a,
+                        id,
+                        registry,
+                        binding_type_bases,
+                    )
+                })
             }
             Expression::Binary { left, right, .. } => {
-                self.expr_calls_mut_self_method_on_identifier(left, id, registry)
-                    || self.expr_calls_mut_self_method_on_identifier(right, id, registry)
+                self.expr_calls_mut_self_method_on_identifier(
+                    left,
+                    id,
+                    registry,
+                    binding_type_bases,
+                ) || self.expr_calls_mut_self_method_on_identifier(
+                    right,
+                    id,
+                    registry,
+                    binding_type_bases,
+                )
             }
-            Expression::Unary { operand, .. } => {
-                self.expr_calls_mut_self_method_on_identifier(operand, id, registry)
-            }
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, a)| self.expr_calls_mut_self_method_on_identifier(a, id, registry)),
+            Expression::Unary { operand, .. } => self.expr_calls_mut_self_method_on_identifier(
+                operand,
+                id,
+                registry,
+                binding_type_bases,
+            ),
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, a)| {
+                self.expr_calls_mut_self_method_on_identifier(
+                    a,
+                    id,
+                    registry,
+                    binding_type_bases,
+                )
+            }),
             _ => false,
         }
     }
@@ -349,33 +386,51 @@ impl<'ast> Analyzer<'ast> {
         block: &[&'s Statement<'s>],
         id: &str,
         registry: Option<&super::SignatureRegistry>,
+        binding_type_bases: Option<&std::collections::HashMap<String, String>>,
     ) -> bool {
         for s in block {
             match *s {
                 Statement::Expression { expr, .. } => {
-                    if self.expr_calls_mut_self_method_on_identifier(expr, id, registry) {
+                    if self.expr_calls_mut_self_method_on_identifier(
+                        expr,
+                        id,
+                        registry,
+                        binding_type_bases,
+                    ) {
                         return true;
                     }
                 }
                 Statement::Return {
                     value: Some(expr), ..
                 } => {
-                    if self.expr_calls_mut_self_method_on_identifier(expr, id, registry) {
+                    if self.expr_calls_mut_self_method_on_identifier(
+                        expr,
+                        id,
+                        registry,
+                        binding_type_bases,
+                    ) {
                         return true;
                     }
                 }
                 Statement::Let { value, .. } => {
-                    if self.expr_calls_mut_self_method_on_identifier(value, id, registry) {
+                    if self.expr_calls_mut_self_method_on_identifier(
+                        value,
+                        id,
+                        registry,
+                        binding_type_bases,
+                    ) {
                         return true;
                     }
                 }
                 Statement::While { body, .. } | Statement::Loop { body, .. } => {
-                    if self.block_expr_calls_mut_self_on_id(body, id, registry) {
+                    if self.block_expr_calls_mut_self_on_id(body, id, registry, binding_type_bases)
+                    {
                         return true;
                     }
                 }
                 Statement::For { body, .. } => {
-                    if self.block_expr_calls_mut_self_on_id(body, id, registry) {
+                    if self.block_expr_calls_mut_self_on_id(body, id, registry, binding_type_bases)
+                    {
                         return true;
                     }
                 }
@@ -385,14 +440,25 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    if self.expr_calls_mut_self_method_on_identifier(condition, id, registry) {
+                    if self.expr_calls_mut_self_method_on_identifier(
+                        condition,
+                        id,
+                        registry,
+                        binding_type_bases,
+                    ) {
                         return true;
                     }
-                    if self.block_expr_calls_mut_self_on_id(then_block, id, registry) {
+                    if self.block_expr_calls_mut_self_on_id(
+                        then_block,
+                        id,
+                        registry,
+                        binding_type_bases,
+                    ) {
                         return true;
                     }
                     if let Some(e) = else_block {
-                        if self.block_expr_calls_mut_self_on_id(e, id, registry) {
+                        if self.block_expr_calls_mut_self_on_id(e, id, registry, binding_type_bases)
+                        {
                             return true;
                         }
                     }

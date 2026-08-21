@@ -143,6 +143,11 @@ impl<'ast> CodeGenerator<'ast> {
                 &func.parameters,
                 &self.current_struct_fields,
                 &local_bindings,
+            )
+            .with_field_type_lookup(
+                self.current_struct_name.as_deref(),
+                Some(&self.struct_field_types),
+                Some(&self.signature_registry),
             );
             let mutates = self_analysis::function_mutates_fields(&ctx, func);
             let accesses = self_analysis::function_accesses_fields(&ctx, func);

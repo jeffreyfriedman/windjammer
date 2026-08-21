@@ -101,6 +101,9 @@ pub(crate) fn has_ownership_collision_for_call(
     gen: &crate::codegen::rust::generator::CodeGenerator,
     func_name: &str,
 ) -> bool {
+    if let Some(qualified) = gen.imported_runtime_qualified_callee(func_name) {
+        return gen.has_explicit_ownership_collision_with_global(&qualified);
+    }
     // `WalSegment::from_bytes` / `Vec::push` — the type prefix disambiguates homonyms;
     // do not block on simple-name method collisions (`from_bytes`, `new`, etc.).
     if is_type_qualified_associated_call(func_name) {
@@ -185,7 +188,10 @@ fn best_module_qualified_suffix_match(
 
     // Prefer method-index: suffix is `::{Type}::{method}` or `::{method}` — index by
     // the trailing method segment so we never scan the full registry.
-    let method_leaf = suffix.rsplit("::").next().unwrap_or(suffix.trim_start_matches(':'));
+    let method_leaf = suffix
+        .rsplit("::")
+        .next()
+        .unwrap_or(suffix.trim_start_matches(':'));
     if let Some(keys) = registry.method_keys_for(method_leaf) {
         for key in keys {
             if let Some(sig) = registry.get_signature(key) {
@@ -754,10 +760,9 @@ pub(crate) fn global_suffix_param_ownership(
 /// Whether a formal type should honor a body-converged borrow.
 pub(crate) fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
     match formal_ty {
-        Type::Parameterized(base, _) => matches!(
-            base.as_str(),
-            "Vec" | "HashMap" | "HashSet" | "Map" | "Option" | "Result"
-        ),
+        Type::Parameterized(base, _) => {
+            crate::type_classification::is_stdlib_wrapper_type_base(base)
+        }
         Type::String => true,
         Type::Custom(name) if name == "string" => true,
         Type::Custom(name)
@@ -2147,8 +2152,6 @@ impl BuildFingerprint {
         );
     }
 
-
-
     #[test]
     fn draw_text_borrows_owned_string_local() {
         use crate::analyzer::Analyzer;
@@ -2203,10 +2206,6 @@ fn main() {
         );
     }
 
-
-
-
-
     #[test]
     fn cross_file_walls_borrow_via_layered_registry() {
         use crate::analyzer::{Analyzer, OwnershipMode};
@@ -2234,7 +2233,10 @@ fn check_collisions(walls: Vec<AABB>) -> bool {
         let mut analyzer_a = Analyzer::new();
         let (_, registry_a, _) = analyzer_a.analyze_program(&program_a).unwrap();
         assert_eq!(
-            registry_a.get_signature("check_collisions").unwrap().param_ownership[0],
+            registry_a
+                .get_signature("check_collisions")
+                .unwrap()
+                .param_ownership[0],
             OwnershipMode::Borrowed
         );
 
@@ -2254,7 +2256,10 @@ fn game_update() {
         let (analyzed, registry, _) = analyzer_b
             .analyze_program_with_global_signatures(&program_b, &registry_a)
             .unwrap();
-        let found = registry.get_signature("check_collisions").cloned().expect("sig");
+        let found = registry
+            .get_signature("check_collisions")
+            .cloned()
+            .expect("sig");
         assert!(crate::ir::signature_bridge::call_site_expects_shared_borrow(&found, 0));
         let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
         codegen.set_global_signature_registry(Arc::new(registry_a));
@@ -2289,13 +2294,18 @@ pub fn graph_bfs_run_dense(csr: DenseCsr, source: i64) -> i64 {
         let mut analyzer_a = Analyzer::new();
         let (_, registry_a, _) = analyzer_a.analyze_program(&program_a).unwrap();
         assert_eq!(
-            registry_a.get_signature("graph_bfs_run_dense").unwrap().param_ownership[0],
+            registry_a
+                .get_signature("graph_bfs_run_dense")
+                .unwrap()
+                .param_ownership[0],
             OwnershipMode::Borrowed
         );
-        assert!(crate::ir::signature_bridge::call_site_expects_shared_borrow(
-            registry_a.get_signature("graph_bfs_run_dense").unwrap(),
-            0
-        ));
+        assert!(
+            crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                registry_a.get_signature("graph_bfs_run_dense").unwrap(),
+                0
+            )
+        );
 
         let file_b = r#"
 pub struct DenseCsr {
@@ -2317,7 +2327,10 @@ pub fn run_bfs(source: i64) -> i64 {
         let (analyzed, registry, _) = analyzer_b
             .analyze_program_with_global_signatures(&program_b, &registry_a)
             .unwrap();
-        let found = registry.get_signature("graph_bfs_run_dense").cloned().expect("sig");
+        let found = registry
+            .get_signature("graph_bfs_run_dense")
+            .cloned()
+            .expect("sig");
         assert!(
             crate::ir::signature_bridge::call_site_expects_shared_borrow(&found, 0),
             "merged sig must expect shared borrow"

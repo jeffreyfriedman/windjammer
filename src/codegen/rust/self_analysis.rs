@@ -23,6 +23,16 @@ pub struct AnalysisContext<'a, 'ast> {
     pub current_struct_fields: &'a HashSet<String>,
     /// Locals bound in this function (let / for / match) — shadow struct field names
     pub local_variables: Option<&'a HashSet<String>>,
+    /// Impl type for `self.field` type resolution (codegen match-arm scans).
+    pub struct_name: Option<&'a str>,
+    /// Struct field types from metadata / multipass (type-qualified method lookup).
+    pub struct_field_types: Option<
+        &'a std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, crate::parser::Type>,
+        >,
+    >,
+    pub signature_registry: Option<&'a SignatureRegistry>,
 }
 
 impl<'a, 'ast> AnalysisContext<'a, 'ast> {
@@ -31,7 +41,27 @@ impl<'a, 'ast> AnalysisContext<'a, 'ast> {
             current_function_params: params,
             current_struct_fields: fields,
             local_variables: None,
+            struct_name: None,
+            struct_field_types: None,
+            signature_registry: None,
         }
+    }
+
+    pub fn with_field_type_lookup(
+        mut self,
+        struct_name: Option<&'a str>,
+        struct_field_types: Option<
+            &'a std::collections::HashMap<
+                String,
+                std::collections::HashMap<String, crate::parser::Type>,
+            >,
+        >,
+        signature_registry: Option<&'a SignatureRegistry>,
+    ) -> Self {
+        self.struct_name = struct_name;
+        self.struct_field_types = struct_field_types;
+        self.signature_registry = signature_registry;
+        self
     }
 
     pub fn with_locals(
@@ -43,6 +73,9 @@ impl<'a, 'ast> AnalysisContext<'a, 'ast> {
             current_function_params: params,
             current_struct_fields: fields,
             local_variables: Some(locals),
+            struct_name: None,
+            struct_field_types: None,
+            signature_registry: None,
         }
     }
 
@@ -1421,30 +1454,12 @@ fn method_is_mutating_on_receiver(
                     receiver_upgrades,
                 );
             }
-            // `self.field.method` with unknown field type: last-resort signature
-            // consensus — never `ParentType::method` (qualified miss → false).
-            if let Some(reg) = registry {
-                return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
-                    method, None, reg,
-                );
-            }
-            return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
-                method,
-                None,
-                SignatureRegistry::stdlib(),
-            );
+            // `self.field.method` with unknown field type: do not use unqualified consensus.
+            return false;
         }
     } else if is_self_field_chain(receiver) {
-        if let Some(reg) = registry {
-            return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
-                method, None, reg,
-            );
-        }
-        return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
-            method,
-            None,
-            SignatureRegistry::stdlib(),
-        );
+        // Unknown field chain type — avoid stdlib consensus poisoning user types.
+        return false;
     }
     method_is_mutating(method, registry, struct_name, receiver_upgrades)
 }
@@ -1516,11 +1531,7 @@ pub fn resolve_self_field_chain_type_name(
 }
 
 fn type_to_custom_name(ty: &crate::parser::Type) -> Option<String> {
-    match ty {
-        crate::parser::Type::Custom(name) => Some(name.clone()),
-        crate::parser::Type::Parameterized(name, _) => Some(name.clone()),
-        _ => None,
-    }
+    crate::type_classification::type_to_registry_base(ty)
 }
 
 fn resolve_self_field_chain_type(
@@ -1661,18 +1672,26 @@ pub fn expression_mutates_fields(ctx: &AnalysisContext, expr: &Expression) -> bo
             statements.iter().any(|s| statement_mutates_fields(ctx, s))
         }
         Expression::MethodCall { object, method, .. } => {
-            // Check if this is a mutating method call on a field: self.field.push(...) or self.field[i].push(...)
+            // Type-qualified only — never unqualified stdlib consensus on unknown field types.
             if expression_is_field_access(ctx, object)
                 || expression_is_self_field_index_access(ctx, object)
             {
-                crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
-                    method,
-                    None,
-                    SignatureRegistry::stdlib(),
-                )
-            } else {
-                false
+                if let (Some(sn), Some(fields), Some(reg)) = (
+                    ctx.struct_name,
+                    ctx.struct_field_types,
+                    ctx.signature_registry,
+                ) {
+                    return method_is_mutating_on_receiver(
+                        object,
+                        method,
+                        Some(reg),
+                        Some(sn),
+                        Some(fields),
+                        None,
+                    );
+                }
             }
+            false
         }
         _ => false,
     }

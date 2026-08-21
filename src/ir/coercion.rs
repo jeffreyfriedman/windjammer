@@ -344,7 +344,7 @@ pub(crate) fn is_string_base(base: &BaseType) -> bool {
 }
 
 pub(crate) fn is_vec_base(base: &BaseType) -> bool {
-    matches!(base, BaseType::Custom(name) if name == "Vec")
+    matches!(base, BaseType::Custom(name) if crate::type_classification::type_name_leaf(name) == "Vec")
 }
 
 fn needs_string_owned_coercion(actual: &BaseType, expected: &BaseType) -> bool {

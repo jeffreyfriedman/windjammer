@@ -386,7 +386,16 @@ impl Parser {
                 }
                 Token::Bang => {
                     // Macro invocation: name!(...) or name![...] or name!{...}
+                    // Do not treat `ident !expr` across statement boundaries as a macro
+                    // (`let _ = name` / `!false` must leave Bang for unary-not).
                     if let Expression::Identifier { name, .. } = expr {
+                        let is_macro_call = matches!(
+                            self.peek(1),
+                            Some(Token::LParen | Token::LBracket | Token::LBrace)
+                        );
+                        if !is_macro_call {
+                            break;
+                        }
                         self.advance(); // consume '!'
 
                         let (delimiter, end_token) = match self.current_token() {
@@ -414,29 +423,29 @@ impl Parser {
                                     location: self.current_location(),
                                 }));
                             } else {
-                            // Parse first argument
-                            args.push(self.parse_expression()?);
-
-                            // Check for vec![item; count] repetition syntax
-                            if delimiter == MacroDelimiter::Brackets
-                                && self.current_token() == &Token::Semicolon
-                            {
-                                self.advance(); // consume semicolon
+                                // Parse first argument
                                 args.push(self.parse_expression()?);
-                                is_repeat_flag = true; // This is vec![x; n] repeat syntax
-                            } else {
-                                // Parse remaining comma-separated arguments
-                                while self.current_token() == &Token::Comma {
-                                    self.advance();
 
-                                    // Allow trailing comma
-                                    if self.current_token() == &end_token {
-                                        break;
-                                    }
-
+                                // Check for vec![item; count] repetition syntax
+                                if delimiter == MacroDelimiter::Brackets
+                                    && self.current_token() == &Token::Semicolon
+                                {
+                                    self.advance(); // consume semicolon
                                     args.push(self.parse_expression()?);
+                                    is_repeat_flag = true; // This is vec![x; n] repeat syntax
+                                } else {
+                                    // Parse remaining comma-separated arguments
+                                    while self.current_token() == &Token::Comma {
+                                        self.advance();
+
+                                        // Allow trailing comma
+                                        if self.current_token() == &end_token {
+                                            break;
+                                        }
+
+                                        args.push(self.parse_expression()?);
+                                    }
                                 }
-                            }
                             }
                         }
 

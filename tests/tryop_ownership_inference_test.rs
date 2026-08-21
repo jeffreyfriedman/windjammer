@@ -13,31 +13,15 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
-/// TDD Test: TryOp (?) Ownership Inference
+/// TDD: TryOp (`?`) must recurse into the inner expression for ownership.
 ///
-/// PROBLEM: When a parameter is used inside a `?` (try/error propagation) expression,
-/// the analyzer fails to detect the usage because `Expression::TryOp` wraps the inner
-/// expression and the walking functions don't recurse into it.
-///
-/// Example:
-/// ```
-/// pub fn load_game_level(loader: AssetLoader, level_name: String) -> Result<...> {
-///     let tilemap = loader.load("tilemap", "path", 8192)?
-/// }
-/// ```
-///
-/// The AST for `loader.load(...)?` is:
-///   TryOp { expr: MethodCall { object: Identifier("loader"), method: "load", ... } }
-///
-/// The analyzer sees TryOp and returns false (catch-all), never checking the inner
-/// MethodCall. This causes `loader` to be inferred as `&AssetLoader` (borrowed)
-/// when it should stay Owned (since .load() is potentially mutating).
-///
-/// FIX: Add TryOp handling to all walking functions in the analyzer so that
-/// expressions wrapped in `?` are still analyzed for ownership inference.
+/// Signature-driven: when the method under `?` takes owned/`&mut self`, the
+/// param stays owned (or mut-borrowed). When the method is clearly `&self`,
+/// borrowing the param is correct — do not poison via unqualified method-name
+/// consensus (`load` is not a stdlib-wide mutate oracle).
+
 #[test]
-fn test_tryop_method_call_keeps_param_owned() {
-    // loader.load(...)? — .load() is potentially mutating, so loader should stay Owned
+fn test_tryop_readonly_method_may_borrow_param() {
     let source = r#"
 struct AssetLoader {
     pub base_path: string,
@@ -61,25 +45,51 @@ fn load_game(loader: AssetLoader) -> Result<string, string> {
 
     let rust_code = test_utils::compile_single(source);
 
-    // The parameter should NOT be borrowed because .load() is potentially mutating
-    // and it's inside a TryOp expression
+    // Body does not use `self` fields → analyzer converges `&self` → call-site borrow OK.
+    assert!(
+        rust_code.contains("loader: &AssetLoader")
+            || rust_code.contains("fn load(&self"),
+        "readonly AssetLoader::load under ? may borrow loader.\nGenerated:\n{rust_code}"
+    );
+    assert!(
+        !rust_code.contains("loader: &mut AssetLoader"),
+        "readonly load must not force &mut.\nGenerated:\n{rust_code}"
+    );
+}
+
+#[test]
+fn test_tryop_mutating_method_keeps_param_mut_or_owned() {
+    // Field mutation under `?` must not demote the param to shared `&T`.
+    let source = r#"
+struct AssetLoader {
+    pub base_path: string,
+}
+
+impl AssetLoader {
+    fn load(self, name: string) -> Result<string, string> {
+        self.base_path = name
+        Ok(self.base_path)
+    }
+}
+
+fn load_game(loader: AssetLoader) -> Result<string, string> {
+    let result = loader.load("tilemap".to_string())?
+    Ok(result)
+}
+"#;
+
+    let rust_code = test_utils::compile_single(source);
+
     assert!(
         !rust_code.contains("loader: &AssetLoader"),
-        "loader should NOT be &AssetLoader (borrowed) when .load()? is called.\n\
-         The ? operator wraps the method call in TryOp, which must be recursed into.\n\
-         Generated:\n{}",
-        rust_code
+        "mutating load()? must not shared-borrow loader.\nGenerated:\n{rust_code}"
     );
-
-    // It should be either owned or mut borrowed
     let has_owned =
         rust_code.contains("loader: AssetLoader") || rust_code.contains("mut loader: AssetLoader");
     let has_mut_ref = rust_code.contains("loader: &mut AssetLoader");
     assert!(
         has_owned || has_mut_ref,
-        "loader should be AssetLoader (owned) or &mut AssetLoader since .load() needs &mut self.\n\
-         Generated:\n{}",
-        rust_code
+        "mutating method under ? must keep owned or &mut formal.\nGenerated:\n{rust_code}"
     );
 }
 

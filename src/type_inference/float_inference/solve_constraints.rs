@@ -242,7 +242,7 @@ impl FloatInference {
                     if base == "Vec" && parameters.len() == 1 {
                         self.var_element_types
                             .insert(name.clone(), parameters[0].clone());
-                    } else if matches!(base, "HashMap" | "Map" | "BTreeMap")
+                    } else if crate::type_classification::is_map_type_name(base)
                         && parameters.len() == 2
                     {
                         // Store the value type (second parameter)

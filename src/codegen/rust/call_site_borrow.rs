@@ -25,45 +25,14 @@ pub(crate) fn plain_string_formal_passes_owned_at_call_site(
     ) {
         return false;
     }
+    // Shared-ref emission confirmed → call sites borrow (`&str`), not own.
     if callee_emits_shared_rust_ref_param(sig, param_idx) {
         return false;
     }
-    // Body/codegen converged to `&str` + Borrowed (cross-file `.wj.meta` often lacks
-    // `emitted_rust_ref_params`) — pass as borrow, never force owned `.to_string()`.
-    if matches!(
-        sig.param_ownership.get(param_idx),
-        Some(OwnershipMode::Borrowed)
-    ) && sig.param_types.get(param_idx).is_some_and(|t| {
-        string_utilities::param_is_rust_str_ref(t) || matches!(t, Type::Reference(_))
-    }) {
-        return false;
-    }
-    // Body-inferred borrow without converged param_types yet (readonly string callees).
-    if matches!(
-        sig.param_ownership.get(param_idx),
-        Some(OwnershipMode::Borrowed)
-    ) && !sig
-        .param_types
-        .get(param_idx)
-        .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
-    {
-        return false;
-    }
-    // Free-function plain `string`: Owned analyzer contract → pass by value.
-    // (Readonly `&str` emission is gated on `emitted_rust_ref_params` / Borrowed ownership.)
-    if !sig.has_self_receiver {
-        return matches!(
-            sig.param_ownership.get(param_idx),
-            Some(OwnershipMode::Owned) | None
-        ) && !callee_emits_shared_rust_ref_param(sig, param_idx);
-    }
-    // Methods: owned plain `string` only when the analyzer contract is Owned (trait
-    // forwards, builder APIs). Readonly `&str` methods (`find_index(key)`) must not
-    // force callers to `.to_string()` literals (blackboard set_bool regression).
-    matches!(
-        sig.param_ownership.get(param_idx),
-        Some(OwnershipMode::Owned) | None
-    ) && !callee_emits_shared_rust_ref_param(sig, param_idx)
+    // Plain WJ `string` without codegen-confirmed `&str` → pass owned.
+    // Stale analyzer `Borrowed` / `Reference(str)` multipass metadata must not force
+    // call-site `&` (circular-dep owned formals, WDB-099).
+    true
 }
 
 /// Whether codegen recorded (or unambiguously converged) a shared-ref Rust formal for `param_idx`.
@@ -314,15 +283,19 @@ pub(crate) fn callee_emits_shared_rust_ref_param(
 }
 
 fn type_is_vec_container(t: &Type) -> bool {
-    matches!(t, Type::Vec(_)) || matches!(t, Type::Parameterized(name, _) if name == "Vec")
+    crate::type_classification::type_is_vec_container(t)
 }
 
 pub(crate) fn expression_is_vec_macro_literal(expr: &Expression) -> bool {
     matches!(expr, Expression::MacroInvocation { name, .. } if name == "vec")
 }
 
-/// `Vec::new()` / `Vec::<T>::new()` at a call site — owned constructor, safe to prefix `&`.
-pub(crate) fn expression_is_vec_new_constructor(expr: &Expression) -> bool {
+/// Zero-arg stdlib empty constructor (`Vec::new`, `HashMap::new`, `vec![]`, …).
+///
+/// Type-driven: zero-arg *associated* call (`Type::…()`) on a
+/// [`is_stdlib_default_empty_type`] type. Method spelling is not consulted —
+/// associated zero-arg formals on these types are empty factories (`new`/`default`).
+pub(crate) fn expression_is_stdlib_empty_default_constructor(expr: &Expression) -> bool {
     if expression_is_vec_macro_literal(expr) {
         return true;
     }
@@ -337,12 +310,22 @@ pub(crate) fn expression_is_vec_new_constructor(expr: &Expression) -> bool {
     if !arguments.is_empty() {
         return false;
     }
-    match &**function {
-        Expression::FieldAccess { object, field, .. } if field == "new" => {
-            matches!(&**object, Expression::Identifier { name, .. } if name == "Vec")
-        }
-        _ => false,
-    }
+    let type_name = match &**function {
+        Expression::FieldAccess { object, .. } => match &**object {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            _ => None,
+        },
+        Expression::Identifier { name, .. } => name.rsplit_once("::").map(|(ty, _)| ty),
+        _ => None,
+    };
+    type_name.is_some_and(|ty| {
+        crate::codegen::rust::stdlib_method_traits::is_stdlib_default_empty_type(ty)
+    })
+}
+
+/// Back-compat alias — prefer [`expression_is_stdlib_empty_default_constructor`].
+pub(crate) fn expression_is_vec_new_constructor(expr: &Expression) -> bool {
+    expression_is_stdlib_empty_default_constructor(expr)
 }
 
 fn expression_is_owned_vec_at_call_site<'ast>(
@@ -637,7 +620,7 @@ pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
     ) || matches!(
         arg_expr,
         Expression::MethodCall { method, object, .. }
-        if (method.as_str() == "to_string" || method.as_str() == "string")
+        if crate::type_classification::is_language_level_owned_string_convert(method.as_str())
             && matches!(
                 &**object,
                 Expression::Literal { value: Literal::String(_), .. }
@@ -704,6 +687,13 @@ fn registry_param_types_indicate_shared_borrow(
         .copied()
         == Some(false)
     {
+        return false;
+    }
+    // Plain WJ `string` formals need `emitted_rust_ref_params` — stale `Reference(str)`
+    // alone must not claim shared-ref emission (circular-dep / multipass).
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) {
         return false;
     }
     if !matches!(
@@ -797,6 +787,12 @@ pub fn should_borrow_at_call_site_with_copy_check(
     let is_collection_key = is_collection_key_arg(sig, arg_index, receiver_type);
 
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return CallSiteBorrowDecision::default();
+    }
+
+    // Plain WJ `string` without codegen-confirmed `&str` — pass owned before any
+    // stale `Reference(str)` registry-wrap path can force call-site `&`.
+    if plain_string_formal_passes_owned_at_call_site(sig, param_idx) && !is_collection_key {
         return CallSiteBorrowDecision::default();
     }
 
@@ -1313,7 +1309,7 @@ mod tests {
 
     #[test]
     fn registry_str_ref_param_emits_shared_borrow() {
-        let sig = sig_with_formal(
+        let mut sig = sig_with_formal(
             "TextBuffer::append_slice",
             vec![
                 Type::Custom("TextBuffer".into()),
@@ -1323,10 +1319,12 @@ mod tests {
             vec![OwnershipMode::MutBorrowed, OwnershipMode::Borrowed],
             true,
         );
+        // Plain WJ `string` formals require codegen emission confirmation for `&str`.
+        sig.emitted_rust_ref_params = Some(vec![false, true]);
         let pidx = sig.arg_param_index(0);
         assert!(
             callee_emits_shared_rust_ref_param(&sig, pidx),
-            "Reference(str) + Borrowed ownership must emit shared borrow at call sites"
+            "emitted_rust_ref_params + Reference(str) must emit shared borrow at call sites"
         );
     }
 

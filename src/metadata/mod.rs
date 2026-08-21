@@ -477,13 +477,13 @@ pub fn collect_analyzed_module_metadata(
     for item in &program.items {
         match item {
             Item::Function { decl, .. } => {
-                let sig = registry.get_signature(&decl.name).or_else(|| {
-                    if module_name.is_empty() {
-                        None
-                    } else {
-                        registry.get_signature(&format!("{}::{}", module_name, decl.name))
-                    }
-                });
+                let module_recv = (!module_name.is_empty()).then_some(module_name);
+                let sig = crate::analyzer::stdlib_method_traits::lookup_method_signature(
+                    &decl.name,
+                    module_recv,
+                    registry,
+                )
+                .or_else(|| registry.get_signature(&decl.name));
                 if let Some(sig) = sig {
                     let key = if registry.get_signature(&decl.name).is_some() {
                         decl.name.clone()
@@ -497,7 +497,13 @@ pub fn collect_analyzed_module_metadata(
             Item::Impl { block, .. } => {
                 for func_decl in &block.functions {
                     let full_name = format!("{}::{}", block.type_name, func_decl.name);
-                    if let Some(sig) = registry.get_signature(&full_name) {
+                    if let Some(sig) =
+                        crate::analyzer::stdlib_method_traits::lookup_method_signature(
+                            &func_decl.name,
+                            Some(block.type_name.as_str()),
+                            registry,
+                        )
+                    {
                         meta.functions.insert(
                             full_name,
                             metadata_function_sig_from_analyzer(
@@ -522,7 +528,13 @@ pub fn collect_analyzed_module_metadata(
             Item::Trait { decl, .. } => {
                 for method in &decl.methods {
                     let full_name = format!("{}::{}", decl.name, method.name);
-                    if let Some(sig) = registry.get_signature(&full_name) {
+                    if let Some(sig) =
+                        crate::analyzer::stdlib_method_traits::lookup_method_signature(
+                            &method.name,
+                            Some(decl.name.as_str()),
+                            registry,
+                        )
+                    {
                         meta.functions.insert(
                             full_name,
                             metadata_function_sig_from_analyzer(sig, true, Some(decl.name.clone())),

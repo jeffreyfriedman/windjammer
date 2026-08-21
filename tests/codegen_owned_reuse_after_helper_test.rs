@@ -54,3 +54,40 @@ fn main() {
         result
     );
 }
+
+/// WDB-100 / Phase 128: two-arg owned helper then substring of the same String.
+/// PRE isolate-transpile cloned earlier one-arg helpers but moved `sql` into
+/// `find_word` / `find_sum_open` without a later clone before `strings::substring`.
+#[test]
+fn owned_string_reuse_after_two_arg_by_value_helper_should_clone() {
+    let source = r#"
+use std::strings
+
+pub fn find_word(hay: string, needle: string) -> int {
+    if hay.len() == 0 { return -1 }
+    0
+}
+
+pub fn after_sum(sql: string) -> string {
+    let i = find_word(sql, "sum(")
+    strings::substring(sql, i as usize, sql.len())
+}
+
+fn main() {
+    let _ = after_sum("SELECT SUM(qty)")
+}
+"#;
+
+    let result = test_utils::compile_single(source);
+
+    let has_clone = result.contains("sql.clone()") || result.contains(".clone()");
+    let borrowed_formals = result.contains("sql: &str") && result.contains("find_word(sql,");
+    assert!(
+        has_clone
+            || borrowed_formals
+            || result.contains("find_word(&sql")
+            || result.contains("find_word(sql.as_str()"),
+        "owned string reused after two-arg by-value helper should auto-clone or borrow. Got:\n{}",
+        result
+    );
+}
