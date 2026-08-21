@@ -4,15 +4,13 @@
 //! are available; inline name-based fallbacks otherwise (legacy method_registry parity).
 
 use crate::parser::Type;
+use crate::type_classification::{self, MAP_TYPE_NAMES, SET_TYPE_NAMES};
 
 use super::{FunctionSignature, OwnershipMode, SignatureRegistry};
 
 // ── Inline fallback tables (legacy method_registry parity) ───────────────
 // Mutating/readonly-receiver detection is signature-driven (see consensus_*).
 // Do not reintroduce method-name lists for ownership decisions.
-
-const MAP_TYPES: &[&str] = &["HashMap", "BTreeMap", "Map", "IndexMap"];
-const SET_TYPES: &[&str] = &["HashSet", "BTreeSet"];
 
 /// Receiver type names to try for `Type::method` registry lookup.
 ///
@@ -77,7 +75,24 @@ pub(crate) fn is_qualified_map_type(ty: &Type) -> bool {
     }
 }
 
+pub(crate) fn is_qualified_set_type(ty: &Type) -> bool {
+    match ty {
+        Type::Parameterized(base, _) | Type::Custom(base) => {
+            is_set_receiver(Some(base.as_str())) && base.contains("::")
+        }
+        Type::Reference(inner) | Type::MutableReference(inner) => is_qualified_set_type(inner),
+        _ => false,
+    }
+}
+
+pub(crate) fn is_qualified_collection_type(ty: &Type) -> bool {
+    is_qualified_map_type(ty) || is_qualified_set_type(ty)
+}
+
 /// Map/set lookup syntax may parse as `MethodCall` or `Call(FieldAccess(receiver, method))`.
+///
+/// Shape prefilter only (unqualified method name). Callers must validate the receiver
+/// via [`is_collection_key_arg_on_receiver`] before treating the first arg as a lookup key.
 pub(crate) fn decompose_collection_key_lookup<'ast>(
     expr: &'ast crate::parser::Expression<'ast>,
 ) -> Option<(
@@ -187,6 +202,40 @@ pub(crate) fn lookup_callable_signature<'a>(
     lookup_suffix(simple, registry)
 }
 
+/// Bare callee uniquely provided by imported `use std::{module}` runtime modules.
+///
+/// Homonyms (`http::error` vs `log_mod::error`) stay ambiguous unless exactly one
+/// imported module registers the name. Not a function-name heuristic.
+pub(crate) fn unique_imported_runtime_callee_key(
+    callee: &str,
+    imported_modules: &std::collections::HashSet<String>,
+    registry: &SignatureRegistry,
+) -> Option<String> {
+    if callee.contains("::") || imported_modules.is_empty() {
+        return None;
+    }
+    let mut hit: Option<String> = None;
+    for module in imported_modules {
+        let stem = registry
+            .runtime_rust_stem(module)
+            .unwrap_or(module.as_str());
+        let key = [format!("{module}::{callee}"), format!("{stem}::{callee}")]
+            .into_iter()
+            .find(|k| registry.get_signature(k).is_some());
+        let Some(key) = key else {
+            continue;
+        };
+        if let Some(prev) = hit.as_ref() {
+            if prev != &key {
+                return None;
+            }
+        } else {
+            hit = Some(key);
+        }
+    }
+    hit
+}
+
 /// Whether call-site argument `arg_idx` is `&mut`.
 ///
 /// `args_include_receiver` is true for `Call` (UFCS / free functions: every
@@ -249,19 +298,28 @@ fn is_closure_type(ty: &Type) -> bool {
 }
 
 pub(crate) fn is_map_receiver(receiver_type: Option<&str>) -> bool {
-    receiver_type.is_some_and(|ty| {
-        let base = ty.split('<').next().unwrap_or(ty);
-        let short = base.rsplit("::").next().unwrap_or(base);
-        MAP_TYPES.contains(&short)
-    })
+    receiver_type.is_some_and(type_classification::is_map_type_name)
 }
 
-fn is_set_receiver(receiver_type: Option<&str>) -> bool {
-    receiver_type.is_some_and(|ty| {
-        let base = ty.split('<').next().unwrap_or(ty);
-        let short = base.rsplit("::").next().unwrap_or(base);
-        SET_TYPES.contains(&short)
-    })
+pub(crate) fn is_set_receiver(receiver_type: Option<&str>) -> bool {
+    receiver_type.is_some_and(type_classification::is_set_type_name)
+}
+
+/// First arg of a map/set key-lookup method on a **known** matching receiver type.
+///
+/// Requires `receiver_type` — never uses unqualified method-name consensus (avoids
+/// `str.contains` / user `Foo.get` false positives).
+pub(crate) fn is_collection_key_arg_on_receiver(
+    method: &str,
+    arg_index: usize,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+) -> bool {
+    if arg_index != 0 || receiver_type.is_none() {
+        return false;
+    }
+    method_is_map_key_qualified(method, receiver_type, registry)
+        || method_is_set_lookup_qualified(method, receiver_type, registry)
 }
 
 fn method_matches_borrowed_key_on_types(
@@ -784,7 +842,7 @@ pub fn method_is_map_key_qualified(
     method_matches_borrowed_key_on_types(
         method,
         receiver_type,
-        MAP_TYPES,
+        MAP_TYPE_NAMES,
         is_map_receiver,
         registry,
     )
@@ -798,7 +856,7 @@ pub fn method_is_set_lookup_qualified(
     method_matches_borrowed_key_on_types(
         method,
         receiver_type,
-        SET_TYPES,
+        SET_TYPE_NAMES,
         is_set_receiver,
         registry,
     )
@@ -896,6 +954,36 @@ mod tests {
             true,
             &reg
         ));
+    }
+
+    #[test]
+    fn unique_imported_runtime_callee_disambiguates_homonyms() {
+        let mut reg = SignatureRegistry::empty();
+        let mut log_err = FunctionSignature::default();
+        log_err.name = "log_mod::error".into();
+        log_err.param_ownership = vec![OwnershipMode::Borrowed];
+        log_err.param_types = vec![Type::Reference(Box::new(Type::Custom("str".into())))];
+        reg.add_function("log_mod::error".into(), log_err);
+        reg.register_runtime_file_stem("log_mod");
+        let mut http_err = FunctionSignature::default();
+        http_err.name = "http::error".into();
+        http_err.param_ownership = vec![OwnershipMode::Owned, OwnershipMode::Owned];
+        reg.add_function("http::error".into(), http_err);
+        reg.register_runtime_file_stem("http");
+
+        let mut only_log = std::collections::HashSet::new();
+        only_log.insert("log".into());
+        assert_eq!(
+            unique_imported_runtime_callee_key("error", &only_log, &reg).as_deref(),
+            Some("log_mod::error")
+        );
+
+        let mut both = only_log.clone();
+        both.insert("http".into());
+        assert!(
+            unique_imported_runtime_callee_key("error", &both, &reg).is_none(),
+            "two imported modules defining error must stay ambiguous"
+        );
     }
 
     #[test]

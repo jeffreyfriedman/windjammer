@@ -4298,7 +4298,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let is_enum_variant =
                         crate::analyzer::Analyzer::looks_like_enum_variant_constructor(
                             &callee_name,
-                        ) || matches!(callee_name.as_str(), "Some" | "None" | "Ok" | "Err");
+                        ) || crate::type_classification::is_option_result_constructor(&callee_name);
                     if !is_enum_variant {
                         for (i, (_, arg)) in arguments.iter().enumerate() {
                             if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
@@ -5008,17 +5008,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// `Some`/`Ok`/`Err` / `Type::Variant` (PascalCase after `::` or FieldAccess).
     /// Static methods (`Type::snake_case`) are excluded — they are not payload stores.
     fn call_is_enum_or_lang_payload_constructor(function: &Expression<'ast>) -> bool {
-        match function {
-            Expression::Identifier { name, .. } => {
-                matches!(name.as_str(), "Some" | "Ok" | "Err")
-                    || crate::analyzer::Analyzer::looks_like_enum_variant_constructor(name)
-            }
-            Expression::FieldAccess { field, .. } => {
-                matches!(field.as_str(), "Some" | "Ok" | "Err")
-                    || field.chars().next().is_some_and(|c| c.is_ascii_uppercase())
-            }
-            _ => false,
-        }
+        crate::analyzer::Analyzer::is_language_level_call_payload_store(function)
     }
 
     /// Recurse into nested constructors without treating a bare identifier arg as a store.
@@ -5080,11 +5070,8 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 // Signature-driven: owned formals store the arg. Language-level
                 // `Some`/`Ok`/`Err` / PascalCase variant ctors always store.
-                let is_lang_payload = matches!(method.as_str(), "Some" | "Ok" | "Err")
-                    || method
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_uppercase());
+                let is_lang_payload =
+                    crate::analyzer::Analyzer::is_language_level_method_payload_store(method);
                 arguments.iter().enumerate().any(|(i, (_, arg))| {
                     let stores = is_lang_payload
                         || self.method_call_argument_stores_owned_payload(
@@ -6788,11 +6775,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(in crate::codegen::rust) fn param_type_is_vec_container(ty: &Type) -> bool {
-        match ty {
-            Type::Vec(_) => true,
-            Type::Parameterized(name, _) if name == "Vec" => true,
-            _ => false,
-        }
+        crate::type_classification::type_is_vec_container(ty)
     }
 
     /// `Vec<u8>` / `Vec<uint8>` — FFI/WAL byte buffers may emit `&Vec` + clone at store sites.
@@ -8647,20 +8630,11 @@ impl<'ast> CodeGenerator<'ast> {
         let mut sig = self
             .lookup_method_signature(&rt, method)
             .map(|ms| ms.to_function_signature())
-            .or_else(|| self.signature_registry.get_signature(&qualified).cloned())
-            .or_else(|| {
-                self.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.get_signature(&qualified).cloned())
-            })?;
-        if let Some(reg) = self
-            .signature_registry
-            .get_signature(&qualified)
-            .or_else(|| self.get_signature_with_global(&qualified))
-        {
-            // Always merge analyzer ownership / param_types (not only when
-            // emitted_rust_ref_params is set). Stale method-index Owned stubs
-            // otherwise make static Type::method callees look owning.
+            .or_else(|| self.get_signature_with_global(&qualified).cloned())
+            .or_else(|| self.signature_registry.get_signature(&qualified).cloned())?;
+        // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over the
+        // importer's analysis stub — never take local-only when global has emission.
+        if let Some(reg) = self.get_signature_with_global(&qualified) {
             Self::merge_registry_sig_into_method_sig(&mut sig, reg);
         }
         if let Some(global) = self.global_signature_registry.as_ref() {

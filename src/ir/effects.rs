@@ -122,9 +122,9 @@ fn http_effects(sig: Option<&FunctionSignature>) -> Vec<Effect> {
     match &sig.return_type {
         Some(Type::Result(ok, _)) if is_unit_type(ok) => vec![Effect::NetIngress],
         Some(ty) if is_unit_type(ty) => vec![Effect::NetIngress],
-        Some(Type::Custom(n)) if n == "HashMap" || n == "BTreeMap" || n == "Map" => vec![],
+        Some(Type::Custom(n)) if crate::type_classification::is_map_type_name(n) => vec![],
         Some(Type::Parameterized(base, _))
-            if matches!(base.as_str(), "HashMap" | "BTreeMap" | "Map") =>
+            if crate::type_classification::is_map_type_name(base) =>
         {
             vec![]
         }

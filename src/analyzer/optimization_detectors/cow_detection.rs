@@ -2,7 +2,7 @@
 
 use crate::parser::*;
 
-use super::super::{Analyzer, CowOptimization, CowReason};
+use super::super::{Analyzer, CowOptimization, CowReason, SignatureRegistry};
 
 impl<'ast> Analyzer<'ast> {
     pub(in crate::analyzer) fn detect_cow_opportunities(
@@ -22,7 +22,7 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
 
-            if let Some(reason) = self.analyze_conditional_modification(&param.name, &func.body) {
+            if let Some(reason) = self.analyze_conditional_modification(&param.name, &param.type_, &func.body) {
                 optimizations.push(CowOptimization {
                     variable: param.name.clone(),
                     reason,
@@ -36,6 +36,7 @@ impl<'ast> Analyzer<'ast> {
     pub(crate) fn analyze_conditional_modification(
         &self,
         var_name: &str,
+        var_type: &Type,
         body: &[&'ast Statement<'ast>],
     ) -> Option<CowReason> {
         let mut has_read_only_path = false;
@@ -48,10 +49,10 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    let modified_in_then = self.is_variable_modified(var_name, then_block);
+                    let modified_in_then = self.is_variable_modified(var_name, var_type, then_block);
                     let modified_in_else = else_block
                         .as_ref()
-                        .map(|block| self.is_variable_modified(var_name, block))
+                        .map(|block| self.is_variable_modified(var_name, var_type, block))
                         .unwrap_or(false);
 
                     if modified_in_then != modified_in_else {
@@ -95,8 +96,10 @@ impl<'ast> Analyzer<'ast> {
     pub(crate) fn is_variable_modified(
         &self,
         var_name: &str,
+        var_type: &Type,
         statements: &[&'ast Statement<'ast>],
     ) -> bool {
+        let receiver_base = Self::type_base_for_qualified_sig_lookup(var_type);
         for stmt in statements {
             match stmt {
                 Statement::Assignment {
@@ -114,8 +117,8 @@ impl<'ast> Analyzer<'ast> {
                         if name == var_name {
                             return crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(
                                 method,
-                                None,
-                                crate::analyzer::SignatureRegistry::stdlib(),
+                                receiver_base.as_deref(),
+                                SignatureRegistry::stdlib(),
                             );
                         }
                     }

@@ -42,6 +42,16 @@ impl DependencyGraph {
                     deps.insert(dep_idx);
                 }
             }
+            // `pub mod child;` (empty body) → sibling `child.wj` must codegen first so
+            // re-exports and cross-module callers see refreshed owned/`&str` formals
+            // (ecosystem wj-sitegen: domain/mod → domain/render before adapters/fs_site).
+            for child in collect_external_submodule_names(&program.items) {
+                let mut child_path = file_module.clone();
+                child_path.push(child);
+                if let Some(&dep_idx) = module_to_index.get(&child_path) {
+                    deps.insert(dep_idx);
+                }
+            }
             if !deps.is_empty() {
                 edges.insert(i, deps);
             }
@@ -121,6 +131,24 @@ impl DependencyGraph {
         }
         result
     }
+}
+
+/// Names of `mod child;` / `pub mod child;` declarations that refer to a sibling `.wj`
+/// file (empty item list). Inline `mod child { ... }` bodies are skipped.
+fn collect_external_submodule_names(items: &[Item<'_>]) -> Vec<String> {
+    let mut names = Vec::new();
+    for item in items {
+        match item {
+            Item::Mod { name, items, .. } if items.is_empty() => {
+                names.push(name.clone());
+            }
+            Item::Mod { items, .. } => {
+                names.extend(collect_external_submodule_names(items));
+            }
+            _ => {}
+        }
+    }
+    names
 }
 
 fn collect_imported_modules(items: &[Item<'_>]) -> Vec<Vec<String>> {

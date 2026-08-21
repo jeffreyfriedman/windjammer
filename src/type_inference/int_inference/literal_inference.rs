@@ -32,16 +32,18 @@ impl IntInference {
             }
             Type::Vec(inner) => self.extract_nested_int_type(inner),
             Type::Array(inner, _) => self.extract_nested_int_type(inner),
-            Type::Parameterized(name, args) if name == "Vec" && !args.is_empty() => {
+            Type::Parameterized(name, args)
+                if crate::type_classification::is_single_elem_iterable_base(name)
+                    && !args.is_empty() =>
+            {
                 self.extract_nested_int_type(&args[0])
             }
             Type::Parameterized(name, args) if name == "Option" && !args.is_empty() => {
                 self.extract_nested_int_type(&args[0])
             }
-            Type::Parameterized(name, args) if name == "HashMap" && args.len() >= 2 => {
-                self.extract_nested_int_type(&args[1])
-            }
-            Type::Parameterized(name, args) if name == "BTreeMap" && args.len() >= 2 => {
+            Type::Parameterized(name, args)
+                if crate::type_classification::is_map_type_name(name) && args.len() >= 2 =>
+            {
                 self.extract_nested_int_type(&args[1])
             }
             Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -180,7 +182,7 @@ impl IntInference {
         match ty {
             Type::Parameterized(name, args) => {
                 let base = crate::type_inference::generic_type_base_name(name);
-                if matches!(base, "HashMap" | "BTreeMap" | "Map") && args.len() >= 2 {
+                if crate::type_classification::is_map_type_name(base) && args.len() >= 2 {
                     Some(args[0].clone())
                 } else {
                     None
@@ -188,7 +190,7 @@ impl IntInference {
             }
             Type::Custom(name) if name.contains('<') => {
                 let base = name.split('<').next().unwrap_or(name);
-                if matches!(base, "HashMap" | "BTreeMap" | "Map") {
+                if crate::type_classification::is_map_type_name(base) {
                     if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
                         let inner = &name[start + 1..end];
                         let key = inner.split(',').next()?.trim();
@@ -209,7 +211,7 @@ impl IntInference {
         match ty {
             Type::Parameterized(name, args) => {
                 let base = crate::type_inference::generic_type_base_name(name);
-                if matches!(base, "HashMap" | "BTreeMap" | "Map") && args.len() >= 2 {
+                if crate::type_classification::is_map_type_name(base) && args.len() >= 2 {
                     Some(args[1].clone())
                 } else {
                     None
@@ -217,7 +219,7 @@ impl IntInference {
             }
             Type::Custom(name) if name.contains('<') => {
                 let base = name.split('<').next().unwrap_or(name);
-                if matches!(base, "HashMap" | "BTreeMap" | "Map") {
+                if crate::type_classification::is_map_type_name(base) {
                     if let (Some(start), Some(end)) = (name.find('<'), name.rfind('>')) {
                         let inner = &name[start + 1..end];
                         let value = inner.split(',').nth(1)?.trim();
@@ -265,11 +267,11 @@ impl IntInference {
             || match &receiver_type {
                 Type::Custom(n) => {
                     let base = n.split('<').next().unwrap_or(n);
-                    matches!(base, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                    crate::type_classification::is_map_type_name(base)
                 }
                 Type::Parameterized(base, _) => {
                     let b = crate::type_inference::generic_type_base_name(base);
-                    matches!(b, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                    crate::type_classification::is_map_type_name(b)
                 }
                 Type::Reference(inner) | Type::MutableReference(inner) => {
                     self.extract_map_key_type(inner).is_some()
@@ -277,7 +279,7 @@ impl IntInference {
                             inner.as_ref(),
                             Type::Custom(n) if {
                                 let base = n.split('<').next().unwrap_or(n.as_str());
-                                matches!(base, "HashMap" | "BTreeMap" | "Map" | "IndexMap")
+                                crate::type_classification::is_map_type_name(base)
                             }
                         )
                 }

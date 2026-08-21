@@ -652,6 +652,11 @@ impl<'ast> Analyzer<'ast> {
                 if Self::trait_param_is_owned_string(&param.type_)
                     && !str_ref_optimizable_params.contains(&param.name)
                 {
+                    if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                        str_ref_optimizable_params.remove(&param.name);
+                        continue;
+                    }
                     if self.param_needs_string_ref(&param.name, &func.body, registry) {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
                         str_ref_optimizable_params.remove(&param.name);
@@ -716,15 +721,14 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             if Self::trait_param_is_owned_string(&param.type_) {
-                if self.param_needs_string_ref(&param.name, &func.body, registry) {
-                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                     str_ref_optimizable_params.remove(&param.name);
                     continue;
                 }
-                if self.is_stored(&param.name, &func.body, registry)
-                    || self.is_returned(&param.name, &func.body)
-                    || self.param_is_consumed_into_return(&param.name, &func.body)
-                {
+                if self.param_needs_string_ref(&param.name, &func.body, registry) {
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                    str_ref_optimizable_params.remove(&param.name);
                     continue;
                 }
                 if matches!(
@@ -1342,6 +1346,15 @@ impl<'ast> Analyzer<'ast> {
                 if Self::trait_param_is_owned_string(&param.type_)
                     && !str_ref_optimized.contains(&param.name)
                 {
+                    if self.string_param_consumed_owned(&param.name, &func.decl.body, registry) {
+                        if idx < param_ownership.len() {
+                            param_ownership[idx] = OwnershipMode::Owned;
+                        }
+                        if idx < param_types.len() {
+                            param_types[idx] = param.type_.clone();
+                        }
+                        continue;
+                    }
                     if self.param_needs_string_ref(&param.name, &func.decl.body, registry) {
                         if idx < param_ownership.len() {
                             param_ownership[idx] = OwnershipMode::Borrowed;

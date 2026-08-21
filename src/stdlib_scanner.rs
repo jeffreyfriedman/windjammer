@@ -75,8 +75,8 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
 
     registry.register_runtime_file_stem(module_name);
 
-    // Track `impl Type { ... }` so methods register as both `module::fn` and `Type::fn`
-    // (call sites resolve `Connection::query`, not only `db::query`).
+    // Track `impl Type { ... }` so methods register as `Type::fn` (free functions
+    // keep exclusive claim on `module::fn` — see `register_scanned_runtime_signature`).
     let mut current_impl: Option<String> = None;
     let mut brace_depth: i32 = 0;
     let mut impl_depth: Option<i32> = None;
@@ -162,6 +162,10 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
 
 /// Register a scanned runtime fn under `module::name`, optional `*_mod` → short alias,
 /// and `Type::name` when inside an `impl`.
+///
+/// Self methods register only as `Type::method`. Dual-registering them under
+/// `module::fn` clobbers free functions with the same name (`http::post` vs
+/// `Router::post`) — call sites then borrow only the first user arg.
 fn register_scanned_runtime_signature(
     registry: &mut SignatureRegistry,
     module_name: &str,
@@ -174,21 +178,25 @@ fn register_scanned_runtime_signature(
         .rsplit_once("::")
         .map(|(_, m)| m.to_string())
         .unwrap_or_else(|| sig.name.clone());
-    if mark_sanitizer {
-        registry.register_taint_sanitizer(&sig.name);
-    }
-    registry.add_function(sig.name.clone(), sig.clone());
-    registry.register_runtime_file_stem(module_name);
-    // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
-    if let Some(short) = module_name.strip_suffix("_mod") {
-        let mut aliased = sig.clone();
-        aliased.name = format!("{short}::{method_name}");
+    // Associated fns without `self` still share the module path (`Type::new`-style).
+    let register_module_path = current_impl.is_none() || !sig.has_self_receiver;
+    if register_module_path {
         if mark_sanitizer {
-            registry.register_taint_sanitizer(&aliased.name);
+            registry.register_taint_sanitizer(&sig.name);
         }
-        registry.add_function(aliased.name.clone(), aliased);
-        registry.register_runtime_std_module(short);
+        registry.add_function(sig.name.clone(), sig.clone());
+        // Mirror import aliases: `csv_mod` / `regex_mod` → WJ short names `csv` / `regex`.
+        if let Some(short) = module_name.strip_suffix("_mod") {
+            let mut aliased = sig.clone();
+            aliased.name = format!("{short}::{method_name}");
+            if mark_sanitizer {
+                registry.register_taint_sanitizer(&aliased.name);
+            }
+            registry.add_function(aliased.name.clone(), aliased);
+            registry.register_runtime_std_module(short);
+        }
     }
+    registry.register_runtime_file_stem(module_name);
     if let Some(ty) = current_impl {
         let mut typed = sig;
         typed.name = format!("{ty}::{method_name}");
@@ -1005,6 +1013,24 @@ mod tests {
     }
 
     #[test]
+    fn http_runtime_types_map_to_windjammer_runtime_http() {
+        let registry = crate::analyzer::SignatureRegistry::stdlib();
+        for ty in ["HttpMethod", "ServerRequest", "ServerResponse"] {
+            assert_eq!(
+                registry.runtime_module_for_type(ty),
+                Some("http"),
+                "{ty} must scan to std::http, not a sibling module"
+            );
+            let expected = format!("windjammer_runtime::http::{ty}");
+            assert_eq!(
+                registry.runtime_rust_path_for_type(ty).as_deref(),
+                Some(expected.as_str()),
+                "{ty} FQ path"
+            );
+        }
+    }
+
+    #[test]
     fn scanned_runtime_modules_are_not_a_hardcoded_name_list() {
         use crate::codegen::rust::stdlib_method_traits::{
             is_runtime_std_module, runtime_std_module_for_type,
@@ -1270,6 +1296,68 @@ mod tests {
             crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
                 aliased, 0
             )
+        );
+    }
+
+    #[test]
+    fn self_method_does_not_clobber_free_function_under_module_path() {
+        let mut reg = SignatureRegistry::new();
+        let free = parse_function_signature(
+            "pub fn post(url: &str, body: &str) -> Result<Response, String> {",
+            "http",
+        )
+        .unwrap();
+        register_scanned_runtime_signature(&mut reg, "http", free, None, false);
+        let method = parse_function_signature(
+            "pub fn post<F>(self, path: &str, handler: F) -> Self {",
+            "http",
+        )
+        .unwrap();
+        register_scanned_runtime_signature(&mut reg, "http", method, Some("Router"), false);
+
+        let module_sig = reg
+            .get_signature("http::post")
+            .expect("http::post free function");
+        assert!(
+            !module_sig.has_self_receiver,
+            "module path must keep free function, got {:?}",
+            module_sig.param_types
+        );
+        assert_eq!(module_sig.param_ownership.len(), 2);
+        assert_eq!(
+            module_sig.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed]
+        );
+
+        let typed = reg
+            .get_signature("Router::post")
+            .expect("Router::post method");
+        assert!(typed.has_self_receiver);
+        assert_eq!(typed.param_ownership.len(), 3);
+    }
+
+    #[test]
+    fn scanned_runtime_http_post_is_free_two_str_refs() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        let sig = reg
+            .get_signature("http::post")
+            .expect("scanned http::post");
+        assert!(
+            !sig.has_self_receiver,
+            "Router::post must not clobber free http::post, got {:?}",
+            sig.param_types
+        );
+        assert_eq!(sig.param_ownership.len(), 2);
+        assert!(
+            crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                sig, 1
+            ),
+            "body must need auto-borrow"
+        );
+        assert!(
+            reg.get_signature("Router::post").is_some_and(|s| s.has_self_receiver),
+            "Router::post must still be registered under Type::method"
         );
     }
 }

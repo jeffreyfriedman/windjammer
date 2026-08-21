@@ -163,8 +163,7 @@ fn apply_owned_string_literal_coercion<'ast>(
         });
         if is_string_ref_formal {
             let base = arg_str.trim_start_matches('&');
-            let owned =
-                crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(base);
+            let owned = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(base);
             *arg_str = format!("&{owned}");
             continue;
         }
@@ -261,8 +260,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         };
     }
 
-    // E0282 turbofish: Vec::new() / HashSet::new() → Vec::<T>::new() / HashSet::<T>::new()
-    // when the function return type provides the element type.
+    // E0282 turbofish: `Type::new()` → `Type::<T>::new()` when return type provides args.
     // Skip when suppress_collection_turbofish is set (let binding already has type ascription).
     // Skip in call-argument position: the callee's parameter type is the source of truth
     // (regression-060: `decode_records(Vec::new())` must not become `Vec::<WalRecord>::new()`).
@@ -270,30 +268,37 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         && !gen.suppress_collection_turbofish
         && !gen.in_call_argument_generation
     {
-        if func_str == "Vec::new" {
-            if let Some(Type::Vec(inner)) = &gen.current_function_return_type {
-                func_str = format!("Vec::<{}>::new", gen.type_to_rust(inner));
-            }
-        } else if func_str == "HashSet::new" {
-            if let Some(Type::Parameterized(base, args)) = &gen.current_function_return_type {
-                if base == "HashSet" && args.len() == 1 {
-                    func_str = format!("HashSet::<{}>::new", gen.type_to_rust(&args[0]));
+        if let Some((type_name, "new")) = func_str.rsplit_once("::") {
+            if crate::type_classification::type_name_leaf(type_name) == "Vec" {
+                if let Some(Type::Vec(inner)) = &gen.current_function_return_type {
+                    func_str = format!("Vec::<{}>::new", gen.type_to_rust(inner));
                 }
-            }
-        } else if func_str == "HashMap::new" || func_str == "Map::new" {
-            if let Some(Type::Parameterized(base, args)) = &gen.current_function_return_type {
-                if (base == "HashMap" || base == "Map") && args.len() == 2 {
-                    let map_name = if gen.import_aliases.contains("Map") {
-                        "Map"
-                    } else {
-                        "HashMap"
-                    };
-                    func_str = format!(
-                        "{}::<{}, {}>::new",
-                        map_name,
-                        gen.type_to_rust(&args[0]),
-                        gen.type_to_rust(&args[1])
-                    );
+            } else if crate::type_classification::is_set_type_name(type_name) {
+                if let Some(Type::Parameterized(base, args)) = &gen.current_function_return_type {
+                    if crate::type_classification::is_set_type_name(base) && args.len() == 1 {
+                        let leaf = crate::type_classification::type_name_leaf(type_name);
+                        func_str = format!("{leaf}::<{}>::new", gen.type_to_rust(&args[0]));
+                    }
+                }
+            } else if crate::type_classification::is_map_type_name(type_name) {
+                if let Some(Type::Parameterized(base, args)) = &gen.current_function_return_type {
+                    if crate::type_classification::is_map_type_name(base) && args.len() == 2 {
+                        let map_name = if gen.import_aliases.contains("Map")
+                            && crate::type_classification::type_name_leaf(type_name) == "Map"
+                        {
+                            "Map"
+                        } else if crate::type_classification::type_name_leaf(type_name) == "Map" {
+                            "HashMap"
+                        } else {
+                            crate::type_classification::type_name_leaf(type_name)
+                        };
+                        func_str = format!(
+                            "{}::<{}, {}>::new",
+                            map_name,
+                            gen.type_to_rust(&args[0]),
+                            gen.type_to_rust(&args[1])
+                        );
+                    }
                 }
             }
         }
@@ -337,24 +342,17 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Err("literal") -> Err("literal".to_string())
     // Also: Some(borrowed_iterator_var) -> Some(borrowed_iterator_var.clone())
 
-    // TDD FIX (Bug #2): Detect ALL enum constructors AND tuple struct constructors
-    // Pattern: Some/Ok/Err, Module::Variant, or TupleStruct(args)
-    let is_std_enum = matches!(func_name, "Some" | "Ok" | "Err");
-    let is_custom_enum = func_name.contains("::") && {
-        let parts: Vec<&str> = func_name.split("::").collect();
-        parts.len() == 2
-            && parts[0].chars().next().is_some_and(|c| c.is_uppercase())
-            && parts[1].chars().next().is_some_and(|c| c.is_uppercase())
-    };
-    // Tuple struct constructors: Point(x, y), Id(42)
-    // Uppercase name without :: that is a known tuple struct
-    let is_tuple_struct_constructor = !is_std_enum
-        && !is_custom_enum
+    // Language-level payload constructors (`Some`/`Ok`/`Err`, `Type::Variant`) and
+    // tuple structs need owned values. Signature-driven for named calls; AST for
+    // Option/Result/enum (not a method-name ownership heuristic).
+    let is_payload_ctor =
+        crate::type_classification::is_language_level_payload_call_name(func_name);
+    let is_tuple_struct_constructor = !is_payload_ctor
         && !func_name.contains("::")
         && func_name.chars().next().is_some_and(|c| c.is_uppercase())
         && gen.tuple_struct_names.contains(func_name);
 
-    if is_std_enum || is_custom_enum || is_tuple_struct_constructor {
+    if is_payload_ctor || is_tuple_struct_constructor {
         // Enum variant constructors need owned values (Some(T), Ok(T), Err(E)).
         // Set owned context so index expressions use .clone() instead of &,
         // BUT only for arguments that aren't already explicit references.
@@ -593,12 +591,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 let emitted_rust_ref_params = Some(
                     param_ownership
                         .iter()
-                        .map(|o| {
-                            matches!(
-                                o,
-                                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                            )
-                        })
+                        .map(|o| matches!(o, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed))
                         .collect(),
                 );
 

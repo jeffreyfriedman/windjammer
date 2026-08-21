@@ -35,8 +35,9 @@ impl<'ast> CodeGenerator<'ast> {
                 recv_ty_name.as_deref(),
                 registry,
             );
-        // WJ `string` / Rust `to_string` are explicit owned conversions (not registry Self).
-        let is_explicit_owned_convert = method == "to_string" || method == "string";
+        // WJ `string` / Rust `to_string` are language-level owned conversions (not registry Self).
+        let is_explicit_owned_convert =
+            crate::type_classification::is_language_level_owned_string_convert(method);
         if is_type_preserving || is_explicit_owned_convert {
             self.in_explicit_clone_call = true;
             self.coerce_string_literals_to_owned = false;
@@ -134,10 +135,7 @@ impl<'ast> CodeGenerator<'ast> {
                                             | crate::analyzer::OwnershipMode::Borrowed
                                     );
                                 let skip_owned_mut_helper = is_mut_borrowed_param
-                                    && matches!(
-                                        ownership,
-                                        crate::analyzer::OwnershipMode::Owned
-                                    )
+                                    && matches!(ownership, crate::analyzer::OwnershipMode::Owned)
                                     && !matches!(
                                         sig.return_type.as_ref(),
                                         Some(crate::parser::Type::Custom(ret))
@@ -163,12 +161,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // DOUBLE-CLONE SAFETY NET: If the object was auto-cloned by the FieldAccess
-        // handler and this IS a .clone() call, strip the redundant auto-clone.
+        // handler and this IS a language-level `.clone()` call, strip the redundant auto-clone.
         // e.g., "stack.item.clone()" from auto-clone + ".clone()" from source
         //     → should be "stack.item.clone()", not "stack.item.clone().clone()"
-        if method == "clone" && obj_str.ends_with(".clone()") {
-            obj_str = obj_str[..obj_str.len() - 8].to_string();
-        }
+        crate::codegen::rust::string_utilities::strip_redundant_auto_clone_before_explicit_clone(
+            &mut obj_str,
+            method,
+        );
 
         // Option methods that take owned `self` (unwrap, …) on a borrowed path need
         // `.as_ref()` first — driven by Option::{method} ownership in the registry.
@@ -228,26 +227,17 @@ impl<'ast> CodeGenerator<'ast> {
                             let ownership_base =
                                 self.effective_method_self_ownership(&base_qualified, sig);
                             let ownership = match (ownership_recv, ownership_base) {
-                                (
-                                    crate::analyzer::OwnershipMode::MutBorrowed,
-                                    _,
-                                )
-                                | (
-                                    _,
-                                    crate::analyzer::OwnershipMode::MutBorrowed,
-                                ) => crate::analyzer::OwnershipMode::MutBorrowed,
-                                (
-                                    crate::analyzer::OwnershipMode::Borrowed,
-                                    _,
-                                )
-                                | (
-                                    _,
-                                    crate::analyzer::OwnershipMode::Borrowed,
-                                ) => crate::analyzer::OwnershipMode::Borrowed,
+                                (crate::analyzer::OwnershipMode::MutBorrowed, _)
+                                | (_, crate::analyzer::OwnershipMode::MutBorrowed) => {
+                                    crate::analyzer::OwnershipMode::MutBorrowed
+                                }
+                                (crate::analyzer::OwnershipMode::Borrowed, _)
+                                | (_, crate::analyzer::OwnershipMode::Borrowed) => {
+                                    crate::analyzer::OwnershipMode::Borrowed
+                                }
                                 (other, _) => other,
                             };
-                            let enclosing_mut =
-                                self.inferred_mut_borrowed_params.contains("self");
+                            let enclosing_mut = self.inferred_mut_borrowed_params.contains("self");
                             match ownership {
                                 crate::analyzer::OwnershipMode::Borrowed
                                 | crate::analyzer::OwnershipMode::MutBorrowed => false,
@@ -256,12 +246,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     // move into a helper). From `&mut self`, prefer
                                     // reborrowing `self.field` unless the method
                                     // returns the receiver type (builder / consume).
-                                    let returns_recv_self =
-                                        matches!(
-                                            sig.return_type.as_ref(),
-                                            Some(crate::parser::Type::Custom(name))
-                                                if name == &tn || name == base
-                                        );
+                                    let returns_recv_self = matches!(
+                                        sig.return_type.as_ref(),
+                                        Some(crate::parser::Type::Custom(name))
+                                            if name == &tn || name == base
+                                    );
                                     returns_recv_self
                                 }
                                 crate::analyzer::OwnershipMode::Owned => true,

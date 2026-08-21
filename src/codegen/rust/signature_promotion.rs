@@ -112,14 +112,14 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
 
 /// Per-param slice of [`has_stale_owned_non_copy_params`]: engine/dependency stubs that
 /// mark a method arg after `self` as Owned bare Custom without codegen refresh.
-pub(crate) fn param_is_stale_engine_owned_stub(
-    sig: &FunctionSignature,
-    param_idx: usize,
-) -> bool {
+pub(crate) fn param_is_stale_engine_owned_stub(sig: &FunctionSignature, param_idx: usize) -> bool {
     if sig.has_self_receiver && param_idx == 0 {
         return false;
     }
-    if sig.emitted_rust_ref_params.as_ref().and_then(|flags| flags.get(param_idx).copied())
+    if sig
+        .emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(param_idx).copied())
         == Some(true)
     {
         return false;
@@ -138,6 +138,127 @@ pub(crate) fn param_is_stale_engine_owned_stub(
     ) && sig.has_self_receiver
         && param_idx > 0
         && bare_non_copy
+}
+
+/// True when `existing` already has a shared-ref formal that `incoming` would degrade
+/// to a bare Owned `Custom` (e.g. stdlib `HashMap::get(&K)` vs collections.wj `key: K`).
+///
+/// Does **not** block defining-module codegen refresh: analyzer may wrap `key: Key` as
+/// `Reference(Key)`+Borrowed from field reads while emission keeps owned `key: Key`
+/// (`MemoryEngine::put`). Those refreshes carry `emitted_rust_ref_params`.
+pub(crate) fn existing_has_stronger_shared_ref_contract(
+    existing: &FunctionSignature,
+    incoming: &FunctionSignature,
+) -> bool {
+    if incoming.emitted_rust_ref_params.is_some()
+        && existing.emitted_rust_ref_params.is_none()
+    {
+        return false;
+    }
+    if normalize_signature_param_types(&existing.param_types)
+        != normalize_signature_param_types(&incoming.param_types)
+    {
+        return false;
+    }
+    existing
+        .param_ownership
+        .iter()
+        .enumerate()
+        .any(|(idx, own)| {
+            if existing.has_self_receiver && idx == 0 {
+                return false;
+            }
+            // Codegen recorded owned emission for this slot — not a stdlib downgrade.
+            if incoming
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                == Some(false)
+            {
+                return false;
+            }
+            let existing_ref = existing
+                .param_types
+                .get(idx)
+                .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+                || existing
+                    .formal_param_type(idx)
+                    .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+            matches!(own, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                && existing_ref
+                && incoming
+                    .param_ownership
+                    .get(idx)
+                    .is_some_and(|o| matches!(o, OwnershipMode::Owned))
+                && incoming
+                    .param_types
+                    .get(idx)
+                    .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+        })
+}
+
+/// Restore stdlib `&K` lookup contracts when multipass poisoned them to owned `K`.
+///
+/// `qualified_name` is the call-site key (`HashMap::get`); `sig.name` may be bare `get`.
+pub(crate) fn restore_stdlib_collection_key_contract(
+    sig: &mut FunctionSignature,
+    qualified_name: Option<&str>,
+) {
+    let lookup = qualified_name
+        .filter(|n| n.contains("::"))
+        .unwrap_or(sig.name.as_str());
+    let Some(stdlib_sig) = SignatureRegistry::stdlib().get_signature(lookup) else {
+        return;
+    };
+    let receiver_base = lookup.rsplit_once("::").map(|(ty, _)| {
+        let bare = ty.rsplit("::").next().unwrap_or(ty);
+        bare.split('<').next().unwrap_or(bare)
+    });
+    let Some(base) = receiver_base else {
+        return;
+    };
+    if !crate::type_classification::is_map_type_name(base)
+        && !crate::type_classification::is_set_type_name(base)
+    {
+        return;
+    }
+    for idx in 0..stdlib_sig.param_ownership.len() {
+        if stdlib_sig.has_self_receiver && idx == 0 {
+            continue;
+        }
+        if !matches!(
+            stdlib_sig.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed)
+        ) {
+            continue;
+        }
+        let Some(Type::Reference(inner)) = stdlib_sig.param_types.get(idx) else {
+            continue;
+        };
+        let degraded = matches!(sig.param_ownership.get(idx), Some(OwnershipMode::Owned))
+            && sig
+                .param_types
+                .get(idx)
+                .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+        if !degraded {
+            continue;
+        }
+        if idx < sig.param_ownership.len() {
+            sig.param_ownership[idx] = OwnershipMode::Borrowed;
+        }
+        if idx < sig.param_types.len() {
+            sig.param_types[idx] = Type::Reference(inner.clone());
+        }
+        if idx < sig.formal_param_types.len() {
+            sig.formal_param_types[idx] = stdlib_sig
+                .formal_param_type(idx)
+                .cloned()
+                .unwrap_or_else(|| Type::Reference(inner.clone()));
+        } else if sig.formal_param_types.is_empty() && idx < sig.param_types.len() {
+            // Keep formal list empty — `formal_param_type` falls back to param_types.
+        }
+    }
 }
 
 pub(crate) fn signature_is_declaration_stub_like(sig: &FunctionSignature) -> bool {
@@ -491,7 +612,10 @@ pub(crate) fn global_has_borrowed_text_over_local_owned_stub(
 /// bare `T` (owned stub or body-converged borrow without registry wrap). Indicates `b`
 /// was refined by body analysis / Phase-3 promotion and should be preferred.
 /// Ignores the self param (idx 0 when `has_self_receiver`).
-pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b: &FunctionSignature) -> bool {
+pub(crate) fn converged_has_reference_params_over_bare(
+    a: &FunctionSignature,
+    b: &FunctionSignature,
+) -> bool {
     let min_len = a.param_ownership.len().min(b.param_ownership.len());
     for idx in 0..min_len {
         if a.has_self_receiver && idx == 0 {
@@ -501,7 +625,8 @@ pub(crate) fn converged_has_reference_params_over_bare(a: &FunctionSignature, b:
             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                 && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
         });
-        let a_owned_bare = matches!(a.param_ownership.get(idx), Some(OwnershipMode::Owned)) && a_bare;
+        let a_owned_bare =
+            matches!(a.param_ownership.get(idx), Some(OwnershipMode::Owned)) && a_bare;
         // Multipass: per-caller registry may already show Borrowed ownership while
         // param_types stayed bare `Custom(T)` (engine stub + global merge). Prefer global
         // entries that wrapped the converged borrow as `Reference(T)`.
@@ -556,15 +681,14 @@ pub(crate) fn merge_codegen_refresh_metadata(
                 if matches!(
                     from.param_ownership.get(idx),
                     Some(crate::analyzer::OwnershipMode::MutBorrowed)
-                ) || matches!(
-                    from.param_types.get(idx),
-                    Some(Type::MutableReference(_))
-                ) {
+                ) || matches!(from.param_types.get(idx), Some(Type::MutableReference(_)))
+                {
                     if let Some(Type::MutableReference(inner)) = from.param_types.get(idx) {
                         into.param_types[idx] = Type::MutableReference(inner.clone());
-                    } else if let Some(formal) = from.formal_param_type(idx).or_else(|| {
-                        into.formal_param_type(idx)
-                    }) {
+                    } else if let Some(formal) = from
+                        .formal_param_type(idx)
+                        .or_else(|| into.formal_param_type(idx))
+                    {
                         let bare = match formal {
                             Type::Reference(inner) | Type::MutableReference(inner) => {
                                 inner.as_ref().clone()
@@ -604,10 +728,9 @@ pub(crate) fn merge_codegen_refresh_metadata(
                     .as_ref()
                     .and_then(|f| f.get(idx).copied())
                     == Some(true)
-                    || from
-                        .param_types
-                        .get(idx)
-                        .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_string_ref);
+                    || from.param_types.get(idx).is_some_and(
+                        crate::codegen::rust::string_utilities::param_is_rust_string_ref,
+                    );
                 if string_ref_formal {
                     into.param_types[idx] = Type::Reference(Box::new(Type::String));
                     while into.formal_param_types.len() <= idx {
@@ -684,35 +807,47 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
     // Copy aggregates kept pass-by-value despite field-read Borrowed analysis
     // (`BatchHandle` / regression-060). True `&mut T` already returned above via
     // MutableReference. Scanner-borrowed formals that emit `&T` record `true`.
-        if let Some(ref flags) = sig.emitted_rust_ref_params {
-            if flags.get(param_idx).copied().unwrap_or(false) {
+    if let Some(ref flags) = sig.emitted_rust_ref_params {
+        if flags.get(param_idx).copied().unwrap_or(false) {
+            return false;
+        }
+        if flags.get(param_idx).copied() == Some(false) {
+            // `false` means "not shared `&T`" — owned `T` *or* `&mut T`. MutBorrowed
+            // without a MutableReference wrap must not claim owned (call sites need
+            // `&mut self.field` before formal emission syncs MutableReference).
+            if matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::MutBorrowed)
+            ) {
                 return false;
             }
-            if flags.get(param_idx).copied() == Some(false) {
-                // `false` means "not shared `&T`" — owned `T` *or* `&mut T`. MutBorrowed
-                // without a MutableReference wrap must not claim owned (call sites need
-                // `&mut self.field` before formal emission syncs MutableReference).
-                if matches!(
-                    sig.param_ownership.get(param_idx),
-                    Some(OwnershipMode::MutBorrowed)
+            // Codegen-confirmed non-ref emission is owned even when analyzer ownership
+            // is still Borrowed: plain WJ `string` (`build_html(name: String)`) and bare
+            // Custom aggregates (`MemoryEngine::put(key: Key)` after field-read Borrowed).
+            // Readonly demotion (`MemoryEngine::get` → `key: &Key`) records
+            // `emitted_rust_ref_params[idx] == true`.
+            if matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Borrowed)
+            ) {
+                if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    sig, param_idx,
                 ) {
-                    return false;
+                    return true;
                 }
-                // Plain WJ `string` with codegen-confirmed non-ref emission is owned
-                // `String` even when analyzer ownership is still Borrowed (stale multipass
-                // `build_html(name: String)` — peel `&name`). Non-text shared formals
-                // still borrow until `param_types` converge to `Reference(T)`.
-                if matches!(
-                    sig.param_ownership.get(param_idx),
-                    Some(OwnershipMode::Borrowed)
-                ) {
-                    return crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                        sig, param_idx,
-                    );
+                if let Some(formal) = sig.formal_param_type(param_idx) {
+                    if matches!(formal, Type::Custom(_))
+                        && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                        && !crate::codegen::rust::types::is_windjammer_text_type(formal)
+                    {
+                        return true;
+                    }
                 }
-                return !param_type_is_borrowed_text(sig, param_idx);
+                return false;
             }
+            return !param_type_is_borrowed_text(sig, param_idx);
         }
+    }
 
     // Shared-ref / runtime-scanner Borrowed contracts without an owned-emission
     // record must not be treated as owned (json::get `&Value`, etc.).
@@ -807,9 +942,10 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Borrowed)
         );
-        let param_types_ref = sig.param_types.get(param_idx).is_some_and(|t| {
-            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        });
+        let param_types_ref = sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
         // Bare Custom + Owned (or Copy aggregate) → owned emission. Body-converged
         // Borrowed on non-Copy Custom (QuestId map-key lookup) must NOT claim owned —
         // call sites need `&QuestId`. Copy aggregates (Lsn) already returned above via
@@ -858,24 +994,26 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
             other => other,
         };
-        let converged_to_ref = sig.param_types.get(param_idx).is_some_and(|t| {
-            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        }) && matches!(
-            sig.param_ownership.get(param_idx),
-            Some(OwnershipMode::Borrowed)
-        );
-        let is_non_copy_non_text = !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                sig, param_idx,
-            )
-            && !crate::codegen::rust::type_analysis::is_copy_type(bare)
-            && !matches!(bare, Type::Reference(_) | Type::MutableReference(_))
-            && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(bare)
-            && !crate::codegen::rust::types::is_windjammer_text_type(bare)
-            && !matches!(
+        let converged_to_ref = sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+            && matches!(
                 sig.param_ownership.get(param_idx),
-                Some(OwnershipMode::MutBorrowed)
-            )
-            && !converged_to_ref;
+                Some(OwnershipMode::Borrowed)
+            );
+        let is_non_copy_non_text =
+            !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                sig, param_idx,
+            ) && !crate::codegen::rust::type_analysis::is_copy_type(bare)
+                && !matches!(bare, Type::Reference(_) | Type::MutableReference(_))
+                && !crate::codegen::rust::string_utilities::param_is_rust_str_ref(bare)
+                && !crate::codegen::rust::types::is_windjammer_text_type(bare)
+                && !matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::MutBorrowed)
+                )
+                && !converged_to_ref;
         let is_vec = matches!(bare, Type::Vec(_))
             || matches!(bare, Type::Parameterized(name, _) if name == "Vec");
         // Vec defaults to owned emission (regression-056), but body-converged `&Vec` / Borrowed
@@ -893,11 +1031,15 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         }
     }
 
-    if sig.param_types.get(param_idx).is_some_and(|t| {
-        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-    }) && !sig.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
-        flags.get(param_idx).copied() == Some(false)
-    }) {
+    if sig
+        .param_types
+        .get(param_idx)
+        .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+        && !sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|flags| flags.get(param_idx).copied() == Some(false))
+    {
         // Copy aggregates (`Lsn`) emit owned Rust formals even when analyzer left
         // `Reference(T)` without codegen refresh (regression-060).
         if let Some(bare) = sig.param_types.get(param_idx).map(|t| match t {
@@ -921,8 +1063,10 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         return false;
     }
     // Do NOT call effective_param_ownership here — it calls this function (recursion).
-    matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
-        && param_type_is_owned_non_text(sig, param_idx)
+    matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Owned)
+    ) && param_type_is_owned_non_text(sig, param_idx)
 }
 
 fn param_type_is_borrowed_text(sig: &FunctionSignature, param_idx: usize) -> bool {
@@ -1403,14 +1547,8 @@ mod prefer_shared_runtime_tests {
     fn wj_owned_join() -> FunctionSignature {
         FunctionSignature {
             name: "strings::join".into(),
-            param_types: vec![
-                Type::Vec(Box::new(Type::String)),
-                Type::String,
-            ],
-            formal_param_types: vec![
-                Type::Vec(Box::new(Type::String)),
-                Type::String,
-            ],
+            param_types: vec![Type::Vec(Box::new(Type::String)), Type::String],
+            formal_param_types: vec![Type::Vec(Box::new(Type::String)), Type::String],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             return_type: Some(Type::String),
             return_ownership: OwnershipMode::Owned,
@@ -1476,8 +1614,8 @@ mod prefer_shared_runtime_tests {
             .get_signature("Connection::query")
             .expect("runtime Connection::query must be scanned into stdlib fallback");
         let sql_idx = wj.arg_param_index(0);
-        let merged = prefer_shared_ref_signature(Some(wj), Some(runtime), sql_idx)
-            .expect("prefer_shared");
+        let merged =
+            prefer_shared_ref_signature(Some(wj), Some(runtime), sql_idx).expect("prefer_shared");
         assert!(
             crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &merged, sql_idx
@@ -1521,7 +1659,9 @@ mod prefer_shared_runtime_tests {
             primary.emitted_rust_ref_params,
             primary.param_types,
             primary.formal_param_types,
-            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(&primary, 1)
+            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &primary, 1
+            )
         );
         assert!(
             !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
@@ -1536,7 +1676,10 @@ mod prefer_shared_runtime_tests {
         let expected = crate::ir::signature_bridge::safety_type_from_signature_param(&primary, 1);
         eprintln!("EXPECTED_OWN={:?}", expected.ownership);
         assert!(
-            matches!(expected.ownership, crate::ir::safety_type::OwnedType::Ref(_)),
+            matches!(
+                expected.ownership,
+                crate::ir::safety_type::OwnedType::Ref(_)
+            ),
             "expected Ref for join delimiter, got {:?}",
             expected.ownership
         );
@@ -1582,9 +1725,8 @@ pub fn exercise(parts: Vec<string>) -> string {
     fn refresh_join_delimiter_uses_runtime_fallback_from_stdlib() {
         let reg = crate::analyzer::SignatureRegistry::stdlib();
         // Simulate WJ-owned shadow (meta / analyzed std.wj).
-        let mut local = crate::analyzer::SignatureRegistry::layered(std::sync::Arc::new(
-            reg.clone(),
-        ));
+        let mut local =
+            crate::analyzer::SignatureRegistry::layered(std::sync::Arc::new(reg.clone()));
         local.add_function("strings::join".into(), wj_owned_join());
         let refreshed = refresh_call_site_signature_for_arg(
             Some(wj_owned_join()),

@@ -141,7 +141,9 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
         Type::Parameterized(name, args) => {
             let base_name = name.rsplit("::").next().unwrap_or(name);
             match base_name {
-                "Vec" if args.len() == 1 => {
+                base if crate::type_classification::type_name_leaf(base) == "Vec"
+                    && args.len() == 1 =>
+                {
                     BaseType::Vec(Box::new(parser_type_to_base_type(&args[0])))
                 }
                 "Option" if args.len() == 1 => {
@@ -151,10 +153,12 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
                     Box::new(parser_type_to_base_type(&args[0])),
                     Box::new(parser_type_to_base_type(&args[1])),
                 ),
-                "HashMap" | "BTreeMap" if args.len() == 2 => BaseType::HashMap(
-                    Box::new(parser_type_to_base_type(&args[0])),
-                    Box::new(parser_type_to_base_type(&args[1])),
-                ),
+                base if crate::type_classification::is_map_type_name(base) && args.len() == 2 => {
+                    BaseType::HashMap(
+                        Box::new(parser_type_to_base_type(&args[0])),
+                        Box::new(parser_type_to_base_type(&args[1])),
+                    )
+                }
                 _ => BaseType::Custom(name.clone()),
             }
         }

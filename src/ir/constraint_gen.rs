@@ -234,11 +234,43 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
-    /// Params moved into struct/enum/Option payloads must stay Owned at the formal.
-    fn emit_owned_for_stored_param_identifiers(&mut self, expr: &Expression<'ast>) {
-        self.emit_owned_for_stored_param_identifiers_inner(expr, false);
+    /// Whether call argument `arg_index` is stored as an owned payload.
+    /// Language-level constructors (`Some`/`Ok`/`Err`/PascalCase variants) do not
+    /// require a registry; user constructors use resolved signatures.
+    fn call_arg_is_owned_payload_store(
+        &self,
+        function: &Expression<'ast>,
+        arg_index: usize,
+        arg_count: usize,
+    ) -> bool {
+        match self.registry {
+            Some(registry) => crate::analyzer::Analyzer::call_argument_stores_owned_payload(
+                function, arg_index, arg_count, registry,
+            ),
+            None => crate::analyzer::Analyzer::is_language_level_call_payload_store(function),
+        }
     }
 
+    fn method_arg_is_owned_payload_store(
+        &self,
+        method: &str,
+        receiver_type: Option<&str>,
+        arg_index: usize,
+        arg_count: usize,
+    ) -> bool {
+        match self.registry {
+            Some(registry) => crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
+                method,
+                receiver_type,
+                arg_index,
+                arg_count,
+                registry,
+            ),
+            None => crate::analyzer::Analyzer::is_language_level_method_payload_store(method),
+        }
+    }
+
+    /// Params moved into struct/enum/Option payloads must stay Owned at the formal.
     fn emit_owned_for_stored_param_identifiers_inner(
         &mut self,
         expr: &Expression<'ast>,
@@ -268,14 +300,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    let arg_in_payload = self.registry.is_some_and(|registry| {
-                        crate::analyzer::Analyzer::call_argument_stores_owned_payload(
-                            function,
-                            i,
-                            arguments.len(),
-                            registry,
-                        )
-                    });
+                    let arg_in_payload =
+                        self.call_arg_is_owned_payload_store(function, i, arguments.len());
                     self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
             }
@@ -287,15 +313,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let receiver_type = self.receiver_type_name_for_method(object);
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    let arg_in_payload = self.registry.is_some_and(|registry| {
-                        crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
-                            method,
-                            receiver_type.as_deref(),
-                            i,
-                            arguments.len(),
-                            registry,
-                        )
-                    });
+                    let arg_in_payload = self.method_arg_is_owned_payload_store(
+                        method,
+                        receiver_type.as_deref(),
+                        i,
+                        arguments.len(),
+                    );
                     self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
             }
@@ -663,14 +686,8 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    let arg_in_payload = self.registry.is_some_and(|registry| {
-                        crate::analyzer::Analyzer::call_argument_stores_owned_payload(
-                            function,
-                            i,
-                            arguments.len(),
-                            registry,
-                        )
-                    });
+                    let arg_in_payload =
+                        self.call_arg_is_owned_payload_store(function, i, arguments.len());
                     self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
                 let _callee_var = self.walk_expression(function);
@@ -714,15 +731,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             } => {
                 let receiver_type = self.receiver_type_name_for_method(object);
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    let arg_in_payload = self.registry.is_some_and(|registry| {
-                        crate::analyzer::Analyzer::method_call_argument_stores_owned_payload(
-                            method,
-                            receiver_type.as_deref(),
-                            i,
-                            arguments.len(),
-                            registry,
-                        )
-                    });
+                    let arg_in_payload = self.method_arg_is_owned_payload_store(
+                        method,
+                        receiver_type.as_deref(),
+                        i,
+                        arguments.len(),
+                    );
                     self.emit_owned_for_stored_param_identifiers_inner(arg, arg_in_payload);
                 }
                 let obj_var = self.walk_expression(object);
@@ -823,7 +837,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             Expression::StructLiteral { fields, .. } => {
                 let result = self.cs.fresh_var();
                 for (_field_name, field_expr) in fields {
-                    self.emit_owned_for_stored_param_identifiers(field_expr);
+                    self.emit_owned_for_stored_param_identifiers_inner(field_expr, true);
                     self.walk_expression(field_expr);
                 }
                 self.cs

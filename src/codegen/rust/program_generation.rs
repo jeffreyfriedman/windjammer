@@ -252,6 +252,10 @@ impl<'ast> CodeGenerator<'ast> {
                             self.needs_serde_imports = true;
                         }
                     }
+                } else if let Some(first) = path.first() {
+                    if !matches!(first.as_str(), "crate" | "super" | "self") {
+                        self.imported_path_roots.insert(first.clone());
+                    }
                 }
                 // Track modules imported from `ffi` paths so calls through them
                 // are wrapped in `unsafe {}` (e.g., `use engine::ffi::input` → input is FFI).

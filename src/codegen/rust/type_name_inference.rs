@@ -13,7 +13,8 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Vec(inner) => return Some(inner.as_ref()),
                 Type::Array(inner, _) => return Some(inner.as_ref()),
                 Type::Parameterized(name, params)
-                    if (name == "Vec" || name == "VecDeque") && !params.is_empty() =>
+                    if crate::type_classification::is_single_elem_iterable_base(name)
+                        && !params.is_empty() =>
                 {
                     return Some(&params[0]);
                 }
@@ -245,12 +246,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // `Vec<T>` / `HashSet<T>` may be `Parameterized` depending on parse path.
             Type::Parameterized(name, args) if !args.is_empty() => {
-                let base = name.split('<').next().unwrap_or(name.as_str());
-                let short = base.rsplit("::").next().unwrap_or(base);
-                if matches!(
-                    short,
-                    "Vec" | "VecDeque" | "LinkedList" | "HashSet" | "BTreeSet" | "BinaryHeap"
-                ) {
+                if crate::type_classification::is_single_elem_iterable_base(name) {
                     Some(args[0].clone())
                 } else {
                     None

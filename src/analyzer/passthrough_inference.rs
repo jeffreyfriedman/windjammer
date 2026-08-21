@@ -824,7 +824,7 @@ impl<'ast> Analyzer<'ast> {
             return false;
         }
         let mut other_uses = false;
-        self.collect_non_lookup_param_uses(param_name, body, &mut other_uses);
+        self.collect_non_lookup_param_uses(param_name, body, func, &mut other_uses);
         !other_uses
     }
 
@@ -1514,12 +1514,10 @@ impl<'ast> Analyzer<'ast> {
         func: &FunctionDecl<'ast>,
         results: &mut Vec<()>,
     ) {
-        if let Some((object, _method, arguments)) =
+        if let Some((object, method, arguments)) =
             super::stdlib_method_traits::decompose_collection_key_lookup(expr)
         {
-            if arguments
-                .first()
-                .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
+            if self.is_validated_collection_key_lookup(object, method, arguments, param_name, func)
             {
                 results.push(());
             }
@@ -1568,21 +1566,37 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_hashmap_lookup_method(method: &str) -> bool {
-        super::stdlib_method_traits::is_map_key_method(method)
+    fn is_validated_collection_key_lookup(
+        &self,
+        object: &Expression,
+        method: &str,
+        arguments: &[(Option<String>, &Expression)],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        arguments
+            .first()
+            .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
+            && super::stdlib_method_traits::is_collection_key_arg_on_receiver(
+                method,
+                0,
+                self.receiver_type_name_from_expr(object, func).as_deref(),
+                SignatureRegistry::stdlib(),
+            )
     }
 
     fn collect_non_lookup_param_uses(
         &self,
         param_name: &str,
         body: &[&'ast Statement<'ast>],
+        func: &FunctionDecl<'ast>,
         found: &mut bool,
     ) {
         if *found {
             return;
         }
         for stmt in body {
-            self.collect_non_lookup_param_uses_stmt(param_name, stmt, found);
+            self.collect_non_lookup_param_uses_stmt(param_name, stmt, func, found);
         }
     }
 
@@ -1590,6 +1604,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         stmt: &Statement,
+        func: &FunctionDecl<'ast>,
         found: &mut bool,
     ) {
         if *found {
@@ -1601,7 +1616,7 @@ impl<'ast> Analyzer<'ast> {
             | Statement::Return {
                 value: Some(expr), ..
             } => {
-                self.collect_non_lookup_param_uses_expr(param_name, expr, found);
+                self.collect_non_lookup_param_uses_expr(param_name, expr, func, found);
             }
             Statement::If {
                 condition,
@@ -1609,37 +1624,37 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                self.collect_non_lookup_param_uses_expr(param_name, condition, found);
+                self.collect_non_lookup_param_uses_expr(param_name, condition, func, found);
                 for s in then_block {
-                    self.collect_non_lookup_param_uses_stmt(param_name, s, found);
+                    self.collect_non_lookup_param_uses_stmt(param_name, s, func, found);
                 }
                 if let Some(else_block) = else_block {
                     for s in else_block {
-                        self.collect_non_lookup_param_uses_stmt(param_name, s, found);
+                        self.collect_non_lookup_param_uses_stmt(param_name, s, func, found);
                     }
                 }
             }
             Statement::Match { value, arms, .. } => {
-                self.collect_non_lookup_param_uses_expr(param_name, value, found);
+                self.collect_non_lookup_param_uses_expr(param_name, value, func, found);
                 for arm in arms {
                     if let Some(guard) = arm.guard {
-                        self.collect_non_lookup_param_uses_expr(param_name, guard, found);
+                        self.collect_non_lookup_param_uses_expr(param_name, guard, func, found);
                     }
-                    self.collect_non_lookup_param_uses_expr(param_name, arm.body, found);
+                    self.collect_non_lookup_param_uses_expr(param_name, arm.body, func, found);
                 }
             }
             Statement::While {
                 condition, body, ..
             } => {
-                self.collect_non_lookup_param_uses_expr(param_name, condition, found);
+                self.collect_non_lookup_param_uses_expr(param_name, condition, func, found);
                 for s in body {
-                    self.collect_non_lookup_param_uses_stmt(param_name, s, found);
+                    self.collect_non_lookup_param_uses_stmt(param_name, s, func, found);
                 }
             }
             Statement::For { iterable, body, .. } => {
-                self.collect_non_lookup_param_uses_expr(param_name, iterable, found);
+                self.collect_non_lookup_param_uses_expr(param_name, iterable, func, found);
                 for s in body {
-                    self.collect_non_lookup_param_uses_stmt(param_name, s, found);
+                    self.collect_non_lookup_param_uses_stmt(param_name, s, func, found);
                 }
             }
             _ => {}
@@ -1650,6 +1665,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         param_name: &str,
         expr: &Expression,
+        func: &FunctionDecl<'ast>,
         found: &mut bool,
     ) {
         if *found {
@@ -1660,20 +1676,19 @@ impl<'ast> Analyzer<'ast> {
                 *found = true;
             }
             _ if super::stdlib_method_traits::decompose_collection_key_lookup(expr)
-                .is_some_and(|(_, _method, args)| {
-                    args.first()
-                        .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name))
+                .is_some_and(|(object, method, args)| {
+                    self.is_validated_collection_key_lookup(object, method, args, param_name, func)
                 }) =>
             {
                 if let Some((object, _method, arguments)) =
                     super::stdlib_method_traits::decompose_collection_key_lookup(expr)
                 {
-                    self.collect_non_lookup_param_uses_expr(param_name, object, found);
+                    self.collect_non_lookup_param_uses_expr(param_name, object, func, found);
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if i == 0 {
                             continue;
                         }
-                        self.collect_non_lookup_param_uses_expr(param_name, arg, found);
+                        self.collect_non_lookup_param_uses_expr(param_name, arg, func, found);
                     }
                 }
             }
@@ -1683,10 +1698,13 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                let is_lookup = Self::is_hashmap_lookup_method(method)
-                    && arguments
-                        .first()
-                        .is_some_and(|(_, arg)| self.expr_is_identifier(arg, param_name));
+                let is_lookup = self.is_validated_collection_key_lookup(
+                    object,
+                    method,
+                    arguments.as_slice(),
+                    param_name,
+                    func,
+                );
                 if !is_lookup {
                     for (_, arg) in arguments {
                         if self.expr_is_identifier(arg, param_name) {
@@ -1695,14 +1713,14 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                self.collect_non_lookup_param_uses_expr(param_name, object, found);
+                self.collect_non_lookup_param_uses_expr(param_name, object, func, found);
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    // HashMap lookup keys are reads — do not count the key argument as a
-                    // separate non-lookup use (fixes `match map.get(id)` false positive).
+                    // Map/set lookup keys are reads — do not count the key argument as a
+                    // separate non-lookup use (fixes `match map.get(id)` / `set.contains(id)`).
                     if is_lookup && i == 0 {
                         continue;
                     }
-                    self.collect_non_lookup_param_uses_expr(param_name, arg, found);
+                    self.collect_non_lookup_param_uses_expr(param_name, arg, func, found);
                 }
             }
             Expression::Call {
@@ -1716,9 +1734,9 @@ impl<'ast> Analyzer<'ast> {
                         return;
                     }
                 }
-                self.collect_non_lookup_param_uses_expr(param_name, function, found);
+                self.collect_non_lookup_param_uses_expr(param_name, function, func, found);
                 for (_, arg) in arguments {
-                    self.collect_non_lookup_param_uses_expr(param_name, arg, found);
+                    self.collect_non_lookup_param_uses_expr(param_name, arg, func, found);
                 }
             }
             Expression::FieldAccess { object, .. }
@@ -1726,15 +1744,15 @@ impl<'ast> Analyzer<'ast> {
                 operand: object, ..
             }
             | Expression::TryOp { expr: object, .. } => {
-                self.collect_non_lookup_param_uses_expr(param_name, object, found);
+                self.collect_non_lookup_param_uses_expr(param_name, object, func, found);
             }
             Expression::Binary { left, right, .. } => {
-                self.collect_non_lookup_param_uses_expr(param_name, left, found);
-                self.collect_non_lookup_param_uses_expr(param_name, right, found);
+                self.collect_non_lookup_param_uses_expr(param_name, left, func, found);
+                self.collect_non_lookup_param_uses_expr(param_name, right, func, found);
             }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
-                    self.collect_non_lookup_param_uses_stmt(param_name, stmt, found);
+                    self.collect_non_lookup_param_uses_stmt(param_name, stmt, func, found);
                 }
             }
             _ => {}

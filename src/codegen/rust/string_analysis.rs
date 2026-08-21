@@ -83,56 +83,55 @@ pub fn contains_string_literal(expr: &Expression) -> bool {
     }
 }
 
-/// Checks if an expression produces a String (not &str)
+/// Checks if an expression produces a `String` (owned text).
 ///
-/// Detects expressions that return owned String values like:
-/// - `format!("hello")`  
-/// - `obj.to_string()`
-/// - `s.to_owned()`
-/// - `String::from("text")`
-/// - Blocks that end in String-producing expressions
-///
-/// # Examples
-/// ```
-/// // format!() → true
-/// // .to_string() → true
-/// // String::from() → true
-/// // .len() → false
-/// ```
+/// Language-level: `format!` / `concat!` macros and WJ `.string()` sugar.
+/// Method/associated call sites consult the stdlib signature registry for
+/// owned-`String` returns — not a hardcoded `to_string|to_owned` ownership oracle.
 pub fn expression_produces_string(expr: &Expression) -> bool {
     use crate::parser::Statement;
     match expr {
-        // Macro invocations like format!(...) produce String
         Expression::MacroInvocation { name, .. } => {
-            // format!, concat!, and write!-like macros produce String
             matches!(name.as_str(), "format" | "concat" | "format_args" | "write")
         }
-        // Function calls like String::from, format() without !
-        Expression::Call { function, .. } => {
-            if let Expression::Identifier { name, .. } = &**function {
-                name == "format" || name == "String" || name == "to_string"
-            } else if let Expression::FieldAccess { field, .. } = &**function {
-                field == "from" || field == "to_string"
-            } else {
-                false
+        Expression::Call { function, .. } => match &**function {
+            Expression::Identifier { name, .. } => {
+                name == "format" || stdlib_method_returns_owned_string(name, None)
             }
+            Expression::FieldAccess { object, field, .. } => {
+                let receiver = match &**object {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    _ => None,
+                };
+                stdlib_method_returns_owned_string(field, receiver)
+            }
+            _ => false,
+        },
+        Expression::MethodCall { method, object, .. } => {
+            if method == "string" {
+                return true;
+            }
+            let receiver = match &**object {
+                Expression::Identifier { name, .. }
+                    if name.chars().next().is_some_and(|c| c.is_uppercase()) =>
+                {
+                    Some(name.as_str())
+                }
+                _ => None,
+            };
+            stdlib_method_returns_owned_string(method, receiver)
+                || stdlib_method_returns_owned_string(method, Some("String"))
+                || stdlib_method_returns_owned_string(method, Some("str"))
         }
-        // Method calls like .to_string()
-        Expression::MethodCall { method, .. } => {
-            method == "to_string" || method == "string" || method == "to_owned"
-        }
-        // Blocks - check last statement for String-producing expression
         Expression::Block { statements, .. } => {
             if let Some(last) = statements.last() {
                 match last {
                     Statement::Expression { expr, .. } => expression_produces_string(expr),
-                    // If statements - check if branches return String
                     Statement::If {
                         then_block,
                         else_block,
                         ..
                     } => {
-                        // Check if then branch produces String
                         let then_produces_string = then_block.last().is_some_and(|s| {
                             if let Statement::Expression { expr, .. } = s {
                                 expression_produces_string(expr)
@@ -140,7 +139,6 @@ pub fn expression_produces_string(expr: &Expression) -> bool {
                                 false
                             }
                         });
-                        // Check else branch if present
                         let else_produces_string = else_block.as_ref().is_some_and(|block| {
                             block.last().is_some_and(|s| {
                                 if let Statement::Expression { expr, .. } = s {
@@ -158,22 +156,41 @@ pub fn expression_produces_string(expr: &Expression) -> bool {
                 false
             }
         }
+        Expression::Binary {
+            op: crate::parser::BinaryOp::Add,
+            left,
+            right,
+            ..
+        } => expression_produces_string(left) || expression_produces_string(right),
         _ => false,
     }
 }
 
-/// Checks if an expression contains .as_str() call (recursively)
-///
-/// This is useful for detecting when string conversion should be suppressed
-/// because the user explicitly wants a &str.
-///
-/// # Examples
-/// ```
-/// // s.as_str() → true
-/// // s.trim().as_str() → true (nested)
-/// // obj.field.as_str() → true (field access)
-/// // s.to_string() → false
-/// ```
+/// Stdlib / qualified lookup: does `Receiver::method` return owned text?
+fn stdlib_method_returns_owned_string(method: &str, receiver: Option<&str>) -> bool {
+    use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
+    use crate::parser::Type;
+
+    let is_owned_text = |ty: &Type| -> bool {
+        matches!(ty, Type::String)
+            || matches!(ty, Type::Custom(n) if n == "String" || n == "string")
+            || (crate::codegen::rust::types::is_windjammer_text_type(ty)
+                && !matches!(ty, Type::Reference(_) | Type::MutableReference(_)))
+    };
+    let check = |sig: &FunctionSignature| -> bool {
+        matches!(sig.return_ownership, OwnershipMode::Owned)
+            && sig.return_type.as_ref().is_some_and(is_owned_text)
+    };
+    let reg = SignatureRegistry::stdlib();
+    if let Some(recv) = receiver {
+        let key = format!("{recv}::{method}");
+        if let Some(sig) = reg.get_signature(&key) {
+            return check(sig);
+        }
+    }
+    reg.get_signature(method).is_some_and(check)
+}
+
 pub fn expression_has_as_str(expr: &Expression) -> bool {
     match expr {
         Expression::MethodCall { method, object, .. } => {
