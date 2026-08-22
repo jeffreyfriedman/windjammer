@@ -695,6 +695,21 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut param_idx = sig.arg_param_index(arg_index);
         let mut expected = safety_type_from_signature_param(&sig, param_idx);
+        if (crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(&sig, param_idx)
+            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                &sig, param_idx,
+            ))
+            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                &sig, param_idx,
+            )
+        {
+            if let Some(bare) = crate::ir::signature_bridge::bare_wj_formal_type(&sig, param_idx) {
+                expected = crate::ir::signature_bridge::safety_type_from_parser_type(
+                    bare,
+                    Some(crate::analyzer::OwnershipMode::Owned),
+                );
+            }
+        }
         if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some() {
             eprintln!(
                 "WJ_DEBUG_COLLISION_BORROW expected callee={callee_name} emitted={:?} \
@@ -3364,6 +3379,15 @@ impl<'ast> CodeGenerator<'ast> {
         .unwrap_or_else(|| sig.clone());
         let pidx = enforce_sig.arg_param_index(arg_index);
         let keep_shared_ref = coerced.starts_with('&')
+            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &enforce_sig, pidx,
+            )
+            && !crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                &enforce_sig, pidx,
+            )
+            && !crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                &enforce_sig, pidx,
+            )
             && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &enforce_sig,
                 pidx,
@@ -3789,7 +3813,13 @@ impl<'ast> CodeGenerator<'ast> {
         let force_owned = !expects_mut
             && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 sig, param_idx,
-            ) || copy_aggregate_owned)
+            ) || copy_aggregate_owned
+                || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                    sig, param_idx,
+                )
+                || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    sig, param_idx,
+                ))
             && !runtime_std_borrow
             // Never strip `&` for text formals the callee emits as `&str` / shared ref
             // (regression-049 `replay_to_lsn(&self.path)`).
@@ -3799,7 +3829,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Do not strip `.clone()` — Copy aggregates still need multi-use clones (dogfood seed_write).
         // Also peel parenthesized unary refs from expression codegen: `(&through)`.
         if force_owned {
-            let mut s = coerced.trim().to_string();
+            let before = coerced.trim().to_string();
+            let mut s = before.clone();
             loop {
                 if s.starts_with('(') && s.ends_with(')') {
                     let inner = s[1..s.len() - 1].trim().to_string();
@@ -3817,6 +3848,15 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
                 break;
+            }
+            let expected = safety_type_from_signature_param(sig, param_idx);
+            let actual = self.infer_call_arg_actual_safety_type(arg_expr, before.as_str());
+            if matches!(compute_coercion(&actual, &expected), CoercionKind::Clone)
+                && !s.ends_with(".clone()")
+                && !s.ends_with(".to_string()")
+                && !s.ends_with(".to_owned()")
+            {
+                s = format!("{s}.clone()");
             }
             *coerced = s;
             return;

@@ -843,6 +843,11 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
                         return true;
                     }
                 }
+                // Bare WJ `Vec` / map formals emit owned containers in Rust even when
+                // multipass field-read analysis left stale Borrowed (`graph_csr_sort_*`).
+                if bare_formal_is_vec_or_map(sig, param_idx) {
+                    return true;
+                }
                 return false;
             }
             return !param_type_is_borrowed_text(sig, param_idx);
@@ -855,6 +860,15 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
     ) {
+        // Bare WJ container formals (`Vec`, maps) emit owned Rust params — stale
+        // multipass Borrowed must not force `&local` at call sites (wdb-layers CSR).
+        if bare_formal_is_vec_or_map(sig, param_idx)
+            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                sig, param_idx,
+            )
+        {
+            return true;
+        }
         return false;
     }
     let analyzer_mut = matches!(
@@ -1173,21 +1187,39 @@ pub(crate) fn shared_ref_emission_beats(
     pref_has && !other_has
 }
 
-fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usize) -> bool {
+pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usize) -> bool {
+    sig.formal_param_type(param_idx).is_some_and(|t| {
+        if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
+            return false;
+        }
+        matches!(t, Type::Vec(_))
+            || matches!(t, Type::Parameterized(name, _) if name == "Vec")
+            || matches!(
+                t,
+                Type::Parameterized(name, _)
+                    if name == "HashMap" || name == "Map" || name == "BTreeMap"
+            )
+    }) && !sig.param_types.get(param_idx).is_some_and(|t| {
+        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    })
+}
+
+/// Bare WJ user `Custom` formals that emit owned Rust params (not `&T` / `&str`).
+pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx: usize) -> bool {
+    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+    {
+        return false;
+    }
+    if sig.param_types.get(param_idx).is_some_and(|t| {
+        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+    }) {
+        return false;
+    }
     sig.formal_param_type(param_idx)
-        .or_else(|| sig.param_types.get(param_idx))
-        .is_some_and(|t| {
-            let bare = match t {
-                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                other => other,
-            };
-            matches!(bare, Type::Vec(_))
-                || matches!(bare, Type::Parameterized(name, _) if name == "Vec")
-                || matches!(
-                    bare,
-                    Type::Parameterized(name, _)
-                        if name == "HashMap" || name == "Map" || name == "BTreeMap"
-                )
+        .is_some_and(|formal| {
+            matches!(formal, Type::Custom(_))
+                && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                && !crate::codegen::rust::types::is_windjammer_text_type(formal)
         })
 }
 
