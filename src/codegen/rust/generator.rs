@@ -2174,6 +2174,36 @@ impl<'ast> CodeGenerator<'ast> {
             || self.binding_emits_as_rust_shared_ref(name)
     }
 
+    /// Peel spurious leading `&` when a binding is already emitted as `&T` / `&mut T` and the
+    /// callee slot is not owned (signature-driven; avoids `&&mut` / redundant `&csr`).
+    pub(crate) fn peel_stacked_amp_on_emitted_ref_binding(
+        &self,
+        coerced: &mut String,
+        arg_expr: &crate::parser::Expression<'ast>,
+        sig: Option<&crate::analyzer::FunctionSignature>,
+        arg_index: usize,
+        require_leading_amp: bool,
+    ) {
+        let crate::parser::Expression::Identifier { name, .. } = arg_expr else {
+            return;
+        };
+        if !self.identifier_binding_already_rust_ref(name) {
+            return;
+        }
+        if require_leading_amp && !coerced.starts_with('&') {
+            return;
+        }
+        let owned_slot = sig.is_some_and(|sig| {
+            let pidx = sig.arg_param_index(arg_index);
+            crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+        });
+        if sig.is_none() || !owned_slot {
+            *coerced =
+                crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+        }
+    }
+
     /// True when `name` was already passed to a field-extract callee earlier in this fn body.
     pub(in crate::codegen::rust) fn param_used_in_prior_field_extract_call(
         &self,
