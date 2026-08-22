@@ -657,10 +657,7 @@ impl<'ast> CodeGenerator<'ast> {
                             let arg_binding_already_rust_ref = matches!(
                                 arg_expr,
                                 Expression::Identifier { name, .. }
-                                    if self.identifier_already_mut_ref(name)
-                                        || self.identifier_already_ref(name)
-                                        || self.emitted_rust_ref_formals.contains(name)
-                                        || self.binding_emits_as_rust_shared_ref(name)
+                                    if self.identifier_binding_already_rust_ref(name)
                             );
                             let callee_wants_mut = matches!(
                                 crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(

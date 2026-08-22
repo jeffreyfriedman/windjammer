@@ -1168,11 +1168,7 @@ impl<'ast> CodeGenerator<'ast> {
         // even when IR coercion chose Identity (stale effective ownership metadata).
         let arg_already_rust_ref = matches!(
             arg_expr,
-            Expression::Identifier { name, .. }
-                if self.identifier_already_ref(name)
-                    || self.identifier_already_mut_ref(name)
-                    || self.emitted_rust_ref_formals.contains(name)
-                    || self.binding_emits_as_rust_shared_ref(name)
+            Expression::Identifier { name, .. } if self.identifier_binding_already_rust_ref(name)
         );
         let formal_is_copy = sig
             .formal_param_type(param_idx)
@@ -1199,10 +1195,7 @@ impl<'ast> CodeGenerator<'ast> {
         let arg_binding_already_rust_ref = matches!(
             arg_expr,
             Expression::Identifier { name, .. }
-                if self.identifier_already_ref(name)
-                    || self.identifier_already_mut_ref(name)
-                    || self.emitted_rust_ref_formals.contains(name)
-                    || self.binding_emits_as_rust_shared_ref(name)
+                if self.identifier_binding_already_rust_ref(name)
         );
         if arg_binding_already_rust_ref {
             borrow_decision.add_ref = false;
@@ -1889,7 +1882,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let arg_already_rust_ref = matches!(
                         arg_expr,
                         Expression::Identifier { name, .. }
-                            if self.identifier_already_ref(name)
+                            if self.identifier_binding_already_rust_ref(name)
                                 || self.str_ref_optimized_params.contains(name.as_str())
                                 || self.inferred_borrowed_params.contains(name)
                     );
@@ -2464,6 +2457,25 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         let param_idx = sig.arg_param_index(arg_index);
 
+        // Terminal peel first: IR / collision paths may prefix `&` before reconcile runs.
+        // Existing `&T` / `&mut T` bindings reborrow/coerce — never stack (`&&mut`, `&&T`).
+        if matches!(
+            arg_expr,
+            Expression::Identifier { name, .. }
+                if self.identifier_binding_already_rust_ref(name)
+        ) {
+            let wants_owned = crate::ir::signature_bridge::call_site_expects_owned_pass(
+                sig, param_idx,
+            ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                sig, param_idx,
+            );
+            if !wants_owned {
+                *coerced =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                        .to_string();
+            }
+        }
+
         // Ownership-collision: do not keep IR/heuristic `&` from a conflicting
         // Borrowed snapshot (draw_text homonyms). Confirmed shared-ref formals skip.
         if has_ownership_collision
@@ -2541,12 +2553,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let arg_already_rust_ref = matches!(
                     arg_expr,
                     Expression::Identifier { name, .. }
-                        if self.identifier_already_ref(name)
-                            || self.identifier_already_mut_ref(name)
-                            || self.emitted_rust_ref_formals.contains(name)
-                            || self.str_ref_optimized_params.contains(name.as_str())
-                            || self.inferred_borrowed_params.contains(name)
-                            || self.binding_emits_as_rust_shared_ref(name)
+                        if self.identifier_binding_already_rust_ref(name)
                 );
                 if arg_already_rust_ref {
                     // Binding is already `&T` / `&mut T` in Rust — never prefix another `&`
@@ -2618,9 +2625,7 @@ impl<'ast> CodeGenerator<'ast> {
             let already_ref_binding = matches!(
                 arg_expr,
                 Expression::Identifier { name, .. }
-                    if self.identifier_already_mut_ref(name)
-                        || self.identifier_already_ref(name)
-                        || self.emitted_rust_ref_formals.contains(name)
+                    if self.identifier_binding_already_rust_ref(name)
             );
             if already_ref_binding {
                 *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
@@ -2690,7 +2695,7 @@ impl<'ast> CodeGenerator<'ast> {
         let arg_already_rust_ref = matches!(
             arg_expr,
             Expression::Identifier { name, .. }
-                if self.identifier_already_ref(name)
+                if self.identifier_binding_already_rust_ref(name)
                     || self.str_ref_optimized_params.contains(name.as_str())
                     || self.inferred_borrowed_params.contains(name)
         );
@@ -3309,6 +3314,38 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         let pidx = sig.arg_param_index(arg_index);
+        // Existing `&T` / `&mut T` bindings coerce to shared `&T` — never keep stacked `&`
+        // (`run_dense(&csr)` when `csr: &mut DenseCsr` and callee emits `&DenseCsr`).
+        if matches!(
+            arg_expr,
+            Expression::Identifier { name, .. }
+                if self.identifier_binding_already_rust_ref(name)
+        ) {
+            let enforce_sig =
+                crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(callee_name).cloned()),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(simple).cloned()),
+                    Some(sig.clone()),
+                    registry.get_signature(callee_name).cloned(),
+                    registry.get_signature(simple).cloned(),
+                ])
+                .unwrap_or_else(|| sig.clone());
+            let epidx = enforce_sig.arg_param_index(arg_index);
+            if crate::ir::signature_bridge::call_site_expects_shared_borrow(&enforce_sig, epidx)
+                || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &enforce_sig, epidx,
+                )
+            {
+                *coerced =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                        .to_string();
+                return;
+            }
+        }
         let mut enforce_sig =
             crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                 self.global_signature_registry
@@ -3803,6 +3840,17 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return;
             }
+            if matches!(
+                arg_expr,
+                Expression::Identifier { name, .. }
+                    if self.identifier_binding_already_rust_ref(name)
+            ) {
+                // `&mut T` coerces to `&T` — never stack shared `&` (`&&mut`, `&&T`).
+                *coerced =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                        .to_string();
+                return;
+            }
             if !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
@@ -3833,11 +3881,9 @@ impl<'ast> CodeGenerator<'ast> {
         user_arg_count: Option<usize>,
     ) {
         if let Expression::Identifier { name, .. } = arg_expr {
-            if self.emitted_rust_ref_formals.contains(name)
-                || self.identifier_already_ref(name)
+            if self.identifier_binding_already_rust_ref(name)
                 || self.inferred_borrowed_params.contains(name)
                 || self.str_ref_optimized_params.contains(name)
-                || self.binding_emits_as_rust_shared_ref(name)
             {
                 return;
             }

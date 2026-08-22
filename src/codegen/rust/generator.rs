@@ -2163,6 +2163,17 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|p| p.name == name && matches!(&p.type_, Type::MutableReference(_)))
     }
 
+    /// Whether `name` already codegen's as any Rust reference binding (`&T` or `&mut T`).
+    ///
+    /// Use at call sites when deciding whether to prefix `&` / `&mut`: existing refs
+    /// reborrow/coerce (e.g. `&mut DenseCsr` → `&DenseCsr`) and must not get `&` stacked.
+    pub(crate) fn identifier_binding_already_rust_ref(&self, name: &str) -> bool {
+        self.identifier_already_mut_ref(name)
+            || self.identifier_already_ref(name)
+            || self.emitted_rust_ref_formals.contains(name)
+            || self.binding_emits_as_rust_shared_ref(name)
+    }
+
     /// True when `name` was already passed to a field-extract callee earlier in this fn body.
     pub(in crate::codegen::rust) fn param_used_in_prior_field_extract_call(
         &self,
