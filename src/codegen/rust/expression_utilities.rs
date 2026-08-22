@@ -176,7 +176,9 @@ pub fn apply_mut_borrow_coercion(
     if is_identifier_already_mut_ref(arg, current_function_params, inferred_mut_borrowed_params) {
         // Reborrow of an existing `&mut` binding — strip spurious `.clone()` from
         // auto-clone / owned-context lowering inside loop bodies.
+        // Also peel a stale shared `&` from IR Ref (`&csr` → `&&mut T`, E0308).
         strip_trailing_clone(arg_str);
+        *arg_str = borrow_base_expr(arg_str).to_string();
         return false;
     }
     // Owned non-mut parameters cannot be `&mut` coerced (E0596). Downgrade to shared borrow

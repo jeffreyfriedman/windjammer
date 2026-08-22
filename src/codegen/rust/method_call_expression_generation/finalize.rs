@@ -654,7 +654,29 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     if !arg_str.starts_with('&') && !callee_arg_emits_owned {
                         if let Some((_, arg_expr)) = arguments.get(i) {
-                            if crate::codegen::rust::call_site_borrow::expression_supports_shared_borrow_at_call_site(
+                            let arg_binding_already_rust_ref = matches!(
+                                arg_expr,
+                                Expression::Identifier { name, .. }
+                                    if self.identifier_already_mut_ref(name)
+                                        || self.identifier_already_ref(name)
+                                        || self.emitted_rust_ref_formals.contains(name)
+                                        || self.binding_emits_as_rust_shared_ref(name)
+                            );
+                            let callee_wants_mut = matches!(
+                                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                                    &sig,
+                                    i,
+                                    receiver_type_name.as_deref(),
+                                ),
+                                OwnershipMode::MutBorrowed,
+                            ) || sig.param_types.get(sig.arg_param_index(i)).is_some_and(|t| {
+                                matches!(t, Type::MutableReference(_))
+                            });
+                            // Already `&mut T` / `&T` bindings reborrow bare; mut formals
+                            // must not get a shared `&` (`&&mut T`).
+                            if arg_binding_already_rust_ref || callee_wants_mut {
+                                // keep bare / let mut-coercion path handle `&mut`
+                            } else if crate::codegen::rust::call_site_borrow::expression_supports_shared_borrow_at_call_site(
                                 arg_expr,
                                 &arg_str,
                             ) {
