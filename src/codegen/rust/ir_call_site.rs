@@ -1196,16 +1196,21 @@ impl<'ast> CodeGenerator<'ast> {
                 receiver_type_name,
                 formal_is_copy,
             );
-        if matches!(
+        let arg_binding_already_rust_ref = matches!(
             arg_expr,
             Expression::Identifier { name, .. }
                 if self.identifier_already_ref(name)
                     || self.identifier_already_mut_ref(name)
                     || self.emitted_rust_ref_formals.contains(name)
                     || self.binding_emits_as_rust_shared_ref(name)
-        ) {
+        );
+        if arg_binding_already_rust_ref {
             borrow_decision.add_ref = false;
             borrow_decision.add_mut_ref = false;
+            // IR Ref / shared auto-borrow may already have prefixed `&` onto an
+            // emitted `&mut T` / `&T` binding (`take_in_edges(&csr)` → `&&mut`).
+            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                .to_string();
         }
         // Stale multipass metadata may infer borrow for plain `string` formals on user
         // free functions that actually emit owned `String` (circular-dep convergence).
@@ -1568,11 +1573,13 @@ impl<'ast> CodeGenerator<'ast> {
                     || callee_sig.param_types.get(callee_pidx).is_some_and(|t| {
                         crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                     });
-                let callee_accepts_shared_ref = callee_borrows_text
+                let callee_accepts_ref_reborrow = callee_borrows_text
                     || callee_sig.param_types.get(callee_pidx).is_some_and(|t| {
-                        matches!(t, Type::Reference(_))
-                    });
-                if !formal_is_copy && !callee_accepts_shared_ref {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    })
+                    || self.ir_sig_arg_expects_shared_borrow(&callee_sig, arg_index)
+                    || self.ir_sig_arg_expects_mut_borrow(&callee_sig, arg_index);
+                if !formal_is_copy && !callee_accepts_ref_reborrow {
                     coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
                 }
             } else if !coerced.ends_with(".clone()") {
@@ -2535,9 +2542,30 @@ impl<'ast> CodeGenerator<'ast> {
                     arg_expr,
                     Expression::Identifier { name, .. }
                         if self.identifier_already_ref(name)
+                            || self.identifier_already_mut_ref(name)
+                            || self.emitted_rust_ref_formals.contains(name)
                             || self.str_ref_optimized_params.contains(name.as_str())
                             || self.inferred_borrowed_params.contains(name)
+                            || self.binding_emits_as_rust_shared_ref(name)
                 );
+                if arg_already_rust_ref {
+                    // Binding is already `&T` / `&mut T` in Rust — never prefix another `&`
+                    // (`take_in_edges(&csr)` → `&&mut DenseCsr`).
+                    *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                        coerced,
+                    )
+                    .to_string();
+                    // Keep `.clone()` when the slot is owned (iterator `push(item)` into
+                    // `Vec<T>`). Only strip clone for true reborrows into `&` / `&mut`.
+                    let wants_owned = crate::ir::signature_bridge::call_site_expects_owned_pass(
+                        sig, param_idx,
+                    ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, param_idx,
+                    );
+                    if !wants_owned {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
+                    }
+                } else {
                 let method = callee_name.rsplit("::").next().unwrap_or(callee_name);
                 let formal_is_copy = sig
                     .formal_param_type(param_idx)
@@ -2567,6 +2595,7 @@ impl<'ast> CodeGenerator<'ast> {
                         formal_is_copy,
                     );
                 crate::codegen::rust::call_site_borrow::apply_call_site_borrow(&decision, coerced);
+                }
             }
         }
 
@@ -2585,12 +2614,27 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_expr,
             )
         {
-            crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+            // Already-emitted `&mut T` / `&T` bindings reborrow by value of the binding.
+            let already_ref_binding = matches!(
                 arg_expr,
-                coerced,
-                &self.current_function_params,
-                &self.inferred_mut_borrowed_params,
+                Expression::Identifier { name, .. }
+                    if self.identifier_already_mut_ref(name)
+                        || self.identifier_already_ref(name)
+                        || self.emitted_rust_ref_formals.contains(name)
             );
+            if already_ref_binding {
+                *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                    .to_string();
+                // Mut reborrow never needs `.clone()` on an already-`&mut` binding.
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
+            } else {
+                crate::codegen::rust::expression_utilities::apply_mut_borrow_coercion(
+                    arg_expr,
+                    coerced,
+                    &self.current_function_params,
+                    &self.inferred_mut_borrowed_params,
+                );
+            }
         }
 
         // Owned formals: strip stale `&` / `&mut`. Prefer *any* layered signature

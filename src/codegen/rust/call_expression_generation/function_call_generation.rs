@@ -58,7 +58,13 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
             });
         if needs_mut && !arg_str.starts_with("&mut ") {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if gen.identifier_already_mut_ref(name) {
+                if gen.identifier_already_mut_ref(name)
+                    || gen.emitted_rust_ref_formals.contains(name)
+                {
+                    // Binding is already `&mut T` / `&T` — peel stale shared `&`.
+                    *arg_str =
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
+                            .to_string();
                     continue;
                 }
             }
