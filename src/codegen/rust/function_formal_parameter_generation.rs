@@ -117,6 +117,16 @@ impl<'ast> CodeGenerator<'ast> {
                     && !multiparam_store_keeps_owned_early
                     && !tuple_discard_keeps_owned_early
                     && !self.param_single_arg_owned_self_or_field_forward(param, func)
+                    && !self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_only_forwards_to_emitted_owned_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     && !self.param_has_field_or_index_move_binding(
                         func.body.as_slice(),
                         &param.name,
@@ -2037,11 +2047,25 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                             // Forward-only owned callees (`create` → owned `post_journal_entry`)
                             // must not be re-promoted to `&mut` from stale registry MutBorrowed.
-                            let forwards_to_owned = self.param_only_forwards_to_emitted_owned_callees(
+                            // Never treat mut-borrowing callees (take/restore) as owned forwards.
+                            let forwards_to_owned = !self.param_passed_to_mut_borrowing_callee(
                                 func.body.as_slice(),
                                 &param.name,
                                 func,
-                            );
+                            ) && (self.param_only_forwards_to_emitted_owned_callees(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) || (matches!(&param.type_, Type::Custom(_))
+                                && !crate::codegen::rust::types::is_windjammer_text_type(
+                                    &param.type_,
+                                )
+                                && !self.is_type_copy(&param.type_)
+                                && self.param_passes_to_wj_owned_sibling_call(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )));
                             if param.name != "self"
                                 && !self.in_trait_impl
                                 && !forwards_to_owned
