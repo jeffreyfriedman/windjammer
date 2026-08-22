@@ -719,6 +719,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }) {
                     continue;
                 }
+                // Pure forward-only wrappers must not re-seed MutBorrowed after strip_borrow.
+                // Take/restore bodies still need MutBorrowed (`run_parallel` → `&mut DenseCsr`).
+                if self.param_only_forwards_to_emitted_owned_callees(
+                    func.body.as_slice(),
+                    param_name,
+                    func,
+                ) {
+                    continue;
+                }
                 if self.current_struct_name.as_ref().is_some_and(|sn| {
                     func.parameters.iter().any(|p| {
                         p.name == *param_name && self.struct_is_owned_engine_key_facade(sn, p)
@@ -4365,6 +4374,67 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// WJ AST formals for free functions (authoritative before registry convergence).
+    pub(in crate::codegen::rust) fn register_free_function_ast_formals(
+        &mut self,
+        func: &FunctionDecl<'ast>,
+        analyzed: Option<&crate::analyzer::AnalyzedFunction<'ast>>,
+    ) {
+        let formals: Vec<Type> = func
+            .parameters
+            .iter()
+            .map(|p| p.type_.clone())
+            .collect();
+        let field_written: Vec<bool> = func
+            .parameters
+            .iter()
+            .map(|p| {
+                self.param_has_field_or_index_write(func.body.as_slice(), &p.name)
+                    || analyzed.is_some_and(|af| {
+                        af.field_mutated_parameters.contains(&p.name)
+                            || af.mutated_parameters.contains(&p.name)
+                            || matches!(
+                                af.inferred_ownership.get(&p.name),
+                                Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                            )
+                    })
+            })
+            .collect();
+        self.free_function_ast_formal_param_types
+            .insert(func.name.clone(), formals);
+        self.free_function_ast_param_field_written
+            .insert(func.name.clone(), field_written);
+    }
+
+    /// True when WJ declares a bare owned non-text formal that is not field-mutated
+    /// (take/restore). Field writes mean the callee emits `&mut`, not owned.
+    pub(in crate::codegen::rust) fn free_function_ast_arg_is_owned_wj_formal(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        for key in [callee_name, simple] {
+            if let Some(formals) = self.free_function_ast_formal_param_types.get(key) {
+                if let Some(t) = formals.get(arg_index) {
+                    if self
+                        .free_function_ast_param_field_written
+                        .get(key)
+                        .and_then(|flags| flags.get(arg_index))
+                        .copied()
+                        == Some(true)
+                    {
+                        return false;
+                    }
+                    return crate::codegen::rust::signature_promotion::wj_ast_bare_owned_non_text_type(
+                        t,
+                    );
+                }
+            }
+        }
+        false
+    }
+
     /// WJ AST formals for sibling methods (authoritative before registry convergence).
     pub(in crate::codegen::rust) fn register_impl_ast_method_formals(
         &mut self,
@@ -4377,10 +4447,20 @@ impl<'ast> CodeGenerator<'ast> {
             .filter(|p| p.name != "self")
             .map(|p| p.type_.clone())
             .collect();
+        let field_written: Vec<bool> = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .map(|p| self.param_has_field_or_index_write(func.body.as_slice(), &p.name))
+            .collect();
         self.struct_method_ast_formal_param_types
             .entry(struct_name.to_string())
             .or_default()
             .insert(func.name.clone(), formals);
+        self.struct_method_ast_param_field_written
+            .entry(struct_name.to_string())
+            .or_default()
+            .insert(func.name.clone(), field_written);
         // Lookup facades (get-style): owned non-Copy custom formals read via field access.
         for param in &func.parameters {
             if param.name == "self" || self.is_type_copy(&param.type_) {
@@ -4519,6 +4599,16 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(struct_name) = self.current_struct_name.as_ref() else {
             return false;
         };
+        if self
+            .struct_method_ast_param_field_written
+            .get(struct_name)
+            .and_then(|methods| methods.get(method))
+            .and_then(|flags| flags.get(arg_index))
+            .copied()
+            == Some(true)
+        {
+            return false;
+        }
         self.struct_method_ast_formal_param_types
             .get(struct_name)
             .and_then(|methods| methods.get(method))
@@ -6107,6 +6197,8 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         let pidx = sig.arg_param_index(arg_index);
+        // Completed codegen `&` / `&mut` emission wins over WJ AST bare formals
+        // (take/restore emits `&mut DenseCsr` despite `csr: DenseCsr` in source).
         if sig
             .emitted_rust_ref_params
             .as_ref()
@@ -6116,7 +6208,26 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
+        let callee_name = match function {
+            Expression::Identifier { name, .. } => name.as_str(),
+            Expression::FieldAccess { field, .. } => field.as_str(),
+            _ => "",
+        };
+        // Multipass: when emission flags are unset/false, WJ AST bare owned Custom
+        // and registry bare slots defeat stale Borrowed stubs.
+        if !callee_name.is_empty()
+            && self.free_function_ast_arg_is_owned_wj_formal(callee_name, arg_index)
+        {
+            return true;
+        }
+        if crate::codegen::rust::signature_promotion::wj_registry_bare_owned_formal_slot(
+            &sig, pidx,
+        ) {
+            return true;
+        }
         crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
+            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(&sig, pidx)
+            || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(&sig, pidx)
             || (matches!(
                 sig.param_ownership.get(pidx),
                 Some(crate::analyzer::OwnershipMode::Owned)
@@ -6238,6 +6349,18 @@ impl<'ast> CodeGenerator<'ast> {
                 .function_emitted_mut_arg_indices
                 .get(qualified.as_str())
                 .is_some_and(|set| set.contains(&arg_index))
+            {
+                return true;
+            }
+            // WJ AST field writes on the callee formal → emits `&mut` (take/restore),
+            // even before that method's formals are refreshed into the registry.
+            if self
+                .struct_method_ast_param_field_written
+                .get(&rt)
+                .and_then(|methods| methods.get(method))
+                .and_then(|flags| flags.get(arg_index))
+                .copied()
+                == Some(true)
             {
                 return true;
             }
@@ -8120,11 +8243,33 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(crate::analyzer::OwnershipMode::Owned)
             );
             let emitted_owned = trait_owned_string
+                || crate::codegen::rust::signature_promotion::wj_registry_bare_owned_formal_slot(
+                    sig, pidx,
+                )
                 || ((callee_keeps_wj_owned
                     || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         sig, pidx,
+                    )
+                    || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                        sig, pidx,
+                    )
+                    || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                        sig, pidx,
                     ))
                     && !crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx));
+            // AST bare owned only when emission metadata does not already record a Rust ref
+            // (take/restore callees keep `emitted_rust_ref_params=true`).
+            let emitted_owned = emitted_owned
+                || (self.free_function_ast_arg_is_owned_wj_formal(&sig.name, arg_index)
+                    && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        sig, pidx,
+                    )
+                    && sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(pidx))
+                        .copied()
+                        != Some(true));
             if forwarding && !emitted_owned {
                 all_emitted_owned = false;
             }
@@ -8486,29 +8631,32 @@ impl<'ast> CodeGenerator<'ast> {
                 .and_then(|flags| flags.get(pidx))
                 .copied()
                 == Some(true);
-            if !codegen_confirmed_shared_ref {
-                if sig
-                    .param_types
-                    .get(pidx)
-                    .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-                    || matches!(
-                        sig.param_ownership.get(pidx),
-                        Some(OwnershipMode::MutBorrowed)
-                    )
-                {
-                    return false;
-                }
-                let stale_shared_ref_only = sig
-                    .param_types
-                    .get(pidx)
-                    .is_some_and(|t| matches!(t, Type::Reference(_)))
-                    && matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Borrowed));
-                if stale_shared_ref_only {
-                    // Converged readonly (`key.bytes.len()`): Borrowed + Reference(T) is the
-                    // target contract, not stale metadata. Claiming owned here blocks delegation
-                    // formal demotion (LsmEngine → MemoryEngine::get) before callee codegen runs.
-                    return false;
-                }
+            // Completed `&` / `&mut` emission always wins over stale analyzer Owned on
+            // bare WJ formals (take/restore → `&mut DenseCsr`).
+            if codegen_confirmed_shared_ref {
+                return false;
+            }
+            if sig
+                .param_types
+                .get(pidx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+                || matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(OwnershipMode::MutBorrowed)
+                )
+            {
+                return false;
+            }
+            let stale_shared_ref_only = sig
+                .param_types
+                .get(pidx)
+                .is_some_and(|t| matches!(t, Type::Reference(_)))
+                && matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Borrowed));
+            if stale_shared_ref_only {
+                // Converged readonly (`key.bytes.len()`): Borrowed + Reference(T) is the
+                // target contract, not stale metadata. Claiming owned here blocks delegation
+                // formal demotion (LsmEngine → MemoryEngine::get) before callee codegen runs.
+                return false;
             }
             // Analyzer-owned consumption on bare AST formals beats stale Reference(T)
             // (`Table::column(col)` builder gate).
@@ -8605,6 +8753,13 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.is_type_copy(t)
                     && !crate::codegen::rust::types::is_windjammer_text_type(t)
             })
+            && self
+                .struct_method_ast_param_field_written
+                .get(&rt)
+                .and_then(|methods| methods.get(method))
+                .and_then(|flags| flags.get(arg_index))
+                .copied()
+                != Some(true)
     }
 
     fn method_call_signature_for_arg(

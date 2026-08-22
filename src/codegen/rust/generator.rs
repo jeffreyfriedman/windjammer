@@ -86,10 +86,20 @@ pub struct CodeGenerator<'ast> {
     /// WJ source non-`self` formal types per method, merged across impl blocks for one struct.
     pub(crate) struct_method_ast_formal_param_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Vec<Type>>>,
+    /// WJ source formal types per free function (authoritative before registry convergence).
+    pub(crate) free_function_ast_formal_param_types:
+        std::collections::HashMap<String, Vec<Type>>,
+    /// Parallel to `free_function_ast_formal_param_types`: true when the WJ body assigns
+    /// through that param's fields/indexes (take/restore → emit `&mut`, not owned).
+    pub(crate) free_function_ast_param_field_written:
+        std::collections::HashMap<String, Vec<bool>>,
     /// Structs with ≥1 method that field-reads an owned non-Copy custom formal (lookup facade).
     pub(crate) struct_has_owned_key_field_lookup: std::collections::HashSet<String>,
     /// Structs with ≥1 method that only forwards an owned custom formal to a self sibling.
     pub(crate) struct_has_owned_key_sibling_wrapper: std::collections::HashSet<String>,
+    /// Parallel to method AST formals: field-write flags per non-self param.
+    pub(crate) struct_method_ast_param_field_written:
+        std::collections::HashMap<String, std::collections::HashMap<String, Vec<bool>>>,
     pub(crate) current_impl_instance_methods: std::collections::HashSet<String>, // Methods that take self
     /// Same-impl methods that codegen will emit with owned/`mut self` (consuming receiver).
     pub(crate) current_impl_consuming_self_methods: std::collections::HashSet<String>,
@@ -569,8 +579,11 @@ impl<'ast> CodeGenerator<'ast> {
             current_impl_methods: std::collections::HashSet::new(),
             preregistered_impl_sibling_types: std::collections::HashSet::new(),
             struct_method_ast_formal_param_types: std::collections::HashMap::new(),
+            free_function_ast_formal_param_types: std::collections::HashMap::new(),
+            free_function_ast_param_field_written: std::collections::HashMap::new(),
             struct_has_owned_key_field_lookup: std::collections::HashSet::new(),
             struct_has_owned_key_sibling_wrapper: std::collections::HashSet::new(),
+            struct_method_ast_param_field_written: std::collections::HashMap::new(),
             current_impl_instance_methods: std::collections::HashSet::new(),
             current_impl_consuming_self_methods: std::collections::HashSet::new(),
             trivial_copy_field_accessors: std::collections::HashSet::new(),
