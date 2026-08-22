@@ -783,6 +783,14 @@ pub fn should_borrow_at_call_site_with_copy_check(
     formal_type_is_copy: bool,
 ) -> CallSiteBorrowDecision {
     let param_idx = sig.arg_param_index(arg_index);
+    if (crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx)
+        || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+            sig, param_idx,
+        ))
+        && !callee_emits_shared_rust_ref_param(sig, param_idx)
+    {
+        return CallSiteBorrowDecision::default();
+    }
     let effective = effective_ownership_for_call_arg(sig, arg_index);
     let is_collection_key = is_collection_key_arg(sig, arg_index, receiver_type);
 
