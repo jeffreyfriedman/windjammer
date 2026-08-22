@@ -114,3 +114,40 @@ impl Host {
         "must not emit &csr / &mut csr / clone into &mut method formal. Got:\n{generated}"
     );
 }
+
+#[test]
+fn mut_formal_shared_borrow_callee_must_not_prefix_amp() {
+    let source = r#"
+pub struct DenseCsr {
+    pub offsets: Vec<int>,
+    pub neighbors: Vec<int>,
+}
+
+pub struct LccEngine {
+    pub total_triangles: int,
+}
+
+pub fn run_dense(csr: DenseCsr) -> LccEngine {
+    LccEngine { total_triangles: csr.offsets.len() as int }
+}
+
+pub fn execute(csr: DenseCsr) -> int {
+    let eng = run_dense(csr)
+    let empty: Vec<int> = Vec::new()
+    csr.offsets = empty
+    eng.total_triangles
+}
+"#;
+    let generated = test_utils::compile_single(source);
+    assert!(
+        generated.contains("fn execute(csr: &mut DenseCsr)")
+            || generated.contains("fn execute(mut csr: &mut DenseCsr)"),
+        "execute must emit &mut DenseCsr formal, got:\n{generated}"
+    );
+    assert!(
+        generated.contains("run_dense(csr)")
+            && !generated.contains("run_dense(&csr)")
+            && !generated.contains("run_dense(&mut csr)"),
+        "&mut formal into &T callee must reborrow bare csr (no stacked &). Got:\n{generated}"
+    );
+}

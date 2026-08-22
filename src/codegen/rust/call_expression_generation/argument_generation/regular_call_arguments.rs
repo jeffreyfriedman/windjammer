@@ -318,6 +318,26 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &mut coerced,
                         );
                     }
+                    // Terminal guard: IR may prefix `&` before reconcile or when peel_sig is
+                    // missing — never stack on emitted `&T` / `&mut T` formals (`run_dense(&csr)`).
+                    if let Expression::Identifier { name, .. } = arg {
+                        if gen.identifier_binding_already_rust_ref(name) && coerced.starts_with('&') {
+                            let owned_slot = peel_sig.as_ref().is_some_and(|sig| {
+                                let pidx = sig.arg_param_index(i);
+                                crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                    sig, pidx,
+                                ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    sig, pidx,
+                                )
+                            });
+                            if peel_sig.is_none() || !owned_slot {
+                                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &coerced,
+                                )
+                                .to_string();
+                            }
+                        }
+                    }
                     return vec![coerced];
                 }
                 debug_assert!(
