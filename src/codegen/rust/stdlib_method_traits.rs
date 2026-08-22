@@ -923,9 +923,12 @@ fn runtime_std_module_arg_needs_rust_borrow(
         .and_then(|flags| flags.get(pidx))
         .copied()
         == Some(false)
-        && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
             sig, pidx,
-        )
+        ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx)
+            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                sig, pidx,
+            ))
     {
         return false;
     }
@@ -956,6 +959,14 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
 ) -> bool {
+    // Defining-module codegen refresh beats stale registry/stdlib Borrowed stubs that
+    // lack `emitted_rust_ref_params` (multipass owned `Vec` / Custom formals).
+    if let Some(sig) = signature {
+        let pidx = sig.arg_param_index(arg_index);
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return false;
+        }
+    }
     if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index)) {
         return true;
     }
