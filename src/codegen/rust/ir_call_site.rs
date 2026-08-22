@@ -2458,23 +2458,13 @@ impl<'ast> CodeGenerator<'ast> {
         let param_idx = sig.arg_param_index(arg_index);
 
         // Terminal peel first: IR / collision paths may prefix `&` before reconcile runs.
-        // Existing `&T` / `&mut T` bindings reborrow/coerce — never stack (`&&mut`, `&&T`).
-        if matches!(
+        self.peel_stacked_amp_on_emitted_ref_binding(
+            coerced,
             arg_expr,
-            Expression::Identifier { name, .. }
-                if self.identifier_binding_already_rust_ref(name)
-        ) {
-            let wants_owned = crate::ir::signature_bridge::call_site_expects_owned_pass(
-                sig, param_idx,
-            ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                sig, param_idx,
-            );
-            if !wants_owned {
-                *coerced =
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-                        .to_string();
-            }
-        }
+            Some(sig),
+            arg_index,
+            false,
+        );
 
         // Ownership-collision: do not keep IR/heuristic `&` from a conflicting
         // Borrowed snapshot (draw_text homonyms). Confirmed shared-ref formals skip.
