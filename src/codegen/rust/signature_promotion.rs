@@ -1187,6 +1187,49 @@ pub(crate) fn shared_ref_emission_beats(
     pref_has && !other_has
 }
 
+/// WJ AST declares bare non-text, non-Copy `Custom(T)` (owned API intent).
+pub(crate) fn wj_ast_bare_owned_non_text_type(t: &Type) -> bool {
+    matches!(t, Type::Custom(_))
+        && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+        && !crate::codegen::rust::type_analysis_pure::is_copy_type(t)
+}
+
+/// Registry slot still records bare WJ `Custom` in `formal_param_types` (import / AST stub).
+pub(crate) fn wj_registry_bare_owned_formal_slot(
+    sig: &FunctionSignature,
+    param_idx: usize,
+) -> bool {
+    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+    {
+        return false;
+    }
+    if sig
+        .emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(param_idx))
+        .copied()
+        == Some(true)
+    {
+        return false;
+    }
+    // Take/restore and mut-passthrough analyze as MutBorrowed / MutableReference while
+    // the WJ AST formal stays bare `Custom` — that is not an owned emit contract.
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::MutBorrowed)
+    ) || sig
+        .param_types
+        .get(param_idx)
+        .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+    {
+        return false;
+    }
+    sig.formal_param_types
+        .get(param_idx)
+        .is_some_and(wj_ast_bare_owned_non_text_type)
+}
+
 pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usize) -> bool {
     sig.formal_param_type(param_idx).is_some_and(|t| {
         if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
