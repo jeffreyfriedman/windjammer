@@ -627,8 +627,23 @@ impl<'ast> CodeGenerator<'ast> {
         // Refresh free-fn signatures from the codegen registry before expected-type /
         // coercion decisions — analyzer stubs often still say bare `string`+Owned while
         // the defining-fn refresh recorded `&str` (`process("hello")` must stay bare).
+        // Mirror method path: merge defining-module `emitted_rust_ref_params` so owned
+        // Custom formals (`csr: DenseCsr`) beat WDB-097 cold-meta Borrowed stubs.
         if receiver_type_name.is_none() {
             let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+            let refresh_keys = vec![callee_name.to_string(), simple.to_string()];
+            crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                &mut sig,
+                registry,
+                &refresh_keys,
+            );
+            if let Some(global) = self.global_signature_registry.as_ref() {
+                crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                    &mut sig,
+                    global,
+                    &refresh_keys,
+                );
+            }
             if let Some(refreshed) =
                 crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                     self.signature_registry.get_signature(callee_name).cloned(),
@@ -650,6 +665,9 @@ impl<'ast> CodeGenerator<'ast> {
                     || refreshed.param_types.get(ridx).is_some_and(|t| {
                         crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                     })
+                    || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &refreshed, ridx,
+                    )
                 {
                     sig = refreshed;
                 }
@@ -900,14 +918,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
-        // `rows[i]` cannot move a non-Copy element into an owned formal (E0507).
-        // Reuse-based auto-clone misses single-use index sites (dogfood).
-        if matches!(arg_expr, Expression::Index { .. })
-            && matches!(expected.ownership, OwnedType::Owned)
+        // `rows[i]` / `self.field` into owned non-Copy formals: clone when the root cannot
+        // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Always cloning
+        // `self.field` into Owned is correct for `&self` (E0507) and harmless for owned-self.
+        let field_from_self = matches!(
+            arg_expr,
+            Expression::FieldAccess { object, .. }
+                if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+        );
+        if matches!(expected.ownership, OwnedType::Owned)
             && !prepared_arg.ends_with(".clone()")
             && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
             )
+            && (matches!(arg_expr, Expression::Index { .. })
+                || (matches!(arg_expr, Expression::FieldAccess { .. })
+                    && (self.field_access_root_is_behind_reference(arg_expr) || field_from_self)))
         {
             let elem_needs_clone = self.infer_expression_type(arg_expr).map_or_else(
                 || matches!(expected.base, BaseType::Custom(_) | BaseType::String),
