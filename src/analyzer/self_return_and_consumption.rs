@@ -1292,4 +1292,82 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
+
+    /// True when `name` is moved/consumed in `body` before the final statement (e.g. `for x in name`).
+    pub(crate) fn param_consumed_before_return(
+        &self,
+        name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        if body.len() <= 1 {
+            return false;
+        }
+        body.iter()
+            .take(body.len().saturating_sub(1))
+            .any(|stmt| self.statement_consumes_identifier(name, stmt))
+    }
+
+    /// Whether a statement moves/consumes an owned binding (for-in, pass-by-value call, assign-move).
+    pub(crate) fn statement_consumes_identifier(&self, name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::For { iterable, .. } => self.expression_consumes_identifier(name, iterable),
+            Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
+                self.expression_consumes_identifier(name, expr)
+            }
+            Statement::Assignment { value, .. } => self.expression_consumes_identifier(name, value),
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_consumes_identifier(name, expr),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.function_body_slice_consumes_identifier(name, then_block)
+                    || else_block.as_ref().is_some_and(|block| {
+                        self.function_body_slice_consumes_identifier(name, block)
+                    })
+            }
+            Statement::While { body, .. } => {
+                self.function_body_slice_consumes_identifier(name, body)
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                self.expression_consumes_identifier(name, &arm.body)
+            }),
+            _ => false,
+        }
+    }
+
+    fn function_body_slice_consumes_identifier(&self, name: &str, body: &[&Statement]) -> bool {
+        body.iter()
+            .any(|stmt| self.statement_consumes_identifier(name, stmt))
+    }
+
+    /// Expression uses `name` by move (bare identifier in by-value position).
+    fn expression_consumes_identifier(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                arguments.iter().any(|(_, arg)| {
+                    self.expression_consumes_identifier(name, arg)
+                }) || self.expression_consumes_identifier(name, function)
+            }
+            Expression::MethodCall { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expression_consumes_identifier(name, arg)),
+            Expression::Unary { operand, .. } => self.expression_consumes_identifier(name, operand),
+            Expression::Binary { left, right, .. } => {
+                self.expression_consumes_identifier(name, left)
+                    || self.expression_consumes_identifier(name, right)
+            }
+            Expression::Block { statements, .. } => {
+                self.function_body_slice_consumes_identifier(name, statements)
+            }
+            _ => false,
+        }
+    }
 }

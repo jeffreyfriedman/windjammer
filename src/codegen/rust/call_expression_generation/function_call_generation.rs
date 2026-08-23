@@ -255,6 +255,28 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 ) -> String {
     let mut func_str = gen.generate_expression(function);
 
+    if let Some(rt_method) = {
+        let normalized = func_name
+            .replace('.', "::")
+            .strip_prefix("std::")
+            .unwrap_or(func_name)
+            .to_string();
+        crate::analyzer::SignatureRegistry::resolve_runtime_emit_method_name_chain(
+            &normalized,
+            &gen.signature_registry,
+            gen.global_signature_registry.as_deref(),
+        )
+    } {
+        let normalized = func_name.replace('.', "::");
+        let module = normalized
+            .strip_prefix("std::")
+            .unwrap_or(normalized.as_str())
+            .rsplit_once("::")
+            .map(|(m, _)| m)
+            .unwrap_or("random");
+        func_str = format!("{module}::{rt_method}");
+    }
+
     // Bare `min(a, b)` on floats → Rust float min (no unqualified `min` in scope).
     if func_name == "min" && arguments.len() == 2 {
         use crate::type_inference::FloatType;
@@ -699,6 +721,27 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         );
                     }
                 }
+            }
+        }
+    }
+
+    // Bare same-module user API beats stdlib homonym (`join` vs `strings::join`).
+    if !func_name.contains("::") {
+        if let Some(local) = gen.signature_registry.get_signature(func_name).cloned() {
+            if !local.formal_param_types.is_empty()
+                && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                    &local,
+                )
+                && signature.as_ref().is_some_and(|resolved| {
+                    resolved.name != local.name
+                        && (0..local.formal_param_types.len()).any(|idx| {
+                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                resolved, idx,
+                            )
+                        })
+                })
+            {
+                signature = Some(local);
             }
         }
     }

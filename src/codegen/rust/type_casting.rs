@@ -28,6 +28,12 @@ pub fn type_is_usize(ty: &Type) -> bool {
     matches!(ty, Type::Custom(n) if n == "usize")
 }
 
+/// WJ `int` / `i64` formals that may lower to runtime `usize` via fallback registry.
+pub fn type_is_wj_int_formal(ty: &Type) -> bool {
+    matches!(ty, Type::Int | Type::Int32)
+        || matches!(ty, Type::Custom(n) if n == "int" || n == "i64" || n == "i32")
+}
+
 /// Coerce a call argument to match a `usize` formal (Rust collection capacity/index).
 ///
 /// Signature-driven: only runs when the resolved formal is `usize`. Skips when the

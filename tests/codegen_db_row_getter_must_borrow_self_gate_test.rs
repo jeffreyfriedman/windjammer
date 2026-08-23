@@ -43,18 +43,16 @@ use std::db::Row
 pub fn two_columns(row: Row) -> string {
     let id = match row.get_string("id") {
         Ok(v) => v,
-        Err(_) => "" + "",
+        Err(_) => "missing" + "",
     }
     let name = match row.get_string("name") {
         Ok(v) => v,
-        Err(_) => "" + "",
+        Err(_) => "missing" + "",
     }
-    id + name
+    "${id}${name}"
 }
 
-fn main() {
-    let _ = two_columns
-}
+fn main() {}
 "#,
     )
     .unwrap();
@@ -68,6 +66,7 @@ fn main() {
             out.to_str().unwrap(),
             "--check",
             "--module-file",
+            "--no-cargo",
         ])
         .output()
         .expect("run wj");

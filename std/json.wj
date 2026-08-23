@@ -56,6 +56,16 @@ fn is_empty(value: Value) -> bool { true }
 /// Array element by index (objects use `get`).
 fn get_index(value: Value, index: usize) -> Option<Value> { None }
 
+/// Object field names (empty when not an object).
+fn keys(value: Value) -> Vec<string> {
+    Vec::new()
+}
+
+/// Set object field (errors when `value` is not an object).
+fn set(value: Value, key: string, new_value: Value) -> Result<(), string> {
+    Err("use std::json import — maps to runtime")
+}
+
 fn object() -> Value { Value {} }
 fn array() -> Value { Value {} }
 fn null() -> Value { Value {} }

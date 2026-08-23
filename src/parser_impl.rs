@@ -545,8 +545,12 @@ impl Parser {
                     location: self.current_location(),
                 })
             }
-            Token::Bound => {
-                self.advance(); // consume 'bound'
+            Token::Ident(name)
+                if name == "bound"
+                    && matches!(self.peek(1), Some(Token::Ident(_)))
+                    && self.peek(2) == Some(&Token::Assign) =>
+            {
+                self.advance(); // consume soft-keyword `bound`
                 self.parse_bound_alias()
             }
             Token::Mod => {

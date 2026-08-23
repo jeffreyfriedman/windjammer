@@ -3,7 +3,8 @@
 //! Windjammer's `std::json` module maps to these functions.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+/// Public JSON value type for Windjammer `std::json::Value` formals.
+pub use serde_json::Value;
 
 /// Parse JSON string into a Value
 pub fn parse(s: &str) -> Result<Value, String> {
@@ -72,9 +73,9 @@ pub fn string(s: &str) -> Value {
     Value::String(s.to_string())
 }
 
-/// Get value from object by key
-pub fn get<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
-    value.get(key)
+/// Get value from object by key (owned; matches WJ `Option<Value>`).
+pub fn get(value: &Value, key: &str) -> Option<Value> {
+    value.get(key).cloned()
 }
 
 /// Type predicates (Windjammer `std::json` surface)
@@ -160,9 +161,17 @@ pub fn is_empty(value: &Value) -> bool {
     len(value) == 0
 }
 
-/// Get array element by index
-pub fn get_index(value: &Value, index: usize) -> Option<&Value> {
-    value.get(index)
+/// Get array element by index (owned; matches WJ `Option<Value>`).
+pub fn get_index(value: &Value, index: usize) -> Option<Value> {
+    value.get(index).cloned()
+}
+
+/// Object field names (empty when `value` is not an object).
+pub fn keys(value: &Value) -> Vec<String> {
+    match value.as_object() {
+        Some(map) => map.keys().cloned().collect(),
+        None => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -255,6 +264,15 @@ mod tests {
     }
 
     #[test]
+    fn test_keys_lists_object_fields() {
+        let value = parse(r#"{"b":2,"a":1}"#).unwrap();
+        let mut field_names = keys(&value);
+        field_names.sort();
+        assert_eq!(field_names, vec!["a".to_string(), "b".to_string()]);
+        assert!(keys(&null()).is_empty());
+    }
+
+    #[test]
     fn test_get() {
         let json = r#"{"name": "Alice", "age": 30, "active": true}"#;
         let value = parse(json).unwrap();
@@ -300,18 +318,18 @@ mod tests {
         assert!(!is_array(&value));
 
         let name = get(&value, "name").unwrap();
-        assert!(is_string(name));
-        assert_eq!(as_str(name), Some("Alice".to_string()));
+        assert!(is_string(&name));
+        assert_eq!(as_str(&name), Some("Alice".to_string()));
 
         let age = get(&value, "age").unwrap();
-        assert!(is_number(age));
-        assert_eq!(as_i64(age), Some(30));
+        assert!(is_number(&age));
+        assert_eq!(as_i64(&age), Some(30));
 
         let active = get(&value, "active").unwrap();
-        assert!(is_bool(active));
-        assert_eq!(as_bool(active), Some(true));
+        assert!(is_bool(&active));
+        assert_eq!(as_bool(&active), Some(true));
 
         let nil = get(&value, "nil").unwrap();
-        assert!(is_null(nil));
+        assert!(is_null(&nil));
     }
 }

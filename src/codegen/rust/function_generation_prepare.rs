@@ -1099,6 +1099,120 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    pub(in crate::codegen::rust) fn function_return_is_text(&self, func: &FunctionDecl<'ast>) -> bool {
+        fn type_is_text(t: &Type) -> bool {
+            crate::codegen::rust::types::is_windjammer_text_type(t)
+        }
+        fn type_is_text_result(t: &Type) -> bool {
+            match t {
+                Type::Result(ok, _) => type_is_text(ok),
+                Type::Parameterized(name, args) if name == "Result" => {
+                    args.first().is_some_and(type_is_text)
+                }
+                _ => false,
+            }
+        }
+        match func.return_type.as_ref() {
+            Some(t) if type_is_text(t) => true,
+            Some(t) if type_is_text_result(t) => true,
+            Some(Type::Parameterized(name, args)) if name == "Result" => {
+                args.first().is_some_and(type_is_text)
+            }
+            _ => false,
+        }
+    }
+
+    /// True when `param_name` is passed to or received by a call (not pure text construction).
+    pub(in crate::codegen::rust) fn param_used_as_call_argument(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.statement_passes_param_to_call(stmt, param_name, func))
+    }
+
+    fn statement_passes_param_to_call(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Let { value: expr, .. } => {
+                self.expression_passes_param_to_call(expr, param_name, func)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.param_used_as_call_argument(then_block, param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_used_as_call_argument(b, param_name, func)
+                    })
+            }
+            Statement::While { body, .. } | Statement::For { body, .. } => {
+                self.param_used_as_call_argument(body, param_name, func)
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|arm| {
+                self.expression_passes_param_to_call(&arm.body, param_name, func)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_passes_param_to_call(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    || self.expression_passes_param_to_call(arg, param_name, func)
+            }),
+            Expression::MethodCall { object, arguments, .. } => {
+                if matches!(&**object, Expression::Identifier { name, .. } if name == param_name) {
+                    return true;
+                }
+                self.expression_passes_param_to_call(object, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                            || self.expression_passes_param_to_call(arg, param_name, func)
+                    })
+            }
+            Expression::MacroInvocation { name, args, .. } => {
+                if matches!(
+                    name.as_str(),
+                    "format" | "println" | "print" | "eprintln" | "eprint"
+                ) {
+                    false
+                } else {
+                    args.iter()
+                        .any(|arg| self.expression_passes_param_to_call(arg, param_name, func))
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_passes_param_to_call(left, param_name, func)
+                    || self.expression_passes_param_to_call(right, param_name, func)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_passes_param_to_call(operand, param_name, func)
+            }
+            Expression::Block { statements, .. } => {
+                self.param_used_as_call_argument(statements, param_name, func)
+            }
+            _ => false,
+        }
+    }
+
     /// True when every mention of `param_name` is under a field/index projection
     /// (`param.field`, `param[i]`, `param.field.method()`), never as a bare value.
     ///
@@ -6466,6 +6580,17 @@ impl<'ast> CodeGenerator<'ast> {
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        if self.param_cross_module_borrowed_callee_keeps_owned_formal(
+            func.body.as_slice(),
+            &param.name,
+            func,
+        ) || self.param_runtime_wj_owned_rust_borrowed_forces_owned_formal(
+            func.body.as_slice(),
+            &param.name,
+            func,
+        ) {
+            return false;
+        }
         let non_self_facade = self.param_is_non_self_forward_facade_borrow_candidate(param, func);
         let only_as_call_arg =
             self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func);
@@ -6947,6 +7072,284 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         self.param_only_forwarded_to_asref_str_runtime(body, param_name)
             && !self.param_only_forwards_to_path_asref_callees(body, param_name, func)
+    }
+
+    /// Runtime WJ-owned / Rust-borrowed forwards (`from_chars(parts: Vec<char>)` → `&[char]`)
+    /// keep owned container formals + call-site borrow (WDB-102).
+    pub(in crate::codegen::rust) fn param_runtime_wj_owned_rust_borrowed_forces_owned_formal(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        self.param_only_forwarded_to_runtime_wj_owned_rust_borrowed(body, param_name, func)
+    }
+
+    /// Cross-module shared-ref callees (`graph_vertex_i64_get(map: &GraphVertexI64Map)`) keep
+    /// the outer owned Custom formal; borrow only at the call site (WDB-101).
+    pub(in crate::codegen::rust) fn param_cross_module_borrowed_callee_keeps_owned_formal(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_only_used_as_call_argument(body, param_name, func) {
+            return false;
+        }
+        let mut saw_site = false;
+        let mut all_shared_ref_callees = true;
+        {
+            let mut visit_sig = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
+                saw_site = true;
+                let pidx = sig.arg_param_index(arg_index);
+                let shared = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    sig, pidx,
+                ) || sig.param_types.get(pidx).is_some_and(|t| {
+                    matches!(
+                        t,
+                        Type::Reference(inner)
+                            if matches!(**inner, Type::Custom(_))
+                                && !crate::codegen::rust::types::is_windjammer_text_type(
+                                    inner.as_ref(),
+                                )
+                    )
+                });
+                if !shared {
+                    all_shared_ref_callees = false;
+                }
+            };
+            self.for_each_param_call_argument_site(body, param_name, func, &mut visit_sig);
+        }
+        if !saw_site {
+            if let Some((callee, arg_index)) =
+                self.forward_call_target_for_param(body, param_name, func)
+            {
+                saw_site = true;
+                if !self.callee_arg_is_shared_custom_borrow(&callee, arg_index) {
+                    all_shared_ref_callees = false;
+                }
+            }
+        }
+        saw_site && all_shared_ref_callees
+    }
+
+    fn callee_arg_is_shared_custom_borrow(&self, callee: &str, arg_index: usize) -> bool {
+        let simple = callee.rsplit("::").next().unwrap_or(callee);
+        let sig = self
+            .get_signature_with_global(callee)
+            .or_else(|| self.get_signature_with_global(simple))
+            .or_else(|| self.signature_registry.find_signature_ending_with(simple))
+            .or_else(|| {
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.find_signature_ending_with(simple))
+            });
+        let Some(sig) = sig else {
+            return false;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+            || sig.param_types.get(pidx).is_some_and(|t| {
+                matches!(
+                    t,
+                    Type::Reference(inner)
+                        if matches!(**inner, Type::Custom(_))
+                            && !crate::codegen::rust::types::is_windjammer_text_type(
+                                inner.as_ref(),
+                            )
+                )
+            })
+    }
+
+    fn global_callee_arg_is_shared_custom_borrow(&self, callee: &str, arg_index: usize) -> bool {
+        self.callee_arg_is_shared_custom_borrow(callee, arg_index)
+    }
+
+    fn forward_call_target_for_param(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> Option<(String, usize)> {
+        for stmt in body {
+            if let Some(found) =
+                self.expression_forward_call_target_for_param(stmt, param_name, func)
+            {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn expression_forward_call_target_for_param(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> Option<(String, usize)> {
+        let expr = match stmt {
+            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                expr
+            }
+            _ => return None,
+        };
+        self.call_expr_forward_target(expr, param_name, func)
+    }
+
+    fn call_expr_forward_target(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> Option<(String, usize)> {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        || Self::expr_is_field_or_index_of_param(arg, param_name)
+                    {
+                        let callee = match &**function {
+                            Expression::Identifier { name, .. } => name.clone(),
+                            Expression::FieldAccess { object, field, .. } => {
+                                if let Expression::Identifier { name, .. } = &**object {
+                                    format!("{name}::{field}")
+                                } else {
+                                    field.clone()
+                                }
+                            }
+                            _ => return None,
+                        };
+                        return Some((callee, i));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn param_only_forwarded_to_runtime_wj_owned_rust_borrowed(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_only_used_as_call_argument(body, param_name, func) {
+            return false;
+        }
+        let mut saw_site = false;
+        let mut all_runtime_borrow = true;
+        let mut visit = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
+            saw_site = true;
+            if !self.callee_arg_is_wj_owned_rust_borrowed(sig, arg_index) {
+                all_runtime_borrow = false;
+            }
+        };
+        self.for_each_param_call_argument_site(body, param_name, func, &mut visit);
+        saw_site && all_runtime_borrow
+    }
+
+    /// WJ owned formal + runtime/scanned Rust borrow (registry + fallback driven).
+    fn callee_arg_is_wj_owned_rust_borrowed(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+    ) -> bool {
+        if crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+            sig, arg_index,
+        ) {
+            return true;
+        }
+        let pidx = sig.arg_param_index(arg_index);
+        let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
+        let wj_owned_container = |candidate: &crate::analyzer::FunctionSignature| {
+            candidate
+                .formal_param_type(pidx)
+                .or_else(|| candidate.param_types.get(pidx))
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                        && (matches!(t, Type::Vec(_))
+                            || matches!(t, Type::Parameterized(n, _) if n == "Vec")
+                            || matches!(t, Type::Custom(_)))
+                })
+        };
+        let runtime_borrow = |candidate: &crate::analyzer::FunctionSignature| {
+            let idx = candidate.arg_param_index(arg_index);
+            candidate
+                .param_types
+                .get(idx)
+                .is_some_and(|t| matches!(t, Type::Reference(_)))
+                || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    candidate, idx,
+                )
+        };
+
+        let mut has_wj_owned = !sig.formal_param_types.is_empty() && wj_owned_container(sig);
+        let mut has_runtime_borrow = runtime_borrow(sig);
+
+        for reg in [
+            self.global_signature_registry.as_deref(),
+            Some(&self.signature_registry),
+            Some(crate::analyzer::SignatureRegistry::stdlib()),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for key in [sig.name.as_str(), simple] {
+                if let Some(stub) = reg.get_signature(key) {
+                    if !stub.formal_param_types.is_empty() && wj_owned_container(stub) {
+                        has_wj_owned = true;
+                    }
+                    if runtime_borrow(stub) {
+                        has_runtime_borrow = true;
+                    }
+                }
+                if let Some(fb) = reg.get_fallback_signature(key) {
+                    if runtime_borrow(fb) {
+                        has_runtime_borrow = true;
+                    }
+                    if !fb.formal_param_types.is_empty() && wj_owned_container(fb) {
+                        has_wj_owned = true;
+                    }
+                }
+            }
+        }
+        // Module-qualified runtime std (`strings::from_chars` → `&[char]`).
+        if !has_runtime_borrow {
+            for key in [sig.name.as_str(), simple] {
+                if let Some(scanned) = crate::analyzer::SignatureRegistry::stdlib().get_signature(key)
+                {
+                    if runtime_borrow(scanned) {
+                        has_runtime_borrow = true;
+                    }
+                }
+            }
+        }
+        has_wj_owned && has_runtime_borrow
+    }
+
+    fn refreshed_sig_for_forward_check(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+    ) -> crate::analyzer::FunctionSignature {
+        let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
+        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(&sig.name).cloned()),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(simple).cloned()),
+            self.signature_registry.get_signature(&sig.name).cloned(),
+            self.signature_registry.get_signature(simple).cloned(),
+            Some(sig.clone()),
+        ])
+        .unwrap_or_else(|| sig.clone())
     }
 
     /// True when every forward of `param_name` is into a scanned `AsRef<Path>` formal
@@ -8406,6 +8809,47 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    fn global_free_call_signature_fallback_for_method(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let Expression::Identifier { name, .. } = object else {
+            return None;
+        };
+        let key = format!("{name}::{method}");
+        self.global_signature_registry.as_ref().and_then(|g| {
+            g.get_signature(&key)
+                .or_else(|| g.find_signature_ending_with(method))
+                .cloned()
+        })
+    }
+
+    fn global_free_call_signature_fallback(
+        &self,
+        function: &Expression<'ast>,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let global = self.global_signature_registry.as_ref()?;
+        match function {
+            Expression::Identifier { name, .. } => global
+                .get_signature(name)
+                .or_else(|| global.find_signature_ending_with(name))
+                .cloned(),
+            Expression::FieldAccess { object, field, .. } => {
+                let receiver = match &**object {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    _ => None,
+                }?;
+                let key = format!("{receiver}::{field}");
+                global
+                    .get_signature(&key)
+                    .or_else(|| global.find_signature_ending_with(field))
+                    .cloned()
+            }
+            _ => None,
+        }
+    }
+
     fn expression_for_each_param_call_argument_site<F>(
         &self,
         expr: &Expression<'ast>,
@@ -8426,9 +8870,12 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                         || Self::expr_is_field_or_index_of_param(arg, param_name)
                     {
-                        if let Some(sig) =
-                            self.method_call_signature_for_arg(object, method, i, func)
-                        {
+                        let sig = self
+                            .method_call_signature_for_arg(object, method, i, func)
+                            .or_else(|| {
+                                self.global_free_call_signature_fallback_for_method(object, method)
+                            });
+                        if let Some(sig) = sig {
                             visit(&sig, i);
                         }
                     }
@@ -8448,9 +8895,10 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                         || Self::expr_is_field_or_index_of_param(arg, param_name)
                     {
-                        if let Some(sig) =
-                            self.resolve_free_call_signature(function, Some(call_arg_count))
-                        {
+                        let sig = self
+                            .resolve_free_call_signature(function, Some(call_arg_count))
+                            .or_else(|| self.global_free_call_signature_fallback(function));
+                        if let Some(sig) = sig {
                             visit(&sig, i);
                         }
                     }
