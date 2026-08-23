@@ -3448,23 +3448,10 @@ impl<'ast> CodeGenerator<'ast> {
                     || root_behind_ref)
                     && !arg_str.ends_with(".clone()")
                 {
-                    // `&mut self.field` can be reborrowed as `&mut T` — never clone for passthrough.
-                    if is_self_field {
-                        let self_is_borrowed_receiver =
-                            self.inferred_mut_borrowed_params.contains("self")
-                                || self.inferred_borrowed_params.contains("self")
-                                || self.current_function_params.iter().any(|p| {
-                                    p.name == "self"
-                                        && matches!(
-                                            p.ownership,
-                                            crate::parser::OwnershipHint::Ref
-                                                | crate::parser::OwnershipHint::Mut
-                                        )
-                                });
-                        if self_is_borrowed_receiver {
-                            return false;
-                        }
-                    }
+                    // Owned callee formals cannot reborrow `&self.field` / `&param.field`
+                    // (E0507). Always clone non-Copy fields out of a borrowed root.
+                    // Mut-passthrough (`&mut self.field` → `&mut T`) is handled by the
+                    // mut-borrow call-site path and never reaches this helper.
                     let is_copy = self
                         .infer_expression_type(arg)
                         .as_ref()
