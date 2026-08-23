@@ -43,6 +43,7 @@ mis-emits.
 | P1 | **User `join(string,string)` vs `strings.join` name clash (`wj-url`)** | `bug_user_join_name_clash_strings_join_test` | 🚧 |
 | P1 | **`Ok((text, ""))` must own empty string** | `bug_ok_tuple_empty_string_literal_test` | 🚧 |
 | P1 | **`encoding.base64_encode_string` / `decode_string` (`wj-base64`)** | `bug_std_encoding_base64_string_api_test` | 🚧 |
+| P1 | **`HashMap.get("lit")` after `Result` match (`wj-cookie`)** | `bug_hashmap_get_string_literal_to_string_test` | 🚧 |
 
 ## Application cleanup (after green gates)
 
