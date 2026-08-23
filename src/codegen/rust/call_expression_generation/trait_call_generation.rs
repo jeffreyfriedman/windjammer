@@ -403,11 +403,19 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         }
     }
 
+    let qualified_for_emit = format!("{obj_str}::{call_method}");
+    let emit_method = crate::analyzer::SignatureRegistry::resolve_runtime_emit_method_name_chain(
+        &qualified_for_emit,
+        &gen.signature_registry,
+        gen.global_signature_registry(),
+    )
+    .unwrap_or_else(|| call_method.to_string());
+
     let call_str = format!(
         "{}{}{}({})",
         obj_str,
         separator,
-        call_method,
+        emit_method,
         args.join(", ")
     );
 

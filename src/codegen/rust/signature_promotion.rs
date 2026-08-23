@@ -1122,21 +1122,47 @@ pub(crate) fn codegen_refreshed_beats_analysis_only(
 /// When several candidates only have all-false emission flags, prefer the one that
 /// records owned emission (`emitted_owned_arg_contract` / Owned ownership) so a stale
 /// global Borrowed stub cannot beat a same-module Owned refresh (ReBAC `policy: Policy`).
+fn sig_simple_name(name: &str) -> &str {
+    name.rsplit("::").next().unwrap_or(name)
+}
+
+/// User-owned refresh beats runtime-std shared-ref when they share a suffix but differ
+/// in qualification (`join` vs `strings::join`).
+fn owned_user_refresh_beats_stdlib_shared_ref(
+    owned: &FunctionSignature,
+    shared: &FunctionSignature,
+) -> bool {
+    method_registry_reflects_emitted_owned(owned)
+        && !owned.formal_param_types.is_empty()
+        && !signature_is_wj_std_stub_or_runtime_qualified(owned)
+        && sig_simple_name(&shared.name) == sig_simple_name(&owned.name)
+        && shared.name != owned.name
+        && shared
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|flags| flags.iter().any(|&f| f))
+}
+
 pub(crate) fn pick_codegen_refreshed_signature<I>(candidates: I) -> Option<FunctionSignature>
 where
     I: IntoIterator<Item = Option<FunctionSignature>>,
 {
     let mut first = None;
     let mut refresh_without_shared_ref = None;
+    let mut shared_ref_refresh = None;
     for cand in candidates {
         let Some(sig) = cand else {
             continue;
         };
         if let Some(ref flags) = sig.emitted_rust_ref_params {
             // Prefer defining-module refresh that confirmed at least one `&str`/`&T`
-            // slot over importer stubs with all-false emission flags.
+            // slot over importer stubs with all-false emission flags — but defer when a
+            // later candidate is a user-owned API clashing on suffix (`join` vs `strings::join`).
             if flags.iter().any(|&f| f) {
-                return Some(sig);
+                if shared_ref_refresh.is_none() {
+                    shared_ref_refresh = Some(sig);
+                }
+                continue;
             }
             let owned_better = |candidate: &FunctionSignature, incumbent: &FunctionSignature| {
                 method_registry_reflects_emitted_owned(candidate)
@@ -1153,7 +1179,7 @@ where
                             .count()
             };
             match refresh_without_shared_ref {
-                None => refresh_without_shared_ref = Some(sig),
+                None => refresh_without_shared_ref = Some(sig.clone()),
                 Some(ref incumbent) if owned_better(&sig, incumbent) => {
                     refresh_without_shared_ref = Some(sig);
                 }
@@ -1161,11 +1187,32 @@ where
             }
             continue;
         }
+        if !sig.formal_param_types.is_empty()
+            && !signature_is_wj_std_stub_or_runtime_qualified(&sig)
+            && method_registry_reflects_emitted_owned(&sig)
+        {
+            match refresh_without_shared_ref {
+                None => refresh_without_shared_ref = Some(sig.clone()),
+                Some(ref incumbent) if method_registry_reflects_emitted_owned(&sig)
+                    && !method_registry_reflects_emitted_owned(incumbent) =>
+                {
+                    refresh_without_shared_ref = Some(sig.clone());
+                }
+                Some(_) => {}
+            }
+        }
         if first.is_none() {
             first = Some(sig);
         }
     }
-    refresh_without_shared_ref.or(first)
+    if let (Some(shared), Some(owned)) = (&shared_ref_refresh, &refresh_without_shared_ref) {
+        if owned_user_refresh_beats_stdlib_shared_ref(owned, shared) {
+            return Some(owned.clone());
+        }
+    }
+    shared_ref_refresh
+        .or(refresh_without_shared_ref)
+        .or(first)
 }
 
 /// True when `preferred` recorded at least one shared-ref formal and `other` did not.
@@ -1268,6 +1315,13 @@ pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx:
 
 /// Prefer defining-module refresh with shared-ref emission (`&str`, `&Vec`, …) over a
 /// stale call-site stub lacking `emitted_rust_ref_params` confirmation (regression-049).
+pub(crate) fn signature_is_wj_std_stub_or_runtime_qualified(sig: &FunctionSignature) -> bool {
+    if sig.formal_param_types.is_empty() {
+        return true;
+    }
+    crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(&sig.name)
+}
+
 pub(crate) fn prefer_shared_ref_signature(
     preferred: Option<FunctionSignature>,
     challenger: Option<&FunctionSignature>,
@@ -1276,6 +1330,19 @@ pub(crate) fn prefer_shared_ref_signature(
     let Some(challenger) = challenger else {
         return preferred;
     };
+    if let Some(ref pref) = preferred {
+        // User-owned API with confirmed WJ formals beats stdlib homonym (`join` vs `strings::join`).
+        if !pref.formal_param_types.is_empty()
+            && !signature_is_wj_std_stub_or_runtime_qualified(pref)
+            && sig_simple_name(&pref.name) == sig_simple_name(&challenger.name)
+            && pref.name != challenger.name
+            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                challenger, param_idx,
+            )
+        {
+            return Some(pref.clone());
+        }
+    }
     if !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
         challenger, param_idx,
     ) {
@@ -1307,7 +1374,7 @@ pub(crate) fn prefer_shared_ref_signature(
             .copied()
             == Some(true);
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
-        if challenger_runtime_str_ref {
+        if challenger_runtime_str_ref && signature_is_wj_std_stub_or_runtime_qualified(&pref) {
             return Some(challenger.clone());
         }
         return Some(pref);

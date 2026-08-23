@@ -66,7 +66,8 @@ impl Lexer {
             "where" => Token::Where,
             "type" => Token::Type,
             "dyn" => Token::Dyn,
-            "bound" => Token::Bound,
+            // Soft keyword: `bound` is only special in `bound Alias = Trait + …` item position.
+            "bound" => Token::Ident("bound".to_string()),
             "int" => Token::Int,
             "int32" => Token::Int32,
             "uint" => Token::Uint,

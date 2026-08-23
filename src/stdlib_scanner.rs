@@ -1010,6 +1010,18 @@ mod tests {
             regex_types.iter().any(|t| *t == "Regex"),
             "regex_mod pub use Regex must be a scanned export, got {regex_types:?}"
         );
+        let json_types =
+            crate::analyzer::SignatureRegistry::stdlib().runtime_exported_types_for_module("json");
+        assert!(
+            json_types.iter().any(|t| *t == "Value"),
+            "json pub use Value must be a scanned export, got {json_types:?}"
+        );
+        let http_types =
+            crate::analyzer::SignatureRegistry::stdlib().runtime_exported_types_for_module("http");
+        assert!(
+            http_types.iter().any(|t| *t == "Response"),
+            "http pub struct Response must be a scanned export, got {http_types:?}"
+        );
     }
 
     #[test]

@@ -46,7 +46,9 @@ impl<'ast> Analyzer<'ast> {
                                 .body
                                 .last()
                                 .is_some_and(|stmt| self.statement_uses_identifier(&param.name, stmt));
-                            if !still_live_at_return {
+                            let consumed_before_return =
+                                self.param_consumed_before_return(&param.name, func.body.as_slice());
+                            if !still_live_at_return && !consumed_before_return {
                                 optimizations.push(DeferDropOptimization {
                                     variable: param.name.clone(),
                                     estimated_size: param_size,

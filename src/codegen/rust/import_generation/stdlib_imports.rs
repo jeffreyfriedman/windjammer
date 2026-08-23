@@ -68,7 +68,17 @@ impl CodeGenerator<'_> {
                 let rest = module_name
                     .strip_prefix(module_base.split("::").next().unwrap_or(module_base))
                     .unwrap_or("");
-                return Some(format!("use {rust_import}{rest};\n"));
+                // `use windjammer_runtime::json;` alone does not bring `Value` into
+                // scope — also import scanned public types (Response, Value, …).
+                let mut result = format!("use {rust_import}{rest};\n");
+                if rest.is_empty() && !module_name.ends_with("::*") {
+                    let registry = crate::analyzer::SignatureRegistry::stdlib();
+                    let stem = module_base.split("::").next().unwrap_or(module_base);
+                    for ty in registry.runtime_exported_types_for_module(stem) {
+                        result.push_str(&format!("use {rust_import}::{ty};\n"));
+                    }
+                }
+                return Some(result);
             }
         }
     }
