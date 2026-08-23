@@ -13,12 +13,13 @@ fn connect(url: string) -> Result<Connection, string> {
 
 impl Connection {
     /// Parameterized query returning rows (`$1`, `$2`, … for Postgres; `?` for SQLite).
-    fn query(self, sql: string, params: Vec<string>) -> Result<Vec<Row>, string> {
+    /// Borrowed `&self` — lockstep with `windjammer_runtime::db::Connection::query`.
+    fn query(&self, sql: string, params: Vec<string>) -> Result<Vec<Row>, string> {
         Err("not implemented")
     }
 
     /// INSERT/UPDATE/DELETE — returns affected row count.
-    fn execute(self, sql: string, params: Vec<string>) -> Result<int, string> {
+    fn execute(&self, sql: string, params: Vec<string>) -> Result<int, string> {
         Err("not implemented")
     }
 
@@ -26,19 +27,21 @@ impl Connection {
 }
 
 impl Row {
-    fn get_string(self, column: string) -> Result<string, string> {
+    /// Column getters must borrow — runtime already uses `&self`; std stub must match
+    /// or multipass marks the row moved after the first `get_*` (WJ0007 dogfood).
+    fn get_string(&self, column: string) -> Result<string, string> {
         Err("not implemented")
     }
 
-    fn get_int(self, column: string) -> Result<int, string> {
+    fn get_int(&self, column: string) -> Result<int, string> {
         Err("not implemented")
     }
 
-    fn get_string_at(self, index: int) -> Result<string, string> {
+    fn get_string_at(&self, index: int) -> Result<string, string> {
         Err("not implemented")
     }
 
-    fn get_int_at(self, index: int) -> Result<int, string> {
+    fn get_int_at(&self, index: int) -> Result<int, string> {
         Err("not implemented")
     }
 }
