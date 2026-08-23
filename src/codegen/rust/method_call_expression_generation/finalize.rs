@@ -1336,11 +1336,22 @@ impl<'ast> CodeGenerator<'ast> {
                 fixed_args.join(", ")
             )
         } else {
+            let emit_method = if separator == "::" {
+                let qualified = format!("{obj_str}::{method}");
+                crate::analyzer::SignatureRegistry::resolve_runtime_emit_method_name_chain(
+                    &qualified,
+                    &self.signature_registry,
+                    self.global_signature_registry.as_deref(),
+                )
+                .unwrap_or_else(|| method.to_string())
+            } else {
+                method.to_string()
+            };
             format!(
                 "{}{}{}{}({})",
                 obj_str,
                 separator,
-                method,
+                emit_method,
                 turbofish,
                 processed_args.join(", ")
             )

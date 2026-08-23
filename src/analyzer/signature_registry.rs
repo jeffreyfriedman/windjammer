@@ -323,6 +323,91 @@ impl SignatureRegistry {
             .and_then(|g| g.runtime_module_for_type(type_name))
     }
 
+    /// Resolve WJ std stub name → runtime Rust fn segment, checking local registry,
+    /// optional global multipass registry, then the process-wide stdlib snapshot.
+    pub fn resolve_runtime_emit_method_name_chain(
+        wj_qualified: &str,
+        local: &Self,
+        global: Option<&Self>,
+    ) -> Option<String> {
+        local
+            .resolve_runtime_emit_method_name(wj_qualified)
+            .or_else(|| global.and_then(|g| g.resolve_runtime_emit_method_name(wj_qualified)))
+            .or_else(|| Self::stdlib().resolve_runtime_emit_method_name(wj_qualified))
+    }
+
+    /// When a WJ std stub (`random::range`) shadows a differently-named runtime fn
+    /// (`random::int_range`), return the runtime Rust method segment for codegen.
+    pub fn resolve_runtime_emit_method_name(&self, wj_qualified: &str) -> Option<String> {
+        if !self.signatures.contains_key(wj_qualified) {
+            return None;
+        }
+        if self
+            .global_fallback
+            .as_ref()
+            .is_some_and(|g| g.get_signature(wj_qualified).is_some())
+        {
+            return None;
+        }
+        let (module, wj_method) = wj_qualified.rsplit_once("::")?;
+        if !self.has_runtime_std_module(module) {
+            return None;
+        }
+        let wj_sig = self.get_signature(wj_qualified)?;
+        let fallback = self.global_fallback.as_ref()?;
+        let mut hits: Vec<String> = Vec::new();
+        for (key, sig) in &fallback.signatures {
+            let Some((rt_module, rt_method)) = key.rsplit_once("::") else {
+                continue;
+            };
+            if rt_module != module || rt_method == wj_method || sig.has_self_receiver {
+                continue;
+            }
+            if sig.param_types.len() == wj_sig.param_types.len()
+                && !sig.has_self_receiver
+                && !wj_sig.has_self_receiver
+                && rt_method.ends_with(wj_method)
+                && Self::wj_runtime_param_lists_compatible(&wj_sig.param_types, &sig.param_types)
+            {
+                hits.push(rt_method.to_string());
+            }
+        }
+        if hits.len() == 1 {
+            Some(hits.remove(0))
+        } else {
+            None
+        }
+    }
+
+    fn wj_runtime_param_lists_compatible(wj: &[Type], rt: &[Type]) -> bool {
+        fn peel(t: &Type) -> Type {
+            match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => (**inner).clone(),
+                other => other.clone(),
+            }
+        }
+        fn is_int_like(t: &Type) -> bool {
+            match peel(t) {
+                Type::Int | Type::Int32 | Type::Uint => true,
+                Type::Custom(name) => {
+                    matches!(name.as_str(), "int" | "i64" | "i32" | "isize" | "usize")
+                }
+                _ => false,
+            }
+        }
+        fn is_float_like(t: &Type) -> bool {
+            match peel(t) {
+                Type::Float => true,
+                Type::Custom(name) => matches!(name.as_str(), "float" | "f64" | "f32"),
+                _ => false,
+            }
+        }
+        wj.len() == rt.len()
+            && wj.iter().zip(rt.iter()).all(|(a, b)| {
+                peel(a) == peel(b) || (is_int_like(a) && is_int_like(b)) || (is_float_like(a) && is_float_like(b))
+            })
+    }
+
     /// Fully-qualified Rust path for a scanned runtime type
     /// (`HttpMethod` → `windjammer_runtime::http::HttpMethod`).
     pub fn runtime_rust_path_for_type(&self, type_name: &str) -> Option<String> {
@@ -417,8 +502,36 @@ impl SignatureRegistry {
                 // `MyRenderer::render`) and poisons unqualified consensus
                 // (`method_mutates_receiver("render")` → true).
                 crate::metadata::merge_wj_meta_signatures_from_dir_only(dir, registry);
+                Self::register_wj_runtime_name_aliases(registry);
                 return;
             }
+        }
+    }
+
+    /// WJ std stubs whose exported name differs from the scanned runtime Rust fn.
+    fn register_wj_runtime_name_aliases(registry: &mut SignatureRegistry) {
+        let aliases = [("random::range", "random::int_range")];
+        let pending: Vec<(&str, &str)> = aliases
+            .iter()
+            .copied()
+            .filter(|(wj_name, _)| !registry.signatures.contains_key(*wj_name))
+            .collect();
+        if pending.is_empty() {
+            return;
+        }
+        let Some(fallback) = registry.global_fallback.clone() else {
+            return;
+        };
+        let mut to_add = Vec::new();
+        for (wj_name, rt_name) in pending {
+            let Some(mut alias) = fallback.get_signature(rt_name).cloned() else {
+                continue;
+            };
+            alias.name = wj_name.to_string();
+            to_add.push((wj_name.to_string(), alias));
+        }
+        for (name, sig) in to_add {
+            registry.add_function(name, sig);
         }
     }
 
@@ -1585,6 +1698,16 @@ pub fn parse_field(line: string) -> string {
                 sig, 0,
             ),
             "find pattern arg must be &str in registry"
+        );
+    }
+
+    #[test]
+    fn resolve_runtime_emit_method_name_maps_random_range_to_int_range() {
+        let reg = SignatureRegistry::stdlib();
+        assert_eq!(
+            reg.resolve_runtime_emit_method_name("random::range").as_deref(),
+            Some("int_range"),
+            "WJ random::range stub must codegen to scanned int_range"
         );
     }
 }

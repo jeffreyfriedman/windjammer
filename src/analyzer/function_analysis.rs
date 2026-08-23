@@ -185,13 +185,12 @@ impl<'ast> Analyzer<'ast> {
         calls_mutating: bool,
         calls_owned_on_self: bool,
     ) -> OwnershipMode {
-        // In-place mutation without returning/consuming self → &mut self, not owned self.
-        // Dogfooding: RenderPort::render_frame mutates fields but must not take owned self.
-        // Skip when the method calls another method with owned `self` (e.g. evaluate → evaluate_node).
+        // In-place mutation → &mut self, not owned self — including `returns self` builders
+        // (WDB-104 `append_edge`: mutates `self.buffer` then returns `self`).
+        // Skip when the method calls another method with owned `self` (evaluate → evaluate_node)
+        // or moves non-Copy fields out of `self`.
         if (modifies_fields || calls_mutating)
-            && !returns_self
             && !body_moves_fields
-            && !self.function_moves_self_into_return(func)
             && !calls_owned_on_self
         {
             return OwnershipMode::MutBorrowed;

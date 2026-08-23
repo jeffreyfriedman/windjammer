@@ -69,6 +69,20 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let return_tuple_types = match &self.current_function_return_type {
             Some(Type::Tuple(types)) => Some(types.clone()),
+            Some(Type::Result(ok, _)) => match ok.as_ref() {
+                Type::Tuple(types) => Some(types.clone()),
+                _ => None,
+            },
+            Some(Type::Parameterized(name, args)) if name == "Result" => {
+                args.first().and_then(|t| match t {
+                    Type::Tuple(types) => Some(types.clone()),
+                    _ => None,
+                })
+            }
+            Some(Type::Option(inner)) => match inner.as_ref() {
+                Type::Tuple(types) => Some(types.clone()),
+                _ => None,
+            },
             _ => None,
         };
         let expr_strs: Vec<String> = elements

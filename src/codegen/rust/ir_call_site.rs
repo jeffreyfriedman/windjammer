@@ -2130,6 +2130,27 @@ impl<'ast> CodeGenerator<'ast> {
             receiver_type_name,
             Some(&self.enum_variant_types),
         );
+        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            &sig,
+            arg_index,
+            receiver_type_name,
+        ) && matches!(
+            arg_expr,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        ) {
+            if coerced.ends_with(".to_string()") {
+                if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                    coerced = stripped.to_string();
+                }
+            }
+            crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                arg_expr,
+                &mut coerced,
+            );
+        }
 
         if matches!(
             arg_expr,
@@ -2138,6 +2159,11 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) && crate::codegen::rust::string_utilities::already_owned_string_expr(&coerced)
+            && !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                &sig,
+                arg_index,
+                receiver_type_name,
+            )
         {
             coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&coerced);
         }
@@ -2847,6 +2873,27 @@ impl<'ast> CodeGenerator<'ast> {
             receiver_type_name,
             Some(&self.enum_variant_types),
         );
+        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            &text_sig,
+            arg_index,
+            receiver_type_name,
+        ) && matches!(
+            arg_expr,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        ) {
+            if coerced.ends_with(".to_string()") {
+                if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                    *coerced = stripped.to_string();
+                }
+            }
+            crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                arg_expr,
+                coerced,
+            );
+        }
 
         // Vec locals into `&Vec<T>` formals (signature-driven; not in apply_ir).
         *coerced =
@@ -3122,6 +3169,11 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) && crate::codegen::rust::string_utilities::already_owned_string_expr(coerced)
+            && !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                &text_sig,
+                arg_index,
+                receiver_type_name,
+            )
         {
             *coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(coerced);
         }
@@ -3175,6 +3227,39 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Runtime/stdlib fallback declares `usize` at `pidx` while the WJ stub may still say `int`.
+    fn fallback_signature_param_is_usize(
+        &self,
+        callee_name: &str,
+        simple: &str,
+        pidx: usize,
+    ) -> bool {
+        let is_usize_slot = |sig: &crate::analyzer::FunctionSignature| {
+            sig.formal_param_type(pidx)
+                .or_else(|| sig.param_types.get(pidx))
+                .is_some_and(crate::codegen::rust::type_casting::type_is_usize)
+        };
+        for reg in [
+            self.global_signature_registry.as_deref(),
+            Some(&self.signature_registry),
+            Some(crate::analyzer::SignatureRegistry::stdlib()),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for key in [callee_name, simple] {
+                if reg
+                    .get_fallback_signature(key)
+                    .or_else(|| reg.get_signature(key))
+                    .is_some_and(is_usize_slot)
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// `usize` index/capacity and int→float casts from the resolved formal type.
     fn apply_post_ir_numeric_formal_casts(
         &self,
@@ -3199,11 +3284,48 @@ impl<'ast> CodeGenerator<'ast> {
         let formal = cast_sig
             .formal_param_type(pidx)
             .or_else(|| cast_sig.param_types.get(pidx));
-        let already_usize = self.arg_expression_already_usize(arg_expr);
+        let mut fallback_usize_formal = None;
+        let formal_for_usize = if formal.is_some_and(crate::codegen::rust::type_casting::type_is_usize)
+        {
+            formal
+        } else if self.fallback_signature_param_is_usize(callee_name, simple, pidx) {
+            fallback_usize_formal = Some(Type::Custom("usize".to_string()));
+            fallback_usize_formal.as_ref()
+        } else if formal
+            .is_some_and(crate::codegen::rust::type_casting::type_is_wj_int_formal)
+            && self.fallback_signature_param_is_usize(callee_name, simple, pidx)
+        {
+            fallback_usize_formal = Some(Type::Custom("usize".to_string()));
+            fallback_usize_formal.as_ref()
+        } else {
+            formal
+        };
+        let already_usize = if formal_for_usize.is_some() {
+            let expr_is_wj_int = match arg_expr {
+                Expression::Identifier { name, .. } => self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                    .map(|p| &p.type_)
+                    .or_else(|| self.local_var_types.get(name))
+                    .is_some_and(|t| crate::codegen::rust::type_casting::type_is_wj_int_formal(t)),
+                _ => self
+                    .infer_expression_type(arg_expr)
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::type_casting::type_is_wj_int_formal),
+            };
+            if expr_is_wj_int {
+                false
+            } else {
+                self.arg_expression_already_usize(arg_expr)
+            }
+        } else {
+            self.arg_expression_already_usize(arg_expr)
+        };
         crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
             arg_expr,
             coerced,
-            formal,
+            formal_for_usize,
             already_usize,
         );
         // Numeric inference may have already emitted `1_usize` from a Vec::insert

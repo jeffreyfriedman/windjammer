@@ -104,6 +104,10 @@ impl<'ast> CodeGenerator<'ast> {
         let body_modifies = self.function_modifies_self_or_derived(func);
         let returns_impl_struct = self.method_returns_impl_struct(func);
 
+        if body_modifies && super::self_analysis::function_returns_self_type(func) {
+            return "mut self";
+        }
+
         if body_modifies && returns_impl_struct {
             "mut self"
         } else if body_modifies {

@@ -1514,6 +1514,20 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(l)
             }
             (Some(l), Some(g))
+                if !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                    l,
+                )
+                    && !l.formal_param_types.is_empty()
+                    && crate::codegen::rust::signature_promotion::method_registry_reflects_emitted_owned(
+                        l,
+                    )
+                    && crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                        g,
+                    ) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
                 if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(g, l) =>
             {
                 Some(g)

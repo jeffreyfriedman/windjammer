@@ -1008,6 +1008,8 @@ pub fn is_collection_key_lookup(
     if arg_index != 0 {
         return false;
     }
+    let method = sig.name.rsplit("::").next().unwrap_or(&sig.name);
+    let registry = SignatureRegistry::stdlib();
     let receiver_base = receiver_type
         .map(|rt| rt.split('<').next().unwrap_or(rt))
         .or_else(|| {
@@ -1016,13 +1018,16 @@ pub fn is_collection_key_lookup(
                 bare.split('<').next().unwrap_or(bare)
             })
         });
-    let Some(base) = receiver_base else {
-        return false;
-    };
-    if !is_map_type_name(base) && !is_set_type_name(base) {
-        return false;
+    if let Some(base) = receiver_base {
+        if is_map_type_name(base) || is_set_type_name(base) {
+            if callee_arg_expects_reference_param(sig, arg_index) {
+                return true;
+            }
+            return method_is_map_key_qualified(method, receiver_type, registry);
+        }
     }
-    callee_arg_expects_reference_param(sig, arg_index)
+    // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus.
+    method_is_map_key_qualified(method, receiver_type, registry)
 }
 
 /// Extract `Vec` from `Vec::push` for call-site qualification when local type inference failed.

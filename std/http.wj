@@ -424,6 +424,33 @@ impl ServerResponse {
             binary_body: None,
         }
     }
+
+    fn payload_too_large(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 413,
+            body: body,
+            headers: vec![],
+            binary_body: None,
+        }
+    }
+
+    fn too_many_requests(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 429,
+            body: body,
+            headers: vec![],
+            binary_body: None,
+        }
+    }
+
+    fn service_unavailable(body: string) -> ServerResponse {
+        ServerResponse {
+            status: 503,
+            body: body,
+            headers: vec![],
+            binary_body: None,
+        }
+    }
     
     fn not_found() -> ServerResponse {
         ServerResponse {
