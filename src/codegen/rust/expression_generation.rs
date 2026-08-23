@@ -1061,6 +1061,21 @@ impl<'ast> CodeGenerator<'ast> {
                 self.field_access_root_is_behind_reference(object)
             }
             Expression::Identifier { name, .. } => {
+                if name == "self"
+                    && (self.inferred_borrowed_params.contains("self")
+                        || self.inferred_mut_borrowed_params.contains("self")
+                        || self.emitted_rust_ref_formals.contains("self")
+                        || self.current_function_params.iter().any(|p| {
+                            p.name == "self"
+                                && matches!(
+                                    p.ownership,
+                                    crate::parser::OwnershipHint::Ref
+                                        | crate::parser::OwnershipHint::Mut
+                                )
+                        }))
+                {
+                    return true;
+                }
                 if self.emitted_rust_ref_formals.contains(name)
                     || self.inferred_borrowed_params.contains(name.as_str())
                     || self.inferred_mut_borrowed_params.contains(name)
