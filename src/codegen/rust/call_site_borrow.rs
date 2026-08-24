@@ -452,6 +452,18 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
     )
 }
 
+/// Resolve a bare free-fn name against direct keys and `{module}::{name}` suffixes.
+fn lookup_free_fn_signature<'a>(
+    registry: &'a crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+) -> Option<&'a FunctionSignature> {
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    registry
+        .get_signature(callee_name)
+        .or_else(|| registry.get_signature(simple))
+        .or_else(|| registry.find_unique_signature_ending_with(simple))
+}
+
 /// Same as [`skip_stale_borrow_on_owned_user_free_fn`] but also consults a converged
 /// global registry so cross-module `&str` emission is not treated as a stale borrow.
 pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
@@ -503,15 +515,10 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
         callee_emits_shared_rust_ref_param(sig, pidx)
     };
     if any_emits_shared_ref(call_sig)
-        || global.is_some_and(|g| {
-            g.get_signature(callee_name)
-                .or_else(|| g.get_signature(simple))
-                .is_some_and(any_emits_shared_ref)
-        })
-        || registry
-            .get_signature(callee_name)
-            .or_else(|| registry.get_signature(simple))
+        || global
+            .and_then(|g| lookup_free_fn_signature(g, callee_name))
             .is_some_and(any_emits_shared_ref)
+        || lookup_free_fn_signature(registry, callee_name).is_some_and(any_emits_shared_ref)
     {
         return false;
     }
@@ -524,15 +531,8 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     if call_sig.emitted_rust_ref_params.is_some() {
         return false;
     }
-    registry
-        .get_signature(callee_name)
-        .or_else(|| registry.get_signature(simple))
-        .or_else(|| {
-            global.and_then(|g| {
-                g.get_signature(callee_name)
-                    .or_else(|| g.get_signature(simple))
-            })
-        })
+    lookup_free_fn_signature(registry, callee_name)
+        .or_else(|| global.and_then(|g| lookup_free_fn_signature(g, callee_name)))
         .is_some_and(|rs| {
             let pidx = rs.arg_param_index(arg_index);
             check(rs, pidx)

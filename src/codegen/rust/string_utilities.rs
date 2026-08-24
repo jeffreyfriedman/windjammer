@@ -407,12 +407,14 @@ pub fn is_windjammer_string_const_name(name: &str) -> bool {
     name.starts_with("SCOPE_") || name.starts_with("AUDIT_") || name.starts_with("PERIOD_STATUS_")
 }
 
-/// Identifier is a string constant (`SCOPE_*` or a variable bound to a string literal).
+/// Identifier is a string constant (`SCOPE_*`, module `const string`, or a let-bound literal).
 pub fn is_string_const_identifier(
     name: &str,
     auto_clone: Option<&crate::auto_clone::AutoCloneAnalysis>,
+    module_string_consts: Option<&std::collections::HashSet<String>>,
 ) -> bool {
     is_windjammer_string_const_name(name)
+        || module_string_consts.is_some_and(|s| s.contains(name))
         || auto_clone.is_some_and(|a| a.string_literal_vars.contains(name))
 }
 

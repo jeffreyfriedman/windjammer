@@ -189,6 +189,14 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Expression { expr, .. } => {
                 let mut output = self.indent();
                 let expr_str = self.generate_expression(expr);
+                // Void blocks (`if` without `else`, loop bodies) must evaluate to `()`.
+                // Signature-/type-driven discard for non-unit tails (e.g. `HashMap::insert` → Option).
+                if self.in_void_block
+                    && !self.in_expression_context
+                    && self.expression_needs_void_discard(expr)
+                {
+                    output.push_str("let _ = ");
+                }
                 output.push_str(&expr_str);
 
                 // TDD FIX: Only add semicolon if not in expression context

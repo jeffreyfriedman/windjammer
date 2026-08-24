@@ -13,6 +13,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("loop {\n");
 
         self.indent_level += 1;
+        self.loop_body_depth += 1;
         let saved_idx = self.current_statement_idx;
         let saved_local_idx = self.current_block_local_idx;
         let old_void_block = self.in_void_block;
@@ -26,6 +27,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
         self.in_void_block = old_void_block;
+        self.loop_body_depth = self.loop_body_depth.saturating_sub(1);
         self.indent_level -= 1;
 
         output.push_str(&self.indent());
@@ -48,6 +50,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(" {\n");
 
         self.indent_level += 1;
+        self.loop_body_depth += 1;
         let saved_body = self.current_function_body.clone();
         let saved_idx = self.current_statement_idx;
         let saved_local_idx = self.current_block_local_idx;
@@ -64,6 +67,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
         self.in_void_block = old_void_block;
+        self.loop_body_depth = self.loop_body_depth.saturating_sub(1);
         self.indent_level -= 1;
 
         output.push_str(&self.indent());
