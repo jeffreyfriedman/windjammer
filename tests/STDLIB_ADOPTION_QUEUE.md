@@ -22,6 +22,7 @@ Definition of done per row:
 | Need | Repro | Gate status (2026-08-24) | Fix hint |
 |---|---|---|---|
 | `std::encoding.base64_*_string` | `bug_std_encoding_base64_string_api_test` | ✅ | Runtime `base64_encode_string` / `decode_string` |
+| `std::encoding.url_encode` / `url_decode` | `bug_std_encoding_url_encode_wiring_test` | ✅ | Runtime `url_encode` / `url_decode` (+ component aliases) |
 | `std::random.range` → `int_range` | `bug_std_random_range_codegen_test` | ✅ | Done (alias + runtime) |
 | `std::crypto.sha1_bytes` | `bug_std_crypto_sha1_bytes_test` | ✅ | Runtime SHA-1 + `std/crypto.wj` stub |
 | `std::crypto.sha256_hex` | `bug_std_crypto_sha256_hex_wiring_test` | ✅ | Alias `sha256_hex` → hex digest |
