@@ -43,6 +43,28 @@ pub fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// URL-encode a string (Windjammer `std::encoding::url_encode`).
+pub fn url_encode(data: impl AsRef<str>) -> String {
+    urlencoding::encode(data.as_ref()).into_owned()
+}
+
+/// URL-decode a string (Windjammer `std::encoding::url_decode`).
+pub fn url_decode(data: impl AsRef<str>) -> Result<String, String> {
+    urlencoding::decode(data.as_ref())
+        .map(|s| s.into_owned())
+        .map_err(|e| e.to_string())
+}
+
+/// URL-encode a component (same percent-encoding as `url_encode` on native).
+pub fn url_encode_component(data: impl AsRef<str>) -> String {
+    url_encode(data)
+}
+
+/// URL-decode a component (same as `url_decode` on native).
+pub fn url_decode_component(data: impl AsRef<str>) -> Result<String, String> {
+    url_decode(data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
