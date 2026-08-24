@@ -178,6 +178,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 }
             }
 
+            // Non-Copy / Custom `vec[i]` into owned formals — clone before IR pass (E0507).
+            if matches!(arg, Expression::Index { .. }) {
+                gen.maybe_clone_index_for_owned_param(arg, &mut arg_str);
+            }
+
             if gen.ir_cutover.call_sites && !is_extern_call {
                 if let Some(mut coerced) = gen.apply_ir_call_site_coercion(
                     &gen.signature_registry,

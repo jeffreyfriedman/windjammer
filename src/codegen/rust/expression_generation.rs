@@ -1060,6 +1060,10 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, .. } => {
                 self.field_access_root_is_behind_reference(object)
             }
+            Expression::Index { object, .. } => {
+                // `rows[0]` when `rows: &Vec<T>` — root is behind a reference.
+                self.field_access_root_is_behind_reference(object)
+            }
             Expression::Identifier { name, .. } => {
                 if name == "self"
                     && (self.inferred_borrowed_params.contains("self")

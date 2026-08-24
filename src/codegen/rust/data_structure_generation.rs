@@ -846,6 +846,26 @@ impl<'ast> CodeGenerator<'ast> {
 
         let base_expr = format!("{}[{}]", obj_str, final_idx);
 
+        // Owned call-site formals: clone non-Copy / Custom index elements (E0507). Empty WJ
+        // std stubs (`Row {}`) may be misclassified Copy while runtime types are Clone-only.
+        if self.in_call_argument_generation && !self.generating_assignment_target {
+            let et = self
+                .infer_expression_type(object)
+                .as_ref()
+                .and_then(|t| Self::peeled_collection_element_type(t))
+                .cloned();
+            let needs_clone = match et.as_ref() {
+                None => true,
+                Some(t) => {
+                    !self.is_type_copy(t)
+                        || matches!(t, Type::Custom(_))
+                }
+            };
+            if needs_clone {
+                return format!("{}.clone()", base_expr);
+            }
+        }
+
         // WINDJAMMER PHILOSOPHY: Auto-borrow Vec indexing for non-Copy types (E0507 fix).
         // Rust doesn't allow moving out of a Vec index (E0507).
         // For Copy types: vec[idx] works directly (value is copied).

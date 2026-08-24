@@ -84,6 +84,7 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
     let mut current_struct: Option<String> = None;
     let mut struct_fields: Vec<(String, String)> = Vec::new();
     let mut struct_body_depth: Option<i32> = None;
+    let mut pending_struct_derives_copy: Option<bool> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -98,12 +99,20 @@ fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), S
             pending_sanitizer = false;
         }
 
+        if let Some(has_copy) = parse_derive_declares_copy(trimmed) {
+            pending_struct_derives_copy = Some(has_copy);
+        }
+
         if brace_depth == 0 {
             if let Some(type_name) = parse_exported_type_name(trimmed) {
                 registry.register_runtime_exported_type(module_name, &type_name);
             }
             if current_struct.is_none() {
                 if let Some(struct_name) = parse_named_struct_start(trimmed) {
+                    if pending_struct_derives_copy != Some(true) {
+                        registry.register_runtime_non_copy_type(&struct_name);
+                    }
+                    pending_struct_derives_copy = None;
                     current_struct = Some(struct_name);
                     struct_fields.clear();
                     struct_body_depth = None;
@@ -231,6 +240,14 @@ fn parse_named_struct_start(trimmed: &str) -> Option<String> {
         return None;
     }
     Some(name.to_string())
+}
+
+/// True when `#[derive(..., Copy, ...)]`; false when derive exists without Copy; None otherwise.
+fn parse_derive_declares_copy(trimmed: &str) -> Option<bool> {
+    if !trimmed.starts_with("#[derive") {
+        return None;
+    }
+    Some(trimmed.split(|c: char| !c.is_ascii_alphanumeric()).any(|tok| tok == "Copy"))
 }
 
 fn parse_pub_struct_field(trimmed: &str) -> Option<(String, String)> {
@@ -1066,6 +1083,14 @@ mod tests {
         // `impl Connection` / `impl Row` in db.rs — not a hardcoded type table.
         assert_eq!(runtime_std_module_for_type("Connection"), Some("db"));
         assert_eq!(runtime_std_module_for_type("Row"), Some("db"));
+        assert!(
+            crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_copy("Row"),
+            "runtime Row derives Clone but not Copy — empty WJ stub must not be Copy"
+        );
+        assert!(
+            crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_copy("Connection"),
+            "runtime Connection is not Copy"
+        );
         let req_fields =
             crate::analyzer::SignatureRegistry::stdlib().runtime_type_fields("ServerRequest");
         assert!(

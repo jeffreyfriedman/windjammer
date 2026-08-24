@@ -39,7 +39,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// 5. Known game engine types from external crates (Vec3, AABB, etc.)
     pub(super) fn is_type_copy(&self, ty: &Type) -> bool {
         if let Type::Custom(name) = ty {
-            if self.non_copy_types_registry.contains(name.as_str()) {
+            let base = name.rsplit("::").next().unwrap_or(name.as_str());
+            if self.non_copy_types_registry.contains(name.as_str())
+                || self.non_copy_types_registry.contains(base)
+                || self.signature_registry.runtime_type_is_non_copy(name)
+            {
                 return false;
             }
         }

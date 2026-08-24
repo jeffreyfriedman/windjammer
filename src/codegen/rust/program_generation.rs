@@ -203,6 +203,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Runtime `Row` / `Connection` stubs in std/*.wj are empty but map to non-Copy Rust types.
+        self.apply_runtime_non_copy_type_overrides();
+
         // Collect bound aliases first (bound Name = Trait + Trait)
         for item in &program.items {
             if let Item::BoundAlias { name, traits, .. } = item {
@@ -1099,5 +1102,23 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 
         scan_dir(&std_dir, &mut names);
         names
+    }
+
+    /// Remove empty WJ std stubs from `copy_types_registry` when runtime scan says non-`Copy`.
+    fn apply_runtime_non_copy_type_overrides(&mut self) {
+        let mut types: std::collections::HashSet<String> = self
+            .signature_registry
+            .runtime_non_copy_types()
+            .map(str::to_string)
+            .collect();
+        if let Some(global) = &self.global_signature_registry {
+            for ty in global.runtime_non_copy_types() {
+                types.insert(ty.to_string());
+            }
+        }
+        for ty in types {
+            self.copy_types_registry.remove(&ty);
+            self.non_copy_types_registry.insert(ty);
+        }
     }
 }
