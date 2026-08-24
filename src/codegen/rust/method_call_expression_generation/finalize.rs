@@ -1080,8 +1080,9 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
         }
 
-        // Explicit `.clone()` in WJ source is Rust leakage (W0005). Strip it and emit the
-        // receiver; auto-clone on move+reuse still runs elsewhere in codegen.
+        // Explicit `.clone()` in WJ source is Rust leakage (W0005). Prefer stripping, but
+        // preserve when reuse analysis, loop body, or call-argument context needs it
+        // (WDB-105 loop / WDB-106 sequential owned moves — stripping leaves E0382).
         if crate::type_classification::is_language_level_explicit_clone(method)
             && arguments.is_empty()
         {
@@ -1092,7 +1093,11 @@ impl<'ast> CodeGenerator<'ast> {
                         || a.needs_clone_anywhere(name)
                 })
             });
-            if preserve_in_loop || preserve_for_reuse {
+            // Call-arg sites: analysis often misses reuse because the explicit clone
+            // itself masks the first move; keep the user's clone (WDB-106).
+            let preserve_call_arg = self.in_call_argument_generation
+                && matches!(object, Expression::Identifier { .. });
+            if preserve_in_loop || preserve_for_reuse || preserve_call_arg {
                 if let Expression::Identifier { name, .. } = object {
                     let is_borrowed_string = self.inferred_borrowed_params.contains(name)
                         && self.current_function_params.iter().any(|p| {
