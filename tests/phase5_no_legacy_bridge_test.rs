@@ -109,3 +109,36 @@ fn main() {
         "call_sites-off path must still emit (prepared args, no IR coercion):\n{output}"
     );
 }
+
+#[test]
+fn method_call_sites_owned_by_ir_not_finalize_rewrite() {
+    // With call_sites on, method args must come from IR coerce + reconcile only —
+    // `mc_finalize_method_call_expression` must not re-apply the ownership map.
+    let program = parse_program(
+        r#"
+fn main() {
+    let mut m = HashMap::new()
+    m.insert("k", 1)
+    let _ = m.get("k")
+}
+"#,
+    );
+    let mut analyzer = Analyzer::new();
+    let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+    let mut gen = CodeGenerator::new(registry, CompilationTarget::Rust);
+    assert!(gen.ir_cutover_call_sites_enabled());
+    let output = gen.generate_program(&program, &analyzed);
+    assert!(
+        !output.contains("compile_error!"),
+        "IR method call path must not fail closed:\n{output}"
+    );
+    // Collection-key Pattern: bare string literal (or &"lit"), never ".to_string()" key.
+    let get_line = output
+        .lines()
+        .find(|l| l.contains(".get("))
+        .unwrap_or("(missing)");
+    assert!(
+        !get_line.contains(".to_string()"),
+        "finalize must not re-own collection-key literal after IR:\n{get_line}\n{output}"
+    );
+}
