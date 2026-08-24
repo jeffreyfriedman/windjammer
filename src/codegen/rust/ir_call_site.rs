@@ -629,7 +629,13 @@ impl<'ast> CodeGenerator<'ast> {
         // the defining-fn refresh recorded `&str` (`process("hello")` must stay bare).
         // Mirror method path: merge defining-module `emitted_rust_ref_params` so owned
         // Custom formals (`csr: DenseCsr`) beat WDB-097 cold-meta Borrowed stubs.
-        if receiver_type_name.is_none() {
+        // Skip type-qualified associated calls (`ServerResponse::error`) — bare `error`
+        // would merge `log::error`'s `&str` formal onto owned i64 status.
+        if receiver_type_name.is_none()
+            && !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                callee_name,
+            )
+        {
             let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
             let refresh_keys = vec![callee_name.to_string(), simple.to_string()];
             crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
@@ -2846,47 +2852,62 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Prefer defining-module shared-text formals (`path: &str`) over stale owned stubs
         // before the IR text/collection finalize pass (regression-049).
-        let text_sig_lookup = |reg: &SignatureRegistry| -> Vec<crate::analyzer::FunctionSignature> {
-            [
-                reg.get_signature(callee_name).cloned(),
-                reg.get_signature(simple).cloned(),
-                reg.lookup_method(callee_name).cloned(),
-                reg.lookup_method(simple).cloned(),
-                reg.find_unique_signature_ending_with(simple).cloned(),
-            ]
-            .into_iter()
-            .flatten()
-            .collect()
-        };
+        // Type-qualified callees never consult bare method homonyms (`log::error`).
         let mut text_sig_candidates: Vec<Option<crate::analyzer::FunctionSignature>> = self
             .global_signature_registry
             .as_ref()
-            .map(|g| text_sig_lookup(g))
+            .map(|g| {
+                crate::codegen::rust::signature_promotion::callee_signature_lookup_candidates(
+                    g,
+                    callee_name,
+                )
+            })
             .unwrap_or_default()
             .into_iter()
             .map(Some)
             .collect();
-        text_sig_candidates.extend(text_sig_lookup(registry).into_iter().map(Some));
+        text_sig_candidates.extend(
+            crate::codegen::rust::signature_promotion::callee_signature_lookup_candidates(
+                registry,
+                callee_name,
+            )
+            .into_iter()
+            .map(Some),
+        );
         text_sig_candidates.push(Some(sig.clone()));
         let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
             text_sig_candidates,
         )
         .unwrap_or_else(|| sig.clone());
         let pidx_for_upgrade = text_sig.arg_param_index(arg_index);
-        for challenger in [
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(callee_name)),
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(simple)),
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.find_unique_signature_ending_with(simple)),
-            registry.get_signature(callee_name),
-            registry.get_signature(simple),
-            registry.find_unique_signature_ending_with(simple),
-        ] {
+        let type_qualified =
+            crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                callee_name,
+            );
+        let text_challengers: Vec<Option<&crate::analyzer::FunctionSignature>> = if type_qualified {
+            vec![
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(callee_name)),
+                registry.get_signature(callee_name),
+            ]
+        } else {
+            vec![
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(callee_name)),
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple)),
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.find_unique_signature_ending_with(simple)),
+                registry.get_signature(callee_name),
+                registry.get_signature(simple),
+                registry.find_unique_signature_ending_with(simple),
+            ]
+        };
+        for challenger in text_challengers {
             text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
                 Some(text_sig),
                 challenger,

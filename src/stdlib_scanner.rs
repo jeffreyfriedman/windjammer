@@ -1393,8 +1393,35 @@ mod tests {
             "body must need auto-borrow"
         );
         assert!(
-            reg.get_signature("Router::post").is_some_and(|s| s.has_self_receiver),
+            reg.get_signature("Router::post")
+                .is_some_and(|s| s.has_self_receiver),
             "Router::post must still be registered under Type::method"
         );
+    }
+
+    #[test]
+    fn server_response_error_registers_as_type_method_not_log_homonym() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        let typed = reg
+            .get_signature("ServerResponse::error")
+            .expect("ServerResponse::error must be Type::method");
+        assert_eq!(
+            typed.param_ownership.len(),
+            2,
+            "status + message, not log::error's single &str: {:?}",
+            typed.param_types
+        );
+        assert_eq!(typed.param_ownership[0], OwnershipMode::Owned);
+        assert!(
+            typed
+                .emitted_rust_ref_params
+                .as_ref()
+                .is_none_or(|f| f.first() != Some(&true)),
+            "status must not emit shared-ref: {:?}",
+            typed.emitted_rust_ref_params
+        );
+        let log = reg.get_signature("log::error").expect("log::error free fn");
+        assert_eq!(log.param_ownership.len(), 1);
     }
 }
