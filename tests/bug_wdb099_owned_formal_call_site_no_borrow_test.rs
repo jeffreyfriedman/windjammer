@@ -19,7 +19,7 @@
 //!
 //! Gate A: current `wj` multipass (linked crate) must stay green.
 //! Gate B: if `.worktrees/wj-pre-ir/target/release/wj` exists, it must also stay green
-//! (this is the WindjammerDB dogfood compiler — currently the failing repro).
+//! (WindjammerDB dogfood compiler — live as of PRE `wj` 0.50.0).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -223,12 +223,10 @@ fn wdb099_owned_claims_struct_must_not_borrow_at_call_site() {
     assert_suite_no_overborrow(suite);
 }
 
-/// Failing repro against the WindjammerDB dogfood PRE binary (when present).
+/// Gate B: WindjammerDB dogfood PRE binary (when present) must match tip ownership.
 ///
-/// Run: `cargo test --release --test all wdb099_pre_ir -- --ignored --nocapture`
-/// Expected (until PRE is upgraded / ownership fix backported): FAIL on `&ledger` / `&samples`.
+/// PRE `wj` 0.50.0 (2026-08-22) is green; keep live so dogfood cannot regress.
 #[test]
-#[ignore = "WDB-099 failing repro: PRE dogfood wj over-borrows owned non-Copy formals"]
 fn wdb099_pre_ir_dogfood_wj_must_not_borrow_owned_formals() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let pre = manifest

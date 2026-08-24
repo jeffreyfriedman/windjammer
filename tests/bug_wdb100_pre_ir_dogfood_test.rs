@@ -41,7 +41,6 @@ fn assert_wdb100_shape(rs: &str) {
 }
 
 #[test]
-#[ignore = "WDB-100 failing repro: PRE dogfood wj moves sql into find_word without later clone"]
 fn wdb100_pre_ir_dogfood_owned_string_reuse_after_helper() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let pre = manifest

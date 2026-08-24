@@ -179,6 +179,8 @@ For every coercion rule or constraint change:
 - **Method finalize ownership skip (2026-08-24):** when `call_sites` is on, `mc_finalize_method_call_expression` keeps args from IR coerce + terminal reconcile and does not re-run the ~800-line ownership map (third-layer ping-pong). Legacy map remains only for unit tests with `call_sites: false`. Gate: `method_call_sites_owned_by_ir_not_finalize_rewrite`.
 - **Apply-IR `should_borrow` retired (2026-08-24):** `apply_ir_call_site_coercion` uses `enforce_ownership_contract_on_coerced_arg` plus peel/suppress guards instead of `should_borrow_at_call_site_with_copy_check`. Collection-key lookups always set `expected=Ref` (even for already-`&str` bindings) so Identity wins over spurious Owned→`.to_string()`.
 - **Reconcile shared-borrow reapply is IR-only (2026-08-24):** fresher-sig / WDB-101 path uses `enforce_ownership_contract_on_coerced_arg` (with collection-key `expected=Ref`). Production no longer calls `should_borrow_at_call_site*`; those remain as unit-test oracles pending migration to `src/ir/coercion` gates.
+- **Solver actual-type merge (2026-08-24):** `set_ir_module` retains the full `IrModule`; `infer_actual_safety_type` merges AST/emit actuals with current-function / module IR binding types via `merge_call_arg_actual_with_ir`. Added `call_site_expects_mut_borrow`.
+- **PRE dogfood gates live (2026-08-24):** WDB-099/100/101/107 PRE gates un-ignored against PRE `wj` 0.50.0 (soft-skip if binary absent).
 
 ## Related Documentation
 

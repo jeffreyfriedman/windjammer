@@ -4718,7 +4718,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .as_ref()
                 .map(|ty| crate::ir::node::parser_type_to_base_type(ty))
                 .unwrap_or(BaseType::Inferred);
-            return SafetyType {
+            let mut from_ast = SafetyType {
                 base,
                 ownership,
                 effects: crate::ir::safety_type::EffectSet::pure(),
@@ -4726,13 +4726,60 @@ impl<'ast> CodeGenerator<'ast> {
                 const_eval: crate::ir::safety_type::ConstEval::Runtime,
                 exec_mode: None,
             };
+            from_ast = self.merge_actual_with_solver_binding(arg_expr, arg_str, from_ast);
+            return from_ast;
         }
 
         if let Some(ty) = self.infer_expression_type(arg_expr) {
-            return safety_type_from_parser_type(&ty, None);
+            let from_ast = safety_type_from_parser_type(&ty, None);
+            return self.merge_actual_with_solver_binding(arg_expr, arg_str, from_ast);
         }
 
-        safety_type_from_arg_expression(arg_expr)
+        let from_ast = safety_type_from_arg_expression(arg_expr);
+        self.merge_actual_with_solver_binding(arg_expr, arg_str, from_ast)
+    }
+
+    /// Prefer current-function IR binding types, then module-wide solver lookup.
+    fn merge_actual_with_solver_binding(
+        &self,
+        arg_expr: &Expression<'ast>,
+        arg_str: &str,
+        from_ast: SafetyType,
+    ) -> SafetyType {
+        let binding = if let Expression::Identifier { name, .. } = arg_expr {
+            Some(name.as_str())
+        } else {
+            None
+        };
+        if let Some(name) = binding {
+            if let Some(ir_fn) = self.current_ir_function.as_ref() {
+                if let Some(from_ir) = ir_fn
+                    .param_types
+                    .get(name)
+                    .or_else(|| ir_fn.local_types.get(name))
+                {
+                    return crate::ir::signature_bridge::merge_call_arg_actual_with_ir(
+                        from_ast,
+                        from_ir.clone(),
+                    );
+                }
+            }
+        }
+        if let Some(module) = self.ir_module.as_ref() {
+            if let Some(from_ir) =
+                crate::ir::signature_bridge::safety_type_from_ir_binding(module, arg_str.trim())
+                    .or_else(|| {
+                        binding.and_then(|name| {
+                            crate::ir::signature_bridge::safety_type_from_ir_binding(module, name)
+                        })
+                    })
+            {
+                return crate::ir::signature_bridge::merge_call_arg_actual_with_ir(
+                    from_ast, from_ir,
+                );
+            }
+        }
+        from_ast
     }
 
     fn safety_type_for_param_binding(

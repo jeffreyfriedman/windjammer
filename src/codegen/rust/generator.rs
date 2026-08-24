@@ -361,6 +361,8 @@ pub struct CodeGenerator<'ast> {
     /// Full IR module (all functions), set when cutover is active. Functions are looked up
     /// by name when codegen begins processing each AnalyzedFunction.
     pub(crate) ir_module_functions: Vec<crate::ir::IrFunction>,
+    /// Full IR module retained for solver binding lookup at call sites (`resolve_call_arg_actual_type`).
+    pub(crate) ir_module: Option<crate::ir::pipeline::IrModule>,
     /// Hard errors for boundary calls with no registry signature (fail closed — no guesses).
     pub(crate) boundary_signature_errors: std::cell::RefCell<Vec<String>>,
 }
@@ -686,6 +688,7 @@ impl<'ast> CodeGenerator<'ast> {
             ir_cutover: IrCutoverConfig::from_env(),
             current_ir_function: None,
             ir_module_functions: Vec::new(),
+            ir_module: None,
             boundary_signature_errors: std::cell::RefCell::new(Vec::new()),
         }
     }
@@ -1143,9 +1146,11 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Store an IR module for cutover. The codegen will look up the right IrFunction
-    /// by name when processing each AnalyzedFunction.
+    /// by name when processing each AnalyzedFunction, and retain the full module for
+    /// solver binding lookup at call sites.
     pub fn set_ir_module(&mut self, module: crate::ir::pipeline::IrModule) {
-        self.ir_module_functions = module.functions;
+        self.ir_module_functions = module.functions.clone();
+        self.ir_module = Some(module);
     }
 
     /// Attach solver-resolved IR functions for this file (multipass library builds).

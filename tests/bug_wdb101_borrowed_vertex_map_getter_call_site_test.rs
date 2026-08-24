@@ -89,7 +89,6 @@ fn wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site() {
 }
 
 #[test]
-#[ignore = "WDB-101 failing repro: PRE dogfood wj may omit & on borrowed map getter call sites"]
 fn wdb101_pre_ir_dogfood_must_auto_borrow_vertex_map_getter() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let pre = manifest
