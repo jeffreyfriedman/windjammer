@@ -874,17 +874,10 @@ impl<'ast> CodeGenerator<'ast> {
                 &sig, arg_index,
             ))
         {
-            // Signature-driven: map/set lookup formals are `&T` (Borrowed), never method-name lists.
-            let arg_already_borrowed = matches!(
-                arg_expr,
-                Expression::Identifier { name, .. }
-                    if self.identifier_already_ref(name)
-                        || self.inferred_borrowed_params.contains(name)
-                        || self.emitted_rust_ref_formals.contains(name)
-            );
-            if !arg_already_borrowed {
-                expected.ownership = OwnedType::Ref(Region::fresh(4));
-            }
+            // Map/set lookup formals are always `&K` at the call site. Even when the
+            // caller binding is already `&str` / `&T`, keep expected=Ref so Identity
+            // wins (`.get(key)`) — not Owned (which would spuriously `.to_string()`).
+            expected.ownership = OwnedType::Ref(Region::fresh(4));
         } else if crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
             &sig, arg_index,
         ) && matches!(expected.base, BaseType::String | BaseType::Custom(_))
@@ -1231,42 +1224,19 @@ impl<'ast> CodeGenerator<'ast> {
         let coerced = apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust);
         let mut coerced = self.finalize_ir_call_arg(arg_expr, prepared_arg.as_str(), &coerced);
 
-        // Unified borrow guard: registry Reference(T) / Borrowed ownership must reach call sites
-        // even when IR coercion chose Identity (stale effective ownership metadata).
-        let arg_already_rust_ref = matches!(
-            arg_expr,
-            Expression::Identifier { name, .. } if self.identifier_binding_already_rust_ref(name)
+        // IR contract pass: when Identity was forced above but `expected` is still Ref,
+        // re-apply borrow from SafetyType (not the legacy should_borrow decision tree).
+        crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
+            &mut coerced,
+            &actual,
+            &expected,
         );
-        let formal_is_copy = sig
-            .formal_param_type(param_idx)
-            .or_else(|| sig.param_types.get(param_idx))
-            .is_some_and(|t| {
-                let bare = match t {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                    other => other,
-                };
-                self.is_type_copy(bare)
-                    && !crate::type_classification::is_copy_pass_by_value_formal(bare)
-            });
-        let mut borrow_decision =
-            crate::codegen::rust::call_site_borrow::should_borrow_at_call_site_with_copy_check(
-                &sig,
-                arg_index,
-                arg_expr,
-                &coerced,
-                method_simple,
-                arg_already_rust_ref,
-                receiver_type_name,
-                formal_is_copy,
-            );
         let arg_binding_already_rust_ref = matches!(
             arg_expr,
             Expression::Identifier { name, .. }
                 if self.identifier_binding_already_rust_ref(name)
         );
         if arg_binding_already_rust_ref {
-            borrow_decision.add_ref = false;
-            borrow_decision.add_mut_ref = false;
             // IR Ref / shared auto-borrow may already have prefixed `&` onto an
             // emitted `&mut T` / `&T` binding (`take_in_edges(&csr)` → `&&mut`).
             coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
@@ -1284,25 +1254,22 @@ impl<'ast> CodeGenerator<'ast> {
                 param_idx,
                 arg_index,
             )
-        {
-            borrow_decision.add_ref = false;
-            if !self.ir_sig_arg_expects_mut_borrow(&sig, arg_index) {
-                borrow_decision.add_mut_ref = false;
-            }
-        }
-        // `.clone()` is already owned; `&str` formals deref-coerce from `String`.
-        if coerced.ends_with(".clone()") {
-            borrow_decision.add_ref = false;
-        }
-        crate::codegen::rust::call_site_borrow::apply_call_site_borrow(
-            &borrow_decision,
-            &mut coerced,
-        );
-        if coerced.starts_with('&')
+            && coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
-            && coerced.ends_with(".clone()")
+            && !self.ir_sig_arg_expects_mut_borrow(&sig, arg_index)
         {
-            coerced = coerced[1..].to_string();
+            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                .to_string();
+        }
+        // `.clone()` / `.to_string()` already own; peel any spurious shared borrow.
+        if (coerced.ends_with(".clone()")
+            || coerced.ends_with(".to_string()")
+            || coerced.ends_with(".to_owned()"))
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                .to_string();
         }
         if let Expression::Identifier { name, .. } = arg_expr {
             if self.in_user_written_closure
@@ -1799,7 +1766,7 @@ impl<'ast> CodeGenerator<'ast> {
                 receiver_type_name,
                 arg_expr,
                 &mut coerced,
-                arg_already_rust_ref,
+                arg_binding_already_rust_ref,
             );
         }
         // Forward-ref: owned caller binding → callee `&T` when registry encodes borrow.
