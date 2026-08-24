@@ -1,7 +1,4 @@
-//! FAILING REPRO — `std::csv` must expose idiomatic Windjammer `Result<…, string>`.
-//!
-//! Current `std/csv.wj` leaks Rust `csv.Error` and non-WJ syntax. Ecosystem needs:
-//! `csv.parse(text) -> Result<Vec<Vec<string>>, string>`.
+//! `std::csv.parse` must expose idiomatic WJ `Result<…, string>` and `cargo check`.
 
 #![cfg(any(
     not(any(
@@ -28,18 +25,7 @@ pub fn rows(text: string) -> Result<Vec<Vec<string>>, string> {
     csv.parse(text)
 }
 "#;
-    let (generated, ok) = test_utils::compile_single_check(source);
-    assert!(
-        ok,
-        "std::csv.parse must compile with WJ Result API, got:\n{generated}"
-    );
-    let wired = generated.contains("csv::parse")
-        || generated.contains("csv_mod::parse")
-        || generated.contains("windjammer_runtime::csv");
-    assert!(
-        wired,
-        "csv.parse must map to runtime csv, got:\n{generated}"
-    );
+    let generated = test_utils::assert_stdlib_runtime_links(source, &["csv::parse"]);
     assert!(
         !generated.contains("csv.Error"),
         "must not leak Rust csv.Error into WJ surface, got:\n{generated}"

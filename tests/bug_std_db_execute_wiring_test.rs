@@ -1,7 +1,4 @@
-//! FAILING REPRO — `std::db` connect + execute must be usable for migrations.
-//!
-//! Ecosystem `wj-migrate` has domain SQL + docker smoke; in-WJ apply needs:
-//! `db.connect(url)?` then `conn.execute(sql, params)?`.
+//! `std::db` connect + execute must be usable for migrations and `cargo check`.
 
 #![cfg(any(
     not(any(
@@ -34,16 +31,9 @@ pub fn apply(url: string, sql: string) -> Result<int, string> {
     }
 }
 "#;
-    let (generated, ok) = test_utils::compile_single_check(source);
+    let generated = test_utils::assert_stdlib_runtime_links(source, &["db::connect", "execute("]);
     assert!(
-        ok,
-        "std::db.connect/execute must compile, got:\n{generated}"
-    );
-    let connect_ok = generated.contains("db::connect")
-        || generated.contains("windjammer_runtime::db::connect");
-    let execute_ok = generated.contains("execute(");
-    assert!(
-        connect_ok && execute_ok,
-        "db.connect + execute must map to runtime, got:\n{generated}"
+        generated.contains("execute("),
+        "db.execute must appear in generated Rust, got:\n{generated}"
     );
 }

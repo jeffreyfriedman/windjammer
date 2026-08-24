@@ -16,6 +16,19 @@ pub fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Base64 encode a string (Windjammer `std::encoding::base64_encode_string`).
+pub fn base64_encode_string(data: impl AsRef<str>) -> String {
+    general_purpose::STANDARD.encode(data.as_ref().as_bytes())
+}
+
+/// Base64 decode to UTF-8 string (Windjammer `std::encoding::base64_decode_string`).
+pub fn base64_decode_string(data: impl AsRef<str>) -> Result<String, String> {
+    let bytes = general_purpose::STANDARD
+        .decode(data.as_ref())
+        .map_err(|e| e.to_string())?;
+    String::from_utf8(bytes).map_err(|e| e.to_string())
+}
+
 /// Hex encode bytes
 pub fn hex_encode(data: &[u8]) -> String {
     data.iter().map(|b| format!("{:02x}", b)).collect()

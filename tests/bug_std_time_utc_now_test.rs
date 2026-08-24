@@ -1,6 +1,4 @@
-//! `std::time.utc_now()` must codegen to a real runtime clock function.
-//!
-//! Ecosystem `wj-uuid`: `v1()` calls `time.utc_now().timestamp_millis()`.
+//! `std::time.utc_now()` must codegen to runtime clock and `cargo check`.
 
 #![cfg(any(
     not(any(
@@ -27,15 +25,5 @@ pub fn now() -> time.DateTime {
     time.utc_now()
 }
 "#;
-    let generated = test_utils::compile_single(source);
-    assert!(
-        generated.contains("time::utc_now")
-            || generated.contains("time::now")
-            || generated.contains("Utc::now"),
-        "std::time.utc_now must codegen to runtime clock, got:\n{generated}"
-    );
-    assert!(
-        !generated.contains("cannot find function `utc_now`"),
-        "must not emit missing utc_now, got:\n{generated}"
-    );
+    test_utils::assert_stdlib_runtime_links_any(source, &["time::utc_now", "time::now"]);
 }

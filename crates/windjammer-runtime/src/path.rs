@@ -22,8 +22,16 @@ pub fn from_str(s: &str) -> StdPathBuf {
     StdPathBuf::from(s)
 }
 
-/// Get the file name from a path
-pub fn file_name(path: &StdPath) -> Option<&str> {
+/// Get the file name from a path string (Windjammer `std::path::file_name`).
+pub fn file_name(path: impl AsRef<str>) -> Option<String> {
+    StdPath::new(path.as_ref())
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(String::from)
+}
+
+/// Get the file name from a path (legacy `&Path` API).
+pub fn file_name_path(path: &StdPath) -> Option<&str> {
     path.file_name().and_then(|s| s.to_str())
 }
 
@@ -70,8 +78,16 @@ pub fn is_dir(path: &StdPath) -> bool {
     path.is_dir()
 }
 
-/// Join path segments
-pub fn join(path: &StdPath, other: &str) -> StdPathBuf {
+/// Join path segments as strings (Windjammer `std::path::join`).
+pub fn join(a: impl AsRef<str>, b: impl AsRef<str>) -> String {
+    StdPath::new(a.as_ref())
+        .join(b.as_ref())
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Join path segments returning `PathBuf` (legacy `&Path` API).
+pub fn join_path(path: &StdPath, other: &str) -> StdPathBuf {
     path.join(other)
 }
 
@@ -130,7 +146,7 @@ mod tests {
     fn test_path_operations() {
         let path = new("/foo/bar/baz.txt");
 
-        assert_eq!(file_name(path), Some("baz.txt"));
+        assert_eq!(file_name("/foo/bar/baz.txt"), Some("baz.txt".to_string()));
         assert_eq!(file_stem(path), Some("baz"));
         assert_eq!(extension(path), Some("txt".to_string()));
         assert!(is_absolute(path));
@@ -141,8 +157,9 @@ mod tests {
 
     #[test]
     fn test_path_join() {
+        assert_eq!(join("/foo", "bar"), "/foo/bar");
         let base = new("/foo");
-        let joined = join(base, "bar");
+        let joined = join_path(base, "bar");
         assert_eq!(to_string(&joined), Some("/foo/bar".to_string()));
     }
 

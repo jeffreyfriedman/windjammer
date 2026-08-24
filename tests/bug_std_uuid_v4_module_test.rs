@@ -1,7 +1,4 @@
-//! FAILING REPRO — `std::uuid` (or documented std composition) for v4 IDs.
-//!
-//! Ecosystem `wj-uuid` is blocked on random/crypto/time. Languages ship UUID in
-//! std or a first-party module. Prefer `std::uuid.v4() -> string`.
+//! `std::uuid.v4()` — new std module wired to runtime (or composition API).
 
 #![cfg(any(
     not(any(
@@ -28,15 +25,5 @@ pub fn new_id() -> string {
     uuid.v4()
 }
 "#;
-    let (generated, ok) = test_utils::compile_single_check(source);
-    assert!(
-        ok,
-        "std::uuid.v4 must compile (add std/uuid.wj + runtime), got:\n{generated}"
-    );
-    let wired = generated.contains("uuid::v4")
-        || generated.contains("windjammer_runtime::uuid::v4");
-    assert!(
-        wired,
-        "uuid.v4 must map to runtime, got:\n{generated}"
-    );
+    test_utils::assert_stdlib_runtime_links_any(source, &["uuid::v4", "uuid::new_v4"]);
 }

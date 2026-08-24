@@ -1,0 +1,11 @@
+// std::path — string-oriented path helpers (implementation: windjammer_runtime::path)
+
+/// Join two path segments; returns a normalized path string.
+fn join(a: string, b: string) -> string {
+    Err("import std::path — maps to windjammer_runtime::path")
+}
+
+/// Final path component, or empty when none.
+fn file_name(path: string) -> Option<string> {
+    None
+}

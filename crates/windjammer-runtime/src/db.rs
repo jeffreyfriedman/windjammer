@@ -257,7 +257,7 @@ impl Connection {
         }
     }
 
-    pub fn execute(&self, sql: impl AsRef<str>, params: Vec<String>) -> Result<u64, String> {
+    pub fn execute(&self, sql: impl AsRef<str>, params: Vec<String>) -> Result<i64, String> {
         let sql = sql.as_ref();
         let rt = runtime()?;
         match &self.backend {
@@ -270,7 +270,7 @@ impl Connection {
                 let result = rt
                     .block_on(async { query.execute(pool.as_ref()).await })
                     .map_err(|e| e.to_string())?;
-                Ok(result.rows_affected())
+                Ok(result.rows_affected() as i64)
             }
             DbBackend::Sqlite(pool) => {
                 let mut query = sqlx::query(sql);
@@ -280,7 +280,7 @@ impl Connection {
                 let result = rt
                     .block_on(async { query.execute(pool.as_ref()).await })
                     .map_err(|e| e.to_string())?;
-                Ok(result.rows_affected())
+                Ok(result.rows_affected() as i64)
             }
         }
     }
