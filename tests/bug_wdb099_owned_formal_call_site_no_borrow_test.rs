@@ -86,23 +86,58 @@ pub fn rebuild_then_report() -> u64 {
     )
 }
 
-fn assert_consumer_no_overborrow(consumer: &str) {
+fn assert_consumer_matches_harness_ownership(harness: &str, consumer: &str) {
+    // Tip demotes read-only formals to `&T` / `&Vec<T>` and call sites must match.
+    // The PRE bug was owned formals + borrowed call sites (E0308) — Gate B keeps that repro.
+    let report_owned = harness.contains("opt_run_cost_report(ledger: OptEconLedger)");
+    let report_borrowed = harness.contains("opt_run_cost_report(ledger: &OptEconLedger)");
     assert!(
-        !consumer.contains("opt_run_cost_report(&ledger)"),
-        "WDB-099: owned OptEconLedger formal must not receive &ledger. Got:\n{consumer}"
+        report_owned || report_borrowed,
+        "expected opt_run_cost_report formal. harness=\n{harness}"
     );
+    if report_owned {
+        assert!(
+            !consumer.contains("opt_run_cost_report(&ledger)"),
+            "WDB-099: owned OptEconLedger formal must not receive &ledger. Got:\n{consumer}"
+        );
+        assert!(
+            consumer.contains("opt_run_cost_report(ledger)"),
+            "expected move of ledger into owned formal. Got:\n{consumer}"
+        );
+    } else {
+        assert!(
+            consumer.contains("opt_run_cost_report(&ledger)"),
+            "demoted &OptEconLedger formal requires borrow at call site. Got:\n{consumer}"
+        );
+    }
+
+    let samples_owned = harness.contains("opt_quiet_median_and_contended(samples: Vec<u64>)");
+    let samples_borrowed = harness.contains("opt_quiet_median_and_contended(samples: &Vec<u64>)");
     assert!(
-        !consumer.contains("opt_quiet_median_and_contended(&samples)"),
-        "WDB-099: owned Vec<u64> formal must not receive &samples. Got:\n{consumer}"
+        samples_owned || samples_borrowed,
+        "expected opt_quiet_median_and_contended formal. harness=\n{harness}"
     );
-    assert!(
-        consumer.contains("opt_run_cost_report(ledger)"),
-        "expected move of ledger into owned formal. Got:\n{consumer}"
-    );
-    assert!(
-        consumer.contains("opt_quiet_median_and_contended(samples)"),
-        "expected move of samples into owned Vec formal. Got:\n{consumer}"
-    );
+    if samples_owned {
+        assert!(
+            !consumer.contains("opt_quiet_median_and_contended(&samples)"),
+            "WDB-099: owned Vec formal must not receive &samples. Got:\n{consumer}"
+        );
+        assert!(
+            consumer.contains("opt_quiet_median_and_contended(samples)"),
+            "expected move of samples into owned Vec formal. Got:\n{consumer}"
+        );
+    } else {
+        // Caller may already be `&Vec` (`samples: &Vec<u64>` → pass `samples`) or own then borrow.
+        assert!(
+            consumer.contains("opt_quiet_median_and_contended(samples)")
+                || consumer.contains("opt_quiet_median_and_contended(&samples)"),
+            "demoted &Vec formal must be passed by shared ref. Got:\n{consumer}"
+        );
+        assert!(
+            !consumer.contains("opt_quiet_median_and_contended(samples.clone())"),
+            "must not clone into &Vec formal. Got:\n{consumer}"
+        );
+    }
 }
 
 fn wdb099_struct_field_sources() -> (&'static str, &'static str, &'static str) {
@@ -162,10 +197,13 @@ fn wdb099_owned_struct_and_vec_formals_must_not_borrow_at_call_site() {
     let map = test
         .compile()
         .expect("WDB-099 multipass compile should succeed");
+    let harness = map
+        .get("harness.rs")
+        .expect("harness.rs must be generated");
     let consumer = map
         .get("consumer.rs")
         .expect("consumer.rs must be generated");
-    assert_consumer_no_overborrow(consumer);
+    assert_consumer_matches_harness_ownership(harness, consumer);
 }
 
 /// Gate C: owned aggregate struct at suite call site (Wave1OptLiveClaims pattern).
@@ -236,5 +274,7 @@ fn wdb099_pre_ir_dogfood_wj_must_not_borrow_owned_formals() {
     );
 
     let consumer = fs::read_to_string(out.join("consumer.rs")).expect("consumer.rs");
-    assert_consumer_no_overborrow(&consumer);
+    let harness = fs::read_to_string(out.join("harness.rs")).expect("harness.rs");
+    // PRE dogfood historically kept owned formals while over-borrowing at call sites.
+    assert_consumer_matches_harness_ownership(&harness, &consumer);
 }

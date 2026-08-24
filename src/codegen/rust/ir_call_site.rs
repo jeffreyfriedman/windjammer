@@ -3343,6 +3343,19 @@ impl<'ast> CodeGenerator<'ast> {
         // function — strip `&` re-applied by later text/forwarder/vec finalize
         // (ReBAC `resolve_check(&policy)` into `policy: Policy`).
         self.strip_recursive_owned_formal_stale_borrow(coerced, arg_expr, callee_name);
+
+        // Terminal: `vec[i]` into owned non-Copy / Custom formals — reconcile may strip
+        // IR `.clone()` when a stale Borrowed snapshot briefly applies `&` then peels it
+        // (`col_string(rows[0], …)` E0507). Reuse the same IR helper as call-site coerce.
+        if matches!(arg_expr, Expression::Index { .. }) {
+            *coerced = self.ensure_owned_move_clone_for_reuse(
+                arg_expr,
+                coerced,
+                &sig,
+                param_idx,
+            );
+        }
+
         if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
             && callee_name.contains("graph_vertex_i64_get")
             && arg_index == 0
