@@ -12,7 +12,7 @@ fn random<T>() -> T {
 }
 
 fn range(min: int, max: int) -> int {
-    // Implementation wraps: rand::thread_rng().gen_range(min..max)
+    // WJ API name; codegen maps to windjammer_runtime::random::int_range(min, max).
     min
 }
 
