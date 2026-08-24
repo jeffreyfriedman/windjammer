@@ -5,6 +5,28 @@
 use mime_guess;
 use std::path::Path;
 
+// Common text MIME types (mirror `std/mime.wj` constants)
+pub const TEXT_HTML: &str = "text/html; charset=utf-8";
+pub const TEXT_PLAIN: &str = "text/plain; charset=utf-8";
+pub const TEXT_CSS: &str = "text/css; charset=utf-8";
+pub const TEXT_XML: &str = "text/xml; charset=utf-8";
+pub const TEXT_CSV: &str = "text/csv; charset=utf-8";
+
+pub const APPLICATION_JSON: &str = "application/json; charset=utf-8";
+pub const APPLICATION_JAVASCRIPT: &str = "application/javascript; charset=utf-8";
+pub const APPLICATION_WASM: &str = "application/wasm";
+pub const APPLICATION_PDF: &str = "application/pdf";
+pub const APPLICATION_ZIP: &str = "application/zip";
+pub const APPLICATION_OCTET_STREAM: &str = "application/octet-stream";
+pub const APPLICATION_XML: &str = "application/xml; charset=utf-8";
+
+pub const IMAGE_PNG: &str = "image/png";
+pub const IMAGE_JPEG: &str = "image/jpeg";
+pub const IMAGE_GIF: &str = "image/gif";
+pub const IMAGE_SVG: &str = "image/svg+xml";
+pub const IMAGE_WEBP: &str = "image/webp";
+pub const IMAGE_ICO: &str = "image/x-icon";
+
 /// Guess MIME type from file path
 pub fn from_filename<P: AsRef<Path>>(path: P) -> String {
     mime_guess::from_path(path)

@@ -106,6 +106,9 @@ impl<'ast> CodeGenerator<'ast> {
         self.collect_partial_eq_types(program);
 
         // PRE-PASS: Module `const string` names — used for owned-String coercion at returns/match arms.
+        for name in Self::stdlib_string_const_names() {
+            self.module_string_consts.insert(name);
+        }
         for item in &program.items {
             if let Item::Const {
                 name,
@@ -1033,5 +1036,68 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
                 && (t.contains("::*") || t.ends_with("::*"))
         });
         glob_reexports.count() >= 2
+    }
+
+    /// `pub const FOO: string` names from `std/*.wj` (e.g. `mime::APPLICATION_JSON`).
+    fn stdlib_string_const_names() -> std::collections::HashSet<String> {
+        use std::collections::HashSet;
+        use std::path::Path;
+
+        let mut names = HashSet::new();
+        let std_dir = [
+            Path::new("std").to_path_buf(),
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
+        ]
+        .into_iter()
+        .find(|p| p.is_dir());
+        let Some(std_dir) = std_dir else {
+            return names;
+        };
+
+        fn scan_file(path: &Path, names: &mut HashSet<String>) {
+            let Ok(content) = std::fs::read_to_string(path) else {
+                return;
+            };
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                let Some(rest) = trimmed
+                    .strip_prefix("pub const ")
+                    .or_else(|| trimmed.strip_prefix("const "))
+                else {
+                    continue;
+                };
+                let Some((name, ty_part)) = rest.split_once(':') else {
+                    continue;
+                };
+                let name = name.trim();
+                let ty_part = ty_part.trim();
+                if ty_part.starts_with("string") && !name.is_empty() {
+                    names.insert(name.to_string());
+                }
+            }
+        }
+
+        fn scan_dir(dir: &Path, names: &mut HashSet<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let mod_wj = path.join("mod.wj");
+                    if mod_wj.is_file() {
+                        scan_file(&mod_wj, names);
+                    }
+                } else if path.extension().and_then(|s| s.to_str()) == Some("wj") {
+                    scan_file(&path, names);
+                }
+            }
+        }
+
+        scan_dir(&std_dir, &mut names);
+        names
     }
 }

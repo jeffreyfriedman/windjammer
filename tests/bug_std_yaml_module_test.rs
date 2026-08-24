@@ -31,7 +31,7 @@ pub fn load(text: string) -> Result<string, string> {
     yaml.to_json(text)
 }
 "#;
-    test_utils::assert_stdlib_runtime_links(source, &["windjammer_runtime::yaml::to_json"]);
+    test_utils::assert_stdlib_runtime_links(source, &["yaml::to_json"]);
 }
 
 #[test]
@@ -46,5 +46,5 @@ pub fn has_name(text: string) -> bool {
     }
 }
 "#;
-    test_utils::assert_stdlib_runtime_links(source, &["windjammer_runtime::yaml::parse"]);
+    test_utils::assert_stdlib_runtime_links(source, &["yaml::parse"]);
 }

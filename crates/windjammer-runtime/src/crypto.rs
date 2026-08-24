@@ -2,6 +2,7 @@
 //!
 //! Windjammer's `std::crypto` module maps to these functions.
 
+use sha1::{Digest as Sha1Digest, Sha1};
 use sha2::{Digest, Sha256};
 
 /// SHA-256 hash
@@ -19,6 +20,16 @@ pub fn sha256(data: impl AsRef<str>) -> String {
 /// SHA-256 hash of string
 pub fn sha256_string(s: &str) -> String {
     sha256_bytes(s.as_bytes())
+}
+
+/// SHA-256 hex digest of string (Windjammer `std::crypto::sha256_hex`).
+pub fn sha256_hex(data: impl AsRef<str>) -> String {
+    sha256_string(data.as_ref())
+}
+
+/// SHA-1 digest bytes (Windjammer `std::crypto::sha1_bytes`, UUID v5).
+pub fn sha1_bytes(data: &[u8]) -> Vec<u8> {
+    Sha1::digest(data).to_vec()
 }
 
 /// Hash password with bcrypt

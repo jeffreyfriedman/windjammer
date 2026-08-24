@@ -3534,6 +3534,13 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.current_function_params,
             );
             if !super::string_utilities::already_owned_string_expr(expr_str) {
+                if let crate::parser::Expression::FieldAccess { field, .. } = expr {
+                    if self.module_string_consts.contains(field) {
+                        *expr_str =
+                            super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                        return;
+                    }
+                }
                 if let crate::parser::Expression::Identifier { name, .. } = expr {
                     if self.module_string_consts.contains(name) {
                         *expr_str =
