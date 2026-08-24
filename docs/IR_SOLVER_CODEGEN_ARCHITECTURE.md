@@ -181,6 +181,7 @@ For every coercion rule or constraint change:
 - **Reconcile shared-borrow reapply is IR-only (2026-08-24):** fresher-sig / WDB-101 path uses `enforce_ownership_contract_on_coerced_arg` (with collection-key `expected=Ref`). Production no longer calls `should_borrow_at_call_site*`; those remain as unit-test oracles pending migration to `src/ir/coercion` gates.
 - **Solver actual-type merge (2026-08-24):** `set_ir_module` retains the full `IrModule`; `infer_actual_safety_type` merges AST/emit actuals with current-function / module IR binding types via `merge_call_arg_actual_with_ir`. Added `call_site_expects_mut_borrow`.
 - **PRE dogfood gates live (2026-08-24):** WDB-099/100/101/107 PRE gates un-ignored against PRE `wj` 0.50.0 (soft-skip if binary absent).
+- **`ir/emission_contract.rs` (2026-08-24):** `callee_emits_shared_rust_ref_param` + `plain_string_formal_passes_owned_at_call_site` live in IR; `signature_bridge` imports them directly (no `call_site_borrow` edge). `call_site_borrow` re-exports for codegen stability. Temporary codegen helper deps to be purified next.
 
 ## Related Documentation
 
