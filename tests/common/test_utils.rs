@@ -205,6 +205,53 @@ pub fn compile_single_check(source: &str) -> (String, bool) {
     (generated, success)
 }
 
+/// Stdlib wiring gate for adoption repros.
+///
+/// Substring-only checks false-green when codegen emits
+/// `compile_error!("missing boundary signature for …")` plus a bare
+/// `yaml::to_json` / `jwt::sign_hs256` call — transpile succeeds, rustc never links.
+///
+/// This helper requires:
+/// 1. Transpile success
+/// 2. No fail-closed `compile_error!` / missing boundary signature
+/// 3. Each `required_runtime_needles` substring present (prefer `windjammer_runtime::…`)
+/// 4. `cargo check` of the generated crate against `windjammer-runtime`
+pub fn assert_stdlib_runtime_links(source: &str, required_runtime_needles: &[&str]) -> String {
+    let tmp = TempDir::new().expect("tempdir");
+    let wj_file = tmp.path().join("test.wj");
+    fs::write(&wj_file, source).unwrap();
+    let out_dir = tmp.path().join("build");
+
+    build_project(&wj_file, &out_dir, CompilationTarget::Rust, false).unwrap_or_else(|e| {
+        panic!("stdlib transpile failed:\n{e}");
+    });
+
+    let generated = fs::read_to_string(out_dir.join("test.rs")).unwrap_or_else(|_| {
+        fs::read_to_string(out_dir.join("main.rs")).unwrap_or_default()
+    });
+
+    assert!(
+        !generated.contains("compile_error!")
+            && !generated.contains("missing boundary signature"),
+        "stdlib must not emit fail-closed compile_error!, got:\n{generated}"
+    );
+
+    for needle in required_runtime_needles {
+        assert!(
+            generated.contains(*needle),
+            "stdlib wiring must emit `{needle}`, got:\n{generated}"
+        );
+    }
+
+    assert!(
+        out_dir.join("Cargo.toml").exists(),
+        "expected generated Cargo.toml for cargo check in {}",
+        out_dir.display()
+    );
+    cargo_check_generated(&out_dir);
+    generated
+}
+
 // =============================================================================
 // Single-file compilation (CLI — subprocess, tests CLI behavior)
 // =============================================================================

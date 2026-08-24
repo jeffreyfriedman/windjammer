@@ -10,7 +10,8 @@ use crate::parser::{Expression, Literal, OwnershipHint, Type};
 use crate::type_inference::FloatType;
 
 use super::{
-    expression_utilities, float_type_utilities, type_classification_utilities, CodeGenerator,
+    expression_utilities, float_type_utilities, string_analysis, type_classification_utilities,
+    CodeGenerator,
 };
 
 impl<'ast> CodeGenerator<'ast> {
@@ -971,6 +972,26 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             // All other string combinations work natively (&str, etc.)
+            // Owned `String` vs `&str` literal for PartialOrd (`>=`, `<=`): emit `.as_str()`.
+            let left_is_str_lit = matches!(
+                left,
+                Expression::Literal {
+                    value: Literal::String(_),
+                    ..
+                }
+            );
+            let right_is_str_lit = matches!(
+                right,
+                Expression::Literal {
+                    value: Literal::String(_),
+                    ..
+                }
+            );
+            if left_is_owned && right_is_str_lit && !left_str.contains(".as_str()") {
+                *left_str = format!("{}.as_str()", left_str);
+            } else if right_is_owned && left_is_str_lit && !right_str.contains(".as_str()") {
+                *right_str = format!("{}.as_str()", right_str);
+            }
             return;
         }
 
@@ -1026,5 +1047,70 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Note: Explicit &str parameters are handled by the early return in the string comparison block above
         // No cleanup needed here since they never get * derefs in the first place
+
+        self.balance_owned_text_against_str_literal(left, right, lt.as_ref(), rt.as_ref(), left_str, right_str);
+    }
+
+    /// PartialOrd/PartialEq: owned `String` (or text-producing expr) vs `"lit"` needs `.as_str()`.
+    fn balance_owned_text_against_str_literal(
+        &self,
+        left: &Expression<'ast>,
+        right: &Expression<'ast>,
+        lt: Option<&Type>,
+        rt: Option<&Type>,
+        left_str: &mut String,
+        right_str: &mut String,
+    ) {
+        let left_is_str_lit = matches!(
+            left,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        );
+        let right_is_str_lit = matches!(
+            right,
+            Expression::Literal {
+                value: Literal::String(_),
+                ..
+            }
+        );
+        if left_is_str_lit == right_is_str_lit {
+            return;
+        }
+
+        let is_owned_text_expr = |expr: &Expression, ty: Option<&Type>| -> bool {
+            ty.is_some_and(|t| {
+                matches!(t, Type::String)
+                    || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+            }) || string_analysis::expression_produces_string(expr)
+        };
+
+        let ident_is_borrowed_text = |expr: &Expression| -> bool {
+            let Expression::Identifier { name, .. } = expr else {
+                return false;
+            };
+            self.inferred_borrowed_params.contains(name.as_str())
+                || self.str_ref_optimized_params.contains(name.as_str())
+                || self.emitted_rust_ref_formals.contains(name.as_str())
+                || self.borrowed_iterator_vars.contains(name)
+        };
+
+        let should_as_str = |expr: &Expression, s: &str, ty: Option<&Type>| -> bool {
+            if s.contains(".as_str()") || s.starts_with('&') {
+                return false;
+            }
+            if ident_is_borrowed_text(expr) {
+                return false;
+            }
+            is_owned_text_expr(expr, ty)
+                || matches!(expr, Expression::Identifier { .. })
+        };
+
+        if right_is_str_lit && should_as_str(left, left_str, lt) {
+            *left_str = format!("{}.as_str()", left_str);
+        } else if left_is_str_lit && should_as_str(right, right_str, rt) {
+            *right_str = format!("{}.as_str()", right_str);
+        }
     }
 }

@@ -790,6 +790,7 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(method),
                             Some(i),
                             Some(arguments.len()),
+                            Some(&sig),
                         );
                         // Single-statement consuming moves: strip over-eager `.clone()`
                         // (`local.merge(remote)`). Finalize runs after arguments.rs.
@@ -973,8 +974,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Special case: substring(start, end) -> text[start..end] (or owned String in match arms)
         if method == "substring" && args.len() == 2 {
-            let mut start_str = args[0].clone();
-            let mut end_str = args[1].clone();
+            let mut start_str = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
+                &args[0],
+            );
+            let mut end_str = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
+                &args[1],
+            );
             if let Some((_, start_expr)) = arguments.first() {
                 self.maybe_cast_index_to_usize(&mut start_str, start_expr);
             }
@@ -1080,6 +1085,26 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::type_classification::is_language_level_explicit_clone(method)
             && arguments.is_empty()
         {
+            let preserve_in_loop = self.loop_body_depth > 0;
+            let preserve_for_reuse = matches!(object, Expression::Identifier { name, .. } if {
+                self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                    a.needs_clone(name, self.current_statement_idx).is_some()
+                        || a.needs_clone_anywhere(name)
+                })
+            });
+            if preserve_in_loop || preserve_for_reuse {
+                if let Expression::Identifier { name, .. } = object {
+                    let is_borrowed_string = self.inferred_borrowed_params.contains(name)
+                        && self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        });
+                    if is_borrowed_string {
+                        return format!("{}.to_string()", obj_str);
+                    }
+                }
+                return format!("{}.clone()", obj_str.trim_end_matches(".clone()"));
+            }
             return crate::codegen::rust::string_utilities::lower_explicit_clone_call(
                 object,
                 &obj_str,

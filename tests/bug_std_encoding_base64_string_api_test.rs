@@ -1,9 +1,7 @@
-//! `std::encoding.base64_encode_string` / `base64_decode_string` must resolve at codegen.
+//! `std::encoding.base64_encode_string` / `base64_decode_string` must `cargo check`.
 //!
-//! Ecosystem `wj-base64` and `std/encoding/mod.wj` declare these APIs. Codegen emits
-//! `encoding::base64_encode_string` but `windjammer_runtime::encoding` only exports
-//! `base64_encode(&[u8])` / `base64_decode(&str)` (E0425). Platform native encoding
-//! already implements the string variants — they must be wired through.
+//! Platform encoding implements string variants; top-level `windjammer_runtime::encoding`
+//! must re-export them (today only byte APIs are exported).
 
 #![cfg(any(
     not(any(
@@ -30,15 +28,7 @@ pub fn encode_text(text: string) -> string {
     encoding.base64_encode_string(text)
 }
 "#;
-    let generated = test_utils::compile_single(source);
-    assert!(
-        generated.contains("base64_encode_string"),
-        "must call base64_encode_string, got:\n{generated}"
-    );
-    // Prefer a path that exists: runtime re-export or platform module.
-    let wired = generated.contains("encoding::base64_encode_string")
-        || generated.contains("windjammer_runtime::encoding::base64_encode_string");
-    assert!(wired, "must emit encoding base64_encode_string call, got:\n{generated}");
+    test_utils::assert_stdlib_runtime_links(source, &["encoding::base64_encode_string"]);
 }
 
 #[test]
@@ -50,9 +40,5 @@ pub fn decode_text(text: string) -> Result<string, string> {
     encoding.base64_decode_string(text)
 }
 "#;
-    let generated = test_utils::compile_single(source);
-    assert!(
-        generated.contains("base64_decode_string"),
-        "must call base64_decode_string, got:\n{generated}"
-    );
+    test_utils::assert_stdlib_runtime_links(source, &["encoding::base64_decode_string"]);
 }

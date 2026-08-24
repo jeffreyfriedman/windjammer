@@ -7101,20 +7101,17 @@ impl<'ast> CodeGenerator<'ast> {
         {
             let mut visit_sig = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
                 saw_site = true;
-                let pidx = sig.arg_param_index(arg_index);
-                let shared = crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                    sig, pidx,
-                ) || sig.param_types.get(pidx).is_some_and(|t| {
-                    matches!(
-                        t,
-                        Type::Reference(inner)
-                            if matches!(**inner, Type::Custom(_))
-                                && !crate::codegen::rust::types::is_windjammer_text_type(
-                                    inner.as_ref(),
-                                )
-                    )
-                });
-                if !shared {
+                let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
+                let cross_module = self.callee_is_cross_module_free_fn(&sig.name)
+                    || (simple != sig.name && self.callee_is_cross_module_free_fn(simple));
+                if !cross_module {
+                    all_shared_ref_callees = false;
+                    return;
+                }
+                let expects_borrow = self.free_call_arg_expects_borrow(&sig.name, arg_index)
+                    || (simple != sig.name
+                        && self.free_call_arg_expects_borrow(simple, arg_index));
+                if !expects_borrow {
                     all_shared_ref_callees = false;
                 }
             };
@@ -7125,7 +7122,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.forward_call_target_for_param(body, param_name, func)
             {
                 saw_site = true;
-                if !self.callee_arg_is_shared_custom_borrow(&callee, arg_index) {
+                if !self.callee_is_cross_module_free_fn(&callee)
+                    || !self.free_call_arg_expects_borrow(&callee, arg_index)
+                {
                     all_shared_ref_callees = false;
                 }
             }
@@ -7133,36 +7132,29 @@ impl<'ast> CodeGenerator<'ast> {
         saw_site && all_shared_ref_callees
     }
 
-    fn callee_arg_is_shared_custom_borrow(&self, callee: &str, arg_index: usize) -> bool {
-        let simple = callee.rsplit("::").next().unwrap_or(callee);
-        let sig = self
-            .get_signature_with_global(callee)
-            .or_else(|| self.get_signature_with_global(simple))
-            .or_else(|| self.signature_registry.find_signature_ending_with(simple))
-            .or_else(|| {
-                self.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.find_signature_ending_with(simple))
-            });
-        let Some(sig) = sig else {
-            return false;
-        };
-        let pidx = sig.arg_param_index(arg_index);
-        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
-            || sig.param_types.get(pidx).is_some_and(|t| {
-                matches!(
-                    t,
-                    Type::Reference(inner)
-                        if matches!(**inner, Type::Custom(_))
-                            && !crate::codegen::rust::types::is_windjammer_text_type(
-                                inner.as_ref(),
-                            )
-                )
-            })
+    /// True when `callee` is a free function defined outside the current `.wj` module stem.
+    fn callee_is_cross_module_free_fn(&self, callee: &str) -> bool {
+        let current = self
+            .current_wj_file
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if let Some((module, _)) = callee.rsplit_once("::") {
+            return module != current;
+        }
+        // Bare name: same-module only when `{current}::{callee}` was codegen-refreshed
+        // in this file. Import/analysis stubs must not beat cross-module borrow (WDB-101).
+        let local_qualified = format!("{current}::{callee}");
+        let same_module = self
+            .get_signature_with_global(&local_qualified)
+            .or_else(|| self.signature_registry.get_signature(&local_qualified))
+            .is_some_and(|sig| sig.emitted_rust_ref_params.is_some());
+        !same_module
     }
 
-    fn global_callee_arg_is_shared_custom_borrow(&self, callee: &str, arg_index: usize) -> bool {
-        self.callee_arg_is_shared_custom_borrow(callee, arg_index)
+    fn callee_arg_is_shared_custom_borrow(&self, callee: &str, arg_index: usize) -> bool {
+        self.callee_is_cross_module_free_fn(callee)
+            && self.free_call_arg_expects_borrow(callee, arg_index)
     }
 
     fn forward_call_target_for_param(

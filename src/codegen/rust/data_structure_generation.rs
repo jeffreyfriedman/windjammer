@@ -317,9 +317,10 @@ impl<'ast> CodeGenerator<'ast> {
         let separator = match object {
             Expression::Identifier { name, .. }
                 if name.contains("::")
-                    || (!name.is_empty() && name.chars().next().unwrap().is_uppercase()) =>
+                    || (!name.is_empty() && name.chars().next().unwrap().is_uppercase())
+                    || self.identifier_is_static_call_root(name) =>
             {
-                "::" // Module path: std::fs or Type::CONST
+                "::" // Module path: std::fs, mime::CONST, Type::assoc
             }
             Expression::FieldAccess { .. }
                 // Check if this is a module path or a field chain
@@ -594,6 +595,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if string_utilities::is_string_const_identifier(
                         id,
                         self.auto_clone_analysis.as_ref(),
+                        Some(&self.module_string_consts),
                     ) && !expr_str.ends_with(".to_string()")
                     {
                         let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");

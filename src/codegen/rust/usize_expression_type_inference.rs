@@ -412,6 +412,15 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Handles: int→usize cast, i64/int cast rewrite, usize variable skip,
     /// non-negative literal skip, binary expression parenthesization.
+    fn identifier_emits_as_usize(&self, name: &str) -> bool {
+        self.current_function_params.iter().any(|p| {
+            p.name == name && matches!(&p.type_, Type::Custom(s) if s == "usize")
+        }) || self
+            .local_var_types
+            .get(name)
+            .is_some_and(|t| matches!(t, Type::Custom(s) if s == "usize"))
+    }
+
     pub(in crate::codegen::rust) fn maybe_cast_index_to_usize(
         &self,
         idx_str: &mut String,
@@ -428,17 +437,20 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // Already a usize index form — never double-cast (`0_usize as usize`).
-        if idx_str.contains(" as usize")
-            || idx_str.ends_with("_usize")
-            || self.infer_expression_type_is_usize(index)
-            || self.expression_produces_usize(index)
-        {
+        if idx_str.contains(" as usize") || idx_str.ends_with("_usize") {
+            return;
+        }
+        if self.infer_expression_type_is_usize(index) {
             return;
         }
         if let Expression::Identifier { name, .. } = index {
-            if self.usize_variables.contains(name) {
+            // Loop-promoted `int` counters (`while i < vec.len()`) stay i64 in Rust — index still
+            // needs `as usize` even when comparison analysis marked them in `usize_variables`.
+            if self.identifier_emits_as_usize(name) {
                 return;
             }
+        } else if self.expression_produces_usize(index) {
+            return;
         }
         if let Some(ty) = self.infer_expression_type(index) {
             let needs_usize_cast = matches!(ty, Type::Int)
@@ -472,12 +484,12 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
             if let Expression::Identifier { name, .. } = index {
-                if self.usize_variables.contains(name) {
+                if self.identifier_emits_as_usize(name) {
                     return;
                 }
             }
             let needs_cast = match index {
-                Expression::Identifier { name, .. } => !self.usize_variables.contains(name),
+                Expression::Identifier { name, .. } => !self.identifier_emits_as_usize(name),
                 Expression::Literal {
                     value: Literal::Int(n),
                     ..
