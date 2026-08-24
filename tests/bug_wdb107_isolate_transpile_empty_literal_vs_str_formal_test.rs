@@ -20,8 +20,9 @@
 //!   `wave1_sf1_cli_run_parquet_load("".to_string(), "", …)`  // from isolate test
 //!
 //! Gate A: same-file tip must cargo-check.
-//! Gate B: PRE isolate of callee + caller; if callee demotes to `&str`, caller
-//! must not own empty literals at that call site.
+//! Gate B: tip isolate of callee + caller (no shared multipass metadata); if
+//! callee demotes to `&str`, caller must not own empty literals at that call site.
+//! Gate C (optional): PRE dogfood binary when `.worktrees/wj-pre-ir/.../wj` exists.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -125,22 +126,7 @@ fn read_first_rs(dir: &std::path::Path) -> String {
         .unwrap_or_default()
 }
 
-#[test]
-#[ignore = "WDB-107 PRE isolate: empty-literal ownership must match demoted &str formals across separately transpiled modules"]
-fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let pre = manifest
-        .join("..")
-        .join(".worktrees")
-        .join("wj-pre-ir")
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !pre.exists() {
-        eprintln!("skip WDB-107 PRE gate: {}", pre.display());
-        return;
-    }
-
+fn isolate_transpile_with(wj_bin: &std::path::Path) -> (String, String) {
     let tmp = TempDir::new().expect("tempdir");
     let src = tmp.path().join("src");
     fs::create_dir_all(&src).unwrap();
@@ -154,7 +140,7 @@ fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
         (src.join("callee.wj"), &callee_out),
         (src.join("caller.wj"), &caller_out),
     ] {
-        let build = Command::new(&pre)
+        let build = Command::new(wj_bin)
             .args([
                 "build",
                 wj.to_str().unwrap(),
@@ -164,10 +150,11 @@ fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
                 "--library",
             ])
             .output()
-            .expect("run PRE wj");
+            .unwrap_or_else(|e| panic!("run {}: {e}", wj_bin.display()));
         assert!(
             build.status.success(),
-            "PRE build failed for {}:\n{}",
+            "{} build failed for {}:\n{}",
+            wj_bin.display(),
             wj.display(),
             String::from_utf8_lossy(&build.stderr)
         );
@@ -175,6 +162,35 @@ fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
 
     let callee_rs = read_first_rs(&callee_out);
     let caller_rs = read_first_rs(&caller_out);
-    assert!(!callee_rs.is_empty() && !caller_rs.is_empty(), "missing isolate .rs");
+    assert!(
+        !callee_rs.is_empty() && !caller_rs.is_empty(),
+        "missing isolate .rs"
+    );
+    (callee_rs, caller_rs)
+}
+
+#[test]
+fn wdb107_tip_isolate_caller_must_not_own_empty_literal_into_str_formal() {
+    let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
+    let (callee_rs, caller_rs) = isolate_transpile_with(&wj);
+    assert_caller_compatible_with_callee(&callee_rs, &caller_rs);
+}
+
+#[test]
+#[ignore = "WDB-107 PRE isolate: dogfood binary may still own empty literals into &str"]
+fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let pre = manifest
+        .join("..")
+        .join(".worktrees")
+        .join("wj-pre-ir")
+        .join("target")
+        .join("release")
+        .join("wj");
+    if !pre.exists() {
+        eprintln!("skip WDB-107 PRE gate: {}", pre.display());
+        return;
+    }
+    let (callee_rs, caller_rs) = isolate_transpile_with(&pre);
     assert_caller_compatible_with_callee(&callee_rs, &caller_rs);
 }
