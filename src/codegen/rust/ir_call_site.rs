@@ -2727,35 +2727,22 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
                     }
                 } else {
-                let method = callee_name.rsplit("::").next().unwrap_or(callee_name);
-                let formal_is_copy = sig
-                    .formal_param_type(param_idx)
-                    .or_else(|| sig.param_types.get(param_idx))
-                    .or_else(|| sig.param_type_for_arg(arg_index))
-                    .is_some_and(|t| {
-                        let bare = match t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref()
-                            }
-                            other => other,
-                        };
-                        crate::codegen::rust::call_site_borrow::bare_type_is_copy_aggregate_owned_formal(
-                            bare,
-                            |ty| self.is_type_copy(ty),
-                        )
-                    });
-                let decision =
-                    crate::codegen::rust::call_site_borrow::should_borrow_at_call_site_with_copy_check(
+                    // Fresher-sig shared-borrow reapply via IR contract (not should_borrow).
+                    let mut expected =
+                        crate::ir::signature_bridge::safety_type_from_signature_param(
+                            &sig, param_idx,
+                        );
+                    if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
                         &sig,
                         arg_index,
-                        arg_expr,
-                        coerced,
-                        method,
-                        arg_already_rust_ref,
                         None,
-                        formal_is_copy,
+                    ) {
+                        expected.ownership = OwnedType::Ref(Region::fresh(4));
+                    }
+                    let actual = self.infer_actual_safety_type(arg_expr, coerced.as_str());
+                    crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
+                        coerced, &actual, &expected,
                     );
-                crate::codegen::rust::call_site_borrow::apply_call_site_borrow(&decision, coerced);
                 }
             }
         }
