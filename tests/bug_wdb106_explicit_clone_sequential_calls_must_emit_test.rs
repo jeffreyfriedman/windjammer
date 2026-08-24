@@ -67,8 +67,11 @@ pub fn use_after_empty_check(line: string) -> bool {
 "#;
 
     let rs = test_utils::compile_single(source);
+    // Read-only path may demote `line: string` → `&str` (no move); otherwise an
+    // explicit clone before the consuming `trim` must survive codegen (WDB-106).
+    let demoted = rs.contains("line: &str");
     assert!(
-        rs.contains("line.clone()"),
-        "WDB-106: explicit clone for is_empty before move must emit. Got:\n{rs}"
+        demoted || rs.contains("line.clone()"),
+        "WDB-106: demote to &str or emit explicit clone before move. Got:\n{rs}"
     );
 }

@@ -149,6 +149,9 @@ pub struct SignatureRegistry {
     runtime_exported_types: HashMap<String, Vec<String>>,
     /// Scanned `pub struct` fields (`ServerRequest` → `[("query", "HashMap<…>"), …]`).
     runtime_type_fields: HashMap<String, Vec<(String, String)>>,
+    /// Runtime `pub struct` names without `Copy` in `#[derive(...)]` (`Row`, `Connection`, …).
+    /// Empty WJ std stubs must not be treated as Copy when indexing/moving at call sites.
+    runtime_non_copy_types: HashSet<String>,
     /// Qualified callees marked `wj-taint: sanitizer` in scanned runtime source.
     taint_sanitizer_callees: HashSet<String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
@@ -201,6 +204,7 @@ impl SignatureRegistry {
             runtime_type_modules: HashMap::new(),
             runtime_exported_types: HashMap::new(),
             runtime_type_fields: HashMap::new(),
+            runtime_non_copy_types: HashSet::new(),
             taint_sanitizer_callees: HashSet::new(),
             global_fallback: None,
         }
@@ -452,6 +456,30 @@ impl SignatureRegistry {
             .as_ref()
             .map(|g| g.runtime_type_fields(type_name))
             .unwrap_or(&[])
+    }
+
+    /// Record a runtime struct that does not derive `Copy` (scanned from `#[derive(...)]`).
+    pub fn register_runtime_non_copy_type(&mut self, type_name: &str) {
+        if type_name.is_empty() {
+            return;
+        }
+        self.runtime_non_copy_types.insert(type_name.to_string());
+    }
+
+    /// True when a scanned runtime struct is not `Copy` in Rust (`Row`, `Connection`, …).
+    pub fn runtime_type_is_non_copy(&self, type_name: &str) -> bool {
+        let base = type_name.rsplit("::").next().unwrap_or(type_name);
+        if self.runtime_non_copy_types.contains(base) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.runtime_type_is_non_copy(type_name))
+    }
+
+    /// All runtime struct names registered as non-`Copy`.
+    pub fn runtime_non_copy_types(&self) -> impl Iterator<Item = &str> {
+        self.runtime_non_copy_types.iter().map(String::as_str)
     }
 
     /// Mark a scanned callee as a taint sanitizer (`/// wj-taint: sanitizer`).
@@ -1458,6 +1486,8 @@ impl SignatureRegistry {
                 .entry(ty.clone())
                 .or_insert_with(|| fields.clone());
         }
+        self.runtime_non_copy_types
+            .extend(other.runtime_non_copy_types.iter().cloned());
         self.taint_sanitizer_callees
             .extend(other.taint_sanitizer_callees.iter().cloned());
     }

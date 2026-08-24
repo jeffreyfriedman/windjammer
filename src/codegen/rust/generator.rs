@@ -3659,20 +3659,36 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    /// Clone a Vec-index expression (`&vec[i]`) when the callee expects Owned and the element is non-Copy.
+    /// Clone a Vec-index expression when the callee expects Owned and the element is non-Copy.
     pub(crate) fn maybe_clone_index_for_owned_param(
         &self,
         arg: &crate::parser::Expression,
         arg_str: &mut String,
     ) -> bool {
-        if let crate::parser::Expression::Index { .. } = arg {
-            if arg_str.starts_with('&') && !arg_str.ends_with(".clone()") {
-                if let Some(inner) = self.infer_expression_type(arg) {
-                    if !self.is_type_copy(&inner) {
-                        *arg_str = format!("({}).clone()", arg_str);
-                        return true;
-                    }
+        if let crate::parser::Expression::Index { object, .. } = arg {
+            if arg_str.ends_with(".clone()") {
+                return false;
+            }
+            // Clone when non-Copy, or for Custom elements (empty WJ std stubs may be mis-
+            // classified Copy while runtime types are Clone-only — E0507 on `rows[0]`).
+            let needs_clone = match self.infer_expression_type(arg) {
+                None => true,
+                Some(t) => {
+                    let bare = match &t {
+                        crate::parser::Type::Reference(inner)
+                        | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    !self.is_type_copy(bare) || matches!(bare, crate::parser::Type::Custom(_))
                 }
+            };
+            if needs_clone {
+                if arg_str.starts_with('&') {
+                    *arg_str = format!("({}).clone()", arg_str);
+                } else {
+                    *arg_str = format!("{}.clone()", arg_str);
+                }
+                return true;
             }
         }
         false

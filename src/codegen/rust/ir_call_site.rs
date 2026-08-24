@@ -1912,7 +1912,9 @@ impl<'ast> CodeGenerator<'ast> {
                 while coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                     coerced = coerced[1..].to_string();
                 }
-                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+                if !matches!(arg_expr, Expression::Index { .. }) {
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+                }
             } else {
                 let is_text_shared = crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                     &sig, param_idx,
@@ -2311,23 +2313,47 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // Indexing a non-Copy element into an owned formal is always an invalid move
-        // (E0507), even on single-use sites that reuse analysis does not flag.
-        if matches!(arg_expr, Expression::Index { .. })
-            && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
-            )
-        {
-            let elem_is_copy = self.infer_expression_type(arg_expr).is_some_and(|t| {
-                let bare = match &t {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                    other => other,
+        // Indexing a non-Copy element into a non-shared-ref formal is always an
+        // invalid move (E0507). Analyzer may still mark `(Row, T)` chain helpers
+        // Borrowed while codegen emits owned `Row` — trust shared-ref emission.
+        if matches!(arg_expr, Expression::Index { .. }) {
+            let emits_shared = [sig.name.as_str(), sig.name.rsplit("::").next().unwrap_or(&sig.name)]
+                .iter()
+                .find_map(|key| {
+                    self.signature_registry
+                        .get_signature(key)
+                        .or_else(|| {
+                            self.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(key))
+                        })
+                        .and_then(|s| s.emitted_rust_ref_params.as_ref())
+                        .and_then(|flags| flags.get(param_idx).copied())
+                })
+                .unwrap_or_else(|| {
+                    sig.emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(param_idx).copied())
+                        .unwrap_or_else(|| {
+                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                sig, param_idx,
+                            )
+                        })
+                });
+            if !emits_shared {
+                let needs_clone = match self.infer_expression_type(arg_expr) {
+                    None => true,
+                    Some(t) => {
+                        let bare = match &t {
+                            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                            other => other,
+                        };
+                        !self.is_type_copy(bare) || matches!(bare, Type::Custom(_))
+                    }
                 };
-                self.is_type_copy(bare)
-            });
-            if !elem_is_copy {
-                return format!("{arg_str}.clone()");
+                if needs_clone {
+                    return format!("{arg_str}.clone()");
+                }
             }
         }
         if let Expression::Identifier { name, .. } = arg_expr {

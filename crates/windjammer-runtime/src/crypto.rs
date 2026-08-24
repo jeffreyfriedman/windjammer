@@ -3,11 +3,11 @@
 //! Windjammer's `std::crypto` module maps to these functions.
 
 use sha1::{Digest as Sha1Digest, Sha1};
-use sha2::{Digest, Sha256};
+use sha2::{Digest as Sha2Digest, Sha256};
 
 /// SHA-256 hash
 pub fn sha256_bytes(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
+    let mut hasher = <Sha256 as Sha2Digest>::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
 }
@@ -29,7 +29,7 @@ pub fn sha256_hex(data: impl AsRef<str>) -> String {
 
 /// SHA-1 digest bytes (Windjammer `std::crypto::sha1_bytes`, UUID v5).
 pub fn sha1_bytes(data: &[u8]) -> Vec<u8> {
-    Sha1::digest(data).to_vec()
+    <Sha1 as Sha1Digest>::digest(data).to_vec()
 }
 
 /// Hash password with bcrypt

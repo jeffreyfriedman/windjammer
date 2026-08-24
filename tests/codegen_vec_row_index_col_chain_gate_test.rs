@@ -40,8 +40,8 @@ use std::db::Row
 
 fn col_string(row: Row, col: string) -> (Row, string) {
     let value = match row.get_string(col + "") {
-        Some(v) => v + "",
-        None => "" + "",
+        Ok(v) => v + "",
+        Err(_) => "" + "",
     }
     (row, value)
 }
