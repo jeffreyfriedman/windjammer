@@ -10,13 +10,14 @@
     feature = "codegen_tests",
 ))]
 
-//! FAILING REPRO — `method: "GET"` must emit `HttpMethod::GET` *and* import `HttpMethod`.
+//! FAILING REPRO — `method: "GET"` under `--module-file` must emit `HttpMethod::GET`
+//! *and* import `HttpMethod`.
 //!
-//! Tip coerces the string literal correctly, but if WJ source never names `HttpMethod`
-//! (only `use std::http::ServerRequest`), emit uses `HttpMethod::GET` without importing
-//! it (E0433). Desired: auto-import `HttpMethod` whenever a struct field coerces.
+//! Isolated `--check` (single file) may auto-import; `--module-file` dogfood still
+//! emits `HttpMethod::GET` without `use …::HttpMethod` (E0433).
+//! Desired: auto-import whenever a struct field coerces to HttpMethod.
 //!
-//! Dogfood: `request_context.wj` keeps `use …::{ServerRequest, HttpMethod}` as workaround
+//! Dogfood: `request_context.wj` keeps `use std::http::{ServerRequest, HttpMethod}`
 //! while writing `method: "GET"`.
 
 #[path = "common/test_utils.rs"]
@@ -61,13 +62,14 @@ fn main() {}
             "-o",
             out.to_str().unwrap(),
             "--check",
+            "--module-file",
             "--no-cargo",
         ])
         .output()
         .expect("run wj");
     assert!(
         build.status.success(),
-        "wj --check must succeed with method: \"GET\" and no HttpMethod import. stderr=\n{}\nstdout=\n{}",
+        "wj --module-file --check must auto-import HttpMethod for method: \"GET\". stderr=\n{}\nstdout=\n{}",
         String::from_utf8_lossy(&build.stderr),
         String::from_utf8_lossy(&build.stdout)
     );

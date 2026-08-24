@@ -1159,7 +1159,18 @@ where
             // slot over importer stubs with all-false emission flags — but defer when a
             // later candidate is a user-owned API clashing on suffix (`join` vs `strings::join`).
             if flags.iter().any(|&f| f) {
-                if shared_ref_refresh.is_none() {
+                // Homonyms (`log::error` vs `ServerResponse::error`) must not steal
+                // shared-ref preference from a different arity / qualified name.
+                let arity_ok = first.as_ref().is_none_or(|prev: &FunctionSignature| {
+                    let prev_n = prev.param_ownership.len().saturating_sub(usize::from(
+                        prev.has_self_receiver_slot(),
+                    ));
+                    let sig_n = sig.param_ownership.len().saturating_sub(usize::from(
+                        sig.has_self_receiver_slot(),
+                    ));
+                    prev_n == sig_n
+                });
+                if arity_ok && shared_ref_refresh.is_none() {
                     shared_ref_refresh = Some(sig);
                 }
                 continue;
@@ -1427,6 +1438,50 @@ pub(crate) fn prefer_shared_text_ref_signature(
     prefer_shared_ref_signature(preferred, challenger, param_idx)
 }
 
+/// Registry lookups for call-site signature refresh.
+///
+/// Type-qualified associated calls (`ServerResponse::error`) must never consult bare
+/// method-name keys (`error`) — free-fn homonyms (`log::error`) poison owned formals.
+pub(crate) fn callee_signature_lookup_candidates(
+    reg: &crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+) -> Vec<FunctionSignature> {
+    let type_qualified =
+        crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            callee_name,
+        );
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    let mut out = Vec::new();
+    if let Some(sig) = reg.get_signature(callee_name) {
+        out.push(sig.clone());
+    }
+    if let Some(sig) = reg.lookup_method(callee_name) {
+        if out
+            .last()
+            .is_none_or(|prev| prev.name != sig.name || prev.param_ownership != sig.param_ownership)
+        {
+            out.push(sig.clone());
+        }
+    }
+    if !type_qualified {
+        for sig in [
+            reg.get_signature(simple),
+            reg.lookup_method(simple),
+            reg.find_unique_signature_ending_with(simple),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if out.iter().all(|prev| {
+                prev.name != sig.name || prev.param_ownership != sig.param_ownership
+            }) {
+                out.push(sig.clone());
+            }
+        }
+    }
+    out
+}
+
 /// Merge defining-module codegen refresh into a resolved call signature for borrow lowering.
 ///
 /// Associated calls (`WalSegment::from_bytes`) and free calls both need the defining
@@ -1438,47 +1493,54 @@ pub(crate) fn refresh_call_site_signature_for_arg(
     global: Option<&crate::analyzer::SignatureRegistry>,
     local: &crate::analyzer::SignatureRegistry,
 ) -> Option<FunctionSignature> {
+    let type_qualified =
+        crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            callee_name,
+        );
     let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-    let lookup = |reg: &crate::analyzer::SignatureRegistry| -> Vec<FunctionSignature> {
-        [
-            reg.get_signature(callee_name).cloned(),
-            reg.get_signature(simple).cloned(),
-            reg.lookup_method(callee_name).cloned(),
-            reg.lookup_method(simple).cloned(),
-            reg.find_unique_signature_ending_with(simple).cloned(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
-    };
     let pidx = initial
         .as_ref()
         .map(|s| s.arg_param_index(arg_index))
         .unwrap_or(arg_index);
     let mut sig_candidates: Vec<Option<FunctionSignature>> = global
-        .map(|g| lookup(g))
+        .map(|g| callee_signature_lookup_candidates(g, callee_name))
         .unwrap_or_default()
         .into_iter()
         .map(Some)
         .collect();
-    sig_candidates.extend(lookup(local).into_iter().map(Some));
+    sig_candidates.extend(
+        callee_signature_lookup_candidates(local, callee_name)
+            .into_iter()
+            .map(Some),
+    );
     sig_candidates.push(initial.clone());
     let mut refreshed = pick_codegen_refreshed_signature(sig_candidates);
     // WJ `.wj` stubs shadow scanned runtime APIs in `signatures`. Challenge with the
     // runtime baseline (`get_fallback_signature`) so `&str`/`AsRef<str>` beat owned
     // `string` emission for literals (`strings::join`, `contains`, `Connection::query`).
-    for challenger in [
-        global.and_then(|g| g.get_signature(callee_name)),
-        global.and_then(|g| g.get_signature(simple)),
-        global.and_then(|g| g.find_unique_signature_ending_with(simple)),
-        global.and_then(|g| g.get_fallback_signature(callee_name)),
-        global.and_then(|g| g.get_fallback_signature(simple)),
-        local.get_signature(callee_name),
-        local.get_signature(simple),
-        local.find_unique_signature_ending_with(simple),
-        local.get_fallback_signature(callee_name),
-        local.get_fallback_signature(simple),
-    ] {
+    // Type-qualified calls never challenge bare `error` / `join` homonyms (`log::error`).
+    let challengers: Vec<Option<&FunctionSignature>> = if type_qualified {
+        vec![
+            global.and_then(|g| g.get_signature(callee_name)),
+            global.and_then(|g| g.get_fallback_signature(callee_name)),
+            local.get_signature(callee_name),
+            local.get_fallback_signature(callee_name),
+        ]
+    } else {
+        vec![
+            global.and_then(|g| g.get_signature(callee_name)),
+            global.and_then(|g| g.get_signature(simple)),
+            global.and_then(|g| g.find_unique_signature_ending_with(simple)),
+            global.and_then(|g| g.get_fallback_signature(callee_name)),
+            global.and_then(|g| g.get_fallback_signature(simple)),
+            local.get_signature(callee_name),
+            local.get_signature(simple),
+            local.find_unique_signature_ending_with(simple),
+            local.get_fallback_signature(callee_name),
+            local.get_fallback_signature(simple),
+        ]
+    };
+    for challenger in challengers {
         refreshed = prefer_shared_ref_signature(refreshed, challenger, pidx);
     }
     let mut out = refreshed.or(initial)?;
