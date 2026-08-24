@@ -74,7 +74,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
             sig
         });
-        let args = if let Some(ref sig) = resolved_signature {
+        // When IR call-sites are on, `mc_build_method_call_arg_strings` already ran
+        // `apply_ir_call_site_coercion` + terminal `reconcile_post_ir_*`. Re-running the
+        // ownership rewrite here is a third legacy layer (add/strip/re-add ping-pong).
+        // Keep this path only for isolated unit tests that disable `call_sites`.
+        let args = if self.ir_cutover.call_sites {
+            args
+        } else if let Some(ref sig) = resolved_signature {
             args.into_iter()
                 .enumerate()
                 .map(|(i, mut arg_str)| {
