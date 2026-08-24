@@ -45,6 +45,13 @@ impl<'ast> CodeGenerator<'ast> {
             return base_name;
         }
 
+        if (self.in_match_arm_needing_string || self.in_owned_value_context)
+            && self.module_string_consts.contains(name)
+            && !base_name.ends_with(".to_string()")
+        {
+            return format!("{}.to_string()", base_name);
+        }
+
         // AUTO-CLONE: Check if this variable needs to be cloned at this point
         // CRITICAL: Never clone assignment targets (left side of `=`)
         // DOUBLE-CLONE FIX: Skip auto-clone when inside an explicit .clone() call

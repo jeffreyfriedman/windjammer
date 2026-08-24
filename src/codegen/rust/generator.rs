@@ -178,6 +178,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) match_arm_bindings: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     pub(crate) usize_variables: std::collections::HashSet<String>,
+    /// Module-level `const NAME: string = "…"` identifiers (lower to `&'static str` in Rust).
+    pub(crate) module_string_consts: std::collections::HashSet<String>,
+    /// Nesting depth of loop bodies — explicit `.clone()` in loops must be preserved (WDB-105).
+    pub(crate) loop_body_depth: u32,
     // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
     // Keyed by (line, column) of the let statement's source location.
     // These will be prefixed with `_` in the generated Rust to suppress "unused variable" warnings.
@@ -607,6 +611,8 @@ impl<'ast> CodeGenerator<'ast> {
             match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
+            module_string_consts: std::collections::HashSet::new(),
+            loop_body_depth: 0,
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),
             inferred_mut_borrowed_params: std::collections::HashSet::new(),
@@ -2513,6 +2519,13 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if self.in_if_condition {
+            if callee_wants_owned {
+                if let Expression::Identifier { name, .. } = arg_expr {
+                    if self.caller_owned_non_copy_formal(name) && !coerced.ends_with(".clone()") {
+                        *coerced = format!("{coerced}.clone()");
+                    }
+                }
+            }
             return;
         }
         if callee_wants_shared_borrow {
@@ -2686,11 +2699,24 @@ impl<'ast> CodeGenerator<'ast> {
         arg_expr: &Expression<'ast>,
         _receiver_type: Option<&str>,
         _method: Option<&str>,
-        _arg_index: Option<usize>,
+        arg_index: Option<usize>,
         _user_arg_count: Option<usize>,
+        callee_sig: Option<&crate::analyzer::FunctionSignature>,
     ) {
         if !self.current_func_is_pure_forwarding_delegate {
             return;
+        }
+        if let (Some(sig), Some(arg_idx)) = (callee_sig, arg_index) {
+            let pidx = sig.arg_param_index(arg_idx);
+            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                sig, pidx,
+            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
+                || crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                    sig, arg_idx,
+                )
+            {
+                return;
+            }
         }
         // Single-expression owned-formal delegates (TxnManager::seed_write) must not keep
         // stale registry `&` from callee body analysis (MemoryEngine::seed_write key.bytes.len()).
@@ -2740,6 +2766,147 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         cond_str
+    }
+
+    /// When an if-condition passes an owned outer param into an owned callee formal,
+    /// clone at the call site so the then-branch can reuse the binding (list_unique / ReBAC).
+    pub(crate) fn coerce_owned_params_clone_in_if_condition(
+        &self,
+        condition: &Expression<'ast>,
+        mut cond_str: String,
+    ) -> String {
+        for param in &self.current_function_params {
+            if param.name == "self" || self.is_type_copy(&param.type_) {
+                continue;
+            }
+            if !self.caller_owned_non_copy_formal(&param.name) {
+                continue;
+            }
+            if !self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition) {
+                continue;
+            }
+            if !self.expr_call_expects_owned_formal_for_param(condition, &param.name) {
+                continue;
+            }
+            let clone_comma = format!("{}.clone(),", param.name);
+            if cond_str.contains(&clone_comma) {
+                continue;
+            }
+            let bare_comma = format!("({},", param.name);
+            let cloned_comma = format!("({}.clone(),", param.name);
+            if cond_str.contains(&bare_comma) {
+                cond_str = cond_str.replace(&bare_comma, &cloned_comma);
+            }
+            let bare_fn = format!("({}", param.name);
+            let cloned_fn = format!("({}.clone()", param.name);
+            if cond_str.contains(&bare_fn) && !cond_str.contains(&cloned_fn) {
+                cond_str = cond_str.replace(&bare_fn, &cloned_fn);
+            }
+        }
+        cond_str
+    }
+
+    /// True when some call/method in `expr` takes `param_name` into an owned formal.
+    fn expr_call_expects_owned_formal_for_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let func_name = match &**function {
+                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                    Expression::FieldAccess { field, .. } => Some(field.as_str()),
+                    _ => None,
+                };
+                if let Some(fname) = func_name {
+                    let simple = fname.rsplit("::").next().unwrap_or(fname);
+                    let sig =
+                        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
+                            [
+                                self.signature_registry.get_signature(fname).cloned(),
+                                self.signature_registry.get_signature(simple).cloned(),
+                                self.global_signature_registry
+                                    .as_ref()
+                                    .and_then(|g| g.get_signature(fname).cloned()),
+                                self.global_signature_registry
+                                    .as_ref()
+                                    .and_then(|g| g.get_signature(simple).cloned()),
+                            ],
+                        );
+                    if let Some(sig) = sig.as_ref() {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                            {
+                                let pidx = sig.arg_param_index(i);
+                                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    sig, pidx,
+                                ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                    sig, pidx,
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                arguments.iter().any(|(_, arg)| {
+                    self.expr_call_expects_owned_formal_for_param(arg, param_name)
+                }) || self.expr_call_expects_owned_formal_for_param(function, param_name)
+            }
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                let recv_ty = self.infer_expression_type(object).and_then(|t| match t {
+                    Type::Custom(name) => Some(name),
+                    Type::Reference(inner) | Type::MutableReference(inner) => match *inner {
+                        Type::Custom(name) => Some(name),
+                        _ => None,
+                    },
+                    _ => None,
+                });
+                if let Some(rt) = recv_ty.as_deref() {
+                    if let Some(sig) =
+                        self.resolve_method_function_signature(rt, method, arguments.len())
+                    {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                            {
+                                let pidx = sig.arg_param_index(i);
+                                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    &sig, pidx,
+                                ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                    &sig, pidx,
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                arguments.iter().any(|(_, arg)| {
+                    self.expr_call_expects_owned_formal_for_param(arg, param_name)
+                }) || self.expr_call_expects_owned_formal_for_param(object, param_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_call_expects_owned_formal_for_param(left, param_name)
+                    || self.expr_call_expects_owned_formal_for_param(right, param_name)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_call_expects_owned_formal_for_param(operand, param_name)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_call_expects_owned_formal_for_param(object, param_name)
+            }
+            _ => false,
+        }
     }
 
     /// True when some call/method in `expr` takes `param_name` into a shared-ref formal.
@@ -3368,6 +3535,11 @@ impl<'ast> CodeGenerator<'ast> {
             );
             if !super::string_utilities::already_owned_string_expr(expr_str) {
                 if let crate::parser::Expression::Identifier { name, .. } = expr {
+                    if self.module_string_consts.contains(name) {
+                        *expr_str =
+                            super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                        return;
+                    }
                     let is_ref_text = self.infer_expression_type(expr).as_ref().is_some_and(|t| {
                         matches!(
                             t,

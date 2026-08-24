@@ -105,6 +105,29 @@ impl<'ast> CodeGenerator<'ast> {
         // This enables smart enum derive that only adds PartialEq if all variants support it
         self.collect_partial_eq_types(program);
 
+        // PRE-PASS: Module `const string` names — used for owned-String coercion at returns/match arms.
+        for item in &program.items {
+            if let Item::Const {
+                name,
+                type_,
+                value,
+                ..
+            } = item
+            {
+                if crate::codegen::rust::types::is_windjammer_text_type(type_)
+                    && matches!(
+                        value,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    )
+                {
+                    self.module_string_consts.insert(name.clone());
+                }
+            }
+        }
+
         // PRE-PASS: Collect types that implement Drop (cannot derive Copy, Rust E0184)
         for item in &program.items {
             if let Item::Impl { block, .. } = item {

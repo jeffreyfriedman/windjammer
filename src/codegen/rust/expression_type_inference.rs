@@ -541,4 +541,26 @@ impl<'ast> CodeGenerator<'ast> {
             other => other,
         }
     }
+
+    /// True when a WJ type lowers to Rust `()` (unit).
+    pub(in crate::codegen::rust) fn expression_type_is_unit(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Tuple(ref fields) if fields.is_empty())
+    }
+
+    /// Expression statements in void blocks must not leave non-unit values as tail exprs.
+    /// Uses inferred/signature return types — no callee name lists.
+    pub(in crate::codegen::rust) fn expression_needs_void_discard(&self, expr: &Expression) -> bool {
+        if let Some(ty) = self.infer_expression_type(expr) {
+            return !self.expression_type_is_unit(&ty);
+        }
+        matches!(
+            expr,
+            Expression::MethodCall { .. }
+                | Expression::Call { .. }
+                | Expression::Binary { .. }
+                | Expression::Unary { .. }
+                | Expression::Cast { .. }
+                | Expression::Index { .. }
+        )
+    }
 }

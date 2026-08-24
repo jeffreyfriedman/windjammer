@@ -643,17 +643,36 @@ impl<'ast> CodeGenerator<'ast> {
                     global,
                     &refresh_keys,
                 );
+                for key in [callee_name, simple] {
+                    if let Some(reg) = global.lookup_method(key) {
+                        if reg.emitted_rust_ref_params.is_some() {
+                            crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                                &mut sig,
+                                reg,
+                            );
+                            break;
+                        }
+                    }
+                }
             }
             if let Some(refreshed) =
                 crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                    self.signature_registry.get_signature(callee_name).cloned(),
-                    self.signature_registry.get_signature(simple).cloned(),
                     self.global_signature_registry
                         .as_ref()
                         .and_then(|g| g.get_signature(callee_name).cloned()),
                     self.global_signature_registry
                         .as_ref()
                         .and_then(|g| g.get_signature(simple).cloned()),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.lookup_method(callee_name).cloned()),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.lookup_method(simple).cloned()),
+                    self.signature_registry.get_signature(callee_name).cloned(),
+                    self.signature_registry.get_signature(simple).cloned(),
+                    self.signature_registry.lookup_method(callee_name).cloned(),
+                    self.signature_registry.lookup_method(simple).cloned(),
                     Some(sig.clone()),
                 ])
             {
@@ -720,6 +739,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
             )
+            && !crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, param_idx)
         {
             if let Some(bare) = crate::ir::signature_bridge::bare_wj_formal_type(&sig, param_idx) {
                 expected = crate::ir::signature_bridge::safety_type_from_parser_type(
@@ -2168,6 +2188,20 @@ impl<'ast> CodeGenerator<'ast> {
             coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&coerced);
         }
 
+        if self.in_if_condition {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, param_idx,
+                ) && self.current_function_params.iter().any(|p| {
+                    p.name == *name && !self.is_type_copy(&p.type_)
+                })
+                    && !coerced.ends_with(".clone()")
+                {
+                    coerced = format!("{coerced}.clone()");
+                }
+            }
+        }
+
         Some(coerced)
     }
 
@@ -2263,6 +2297,19 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if arg_str.ends_with(".to_string()") {
             return arg_str.to_string();
+        }
+        // `if !callee(mut_param)` then `{ mut_param.mutate() }` — owned formal in the
+        // condition moves before the then-branch reuses the binding (list_unique / ReBAC).
+        if self.in_if_condition {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                ) && self.current_function_params.iter().any(|p| {
+                    p.name == *name && !self.is_type_copy(&p.type_)
+                }) {
+                    return format!("{arg_str}.clone()");
+                }
+            }
         }
         // Indexing a non-Copy element into an owned formal is always an invalid move
         // (E0507), even on single-use sites that reuse analysis does not flag.
@@ -2377,9 +2424,16 @@ impl<'ast> CodeGenerator<'ast> {
         };
         // Statement-local reuse only (matches method-arg policy in arguments.rs).
         let needs = match arg_expr {
-            Expression::Identifier { name, .. } => analysis
-                .needs_clone(name, self.current_statement_idx)
-                .is_some(),
+            Expression::Identifier { name, .. } => {
+                let local = analysis
+                    .needs_clone(name, self.current_statement_idx)
+                    .is_some();
+                let anywhere = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                ) && !self.binding_is_copy_pass_by_value_scalar(name)
+                    && analysis.needs_clone_anywhere(name);
+                local || anywhere
+            }
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
                     analysis
@@ -2522,13 +2576,36 @@ impl<'ast> CodeGenerator<'ast> {
         user_arg_count: Option<usize>,
         has_ownership_collision: bool,
     ) {
+        // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over stale
+        // importer/collision stubs before any owned-formal peel (WDB-101 map getters).
+        let sig = self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, sig);
         let param_idx = sig.arg_param_index(arg_index);
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let global_confirms_shared_ref = |pidx: usize| {
+            self.global_signature_registry.as_ref().is_some_and(|g| {
+                [callee_name, simple]
+                    .into_iter()
+                    .flat_map(|key| {
+                        [
+                            g.get_signature(key),
+                            g.lookup_method(key),
+                            g.find_unique_signature_ending_with(simple),
+                        ]
+                    })
+                    .flatten()
+                    .any(|gs| {
+                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            gs, pidx,
+                        )
+                    })
+            })
+        };
 
         // Terminal peel first: IR / collision paths may prefix `&` before reconcile runs.
         self.peel_stacked_amp_on_emitted_ref_binding(
             coerced,
             arg_expr,
-            Some(sig),
+            Some(&sig),
             arg_index,
             false,
         );
@@ -2537,11 +2614,12 @@ impl<'ast> CodeGenerator<'ast> {
         // Borrowed snapshot (draw_text homonyms). Confirmed shared-ref formals skip.
         if has_ownership_collision
             && crate::codegen::rust::call_signature_resolution::ownership_collision_blocks_autoborrow(
-                callee_name.rsplit("::").next().unwrap_or(callee_name),
+                simple,
             )
             && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
+                &sig, param_idx,
             )
+            && !global_confirms_shared_ref(param_idx)
         {
             crate::codegen::rust::call_signature_resolution::strip_collision_blocked_call_site_coercions(
                 coerced,
@@ -2554,12 +2632,23 @@ impl<'ast> CodeGenerator<'ast> {
             arg_expr,
             callee_name,
             arg_index,
-            sig,
+            &sig,
             registry,
         );
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && callee_name.contains("graph_vertex_i64_get")
+            && arg_index == 0
+        {
+            eprintln!("WJ_DEBUG_COLLISION_BORROW after_enforce_ir coerced={coerced}");
+        }
 
         // Spurious `&mut` on owned Copy-aggregate formals (regression-060).
-        self.peel_spurious_mut_borrow_on_owned_copy_aggregate(coerced, callee_name, arg_index, sig);
+        self.peel_spurious_mut_borrow_on_owned_copy_aggregate(
+            coerced,
+            callee_name,
+            arg_index,
+            &sig,
+        );
 
         // Stale `&` on owned user free-fn formals (circular-dep / multipass).
         let skip_stale_borrow = !callee_name.contains("::")
@@ -2567,7 +2656,7 @@ impl<'ast> CodeGenerator<'ast> {
                 registry,
                 self.global_signature_registry.as_deref(),
                 callee_name,
-                sig,
+                &sig,
                 param_idx,
                 arg_index,
             );
@@ -2579,19 +2668,28 @@ impl<'ast> CodeGenerator<'ast> {
                 callee_name,
                 arg_index,
                 user_arg_count,
-                Some(sig),
+                Some(&sig),
             )
         {
             *coerced =
                 crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+        }
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && callee_name.contains("graph_vertex_i64_get")
+            && arg_index == 0
+        {
+            eprintln!(
+                "WJ_DEBUG_COLLISION_BORROW after_skip_stale skip={skip_stale_borrow} coerced={coerced}"
+            );
         }
 
         // Shared-borrow reapply when IR used a stale stub and the refreshed sig borrows.
         // Skip on ownership collision unless codegen confirmed shared-ref emission.
         let allow_shared = !has_ownership_collision
             || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
-            );
+                &sig, param_idx,
+            )
+            || global_confirms_shared_ref(param_idx);
         if allow_shared
             && !skip_stale_borrow
             && !crate::codegen::rust::expression_helpers::is_reference_expression(arg_expr)
@@ -2622,9 +2720,9 @@ impl<'ast> CodeGenerator<'ast> {
                     // Keep `.clone()` when the slot is owned (iterator `push(item)` into
                     // `Vec<T>`). Only strip clone for true reborrows into `&` / `&mut`.
                     let wants_owned = crate::ir::signature_bridge::call_site_expects_owned_pass(
-                        sig, param_idx,
+                        &sig, param_idx,
                     ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                        sig, param_idx,
+                        &sig, param_idx,
                     );
                     if !wants_owned {
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
@@ -2649,7 +2747,7 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                 let decision =
                     crate::codegen::rust::call_site_borrow::should_borrow_at_call_site_with_copy_check(
-                        sig,
+                        &sig,
                         arg_index,
                         arg_expr,
                         coerced,
@@ -2669,8 +2767,8 @@ impl<'ast> CodeGenerator<'ast> {
             callee_name,
             arg_index,
             user_arg_count,
-            Some(sig),
-        ) || self.ir_sig_arg_expects_mut_borrow(sig, arg_index);
+            Some(&sig),
+        ) || self.ir_sig_arg_expects_mut_borrow(&sig, arg_index);
         if (!has_ownership_collision || wants_mut)
             && wants_mut
             && !coerced.starts_with("&mut ")
@@ -2706,30 +2804,48 @@ impl<'ast> CodeGenerator<'ast> {
             coerced,
             callee_name,
             arg_index,
-            sig,
+            &sig,
             registry,
             wants_mut,
         );
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && callee_name.contains("graph_vertex_i64_get")
+            && arg_index == 0
+        {
+            eprintln!("WJ_DEBUG_COLLISION_BORROW after_multi_peel coerced={coerced}");
+        }
 
         // Recursive same-fn call into owned formal emitted by this function.
         self.strip_recursive_owned_formal_stale_borrow(coerced, arg_expr, callee_name);
 
         // Prefer defining-module shared-text formals (`path: &str`) over stale owned stubs
         // before the IR text/collection finalize pass (regression-049).
-        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        let mut text_sig =
-            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                self.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.get_signature(callee_name).cloned()),
-                self.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.get_signature(simple).cloned()),
-                registry.get_signature(callee_name).cloned(),
-                registry.get_signature(simple).cloned(),
-                Some(sig.clone()),
-            ])
-            .unwrap_or_else(|| sig.clone());
+        let text_sig_lookup = |reg: &SignatureRegistry| -> Vec<crate::analyzer::FunctionSignature> {
+            [
+                reg.get_signature(callee_name).cloned(),
+                reg.get_signature(simple).cloned(),
+                reg.lookup_method(callee_name).cloned(),
+                reg.lookup_method(simple).cloned(),
+                reg.find_unique_signature_ending_with(simple).cloned(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect()
+        };
+        let mut text_sig_candidates: Vec<Option<crate::analyzer::FunctionSignature>> = self
+            .global_signature_registry
+            .as_ref()
+            .map(|g| text_sig_lookup(g))
+            .unwrap_or_default()
+            .into_iter()
+            .map(Some)
+            .collect();
+        text_sig_candidates.extend(text_sig_lookup(registry).into_iter().map(Some));
+        text_sig_candidates.push(Some(sig.clone()));
+        let mut text_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
+            text_sig_candidates,
+        )
+        .unwrap_or_else(|| sig.clone());
         let pidx_for_upgrade = text_sig.arg_param_index(arg_index);
         for challenger in [
             self.global_signature_registry
@@ -2738,8 +2854,12 @@ impl<'ast> CodeGenerator<'ast> {
             self.global_signature_registry
                 .as_ref()
                 .and_then(|g| g.get_signature(simple)),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.find_unique_signature_ending_with(simple)),
             registry.get_signature(callee_name),
             registry.get_signature(simple),
+            registry.find_unique_signature_ending_with(simple),
         ] {
             text_sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
                 Some(text_sig),
@@ -2767,9 +2887,9 @@ impl<'ast> CodeGenerator<'ast> {
             && {
                 let pidx = sig.arg_param_index(arg_index);
                 crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                    sig, pidx,
+                    &sig, pidx,
                 ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                    sig, pidx,
+                    &sig, pidx,
                 )
             };
         if !skip_borrow_finalize
@@ -2778,7 +2898,7 @@ impl<'ast> CodeGenerator<'ast> {
                     callee_name,
                 )
                 && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                    sig,
+                    &sig,
                     sig.arg_param_index(arg_index),
                 )
                 && matches!(
@@ -2911,6 +3031,10 @@ impl<'ast> CodeGenerator<'ast> {
         // (ReBAC `contains_string(&out)` into `items: Vec<String>`).
         {
             let owned_pidx = text_sig.arg_param_index(arg_index);
+            let callee_emits_shared =
+                crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    &text_sig, owned_pidx,
+                ) || global_confirms_shared_ref(owned_pidx);
             let bare_is_vec = text_sig
                 .formal_param_type(owned_pidx)
                 .or_else(|| text_sig.param_types.get(owned_pidx))
@@ -2929,7 +3053,8 @@ impl<'ast> CodeGenerator<'ast> {
                         | crate::analyzer::OwnershipMode::MutBorrowed
                 )
             );
-            let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            let owned_slot = !callee_emits_shared
+                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 &text_sig, owned_pidx,
             ) || (crate::ir::signature_bridge::call_site_expects_owned_pass(
                 &text_sig, owned_pidx,
@@ -2955,8 +3080,17 @@ impl<'ast> CodeGenerator<'ast> {
                 ) || text_sig.formal_param_type(owned_pidx).is_some_and(|t| {
                     matches!(t, Type::Vec(_))
                         || matches!(t, Type::Parameterized(n, _) if n == "Vec")
-                })));
+                }))));
             if coerced.starts_with('&') && !coerced.starts_with("&mut ") && owned_slot {
+                if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+                    && callee_name.contains("graph_vertex_i64_get")
+                    && arg_index == 0
+                {
+                    eprintln!(
+                        "WJ_DEBUG_COLLISION_BORROW owned_slot_peel callee={callee_name} \
+                         callee_emits_shared={callee_emits_shared} owned_slot={owned_slot}"
+                    );
+                }
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                     .to_string();
                 let needs_clone = match arg_expr {
@@ -3116,7 +3250,7 @@ impl<'ast> CodeGenerator<'ast> {
         // for self-receiver calls, then shared helpers. Copy-aggregate peel runs after
         // so `&through` into owned `Lsn` is still stripped (regression-060).
         self.apply_post_ir_forwarder_owned_outer_and_reuse(
-            coerced, arg_expr, &text_sig, arg_index, receiver,
+            coerced, arg_expr, &sig, arg_index, receiver,
         );
 
         // After shared-borrow reapply: Copy-aggregate caller → owned Copy-aggregate
@@ -3137,7 +3271,7 @@ impl<'ast> CodeGenerator<'ast> {
             arg_expr,
             callee_name,
             arg_index,
-            sig,
+            &sig,
             receiver_type_name,
         );
 
@@ -3149,8 +3283,9 @@ impl<'ast> CodeGenerator<'ast> {
                 collision_simple,
             )
             && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
+                &sig, param_idx,
             )
+            && !global_confirms_shared_ref(param_idx)
             && matches!(
                 arg_expr,
                 Expression::Identifier { .. } | Expression::Literal { .. }
@@ -3182,6 +3317,14 @@ impl<'ast> CodeGenerator<'ast> {
         // function — strip `&` re-applied by later text/forwarder/vec finalize
         // (ReBAC `resolve_check(&policy)` into `policy: Policy`).
         self.strip_recursive_owned_formal_stale_borrow(coerced, arg_expr, callee_name);
+        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
+            && callee_name.contains("graph_vertex_i64_get")
+            && arg_index == 0
+        {
+            eprintln!(
+                "WJ_DEBUG_COLLISION_BORROW reconcile_end callee={callee_name} coerced={coerced}"
+            );
+        }
     }
 
     /// Strip stale `&` on recursive calls into owned formals this function emits.
@@ -3373,15 +3516,19 @@ impl<'ast> CodeGenerator<'ast> {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         let refreshed =
             self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, primary_sig);
-        let candidates: [Option<&crate::analyzer::FunctionSignature>; 6] = [
+        let candidates: [Option<&crate::analyzer::FunctionSignature>; 8] = [
             registry.get_signature(callee_name),
             registry.get_signature(simple),
+            registry.find_unique_signature_ending_with(simple),
             self.global_signature_registry
                 .as_ref()
                 .and_then(|g| g.get_signature(callee_name)),
             self.global_signature_registry
                 .as_ref()
                 .and_then(|g| g.get_signature(simple)),
+            self.global_signature_registry
+                .as_ref()
+                .and_then(|g| g.find_unique_signature_ending_with(simple)),
             Some(primary_sig),
             Some(&refreshed),
         ];
@@ -3526,35 +3673,34 @@ impl<'ast> CodeGenerator<'ast> {
         )
         .unwrap_or_else(|| sig.clone());
         let pidx = enforce_sig.arg_param_index(arg_index);
-        let keep_shared_ref = coerced.starts_with('&')
-            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                &enforce_sig, pidx,
-            )
-            && !crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
-                &enforce_sig, pidx,
-            )
-            && !crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
-                &enforce_sig, pidx,
-            )
-            && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
-                &enforce_sig,
-                pidx,
-            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
-                &enforce_sig,
-                pidx,
-            ) || self
-                .global_signature_registry
-                .as_ref()
-                .and_then(|g| {
-                    g.get_signature(callee_name)
-                        .or_else(|| g.get_signature(simple))
-                })
-                .is_some_and(|gs| {
+        let global_confirms_shared = self.global_signature_registry.as_ref().is_some_and(|g| {
+            [callee_name, simple].into_iter().any(|key| {
+                g.lookup_method(key).is_some_and(|gs| {
                     let gp = gs.arg_param_index(arg_index);
                     crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                         gs, gp,
                     )
-                }));
+                })
+            })
+        });
+        let keep_shared_ref = coerced.starts_with('&')
+            && (global_confirms_shared
+                || (!crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &enforce_sig, pidx,
+                )
+                    && !crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                        &enforce_sig, pidx,
+                    )
+                    && !crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                        &enforce_sig, pidx,
+                    )
+                    && (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        &enforce_sig,
+                        pidx,
+                    ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                        &enforce_sig,
+                        pidx,
+                    ))));
         if !keep_shared_ref {
             self.enforce_call_site_ownership_contract(
                 coerced,
@@ -3781,6 +3927,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        if self.in_if_condition
+            && wants_owned
+            && !wants_ref
+            && !coerced.ends_with(".clone()")
+            && !coerced.starts_with('&')
+        {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.caller_owned_non_copy_formal(name) {
+                    *coerced = format!("{coerced}.clone()");
+                }
+            }
+        }
+
         self.maybe_pure_forwarding_strip_call_arg(
             coerced,
             arg_expr,
@@ -3788,6 +3947,7 @@ impl<'ast> CodeGenerator<'ast> {
             None,
             Some(arg_index),
             None,
+            Some(sig),
         );
     }
 
@@ -3914,6 +4074,19 @@ impl<'ast> CodeGenerator<'ast> {
             crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
             );
+        let global_emits_shared_ref = {
+            let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+            self.global_signature_registry.as_ref().is_some_and(|g| {
+                [callee_name, simple].into_iter().any(|key| {
+                    g.lookup_method(key).is_some_and(|gs| {
+                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            gs,
+                            gs.arg_param_index(arg_index),
+                        )
+                    })
+                })
+            })
+        };
         let mut_arg_emitted = {
             let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
             self.function_emitted_mut_arg_indices
@@ -3957,7 +4130,8 @@ impl<'ast> CodeGenerator<'ast> {
                     self.is_type_copy(bare)
                         && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                 })
-            && !emits_shared_ref;
+            && !emits_shared_ref
+            && !global_emits_shared_ref;
         let force_owned = !expects_mut
             && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 sig, param_idx,
@@ -3971,7 +4145,8 @@ impl<'ast> CodeGenerator<'ast> {
             && !runtime_std_borrow
             // Never strip `&` for text formals the callee emits as `&str` / shared ref
             // (regression-049 `replay_to_lsn(&self.path)`).
-            && !emits_shared_ref;
+            && !emits_shared_ref
+            && !global_emits_shared_ref;
         // Owned emission wins over stale analyzer/IR Ref expectations (regression-060
         // `is_at_or_before(&through)` → `other: Lsn`). Strip before shared-borrow path.
         // Do not strip `.clone()` — Copy aggregates still need multi-use clones (dogfood seed_write).

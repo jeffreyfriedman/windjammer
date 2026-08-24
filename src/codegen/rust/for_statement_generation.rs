@@ -279,6 +279,7 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(" {\n");
 
         self.indent_level += 1;
+        self.loop_body_depth += 1;
 
         // TDD FIX: Track bound variables in tuple patterns for explicit deref fix.
         // IMPORTANT: When the iterable uses .enumerate(), the index variable (first
@@ -432,6 +433,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.local_var_types.remove(var);
         }
 
+        self.loop_body_depth = self.loop_body_depth.saturating_sub(1);
         self.indent_level -= 1;
 
         output.push_str(&self.indent());

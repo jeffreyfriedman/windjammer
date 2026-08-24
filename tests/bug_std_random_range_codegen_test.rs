@@ -1,7 +1,7 @@
 //! `std::random.range` must codegen to `windjammer_runtime::random::int_range`.
 //!
-//! Ecosystem `wj-uuid`: `random.range(0, 256)` for v4 octets. Today emits
-//! `random::range(...)` (E0425: not found in `random`).
+//! WJ exposes `range`; runtime Rust fn is `int_range`. Alias wiring must survive
+//! `cargo check` (not just transpile).
 
 #![cfg(any(
     not(any(
@@ -28,12 +28,7 @@ pub fn octet() -> int {
     random.range(0, 256)
 }
 "#;
-    let generated = test_utils::compile_single(source);
-    assert!(
-        generated.contains("random::int_range(0, 256)")
-            || generated.contains("random::int_range(0_i64, 256_i64)"),
-        "std::random.range must map to runtime int_range, got:\n{generated}"
-    );
+    let generated = test_utils::assert_stdlib_runtime_links(source, &["random::int_range"]);
     assert!(
         !generated.contains("random::range("),
         "must not emit nonexistent random::range, got:\n{generated}"

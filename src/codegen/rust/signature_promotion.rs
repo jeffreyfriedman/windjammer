@@ -1439,27 +1439,43 @@ pub(crate) fn refresh_call_site_signature_for_arg(
     local: &crate::analyzer::SignatureRegistry,
 ) -> Option<FunctionSignature> {
     let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    let lookup = |reg: &crate::analyzer::SignatureRegistry| -> Vec<FunctionSignature> {
+        [
+            reg.get_signature(callee_name).cloned(),
+            reg.get_signature(simple).cloned(),
+            reg.lookup_method(callee_name).cloned(),
+            reg.lookup_method(simple).cloned(),
+            reg.find_unique_signature_ending_with(simple).cloned(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    };
     let pidx = initial
         .as_ref()
         .map(|s| s.arg_param_index(arg_index))
         .unwrap_or(arg_index);
-    let mut refreshed = pick_codegen_refreshed_signature([
-        global.and_then(|g| g.get_signature(callee_name).cloned()),
-        global.and_then(|g| g.get_signature(simple).cloned()),
-        local.get_signature(callee_name).cloned(),
-        local.get_signature(simple).cloned(),
-        initial.clone(),
-    ]);
+    let mut sig_candidates: Vec<Option<FunctionSignature>> = global
+        .map(|g| lookup(g))
+        .unwrap_or_default()
+        .into_iter()
+        .map(Some)
+        .collect();
+    sig_candidates.extend(lookup(local).into_iter().map(Some));
+    sig_candidates.push(initial.clone());
+    let mut refreshed = pick_codegen_refreshed_signature(sig_candidates);
     // WJ `.wj` stubs shadow scanned runtime APIs in `signatures`. Challenge with the
     // runtime baseline (`get_fallback_signature`) so `&str`/`AsRef<str>` beat owned
     // `string` emission for literals (`strings::join`, `contains`, `Connection::query`).
     for challenger in [
         global.and_then(|g| g.get_signature(callee_name)),
         global.and_then(|g| g.get_signature(simple)),
+        global.and_then(|g| g.find_unique_signature_ending_with(simple)),
         global.and_then(|g| g.get_fallback_signature(callee_name)),
         global.and_then(|g| g.get_fallback_signature(simple)),
         local.get_signature(callee_name),
         local.get_signature(simple),
+        local.find_unique_signature_ending_with(simple),
         local.get_fallback_signature(callee_name),
         local.get_fallback_signature(simple),
     ] {

@@ -36,7 +36,7 @@ mis-emits.
 | P1 | **WDB-102: `strings.from_chars(chars)` must borrow owned `Vec<char>`** | `wdb102_from_chars_owned_vec_must_borrow_at_call_site` | ✅ tip GREEN (runtime WJ-owned/Rust-borrowed keeps `Vec` formal + call-site `&`) |
 | P1 | **WDB-103: owned struct formal must not receive `&arg` (inverse WDB-099)** | `wdb103_owned_host_formal_must_move_not_borrow` | ✅ |
 | P1 | **WDB-104: field-mutating method must emit `mut self`** | `wdb104_field_mutating_method_must_emit_mut_self` | ✅ |
-| P1 | **WDB-105: explicit `.clone()` in while-loop trait calls must emit** | `wdb105_explicit_clone_in_while_loop_trait_call_must_emit` | 🚧 |
+| P1 | **WDB-105: explicit `.clone()` in while-loop trait calls must emit** | `wdb105_explicit_clone_in_while_loop_trait_call_must_emit` | ✅ tip GREEN (`loop_body_depth` preserves explicit clone in loops) |
 | P1 | **WDB-099 / WDB-100 PRE dogfood gates** | `wdb099_pre_ir_dogfood_*` (existing), `wdb100_pre_ir_dogfood_*` (`#[ignore]`) | 🚧 PRE |
 | P1 | **`std::random.range` → `random::int_range` (ecosystem `wj-uuid` v4)** | `bug_std_random_range_codegen_test` | ✅ tip GREEN (`resolve_runtime_emit_method_name` + MethodCall path) |
 | P1 | **`std::crypto.sha1_bytes` for UUID v5** | `bug_std_crypto_sha1_bytes_test` | 🚧 |
@@ -52,29 +52,32 @@ mis-emits.
 | P1 | **Read-only helper param must borrow, not own (`wj-validate`)** | `bug_readonly_helper_param_must_borrow_test` | ✅ tip GREEN |
 | P1 | **Owned call-site temp must not become `&` (multi-arm routes)** | product `clone_tenant_slug` + tip `codegen_library_multipass_owned_custom_call_site` | 🚧 95eb4716 helps; `clone_tenant_slug(x) + ""` still needed at some sites |
 | P1 | **String concat if/else must unify owned arms (alloc macros)** | `codegen_if_else_string_arms_must_unify_gate_test`, `codegen_string_concat_chain_gate_test`, dogfood `domain/actor.wj` / `string_concat.wj` | 🚧 product uses mut writeback / `concat2`; tip still emits if-arm `&str` vs else `String` |
-| P1 | **Match arms yielding `string` must unify owned (`substring` vs binding)** | `codegen_match_string_arms_must_unify_gate_test` | 🚧 dogfood: finance-screens `json.wj` analytics dims/facts clip; product uses `+ ""` on both arms |
+| P1 | **Match arms yielding `string` must unify owned (`substring` vs binding)** | `codegen_match_string_arms_must_unify_gate_test` | ✅ tip GREEN (substring index strip + owned arm coercion; `--module-file --check`) |
+| P1 | **`col_string(rows[0], …)` must not E0507 move from Vec index** | `codegen_vec_row_index_col_chain_gate_test` | 🚧 product binds `let row = rows[0]` first |
+| P1 | **Local `len` binding must not shadow `strings::len` in substring end** | `codegen_substring_len_binding_shadow_gate_test` | 🚧 product renames to `text_len` |
+| P1 | **Cross-module call to `&str` formal must auto-borrow owned temp** | dogfood `fetch_bank_reconciliation_*` wrappers | 🚧 owned boundary wrappers in composition |
 | P1 | **`strings.substring` int indices → usize (`wj-validate`)** | `bug_substring_int_indices_usize_test` | ✅ tip GREEN (runtime fallback `usize` formal drives cast) |
 | P1 | **Loop reuses read-only `string` param (`wj-glob` filter)** | `bug_loop_reuse_readonly_string_param_test` | ✅ tip GREEN (comparison-only helpers demote to `&str`) |
-| P1 | **`std::mime` constants + fn wiring (`wj-mime`)** | `bug_std_mime_module_wiring_test` | 🚧 |
-| P1 | **Module `const string` return codegen as `&str` (`wj-mime`)** | `bug_module_const_string_return_test` | 🚧 |
+| P1 | **`std::mime` constants + fn wiring (`wj-mime`)** | `bug_std_mime_module_wiring_test` | ✅ tip GREEN (`identifier_is_static_call_root` → `mime::CONST`) |
+| P1 | **Module `const string` return codegen as `&str` (`wj-mime`)** | `bug_module_const_string_return_test` | ✅ tip GREEN (`module_string_consts` + owned return/match coercion) |
 | P1 | **Recursive owned `Vec<string>` helper over-borrowed at call site (`wj-yaml`)** | `bug_recursive_owned_vec_call_site_test` | ✅ tip GREEN |
-| P1 | **`Vec` index with Windjammer `int` loop var (`wj-yaml`)** | `bug_vec_int_index_loop_test` (see also `bug_substring_int_indices_usize_test`) | 🚧 |
+| P1 | **`Vec` index with Windjammer `int` loop var (`wj-yaml`)** | `bug_vec_int_index_loop_test` (see also `bug_substring_int_indices_usize_test`) | ✅ tip GREEN (loop-promoted `int` counters still cast at index sites) |
 | P1 | **`vec.len() - int` loop bound usize/i64 (`wj-migrate`)** | `bug_vec_len_minus_int_loop_test` | 🚧 |
-| P1 | **`string` ordinal compare (`ch < "0"`) after substring (`wj-todo-cli`)** | `bug_string_char_ordinal_compare_test` | 🚧 |
-| P1 | **`HashMap.insert` as if-body expr must discard `Option` (`wj-todo-cli`)** | `bug_hashmap_insert_if_body_unit_test` | 🚧 |
-| P1 | **Module `const string` returns `&str` not `String` (`wj-mime`)** | `bug_module_const_string_returns_str_test` | 🚧 |
+| P1 | **`string` ordinal compare (`ch < "0"`) after substring (`wj-todo-cli`)** | `bug_string_char_ordinal_compare_test` | ✅ tip GREEN (owned text vs str literal → `.as_str()` in comparisons) |
+| P1 | **`HashMap.insert` as if-body expr must discard `Option` (`wj-todo-cli`)** | `bug_hashmap_insert_if_body_unit_test` | ✅ tip GREEN (void-block `let _ =` for non-unit expr stmts) |
+| P1 | **Module `const string` returns `&str` not `String` (`wj-mime`)** | `bug_module_const_string_returns_str_test` | ✅ tip GREEN (`module_string_consts` registry + `.to_string()` at owned sites) |
 
 ## Stdlib adoption P0/P1 (see `tests/STDLIB_ADOPTION_QUEUE.md`)
 
 | Priority | Std gap | Repro test(s) | Status |
 |----------|---------|---------------|--------|
 | P0 | **`std::encoding` base64 string encode/decode** | `bug_std_encoding_base64_string_api_test` | 🚧 |
-| P0 | **`std::random.range` → `int_range`** | `bug_std_random_range_codegen_test` | 🚧 |
+| P0 | **`std::random.range` → `int_range`** | `bug_std_random_range_codegen_test` | ✅ tip GREEN |
 | P0 | **`std::crypto.sha1_bytes`** | `bug_std_crypto_sha1_bytes_test` | 🚧 |
 | P0 | **`std::crypto.sha256_hex` wiring** | `bug_std_crypto_sha256_hex_wiring_test` | 🚧 |
 | P0 | **`std::time.utc_now` / `timestamp_millis`** | `bug_std_time_utc_now_test`, `bug_std_time_timestamp_millis_test` | 🚧 |
 | P0 | **`std::uuid.v4`** | `bug_std_uuid_v4_module_test` | 🚧 |
-| P0 | **`std::mime` constants + from_extension** | `bug_std_mime_module_wiring_test` | 🚧 |
+| P0 | **`std::mime` constants + from_extension** | `bug_std_mime_module_wiring_test` | ✅ tip GREEN |
 | P0 | **`std::path` join / file_name** | `bug_std_path_join_module_test` | 🚧 |
 | P0 | **`std::jwt` HS256 sign/verify wiring** | `bug_std_jwt_hs256_wiring_test` | 🚧 |
 | P1 | **`std::yaml` parse / to_json** | `bug_std_yaml_module_test` | 🚧 |

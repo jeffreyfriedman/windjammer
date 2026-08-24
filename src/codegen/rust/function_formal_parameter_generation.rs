@@ -875,6 +875,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         if param.name != "self"
                             && !asref_runtime_keep_owned
+                            && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
@@ -1184,6 +1185,7 @@ impl<'ast> CodeGenerator<'ast> {
                         // Trait-impl owned `string` and `@string_ref` must keep their contracts.
                         if !trait_impl_owned_string
                             && !asref_runtime_keep_owned
+                            && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
@@ -1531,7 +1533,9 @@ impl<'ast> CodeGenerator<'ast> {
                             }
 
                             if !self.ir_cutover.ownership {
-                                if self.inferred_borrowed_params.contains(&param.name) {
+                                if !cross_module_borrow_keep_owned
+                                    && self.inferred_borrowed_params.contains(&param.name)
+                                {
                                     ownership_mode = OwnershipMode::Borrowed;
                                 } else if self.inferred_mut_borrowed_params.contains(&param.name) {
                                     ownership_mode = OwnershipMode::MutBorrowed;
@@ -1642,7 +1646,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 &param.name,
                                 analyzed,
                                 Some(ownership_mode),
-                            ) && !self.is_type_copy(&param.type_)
+                            ) && !cross_module_borrow_keep_owned
+                                && !self.is_type_copy(&param.type_)
                                 && !analyzed.field_extract_parameters.contains(&param.name)
                                 && !analyzed.returned_parameters.contains(&param.name)
                                 && (!self.param_stored_in_owned_payload(
@@ -1888,10 +1893,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 },
                             );
-                            let keep_owned_contract = if ir_borrow.is_some() && !discard_keep_owned {
+                            let keep_owned_contract = if ir_borrow.is_some()
+                                && !discard_keep_owned
+                                && !cross_module_borrow_keep_owned
+                            {
                                 false
                             } else {
-                                payload_forces_owned
+                                cross_module_borrow_keep_owned
+                                || payload_forces_owned
                                 || discard_keep_owned
                                 || keep_owned_facade
                                 || (self.current_fn_mixed_forwarder_params.contains(&param.name)
@@ -1942,7 +1951,10 @@ impl<'ast> CodeGenerator<'ast> {
                             } else if let Some(ir_mode) = ir_borrow {
                                 // E0053: trait formals already applied above — IR MutRef from
                                 // body mutation must not rewrite owned trait params to `&mut T`.
-                                if !discard_keep_owned && !self.in_trait_impl {
+                                if !discard_keep_owned
+                                    && !self.in_trait_impl
+                                    && !cross_module_borrow_keep_owned
+                                {
                                     ownership_mode = ir_mode;
                                 }
                             } else if (self.param_passed_to_slice_search_string_elem(
@@ -1968,7 +1980,8 @@ impl<'ast> CodeGenerator<'ast> {
                             } else if self.in_trait_impl {
                                 // E0053: trait ownership already applied above — do not
                                 // demote via field-proj / vec-store / inferred Borrowed.
-                            } else if !matches!(ownership_mode, OwnershipMode::MutBorrowed)
+                            } else if !cross_module_borrow_keep_owned
+                                && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name))
                                 && (field_proj_readonly
@@ -1981,22 +1994,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 if field_proj_readonly || vec_store_borrow_ok {
                                     self.inferred_borrowed_params.insert(param.name.clone());
                                 }
-                            } else if let Some(analyzed_own) =
-                                analyzed.inferred_ownership.get(&param.name)
-                            {
-                                // Never demote IR/registry MutBorrowed to analyzer Owned —
-                                // the analyzer may not see cross-file passthrough mutations.
-                                if !(*analyzed_own == OwnershipMode::Owned
-                                    && ownership_mode == OwnershipMode::MutBorrowed)
+                            } else if !cross_module_borrow_keep_owned {
+                                if let Some(analyzed_own) =
+                                    analyzed.inferred_ownership.get(&param.name)
                                 {
-                                    ownership_mode = *analyzed_own;
-                                }
-                            } else if self.get_param_ownership(&param.name, analyzed)
-                                == Some(OwnershipMode::Owned)
-                            {
-                                // Same guard: don't demote MutBorrowed to Owned.
-                                if ownership_mode != OwnershipMode::MutBorrowed {
-                                    ownership_mode = OwnershipMode::Owned;
+                                    // Never demote IR/registry MutBorrowed to analyzer Owned —
+                                    // the analyzer may not see cross-file passthrough mutations.
+                                    if !(*analyzed_own == OwnershipMode::Owned
+                                        && ownership_mode == OwnershipMode::MutBorrowed)
+                                    {
+                                        ownership_mode = *analyzed_own;
+                                    }
+                                } else if self.get_param_ownership(&param.name, analyzed)
+                                    == Some(OwnershipMode::Owned)
+                                {
+                                    // Same guard: don't demote MutBorrowed to Owned.
+                                    if ownership_mode != OwnershipMode::MutBorrowed {
+                                        ownership_mode = OwnershipMode::Owned;
+                                    }
                                 }
                             }
 
@@ -2009,6 +2024,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // Copy aggregates: field method calls are not `&mut` mutations.
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
+                                && !cross_module_borrow_keep_owned
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && !analyzed.returned_parameters.contains(&param.name)
                                 && !payload_forces_owned
@@ -2234,6 +2250,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     analyzed.field_mutated_parameters.contains(&param.name),
                                     self.param_passed_to_owned_self_method_arg(func.body.as_slice(), &param.name, func),
                                 );
+                            }
+                            if cross_module_borrow_keep_owned {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.inferred_borrowed_params.remove(&param.name);
+                                self.inferred_mut_borrowed_params.remove(&param.name);
+                                self.emitted_rust_ref_formals.remove(&param.name);
                             }
                             copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {
                                 OwnershipMode::Owned => {
