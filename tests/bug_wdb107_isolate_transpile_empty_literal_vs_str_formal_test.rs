@@ -22,7 +22,8 @@
 //! Gate A: same-file tip must cargo-check.
 //! Gate B: tip isolate of callee + caller (no shared multipass metadata); if
 //! callee demotes to `&str`, caller must not own empty literals at that call site.
-//! Gate C (optional): PRE dogfood binary when `.worktrees/wj-pre-ir/.../wj` exists.
+//! Gate C (optional): PRE dogfood binary when `.worktrees/wj-pre-ir/.../wj` exists
+//! — live as of PRE `wj` 0.50.0 (soft-skip if absent).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -177,7 +178,6 @@ fn wdb107_tip_isolate_caller_must_not_own_empty_literal_into_str_formal() {
 }
 
 #[test]
-#[ignore = "WDB-107 PRE isolate: dogfood binary may still own empty literals into &str"]
 fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let pre = manifest

@@ -790,6 +790,13 @@ pub fn call_site_expects_shared_borrow(sig: &FunctionSignature, param_idx: usize
     )
 }
 
+pub fn call_site_expects_mut_borrow(sig: &FunctionSignature, param_idx: usize) -> bool {
+    matches!(
+        safety_type_from_signature_param(sig, param_idx).ownership,
+        OwnedType::MutRef(_)
+    )
+}
+
 pub fn call_site_expects_owned_pass(sig: &FunctionSignature, param_idx: usize) -> bool {
     matches!(
         safety_type_from_signature_param(sig, param_idx).ownership,
@@ -900,6 +907,11 @@ fn merge_actual_safety_types(emit: SafetyType, ir: SafetyType) -> SafetyType {
         const_eval: emit.const_eval,
         exec_mode: emit.exec_mode,
     }
+}
+
+/// Merge emit-text / AST actual type with a solver-resolved binding type.
+pub fn merge_call_arg_actual_with_ir(emit: SafetyType, ir: SafetyType) -> SafetyType {
+    merge_actual_safety_types(emit, ir)
 }
 
 /// Map solver-resolved IR ownership back to analyzer `OwnershipMode` for the signature registry.
