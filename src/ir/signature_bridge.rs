@@ -299,7 +299,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     // Plain WJ `string` with stale converged `&str` stays owned until codegen confirms emission.
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
-    ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+    ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
         sig, param_idx,
     ) && sig.param_types.get(param_idx).is_some_and(|t| {
         crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
@@ -319,7 +319,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     // Runtime-scanned sigs often have empty `param_types`/`formal_param_types` but still
     // set `emitted_rust_ref_params` + Borrowed (`&str` / `AsRef<str>`) — treat as String Ref
     // only when types are absent or already text; never force String Ref over `&Custom`.
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx) {
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx) {
         if let Some(ty) = sig.param_types.get(param_idx) {
             if crate::codegen::rust::string_utilities::param_is_rust_string_ref(ty) {
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
@@ -366,7 +366,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Borrowed)
         )
-        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         )
     {
@@ -389,7 +389,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 sig, param_idx,
             )
-            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
             )
             && sig
@@ -414,7 +414,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
             }
             if matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                     sig, param_idx,
                 )
             {
@@ -484,7 +484,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                         );
                     }
                     if param_is_ref_wrap
-                        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                             sig, param_idx,
                         )
                     {
@@ -526,7 +526,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             {
                 if let Some(ty) = sig.param_types.get(param_idx) {
                     if matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                             sig, param_idx,
                         )
                     {
@@ -538,12 +538,12 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     }
 
     // Plain WJ `string` formals pass owned `String` until codegen confirms `&str`.
-    if crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
         sig, param_idx,
     ) {
         // Stale Owned metadata must not beat converged `&str` emission.
         if let Some(ty) = sig.param_types.get(param_idx) {
-            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
             ) || crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
                 || matches!(ty, Type::Reference(_))
@@ -570,7 +570,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
 
     // Converged Rust param types (Reference/MutableReference) are the emitted contract.
     if let Some(ty) = sig.param_types.get(param_idx) {
-        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         ) && crate::codegen::rust::string_utilities::param_is_rust_str_ref(ty)
         {
@@ -584,7 +584,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             };
         }
         if matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
             )
         {
@@ -610,7 +610,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     let mode = Some(effective);
     if matches!(effective, OwnershipMode::Owned) {
         if let Some(ty) = sig.param_types.get(param_idx) {
-            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
             ) {
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
@@ -670,7 +670,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     }
 
     if let Some(ty) = sig.param_types.get(param_idx) {
-        if !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         ) {
             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
