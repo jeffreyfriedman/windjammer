@@ -1,0 +1,11 @@
+// std::yaml — YAML parse / JSON bridge (implementation: windjammer_runtime::yaml)
+
+/// Parse YAML text into a structured value.
+fn parse(text: string) -> Result<string, string> {
+    Err("import std::yaml — maps to windjammer_runtime::yaml")
+}
+
+/// Parse YAML and return equivalent JSON text (interop with `std::json`).
+fn to_json(text: string) -> Result<string, string> {
+    Err("import std::yaml — maps to windjammer_runtime::yaml")
+}

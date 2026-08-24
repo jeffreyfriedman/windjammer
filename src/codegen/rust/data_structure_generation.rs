@@ -471,6 +471,14 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("{}.clone()", base_expr);
         }
 
+        // Module `pub const FOO: string` via static path (`mime::APPLICATION_JSON`).
+        if (self.in_owned_value_context || self.in_match_arm_needing_string)
+            && self.module_string_consts.contains(field)
+            && !base_expr.ends_with(".to_string()")
+        {
+            return format!("{}.to_string()", base_expr);
+        }
+
         base_expr
     }
 

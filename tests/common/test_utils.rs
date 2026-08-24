@@ -217,6 +217,20 @@ pub fn compile_single_check(source: &str) -> (String, bool) {
 /// 3. Each `required_runtime_needles` substring present (prefer `windjammer_runtime::…`)
 /// 4. `cargo check` of the generated crate against `windjammer-runtime`
 pub fn assert_stdlib_runtime_links(source: &str, required_runtime_needles: &[&str]) -> String {
+    assert_stdlib_runtime_links_impl(source, required_runtime_needles, false)
+}
+
+/// Like [`assert_stdlib_runtime_links`], but passes when **any** needle matches
+/// (useful when runtime export names vary, e.g. `utc_now` vs `now`).
+pub fn assert_stdlib_runtime_links_any(source: &str, needles: &[&str]) -> String {
+    assert_stdlib_runtime_links_impl(source, needles, true)
+}
+
+fn assert_stdlib_runtime_links_impl(
+    source: &str,
+    runtime_needles: &[&str],
+    any_needle: bool,
+) -> String {
     let tmp = TempDir::new().expect("tempdir");
     let wj_file = tmp.path().join("test.wj");
     fs::write(&wj_file, source).unwrap();
@@ -236,11 +250,23 @@ pub fn assert_stdlib_runtime_links(source: &str, required_runtime_needles: &[&st
         "stdlib must not emit fail-closed compile_error!, got:\n{generated}"
     );
 
-    for needle in required_runtime_needles {
-        assert!(
-            generated.contains(*needle),
-            "stdlib wiring must emit `{needle}`, got:\n{generated}"
-        );
+    if !runtime_needles.is_empty() {
+        if any_needle {
+            assert!(
+                runtime_needles
+                    .iter()
+                    .any(|needle| generated.contains(*needle)),
+                "stdlib wiring must emit one of {:?}, got:\n{generated}",
+                runtime_needles
+            );
+        } else {
+            for needle in runtime_needles {
+                assert!(
+                    generated.contains(*needle),
+                    "stdlib wiring must emit `{needle}`, got:\n{generated}"
+                );
+            }
+        }
     }
 
     assert!(

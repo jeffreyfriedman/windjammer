@@ -2,8 +2,92 @@
 //!
 //! Windjammer's `std::time` module maps to these functions.
 
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime as ChronoDateTime, Datelike, Local, Timelike, Utc};
 use std::time::Instant as StdInstant;
+
+/// Windjammer `std::time::DateTime` — wraps UTC chrono datetime.
+#[derive(Debug, Clone)]
+pub struct DateTime {
+    inner: ChronoDateTime<Utc>,
+}
+
+impl DateTime {
+    pub fn timestamp(&self) -> i64 {
+        self.inner.timestamp()
+    }
+
+    pub fn timestamp_millis(&self) -> i64 {
+        self.inner.timestamp_millis()
+    }
+
+    pub fn format(&self, fmt: &str) -> String {
+        self.inner.format(fmt).to_string()
+    }
+
+    pub fn to_rfc3339(&self) -> String {
+        self.inner.to_rfc3339()
+    }
+
+    pub fn year(&self) -> i32 {
+        self.inner.year()
+    }
+
+    pub fn month(&self) -> u32 {
+        self.inner.month()
+    }
+
+    pub fn day(&self) -> u32 {
+        self.inner.day()
+    }
+
+    pub fn hour(&self) -> u32 {
+        self.inner.hour()
+    }
+
+    pub fn minute(&self) -> u32 {
+        self.inner.minute()
+    }
+
+    pub fn second(&self) -> u32 {
+        self.inner.second()
+    }
+
+    pub fn add_days(&self, days: i64) -> DateTime {
+        DateTime {
+            inner: self
+                .inner
+                .checked_add_signed(chrono::Duration::days(days))
+                .unwrap_or(self.inner),
+        }
+    }
+
+    pub fn add_hours(&self, hours: i64) -> DateTime {
+        DateTime {
+            inner: self
+                .inner
+                .checked_add_signed(chrono::Duration::hours(hours))
+                .unwrap_or(self.inner),
+        }
+    }
+
+    pub fn add_minutes(&self, minutes: i64) -> DateTime {
+        DateTime {
+            inner: self
+                .inner
+                .checked_add_signed(chrono::Duration::minutes(minutes))
+                .unwrap_or(self.inner),
+        }
+    }
+
+    pub fn add_seconds(&self, seconds: i64) -> DateTime {
+        DateTime {
+            inner: self
+                .inner
+                .checked_add_signed(chrono::Duration::seconds(seconds))
+                .unwrap_or(self.inner),
+        }
+    }
+}
 
 /// Wall-clock timestamps (`std::time::SystemTime` in Windjammer sources).
 pub use std::time::SystemTime;
@@ -37,6 +121,27 @@ pub fn timestamp() -> i64 {
     Utc::now().timestamp()
 }
 
+/// Current UTC datetime (Windjammer `std::time::utc_now`).
+pub fn utc_now() -> DateTime {
+    DateTime { inner: Utc::now() }
+}
+
+/// Local datetime (Windjammer `std::time::now`).
+pub fn now_local_datetime() -> DateTime {
+    DateTime {
+        inner: Local::now().with_timezone(&Utc),
+    }
+}
+
+/// Parse RFC3339 datetime string.
+pub fn parse_rfc3339(s: &str) -> Result<DateTime, String> {
+    ChronoDateTime::parse_from_rfc3339(s)
+        .map(|dt| DateTime {
+            inner: dt.with_timezone(&Utc),
+        })
+        .map_err(|e| e.to_string())
+}
+
 /// Windjammer `std::time::now_unix()` alias.
 pub fn now_unix() -> i64 {
     timestamp()
@@ -59,21 +164,21 @@ pub fn now_local() -> String {
 
 /// Parse ISO 8601 date string  
 pub fn parse(s: &str) -> Result<i64, String> {
-    s.parse::<DateTime<Utc>>()
+    s.parse::<ChronoDateTime<Utc>>()
         .map(|dt| dt.timestamp())
         .map_err(|e| e.to_string())
 }
 
 /// Parse date string with custom format
 pub fn parse_format(s: &str, fmt: &str) -> Result<i64, String> {
-    DateTime::parse_from_str(s, fmt)
+    ChronoDateTime::parse_from_str(s, fmt)
         .map(|dt| dt.timestamp())
         .map_err(|e| e.to_string())
 }
 
 /// Format timestamp as string
 pub fn format(timestamp: i64, format: &str) -> String {
-    DateTime::from_timestamp(timestamp, 0)
+    ChronoDateTime::from_timestamp(timestamp, 0)
         .unwrap_or_else(Utc::now)
         .format(format)
         .to_string()
@@ -91,16 +196,16 @@ pub fn sleep_millis(millis: u64) {
 
 /// Add seconds to timestamp
 pub fn add_seconds(timestamp: i64, seconds: i64) -> i64 {
-    DateTime::from_timestamp(timestamp, 0)
-        .and_then(|dt| dt.checked_add_signed(Duration::seconds(seconds)))
+    ChronoDateTime::from_timestamp(timestamp, 0)
+        .and_then(|dt| dt.checked_add_signed(chrono::Duration::seconds(seconds)))
         .map(|dt| dt.timestamp())
         .unwrap_or(timestamp)
 }
 
 /// Add days to timestamp
 pub fn add_days(timestamp: i64, days: i64) -> i64 {
-    DateTime::from_timestamp(timestamp, 0)
-        .and_then(|dt| dt.checked_add_signed(Duration::days(days)))
+    ChronoDateTime::from_timestamp(timestamp, 0)
+        .and_then(|dt| dt.checked_add_signed(chrono::Duration::days(days)))
         .map(|dt| dt.timestamp())
         .unwrap_or(timestamp)
 }

@@ -57,6 +57,8 @@ pub mod testing;
 pub mod thread;
 pub mod time;
 pub mod timeout;
+pub mod uuid;
+pub mod yaml;
 
 // Re-export commonly used types
 pub use http::{HttpMethod, Request, Response, Router, Server, ServerRequest, ServerResponse};

@@ -59,6 +59,11 @@ fn sha256_hex(data: string) -> string {
     ""
 }
 
+fn sha1_bytes(data: Vec<u8>) -> Vec<u8> {
+    // Implementation wraps: sha1::Sha1::digest(&data).to_vec()
+    vec![]
+}
+
 // SHA-512 Hashing
 
 fn sha512(data: string) -> string {

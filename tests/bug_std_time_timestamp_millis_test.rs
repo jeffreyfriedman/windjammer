@@ -1,6 +1,4 @@
-//! `std::time.utc_now().timestamp_millis()` must reach a real clock (not stub `0`).
-//!
-//! Ecosystem `wj-uuid`: `v1()` uses current Unix milliseconds for time-based UUIDs.
+//! `std::time.utc_now().timestamp_millis()` must reach runtime clock.
 
 #![cfg(any(
     not(any(
@@ -27,16 +25,8 @@ pub fn now_millis() -> i64 {
     time.utc_now().timestamp_millis()
 }
 "#;
-    let generated = test_utils::compile_single(source);
-    let wired = generated.contains("now_millis()")
-        || generated.contains("timestamp_millis()")
-        || generated.contains("time::now_millis()");
-    assert!(
-        wired,
-        "utc_now timestamp_millis must codegen to runtime clock, got:\n{generated}"
-    );
-    assert!(
-        !generated.contains("cannot find function `timestamp_millis`"),
-        "must not emit missing timestamp_millis on DateTime, got:\n{generated}"
+    test_utils::assert_stdlib_runtime_links_any(
+        source,
+        &["timestamp_millis", "time::utc_now", "time::now"],
     );
 }

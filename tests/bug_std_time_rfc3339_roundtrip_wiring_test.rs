@@ -1,6 +1,4 @@
-//! FAILING REPRO — `std::time.parse_rfc3339` / `to_rfc3339` must wire to runtime.
-//!
-//! Ecosystem `wj-timefmt` is a pure-WJ Zulu subset. Std should own RFC3339.
+//! `std::time.parse_rfc3339` / `to_rfc3339` must wire to runtime.
 
 #![cfg(any(
     not(any(
@@ -30,16 +28,10 @@ pub fn parse_ts(text: string) -> Result<string, string> {
     }
 }
 "#;
-    let (generated, ok) = test_utils::compile_single_check(source);
+    let generated =
+        test_utils::assert_stdlib_runtime_links(source, &["parse_rfc3339", "to_rfc3339"]);
     assert!(
-        ok,
-        "std::time.parse_rfc3339/to_rfc3339 must compile, got:\n{generated}"
-    );
-    let parse_ok = generated.contains("parse_rfc3339")
-        || generated.contains("time::parse_rfc3339");
-    let format_ok = generated.contains("to_rfc3339");
-    assert!(
-        parse_ok && format_ok,
+        generated.contains("parse_rfc3339") && generated.contains("to_rfc3339"),
         "RFC3339 parse/format must reach runtime time, got:\n{generated}"
     );
 }
