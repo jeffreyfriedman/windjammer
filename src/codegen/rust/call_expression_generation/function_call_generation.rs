@@ -184,7 +184,7 @@ fn apply_owned_string_literal_coercion<'ast>(
             Some(&gen.enum_variant_types),
         ) || sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
-            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(s, idx) {
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx) {
                 return false;
             }
             let text_formal = s
@@ -735,7 +735,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 && signature.as_ref().is_some_and(|resolved| {
                     resolved.name != local.name
                         && (0..local.formal_param_types.len()).any(|idx| {
-                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 resolved, idx,
                             )
                         })
