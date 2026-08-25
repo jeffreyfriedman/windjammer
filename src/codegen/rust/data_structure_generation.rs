@@ -85,6 +85,17 @@ impl<'ast> CodeGenerator<'ast> {
             },
             _ => None,
         };
+        // Call-arg expected type (e.g. specialized `Vec<(String,String)>::push` param)
+        // drives nested tuple slot ownership the same way return types do.
+        let call_arg_tuple_types = match &self.call_arg_expected_type {
+            Some(Type::Tuple(types)) => Some(types.clone()),
+            Some(Type::Reference(inner) | Type::MutableReference(inner)) => match inner.as_ref() {
+                Type::Tuple(types) => Some(types.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        let tuple_slot_types = return_tuple_types.or(call_arg_tuple_types);
         let expr_strs: Vec<String> = elements
             .iter()
             .enumerate()
@@ -92,7 +103,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Tuple elements are owned values unless the slot type is a reference.
                 // Index of `Vec<String>` must clone (`parts[0].clone()`), not move or
                 // strip `&parts[0]` back to a move (E0507).
-                let expects_ref = return_tuple_types
+                let expects_ref = tuple_slot_types
                     .as_ref()
                     .and_then(|types| types.get(i))
                     .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
@@ -102,7 +113,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 let mut s = self.generate_expression(e);
                 self.in_owned_value_context = prev_owned;
-                if let Some(ref tuple_types) = return_tuple_types {
+                if let Some(ref tuple_types) = tuple_slot_types {
                     if let Some(expected) = tuple_types.get(i) {
                         if !matches!(expected, Type::Reference(_) | Type::MutableReference(_))
                             && !matches!(e, Expression::Index { .. })
@@ -124,7 +135,7 @@ impl<'ast> CodeGenerator<'ast> {
                         ..
                     }
                 ) {
-                    let needs_owned = return_tuple_types
+                    let needs_owned = tuple_slot_types
                         .as_ref()
                         .and_then(|types| types.get(i))
                         .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);

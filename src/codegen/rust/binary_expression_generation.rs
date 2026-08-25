@@ -616,9 +616,20 @@ impl<'ast> CodeGenerator<'ast> {
         } // end is_comparison guard
 
         // TDD FIX for E0614: Call balance_eq for ALL comparisons, not just == and !=
-        // This handles match arm bindings (owned Copy types like i32) in >=, <=, >, < too
+        // This handles match arm bindings (owned Copy types like i32) in >=, <=, >, < too.
+        // `.as_str()` for owned String vs lit is only for PartialOrd — PartialEq is native.
         if is_comparison {
-            self.balance_eq_operands_for_rust(left, right, &mut left_str, &mut right_str);
+            let is_ordering = matches!(
+                op,
+                BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+            );
+            self.balance_eq_operands_for_rust(
+                left,
+                right,
+                &mut left_str,
+                &mut right_str,
+                is_ordering,
+            );
             left_str = self.peel_copy_ref_match_binding_for_value(left, &left_str);
             right_str = self.peel_copy_ref_match_binding_for_value(right, &right_str);
         }

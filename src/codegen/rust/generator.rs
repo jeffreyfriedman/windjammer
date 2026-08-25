@@ -219,6 +219,10 @@ pub struct CodeGenerator<'ast> {
     /// While generating an assignment RHS, use this LHS type for float literal suffixes when
     /// numeric inference returns Unknown (multipass ExprId mismatch, etc.).
     pub(crate) assignment_float_target_type: Option<Type>,
+    /// Expected type of the call argument currently being generated (method/fn param type
+    /// after signature specialization). Drives nested tuple slot ownership
+    /// (`Vec<(string,string)>::push((k, ""))` → own empty string).
+    pub(crate) call_arg_expected_type: Option<Type>,
     /// When a let-binding has an explicit type annotation, this provides the target type
     /// for `.collect()` turbofish generation (e.g., `let x: Vec<char> = ...collect()`).
     pub(crate) collect_target_type: Option<Type>,
@@ -631,6 +635,7 @@ impl<'ast> CodeGenerator<'ast> {
             closure_predicate_typed_params: false,
             generating_assignment_target: false,
             assignment_float_target_type: None,
+            call_arg_expected_type: None,
             collect_target_type: None,
             in_void_block: false,
             in_explicit_clone_call: false,

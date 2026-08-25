@@ -602,6 +602,7 @@ impl<'ast> CodeGenerator<'ast> {
         right: &Expression<'ast>,
         left_str: &mut String,
         right_str: &mut String,
+        is_ordering_compare: bool,
     ) {
         let lt = self.infer_expression_type(left);
         let rt = self.infer_expression_type(right);
@@ -891,12 +892,14 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             };
 
-            // Check if identifier is an owned String variable (match arm binding, local var)
+            // Check if identifier is an owned String variable (match arm binding, local var).
+            // Do NOT treat `&str` / `Reference(text)` as owned — `is_windjammer_text_type`
+            // matches references and would spuriously emit `.as_str()` on already-slice
+            // locals (`let fmt = s.trim(); fmt.as_str() == "csv"` → E0658).
             let is_owned_string_var = |expr: &Expression| -> bool {
                 if let Expression::Identifier { name, .. } = expr {
-                    // Check local_var_types for owned String
                     if let Some(var_type) = self.local_var_types.get(name.as_str()) {
-                        return crate::codegen::rust::types::is_windjammer_text_type(var_type);
+                        return crate::ir::formal_predicates::type_is_owned_string(var_type);
                     }
                 }
                 false
@@ -971,8 +974,13 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
 
-            // All other string combinations work natively (&str, etc.)
-            // Owned `String` vs `&str` literal for PartialOrd (`>=`, `<=`): emit `.as_str()`.
+            // All other string combinations work natively (&str, etc.).
+            // Owned `String` vs `&str` literal needs `.as_str()` only for PartialOrd
+            // (`<`/`>`/`<=`/`>=`). PartialEq (`==`/`!=`) handles `String == &str` natively —
+            // never emit `.as_str()` on already-`&str` locals (`trim()` → E0658).
+            if !is_ordering_compare {
+                return;
+            }
             let left_is_str_lit = matches!(
                 left,
                 Expression::Literal {
@@ -987,9 +995,41 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 }
             );
-            if left_is_owned && right_is_str_lit && !left_str.contains(".as_str()") {
+            let left_is_shared_text_ref = left_is_ref
+                || matches!(
+                    lt.as_ref(),
+                    Some(Type::Reference(_))
+                )
+                || matches!(
+                    left,
+                    Expression::Identifier { name, .. }
+                        if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                            matches!(t, Type::Reference(_))
+                        })
+                );
+            let right_is_shared_text_ref = right_is_ref
+                || matches!(
+                    rt.as_ref(),
+                    Some(Type::Reference(_))
+                )
+                || matches!(
+                    right,
+                    Expression::Identifier { name, .. }
+                        if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                            matches!(t, Type::Reference(_))
+                        })
+                );
+            if left_is_owned
+                && !left_is_shared_text_ref
+                && right_is_str_lit
+                && !left_str.contains(".as_str()")
+            {
                 *left_str = format!("{}.as_str()", left_str);
-            } else if right_is_owned && left_is_str_lit && !right_str.contains(".as_str()") {
+            } else if right_is_owned
+                && !right_is_shared_text_ref
+                && left_is_str_lit
+                && !right_str.contains(".as_str()")
+            {
                 *right_str = format!("{}.as_str()", right_str);
             }
             return;
@@ -1048,7 +1088,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Note: Explicit &str parameters are handled by the early return in the string comparison block above
         // No cleanup needed here since they never get * derefs in the first place
 
-        self.balance_owned_text_against_str_literal(left, right, lt.as_ref(), rt.as_ref(), left_str, right_str);
+        if is_ordering_compare {
+            self.balance_owned_text_against_str_literal(left, right, lt.as_ref(), rt.as_ref(), left_str, right_str);
+        }
     }
 
     /// PartialOrd/PartialEq: owned `String` (or text-producing expr) vs `"lit"` needs `.as_str()`.
@@ -1103,8 +1145,29 @@ impl<'ast> CodeGenerator<'ast> {
             if ident_is_borrowed_text(expr) {
                 return false;
             }
+            // Already a shared text ref — never `.as_str()` (E0658 on `&str`).
+            if matches!(ty, Some(Type::Reference(_))) {
+                return false;
+            }
+            if let Expression::Identifier { name, .. } = expr {
+                if self
+                    .local_var_types
+                    .get(name.as_str())
+                    .is_some_and(|t| matches!(t, Type::Reference(_)))
+                {
+                    return false;
+                }
+                // Only owned-String identifiers — not every binding.
+                if self
+                    .local_var_types
+                    .get(name.as_str())
+                    .is_some_and(crate::ir::formal_predicates::type_is_owned_string)
+                {
+                    return true;
+                }
+                return is_owned_text_expr(expr, ty);
+            }
             is_owned_text_expr(expr, ty)
-                || matches!(expr, Expression::Identifier { .. })
         };
 
         if right_is_str_lit && should_as_str(left, left_str, lt) {
