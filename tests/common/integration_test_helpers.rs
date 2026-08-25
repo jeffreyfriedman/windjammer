@@ -144,7 +144,14 @@ impl MultiFileTest {
         self.compile()
             .map_err(|e| format!("compile failed before cargo check: {e}"))?;
 
-        write_flat_lib_rs(&self.build_dir).map_err(|e| format!("write lib.rs: {e}"))?;
+        // Nested multipass emits `mod.rs` + `subdir/mod.rs`. Prefer that tree over a
+        // flat `lib.rs` that only sees top-level `.rs` files (drops `adapters/request.rs`).
+        if self.build_dir.join("mod.rs").exists() {
+            fs::copy(self.build_dir.join("mod.rs"), self.build_dir.join("lib.rs"))
+                .map_err(|e| format!("copy mod.rs → lib.rs: {e}"))?;
+        } else {
+            write_flat_lib_rs(&self.build_dir).map_err(|e| format!("write lib.rs: {e}"))?;
+        }
         write_verify_cargo_toml(&self.build_dir)
             .map_err(|e| format!("write Cargo.toml for cargo check: {e}"))?;
 

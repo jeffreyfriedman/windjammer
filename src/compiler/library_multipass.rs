@@ -126,39 +126,15 @@ fn filter_shader_files(
 
 /// Detect if source code imports from Windjammer stdlib (`std::*`)
 fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
-    let mut stdlib_modules = HashSet::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("use std::") {
-            // Extract module: "use std::collections::HashMap" -> "collections"
-            if let Some(rest) = trimmed.strip_prefix("use std::") {
-                if let Some(module) = rest.split("::").next() {
-                    stdlib_modules.insert(module.to_string());
-                }
-            }
-        }
-    }
-    stdlib_modules
+    crate::compiler::library_copy_registry::stdlib_modules_from_source(source)
 }
 
-/// Find Windjammer stdlib directory (relative to compiler binary)
-fn find_stdlib_dir() -> Option<PathBuf> {
-    // Check: ../std/ relative to compiler executable
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            // In development: windjammer/target/release/wj -> windjammer/std/
-            let dev_stdlib = parent.parent()?.parent()?.join("std");
-            if dev_stdlib.is_dir() {
-                return Some(dev_stdlib);
-            }
-            // In installed: ~/.cargo/bin/wj -> ~/.cargo/wj-stdlib/
-            let installed_stdlib = parent.parent()?.join("wj-stdlib");
-            if installed_stdlib.is_dir() {
-                return Some(installed_stdlib);
-            }
-        }
-    }
-    None
+/// Find Windjammer stdlib directory (`std/`).
+///
+/// Shared by multipass + single-file API-type collection. Prefer env / crate
+/// manifest over `current_exe()` so `cargo test` binaries still resolve `std/`.
+pub(crate) fn find_stdlib_dir() -> Option<PathBuf> {
+    crate::compiler::library_copy_registry::find_stdlib_dir_for_api_types()
 }
 
 /// Match a step-2 metadata key (`Type::method`) to the converged multipass registry entry.
@@ -1229,6 +1205,25 @@ pub(crate) fn build_library_multipass(
             codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
             codegen.set_global_struct_field_types((*global_struct_fields).clone());
             codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
+            // Stdlib field/enum shapes + FQ Rust paths (`HttpMethod` →
+            // `windjammer_runtime::http::HttpMethod`) so string→unit-enum coercion
+            // works even when the cargo-test binary's exe-relative std lookup fails
+            // mid-session, and so sibling imports alone resolve without E0433.
+            if !needed_stdlib_modules.is_empty() {
+                let (std_fields, std_variants, std_paths) =
+                    super::library_copy_registry::collect_stdlib_api_types_for_modules(
+                        &needed_stdlib_modules,
+                    );
+                if !std_fields.is_empty() {
+                    codegen.set_global_struct_field_types(std_fields);
+                }
+                if !std_variants.is_empty() {
+                    codegen.set_global_enum_variant_types(std_variants);
+                }
+                if !std_paths.is_empty() {
+                    codegen.set_stdlib_type_rust_paths(std_paths);
+                }
+            }
             codegen.set_output_file(&analysis.output_file);
             codegen.set_source_file(file);
             codegen.set_library_source_root(src_base.clone());

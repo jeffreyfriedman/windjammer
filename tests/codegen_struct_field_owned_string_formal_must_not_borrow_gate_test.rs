@@ -13,10 +13,10 @@
 //! FAILING REPRO — struct field into owned `string` formal must clone/own, not `&field`.
 //!
 //! Dogfood (finance-screens tip regen / `escape_html`):
-//! `escape_html(link.href)` emits `&link.href` while `.replace` keeps formal `String` → E0308.
+//! `escape_html(link.href)` must move/clone, not emit `&link.href` into owned `String`.
+//! Tip GREEN (P3.180) — product drops `field + ""` at escape/status call sites.
 //!
-//! Bool helpers that only trim/compare demote to `&str` (product P3.180) — those accept
-//! `&field` and are not this gate. Owned transformers (`escape_html`, builders) still fail.
+//! Bool helpers that only trim/compare demote to `&str` and accept `&field` as well.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

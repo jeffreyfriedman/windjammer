@@ -1348,7 +1348,20 @@ pub(crate) fn prefer_shared_ref_signature(
         return preferred;
     };
     if let Some(ref pref) = preferred {
-        // User-owned API with confirmed WJ formals beats stdlib homonym (`join` vs `strings::join`).
+        // Qualified runtime-std callee beats a same-suffix user homonym at its call site
+        // (`csv::write` vs local `pub fn write`, `strings::join` vs local `join`).
+        if signature_is_wj_std_stub_or_runtime_qualified(challenger)
+            && !signature_is_wj_std_stub_or_runtime_qualified(pref)
+            && sig_simple_name(&pref.name) == sig_simple_name(&challenger.name)
+            && pref.name != challenger.name
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                challenger, param_idx,
+            )
+        {
+            return Some(challenger.clone());
+        }
+        // User-owned API with confirmed WJ formals beats stdlib homonym for *bare* call
+        // resolution (`join(base, relative)` must not inherit `strings::join` borrowing).
         if !pref.formal_param_types.is_empty()
             && !signature_is_wj_std_stub_or_runtime_qualified(pref)
             && sig_simple_name(&pref.name) == sig_simple_name(&challenger.name)
@@ -1356,6 +1369,7 @@ pub(crate) fn prefer_shared_ref_signature(
             && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 challenger, param_idx,
             )
+            && !signature_is_wj_std_stub_or_runtime_qualified(challenger)
         {
             return Some(pref.clone());
         }
@@ -1469,7 +1483,11 @@ pub(crate) fn callee_signature_lookup_candidates(
             out.push(sig.clone());
         }
     }
-    if !type_qualified {
+    if !type_qualified
+        && !crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+            callee_name,
+        )
+    {
         for sig in [
             reg.get_signature(simple),
             reg.lookup_method(simple),
@@ -1525,7 +1543,11 @@ pub(crate) fn refresh_call_site_signature_for_arg(
     // runtime baseline (`get_fallback_signature`) so `&str`/`AsRef<str>` beat owned
     // `string` emission for literals (`strings::join`, `contains`, `Connection::query`).
     // Type-qualified calls never challenge bare `error` / `join` homonyms (`log::error`).
-    let challengers: Vec<Option<&FunctionSignature>> = if type_qualified {
+    let skip_bare_homonym =
+        crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+            callee_name,
+        );
+    let challengers: Vec<Option<&FunctionSignature>> = if type_qualified || skip_bare_homonym {
         vec![
             global.and_then(|g| g.get_signature(callee_name)),
             global.and_then(|g| g.get_fallback_signature(callee_name)),
