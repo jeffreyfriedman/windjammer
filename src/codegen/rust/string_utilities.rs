@@ -174,10 +174,7 @@ pub fn is_genuine_non_literal_to_string_conversion(arg: &Expression) -> bool {
 /// Parameter type is explicitly `&str` (not `&String`).
 /// This indicates the callee wants a string slice — string literals can be passed directly.
 pub fn param_is_rust_str_ref(param_type: &Type) -> bool {
-    matches!(
-        param_type,
-        Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
-    )
+    crate::ir::formal_predicates::param_is_rust_str_ref(param_type)
 }
 
 /// Parameter type is an owned Windjammer `string` / Rust `String`.
@@ -199,7 +196,7 @@ pub fn call_site_param_expects_owned_string(
     ) {
         return false;
     }
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx) {
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx) {
         return false;
     }
     if crate::ir::signature_bridge::call_site_expects_owned_pass(sig, idx) {
@@ -372,10 +369,7 @@ pub fn unresolved_instance_method_string_literal_needs_rust_owned_string(
 /// Distinct from `&str` (`param_is_rust_str_ref`). String literals passed to
 /// `&String` params need `&"literal".to_string()` conversion.
 pub fn param_is_rust_string_ref(param_type: &Type) -> bool {
-    matches!(
-        param_type,
-        Type::Reference(inner) if param_is_owned_string_type(inner)
-    )
+    crate::ir::formal_predicates::param_is_rust_string_ref(param_type)
 }
 
 /// Whether a call-site expression should be borrowed for runtime std `AsRef<str>` APIs.
@@ -655,7 +649,7 @@ pub fn string_literal_needs_owned_coercion_with_enum(
             return true;
         }
     }
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx) {
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx) {
         return false;
     }
     let Some(param_type) = sig.param_types.get(idx) else {
@@ -715,7 +709,7 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     // analyzer ownership (store-forced Owned emission).
     if param_is_owned_string_type(param_type)
         && !param_is_rust_str_ref(param_type)
-        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, idx)
+        && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx)
     {
         return true;
     }
@@ -752,7 +746,7 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
             ..
         }
     ) && (arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()"))
-        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig,
             sig.arg_param_index(arg_index),
         )
@@ -779,7 +773,7 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
 
     let param_idx = sig.arg_param_index(arg_index);
     let callee_emits_rust_ref =
-        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx);
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx);
     let param_types_say_shared_text = sig.param_types.get(param_idx).is_some_and(|t| {
         param_is_rust_str_ref(t)
             || matches!(
@@ -1003,7 +997,7 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
                     return Some(false);
                 }
                 Some(
-                    crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                    crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                         s, idx,
                     ) || s.param_types.get(idx).is_some_and(param_is_rust_str_ref)
                         || (s.has_self_receiver_slot()

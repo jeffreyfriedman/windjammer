@@ -245,7 +245,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     && !crate::type_classification::is_copy_pass_by_value_formal(
                                         bare,
                                     )
-                                    && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                    && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                         sig, sig_param_idx,
                                     )
                             });

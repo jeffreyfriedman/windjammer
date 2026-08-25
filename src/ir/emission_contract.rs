@@ -1,10 +1,14 @@
 //! Emission-contract oracle for call-site shared-ref / owned formals.
 //!
 //! Lives in IR so `signature_bridge` does not depend on `call_site_borrow`.
-//! Temporary codegen helper imports (`emitted_owned_arg_contract`, text predicates)
-//! will be purified into IR-neutral helpers in a follow-up.
+//! Type predicates live in [`crate::ir::formal_predicates`]; `emitted_owned_arg_contract`
+//! remains a temporary codegen import until formal emission metadata moves to IR.
 
 use crate::analyzer::{FunctionSignature, OwnershipMode};
+use crate::ir::formal_predicates::{
+    formal_is_plain_windjammer_string, is_windjammer_text_type, param_is_rust_str_ref,
+    param_is_rust_string_ref,
+};
 use crate::parser::Type;
 
 /// Plain WJ `string` formals that emit owned `String` at call sites until codegen confirms `&str`.
@@ -12,7 +16,7 @@ pub fn plain_string_formal_passes_owned_at_call_site(
     sig: &FunctionSignature,
     param_idx: usize,
 ) -> bool {
-    if !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+    if !formal_is_plain_windjammer_string(
         sig, param_idx,
     ) {
         return false;
@@ -51,14 +55,14 @@ pub fn callee_emits_shared_rust_ref_param(
     // stale analyzer `Reference(str)` + Borrowed alone must not force call-site `&`
     // (circular-dep / multipass owned formals). Methods and externs may trust
     // registry `&str` contracts without emission flags.
-    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+    if formal_is_plain_windjammer_string(
         sig, param_idx,
     ) {
         if sig.is_extern
             && sig
                 .param_types
                 .get(param_idx)
-                .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
+                .is_some_and(param_is_rust_str_ref)
             && matches!(
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -78,12 +82,12 @@ pub fn callee_emits_shared_rust_ref_param(
     // with Borrowed ownership. Plain WJ `string` user formals are handled above (return
     // false): stale multipass `Reference(str)` + Borrowed must not force call-site `&`
     // on owned movers like `Objective::talk_to(npc_name: string)`.
-    if !crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+    if !formal_is_plain_windjammer_string(
         sig, param_idx,
     ) && sig
         .param_types
         .get(param_idx)
-        .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
+        .is_some_and(param_is_rust_str_ref)
         && matches!(
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -116,7 +120,7 @@ pub fn callee_emits_shared_rust_ref_param(
                 Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
                 _ => formal,
             };
-            let is_copy_aggregate = (crate::codegen::rust::type_analysis::is_copy_type(bare)
+            let is_copy_aggregate = (crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
                 || matches!(
                     bare,
                     Type::Custom(name)
@@ -133,7 +137,7 @@ pub fn callee_emits_shared_rust_ref_param(
             }
         }
         if matches!(formal, Type::Custom(_))
-            && !crate::codegen::rust::types::is_windjammer_text_type(formal)
+            && !is_windjammer_text_type(formal)
             && (emits_shared_flag == Some(false)
                 || matches!(
                     sig.param_ownership.get(param_idx),
@@ -148,10 +152,10 @@ pub fn callee_emits_shared_rust_ref_param(
             other => other,
         };
         if matches!(bare, Type::Custom(_))
-            && !crate::codegen::rust::types::is_windjammer_text_type(bare)
+            && !is_windjammer_text_type(bare)
             && emits_shared_flag != Some(true)
         {
-            let is_copy_aggregate = (crate::codegen::rust::type_analysis::is_copy_type(bare)
+            let is_copy_aggregate = (crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
                 || matches!(
                     bare,
                     Type::Custom(name)
@@ -175,7 +179,7 @@ pub fn callee_emits_shared_rust_ref_param(
         }
         // Copy aggregates (`other: Lsn`) always emit owned formals; stale Reference wrap
         // in formal_param_types must not resurrect `&through` at call sites (regression-060).
-        if crate::codegen::rust::type_analysis::is_copy_type(bare)
+        if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
             && !crate::type_classification::is_copy_pass_by_value_formal(bare)
             && sig
                 .emitted_rust_ref_params
@@ -190,7 +194,7 @@ pub fn callee_emits_shared_rust_ref_param(
     sig.param_types.get(param_idx).is_some_and(|t| match t {
         Type::Reference(inner) | Type::MutableReference(inner) => {
             let inner = inner.as_ref();
-            if crate::codegen::rust::types::is_windjammer_text_type(inner) {
+            if is_windjammer_text_type(inner) {
                 return false;
             }
             // Codegen-converged bare formal beats stale `Reference(T)` in `param_types`
@@ -211,7 +215,7 @@ pub fn callee_emits_shared_rust_ref_param(
                 }
             }
             // Copy aggregates emit owned Rust formals — stale Reference(T) must not borrow (regression-060).
-            if (crate::codegen::rust::type_analysis::is_copy_type(inner)
+            if (crate::codegen::rust::type_analysis_pure::is_copy_type(inner)
                 || matches!(
                     inner,
                     Type::Custom(name)
@@ -238,7 +242,7 @@ pub fn callee_emits_shared_rust_ref_param(
                     .copied()
                     != Some(true)
             {
-                let is_copy_aggregate = (crate::codegen::rust::type_analysis::is_copy_type(inner)
+                let is_copy_aggregate = (crate::codegen::rust::type_analysis_pure::is_copy_type(inner)
                     || matches!(
                         inner,
                         Type::Custom(name)
@@ -253,10 +257,8 @@ pub fn callee_emits_shared_rust_ref_param(
                     return false;
                 }
             }
-            if crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                || crate::codegen::rust::string_utilities::param_is_rust_string_ref(t)
-            {
-                if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            if param_is_rust_str_ref(t) || param_is_rust_string_ref(t) {
+                if formal_is_plain_windjammer_string(
                     sig, param_idx,
                 ) {
                     return false;
