@@ -632,7 +632,7 @@ pub(crate) fn stdlib_modules_from_source(source: &str) -> HashSet<String> {
     stdlib_modules
 }
 
-fn find_stdlib_dir_for_api_types() -> Option<PathBuf> {
+pub(crate) fn find_stdlib_dir_for_api_types() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("WINDJAMMER_STDLIB") {
         let pb = PathBuf::from(p);
         if pb.is_dir() {
@@ -645,9 +645,33 @@ fn find_stdlib_dir_for_api_types() -> Option<PathBuf> {
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
-            let dev = parent.parent()?.parent()?.join("std");
-            if dev.is_dir() {
-                return Some(dev);
+            // `target/release/wj` → crate `std/`
+            let from_wj = parent
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|root| root.join("std"));
+            if let Some(dev) = from_wj {
+                if dev.is_dir() {
+                    return Some(dev);
+                }
+            }
+            // `target/release/deps/all-*` (cargo test) → walk up to crate `std/`
+            let mut walk = parent.to_path_buf();
+            for _ in 0..6 {
+                let candidate = walk.join("std");
+                if candidate.is_dir() {
+                    return Some(candidate);
+                }
+                if !walk.pop() {
+                    break;
+                }
+            }
+            // Installed: ~/.cargo/bin/wj → ~/.cargo/wj-stdlib/
+            if let Some(cargo_home) = parent.parent() {
+                let installed = cargo_home.join("wj-stdlib");
+                if installed.is_dir() {
+                    return Some(installed);
+                }
             }
         }
     }

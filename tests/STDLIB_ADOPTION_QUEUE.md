@@ -44,6 +44,7 @@ Definition of done per row:
 |---|---|---|---|
 | `std::yaml` | `bug_std_yaml_module_test` | ✅ | `std/yaml.wj` + `serde_yaml` → JSON text |
 | `std::csv` idiomatic parse | `bug_std_csv_parse_idiomatic_test` | ✅ | Keep WJ `Result<_, string>` surface |
+| `std::csv.write` owned rows (homonym `write`) | `bug_std_csv_write_owned_rows_auto_borrow_test` | ✅ | Package `pub fn write` → `csv.write(rows)` emits `&rows` |
 | `std::db` connect + execute | `bug_std_db_execute_wiring_test` | ✅ | `execute` returns `i64` (WJ `int`) |
 | `std::time` RFC3339 | `bug_std_time_rfc3339_roundtrip_wiring_test` | ✅ | `parse_rfc3339` + `DateTime::to_rfc3339` |
 

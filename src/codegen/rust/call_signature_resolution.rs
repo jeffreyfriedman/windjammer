@@ -1122,6 +1122,25 @@ pub(crate) fn is_external_module_qualified_call(func_name: &str) -> bool {
     func_name.contains("::") && func_name.chars().next().is_some_and(|c| c.is_lowercase())
 }
 
+/// Whether registry refresh for this callee must not consult bare method-name keys.
+///
+/// Type-qualified associated calls (`ServerResponse::error`) and imported runtime-std
+/// module calls (`csv::write`, `strings::join`) are disambiguated by their qualifier.
+/// Bare homonyms in the same file (`pub fn write` forwarding to `csv.write`) must not
+/// poison the qualified callee's borrow contract.
+pub(crate) fn qualified_callee_skips_bare_homonym_lookup(callee_name: &str) -> bool {
+    if is_type_qualified_associated_call(callee_name) {
+        return true;
+    }
+    callee_name.rsplit_once("::").is_some_and(|(module, _)| {
+        module
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase())
+            && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
+    })
+}
+
 pub fn effective_param_ownership_for_arg(
     sig: &FunctionSignature,
     arg_index: usize,

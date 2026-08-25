@@ -240,29 +240,30 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(ref base) = sig {
             let pidx = base.arg_param_index(arg_index);
             let mut upgraded = sig.clone();
-            let type_qualified =
-                crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            let skip_bare_homonym =
+                crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
                     callee_name,
                 );
-            let challengers: Vec<Option<&crate::analyzer::FunctionSignature>> = if type_qualified {
-                vec![
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(callee_name)),
-                    registry.get_signature(callee_name),
-                ]
-            } else {
-                vec![
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(callee_name)),
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(simple)),
-                    registry.get_signature(callee_name),
-                    registry.get_signature(simple),
-                ]
-            };
+            let challengers: Vec<Option<&crate::analyzer::FunctionSignature>> =
+                if skip_bare_homonym {
+                    vec![
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(callee_name)),
+                        registry.get_signature(callee_name),
+                    ]
+                } else {
+                    vec![
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(callee_name)),
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(simple)),
+                        registry.get_signature(callee_name),
+                        registry.get_signature(simple),
+                    ]
+                };
             for challenger in challengers {
                 upgraded =
                     crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
@@ -2664,10 +2665,8 @@ impl<'ast> CodeGenerator<'ast> {
             let skip_recursive_owned = matches!(
                 arg_expr,
                 Expression::Identifier { name, .. }
-                    if self.current_function_name.as_deref().is_some_and(|cur| {
-                        callee_name == cur
-                            || callee_name.rsplit("::").next().is_some_and(|s| s == cur)
-                    }) && self.current_function_params.iter().any(|p| p.name == *name)
+                    if self.callee_is_recursive_self_call(callee_name)
+                        && self.current_function_params.iter().any(|p| p.name == *name)
                         && !self.emitted_rust_ref_formals.contains(name)
                         && !self.str_ref_optimized_params.contains(name.as_str())
             );
@@ -3299,6 +3298,21 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Strip stale `&` on recursive calls into owned formals this function emits.
+    fn callee_is_recursive_self_call(&self, callee_name: &str) -> bool {
+        self.current_function_name.as_deref().is_some_and(|cur| {
+            if callee_name == cur {
+                return true;
+            }
+            // Forwarding wrappers (`pub fn write` → `csv.write`) are not recursion.
+            if crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+                callee_name,
+            ) {
+                return false;
+            }
+            callee_name.rsplit("::").next().is_some_and(|s| s == cur)
+        })
+    }
+
     fn strip_recursive_owned_formal_stale_borrow(
         &self,
         coerced: &mut String,
@@ -3308,9 +3322,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = arg_expr else {
             return;
         };
-        let recursive = self.current_function_name.as_deref().is_some_and(|cur| {
-            callee_name == cur || callee_name.rsplit("::").next().is_some_and(|s| s == cur)
-        });
+        let recursive = self.callee_is_recursive_self_call(callee_name);
         if recursive
             && self.current_function_params.iter().any(|p| p.name == *name)
             && !self.emitted_rust_ref_formals.contains(name)
@@ -4994,18 +5006,22 @@ impl<'ast> CodeGenerator<'ast> {
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
         // Prefer emitted owned contracts over stale Borrowed analyzer/global stubs.
-        // When `local_sig` is present it is authoritative (fn-pointer / call-resolved).
         if let Some(sig) = local_sig {
-            if self.ir_callee_arg_emits_owned_contract(
-                registry,
-                callee_name,
-                arg_index,
-                user_arg_count,
-                Some(sig),
-            ) {
-                return false;
+            if sig.name == callee_name
+                || (!callee_name.contains("::")
+                    && sig.name.rsplit("::").next() == callee_name.rsplit("::").next())
+            {
+                if self.ir_callee_arg_emits_owned_contract(
+                    registry,
+                    callee_name,
+                    arg_index,
+                    user_arg_count,
+                    Some(sig),
+                ) {
+                    return false;
+                }
+                return self.ir_sig_arg_expects_shared_borrow(sig, arg_index);
             }
-            return self.ir_sig_arg_expects_shared_borrow(sig, arg_index);
         }
         if self.ir_callee_arg_emits_owned_contract(
             registry,
@@ -5052,11 +5068,15 @@ impl<'ast> CodeGenerator<'ast> {
             let pidx = sig.arg_param_index(arg_index);
             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
         };
-        // Call-resolved / fn-pointer signatures are authoritative. Registry
-        // homonyms (e.g. another `has_item` with owned `string`) must not force
-        // `.clone()` into borrowed formals.
+        // Call-resolved signatures are authoritative only when they match this callee.
+        // Enclosing-fn homonyms (`pub fn write` while lowering `csv.write`) must not win.
         if let Some(sig) = local_sig {
-            return check(sig);
+            if sig.name == callee_name
+                || (!callee_name.contains("::")
+                    && sig.name.rsplit("::").next() == callee_name.rsplit("::").next())
+            {
+                return check(sig);
+            }
         }
         if registry.get_signature(callee_name).is_some_and(check) {
             return true;
