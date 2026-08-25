@@ -427,9 +427,23 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         }
         if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
             if is_plain_windjammer_string_type(bare) {
+                // Analyzer Borrowed alone must not force `&field` — owned until codegen
+                // confirms shared-ref emission (struct-field → owned `string` formal gate).
+                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    sig, param_idx,
+                ) {
+                    return SafetyType {
+                        base: BaseType::String,
+                        ownership: OwnedType::Ref(Region::fresh(3)),
+                        effects: EffectSet::pure(),
+                        taint: TaintStatus::Clean,
+                        const_eval: ConstEval::Runtime,
+                        exec_mode: None,
+                    };
+                }
                 return SafetyType {
                     base: BaseType::String,
-                    ownership: OwnedType::Ref(Region::fresh(3)),
+                    ownership: OwnedType::Owned,
                     effects: EffectSet::pure(),
                     taint: TaintStatus::Clean,
                     const_eval: ConstEval::Runtime,
@@ -1131,6 +1145,34 @@ mod tests {
             matches!(expected.ownership, OwnedType::Owned),
             "plain string formal must stay owned at call site until &str is emitted"
         );
+    }
+
+    #[test]
+    fn analyzer_borrowed_bare_string_formal_stays_owned_without_emission() {
+        // escape_html(s: string) with .replace keeps owned String; analyzer may still
+        // mark Borrowed — call sites must move/clone fields, not `&link.href`.
+        let sig = FunctionSignature {
+            name: "escape_html".into(),
+            formal_param_types: vec![Type::String],
+            param_types: vec![Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 0);
+        assert!(
+            matches!(expected.ownership, OwnedType::Owned),
+            "Borrowed plain string without emission must stay Owned, got {:?}",
+            expected.ownership
+        );
+        assert!(call_site_expects_owned_pass(&sig, 0));
+        assert!(!call_site_needs_shared_ref_at_emit(&sig, 0));
     }
 
     #[test]

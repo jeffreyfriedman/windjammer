@@ -519,7 +519,8 @@ impl<'ast> Analyzer<'ast> {
         true
     }
 
-    /// String formals moved into a composite or returned must stay owned `String`.
+    /// String formals moved into a composite, returned, or consumed as string-concat LHS
+    /// must stay owned `String` (not demoted to `&str`).
     pub(crate) fn string_param_consumed_owned(
         &self,
         name: &str,
@@ -529,6 +530,9 @@ impl<'ast> Analyzer<'ast> {
         self.is_stored(name, statements, registry)
             || self.is_returned(name, statements)
             || self.param_is_consumed_into_return(name, statements)
+            // `status + ""` / string `+` consumes the LHS as owned (codegen may lower to
+            // `format!`, which accepts `&str` — demotion must still be blocked).
+            || self.param_is_string_concat_lhs(name, statements)
     }
 
     fn is_only_stored_via_bare_struct_literal_field(

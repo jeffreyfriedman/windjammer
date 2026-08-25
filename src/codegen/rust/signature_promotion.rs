@@ -1087,8 +1087,14 @@ fn param_type_is_borrowed_text(sig: &FunctionSignature, param_idx: usize) -> boo
     sig.formal_param_type(param_idx)
         .or_else(|| sig.param_types.get(param_idx))
         .is_some_and(|t| {
+            // Only actual Rust shared-text refs — bare WJ `string`/`String` is owned.
             crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                || crate::codegen::rust::types::is_windjammer_text_type(t)
+                || crate::codegen::rust::string_utilities::param_is_rust_string_ref(t)
+                || matches!(
+                    t,
+                    Type::Reference(inner)
+                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                )
         })
 }
 

@@ -293,17 +293,48 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_arg_float_target = self.assignment_float_target_type.clone();
-                if let Some(sig) = method_signature.as_ref() {
-                    let pidx = sig.arg_param_index(i);
-                    let param_ty = sig
+                let prev_call_arg_expected = self.call_arg_expected_type.clone();
+                // Prefer specialized call-site signature (e.g. Vec<(String,String)>::push)
+                // so nested tuple slots get owned-text coercion.
+                if let Some(sig) = sig_for_effective {
+                    let mut specialized = sig.clone();
+                    if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                        receiver_type_name,
+                        receiver_type_inferred.as_ref(),
+                        self.current_function_return_type.as_ref(),
+                    ) {
+                        crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                            &mut specialized,
+                            &recv_ty,
+                        );
+                    }
+                    let pidx = specialized.arg_param_index(i);
+                    let mut param_ty = specialized
                         .param_type_for_arg(i)
-                        .or_else(|| sig.formal_param_type(pidx))
-                        .or_else(|| sig.param_types.get(pidx));
-                    if param_ty.is_some_and(
+                        .or_else(|| specialized.formal_param_type(pidx))
+                        .or_else(|| specialized.param_types.get(pidx))
+                        .cloned();
+                    // Unspecialized generic store formal (`T`) → concrete collection element.
+                    if param_ty
+                        .as_ref()
+                        .is_some_and(|t| matches!(t, Type::Custom(n) if n == "T" || n == "E" || n == "V"))
+                    {
+                        if let Some(elem) = receiver_type_inferred
+                            .as_ref()
+                            .and_then(|rty| Self::peeled_collection_element_type(rty))
+                            .cloned()
+                        {
+                            param_ty = Some(elem);
+                        }
+                    }
+                    if param_ty.as_ref().is_some_and(
                         crate::codegen::rust::type_classification_utilities::is_float_type,
                     ) && self.assignment_float_target_type.is_none()
                     {
-                        self.assignment_float_target_type = param_ty.cloned();
+                        self.assignment_float_target_type = param_ty.clone();
+                    }
+                    if let Some(ty) = param_ty {
+                        self.call_arg_expected_type = Some(ty);
                     }
                 }
 
@@ -313,6 +344,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.restore_arg_gen_scope(scope);
                 self.suppress_borrowed_clone = prev_suppress;
                 self.assignment_float_target_type = prev_arg_float_target;
+                self.call_arg_expected_type = prev_call_arg_expected;
                 arg_str = self
                     .peel_copy_ref_match_binding_for_value(arg_to_generate, &arg_str);
                 if let Some(name) =
