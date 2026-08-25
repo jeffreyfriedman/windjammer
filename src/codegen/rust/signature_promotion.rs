@@ -863,7 +863,7 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         // Bare WJ container formals (`Vec`, maps) emit owned Rust params — stale
         // multipass Borrowed must not force `&local` at call sites (wdb-layers CSR).
         if bare_formal_is_vec_or_map(sig, param_idx)
-            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
             )
         {
@@ -1258,7 +1258,7 @@ pub(crate) fn wj_registry_bare_owned_formal_slot(
     sig: &FunctionSignature,
     param_idx: usize,
 ) -> bool {
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
     {
         return false;
     }
@@ -1307,7 +1307,7 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
 
 /// Bare WJ user `Custom` formals that emit owned Rust params (not `&T` / `&str`).
 pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx: usize) -> bool {
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, param_idx)
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
     {
         return false;
     }
@@ -1347,14 +1347,14 @@ pub(crate) fn prefer_shared_ref_signature(
             && !signature_is_wj_std_stub_or_runtime_qualified(pref)
             && sig_simple_name(&pref.name) == sig_simple_name(&challenger.name)
             && pref.name != challenger.name
-            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 challenger, param_idx,
             )
         {
             return Some(pref.clone());
         }
     }
-    if !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+    if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
         challenger, param_idx,
     ) {
         return preferred;
@@ -1362,7 +1362,7 @@ pub(crate) fn prefer_shared_ref_signature(
     let Some(pref) = preferred else {
         return Some(challenger.clone());
     };
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(&pref, param_idx)
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&pref, param_idx)
     {
         return Some(pref);
     }
@@ -1391,7 +1391,7 @@ pub(crate) fn prefer_shared_ref_signature(
         return Some(pref);
     }
     if param_is_stale_engine_owned_stub(&pref, param_idx)
-        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             challenger, param_idx,
         )
     {
@@ -1837,7 +1837,7 @@ mod prefer_shared_runtime_tests {
         let merged =
             prefer_shared_ref_signature(Some(wj), Some(runtime), sql_idx).expect("prefer_shared");
         assert!(
-            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 &merged, sql_idx
             ),
             "runtime AsRef/&str must win over WJ owned sql; got {:?}",

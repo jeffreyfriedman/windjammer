@@ -138,15 +138,17 @@ impl MultiFileTest {
     /// **Scope:** Supports **flat** `build/*.rs` layouts (typical for `src/*.wj`-only projects).
     /// Nested module trees are not wired automatically; use [`Self::compile`] and string asserts, or
     /// extend this helper.
-    pub fn assert_compiles_without_error(&self) {
+    ///
+    /// Returns `Err` with stderr on failure (prefer over panic for `?`-style gate tests).
+    pub fn cargo_check(&self) -> Result<(), String> {
         self.compile()
-            .unwrap_or_else(|e| panic!("compile failed before cargo check: {}", e));
+            .map_err(|e| format!("compile failed before cargo check: {e}"))?;
 
-        write_flat_lib_rs(&self.build_dir).expect("write lib.rs");
-        write_verify_cargo_toml(&self.build_dir).expect("write Cargo.toml for cargo check");
+        write_flat_lib_rs(&self.build_dir).map_err(|e| format!("write lib.rs: {e}"))?;
+        write_verify_cargo_toml(&self.build_dir)
+            .map_err(|e| format!("write Cargo.toml for cargo check: {e}"))?;
 
         let _guard = CARGO_CHECK_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-
         let shared_target = shared_cargo_target_dir();
 
         let mut child = Command::new("cargo")
@@ -156,7 +158,7 @@ impl MultiFileTest {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .unwrap_or_else(|e| panic!("failed to spawn cargo check: {}", e));
+            .map_err(|e| format!("failed to spawn cargo check: {e}"))?;
 
         let deadline = Instant::now() + CARGO_TIMEOUT;
         loop {
@@ -166,27 +168,38 @@ impl MultiFileTest {
                     if Instant::now() >= deadline {
                         let _ = child.kill();
                         let _ = child.wait();
-                        panic!(
+                        return Err(format!(
                             "cargo check TIMED OUT after {}s in {}",
                             CARGO_TIMEOUT.as_secs(),
                             self.build_dir.display()
-                        );
+                        ));
                     }
                     std::thread::sleep(Duration::from_millis(250));
                 }
-                Err(e) => panic!("error waiting for cargo check: {}", e),
+                Err(e) => return Err(format!("error waiting for cargo check: {e}")),
             }
         }
 
-        let output = child.wait_with_output()
-            .unwrap_or_else(|e| panic!("failed to collect cargo check output: {}", e));
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("failed to collect cargo check output: {e}"))?;
 
-        assert!(
-            output.status.success(),
-            "cargo check failed in {}.\nstderr:\n{}",
-            self.build_dir.display(),
-            String::from_utf8_lossy(&output.stderr),
-        );
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "cargo check failed in {}.\nstderr:\n{}",
+                self.build_dir.display(),
+                String::from_utf8_lossy(&output.stderr),
+            ))
+        }
+    }
+
+    /// Compile then `cargo check` the generated Rust (panics on failure).
+    /// Prefer [`Self::cargo_check`] when the test wants a `Result`.
+    pub fn assert_compiles_without_error(&self) {
+        self.cargo_check()
+            .unwrap_or_else(|e| panic!("{e}"));
     }
 }
 

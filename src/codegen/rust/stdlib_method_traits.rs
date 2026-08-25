@@ -933,7 +933,7 @@ fn runtime_std_module_arg_needs_rust_borrow(
         return false;
     }
     // Explicit scanned/emitted shared text / AsRef contract.
-    if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
         && sig.param_types.get(pidx).is_some_and(|t| {
             crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                 || crate::codegen::rust::types::is_windjammer_text_type(match t {
@@ -1155,13 +1155,13 @@ pub fn runtime_or_str_ref_formal_skips_literal_owned(
         .param_types
         .get(pidx)
         .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_owned_string_type(t))
-        && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+        && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
     {
         return false;
     }
     runtime_wj_owned_rust_borrowed_param(sig, arg_index)
         || method_arg_expects_rust_str_ref_from_sig(sig, arg_index)
-        || (crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(sig, pidx)
+        || (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
             && !sig
                 .param_types
                 .get(pidx)

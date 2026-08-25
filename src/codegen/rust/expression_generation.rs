@@ -531,7 +531,7 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str;
         }
         let callee_confirmed_shared_ref = method_signature.as_ref().is_some_and(|sig| {
-            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, sig_param_idx,
             )
         });

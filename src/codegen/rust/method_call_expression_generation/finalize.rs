@@ -248,7 +248,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 sig.param_ownership.get(sig_param_idx),
                                 Some(OwnershipMode::Owned)
                             )
-                            && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 &sig, sig_param_idx,
                             )
                         {
@@ -257,7 +257,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if sig.formal_param_type(sig_param_idx).is_some_and(|t| {
                             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                                 && crate::codegen::rust::types::is_windjammer_text_type(t)
-                        }) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        }) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                             &sig, sig_param_idx,
                         ) {
                             return;
@@ -475,13 +475,13 @@ impl<'ast> CodeGenerator<'ast> {
                                     Some(crate::analyzer::OwnershipMode::MutBorrowed)
                                         | Some(crate::analyzer::OwnershipMode::Borrowed)
                                 )
-                                && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                     &sig, sig_param_idx,
                                 )
                             {
                                 arg_str.trim_start_matches('&').to_string()
                             } else if !arg_str.starts_with('&')
-                                && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                     &sig, sig_param_idx,
                                 )
                             {
@@ -601,7 +601,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         // owned-emitted formals from stale Reference(T).
                                         if !owned_contract
                                             && !caller_copy_aggregate
-                                            && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                                 &reg_sig, pidx,
                                             )
                                         {
@@ -721,7 +721,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         receiver_type_name.as_deref(),
                                     ),
                                     OwnershipMode::Borrowed,
-                                ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                ) || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                     &sig, pidx,
                                 ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
                                     &sig, pidx,
@@ -746,7 +746,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                         &gsig, gpidx,
                                                     ),
                                                     OwnershipMode::Borrowed,
-                                                ) || crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                                ) || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                                     &gsig, gpidx,
                                                 );
                                             }
@@ -779,7 +779,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     if let Some((_, arg_expr)) = arguments.get(i) {
                         let callee_wants_shared =
-                            crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 &sig, sig_param_idx,
                             );
                         let callee_wants_owned = callee_arg_emits_owned;
@@ -1189,7 +1189,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .get_signature_with_global(&qualified)
                     .map(|sig| {
                         let pidx = sig.arg_param_index(i);
-                        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                             sig, pidx,
                         ) || sig
                             .param_types
@@ -1341,7 +1341,7 @@ impl<'ast> CodeGenerator<'ast> {
                             )
                             && !sig_for_format.is_some_and(|sig| {
                                 let pi = sig.arg_param_index(arg_idx);
-                                crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                     sig, pi,
                                 )
                             })

@@ -7,12 +7,7 @@ use crate::parser::Type;
 /// handles legacy metadata from pre-normalization builds.
 #[inline]
 pub fn is_windjammer_text_type(t: &Type) -> bool {
-    matches!(t, Type::String)
-        || matches!(
-            t,
-            Type::Custom(name) if matches!(name.as_str(), "string" | "String" | "str")
-        )
-        || matches!(t, Type::Reference(inner) if is_windjammer_text_type(inner))
+    crate::ir::formal_predicates::is_windjammer_text_type(t)
 }
 
 /// In owned container slots (`Vec<string>`, `Option<string>`, `HashMap` values, etc.),

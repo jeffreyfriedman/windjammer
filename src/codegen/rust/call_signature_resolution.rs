@@ -776,10 +776,7 @@ pub(crate) fn formal_type_honors_converged_borrow(formal_ty: &Type) -> bool {
 }
 
 pub(crate) fn formal_is_plain_windjammer_string(sig: &FunctionSignature, param_idx: usize) -> bool {
-    sig.formal_param_type(param_idx).is_some_and(|t| {
-        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            && crate::codegen::rust::types::is_windjammer_text_type(t)
-    })
+    crate::ir::formal_predicates::formal_is_plain_windjammer_string(sig, param_idx)
 }
 
 /// Like [`formal_is_plain_windjammer_string`] but for a call-site argument index (accounts for `self`).
@@ -790,15 +787,7 @@ pub(crate) fn formal_is_plain_windjammer_string_for_call_arg(
     sig: &FunctionSignature,
     arg_index: usize,
 ) -> bool {
-    let pidx = sig.arg_param_index(arg_index);
-    if formal_is_plain_windjammer_string(sig, pidx) {
-        return true;
-    }
-    sig.has_self_receiver
-        && sig.formal_param_types.get(arg_index).is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && crate::codegen::rust::types::is_windjammer_text_type(t)
-        })
+    crate::ir::formal_predicates::formal_is_plain_windjammer_string_for_call_arg(sig, arg_index)
 }
 
 /// Determine effective ownership for a parameter at a call site.
@@ -1032,7 +1021,7 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         {
             return OwnershipMode::Owned;
         }
-        if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         ) {
             return OwnershipMode::Borrowed;
@@ -1199,7 +1188,7 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
     }
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
-    ) && !crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+    ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
         sig, param_idx,
     ) {
         return false;
@@ -1210,7 +1199,7 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
         .param_types
         .get(param_idx)
         .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-        && crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         )
     {

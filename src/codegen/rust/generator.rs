@@ -1155,7 +1155,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Attach solver-resolved IR functions for this file (multipass library builds).
     pub fn set_ir_functions(&mut self, functions: Vec<crate::ir::node::IrFunction>) {
-        self.ir_module_functions = functions;
+        self.ir_module_functions = functions.clone();
+        if let Some(ref mut module) = self.ir_module {
+            module.functions = functions;
+        }
     }
 
     /// Select the IrFunction matching the current function being generated.
@@ -1468,7 +1471,7 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
             return false;
         }
-        crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(&sig, pidx)
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx)
     }
 
     pub(crate) fn find_signature_by_name_and_arg_count_with_global(
@@ -2713,7 +2716,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let (Some(sig), Some(arg_idx)) = (callee_sig, arg_index) {
             let pidx = sig.arg_param_index(arg_idx);
-            if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, pidx,
             ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
                 || crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
@@ -2951,7 +2954,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                             {
                                 let pidx = sig.arg_param_index(i);
-                                if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                     sig, pidx,
                                 ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
                                     sig, pidx,
@@ -2989,7 +2992,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                             {
                                 let pidx = sig.arg_param_index(i);
-                                if crate::codegen::rust::call_site_borrow::callee_emits_shared_rust_ref_param(
+                                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                     &sig, pidx,
                                 ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(
                                     &sig, pidx,
