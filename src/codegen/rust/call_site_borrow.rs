@@ -234,14 +234,8 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
         {
             return true;
         }
-        if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-            sig, pidx,
-        ) && matches!(
-            crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, pidx),
-            OwnershipMode::Borrowed
-        ) {
-            return false;
-        }
+        // Analyzer Borrowed on plain WJ `string` is not enough to keep `&` — emission
+        // contract decides (see `plain_string_formal_passes_owned_at_call_site`).
         plain_string_formal_passes_owned_at_call_site(sig, pidx)
     };
     // Any codegen-confirmed shared-ref formal must keep the borrow prefix.

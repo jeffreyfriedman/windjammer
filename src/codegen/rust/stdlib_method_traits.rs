@@ -966,6 +966,20 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return false;
         }
+        // Codegen recorded owned `String` (emitted false) — never consult stale
+        // registry/stdlib Borrowed baselines for user free-fns (`escape_html`).
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(false)
+            && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                sig, pidx,
+            )
+        {
+            return false;
+        }
     }
     if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index)) {
         return true;
@@ -1408,6 +1422,23 @@ mod pattern_registry_tests {
         assert!(
             !runtime_std_param_needs_auto_borrow_resolved(&reg, "build_html", Some(&sig), 0),
             "owned String emission must peel `&name`, not keep AsRef-style borrow"
+        );
+        // Owned + emitted false (escape_html after .replace) — same contract.
+        let mut owned = sig.clone();
+        owned.name = "escape_html".into();
+        owned.param_ownership = vec![OwnershipMode::Owned, OwnershipMode::Owned];
+        let mut stale = owned.clone();
+        stale.param_ownership = vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed];
+        stale.emitted_rust_ref_params = None;
+        let mut mixed = SignatureRegistry::empty();
+        mixed.add_function(owned.name.clone(), stale);
+        assert!(
+            !runtime_std_param_needs_auto_borrow_resolved(&mixed, "escape_html", Some(&owned), 0),
+            "defining-module owned emission must beat stale Borrowed registry stub"
+        );
+        assert!(
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&owned, 0),
+            "Owned String + emitted false must be owned arg contract"
         );
     }
 }

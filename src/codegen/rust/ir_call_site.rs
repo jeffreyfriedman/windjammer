@@ -2616,12 +2616,6 @@ impl<'ast> CodeGenerator<'ast> {
             &sig,
             registry,
         );
-        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
-            && callee_name.contains("graph_vertex_i64_get")
-            && arg_index == 0
-        {
-            eprintln!("WJ_DEBUG_COLLISION_BORROW after_enforce_ir coerced={coerced}");
-        }
 
         // Spurious `&mut` on owned Copy-aggregate formals (regression-060).
         self.peel_spurious_mut_borrow_on_owned_copy_aggregate(
@@ -2654,14 +2648,6 @@ impl<'ast> CodeGenerator<'ast> {
         {
             *coerced =
                 crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
-        }
-        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
-            && callee_name.contains("graph_vertex_i64_get")
-            && arg_index == 0
-        {
-            eprintln!(
-                "WJ_DEBUG_COLLISION_BORROW after_skip_stale skip={skip_stale_borrow} coerced={coerced}"
-            );
         }
 
         // Shared-borrow reapply when IR used a stale stub and the refreshed sig borrows.
@@ -2776,12 +2762,6 @@ impl<'ast> CodeGenerator<'ast> {
             registry,
             wants_mut,
         );
-        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
-            && callee_name.contains("graph_vertex_i64_get")
-            && arg_index == 0
-        {
-            eprintln!("WJ_DEBUG_COLLISION_BORROW after_multi_peel coerced={coerced}");
-        }
 
         // Recursive same-fn call into owned formal emitted by this function.
         self.strip_recursive_owned_formal_stale_borrow(coerced, arg_expr, callee_name);
@@ -3179,12 +3159,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Runtime-std WJ-owned / Rust-borrowed slots (`json::get` `&Value`) — signature
         // registry, never module-name lists.
-        if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-            registry,
-            callee_name,
-            Some(&text_sig),
-            arg_index,
-        ) && !coerced.starts_with('&')
+        let runtime_std_borrow =
+            crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                registry,
+                callee_name,
+                Some(&text_sig),
+                arg_index,
+            );
+        if runtime_std_borrow
+            && !coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
             && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
             && matches!(
@@ -3313,14 +3296,6 @@ impl<'ast> CodeGenerator<'ast> {
             );
         }
 
-        if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
-            && callee_name.contains("graph_vertex_i64_get")
-            && arg_index == 0
-        {
-            eprintln!(
-                "WJ_DEBUG_COLLISION_BORROW reconcile_end callee={callee_name} coerced={coerced}"
-            );
-        }
     }
 
     /// Strip stale `&` on recursive calls into owned formals this function emits.
@@ -3583,12 +3558,12 @@ impl<'ast> CodeGenerator<'ast> {
         // (dogfood `policy: Policy`). Never peel `&mut` when any candidate expects mut-borrow.
         if peel_owned && !any_expects_mut && !confirmed_shared_ref {
             if coerced.starts_with("&mut ") {
-                if any_emitted_owned {
+                if any_emitted_owned || any_expects_owned {
                     *coerced =
                         crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                             .to_string();
                 }
-            } else if coerced.starts_with('&') && any_emitted_owned {
+            } else if coerced.starts_with('&') && (any_emitted_owned || any_expects_owned) {
                 *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
                     .to_string();
             }
@@ -4413,18 +4388,29 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, arg_index,
                     );
-                let callee_borrows_text = param_ty.is_some_and(|t| {
-                    crate::codegen::rust::string_utilities::param_is_rust_string_ref(t)
-                        || crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                }) || (matches!(
-                    effective_ownership,
-                    crate::analyzer::OwnershipMode::Borrowed
-                        | crate::analyzer::OwnershipMode::MutBorrowed
-                ) && (param_ty
-                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
-                    || inferred_type
-                        .as_ref()
-                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)));
+                // Plain WJ `string` stays owned until emission confirms `&str` —
+                // analyzer Borrowed alone must not prefix `&field`.
+                let owned_plain_string =
+                    crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
+                        sig, idx,
+                    ) || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, idx);
+                let callee_borrows_text = !owned_plain_string
+                    && (param_ty.is_some_and(|t| {
+                        crate::codegen::rust::string_utilities::param_is_rust_string_ref(t)
+                            || crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                    }) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                        sig, idx,
+                    ) || (matches!(
+                        effective_ownership,
+                        crate::analyzer::OwnershipMode::Borrowed
+                            | crate::analyzer::OwnershipMode::MutBorrowed
+                    ) && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        sig, idx,
+                    ) && (param_ty
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                        || inferred_type
+                            .as_ref()
+                            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type))));
                 if callee_borrows_text
                     && matches!(
                         arg_expr,
