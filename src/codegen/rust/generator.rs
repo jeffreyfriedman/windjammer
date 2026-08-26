@@ -2411,6 +2411,165 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// True when `stmt` passes `param_name` to a callee formal that emits owned (not `&T`).
+    pub(in crate::codegen::rust) fn statement_passes_param_to_owned_formal_callee(
+        &self,
+        stmt: &crate::parser::Statement,
+        param_name: &str,
+    ) -> bool {
+        use crate::parser::{Expression, Statement};
+        let check_expr = |expr: &Expression| -> bool {
+            let Expression::Call {
+                function,
+                arguments,
+                ..
+            } = expr
+            else {
+                return false;
+            };
+            let Some(callee_name) = (match &**function {
+                Expression::Identifier { name, .. } => Some(name.as_str()),
+                _ => None,
+            }) else {
+                return false;
+            };
+            for (i, (_, arg)) in arguments.iter().enumerate() {
+                if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    && self.callee_arg_emits_owned_contract(callee_name, i)
+                {
+                    return true;
+                }
+            }
+            false
+        };
+        match stmt {
+            Statement::Let { value, .. } => check_expr(value),
+            Statement::Expression { expr, .. } => check_expr(expr),
+            Statement::Assignment { value, .. } => check_expr(value),
+            _ => false,
+        }
+    }
+
+    /// Signature-driven: callee arg emits owned in Rust (global registry refresh wins).
+    pub(in crate::codegen::rust) fn callee_arg_emits_owned_contract(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        self.ir_callee_arg_emits_owned_contract(
+            &self.signature_registry,
+            callee_name,
+            arg_index,
+            None,
+            None,
+        ) || self
+            .global_signature_registry
+            .as_ref()
+            .is_some_and(|g| {
+                self.ir_callee_arg_emits_owned_contract(g, callee_name, arg_index, None, None)
+            })
+    }
+
+    /// True when an owned caller param is passed to an owned callee formal and used again later.
+    pub(in crate::codegen::rust) fn should_auto_clone_reused_owned_param_at_call(
+        &self,
+        param_name: &str,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        if self.binding_is_copy_pass_by_value_scalar(param_name)
+            || !self.caller_owned_non_copy_formal(param_name)
+            || !self.callee_arg_emits_owned_contract(callee_name, arg_index)
+        {
+            return false;
+        }
+        self.param_has_later_owned_formal_pass(param_name, self.current_statement_idx)
+    }
+
+    /// Append `.clone()` for signature-driven multi-use owned params (no analyzer site required).
+    pub(in crate::codegen::rust) fn append_clone_for_owned_non_copy_binding(
+        &self,
+        name: &str,
+        arg_str: &str,
+    ) -> String {
+        if arg_str.ends_with(".clone()")
+            || arg_str.ends_with(".to_string()")
+            || arg_str.contains("std::mem::take(")
+        {
+            return arg_str.to_string();
+        }
+        if self.binding_is_copy_pass_by_value_scalar(name)
+            || self
+                .current_function_params
+                .iter()
+                .find(|p| p.name == name)
+                .is_some_and(|p| self.is_type_copy(&p.type_))
+        {
+            return arg_str.to_string();
+        }
+        if arg_str.contains(" as ") && !arg_str.starts_with('(') {
+            format!("({}).clone()", arg_str)
+        } else {
+            format!("{arg_str}.clone()")
+        }
+    }
+
+    /// Owned caller param → owned callee formal, used again at a later owned call site.
+    pub(in crate::codegen::rust) fn emit_signature_driven_reused_owned_param_clone(
+        &self,
+        name: &str,
+        arg_str: &str,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> String {
+        if self.should_auto_clone_reused_owned_param_at_call(name, callee_name, arg_index) {
+            self.append_clone_for_owned_non_copy_binding(name, arg_str)
+        } else {
+            arg_str.to_string()
+        }
+    }
+
+    /// True when an owned caller param will be passed to another owned formal later in this fn.
+    pub(in crate::codegen::rust) fn caller_param_has_later_owned_formal_pass(
+        &self,
+        param_name: &str,
+    ) -> bool {
+        self.caller_owned_non_copy_formal(param_name)
+            && !self.binding_is_copy_pass_by_value_scalar(param_name)
+            && self.param_has_later_owned_formal_pass(param_name, self.current_statement_idx)
+    }
+
+    /// Auto-clone / signature-driven reuse must survive post-IR borrow reapply and peel passes.
+    pub(in crate::codegen::rust) fn must_preserve_auto_clone_for_reuse(
+        &self,
+        arg_expr: &Expression<'ast>,
+    ) -> bool {
+        match arg_expr {
+            Expression::Identifier { name, .. } => {
+                self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                    a.needs_clone(name, self.current_statement_idx).is_some()
+                }) || self.caller_param_has_later_owned_formal_pass(name)
+            }
+            _ => false,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn param_has_later_owned_formal_pass(
+        &self,
+        param_name: &str,
+        from_stmt_idx: usize,
+    ) -> bool {
+        for (idx, stmt) in self.current_function_body.iter().enumerate() {
+            if idx <= from_stmt_idx {
+                continue;
+            }
+            if self.statement_passes_param_to_owned_formal_callee(stmt, param_name) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Owned non-Copy outer formals pass by move at call sites; Rust auto-borrows for `&T` callees
     /// unless the param is a forward-ref (used in `if` conditions / mixed forwarder branches).
     pub(crate) fn callee_call_uses_rust_auto_borrow_for_owned_struct(
