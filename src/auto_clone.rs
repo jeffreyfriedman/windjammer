@@ -554,6 +554,22 @@ impl AutoCloneAnalysis {
                 arguments,
                 ..
             } => {
+                // Explicit `.clone()` masks bare binding moves in reuse analysis;
+                // still register a move so preserve_for_reuse / auto-clone fire (WDB-108).
+                if crate::type_classification::is_language_level_explicit_clone(method)
+                    && arguments.is_empty()
+                    && matches!(&**object, Expression::Identifier { .. })
+                {
+                    Self::collect_usages_from_expression(
+                        object,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                        registry,
+                    );
+                    return;
+                }
                 if let Some(path) = Self::extract_expression_path(expr) {
                     map.entry(path).or_default().push(Usage {
                         statement_idx: idx,
@@ -1945,6 +1961,191 @@ mod tests {
         assert!(
             analysis.needs_clone("value", 0).is_some(),
             "seed_write without registry must still clone; sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn test_multi_use_owned_string_param_needs_clone_on_first_call() {
+        let func = FunctionDecl {
+            name: "render_panel".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![
+                Parameter {
+                    name: "title".to_string(),
+                    pattern: None,
+                    type_: Type::String,
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+                Parameter {
+                    name: "blurb".to_string(),
+                    pattern: None,
+                    type_: Type::String,
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+            ],
+            return_type: Some(Type::String),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("crumbs".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "crumbs_for".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "title".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("title_e".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "escape_html".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "title".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("title", 0).is_some(),
+            "multi-use owned string param must clone at first move; sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn test_multi_use_owned_string_param_with_global_registry_still_needs_clone() {
+        let mut registry = crate::analyzer::SignatureRegistry::new();
+        for name in ["escape_html", "html::escape_html", "crumbs_for", "html::crumbs_for"] {
+            registry.add_function(
+                name.to_string(),
+                crate::analyzer::FunctionSignature {
+                    name: name.rsplit("::").next().unwrap().to_string(),
+                    param_types: vec![Type::Reference(Box::new(Type::String))],
+                    formal_param_types: vec![Type::String],
+                    param_ownership: vec![crate::analyzer::OwnershipMode::Borrowed],
+                    return_type: Some(Type::String),
+                    return_ownership: crate::analyzer::OwnershipMode::Owned,
+                    has_self_receiver: false,
+                    is_extern: false,
+                    emitted_rust_ref_params: Some(vec![true]),
+                    string_ref_string_formal_params: None,
+                    field_extract_params: None,
+                    forwarding_borrow_params: None,
+                },
+            );
+        }
+
+        let func = FunctionDecl {
+            name: "render_panel".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "title".to_string(),
+                pattern: None,
+                type_: Type::String,
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: Some(Type::String),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("crumbs".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "crumbs_for".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "title".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("title_e".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "escape_html".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "title".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function_with_registry(&func, Some(&registry));
+        assert!(
+            analysis.needs_clone("title", 0).is_some(),
+            "stale borrowed callee metadata must not suppress auto-clone; sites={:?}",
             analysis.clone_sites
         );
     }

@@ -1093,17 +1093,19 @@ impl<'ast> CodeGenerator<'ast> {
             && arguments.is_empty()
         {
             let preserve_in_loop = self.loop_body_depth > 0;
-            let preserve_for_reuse = matches!(object, Expression::Identifier { name, .. } if {
-                self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                    a.needs_clone(name, self.current_statement_idx).is_some()
-                        || a.needs_clone_anywhere(name)
-                })
-            });
-            // Call-arg sites: analysis often misses reuse because the explicit clone
-            // itself masks the first move; keep the user's clone (WDB-106).
-            let preserve_call_arg = self.in_call_argument_generation
-                && matches!(object, Expression::Identifier { .. });
-            if preserve_in_loop || preserve_for_reuse || preserve_call_arg {
+            let preserve_for_reuse =
+                crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(object)
+                    .is_some_and(|name| {
+                        self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone(name, self.current_statement_idx).is_some()
+                                || a.needs_clone_anywhere(name)
+                        })
+                    });
+            // Call-arg sites: user wrote `.clone()` in an argument — always preserve
+            // (WDB-106/108). Reuse analysis often misses the first move because the
+            // explicit clone masks it; IR/reconcile must not strip afterward.
+            let preserve_at_call_site = self.in_call_argument_generation;
+            if preserve_in_loop || preserve_for_reuse || preserve_at_call_site {
                 if let Expression::Identifier { name, .. } = object {
                     let is_borrowed_string = self.inferred_borrowed_params.contains(name)
                         && self.current_function_params.iter().any(|p| {

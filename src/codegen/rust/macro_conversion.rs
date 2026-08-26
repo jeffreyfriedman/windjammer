@@ -63,6 +63,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Rust `assert!` requires a string literal format template; variable messages need `"{}", msg`.
+        if func_name == "assert" {
+            return Some(self.emit_assert_macro(arguments));
+        }
+
         let args: Vec<String> = if func_name == "format" && !arguments.is_empty() {
             let mut out = Vec::with_capacity(arguments.len());
             out.push(self.format_macro_template_arg(arguments[0].1));
@@ -100,6 +105,37 @@ impl<'ast> CodeGenerator<'ast> {
                 .collect()
         };
         Some(format!("{}!({})", func_name, args.join(", ")))
+    }
+
+    /// Lower Windjammer `assert(cond)` / `assert(cond, msg)` to Rust `assert!`.
+    pub(in crate::codegen::rust) fn emit_assert_macro(
+        &mut self,
+        arguments: &[(Option<String>, &Expression<'ast>)],
+    ) -> String {
+        use crate::codegen::rust::call_site_borrow::expression_is_string_literal;
+
+        let cond = self.generate_expression(arguments[0].1);
+        if arguments.len() == 1 {
+            return format!("assert!({})", cond);
+        }
+
+        let msg_expr = arguments[1].1;
+        if expression_is_string_literal(msg_expr) {
+            let msg = self.format_macro_template_arg(msg_expr);
+            let rest: Vec<String> = arguments
+                .iter()
+                .skip(2)
+                .map(|(_, arg)| self.generate_expression(arg))
+                .collect();
+            if rest.is_empty() {
+                format!("assert!({}, {})", cond, msg)
+            } else {
+                format!("assert!({}, {}, {})", cond, msg, rest.join(", "))
+            }
+        } else {
+            let msg = self.generate_expression(msg_expr);
+            format!("assert!({}, \"{{}}\", {})", cond, msg)
+        }
     }
 
     /// Try to qualify test assertion runtime functions
