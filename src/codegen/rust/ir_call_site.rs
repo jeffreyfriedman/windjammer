@@ -1086,9 +1086,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // `.clone()` already produces an owned value — never prefix shared `&`.
-        // `String` deref-coerces into `&str` formals (`foo(x.clone())`).
-        if prepared_arg.ends_with(".clone()") && matches!(kind, CoercionKind::Borrow) {
+        // Demoted `&str` formals: strip stale `.clone()` and borrow the binding.
+        // Keeping Identity here leaves `json.clone()` into `&str` (E0308 / wasteful).
+        if prepared_arg.ends_with(".clone()")
+            && matches!(kind, CoercionKind::Borrow)
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
+        {
+            prepared_arg = prepared_arg.trim_end_matches(".clone()").to_string();
+        } else if prepared_arg.ends_with(".clone()") && matches!(kind, CoercionKind::Borrow) {
+            // Other shared-ref targets: `.clone()` is already owned — never prefix `&`.
             kind = CoercionKind::Identity;
         }
         if matches!(kind, CoercionKind::Clone) {
@@ -2155,9 +2161,12 @@ impl<'ast> CodeGenerator<'ast> {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &sig, param_idx,
-                ) && self.current_function_params.iter().any(|p| {
-                    p.name == *name && !self.is_type_copy(&p.type_)
-                })
+                ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                )
+                    && self.current_function_params.iter().any(|p| {
+                        p.name == *name && !self.is_type_copy(&p.type_)
+                    })
                     && !coerced.ends_with(".clone()")
                 {
                     coerced = format!("{coerced}.clone()");
@@ -2267,9 +2276,13 @@ impl<'ast> CodeGenerator<'ast> {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
-                ) && self.current_function_params.iter().any(|p| {
-                    p.name == *name && !self.is_type_copy(&p.type_)
-                }) {
+                ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    sig, param_idx,
+                )
+                    && self.current_function_params.iter().any(|p| {
+                        p.name == *name && !self.is_type_copy(&p.type_)
+                    })
+                {
                     return format!("{arg_str}.clone()");
                 }
             }
@@ -5347,5 +5360,92 @@ fn main() {
         assert!(!CodeGenerator::is_module_boundary_callee(
             "crate::vec_map::vec_map_get_f64"
         ));
+    }
+
+    #[test]
+    fn demoted_str_formal_strips_stale_clone_before_borrow() {
+        let source = r#"
+fn takes_str(json: string) -> string { json }
+fn dispatch(json: string) -> string {
+    if takes_str(json) != "" { json } else { "" }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (_, mut registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let sig = registry
+            .signatures
+            .get_mut("takes_str")
+            .expect("takes_str signature");
+        sig.param_ownership = vec![OwnershipMode::Borrowed];
+        sig.emitted_rust_ref_params = Some(vec![true]);
+        sig.param_types = vec![Type::Reference(Box::new(Type::Custom("str".into())))];
+
+        let mut gen = CodeGenerator::new(registry.clone(), CompilationTarget::Rust);
+        gen.ir_cutover = IrCutoverConfig {
+            ownership: true,
+            clones: true,
+            param_types: true,
+            str_ref: true,
+            call_sites: true,
+            locals: true,
+        };
+        gen.current_function_params = vec![crate::parser::Parameter {
+            name: "json".into(),
+            pattern: None,
+            type_: Type::String,
+            ownership: crate::parser::OwnershipHint::Inferred,
+            is_mutable: false,
+            decorators: vec![],
+        }];
+        gen.in_if_condition = true;
+
+        let call_arg = program
+            .items
+            .iter()
+            .find_map(|item| {
+                if let crate::parser::Item::Function { decl, .. } = item {
+                    if decl.name != "dispatch" {
+                        return None;
+                    }
+                    decl.body.iter().find_map(|stmt| {
+                        if let crate::parser::Statement::If { condition, .. } = stmt {
+                            if let Expression::Binary { left, .. } = condition {
+                                if let Expression::Call { arguments, .. } = &**left {
+                                    return arguments.first().map(|(_, a)| *a);
+                                }
+                            }
+                        }
+                        None
+                    })
+                } else {
+                    None
+                }
+            })
+            .expect("call arg in if condition");
+
+        let coerced = gen
+            .apply_ir_call_site_coercion(
+                &registry,
+                "takes_str",
+                0,
+                call_arg,
+                "json.clone()",
+                registry.get_signature("takes_str"),
+                None,
+                Some(1),
+            )
+            .expect("IR coercion");
+        assert!(
+            !coerced.contains(".clone()"),
+            "demoted &str formal must not keep stale clone, got: {coerced}"
+        );
+        assert!(
+            coerced.starts_with('&'),
+            "demoted &str formal must borrow owned caller param, got: {coerced}"
+        );
     }
 }
