@@ -29,10 +29,9 @@ fn sig_stores_element(sig: &FunctionSignature) -> bool {
 }
 
 fn method_stores_element_in_registry(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     registry
-        .all_signatures_for_suffix_search()
-        .any(|(key, sig)| key.ends_with(&pattern) && sig_stores_element(sig))
+        .signatures_for_method_name(method)
+        .any(|(_key, sig)| sig_stores_element(sig))
 }
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]

@@ -414,11 +414,7 @@ impl AutoCloneAnalysis {
         let mut any_owned_move = false;
         let mut all_shared_borrow = true;
 
-        for (key, sig) in registry.all_signatures_for_suffix_search() {
-            let simple = key.rsplit("::").next().unwrap_or(key.as_str());
-            if simple != method {
-                continue;
-            }
+        for (_key, sig) in registry.signatures_for_method_name(method) {
             let user_args = if sig.has_self_receiver {
                 sig.param_ownership.len().saturating_sub(1)
             } else {

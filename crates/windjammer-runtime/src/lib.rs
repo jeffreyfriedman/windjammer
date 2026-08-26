@@ -27,6 +27,7 @@ pub mod cli;
 pub mod collections;
 pub mod contracts;
 pub mod crypto;
+pub mod compress;
 pub mod csv_mod;
 #[cfg(feature = "db")]
 pub mod db;
