@@ -12,11 +12,10 @@ fn receiver_base(ty: &str) -> &str {
 
 /// Consensus for Go `append` lowering: storage-like and not homonymous with String APIs.
 fn consensus_go_append_storage(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any_non_string = false;
     let mut saw_string = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if !key.ends_with(&pattern) || !sig.has_self_receiver {
+    for (key, sig) in registry.signatures_for_method_name(method) {
+        if !sig.has_self_receiver {
             continue;
         }
         let base = key.split("::").next().unwrap_or("");

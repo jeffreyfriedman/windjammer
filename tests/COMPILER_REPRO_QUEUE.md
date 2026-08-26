@@ -6,9 +6,9 @@ codegen gates as source of truth; fixtures alone can pass while multipass still
 mis-emits.
 
 **Verified green on tip** (`cargo test --release --test all` filter below,
-2026-08-25): demoted `&str` clone skip, multi-use owned auto-clone, WDB-108
-explicit clones, and `assert(false, err_var)` gates green. Remaining ⚠️:
-finance-screens tip hang (needs isolated gate / dogfood tree).
+2026-08-26): method-index consensus (finance-screens hang), demoted `&str`
+clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
+`std::compress` gzip wiring.
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
@@ -60,7 +60,7 @@ finance-screens tip hang (needs isolated gate / dogfood tree).
 | P1 | **`trim` local `== "lit"` must not emit `.as_str()` (E0658)** | `codegen_trim_eq_literal_must_not_emit_as_str` | ✅ tip GREEN — product restored bare `fmt == "csv"` |
 | P1 | **Demoted `&str` formal must not receive `String.clone()` at call site** | `codegen_demoted_str_formal_must_not_receive_owned_clone_gate_test` | ✅ tip GREEN — if-condition clone guard skips demoted `&str`; IR strips stale `.clone()` before borrow |
 | P1 | **Multi-use owned param → two owned `String` formals must auto-`.clone()`** | `codegen_multi_use_owned_param_must_auto_clone_gate_test` | ✅ tip GREEN — analysis-driven reuse clone survives stale shared-borrow registry + IR reconcile |
-| P1 | **Full `finance-screens` tip codegen hang (type-inference recursion)** | tip `wj build … --module-file` on 43-file screens crate | ⚠️ tip RED after 2026-08-25 tip rebuild — stuck in `infer_expression_type` / `all_signatures_for_suffix_search` (30+ min, no emit); dogfood via hand-synced `build/home.rs` until tip recovers |
+| P1 | **Full `finance-screens` tip codegen hang (type-inference recursion)** | `codegen_method_consensus_scales_with_matching_methods_not_registry_size_gate_test`, tip `wj build … --module-file` on 43-file screens crate | ✅ tip GREEN — method-index consensus (`signatures_for_method_name`); finance-screens tip build <2 min |
 | P1 | **`env::get("lit")` / `env.get_or` must not auto-own into `&str` formals** | `codegen_env_get_str_literal_must_not_auto_own_gate_test` | ✅ tip GREEN — LedgerKit `lk_db.wj` centralizes `LK_DB`; env adapters use `lk_db_is_postgres()` |
 | P1 | **String concat if/else must unify owned arms (alloc macros)** | `codegen_if_else_string_arms_must_unify_gate_test`, `codegen_string_concat_chain_gate_test`, dogfood `domain/actor.wj` / `string_concat.wj` | ✅ tip GREEN |
 | P1 | **Match arms yielding `string` must unify owned (`substring` vs binding)** | `codegen_match_string_arms_must_unify_gate_test` | ✅ tip GREEN (substring index strip + owned arm coercion; `--module-file --check`) |
@@ -109,6 +109,8 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 | P1 | **`std::db` connect + execute** | `bug_std_db_execute_wiring_test` | ✅ |
 | P1 | **`std::time` RFC3339 roundtrip wiring** | `bug_std_time_rfc3339_roundtrip_wiring_test` | ✅ |
 | P1 | **`std::encoding.url_encode` / `url_decode`** | `bug_std_encoding_url_encode_wiring_test` | ✅ |
+| P1 | **`std::crypto` bcrypt hash/verify** | `bug_std_crypto_bcrypt_password_wiring_test` | ✅ |
+| P1 | **`std::compress` gzip encode/decode (`wj-compress`)** | `bug_std_compress_gzip_wiring_test` | ✅ tip GREEN — runtime `compress` + flate2 (Base64 gzip string API) |
 
 ## Application cleanup (after green gates)
 

@@ -870,6 +870,80 @@ impl SignatureRegistry {
             })
     }
 
+    /// `(key, sig)` for every signature whose key ends with `::{method}`, walking the
+    /// global-fallback chain and deduplicating like [`Self::all_signatures_for_suffix_search`].
+    ///
+    /// Uses the method index at each registry layer — O(matching keys), not O(registry size).
+    pub fn signatures_for_method_name(
+        &self,
+        method: &str,
+    ) -> impl Iterator<Item = (&str, &FunctionSignature)> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let mut current = Some(self);
+        while let Some(reg) = current {
+            if let Some(keys) = reg.method_index.get(method) {
+                for key in keys {
+                    if seen.insert(key.as_str()) {
+                        if let Some(sig) = reg.signatures.get(key) {
+                            out.push((key.as_str(), sig));
+                        }
+                    }
+                }
+            }
+            current = reg.global_fallback.as_deref();
+        }
+        out.into_iter()
+    }
+
+    /// `(key, sig)` for signatures whose qualified key ends with `suffix` (e.g. `::Vec::push`),
+    /// using the method index on the trailing name segment — not a full registry scan.
+    pub fn signatures_matching_suffix(
+        &self,
+        suffix: &str,
+    ) -> impl Iterator<Item = (&str, &FunctionSignature)> {
+        let method = suffix
+            .rsplit("::")
+            .next()
+            .unwrap_or(suffix)
+            .trim_start_matches(':');
+        let mut out = Vec::new();
+        for (key, sig) in self.signatures_for_method_name(method) {
+            if key.ends_with(suffix) {
+                out.push((key, sig));
+            }
+        }
+        out.into_iter()
+    }
+
+    /// `(key, sig)` for signatures whose qualified key starts with `receiver::`.
+    ///
+    /// Scans method-index buckets (unique method names), not the full signature map.
+    pub fn signatures_for_receiver_prefix(
+        &self,
+        receiver_prefix: &str,
+    ) -> impl Iterator<Item = (&str, &FunctionSignature)> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let mut current = Some(self);
+        while let Some(reg) = current {
+            for keys in reg.method_index.values() {
+                for key in keys {
+                    if !key.starts_with(receiver_prefix) {
+                        continue;
+                    }
+                    if seen.insert(key.as_str()) {
+                        if let Some(sig) = reg.signatures.get(key) {
+                            out.push((key.as_str(), sig));
+                        }
+                    }
+                }
+            }
+            current = reg.global_fallback.as_deref();
+        }
+        out.into_iter()
+    }
+
     /// Like [`Self::find_signature_ending_with`], but only when exactly one
     /// `{Type}::{suffix}` is registered (locally or via global fallback).
     pub fn find_unique_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
@@ -951,11 +1025,7 @@ impl SignatureRegistry {
         arg_count: usize,
     ) -> bool {
         let mut seen: Vec<OwnershipMode> = Vec::new();
-        for (_key, sig) in self.all_signatures_for_suffix_search() {
-            let suffix = _key.rsplit("::").next().unwrap_or(_key.as_str());
-            if suffix != method {
-                continue;
-            }
+        for (_key, sig) in self.signatures_for_method_name(method) {
             let user_args = if sig.has_self_receiver {
                 sig.param_ownership.len().saturating_sub(1)
             } else {

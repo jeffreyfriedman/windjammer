@@ -154,8 +154,8 @@ pub fn map_option_mut_ref_method_name<'a>(
         }
     }
     let prefix = format!("{rt}::");
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.starts_with(&prefix) && method_returns_option_mut_ref(sig) {
+    for (key, sig) in registry.signatures_for_receiver_prefix(&prefix) {
+        if method_returns_option_mut_ref(sig) {
             return key.rsplit("::").next();
         }
     }
@@ -279,14 +279,11 @@ pub fn method_returns_usize_qualified(
 }
 
 fn consensus_return_is_usize(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            any = true;
-            if !return_type_is(sig, is_usize_type) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        any = true;
+        if !return_type_is(sig, is_usize_type) {
+            return false;
         }
     }
     any
@@ -430,14 +427,11 @@ fn return_type_is_self(sig: &FunctionSignature) -> bool {
 
 /// When `::{method}` is registered on many types, true only if every match returns `Self`.
 fn consensus_return_is_self(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            any = true;
-            if !return_type_is_self(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        any = true;
+        if !return_type_is_self(sig) {
+            return false;
         }
     }
     any
