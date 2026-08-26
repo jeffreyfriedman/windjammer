@@ -373,17 +373,14 @@ fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
 /// method match takes `&mut self`. Free functions that share the suffix are
 /// ignored. Ambiguous method names return false — use the qualified API instead.
 fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            if !sig.has_self_receiver {
-                continue;
-            }
-            any = true;
-            if !sig_mutates_receiver(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        if !sig.has_self_receiver {
+            continue;
+        }
+        any = true;
+        if !sig_mutates_receiver(sig) {
+            return false;
         }
     }
     any
@@ -393,17 +390,14 @@ fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> boo
 /// method match does not take `&mut self` (`Owned` and `Borrowed` both count as
 /// non-mutating-in-place). Free functions that share the suffix are ignored.
 fn consensus_readonly_receiver(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            if !sig.has_self_receiver {
-                continue;
-            }
-            any = true;
-            if !sig_readonly_receiver(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        if !sig.has_self_receiver {
+            continue;
+        }
+        any = true;
+        if !sig_readonly_receiver(sig) {
+            return false;
         }
     }
     any
@@ -526,14 +520,11 @@ fn return_type_is_self(sig: &FunctionSignature) -> bool {
 
 /// When `::{method}` is registered on many types, true only if every match returns `Self`.
 fn consensus_return_is_self(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            any = true;
-            if !return_type_is_self(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        any = true;
+        if !return_type_is_self(sig) {
+            return false;
         }
     }
     any
@@ -645,17 +636,14 @@ fn sig_is_storage_like(sig: &FunctionSignature) -> bool {
 /// When `::{method}` is registered on many types, true only if every *instance*
 /// method match is storage-like (`Vec::push`-style). Ambiguous names return false.
 pub fn consensus_storage_method(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            if !sig.has_self_receiver {
-                continue;
-            }
-            any = true;
-            if !sig_is_storage_like(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        if !sig.has_self_receiver {
+            continue;
+        }
+        any = true;
+        if !sig_is_storage_like(sig) {
+            return false;
         }
     }
     any
@@ -688,17 +676,14 @@ pub fn method_predicate_closure_receives_ref(method: &str) -> bool {
 
 /// Unanimous closure-first-arg across all stdlib instance methods named `::{method}`.
 pub fn consensus_closure_taking_method(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            if !sig.has_self_receiver {
-                continue;
-            }
-            any = true;
-            if !sig_is_closure_taking(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        if !sig.has_self_receiver {
+            continue;
+        }
+        any = true;
+        if !sig_is_closure_taking(sig) {
+            return false;
         }
     }
     any
@@ -716,17 +701,14 @@ fn sig_is_membership_test(sig: &FunctionSignature) -> bool {
 
 /// Unanimous bool membership-test shape across stdlib instance `::{method}` keys.
 pub fn consensus_membership_test_method(method: &str, registry: &SignatureRegistry) -> bool {
-    let pattern = format!("::{method}");
     let mut any = false;
-    for (key, sig) in registry.all_signatures_for_suffix_search() {
-        if key.ends_with(&pattern) {
-            if !sig.has_self_receiver {
-                continue;
-            }
-            any = true;
-            if !sig_is_membership_test(sig) {
-                return false;
-            }
+    for (_key, sig) in registry.signatures_for_method_name(method) {
+        if !sig.has_self_receiver {
+            continue;
+        }
+        any = true;
+        if !sig_is_membership_test(sig) {
+            return false;
         }
     }
     any

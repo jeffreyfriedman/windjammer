@@ -4483,6 +4483,7 @@ dependencies = [
  "csv",
  "dirs",
  "env_logger",
+ "flate2",
  "getrandom 0.2.17",
  "hex",
  "js-sys",

@@ -48,6 +48,7 @@ Definition of done per row:
 | `std::db` connect + execute | `bug_std_db_execute_wiring_test` | ✅ | `execute` returns `i64` (WJ `int`) |
 | `std::time` RFC3339 | `bug_std_time_rfc3339_roundtrip_wiring_test` | ✅ | `parse_rfc3339` + `DateTime::to_rfc3339` |
 | `std::crypto.hash_password` / `verify_password` | `bug_std_crypto_bcrypt_password_wiring_test` | ✅ | Runtime bcrypt + `std/crypto.wj` → `windjammer_runtime::crypto` |
+| `std::compress` gzip encode/decode | `bug_std_compress_gzip_wiring_test` | ✅ | Runtime `compress` + flate2; Base64 gzip string round-trip |
 
 ## Run
 

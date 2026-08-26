@@ -265,8 +265,7 @@ impl<'ast> Analyzer<'ast> {
             if !func_name.contains("::") && !is_bare_fn_call {
                 let suffix_pattern = format!("::{}", func_name);
                 let suffix_matches: Vec<_> = registry
-                    .all_signatures()
-                    .filter(|(k, _)| k.ends_with(&suffix_pattern))
+                    .signatures_matching_suffix(&suffix_pattern)
                     .collect();
                 if suffix_matches.len() != 1 {
                     continue;

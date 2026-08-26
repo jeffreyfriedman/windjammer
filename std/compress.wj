@@ -1,0 +1,14 @@
+// std/compress — gzip body codecs for HTTP middleware (`wj-compress`)
+// Implementation: flate2 (hidden); string payloads round-trip as Base64 gzip.
+
+fn gzip_encode(data: string) -> Result<string, string> {
+    Err("gzip_encode requires windjammer-runtime compress module")
+}
+
+fn gzip_decode(data: string) -> Result<string, string> {
+    Err("gzip_decode requires windjammer-runtime compress module")
+}
+
+fn gunzip(data: string) -> Result<string, string> {
+    gzip_decode(data)
+}

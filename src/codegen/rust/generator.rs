@@ -1750,22 +1750,18 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Module-path qualified keys from library multipass (e.g. `foo::Type::method`).
         let suffix = format!("::{receiver_type}::{method}");
-        for (key, sig) in self.signature_registry.all_signatures() {
-            if key.ends_with(&suffix)
-                && crate::codegen::rust::call_signature_resolution::validate_arg_count(
-                    sig, arg_count,
-                )
-            {
+        for (_key, sig) in self.signature_registry.signatures_matching_suffix(&suffix) {
+            if crate::codegen::rust::call_signature_resolution::validate_arg_count(
+                sig, arg_count,
+            ) {
                 return Some(sig.clone());
             }
         }
         if let Some(global) = &self.global_signature_registry {
-            for (key, sig) in global.all_signatures() {
-                if key.ends_with(&suffix)
-                    && crate::codegen::rust::call_signature_resolution::validate_arg_count(
-                        sig, arg_count,
-                    )
-                {
+            for (_key, sig) in global.signatures_matching_suffix(&suffix) {
+                if crate::codegen::rust::call_signature_resolution::validate_arg_count(
+                    sig, arg_count,
+                ) {
                     return Some(sig.clone());
                 }
             }

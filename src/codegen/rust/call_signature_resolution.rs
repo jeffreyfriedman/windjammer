@@ -192,15 +192,16 @@ fn best_module_qualified_suffix_match(
         .rsplit("::")
         .next()
         .unwrap_or(suffix.trim_start_matches(':'));
+    // Indexed by bare method leaf — never fall back to a full registry scan
+    // (finance-screens / large multipass hangs).
+    for (key, sig) in registry.signatures_matching_suffix(suffix) {
+        consider(key, sig);
+    }
     if let Some(keys) = registry.method_keys_for(method_leaf) {
         for key in keys {
             if let Some(sig) = registry.get_signature(key) {
                 consider(key, sig);
             }
-        }
-    } else {
-        for (key, sig) in registry.all_signatures_for_suffix_search() {
-            consider(key, sig);
         }
     }
     best.map(|(key, sig, _, _, _)| (key, sig))
@@ -343,11 +344,11 @@ pub fn resolve_call_signature(
     // The library multipass registers these longer keys for disambiguation.
     if func_name.contains("::") && registry.has_collision(func_name) {
         let suffix = format!("::{}", func_name);
-        for (key, sig) in registry.all_signatures() {
-            if key.ends_with(&suffix) && key != func_name && validate_arg_count(sig, arg_count) {
+        for (key, sig) in registry.signatures_matching_suffix(&suffix) {
+            if key != func_name && validate_arg_count(sig, arg_count) {
                 return Some(ResolvedSignature {
                     sig: sig.clone(),
-                    qualified_key: key.clone(),
+                    qualified_key: key.to_string(),
                     resolution_method: ResolutionMethod::ProgressiveQualified,
                     has_collision: true,
                 });
@@ -462,14 +463,13 @@ pub fn resolve_call_signature(
     // but only for non-self-receiver entries (free functions, not methods).
     if !func_name.contains("::") {
         let suffix = format!("::{}", func_name);
-        for (key, sig) in registry.all_signatures() {
-            if key.ends_with(&suffix)
-                && !sig.has_self_receiver
+        for (key, sig) in registry.signatures_matching_suffix(&suffix) {
+            if !sig.has_self_receiver
                 && validate_arg_count(sig, arg_count)
             {
                 return Some(ResolvedSignature {
                     sig: sig.clone(),
-                    qualified_key: key.clone(),
+                    qualified_key: key.to_string(),
                     resolution_method: ResolutionMethod::ArgCountValidated,
                     has_collision: true,
                 });
@@ -741,8 +741,8 @@ pub(crate) fn global_suffix_param_ownership(
     let method = func_name.rsplit("::").next().unwrap_or(func_name);
     let suffix = format!("::{method}");
     let mut best: Option<(usize, OwnershipMode)> = None;
-    for (key, sig) in global.all_signatures() {
-        if key.ends_with(&suffix) && validate_arg_count(sig, arg_count) {
+    for (key, sig) in global.signatures_matching_suffix(&suffix) {
+        if validate_arg_count(sig, arg_count) {
             if let Some(own) = sig.param_ownership_for_arg(arg_idx) {
                 let key_len = key.len();
                 if best
