@@ -2851,21 +2851,35 @@ impl<'ast> CodeGenerator<'ast> {
                                     .and_then(|g| g.get_signature(simple).cloned()),
                             ],
                         );
-                    if let Some(sig) = sig.as_ref() {
-                        for (i, (_, arg)) in arguments.iter().enumerate() {
-                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                            {
-                                let pidx = sig.arg_param_index(i);
-                                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                    sig, pidx,
-                                ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
-                                    sig, pidx,
-                                ) {
-                                    return true;
-                                }
+                if let Some(sig) = sig.as_ref() {
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        {
+                            let refreshed =
+                                crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                                    Some(sig.clone()),
+                                    fname,
+                                    i,
+                                    self.global_signature_registry.as_deref(),
+                                    &self.signature_registry,
+                                )
+                                .unwrap_or_else(|| sig.clone());
+                            let pidx = refreshed.arg_param_index(i);
+                            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                &refreshed, pidx,
+                            ) {
+                                continue;
+                            }
+                            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                &refreshed, pidx,
+                            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                                &refreshed, pidx,
+                            ) {
+                                return true;
                             }
                         }
                     }
+                }
                 }
                 arguments.iter().any(|(_, arg)| {
                     self.expr_call_expects_owned_formal_for_param(arg, param_name)
@@ -2893,6 +2907,11 @@ impl<'ast> CodeGenerator<'ast> {
                             if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                             {
                                 let pidx = sig.arg_param_index(i);
+                                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                    &sig, pidx,
+                                ) {
+                                    continue;
+                                }
                                 if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                     &sig, pidx,
                                 ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
