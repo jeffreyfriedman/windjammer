@@ -44,6 +44,33 @@ pub fn expression_directly_uses_binding(expr: &Expression, name: &str) -> bool {
     }
 }
 
+/// WJ source wrote `expr.clone()` (Rust leakage W0005). Used to preserve explicit clones
+/// at codegen when reuse / call-arg context needs them (WDB-105/106/108).
+pub fn is_explicit_user_clone_call(expr: &Expression) -> bool {
+    matches!(
+        expr,
+        Expression::MethodCall { method, arguments, .. }
+            if crate::type_classification::is_language_level_explicit_clone(method)
+                && arguments.is_empty()
+    )
+}
+
+/// Binding name when [`is_explicit_user_clone_call`] is `ident.clone()`.
+pub fn explicit_user_clone_binding_name<'a>(expr: &'a Expression<'a>) -> Option<&'a str> {
+    match expr {
+        Expression::MethodCall { method, object, arguments, .. }
+            if crate::type_classification::is_language_level_explicit_clone(method)
+                && arguments.is_empty() =>
+        {
+            match &**object {
+                Expression::Identifier { name, .. } => Some(name.as_str()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 /// True when a method call receiver is `self` or `self.field` / `self.field...`.
 pub fn method_receiver_is_self_or_field(object: &Expression) -> bool {
     matches!(object, Expression::Identifier { name, .. } if name == "self")

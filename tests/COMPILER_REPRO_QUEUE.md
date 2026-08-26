@@ -6,8 +6,9 @@ codegen gates as source of truth; fixtures alone can pass while multipass still
 mis-emits.
 
 **Verified green on tip** (`cargo test --release --test all` filter below,
-2026-08-25): queue RED/🚧 string-ownership + HttpMethod nested multipass +
-`csv.write` owned-rows auto-borrow gates green.
+2026-08-25): demoted `&str` clone skip, multi-use owned auto-clone, WDB-108
+explicit clones, and `assert(false, err_var)` gates green. Remaining ⚠️:
+finance-screens tip hang (needs isolated gate / dogfood tree).
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
@@ -40,7 +41,7 @@ mis-emits.
 | P1 | **WDB-104: field-mutating method must emit `mut self`** | `wdb104_field_mutating_method_must_emit_mut_self` | ✅ |
 | P1 | **WDB-105: explicit `.clone()` in while-loop trait calls must emit** | `wdb105_explicit_clone_in_while_loop_trait_call_must_emit` | ✅ tip GREEN (`loop_body_depth` preserves explicit clone in loops) |
 | P1 | **WDB-106: explicit `.clone()` in sequential owned-string calls / is_empty must emit** | `wdb106_explicit_clone_on_first_of_two_owned_string_calls_must_emit`, `wdb106_explicit_clone_for_is_empty_before_move_must_emit` | ✅ tip GREEN |
-| P1 | **WDB-108: explicit `.clone()` on sequential owned custom-struct / Vec reuse must emit** | `wdb108_explicit_clone_on_sequential_owned_custom_struct_calls_must_emit`, `wdb108_explicit_clone_on_vec_before_parser_and_cursor_reuse_must_emit` | ⚠️ RED (PRE/tip drop clones; Phase 167 dogfood restores) |
+| P1 | **WDB-108: explicit `.clone()` on sequential owned custom-struct / Vec reuse must emit** | `wdb108_explicit_clone_on_sequential_owned_custom_struct_calls_must_emit`, `wdb108_explicit_clone_on_vec_before_parser_and_cursor_reuse_must_emit` | ✅ tip GREEN — preserve explicit `.clone()` through IR reconcile (demoted `&Vec` included) |
 | P1 | **WDB-099 / WDB-100 PRE dogfood gates** | `wdb099_pre_ir_dogfood_*`, `wdb100_pre_ir_dogfood_*` | ✅ tip Gate A + PRE Gate B GREEN (PRE `wj` 0.50.0; soft-skip if binary absent) |
 | P1 | **`std::random.range` → `random::int_range` (ecosystem `wj-uuid` v4)** | `bug_std_random_range_codegen_test` | ✅ tip GREEN (`resolve_runtime_emit_method_name` + MethodCall path) |
 | P1 | **`std::crypto.sha1_bytes` for UUID v5** | `bug_std_crypto_sha1_bytes_test` | ✅ tip GREEN |
@@ -58,7 +59,7 @@ mis-emits.
 | P1 | **Struct field into owned `string` formal must not `&field`** | `codegen_struct_field_owned_string_formal_must_not_borrow` | ✅ tip GREEN — P3.180 dogfood drops `field + ""` into `escape_html` / status helpers |
 | P1 | **`trim` local `== "lit"` must not emit `.as_str()` (E0658)** | `codegen_trim_eq_literal_must_not_emit_as_str` | ✅ tip GREEN — product restored bare `fmt == "csv"` |
 | P1 | **Demoted `&str` formal must not receive `String.clone()` at call site** | `codegen_demoted_str_formal_must_not_receive_owned_clone_gate_test` | ✅ tip GREEN — if-condition clone guard skips demoted `&str`; IR strips stale `.clone()` before borrow |
-| P1 | **Multi-use owned param → two owned `String` formals must auto-`.clone()`** | `codegen_multi_use_owned_param_must_auto_clone_gate_test` | ⚠️ tip RED — hub `crumbs_for(title)` then `escape_html(title)` emits bare `title` twice (E0382); product keeps `title + ""` |
+| P1 | **Multi-use owned param → two owned `String` formals must auto-`.clone()`** | `codegen_multi_use_owned_param_must_auto_clone_gate_test` | ✅ tip GREEN — analysis-driven reuse clone survives stale shared-borrow registry + IR reconcile |
 | P1 | **Full `finance-screens` tip codegen hang (type-inference recursion)** | tip `wj build … --module-file` on 43-file screens crate | ⚠️ tip RED after 2026-08-25 tip rebuild — stuck in `infer_expression_type` / `all_signatures_for_suffix_search` (30+ min, no emit); dogfood via hand-synced `build/home.rs` until tip recovers |
 | P1 | **`env::get("lit")` / `env.get_or` must not auto-own into `&str` formals** | `codegen_env_get_str_literal_must_not_auto_own_gate_test` | ✅ tip GREEN — LedgerKit `lk_db.wj` centralizes `LK_DB`; env adapters use `lk_db_is_postgres()` |
 | P1 | **String concat if/else must unify owned arms (alloc macros)** | `codegen_if_else_string_arms_must_unify_gate_test`, `codegen_string_concat_chain_gate_test`, dogfood `domain/actor.wj` / `string_concat.wj` | ✅ tip GREEN |
@@ -85,7 +86,7 @@ mis-emits.
 | P1 | **`Vec<u8>::push(0)` must infer `u8` not `i64` (`wj-base64`)** | `bug_vec_u8_push_int_literal_infers_u8_test` | ✅ tip GREEN |
 | P1 | **Module `const string` into owned formal (`wj-uuid`)** | `bug_module_const_string_owned_formal_call_site_test` | ✅ tip GREEN |
 | P1 | **`std::csv.write` via user `fn write` must auto-borrow (`wj-csv`)** | `bug_std_csv_write_owned_rows_auto_borrow_test` | ✅ tip GREEN — qualified runtime-std skips bare-homonym lookup / false recursion strip |
-| P1 | **`assert(false, err_var)` must not emit `assert!(false, e)` (`wj-timefmt`)** | `bug_test_assert_err_message_var_test` | 🚧 ecosystem uses literal assert messages until green |
+| P1 | **`assert(false, err_var)` must not emit `assert!(false, e)` (`wj-timefmt`)** | `bug_test_assert_err_message_var_test` | ✅ tip GREEN — non-literal messages → `assert!(cond, "{}", msg)` |
 
 ## Stdlib adoption P0/P1 (see `tests/STDLIB_ADOPTION_QUEUE.md`)
 

@@ -1066,6 +1066,38 @@ pub fn strip_redundant_auto_clone_before_explicit_clone(obj_str: &mut String, me
     }
 }
 
+/// Restore `.clone()` when IR / borrow passes stripped an explicit user clone (WDB-108).
+pub fn restore_stripped_explicit_user_clone(
+    arg_expr: &Expression,
+    prepared_arg: &str,
+    coerced: &str,
+) -> String {
+    if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr) {
+        return coerced.to_string();
+    }
+    if coerced.ends_with(".clone()") {
+        return coerced.to_string();
+    }
+    let base = crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg_expr)
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            let from_prepared =
+                crate::codegen::rust::expression_utilities::borrow_base_expr(prepared_arg);
+            if from_prepared.ends_with(".clone()") {
+                from_prepared.to_string()
+            } else if prepared_arg.ends_with(".clone()") {
+                prepared_arg.to_string()
+            } else {
+                from_prepared.to_string()
+            }
+        });
+    if base.ends_with(".clone()") {
+        base
+    } else {
+        format!("{base}.clone()")
+    }
+}
+
 /// W0005: explicit WJ `.clone()` is stripped; borrowed WJ `string` (`&str`) needs
 /// `.to_string()` because `&str::clone` stays `&str`.
 pub fn lower_explicit_clone_call<'ast>(

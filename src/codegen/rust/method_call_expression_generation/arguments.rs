@@ -486,6 +486,12 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(arguments.len()),
                             false,
                         );
+                        coerced =
+                            crate::codegen::rust::string_utilities::restore_stripped_explicit_user_clone(
+                                arg_to_generate,
+                                &arg_str,
+                                &coerced,
+                            );
                         return coerced;
                     }
                     debug_assert!(

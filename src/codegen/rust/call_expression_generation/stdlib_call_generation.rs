@@ -33,11 +33,7 @@ pub(in crate::codegen::rust) fn try_early_stdio_and_test_dispatch<'ast>(
     }
 
     if func_name == "assert" {
-        let args: Vec<String> = arguments
-            .iter()
-            .map(|(_label, arg)| gen.generate_expression(arg))
-            .collect();
-        return Some(format!("assert!({})", args.join(", ")));
+        return Some(gen.emit_assert_macro(arguments));
     }
 
     None

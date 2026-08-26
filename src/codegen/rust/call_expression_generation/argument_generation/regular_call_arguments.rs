@@ -331,6 +331,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         i,
                         true,
                     );
+                    coerced =
+                        crate::codegen::rust::string_utilities::restore_stripped_explicit_user_clone(
+                            arg,
+                            &arg_str,
+                            &coerced,
+                        );
+                    if let Expression::Identifier { name, .. } = arg {
+                        if gen.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone(name, gen.current_statement_idx).is_some()
+                        }) && !coerced.ends_with(".clone()")
+                        {
+                            coerced = gen.append_clone_for_owned_non_copy_binding(name, &coerced);
+                        }
+                    }
                     return vec![coerced];
                 }
                 debug_assert!(

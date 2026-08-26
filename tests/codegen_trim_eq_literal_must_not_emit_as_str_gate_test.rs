@@ -13,9 +13,8 @@
 //! FAILING REPRO — comparing a demoted `&str` local to a string literal must not emit
 //! `local.as_str()` (unstable `str_as_str` on older rustc → E0658).
 //!
-//! Dogfood (finance-screens tip): `let fmt = format_query.trim(); if fmt == "csv"` emits
-//! `fmt.as_str() == "csv"`. Product workaround: `"${fmt}" == "csv"` (stable String.as_str)
-//! or `(fmt + "") == "csv"`.
+//! Dogfood (finance-screens tip): `let fmt = format_query.trim(); if fmt == "csv"` must
+//! emit `fmt == "csv"` without unstable `&str::as_str`. Tip GREEN — product uses bare `==`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
