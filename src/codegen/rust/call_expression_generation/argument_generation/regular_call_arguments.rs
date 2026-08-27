@@ -344,6 +344,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         {
                             coerced = gen.append_clone_for_owned_non_copy_binding(name, &coerced);
                         }
+                    } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
+                        && !coerced.ends_with(".clone()")
+                    {
+                        // Same analysis-driven restore as bare params (field multi-use).
+                        coerced = gen.maybe_auto_clone_expr_path(arg, &coerced);
                     }
                     return vec![coerced];
                 }

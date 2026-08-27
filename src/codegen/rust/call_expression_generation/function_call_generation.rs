@@ -727,22 +727,14 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     // Bare same-module user API beats stdlib homonym (`join` vs `strings::join`).
     if !func_name.contains("::") {
-        if let Some(local) = gen.signature_registry.get_signature(func_name).cloned() {
-            if !local.formal_param_types.is_empty()
-                && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
-                    &local,
-                )
-                && signature.as_ref().is_some_and(|resolved| {
-                    resolved.name != local.name
-                        && (0..local.formal_param_types.len()).any(|idx| {
-                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                                resolved, idx,
-                            )
-                        })
-                })
-            {
-                signature = Some(local);
-            }
+        if let Some(ref sig) = signature {
+            signature = Some(
+                crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
+                    &gen.signature_registry,
+                    func_name,
+                    sig.clone(),
+                ),
+            );
         }
     }
 

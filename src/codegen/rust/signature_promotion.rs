@@ -1330,6 +1330,52 @@ pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx:
         })
 }
 
+/// Bare same-module user API beats runtime-std homonym at call sites
+/// (`join_path` vs `path::join_path`, `join` vs `strings::join`).
+pub(crate) fn local_user_fn_beats_runtime_std_homonym(
+    local: &crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+    resolved: FunctionSignature,
+) -> FunctionSignature {
+    if callee_name.contains("::") {
+        return resolved;
+    }
+    let Some(local_sig) = local.get_signature(callee_name) else {
+        return resolved;
+    };
+    if local_sig.formal_param_types.is_empty()
+        || signature_is_wj_std_stub_or_runtime_qualified(local_sig)
+    {
+        return resolved;
+    }
+    let resolved_shared = (0..resolved.param_ownership.len()).any(|idx| {
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&resolved, idx)
+    });
+    if !resolved_shared {
+        return resolved;
+    }
+    if resolved.name != local_sig.name {
+        return local_sig.clone();
+    }
+    if method_registry_reflects_emitted_owned(local_sig) {
+        return local_sig.clone();
+    }
+    resolved
+}
+
+pub(crate) fn skip_runtime_std_fallback_for_local_homonym(
+    local: &crate::analyzer::SignatureRegistry,
+    callee_name: &str,
+) -> bool {
+    if callee_name.contains("::") {
+        return false;
+    }
+    local.get_signature(callee_name).is_some_and(|local_sig| {
+        !local_sig.formal_param_types.is_empty()
+            && !signature_is_wj_std_stub_or_runtime_qualified(local_sig)
+    })
+}
+
 /// Prefer defining-module refresh with shared-ref emission (`&str`, `&Vec`, …) over a
 /// stale call-site stub lacking `emitted_rust_ref_params` confirmation (regression-049).
 pub(crate) fn signature_is_wj_std_stub_or_runtime_qualified(sig: &FunctionSignature) -> bool {
@@ -1547,31 +1593,57 @@ pub(crate) fn refresh_call_site_signature_for_arg(
         crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
             callee_name,
         );
+    let skip_local_homonym_fallback = skip_runtime_std_fallback_for_local_homonym(local, callee_name);
     let challengers: Vec<Option<&FunctionSignature>> = if type_qualified || skip_bare_homonym {
         vec![
             global.and_then(|g| g.get_signature(callee_name)),
-            global.and_then(|g| g.get_fallback_signature(callee_name)),
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                global.and_then(|g| g.get_fallback_signature(callee_name))
+            },
             local.get_signature(callee_name),
-            local.get_fallback_signature(callee_name),
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                local.get_fallback_signature(callee_name)
+            },
         ]
     } else {
         vec![
             global.and_then(|g| g.get_signature(callee_name)),
             global.and_then(|g| g.get_signature(simple)),
             global.and_then(|g| g.find_unique_signature_ending_with(simple)),
-            global.and_then(|g| g.get_fallback_signature(callee_name)),
-            global.and_then(|g| g.get_fallback_signature(simple)),
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                global.and_then(|g| g.get_fallback_signature(callee_name))
+            },
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                global.and_then(|g| g.get_fallback_signature(simple))
+            },
             local.get_signature(callee_name),
             local.get_signature(simple),
             local.find_unique_signature_ending_with(simple),
-            local.get_fallback_signature(callee_name),
-            local.get_fallback_signature(simple),
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                local.get_fallback_signature(callee_name)
+            },
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                local.get_fallback_signature(simple)
+            },
         ]
     };
     for challenger in challengers {
         refreshed = prefer_shared_ref_signature(refreshed, challenger, pidx);
     }
     let mut out = refreshed.or(initial)?;
+    out = local_user_fn_beats_runtime_std_homonym(local, callee_name, out);
     // Trait owned `string` must win over body-converged `&str` after prefer-shared.
     if let Some(g) = global {
         let method = simple;

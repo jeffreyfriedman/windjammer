@@ -65,8 +65,7 @@ impl IntInference {
                                 } else if b == IntType::I32 && a != IntType::I32 {
                                     a // Prefer non-default
                                 } else if is_safe_implicit_cast(a, b) || is_safe_implicit_cast(b, a) {
-                                    // Safe cast - keep current
-                                    continue;
+                                    promote_types(a, b)
                                 } else {
                                     // Real conflict
                                     let file_path = self

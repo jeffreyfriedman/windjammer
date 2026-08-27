@@ -2319,4 +2319,103 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_field_move_then_format_reuse_needs_clone() {
+        // label_for shape: escape_html(row.account_code); format!(..., row.account_code, ...)
+        let func = FunctionDecl {
+            name: "label_for".to_string(),
+            is_pub: true,
+            is_extern: false,
+            parameters: vec![crate::parser::Parameter {
+                name: "row".to_string(),
+                pattern: None,
+                type_: Type::Custom("Row".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: Some(Type::String),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("code".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "escape_html".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::FieldAccess {
+                                object: test_alloc_expr(Expression::Identifier {
+                                    name: "row".to_string(),
+                                    location: None,
+                                }),
+                                field: "account_code".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("label_raw".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::MacroInvocation {
+                        name: "format".to_string(),
+                        args: vec![
+                            test_alloc_expr(Expression::Literal {
+                                value: Literal::String("{} · {}".to_string()),
+                                location: None,
+                            }),
+                            test_alloc_expr(Expression::FieldAccess {
+                                object: test_alloc_expr(Expression::Identifier {
+                                    name: "row".to_string(),
+                                    location: None,
+                                }),
+                                field: "account_code".to_string(),
+                                location: None,
+                            }),
+                            test_alloc_expr(Expression::FieldAccess {
+                                object: test_alloc_expr(Expression::Identifier {
+                                    name: "row".to_string(),
+                                    location: None,
+                                }),
+                                field: "account_name".to_string(),
+                                location: None,
+                            }),
+                        ],
+                        delimiter: MacroDelimiter::Parens,
+                        is_repeat: false,
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone_anywhere("row.account_code"),
+            "expected clone site for row.account_code, sites={:?}",
+            analysis.clone_sites
+        );
+        assert!(
+            analysis.needs_clone("row.account_code", 0).is_some(),
+            "first move into owned formal must clone when field is reused"
+        );
+    }
+
 }
