@@ -4360,6 +4360,17 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
         }
+        // Type-qualified associated calls (`Metric::new`) without a matching
+        // `{Type}::{method}` signature must fail closed — never borrow via bare
+        // method-name homonyms (`path::new` → Borrowed) for cross-crate Copy args.
+        if let Some(rt) = receiver_type_name {
+            let qualified = format!("{rt}::{method}");
+            if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+                &qualified,
+            ) {
+                return;
+            }
+        }
         if let Some(resolved) =
             self.resolve_call_signature_with_global(method, receiver_type_name, arg_count)
         {
