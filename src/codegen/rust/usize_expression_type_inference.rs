@@ -87,22 +87,25 @@ impl<'ast> CodeGenerator<'ast> {
                 function,
                 arguments,
                 ..
-            } if arguments.is_empty() => {
-                if self.method_call_rust_emits_usize(expr) {
-                    return true;
-                }
-                if let Expression::FieldAccess { object, field, .. } = function {
-                    if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
-                        field,
-                        self.infer_expression_type(object)
-                            .as_ref()
-                            .and_then(Self::type_to_name)
-                            .as_deref(),
-                        &self.signature_registry,
-                    ) {
+            } => {
+                if arguments.is_empty() {
+                    if self.method_call_rust_emits_usize(expr) {
                         return true;
                     }
+                    if let Expression::FieldAccess { object, field, .. } = function {
+                        if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                            field,
+                            self.infer_expression_type(object)
+                                .as_ref()
+                                .and_then(Self::type_to_name)
+                                .as_deref(),
+                            &self.signature_registry,
+                        ) {
+                            return true;
+                        }
+                    }
                 }
+                // `strings::len(text)` / other free calls — registry return type.
                 self.infer_expression_type_is_usize(expr)
             }
             // Binary ops with usize operands: i + 1, len() - 1, etc.
@@ -367,6 +370,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => return false,
         };
+        // `strings.len(s)` — registry `strings::len` → usize (module is not a receiver type).
+        if let Expression::Identifier { name, .. } = object {
+            if let Some(ret) = self.runtime_std_module_fn_return_type(name, method) {
+                if matches!(ret, Type::Custom(ref n) if n == "usize") {
+                    return true;
+                }
+            }
+        }
         let obj_ty = self.infer_expression_type(object);
         let recv = obj_ty.as_ref().and_then(Self::type_to_name);
         let registry = &self.signature_registry;

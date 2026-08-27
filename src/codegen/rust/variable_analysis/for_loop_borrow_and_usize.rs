@@ -361,10 +361,20 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = maybe_counter else {
             return;
         };
+        // Windjammer `int` (params or annotated/inferred locals) stays `i64`.
+        // Marking them `usize` here would suppress the usize→i64 cast on the bound
+        // while the binding is still emitted as `i64` → E0308 (`end < strings::len`).
         if self
             .current_function_params
             .iter()
             .any(|p| p.name == *name && matches!(&p.type_, Type::Int))
+        {
+            return;
+        }
+        if self
+            .local_var_types
+            .get(name.as_str())
+            .is_some_and(|t| matches!(t, Type::Int))
         {
             return;
         }
