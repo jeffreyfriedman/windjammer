@@ -6,6 +6,29 @@ use crate::parser::{Expression, Literal, Statement, Type};
 
 #[allow(clippy::collapsible_match, clippy::collapsible_if)]
 impl<'ast> CodeGenerator<'ast> {
+    /// Return type of `module.fn` / `module::fn` when `module` is a runtime-std module
+    /// (`strings`, `path`, …). Signature-registry keyed as `{module}::{fn}` — no method-name lists.
+    pub(in crate::codegen::rust) fn runtime_std_module_fn_return_type(
+        &self,
+        module: &str,
+        fn_name: &str,
+    ) -> Option<Type> {
+        let resolved = self
+            .module_alias_map
+            .get(module)
+            .map(|s| s.as_str())
+            .unwrap_or(module);
+        if !(self.is_imported_runtime_std_module(module)
+            || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(resolved)
+            || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module))
+        {
+            return None;
+        }
+        let key = format!("{resolved}::{fn_name}");
+        self.get_signature_with_global(&key)
+            .and_then(|sig| sig.return_type.clone())
+    }
+
     /// `TypeName::assoc` return type from the signature registry (Call or MethodCall form).
     /// No method-name heuristics — drives let-binding typing for Borrowed-string coercion.
     fn infer_associated_fn_return_type(&self, type_name: &str, method: &str) -> Option<Type> {
@@ -250,6 +273,32 @@ impl<'ast> CodeGenerator<'ast> {
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
             Expression::MethodCall { object, method, .. } => {
+                // Runtime-std free functions parsed as MethodCall: `strings.len(s)`.
+                // Registry key is `strings::len` (not `String::len`); resolve before
+                // receiver-typed / consensus usize probes that miss module callees.
+                if let Expression::Identifier {
+                    name: module_or_type,
+                    ..
+                } = &**object
+                {
+                    if let Some(ret) =
+                        self.runtime_std_module_fn_return_type(module_or_type, method)
+                    {
+                        return Some(ret);
+                    }
+                    // Associated functions: `TypeName::assoc()` (may parse as MethodCall).
+                    if module_or_type
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_uppercase())
+                    {
+                        if let Some(ret) =
+                            self.infer_associated_fn_return_type(module_or_type, method)
+                        {
+                            return Some(ret);
+                        }
+                    }
+                }
                 // Prefer usize returns from the signature registry (len/capacity/…).
                 let obj_ty_early = self.infer_expression_type(object);
                 let recv_early = obj_ty_early.as_ref().and_then(Self::type_to_name);
@@ -267,18 +316,6 @@ impl<'ast> CodeGenerator<'ast> {
                     &self.signature_registry,
                 ) {
                     return Some(Type::Custom("usize".to_string()));
-                }
-                // Associated functions: `TypeName::assoc()` (may parse as MethodCall).
-                // Signature-driven — same rules as Call(FieldAccess(Type, method)).
-                if let Expression::Identifier {
-                    name: type_name, ..
-                } = &**object
-                {
-                    if type_name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                        if let Some(ret) = self.infer_associated_fn_return_type(type_name, method) {
-                            return Some(ret);
-                        }
-                    }
                 }
                 // Type-preserving methods (registry return `Self`) keep the receiver type.
                 if crate::codegen::rust::stdlib_method_traits::method_is_type_preserving_qualified(
@@ -392,6 +429,11 @@ impl<'ast> CodeGenerator<'ast> {
                         name: type_name, ..
                     } = object
                     {
+                        if let Some(ret) =
+                            self.runtime_std_module_fn_return_type(type_name, field)
+                        {
+                            return Some(ret);
+                        }
                         if let Some(ret) = self.infer_associated_fn_return_type(type_name, field) {
                             return Some(ret);
                         }
