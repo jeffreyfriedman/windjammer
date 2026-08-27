@@ -97,6 +97,14 @@ impl IntInference {
                         .and_then(|(_, ret)| ret.clone())
                 })
             }
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => self
+                .resolve_method_signature(object, method, arguments.len(), None)
+                .and_then(|(_, ret)| ret),
             Expression::Identifier { name, .. } => {
                 if name == "self" {
                     self.current_impl_type
@@ -258,6 +266,18 @@ impl IntInference {
         arg_count: usize,
         context_type: Option<&Type>,
     ) -> Option<(Vec<Type>, Option<Type>)> {
+        // Runtime-std free functions parsed as MethodCall: `strings.len(s)`.
+        // Registry key is `strings::len`, not a receiver method — skip when `object`
+        // is a local (e.g. `map.get(k)` must not resolve as `map::get`).
+        if let Expression::Identifier { name, .. } = object {
+            if !self.var_types.contains_key(name) && !self.const_types.contains_key(name) {
+                let qualified = format!("{name}::{method}");
+                if let Some((params, ret)) = self.function_signatures.get(&qualified).cloned() {
+                    return Some((params, ret));
+                }
+            }
+        }
+
         let receiver_type = self
             .infer_type_from_expression(object)
             .or_else(|| context_type.cloned())?;

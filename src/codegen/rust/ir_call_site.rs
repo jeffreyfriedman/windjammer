@@ -128,10 +128,22 @@ impl<'ast> CodeGenerator<'ast> {
         && crate::codegen::rust::types::return_type_is_vec_of_shared_refs(
             self.current_function_return_type.as_ref(),
         ));
-        let auto_clone_wants = matches!(arg_expr, Expression::Identifier { name, .. }
-            if self.auto_clone_analysis.as_ref().is_some_and(|a| {
+        // Analysis-driven reuse clones must win over stale demoted/`&T` formals
+        // (same policy for bare params and field/index paths).
+        let auto_clone_wants = match arg_expr {
+            Expression::Identifier { name, .. } => self.auto_clone_analysis.as_ref().is_some_and(|a| {
                 a.needs_clone(name, self.current_statement_idx).is_some()
-            }));
+            }),
+            Expression::FieldAccess { .. } | Expression::Index { .. } => {
+                Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                    self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                        a.needs_clone(&path, self.current_statement_idx).is_some()
+                            || a.needs_clone_anywhere(&path)
+                    })
+                })
+            }
+            _ => false,
+        };
         let mut prepared_arg = match arg_expr {
             Expression::Identifier { .. }
                 if (!skip_auto_clone_for_borrow || auto_clone_wants)
@@ -148,7 +160,8 @@ impl<'ast> CodeGenerator<'ast> {
             // Field paths (`record.key`) moved into owned formals + reused in loops
             // need `.clone()`; identifier-only auto-clone misses them (regression-059).
             Expression::FieldAccess { .. } | Expression::Index { .. }
-                if !skip_auto_clone_for_borrow && !skip_auto_clone_for_field_extract =>
+                if (!skip_auto_clone_for_borrow || auto_clone_wants)
+                    && !skip_auto_clone_for_field_extract =>
             {
                 self.maybe_auto_clone_call_arg(
                     arg_expr,
@@ -740,11 +753,24 @@ impl<'ast> CodeGenerator<'ast> {
             &mut sig,
             Some(callee_name),
         );
+        if receiver_type_name.is_none() {
+            sig = crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
+                registry,
+                callee_name,
+                sig,
+            );
+        }
 
         let mut param_idx = sig.arg_param_index(arg_index);
         let mut expected = safety_type_from_signature_param(&sig, param_idx);
         if (crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(&sig, param_idx)
             || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                &sig, param_idx,
+            )
+            || crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
+                &sig, param_idx,
+            )
+            || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 &sig, param_idx,
             ))
             && !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
@@ -1351,6 +1377,9 @@ impl<'ast> CodeGenerator<'ast> {
                 && (crate::ir::signature_bridge::call_site_expects_owned_pass(&peel_sig, peel_pidx)
                     || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         &peel_sig, peel_pidx,
+                    )
+                    || crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
+                        &peel_sig, peel_pidx,
                     ))
             {
                 if coerced.starts_with("&mut ")
@@ -1442,6 +1471,9 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.ir_sig_arg_expects_shared_borrow(&peel_sig, arg_index)
             && (crate::ir::signature_bridge::call_site_expects_owned_pass(&peel_sig, peel_pidx)
                 || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &peel_sig, peel_pidx,
+                )
+                || crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
                     &peel_sig, peel_pidx,
                 ))
         {
@@ -2462,19 +2494,37 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
-                    analysis
+                    let local = analysis
                         .needs_clone(&path, self.current_statement_idx)
-                        .is_some()
+                        .is_some();
+                    // Statement-idx drift under multipass / nested blocks: same
+                    // owned-formal fallback as bare identifiers (field multi-use).
+                    let anywhere = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, param_idx,
+                    ) && analysis.needs_clone_anywhere(&path);
+                    local || anywhere
                 })
             }
             _ => false,
         };
         if needs {
-            let preserve_for_reuse = matches!(arg_expr, Expression::Identifier { name, .. }
-                if analysis
-                    .needs_clone(name, self.current_statement_idx)
-                    .is_some()
-                    || self.caller_param_has_later_owned_formal_pass(name));
+            let preserve_for_reuse = match arg_expr {
+                Expression::Identifier { name, .. } => {
+                    analysis
+                        .needs_clone(name, self.current_statement_idx)
+                        .is_some()
+                        || self.caller_param_has_later_owned_formal_pass(name)
+                }
+                Expression::FieldAccess { .. } | Expression::Index { .. } => {
+                    Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                        analysis
+                            .needs_clone(&path, self.current_statement_idx)
+                            .is_some()
+                            || analysis.needs_clone_anywhere(&path)
+                    })
+                }
+                _ => false,
+            };
             if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
                 && !preserve_for_reuse
             {
@@ -2893,6 +2943,12 @@ impl<'ast> CodeGenerator<'ast> {
             )
             .unwrap_or_else(|| sig.clone());
         }
+        text_sig =
+            crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
+                registry,
+                callee_name,
+                text_sig,
+            );
 
         let arg_already_rust_ref = matches!(
             arg_expr,
@@ -2957,7 +3013,9 @@ impl<'ast> CodeGenerator<'ast> {
             // receive field moves/clones — never force `&request.email` from stale
             // body-converged `&str` emission on the impl.
             let owned_plain_string =
-                crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &text_sig, pidx,
+                ) || crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
                     &text_sig, pidx,
                 ) || crate::ir::signature_bridge::call_site_expects_owned_pass(&text_sig, pidx)
                     || (matches!(
@@ -4474,10 +4532,12 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, arg_index,
                     );
-                // Plain WJ `string` stays owned until emission confirms `&str` —
-                // analyzer Borrowed alone must not prefix `&field`.
+                // Plain WJ `string` / codegen-owned formals pass by value — stale analyzer
+                // `Reference(str)` and Borrowed must not prefix `&field` (join_path seed).
                 let owned_plain_string =
-                    crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, idx,
+                    ) || crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
                         sig, idx,
                     ) || crate::ir::signature_bridge::call_site_expects_owned_pass(sig, idx);
                 let callee_borrows_text = !owned_plain_string
@@ -4934,6 +4994,16 @@ impl<'ast> CodeGenerator<'ast> {
                     if self.callee_param_field_extracts_by_name(callee, idx) {
                         return arg_str.to_string();
                     }
+                    // Prefer analysis reuse clone over stale shared-borrow skips
+                    // (demoted `&str` formals still move the field at the call site).
+                    if Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                        self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone(&path, self.current_statement_idx).is_some()
+                                || a.needs_clone_anywhere(&path)
+                        })
+                    }) {
+                        return self.maybe_auto_clone_expr_path(arg_expr, arg_str);
+                    }
                     let emits_owned = self.callee_arg_emits_owned_contract(callee, idx);
                     if !emits_owned
                         && (self.ir_callee_arg_expects_mut_borrow(
@@ -4985,7 +5055,10 @@ impl<'ast> CodeGenerator<'ast> {
         let needs = self
             .auto_clone_analysis
             .as_ref()
-            .is_some_and(|a| a.needs_clone(&path, self.current_statement_idx).is_some());
+            .is_some_and(|a| {
+                a.needs_clone(&path, self.current_statement_idx).is_some()
+                    || a.needs_clone_anywhere(&path)
+            });
         if needs {
             // Only scalar Copy (i64/bool/…) skip clone; Copy aggregates/enums still need
             // `.clone()` on multi-use owned moves (regression-063 Value).

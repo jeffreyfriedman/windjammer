@@ -210,6 +210,39 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+                    // Owned `string` tuple slots: demoted `&str` params must use
+                    // `.to_string()`, not `.clone()` (clone of `&str` stays `&str`).
+                    let slot_is_owned_string = tuple_slot_types
+                        .as_ref()
+                        .and_then(|types| types.get(i))
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+                    if slot_is_owned_string {
+                        crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                            &mut s,
+                            e,
+                            &self.inferred_borrowed_params,
+                            &self.current_function_params,
+                        );
+                        // Demoted params that skipped auto-clone (Copy `&str`) still need own.
+                        if !crate::codegen::rust::string_utilities::already_owned_string_expr(&s) {
+                            if let Expression::Identifier { name, .. } = e {
+                                let demoted_text = (self.inferred_borrowed_params.contains(name)
+                                    || self.str_ref_optimized_params.contains(name)
+                                    || self.identifier_already_ref(name))
+                                    && self.current_function_params.iter().any(|p| {
+                                        p.name == *name
+                                            && crate::codegen::rust::types::is_windjammer_text_type(
+                                                &p.type_,
+                                            )
+                                    });
+                                if demoted_text {
+                                    s = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                                        &s,
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 if matches!(
                     e,

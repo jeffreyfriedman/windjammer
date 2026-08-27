@@ -869,6 +869,14 @@ pub fn runtime_wj_owned_rust_borrowed_param(
     use crate::parser::Type;
 
     let pidx = sig.arg_param_index(arg_index);
+    // User plain WJ `string` formals that emit owned `String` are not runtime AsRef/`&str`
+    // contracts — stale analyzer Borrowed must not force call-site `&field` (join_path).
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+        return false;
+    }
+    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, pidx) {
+        return false;
+    }
     let scanned_borrow = matches!(
         sig.param_ownership.get(pidx),
         Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)

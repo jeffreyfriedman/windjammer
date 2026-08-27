@@ -1,4 +1,20 @@
 impl IntInference {
+    fn constrain_call_result_int_type<'ast>(
+        &mut self,
+        expr: &Expression<'ast>,
+        return_type: Option<&Type>,
+        reason: &str,
+    ) {
+        if let Some(int_ty) = return_type.and_then(|t| self.extract_int_type(t)) {
+            let id = self.get_expr_id(expr);
+            self.constraints.push(IntConstraint::MustBe(
+                id,
+                int_ty,
+                reason.to_string(),
+            ));
+        }
+    }
+
     fn collect_expression_constraints<'ast>(
         &mut self,
         expr: &Expression<'ast>,
@@ -123,7 +139,7 @@ impl IntInference {
                     .as_ref()
                     .and_then(|name| self.function_signatures.get(name).cloned());
 
-                if let Some((param_types, _)) = func_sig {
+                if let Some((param_types, ret)) = func_sig {
                     let param_offset = if param_types.len() == arguments.len() + 1 {
                         1
                     } else {
@@ -149,6 +165,11 @@ impl IntInference {
                             }
                         }
                     }
+                    self.constrain_call_result_int_type(
+                        expr,
+                        ret.as_ref(),
+                        "function call return",
+                    );
                 } else {
                     for (i, (_label, arg)) in arguments.iter().enumerate() {
                         let arg_ty: Option<&Type> = if i == 0 {
@@ -181,7 +202,7 @@ impl IntInference {
             } => {
                 self.collect_expression_constraints(object, return_type);
 
-                if let Some((param_types, _)) =
+                if let Some((param_types, ret)) =
                     self.resolve_method_signature(object, method, arguments.len(), return_type)
                 {
                     self.apply_method_param_int_constraints(
@@ -189,6 +210,11 @@ impl IntInference {
                         arguments,
                         method,
                         return_type,
+                    );
+                    self.constrain_call_result_int_type(
+                        expr,
+                        ret.as_ref(),
+                        &format!("{method}() return"),
                     );
                 } else {
                     for (_label, arg) in arguments {
