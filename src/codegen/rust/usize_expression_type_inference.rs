@@ -528,4 +528,59 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
     }
+
+    /// Rust integer width an expression would emit before unified-int coercion.
+    pub(in crate::codegen::rust) fn natural_int_emission_type(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> Option<crate::type_inference::IntType> {
+        use crate::type_inference::IntType;
+        if self.expression_produces_usize(expr) || self.infer_expression_type_is_usize(expr) {
+            return Some(IntType::Usize);
+        }
+        if let Some(t) = self.infer_expression_type(expr) {
+            if let Some(it) = Self::parser_type_to_promotion_int_type(&t) {
+                return Some(it);
+            }
+        }
+        None
+    }
+
+    /// Cast an if/else branch tail to the solver-unified integer type (e.g. `int` + `len` → `usize`).
+    pub(in crate::codegen::rust) fn maybe_cast_branch_tail_to_unified_int(
+        &self,
+        expr_str: &mut String,
+        expr: &Expression<'ast>,
+    ) {
+        if !self.in_expression_context {
+            return;
+        }
+        let Some(ni) = &self.numeric_inference else {
+            return;
+        };
+        let unified = ni.get_int_type(expr);
+        if unified == crate::type_inference::IntType::Unknown {
+            return;
+        }
+        let natural = self
+            .natural_int_emission_type(expr)
+            .unwrap_or(unified);
+        if natural == unified {
+            return;
+        }
+        use crate::type_inference::int_implicit_casts::{get_cast_suffix, is_safe_implicit_cast};
+        if !is_safe_implicit_cast(natural, unified) {
+            return;
+        }
+        if expr_str.contains(" as ") {
+            return;
+        }
+        let suffix = get_cast_suffix(unified);
+        let needs_parens = matches!(expr, Expression::Binary { .. });
+        if needs_parens {
+            *expr_str = format!("({}) as {}", expr_str, suffix);
+        } else {
+            *expr_str = format!("{} as {}", expr_str, suffix);
+        }
+    }
 }

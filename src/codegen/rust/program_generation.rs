@@ -719,7 +719,20 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Generate top-level functions (skip impl methods and extern functions).
-        // Emit `main` last so sibling callees have refreshed registry metadata first.
+        // Emit `main` last; otherwise preserve WJ source order so defining callees
+        // refresh `emitted_rust_ref_params` before forward call sites (join_path seed).
+        let func_source_order: std::collections::HashMap<String, usize> = program
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, item)| {
+                if let Item::Function { decl, .. } = item {
+                    Some((decl.name.clone(), idx))
+                } else {
+                    None
+                }
+            })
+            .collect();
         let mut top_level_funcs: Vec<_> = analyzed
             .iter()
             .filter(|af| {
@@ -731,7 +744,17 @@ impl<'ast> CodeGenerator<'ast> {
         top_level_funcs.sort_by(|a, b| match (a.decl.name.as_str(), b.decl.name.as_str()) {
             ("main", _) => std::cmp::Ordering::Greater,
             (_, "main") => std::cmp::Ordering::Less,
-            _ => std::cmp::Ordering::Equal,
+            _ => {
+                let ia = func_source_order
+                    .get(&a.decl.name)
+                    .copied()
+                    .unwrap_or(usize::MAX);
+                let ib = func_source_order
+                    .get(&b.decl.name)
+                    .copied()
+                    .unwrap_or(usize::MAX);
+                ia.cmp(&ib)
+            }
         });
         for analyzed_func in &top_level_funcs {
             self.preregister_function_formals_in_registry(analyzed_func);

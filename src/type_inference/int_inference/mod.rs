@@ -6,7 +6,7 @@ use crate::parser::ast::core::{Expression, Item, Statement};
 use crate::parser::ast::operators::BinaryOp;
 use crate::parser::ast::types::Type;
 use crate::parser::Program;
-use crate::type_inference::int_implicit_casts::is_safe_implicit_cast;
+use crate::type_inference::int_implicit_casts::{is_safe_implicit_cast, promote_types};
 use crate::type_inference::struct_field_registry;
 use crate::type_inference::ExprId;
 use std::collections::HashMap;
@@ -125,7 +125,7 @@ impl IntInference {
     fn register_stdlib_signatures(&mut self) {
         use crate::analyzer::SignatureRegistry;
 
-        for (name, sig) in SignatureRegistry::stdlib().all_signatures() {
+        for (name, sig) in SignatureRegistry::stdlib().all_signatures_for_suffix_search() {
             let param_types = if !sig.formal_param_types.is_empty() {
                 sig.formal_param_types.clone()
             } else {
@@ -634,6 +634,28 @@ impl IntInference {
         }
     }
 
+    /// ExprIds for value-producing tails of a statement list (if/else int unification).
+    fn branch_tail_expression_ids<'ast>(&mut self, stmts: &[&'ast Statement<'ast>]) -> Vec<ExprId> {
+        let Some(last) = stmts.last().copied() else {
+            return Vec::new();
+        };
+        match last {
+            Statement::Expression { expr, .. } => vec![self.get_expr_id(expr)],
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                let mut ids = self.branch_tail_expression_ids(then_block);
+                if let Some(else_b) = else_block {
+                    ids.extend(self.branch_tail_expression_ids(else_b));
+                }
+                ids
+            }
+            _ => Vec::new(),
+        }
+    }
+
     fn constrain_expr_to_int_type<'ast>(&mut self, expr: &Expression<'ast>, ty: &Type) {
         if let Some(int_ty) = self.extract_int_type(ty) {
             let expr_id = self.get_expr_id(expr);
@@ -729,6 +751,17 @@ impl IntInference {
                 if let Some(else_stmts) = else_block {
                     for s in else_stmts {
                         self.collect_statement_constraints(s, return_type);
+                    }
+                    let then_tails = self.branch_tail_expression_ids(then_block);
+                    let else_tails = self.branch_tail_expression_ids(else_stmts);
+                    for &t_id in &then_tails {
+                        for &e_id in &else_tails {
+                            self.constraints.push(IntConstraint::MustMatch(
+                                t_id,
+                                e_id,
+                                "if/else branches must have same integer type".to_string(),
+                            ));
+                        }
                     }
                 }
             }

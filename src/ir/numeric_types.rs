@@ -94,9 +94,10 @@ impl NumericType {
             (U16, U32) | (U16, U64) | (U16, U128) |
             (U32, U64) | (U32, U128) |
             (U64, U128) |
-            // Common index patterns (i32 <-> usize, u32 <-> usize)
+            // Common index patterns (i32 <-> usize, u32 <-> usize, i64 <-> usize)
             (I32, Usize) | (Usize, I32) |
             (U32, Usize) | (Usize, U32) |
+            (I64, Usize) | (Usize, I64) |
             (I32, Isize) | (Isize, I32)
         )
     }

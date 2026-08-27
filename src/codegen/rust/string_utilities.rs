@@ -241,6 +241,9 @@ pub fn call_site_param_expects_owned_string(
     {
         return true;
     }
+    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, idx) {
+        return true;
+    }
     if matches!(
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
         crate::analyzer::OwnershipMode::Borrowed
@@ -772,6 +775,15 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         };
 
     let param_idx = sig.arg_param_index(arg_index);
+    // Fail closed: codegen-confirmed owned `String` / plain WJ `string` contracts never
+    // receive call-site `&` — stale analyzer `Reference(str)` must not win (join_path seed).
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+        || crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+            sig, param_idx,
+        )
+    {
+        return;
+    }
     let callee_emits_rust_ref =
         crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx);
     let param_types_say_shared_text = sig.param_types.get(param_idx).is_some_and(|t| {
@@ -1022,6 +1034,9 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
 /// string parameter, rewrite `.clone()` to `.to_string()`. Cloning a `&str`
 /// produces another `&str`; `.to_string()` produces an owned `String`.
 ///
+/// Handles both explicit `.clone()` MethodCall AST and codegen-appended
+/// `.clone()` on an Identifier (auto-clone / tuple slot reuse).
+///
 /// Returns `true` if a rewrite happened.
 pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
     expr_str: &mut String,
@@ -1041,6 +1056,8 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
                 _ => None,
             }
         }
+        // Auto-clone / tuple path appends `.clone()` onto the identifier emit.
+        Expression::Identifier { name, .. } => Some(name.as_str()),
         _ => None,
     };
     if let Some(name) = ident_name {
@@ -1049,7 +1066,7 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
         });
         let is_borrowed = borrowed_params.contains(name);
         if is_borrowed && is_string_type {
-            *expr_str = expr_str.replace(".clone()", ".to_string()");
+            *expr_str = expr_str.replacen(".clone()", ".to_string()", 1);
             return true;
         }
     }

@@ -181,6 +181,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
 
                         {
+                            self.maybe_cast_branch_tail_to_unified_int(&mut expr_str, expr);
                             let target = match &self.current_function_return_type {
                                 Some(Type::Int) => Some("int"),
                                 Some(Type::Custom(name)) if name == "i64" || name == "int" => {
