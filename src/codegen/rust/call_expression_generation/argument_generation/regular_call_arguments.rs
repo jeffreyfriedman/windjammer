@@ -338,7 +338,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &coerced,
                         );
                     if let Expression::Identifier { name, .. } = arg {
-                        if gen.auto_clone_analysis.as_ref().is_some_and(|a| {
+                        if peel_sig.as_ref().is_some_and(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, pidx,
+                            ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                sig, pidx,
+                            )
+                        }) && gen.auto_clone_analysis.as_ref().is_some_and(|a| {
                             a.needs_clone(name, gen.current_statement_idx).is_some()
                         }) && !coerced.ends_with(".clone()")
                         {
