@@ -346,9 +346,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
                         && !coerced.ends_with(".clone()")
+                        && peel_sig.as_ref().is_some_and(|sig| {
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig,
+                                sig.arg_param_index(i),
+                            )
+                        })
                     {
-                        // Same analysis-driven restore as bare params (field multi-use).
-                        coerced = gen.maybe_auto_clone_expr_path(arg, &coerced);
+                        coerced = gen.maybe_auto_clone_expr_path(arg, &coerced, Some(func_name), Some(i));
                     }
                     return vec![coerced];
                 }
