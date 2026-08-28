@@ -134,14 +134,19 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => self.auto_clone_analysis.as_ref().is_some_and(|a| {
                 a.needs_clone(name, self.current_statement_idx).is_some()
             }),
-            Expression::FieldAccess { .. } | Expression::Index { .. } => {
-                Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
-                    self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                        a.needs_clone(&path, self.current_statement_idx).is_some()
-                            || a.needs_clone_anywhere(&path)
-                    })
-                })
-            }
+            Expression::FieldAccess { .. } | Expression::Index { .. } => match (callee_name, arg_index) {
+                (callee, idx)
+                    if !emits_owned_formal && self.callee_arg_expects_borrow_at_call(callee, idx) =>
+                {
+                    false
+                }
+                _ => self.auto_clone_field_path_wants_at_call(
+                    arg_expr,
+                    Some(callee_name),
+                    Some(arg_index),
+                    emits_owned_formal,
+                ),
+            },
             _ => false,
         };
         let mut prepared_arg = match arg_expr {
@@ -2520,7 +2525,9 @@ impl<'ast> CodeGenerator<'ast> {
                         analysis
                             .needs_clone(&path, self.current_statement_idx)
                             .is_some()
-                            || analysis.needs_clone_anywhere(&path)
+                            || (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, param_idx,
+                            ) && analysis.needs_clone_anywhere(&path))
                     })
                 }
                 _ => false,
@@ -4994,17 +5001,23 @@ impl<'ast> CodeGenerator<'ast> {
                     if self.callee_param_field_extracts_by_name(callee, idx) {
                         return arg_str.to_string();
                     }
-                    // Prefer analysis reuse clone over stale shared-borrow skips
-                    // (demoted `&str` formals still move the field at the call site).
-                    if Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
-                        self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                            a.needs_clone(&path, self.current_statement_idx).is_some()
-                                || a.needs_clone_anywhere(&path)
-                        })
-                    }) {
-                        return self.maybe_auto_clone_expr_path(arg_expr, arg_str);
-                    }
                     let emits_owned = self.callee_arg_emits_owned_contract(callee, idx);
+                    if !emits_owned && self.callee_arg_expects_borrow_at_call(callee, idx) {
+                        return arg_str.to_string();
+                    }
+                    if self.auto_clone_field_path_wants_at_call(
+                        arg_expr,
+                        Some(callee),
+                        Some(idx),
+                        emits_owned,
+                    ) {
+                        return self.maybe_auto_clone_expr_path(
+                            arg_expr,
+                            arg_str,
+                            Some(callee),
+                            Some(idx),
+                        );
+                    }
                     if !emits_owned
                         && (self.ir_callee_arg_expects_mut_borrow(
                         &self.signature_registry,
@@ -5027,10 +5040,67 @@ impl<'ast> CodeGenerator<'ast> {
                         return arg_str.to_string();
                     }
                 }
-                self.maybe_auto_clone_expr_path(arg_expr, arg_str)
+                self.maybe_auto_clone_expr_path(arg_expr, arg_str, callee_name, arg_index)
             }
             _ => arg_str.to_string(),
         }
+    }
+
+    /// True when auto-clone analysis says a field/index path needs `.clone()` at this call.
+    /// `needs_clone_anywhere` applies only for owned formals (never borrow callees).
+    fn auto_clone_field_path_wants_at_call(
+        &self,
+        arg_expr: &Expression<'ast>,
+        callee_name: Option<&str>,
+        arg_index: Option<usize>,
+        emits_owned_formal: bool,
+    ) -> bool {
+        let Some(path) = Self::auto_clone_expr_path(arg_expr) else {
+            return false;
+        };
+        let Some(analysis) = self.auto_clone_analysis.as_ref() else {
+            return false;
+        };
+        let emits_owned = emits_owned_formal
+            || match (callee_name, arg_index) {
+                (Some(callee), Some(idx)) => self.callee_arg_emits_owned_contract(callee, idx),
+                _ => false,
+            };
+        if !emits_owned {
+            if let (Some(callee), Some(idx)) = (callee_name, arg_index) {
+                if self.callee_arg_expects_borrow_at_call(callee, idx) {
+                    return false;
+                }
+            }
+        }
+        if analysis
+            .needs_clone(&path, self.current_statement_idx)
+            .is_some()
+        {
+            return emits_owned;
+        }
+        emits_owned && analysis.needs_clone_anywhere(&path)
+    }
+
+    /// Shared- or mut-borrow formal at this call (demoted `&str`, `&T`, …).
+    fn callee_arg_expects_borrow_at_call(&self, callee: &str, arg_index: usize) -> bool {
+        self.ir_callee_arg_expects_shared_borrow(
+            &self.signature_registry,
+            callee,
+            arg_index,
+            None,
+            None,
+        ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+            self.ir_callee_arg_expects_shared_borrow(g, callee, arg_index, None, None)
+        }) || self.ir_callee_arg_expects_mut_borrow(
+            &self.signature_registry,
+            callee,
+            arg_index,
+            None,
+            None,
+        ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+            self.ir_callee_arg_expects_mut_borrow(g, callee, arg_index, None, None)
+        })
     }
 
     /// Clone a field/index path when auto-clone analysis recorded a move+reuse site.
@@ -5038,6 +5108,8 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         arg_expr: &Expression<'ast>,
         arg_str: &str,
+        callee_name: Option<&str>,
+        arg_index: Option<usize>,
     ) -> String {
         if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
             // Still rewrite clone → mem::take for call-arg writeback behind &mut self.
@@ -5049,16 +5121,12 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
             return rewritten;
         }
-        let Some(path) = Self::auto_clone_expr_path(arg_expr) else {
-            return arg_str.to_string();
-        };
-        let needs = self
-            .auto_clone_analysis
-            .as_ref()
-            .is_some_and(|a| {
-                a.needs_clone(&path, self.current_statement_idx).is_some()
-                    || a.needs_clone_anywhere(&path)
-            });
+        let needs = self.auto_clone_field_path_wants_at_call(
+            arg_expr,
+            callee_name,
+            arg_index,
+            false,
+        );
         if needs {
             // Only scalar Copy (i64/bool/…) skip clone; Copy aggregates/enums still need
             // `.clone()` on multi-use owned moves (regression-063 Value).
