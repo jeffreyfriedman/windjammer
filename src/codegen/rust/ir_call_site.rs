@@ -131,9 +131,16 @@ impl<'ast> CodeGenerator<'ast> {
         // Analysis-driven reuse clones must win over stale demoted/`&T` formals
         // (same policy for bare params and field/index paths).
         let auto_clone_wants = match arg_expr {
-            Expression::Identifier { name, .. } => self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                a.needs_clone(name, self.current_statement_idx).is_some()
-            }),
+            Expression::Identifier { name, .. } => match (callee_name, arg_index) {
+                (callee, idx)
+                    if !emits_owned_formal && self.callee_arg_expects_borrow_at_call(callee, idx) =>
+                {
+                    false
+                }
+                _ => self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                    a.needs_clone(name, self.current_statement_idx).is_some()
+                }),
+            },
             Expression::FieldAccess { .. } | Expression::Index { .. } => match (callee_name, arg_index) {
                 (callee, idx)
                     if !emits_owned_formal && self.callee_arg_expects_borrow_at_call(callee, idx) =>
@@ -2513,6 +2520,18 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         };
         if needs {
+            // Borrow callees never consume — loop reuse passes borrow/bare, not `.clone()`.
+            if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
+                || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
+            {
+                if arg_str.starts_with('&') {
+                    return arg_str.to_string();
+                }
+                return format!(
+                    "&{}",
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
+                );
+            }
             let preserve_for_reuse = match arg_expr {
                 Expression::Identifier { name, .. } => {
                     analysis
@@ -2799,10 +2818,15 @@ impl<'ast> CodeGenerator<'ast> {
                         &sig, param_idx,
                     );
                     if !wants_owned {
-                        if !self.must_preserve_auto_clone_for_reuse(arg_expr)
-                            && !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(
-                                arg_expr,
-                            )
+                        let borrow_slot =
+                            crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                                &sig, param_idx,
+                            );
+                        if borrow_slot
+                            || (!self.must_preserve_auto_clone_for_reuse(arg_expr)
+                                && !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(
+                                    arg_expr,
+                                ))
                         {
                             crate::codegen::rust::expression_utilities::strip_trailing_clone(
                                 coerced,
@@ -3187,7 +3211,9 @@ impl<'ast> CodeGenerator<'ast> {
                     Expression::Identifier { name, .. } => {
                         self.auto_clone_analysis.as_ref().is_some_and(|a| {
                             a.needs_clone(name, self.current_statement_idx).is_some()
-                                || a.needs_clone_anywhere(name)
+                                || (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    &text_sig, owned_pidx,
+                                ) && a.needs_clone_anywhere(name))
                         })
                     }
                     _ => false,
@@ -4969,6 +4995,11 @@ impl<'ast> CodeGenerator<'ast> {
                         a.needs_clone(name, self.current_statement_idx).is_some()
                     });
                     if analysis_wants_clone {
+                        if !self.callee_arg_emits_owned_contract(callee, idx)
+                            && self.callee_arg_expects_borrow_at_call(callee, idx)
+                        {
+                            return arg_str.to_string();
+                        }
                         return self.maybe_auto_clone(name, arg_str);
                     }
                     let emits_owned = self.callee_arg_emits_owned_contract(callee, idx);
@@ -4990,6 +5021,13 @@ impl<'ast> CodeGenerator<'ast> {
                         ) || self.global_signature_registry.as_ref().is_some_and(|g| {
                             self.ir_callee_arg_expects_shared_borrow(g, callee, idx, None, None)
                         }))
+                    {
+                        return arg_str.to_string();
+                    }
+                }
+                if let (Some(callee), Some(idx)) = (callee_name, arg_index) {
+                    if !self.callee_arg_emits_owned_contract(callee, idx)
+                        && self.callee_arg_expects_borrow_at_call(callee, idx)
                     {
                         return arg_str.to_string();
                     }
@@ -5083,7 +5121,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Shared- or mut-borrow formal at this call (demoted `&str`, `&T`, …).
-    fn callee_arg_expects_borrow_at_call(&self, callee: &str, arg_index: usize) -> bool {
+    pub(in crate::codegen::rust) fn callee_arg_expects_borrow_at_call(&self, callee: &str, arg_index: usize) -> bool {
         self.ir_callee_arg_expects_shared_borrow(
             &self.signature_registry,
             callee,

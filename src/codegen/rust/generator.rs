@@ -2473,6 +2473,9 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> bool {
+        if self.callee_arg_expects_borrow_at_call(callee_name, arg_index) {
+            return false;
+        }
         if self.binding_is_copy_pass_by_value_scalar(param_name)
             || !self.caller_owned_non_copy_formal(param_name)
             || !self.callee_arg_emits_owned_contract(callee_name, arg_index)
