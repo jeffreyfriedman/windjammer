@@ -338,6 +338,12 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
+                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                    && !payload_stored
+                    && !matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::Owned)
+                    )
                     && self.param_has_readonly_expression_use(
                         func.body.as_slice(),
                         &param.name,
@@ -365,6 +371,11 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
+                    && !analyzed.str_ref_optimizable_params.contains(&param.name)
+                    && !matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::Borrowed)
+                    )
                     && !self.param_only_forwards_to_borrowed_text_callees(
                         func.body.as_slice(),
                         &param.name,
@@ -376,6 +387,7 @@ impl<'ast> CodeGenerator<'ast> {
                         func,
                     )
                     && !self.is_collection_key_owned_param(param, func)
+                    && !payload_stored
                     && self.function_return_is_text(func)
                 {
                     self.str_ref_optimized_params.remove(&param.name);
@@ -2124,6 +2136,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
+                                && !self.pub_module_api_keeps_owned_string_formal(func)
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && !self.param_only_forwards_to_emitted_owned_callees(
                                     func.body.as_slice(),
@@ -2624,6 +2637,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             })
             .collect()
+    }
+
+    /// Public module APIs keep WJ `string` as owned `String` unless `@str_ref` opts in.
+    fn pub_module_api_keeps_owned_string_formal(&self, func: &FunctionDecl<'_>) -> bool {
+        func.is_pub && func.parent_type.is_none() && !self.in_trait_impl
     }
 
     /// Shared guard: never demote a param that needs mutable access to shared `&T`.

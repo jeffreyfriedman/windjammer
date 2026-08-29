@@ -75,7 +75,14 @@ impl<'ast> Analyzer<'ast> {
                 // Don't optimize this parameter
                 continue;
             } else {
-                // No decorator - use automatic analysis
+                // Pub validation / concat APIs keep owned `String`. Read-only helpers demote below.
+                if func.parent_type.is_none() && func.is_pub {
+                    if self.param_has_readonly_string_equality_comparison(&param.name, &func.body)
+                        || self.param_used_in_string_concat_expression(&param.name, &func.body)
+                    {
+                        continue;
+                    }
+                }
 
                 let needs_string_ref =
                     self.param_needs_string_ref(&param.name, &func.body, registry);
@@ -186,6 +193,273 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_has_param_as_concat_lhs(param_name, left)
                     || self.expr_has_param_as_concat_lhs(param_name, right)
             }
+            _ => false,
+        }
+    }
+
+    /// Param appears in a string `+` expression (either operand).
+    pub(crate) fn param_used_in_string_concat_expression(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_uses_param_in_string_concat(param_name, stmt))
+    }
+
+    fn stmt_uses_param_in_string_concat(&self, param_name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. }
+            | Statement::Let { value: expr, .. } => {
+                self.expr_uses_param_in_string_concat(param_name, expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_uses_param_in_string_concat(param_name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_uses_param_in_string_concat(param_name, s))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_uses_param_in_string_concat(&self, param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Binary {
+                left,
+                right,
+                op,
+                ..
+            } if matches!(op, crate::parser::BinaryOp::Add) => {
+                self.expr_contains_bare_param(param_name, left)
+                    || self.expr_contains_bare_param(param_name, right)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_uses_param_in_string_concat(param_name, left)
+                    || self.expr_uses_param_in_string_concat(param_name, right)
+            }
+            _ => false,
+        }
+    }
+
+    /// Param used only in `==` / `!=` comparisons against literals (pub validation APIs).
+    pub(crate) fn param_has_readonly_string_equality_comparison(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        let mut saw_eq = false;
+        for stmt in body {
+            if !self.stmt_param_equality_use_only(param_name, stmt, &mut saw_eq) {
+                return false;
+            }
+        }
+        saw_eq
+    }
+
+    fn stmt_param_equality_use_only(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        saw_eq: &mut bool,
+    ) -> bool {
+        match stmt {
+            Statement::If { condition, then_block, else_block, .. } => {
+                if !self.expr_is_equality_use_of_param(param_name, condition, saw_eq) {
+                    return false;
+                }
+                then_block.iter().all(|s| self.stmt_param_equality_use_only(param_name, s, saw_eq))
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter()
+                            .all(|s| self.stmt_param_equality_use_only(param_name, s, saw_eq))
+                    })
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_is_equality_use_of_param(param_name, expr, saw_eq)
+                || !self.expr_contains_bare_param(param_name, expr),
+            Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
+                self.expr_is_equality_use_of_param(param_name, expr, saw_eq)
+                    || !self.expr_contains_bare_param(param_name, expr)
+            }
+            _ => true,
+        }
+    }
+
+    fn expr_is_equality_use_of_param(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        saw_eq: &mut bool,
+    ) -> bool {
+        match expr {
+            Expression::Binary { left, right, op, .. }
+                if matches!(
+                    op,
+                    crate::parser::BinaryOp::Eq | crate::parser::BinaryOp::Ne
+                ) =>
+            {
+                if self.expr_contains_bare_param(param_name, left)
+                    || self.expr_contains_bare_param(param_name, right)
+                {
+                    *saw_eq = true;
+                    true
+                } else {
+                    false
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                !self.expr_contains_bare_param(param_name, left)
+                    && !self.expr_contains_bare_param(param_name, right)
+            }
+            _ => !self.expr_contains_bare_param(param_name, expr),
+        }
+    }
+
+    /// True when every use of `param_name` is as a callee argument (no operators, returns, etc.).
+    pub(crate) fn param_used_only_as_call_argument(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        let mut saw_use = false;
+        for stmt in body {
+            if !self.stmt_param_uses_only_in_call_args(param_name, stmt, &mut saw_use) {
+                return false;
+            }
+        }
+        saw_use
+    }
+
+    fn stmt_param_uses_only_in_call_args(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+        saw_use: &mut bool,
+    ) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. }
+            | Statement::Let { value: expr, .. } => {
+                self.expr_param_uses_only_in_call_args(param_name, expr, saw_use)
+            }
+            Statement::Assignment { value, .. } => {
+                self.expr_param_uses_only_in_call_args(param_name, value, saw_use)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use))
+                    && else_block.as_ref().map_or(true, |b| {
+                        b.iter()
+                            .all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use))
+                    })
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => body
+                .iter()
+                .all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use)),
+            _ => true,
+        }
+    }
+
+    fn expr_param_uses_only_in_call_args(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+        saw_use: &mut bool,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } if name == param_name => {
+                *saw_use = true;
+                false
+            }
+            Expression::Call { arguments, .. } => arguments.iter().all(|(_, arg)| {
+                if self.expr_is_bare_param(param_name, arg) {
+                    *saw_use = true;
+                    true
+                } else {
+                    !self.expr_contains_bare_param(param_name, arg)
+                }
+            }),
+            Expression::MethodCall { arguments, object, .. } => {
+                let object_ok = if self.expr_is_bare_param(param_name, object) {
+                    *saw_use = true;
+                    false
+                } else {
+                    !self.expr_contains_bare_param(param_name, object)
+                };
+                object_ok
+                    && arguments.iter().all(|(_, arg)| {
+                        if self.expr_is_bare_param(param_name, arg) {
+                            *saw_use = true;
+                            true
+                        } else {
+                            !self.expr_contains_bare_param(param_name, arg)
+                        }
+                    })
+            }
+            Expression::Unary { operand, .. } => {
+                !self.expr_contains_bare_param(param_name, operand)
+            }
+            Expression::Binary { left, right, .. } => {
+                !self.expr_contains_bare_param(param_name, left)
+                    && !self.expr_contains_bare_param(param_name, right)
+            }
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use)),
+            _ => !self.expr_contains_bare_param(param_name, expr),
+        }
+    }
+
+    fn expr_is_bare_param(&self, param_name: &str, expr: &Expression) -> bool {
+        matches!(expr, Expression::Identifier { name, .. } if name == param_name)
+    }
+
+    fn expr_contains_bare_param(&self, param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::Call { arguments, function, .. } => {
+                self.expr_contains_bare_param(param_name, function)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_contains_bare_param(param_name, arg))
+            }
+            Expression::MethodCall {
+                arguments,
+                object,
+                ..
+            } => {
+                self.expr_contains_bare_param(param_name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_contains_bare_param(param_name, arg))
+            }
+            Expression::Unary { operand, .. } => self.expr_contains_bare_param(param_name, operand),
+            Expression::Binary { left, right, .. } => {
+                self.expr_contains_bare_param(param_name, left)
+                    || self.expr_contains_bare_param(param_name, right)
+            }
+            Expression::Block { statements, .. } => statements.iter().any(|s| match s {
+                Statement::Expression { expr, .. } => self.expr_contains_bare_param(param_name, expr),
+                _ => false,
+            }),
             _ => false,
         }
     }

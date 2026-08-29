@@ -649,7 +649,12 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 if Self::trait_param_is_owned_string(&param.type_)
-                    && !str_ref_optimizable_params.contains(&param.name)
+                    && (!str_ref_optimizable_params.contains(&param.name)
+                        || (func.is_pub
+                            && self.param_used_in_string_concat_expression(
+                                &param.name,
+                                &func.body,
+                            )))
                 {
                     if self.string_param_consumed_owned(&param.name, &func.body, registry) {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
@@ -657,7 +662,16 @@ impl<'ast> Analyzer<'ast> {
                         continue;
                     }
                     if self.param_needs_string_ref(&param.name, &func.body, registry) {
-                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        if func.is_pub
+                            && self.param_used_in_string_concat_expression(
+                                &param.name,
+                                &func.body,
+                            )
+                        {
+                            inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                        } else {
+                            inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                        }
                         str_ref_optimizable_params.remove(&param.name);
                         continue;
                     }
@@ -714,6 +728,9 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
+        str_ref_optimizable_params
+            .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
+
         // Signature-registry passthrough: readonly/mut-borrow callees win over stale Owned stubs.
         for param in &func.parameters {
             if param.name == "self" {
@@ -726,7 +743,14 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
                 if self.param_needs_string_ref(&param.name, &func.body, registry) {
-                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                    if func.is_pub
+                        && func.parent_type.is_none()
+                        && self.param_used_in_string_concat_expression(&param.name, &func.body)
+                    {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                    } else if inferred_ownership.get(&param.name) != Some(&OwnershipMode::Owned) {
+                        inferred_ownership.insert(param.name.clone(), OwnershipMode::Borrowed);
+                    }
                     str_ref_optimizable_params.remove(&param.name);
                     continue;
                 }
@@ -1355,11 +1379,28 @@ impl<'ast> Analyzer<'ast> {
                         continue;
                     }
                     if self.param_needs_string_ref(&param.name, &func.decl.body, registry) {
-                        if idx < param_ownership.len() {
-                            param_ownership[idx] = OwnershipMode::Borrowed;
-                        }
-                        if idx < param_types.len() {
-                            param_types[idx] = PType::Reference(Box::new(PType::String));
+                        // Pub module APIs keep owned `String` for concat/builder APIs
+                        // (`a + &b`) while read-only helpers still demote (`parse_body`).
+                        if func.decl.parent_type.is_none()
+                            && func.decl.is_pub
+                            && self.param_used_in_string_concat_expression(
+                                &param.name,
+                                &func.decl.body,
+                            )
+                        {
+                            if idx < param_ownership.len() {
+                                param_ownership[idx] = OwnershipMode::Owned;
+                            }
+                            if idx < param_types.len() {
+                                param_types[idx] = param.type_.clone();
+                            }
+                        } else {
+                            if idx < param_ownership.len() {
+                                param_ownership[idx] = OwnershipMode::Borrowed;
+                            }
+                            if idx < param_types.len() {
+                                param_types[idx] = PType::Reference(Box::new(PType::String));
+                            }
                         }
                         continue;
                     }
