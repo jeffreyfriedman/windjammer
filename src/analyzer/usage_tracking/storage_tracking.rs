@@ -428,6 +428,9 @@ impl<'ast> Analyzer<'ast> {
                         if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
                             return true;
                         }
+                        if self.expression_moves_identifier_via_method_receiver(name, value) {
+                            return true;
+                        }
                     }
                 }
                 Statement::Assignment {
@@ -439,6 +442,9 @@ impl<'ast> Analyzer<'ast> {
                         return true;
                     }
                     if matches!(value, Expression::Identifier { name: id, .. } if id == name) {
+                        return true;
+                    }
+                    if self.expression_moves_identifier_via_method_receiver(name, value) {
                         return true;
                     }
                 }
@@ -801,6 +807,21 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::Identifier { .. } => true,
             Expression::FieldAccess { object, .. } => Self::is_rooted_field_access(object),
+            _ => false,
+        }
+    }
+
+    /// `self.field = param.into()` (and similar) moves/converts the param into stored state.
+    fn expression_moves_identifier_via_method_receiver(
+        &self,
+        name: &str,
+        expr: &Expression,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall { method, object, .. } => {
+                method == "into"
+                    && matches!(&**object, Expression::Identifier { name: id, .. } if id == name)
+            }
             _ => false,
         }
     }
@@ -1444,6 +1465,85 @@ impl Inventory {
         assert!(
             analyzer.is_stored("item", add_item.decl.body.as_slice(), &registry),
             "index assign Some(ItemStack::new(item)) must store item"
+        );
+    }
+
+    #[test]
+    fn self_field_assignment_stores_string_param() {
+        let src = r#"
+pub struct Builder { pub value: string }
+impl Builder {
+    pub fn with_value(self, val: string) -> Builder {
+        self.value = val
+        return self
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let with_value = analyzed
+            .iter()
+            .find(|f| f.decl.name == "with_value")
+            .expect("with_value");
+        assert!(
+            analyzer.is_stored("val", with_value.decl.body.as_slice(), &registry),
+            "self.value = val must store val"
+        );
+        assert!(
+            analyzer.string_param_consumed_owned(
+                "val",
+                with_value.decl.body.as_slice(),
+                &registry
+            ),
+            "stored string param must be consumed-owned"
+        );
+        assert!(
+            !with_value.str_ref_optimizable_params.contains("val"),
+            "stored val must not be str_ref optimizable: {:?}",
+            with_value.str_ref_optimizable_params
+        );
+    }
+
+    #[test]
+    fn parse_body_readonly_helper_demotes_json_to_borrow() {
+        let src = r#"
+use std::strings
+
+pub fn parse_body(json: string) -> string {
+    if strings.len(json) == 0 {
+        return ""
+    }
+    let s = "${json.trim()}"
+    s
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let parse_body = analyzed
+            .iter()
+            .find(|f| f.decl.name == "parse_body")
+            .expect("parse_body");
+        assert!(
+            parse_body.str_ref_optimizable_params.contains("json")
+                || matches!(
+                    parse_body.inferred_ownership.get("json"),
+                    Some(OwnershipMode::Borrowed)
+                ),
+            "readonly parse_body json must demote: optimizable={:?} ownership={:?} consumed_owned={} needs_string_ref={}",
+            parse_body.str_ref_optimizable_params,
+            parse_body.inferred_ownership.get("json"),
+            analyzer.string_param_consumed_owned(
+                "json",
+                parse_body.decl.body.as_slice(),
+                &registry
+            ),
+            analyzer.param_needs_string_ref(
+                "json",
+                parse_body.decl.body.as_slice(),
+                &registry
+            )
         );
     }
 }

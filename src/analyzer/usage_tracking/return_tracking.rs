@@ -260,6 +260,16 @@ impl<'ast> Analyzer<'ast> {
                 } => {
                     if self.expression_uses_identifier(param_name, value) {
                         if self.is_returned(var_name, body) {
+                            if matches!(
+                                value,
+                                Expression::Identifier { name, .. } if name == param_name
+                            ) {
+                                return true;
+                            }
+                            // `"${param.trim()}"` → return derived text; param stays borrowable.
+                            if self.expression_is_readonly_text_derivation(param_name, value) {
+                                continue;
+                            }
                             return true;
                         }
                     }
@@ -296,5 +306,71 @@ impl<'ast> Analyzer<'ast> {
             }
         }
         false
+    }
+
+    /// `let s = "${param.trim()}"; return s` — param is read, not moved into the return.
+    fn expression_is_readonly_text_derivation(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+    ) -> bool {
+        if !self.expression_uses_identifier(param_name, expr) {
+            return false;
+        }
+        if matches!(
+            expr,
+            Expression::Identifier { name, .. } if name == param_name
+        ) {
+            return false;
+        }
+        !self.expression_has_consuming_use_of_param(param_name, expr)
+    }
+
+    fn expression_has_consuming_use_of_param(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } if name == param_name => true,
+            Expression::MethodCall { object, .. } => {
+                if matches!(
+                    &**object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    false
+                } else {
+                    self.expression_has_consuming_use_of_param(param_name, object)
+                }
+            }
+            Expression::Call { arguments, function, .. } => {
+                self.expression_has_consuming_use_of_param(param_name, function)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_has_consuming_use_of_param(param_name, arg)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_consuming_use_of_param(param_name, left)
+                    || self.expression_has_consuming_use_of_param(param_name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_has_consuming_use_of_param(param_name, operand)
+            }
+            Expression::Block { statements, .. } => self
+                .function_uses_identifier(param_name, statements)
+                && statements.iter().any(|s| match s {
+                    Statement::Expression { expr, .. } => {
+                        self.expression_has_consuming_use_of_param(param_name, expr)
+                    }
+                    _ => false,
+                }),
+            Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|el| self.expression_has_consuming_use_of_param(param_name, el)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expression_has_consuming_use_of_param(param_name, v)),
+            _ => false,
+        }
     }
 }
