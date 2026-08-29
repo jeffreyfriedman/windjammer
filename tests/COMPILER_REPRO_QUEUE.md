@@ -92,8 +92,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`std::csv.write` via user `fn write` must auto-borrow (`wj-csv`)** | `bug_std_csv_write_owned_rows_auto_borrow_test` | ✅ tip GREEN — qualified runtime-std skips bare-homonym lookup / false recursion strip |
 | P1 | **`assert(false, err_var)` must not emit `assert!(false, e)` (`wj-timefmt`)** | `bug_test_assert_err_message_var_test` | ✅ tip GREEN — non-literal messages → `assert!(cond, "{}", msg)` |
 | P1 | **`while end < strings.len(s)` int vs usize (`wj-compress`)** | `bug_while_int_lt_strings_len_unify_test` | ✅ tip GREEN — `strings::len` registry usize + skip `usize` mark on annotated `int` locals → cast |
-| P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ✅ tip GREEN — borrow callees skip reuse clone; IR reconcile strips stale `.clone()` on shared-ref slots |
+| P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ⚠️ RED on `wj` 0.50.0 — `allow_origin` → `is_origin_allowed(origin, allowed)` then reuse; rustc E0308; product inlines check until tip green |
 | P1 | **Owned formal params into demoted `&str` callee without `+ ""` (`html.wj` export hint)** | dogfood `write_owner_only_export_hint_html` → `auditor_owner_only_export_path(path, format_query)` | ✅ tip GREEN — P3.191; demoted-str borrow gates cover same-crate + cross-module |
+| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test` | ⚠️ RED — `hash_password(password)` → `&password`; `verify(token, secret)` → `.to_string()`; product uses `std::crypto` / `std::jwt` / `std::compress` body codecs until fixed |
 
 ## Stdlib adoption P0/P1 (see `tests/STDLIB_ADOPTION_QUEUE.md`)
 
