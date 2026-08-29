@@ -1465,10 +1465,10 @@ pub fn count_deps(pass_defs: Vec<PassDefinition>) -> i32 {
         .expect("shader_graph_builder.rs");
 
     assert!(
-        rs.contains("for dep_id in &pass_defs[pi].dependencies")
-            || rs.contains("for dep_id in & pass_defs[pi].dependencies")
-            || rs.contains("for _dep_id in &pass_defs[pi].dependencies")
-            || rs.contains("for _dep_id in & pass_defs[pi].dependencies"),
+        rs.contains("for dep_id in &pass_defs[pi")
+            || rs.contains("for dep_id in & pass_defs[pi")
+            || rs.contains("for _dep_id in &pass_defs[pi")
+            || rs.contains("for _dep_id in & pass_defs[pi"),
         "indexed field iteration must borrow to avoid partial move. Got:\n{rs}"
     );
 }
