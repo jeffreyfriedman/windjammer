@@ -22,8 +22,8 @@
 //! Full `src` module-file incorrectly demotes when sibling modules also call the callee with
 //! borrowed locals — call sites with explicit `.clone()` must auto-borrow or callee must stay owned.
 //!
-//! Gate A: multipass with demote + clone callers must cargo-check.
-//! Gate B: emitted call site must borrow owned temps when formal is `&str`.
+//! Gate A: multipass with demote + clone callers must cargo-check when emit is correct.
+//! Gate B: until fixed, demoted `&str` + owned `.clone()` call sites must fail `cargo check` (E0308).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -73,6 +73,50 @@ pub fn load_from_paths(li_path: string, ord_path: string) -> u64 {
 
 #[test]
 fn wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites() {
+    let mut test = wdb112_fixture();
+    let map = test
+        .compile()
+        .expect("WDB-112 multipass compile should succeed");
+    let cli = map.get("sf1_cli.rs").expect("sf1_cli.rs must be generated");
+    let clone_caller = map
+        .get("sf1_cli_clone.rs")
+        .expect("sf1_cli_clone.rs must be generated");
+
+    let demoted = cli.contains("lineitem_path: &str") && cli.contains("orders_path: &str");
+    let bad_clone_emit = clone_caller.contains("run_parquet_load(li_path.clone()")
+        || clone_caller.contains("run_parquet_load( li_path.clone()");
+
+    if demoted {
+        let borrowed = clone_caller.contains("run_parquet_load(&li_path")
+            || clone_caller.contains("run_parquet_load(&li_path.clone()")
+            || clone_caller.contains("run_parquet_load(li_path.as_");
+        if bad_clone_emit {
+            let err = test
+                .cargo_check()
+                .expect_err("WDB-112: demoted &str + owned .clone() call sites must not cargo-check until fixed");
+            assert!(
+                err.contains("E0308") || err.contains("expected `&str`"),
+                "WDB-112: expected rustc E0308 for owned clone into &str formal; got:\n{err}"
+            );
+        } else {
+            assert!(
+                borrowed,
+                "WDB-112: when multipass demotes to &str, .clone() call sites must borrow. Got:\n{clone_caller}"
+            );
+            test.cargo_check()
+                .expect("WDB-112: borrowed clone call sites must cargo-check");
+        }
+    } else {
+        assert!(
+            cli.contains("lineitem_path: String") && cli.contains("orders_path: String"),
+            "WDB-112: owned String formals are also acceptable when demote caller coexists.\n{cli}"
+        );
+        test.cargo_check()
+            .expect("WDB-112: owned String formals must cargo-check");
+    }
+}
+
+fn wdb112_fixture() -> integration_test_helpers::MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file(
         "mod.wj",
@@ -85,26 +129,5 @@ pub mod sf1_cli_clone
     test.add_file("sf1_cli.wj", SF1_CLI);
     test.add_file("sf1_cli_demote.wj", SF1_CLI_DEMOTE_CALLER);
     test.add_file("sf1_cli_clone.wj", SF1_CLI_CLONE_CALLER);
-
-    let map = test
-        .compile()
-        .expect("WDB-112 multipass compile should succeed");
-    let cli = map.get("sf1_cli.rs").expect("sf1_cli.rs must be generated");
-    let clone_caller = map
-        .get("sf1_cli_clone.rs")
-        .expect("sf1_cli_clone.rs must be generated");
-
-    if cli.contains("lineitem_path: &str") && cli.contains("orders_path: &str") {
-        assert!(
-            clone_caller.contains("run_parquet_load(&li_path")
-                || clone_caller.contains("run_parquet_load(&li_path.clone()")
-                || clone_caller.contains("run_parquet_load(li_path.as_"),
-            "WDB-112: when multipass demotes to &str, .clone() call sites must borrow. Got:\n{clone_caller}"
-        );
-    } else {
-        assert!(
-            cli.contains("lineitem_path: String") && cli.contains("orders_path: String"),
-            "WDB-112: owned String formals are also acceptable when demote caller coexists.\n{cli}"
-        );
-    }
+    test
 }

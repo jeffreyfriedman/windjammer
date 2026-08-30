@@ -98,7 +98,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ⚠️ RED on `wj` 0.50.0 — emits `.get(id)` not `.get(&id)`; product uses for-loop lookup until green |
 | P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ✅ tip IR GREEN — explicit-clone forwarding + owned-callee formal restore |
 | P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN relational slice — `./scripts/build_gen.sh relational` after one full build |
-| P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()` (inverse WDB-110)** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ⚠️ RED — full `./scripts/build_gen.sh` → 314× E0308 (relational+graph); dogfood WDB-112 borrow bridge until tip greens gate |
+| P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()` (inverse WDB-110)** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ⚠️ RED — demoted `&str` + owned `.clone()` call sites fail `cargo check` (E0308); gate now asserts rustc failure until tip greens |
 | P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()` (graph batch engines)** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ⚠️ RED — ~193 graph E0308 (`take_out_edges(csr.clone())` vs `&mut DenseCsr`); blocks cargo green after full build_gen |
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — std stub declares `name()`; runtime `DirEntry` has `file_name()` only; product uses `path()` + basename |
@@ -134,7 +134,19 @@ Remaining RED rows above are **compiler-only** — no further product shim drops
 | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN |
 | `finance-ui` owned-`String` wrapper boundary (`.into()` at screens delegates) | ✅ shipped — unblocks `make wasm-boot` |
 
-**2026-08-30:** All queue RED rows resolved on tip (WDB-110, cross-module match-arm, HashMap i64 `.get`).
+## P3.203 repro harness closure (2026-08-30)
+
+| Change | Status |
+|--------|--------|
+| WDB-112 gate: `cargo_check()` must fail E0308 until demoted `&str` + `.clone()` call sites borrow | ⚠️ RED — rustc gate documents compiler fix target |
+| `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — `first_positional(argv.clone())` vs `&Vec<String>` |
+| WDB-113 / `std_fs DirEntry.name` / HashMap i64 `.get` | ⚠️ RED — unchanged; compiler `src/` only |
+
+**Note:** Product roadmap complete; tail = compiler hygiene. Do not work around RED rows in application code.
+
+## Historical note (superseded)
+
+**2026-08-30 (P3.199 era):** Several queue RED rows since resolved on tip (WDB-110, cross-module match-arm). Remaining RED rows listed above.
 
 ## Stdlib adoption P0/P1 (see `tests/STDLIB_ADOPTION_QUEUE.md`)
 
