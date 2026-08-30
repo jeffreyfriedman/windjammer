@@ -96,22 +96,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ⚠️ RED on `wj` 0.50.0 — `allow_origin` → `is_origin_allowed(origin, allowed)` then reuse; rustc E0308; product inlines check until tip green |
 | P1 | **Owned formal params into demoted `&str` callee without `+ ""` (`html.wj` export hint)** | dogfood `write_owner_only_export_hint_html` → `auditor_owner_only_export_path(path, format_query)` | ✅ tip GREEN — P3.191; demoted-str borrow gates cover same-crate + cross-module |
 | P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test` | ⚠️ RED — `hash_password(password)` → `&password`; `verify(token, secret)` → `.to_string()`; product uses `std::crypto` / `std::jwt` / `std::compress` body codecs until fixed |
-
-## P3.200 audit closure (2026-08-30)
-
-Product `finance-screens` shim inventory after PanelHead sweep:
-
-| Shim | Count | Gate | Action |
-|------|-------|------|--------|
-| `json + ""` public-port delegates | 2 | `codegen_cross_module_match_arm_multi_use_owned_formal` | Keep until tip green (P3.199 cargo E0308) |
-| Inline match `+ ""` in json parsers | 0 | `codegen_match_string_arms_must_unify` | DRY via `clip_json_array_through_bracket` |
-| `account_code + ""` in panels | 0 | `codegen_multi_use_struct_field_must_auto_clone` | Green on tip |
-| Hand-rolled `hub-kicker` | 0 | — | PanelHead / PanelSectionHead sweep complete (P3.194–P3.198) |
-
-Remaining RED rows above are **compiler-only** — no further product shim drops without tip fixes.
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ⚠️ RED on `wj` 0.50.0 — emits `.get(id)` not `.get(&id)`; product uses for-loop lookup until green |
 | P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ⚠️ RED on `wj` 0.50.0 per-file transpile (WindjammerDB `cli_run_parquet_load(&li_path.clone(), …)`); tip minimal isolate GREEN — retire `dogfood_gen_p153.py` borrow strip when 0.50.0+ ships fix |
-| P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN — WindjammerDB should migrate relational `gen/` from per-file `wj build file.wj --no-cargo` to `wj build --module-file mod.wj` (or scoped submodule) to share ownership registry; dogfood is bridge until migration |
+| P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN — WindjammerDB Phase 192 adds `scripts/transpile_module_file.sh`; migrate from per-file isolate + dogfood when shipped `wj` matches tip |
 
 ## P3.200 audit closure (2026-08-30)
 
