@@ -10,24 +10,17 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-099 / WindjammerDB PRE dogfood: owned formals must not get `&arg` at call sites.
+//! WDB-099 / WindjammerDB: owned formals must not get `&arg` at call sites (IR-driven).
 //!
-//! After cold multipass regen, PRE emitted:
+//! Multipass regen must not emit:
 //!   `opt_run_cost_report(&ledger)` where formal is owned non-Copy `OptEconLedger`
 //!   `opt_quiet_median_and_contended(&samples)` where formal is owned `Vec<u64>`
 //! → E0308. Call sites must move owned args when the callee formal is Owned.
-//!
-//! Gate A: current `wj` multipass (linked crate) must stay green.
-//! Gate B: if `.worktrees/wj-pre-ir/target/release/wj` exists, it must also stay green
-//! (WindjammerDB dogfood compiler — live as of PRE `wj` 0.50.0).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
 
 fn wdb099_sources() -> (&'static str, &'static str, &'static str) {
     (
@@ -87,8 +80,7 @@ pub fn rebuild_then_report() -> u64 {
 }
 
 fn assert_consumer_matches_harness_ownership(harness: &str, consumer: &str) {
-    // Tip demotes read-only formals to `&T` / `&Vec<T>` and call sites must match.
-    // The PRE bug was owned formals + borrowed call sites (E0308) — Gate B keeps that repro.
+    // IR demotes read-only formals to `&T` / `&Vec<T>` and call sites must match.
     let report_owned = harness.contains("opt_run_cost_report(ledger: OptEconLedger)");
     let report_borrowed = harness.contains("opt_run_cost_report(ledger: &OptEconLedger)");
     assert!(
@@ -206,8 +198,7 @@ fn wdb099_owned_struct_and_vec_formals_must_not_borrow_at_call_site() {
     assert_consumer_matches_harness_ownership(harness, consumer);
 }
 
-/// Gate C: owned aggregate struct at suite call site (Wave1OptLiveClaims pattern).
-/// Passing on main wj 0.50.0 (2026-08-17); keep live so PRE-style over-borrow cannot regress.
+/// Owned aggregate struct at suite call site (Wave1OptLiveClaims pattern).
 #[test]
 fn wdb099_owned_claims_struct_must_not_borrow_at_call_site() {
     let (mod_wj, claims, suite_src) = wdb099_struct_field_sources();
@@ -221,58 +212,4 @@ fn wdb099_owned_claims_struct_must_not_borrow_at_call_site() {
         .expect("WDB-099 Gate C multipass compile should succeed");
     let suite = map.get("suite.rs").expect("suite.rs must be generated");
     assert_suite_no_overborrow(suite);
-}
-
-/// Gate B: WindjammerDB dogfood PRE binary (when present) must match tip ownership.
-///
-/// PRE `wj` 0.50.0 (2026-08-22) is green; keep live so dogfood cannot regress.
-#[test]
-fn wdb099_pre_ir_dogfood_wj_must_not_borrow_owned_formals() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let pre = manifest
-        .join("..")
-        .join(".worktrees")
-        .join("wj-pre-ir")
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !pre.exists() {
-        eprintln!(
-            "skip wdb099 PRE gate: dogfood binary missing at {}",
-            pre.display()
-        );
-        return;
-    }
-
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let src = tmp.path().join("src");
-    let out = tmp.path().join("out");
-    fs::create_dir_all(&src).unwrap();
-    let (mod_wj, harness, consumer_src) = wdb099_sources();
-    fs::write(src.join("mod.wj"), mod_wj).unwrap();
-    fs::write(src.join("harness.wj"), harness).unwrap();
-    fs::write(src.join("consumer.wj"), consumer_src).unwrap();
-
-    let build = Command::new(&pre)
-        .args([
-            "build",
-            src.to_str().unwrap(),
-            "-o",
-            out.to_str().unwrap(),
-            "--no-cargo",
-            "--library",
-            "--no-generate-cargo-toml",
-        ])
-        .output()
-        .expect("run PRE wj");
-    assert!(
-        build.status.success(),
-        "PRE wj build failed:\n{}",
-        String::from_utf8_lossy(&build.stderr)
-    );
-
-    let consumer = fs::read_to_string(out.join("consumer.rs")).expect("consumer.rs");
-    let harness = fs::read_to_string(out.join("harness.rs")).expect("harness.rs");
-    // PRE dogfood historically kept owned formals while over-borrowing at call sites.
-    assert_consumer_matches_harness_ownership(&harness, &consumer);
 }

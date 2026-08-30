@@ -4999,7 +4999,7 @@ impl<'ast> CodeGenerator<'ast> {
         param: &Parameter,
         analyzed: &AnalyzedFunction<'_>,
     ) -> bool {
-        if self.current_struct_name.is_none() {
+        if self.current_struct_name.is_none() && analyzed.decl.parent_type.is_none() {
             return false;
         }
         if func.parameters.iter().any(|p| p.name == "self") {
@@ -6181,7 +6181,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 | Expression::FieldAccess { .. }
                         )
                     {
-                        if self.method_call_callee_emits_owned_arg(object, method, i, func) {
+                        if self.method_call_arg_expects_borrow(object, method, i, func) {
+                            // Codegen-confirmed `&T` callee — allow outer formal demotion.
+                        } else if self.method_call_callee_emits_owned_arg(object, method, i, func) {
                             return true;
                         }
                     }
@@ -6369,6 +6371,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
+                return true;
+            }
             if self.method_call_callee_emits_owned_arg(object, method, arg_index, func) {
                 return false;
             }
@@ -7101,13 +7106,26 @@ impl<'ast> CodeGenerator<'ast> {
         {
             let mut visit_sig = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
                 saw_site = true;
-                let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
-                let cross_module = self.callee_is_cross_module_free_fn(&sig.name)
-                    || (simple != sig.name && self.callee_is_cross_module_free_fn(simple));
+                // Qualified impl methods must not fall through to bare-name homonym checks
+                // (`DialogueCondition::is_met` → false cross-module, not `system::is_met`).
+                let cross_module = if let Some((type_name, method_name)) = sig.name.rsplit_once("::")
+                {
+                    if self.lookup_method_signature(type_name, method_name).is_some() {
+                        false
+                    } else {
+                        self.callee_is_cross_module_free_fn(&sig.name)
+                    }
+                } else {
+                    let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
+                    self.callee_is_cross_module_free_fn(&sig.name)
+                        || (simple != sig.name
+                            && self.callee_is_cross_module_free_fn(simple))
+                };
                 if !cross_module {
                     all_shared_ref_callees = false;
                     return;
                 }
+                let simple = sig.name.rsplit("::").next().unwrap_or(&sig.name);
                 let expects_borrow = self.free_call_arg_expects_borrow(&sig.name, arg_index)
                     || (simple != sig.name
                         && self.free_call_arg_expects_borrow(simple, arg_index));
@@ -7139,7 +7157,12 @@ impl<'ast> CodeGenerator<'ast> {
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
-        if let Some((module, _)) = callee.rsplit_once("::") {
+        if let Some((module, suffix)) = callee.rsplit_once("::") {
+            // Qualified impl methods (`DialogueCondition::is_met`) are not module paths —
+            // `callee_is_cross_module_free_fn` must not treat the type prefix as a file stem.
+            if self.lookup_method_signature(module, suffix).is_some() {
+                return false;
+            }
             return module != current;
         }
         // Bare name: same-module only when `{current}::{callee}` was codegen-refreshed
@@ -7237,6 +7260,29 @@ impl<'ast> CodeGenerator<'ast> {
         let mut all_runtime_borrow = true;
         let mut visit = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
             saw_site = true;
+            // User impl methods with codegen-confirmed `&T` formals are delegation
+            // targets, not runtime WJ-owned/Rust-borrow stdlib adapters (WDB-102).
+            if let Some((type_name, method_name)) = sig.name.rsplit_once("::") {
+                if self.lookup_method_signature(type_name, method_name).is_some() {
+                    let pidx = sig.arg_param_index(arg_index);
+                    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
+                        || (sig
+                            .param_types
+                            .get(pidx)
+                            .is_some_and(|t| matches!(t, Type::Reference(_)))
+                            && matches!(
+                                sig.param_ownership.get(pidx),
+                                Some(
+                                    crate::analyzer::OwnershipMode::Borrowed
+                                        | crate::analyzer::OwnershipMode::MutBorrowed
+                                )
+                            ))
+                    {
+                        all_runtime_borrow = false;
+                        return;
+                    }
+                }
+            }
             if !self.callee_arg_is_wj_owned_rust_borrowed(sig, arg_index) {
                 all_runtime_borrow = false;
             }
@@ -9057,6 +9103,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
+                return false;
+            }
             // Codegen-confirmed owned formals beat stale analyzer Borrowed on bare Custom.
             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
                 return true;

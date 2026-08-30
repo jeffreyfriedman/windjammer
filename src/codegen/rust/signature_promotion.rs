@@ -860,14 +860,14 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
     ) {
-        // Bare WJ container formals (`Vec`, maps) emit owned Rust params — stale
-        // multipass Borrowed must not force `&local` at call sites (wdb-layers CSR).
-        if bare_formal_is_vec_or_map(sig, param_idx)
-            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
-            )
-        {
-            return true;
+        // Bare WJ container formals (`Vec`, maps) emit owned Rust params when codegen
+        // confirmed non-shared emission. Without a record, honor converged Borrowed
+        // (Vec<AABB>) — do not recurse into `callee_emits_shared_rust_ref_param` (cycle).
+        if bare_formal_is_vec_or_map(sig, param_idx) {
+            if let Some(ref flags) = sig.emitted_rust_ref_params {
+                return flags.get(param_idx).copied() == Some(false);
+            }
+            return false;
         }
         return false;
     }

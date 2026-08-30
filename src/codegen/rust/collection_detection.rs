@@ -547,4 +547,418 @@ impl CodeGenerator<'_> {
         };
         Self::extract_iterator_element_type(container)
     }
+
+    /// Discover `strings::`, `path::`, … references so generated Rust gets runtime `use` lines.
+    ///
+    /// `imported_runtime_std_modules` is the set of runtime std modules already brought into
+    /// scope via `use std::foo` in this file. Bare identifiers (e.g. a local `map: HashMap`)
+    /// are only treated as module receivers when listed there — never by homonym with scanned
+    /// std module names.
+    pub(super) fn collect_runtime_std_module_refs_from_program(
+        program: &Program,
+        imported_runtime_std_modules: &std::collections::HashSet<String>,
+    ) -> std::collections::HashSet<String> {
+        let mut mods = std::collections::HashSet::new();
+        for item in &program.items {
+            Self::item_collect_runtime_std_modules(item, imported_runtime_std_modules, &mut mods);
+        }
+        mods
+    }
+
+    fn item_collect_runtime_std_modules(
+        item: &Item,
+        imported_runtime_std_modules: &std::collections::HashSet<String>,
+        mods: &mut std::collections::HashSet<String>,
+    ) {
+        match item {
+            Item::Function { decl, .. } => {
+                for stmt in &decl.body {
+                    Self::stmt_collect_runtime_std_modules(
+                        stmt,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Item::Impl { block, .. } => {
+                for method in &block.functions {
+                    for stmt in &method.body {
+                        Self::stmt_collect_runtime_std_modules(
+                            stmt,
+                            imported_runtime_std_modules,
+                            mods,
+                        );
+                    }
+                }
+            }
+            Item::Mod { items, .. } => {
+                for child in items {
+                    Self::item_collect_runtime_std_modules(
+                        child,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Item::Const { value, .. } | Item::Static { value, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    value,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    fn stmt_collect_runtime_std_modules(
+        stmt: &Statement,
+        imported_runtime_std_modules: &std::collections::HashSet<String>,
+        mods: &mut std::collections::HashSet<String>,
+    ) {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => Self::expr_collect_runtime_std_modules(
+                expr,
+                imported_runtime_std_modules,
+                mods,
+            ),
+            Statement::Let { value, .. }
+            | Statement::Const { value, .. }
+            | Statement::Static { value, .. }
+            | Statement::Assignment { value, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    value,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::expr_collect_runtime_std_modules(
+                    condition,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                for s in then_block {
+                    Self::stmt_collect_runtime_std_modules(
+                        s,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+                if let Some(e) = else_block {
+                    for s in e {
+                        Self::stmt_collect_runtime_std_modules(
+                            s,
+                            imported_runtime_std_modules,
+                            mods,
+                        );
+                    }
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                Self::expr_collect_runtime_std_modules(
+                    condition,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                for s in body {
+                    Self::stmt_collect_runtime_std_modules(
+                        s,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    iterable,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                for s in body {
+                    Self::stmt_collect_runtime_std_modules(
+                        s,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                for s in body {
+                    Self::stmt_collect_runtime_std_modules(
+                        s,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    value,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                for arm in arms {
+                    if let Some(g) = arm.guard {
+                        Self::expr_collect_runtime_std_modules(
+                            g,
+                            imported_runtime_std_modules,
+                            mods,
+                        );
+                    }
+                    Self::expr_collect_runtime_std_modules(
+                        &arm.body,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Statement::Defer { statement, .. } => {
+                Self::stmt_collect_runtime_std_modules(
+                    statement,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    fn expr_collect_runtime_std_modules(
+        expr: &Expression,
+        imported_runtime_std_modules: &std::collections::HashSet<String>,
+        mods: &mut std::collections::HashSet<String>,
+    ) {
+        if let Some(module) = Self::expr_runtime_std_module_segment(
+            expr,
+            imported_runtime_std_modules,
+        ) {
+            mods.insert(module);
+        }
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::expr_collect_runtime_std_modules(
+                    function,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                for (_, arg) in arguments {
+                    Self::expr_collect_runtime_std_modules(
+                        arg,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                Self::expr_collect_runtime_std_modules(
+                    object,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                for (_, arg) in arguments {
+                    Self::expr_collect_runtime_std_modules(
+                        arg,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Expression::FieldAccess { object, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    object,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    left,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                Self::expr_collect_runtime_std_modules(
+                    right,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            Expression::Unary { operand, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    operand,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            Expression::Index { object, index, .. } => {
+                Self::expr_collect_runtime_std_modules(
+                    object,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+                Self::expr_collect_runtime_std_modules(
+                    index,
+                    imported_runtime_std_modules,
+                    mods,
+                );
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    Self::stmt_collect_runtime_std_modules(
+                        s,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
+                for e in elements {
+                    Self::expr_collect_runtime_std_modules(
+                        e,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Expression::StructLiteral { fields, .. } => {
+                for (_, v) in fields {
+                    Self::expr_collect_runtime_std_modules(
+                        v,
+                        imported_runtime_std_modules,
+                        mods,
+                    );
+                }
+            }
+            Expression::Cast { expr, .. }
+            | Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. } => Self::expr_collect_runtime_std_modules(
+                expr,
+                imported_runtime_std_modules,
+                mods,
+            ),
+            _ => {}
+        }
+    }
+
+    fn expr_runtime_std_module_segment(
+        expr: &Expression,
+        imported_runtime_std_modules: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                if let Some((module, _)) = name.split_once("::") {
+                    if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module) {
+                        return Some(module.to_string());
+                    }
+                }
+                None
+            }
+            Expression::FieldAccess { object, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if imported_runtime_std_modules.contains(name) {
+                        return Some(name.clone());
+                    }
+                }
+                Self::expr_runtime_std_module_segment(object, imported_runtime_std_modules)
+            }
+            Expression::MethodCall { object, .. } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if imported_runtime_std_modules.contains(name) {
+                        return Some(name.clone());
+                    }
+                }
+                Self::expr_runtime_std_module_segment(object, imported_runtime_std_modules)
+            }
+            Expression::Call { function, .. } => {
+                Self::expr_runtime_std_module_segment(function, imported_runtime_std_modules)
+            }
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod runtime_std_collect_tests {
+    use super::CodeGenerator;
+    use crate::codegen::rust::stdlib_method_traits::is_runtime_std_module;
+    use crate::compiler::parse_wj_source;
+    use std::path::Path;
+
+    #[test]
+    fn strings_is_runtime_std_module() {
+        assert!(
+            is_runtime_std_module("strings"),
+            "stdlib scanner must register strings as runtime std module"
+        );
+    }
+
+    #[test]
+    fn method_call_strings_len_collects_import() {
+        let source = r#"
+pub struct AssetLoader {
+    loads: int,
+}
+
+impl AssetLoader {
+    pub fn load(self, path: string) -> int {
+        self.loads = self.loads + 1
+        strings::len(path)
+    }
+}
+"#;
+        let (_parser, program) =
+            parse_wj_source(Path::new("assets/loader.wj"), source).expect("parse");
+        let mods = CodeGenerator::collect_runtime_std_module_refs_from_program(
+            &program,
+            &std::collections::HashSet::new(),
+        );
+        assert!(
+            mods.contains("strings"),
+            "strings::len qualified Identifier call must collect strings for implicit import, got {mods:?}"
+        );
+    }
+
+    #[test]
+    fn local_named_map_does_not_collect_runtime_std_map_import() {
+        let source = r#"
+use std::collections::HashMap
+
+pub fn bfs_distance(map: HashMap<i64, i64>, vertex: i64) -> i64 {
+    if map.contains_key(vertex) {
+        return 0
+    }
+    -1
+}
+"#;
+        let (_parser, program) =
+            parse_wj_source(Path::new("graph/hashmap_i64_bfs_keys.wj"), source).expect("parse");
+        let mods = CodeGenerator::collect_runtime_std_module_refs_from_program(
+            &program,
+            &std::collections::HashSet::new(),
+        );
+        assert!(
+            !mods.contains("map"),
+            "local HashMap param named map must not trigger windjammer_runtime::map import, got {mods:?}"
+        );
+    }
 }

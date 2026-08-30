@@ -2980,6 +2980,10 @@ impl<'ast> CodeGenerator<'ast> {
                 callee_name,
                 text_sig,
             );
+        crate::codegen::rust::signature_promotion::restore_stdlib_collection_key_contract(
+            &mut text_sig,
+            Some(callee_name),
+        );
 
         let arg_already_rust_ref = matches!(
             arg_expr,
@@ -3196,6 +3200,13 @@ impl<'ast> CodeGenerator<'ast> {
                         || matches!(t, Type::Parameterized(n, _) if n == "Vec")
                 }))));
             if coerced.starts_with('&') && !coerced.starts_with("&mut ") && owned_slot {
+                let is_map_key_lookup =
+                    crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                        &text_sig,
+                        arg_index,
+                        receiver_type_name,
+                    );
+                if !is_map_key_lookup {
                 if std::env::var_os("WJ_DEBUG_COLLISION_BORROW").is_some()
                     && callee_name.contains("graph_vertex_i64_get")
                     && arg_index == 0
@@ -3239,6 +3250,7 @@ impl<'ast> CodeGenerator<'ast> {
                         _ => base,
                     }
                 };
+                }
             }
         }
 
