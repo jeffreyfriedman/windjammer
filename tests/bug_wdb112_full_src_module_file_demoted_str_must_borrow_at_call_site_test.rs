@@ -82,11 +82,12 @@ fn wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites
         .get("sf1_cli_clone.rs")
         .expect("sf1_cli_clone.rs must be generated");
 
-    let demoted = cli.contains("lineitem_path: &str") && cli.contains("orders_path: &str");
+    let demoted_callee =
+        cli.contains("lineitem_path: &str") && cli.contains("orders_path: &str");
     let bad_clone_emit = clone_caller.contains("run_parquet_load(li_path.clone()")
         || clone_caller.contains("run_parquet_load( li_path.clone()");
 
-    if demoted {
+    if demoted_callee {
         assert!(
             !bad_clone_emit,
             "WDB-112 RED: demoted &str + owned .clone() call sites must borrow. Got:\n{clone_caller}"
@@ -100,6 +101,10 @@ fn wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites
         );
         test.cargo_check()
             .expect("WDB-112: borrowed clone call sites must cargo-check");
+    } else if bad_clone_emit {
+        panic!(
+            "WDB-112 RED: explicit .clone() call sites must not mismatch callee formals. callee:\n{cli}\ncaller:\n{clone_caller}"
+        );
     } else {
         assert!(
             cli.contains("lineitem_path: String") && cli.contains("orders_path: String"),
