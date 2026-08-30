@@ -94,7 +94,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`assert(false, err_var)` must not emit `assert!(false, e)` (`wj-timefmt`)** | `bug_test_assert_err_message_var_test` | ✅ tip GREEN — non-literal messages → `assert!(cond, "{}", msg)` |
 | P1 | **`while end < strings.len(s)` int vs usize (`wj-compress`)** | `bug_while_int_lt_strings_len_unify_test` | ✅ tip GREEN — `strings::len` registry usize + skip `usize` mark on annotated `int` locals → cast |
 | P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ✅ tip IR GREEN |
-| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test`, `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` | ✅ tip GREEN minimal `join_path`/`hash_password` metadata fixtures — regression guard; complex ecosystem apps may still E0308 |
+| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test`, `bug_app_multipass_cross_crate_owned_forwarder_module_file_test`, `bug_cross_crate_owned_formal_multipass_call_site_test` | ⚠️ RED in real apps — isolate/minimal multipass may GREEN; `pretty(body)` + `render_html(lit, vars)` still need `own()` in `wj-fetch`/`wj-auth-api` |
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ⚠️ RED on `wj` 0.50.0 — emits `.get(id)` not `.get(&id)`; product uses for-loop lookup until green |
 | P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ✅ tip IR GREEN — explicit-clone forwarding + owned-callee formal restore |
 | P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN relational slice — `./scripts/build_gen.sh relational` after one full build |
@@ -103,7 +103,24 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — must emit `file_name()`; `assert_stdlib_runtime_links` + cargo check |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — demote+clone multipass; emit assertion + `cargo_check` on green path |
-| P1 | **`pub mod` at end of `lib.wj` must not truncate root codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` after domain fns yields truncated `lib.rs` (~struct only); workaround: declare `pub mod` at top of `lib.wj` |
+| P1 | **`pub mod` at end of `lib.wj` must not truncate root codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ✅ tip GREEN — regression guard |
+| P1 | **Multipass cross-module owned `String` param / literal call sites** | `bug_cross_crate_owned_formal_multipass_call_site_test` | ✅ tip GREEN — `pretty(body)` move + `render_html` literal `.to_string()` |
+
+## P3.206 repro harness closure (2026-08-30)
+
+Verified on clean tip (`cargo test --test all`, no local `src/` patches):
+
+| Gate | Result |
+|------|--------|
+| WDB-112 | ⚠️ RED |
+| WDB-113 | ⚠️ RED |
+| Cross-module Vec borrow | ⚠️ RED |
+| HashMap field `.get(i64)` | ⚠️ RED |
+| `DirEntry.name()` | ⚠️ RED |
+| `pub mod` EOF | ✅ tip GREEN |
+| Multipass owned param/literal | ✅ tip GREEN (new regression guards) |
+
+New: `bug_cross_crate_owned_formal_multipass_call_site_test` — `pretty(body)` + `render_html(lit)` multipass.
 
 ## P3.205 repro bundle (2026-08-30)
 
@@ -128,7 +145,8 @@ cargo test --test all \
 | Cross-module Vec borrow | `cross_crate_vec_string_helper_*` | ⚠️ RED |
 | HashMap field `.get(i64)` | `hashmap_field_get_i64_key_*` | ⚠️ RED |
 | `DirEntry.name()` wiring | `std_fs_dir_entry_name_*` | ⚠️ RED |
-| `pub mod` EOF truncation | `pub_mod_at_end_*` | ⚠️ RED |
+| `pub mod` EOF truncation | `pub_mod_at_end_*` | ✅ tip GREEN (regression guard) |
+| Multipass owned param/literal | `bug_cross_crate_owned_formal_multipass_*` | ✅ tip GREEN (regression guard) |
 | App owned forwarder cross-crate | `cross_crate_owned_forwarder_*` | ✅ tip GREEN (regression guard) |
 
 **Note:** Product roadmap complete; tail = compiler hygiene only. Do not work around RED rows in application code.
