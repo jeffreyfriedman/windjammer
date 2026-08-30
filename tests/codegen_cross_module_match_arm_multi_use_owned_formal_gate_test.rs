@@ -28,8 +28,8 @@ fn cross_module_match_arm_multi_use_owned_formal_must_move_not_borrow() {
         "parser.wj",
         r#"
 pub fn parse_twice(json: string) -> int {
-    let a = strings.len(json + "")
-    let b = strings.len(json + "")
+    let a = json.len()
+    let b = json.len()
     a + b
 }
 "#,
