@@ -23,6 +23,19 @@ fn profile_phase(phase: &str, start: Instant) {
     }
 }
 
+/// Re-scan output for hand-written / cfg-gated `.rs` siblings and refresh `mod.rs`/`lib.rs`
+/// even when incremental transpile is skipped (Bug #11 platform modules).
+fn refresh_mod_declarations_for_handwritten_rs(
+    output: &Path,
+    src_base: &Path,
+    target: CompilationTarget,
+) -> Result<()> {
+    if target == CompilationTarget::Rust {
+        crate::build_utils::generate_mod_file_with_layout(output, Some((output, src_base)))?;
+    }
+    Ok(())
+}
+
 /// Remove shader files from parsed sources (uses upfront parse — no re-tokenize).
 fn filter_shader_files(
     sources: &mut Vec<(PathBuf, String)>,
@@ -288,6 +301,7 @@ pub(crate) fn build_library_multipass(
             "✓ All {} source files up to date, skipping transpilation",
             user_count
         );
+        refresh_mod_declarations_for_handwritten_rs(output, &src_base, target)?;
         return Ok(());
     }
 
