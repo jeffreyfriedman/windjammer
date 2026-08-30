@@ -102,6 +102,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()` (graph batch engines)** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ⚠️ RED — ~193 graph E0308 (`take_out_edges(csr.clone())` vs `&mut DenseCsr`); blocks cargo green after full build_gen |
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — std stub declares `name()`; runtime `DirEntry` has `file_name()` only; product uses `path()` + basename |
+| P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — emits `first_positional(argv.clone())` vs `&Vec<String>` formal; product duplicates argv parsing locally |
 
 ## P3.200 audit closure (2026-08-30)
 
