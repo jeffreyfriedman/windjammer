@@ -103,8 +103,35 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — must emit `file_name()`; `assert_stdlib_runtime_links` + cargo check |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — demote+clone multipass; emit assertion + `cargo_check` on green path |
-| P1 | **`pub mod` at end of `lib.wj` must not truncate root codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — root `pub fn` dropped when `pub mod` trails file |
-| P1 | **`pub mod` at end of `lib.wj` truncates root function codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` after domain fns yields ~21-line `lib.rs` (struct only); workaround: declare `pub mod` at top of `lib.wj` |
+| P1 | **`pub mod` at end of `lib.wj` must not truncate root codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` after domain fns yields truncated `lib.rs` (~struct only); workaround: declare `pub mod` at top of `lib.wj` |
+
+## P3.205 repro bundle (2026-08-30)
+
+Run all tail RED gates (expect failures on tip until compiler `src/` greens):
+
+```bash
+cargo test --test all \
+  wdb112_full_library \
+  wdb113_full_library \
+  cross_crate_vec_string_helper \
+  hashmap_field_get_i64_key \
+  std_fs_dir_entry_name \
+  pub_mod_at_end \
+  cross_module_owned_forwarder_must_move \
+  -- --test-threads=1
+```
+
+| Gate | Repro test | Status |
+|------|------------|--------|
+| WDB-112 demoted `&str` + `.clone()` | `wdb112_full_library_multipass_*` | ⚠️ RED |
+| WDB-113 demoted `&mut T` + `.clone()` | `wdb113_full_library_multipass_*` | ⚠️ RED |
+| Cross-module Vec borrow | `cross_crate_vec_string_helper_*` | ⚠️ RED |
+| HashMap field `.get(i64)` | `hashmap_field_get_i64_key_*` | ⚠️ RED |
+| `DirEntry.name()` wiring | `std_fs_dir_entry_name_*` | ⚠️ RED |
+| `pub mod` EOF truncation | `pub_mod_at_end_*` | ⚠️ RED |
+| App owned forwarder multipass | `cross_module_owned_forwarder_*` | ⚠️ RED |
+
+**Note:** Product roadmap complete; tail = compiler hygiene only. Do not work around RED rows in application code.
 
 ## P3.200 audit closure (2026-08-30)
 
@@ -152,6 +179,14 @@ Remaining RED rows above are **compiler-only** — no further product shim drops
 | `bug_hashmap_field_get_i64_key_auto_borrow_test` multipass + `cargo_check` | ⚠️ RED |
 | `bug_std_fs_dir_entry_name_wiring_test` requires `file_name()` emit | ⚠️ RED |
 | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` at EOF truncates root fns |
+
+## P3.205 repro harness closure (2026-08-30)
+
+| Change | Status |
+|--------|--------|
+| `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` multipass + `cargo_check` | ⚠️ RED — `own()` + `join_path` emits `&local` |
+| COMPILER_REPRO_QUEUE P3.205 repro bundle (`cargo test` filter list) | ✅ shipped |
+| Deduped duplicate `pub mod` EOF queue row | ✅ shipped |
 
 **Note:** Product roadmap complete; tail = compiler hygiene. Do not work around RED rows in application code.
 
