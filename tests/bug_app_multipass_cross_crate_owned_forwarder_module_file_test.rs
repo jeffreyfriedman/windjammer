@@ -11,26 +11,63 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — multipass app: `own()` forwarder into cross-module owned `String` formal
-//! emits `&local` (E0308) under `--module-file`.
+//! FAILING REPRO — cross-crate app: `own()` forwarder into owned `String` formal emits `&local`
+//! (E0308) when callee signatures come from dependency `metadata.json`.
 //!
-//! Isolate gate `bug_app_cross_crate_owned_forwarder_emits_borrow_test` is tip GREEN.
-//! Ecosystem apps (`wj-todo-cli` / `wj-path`, `wj-sitegen` / `wj-template`) still fail until
-//! multipass call sites move owned locals into cross-module callees.
+//! Same-crate multipass (`path_pkg` + `app` modules) is tip GREEN. Ecosystem `wj-path` /
+//! `wj-template` / `wj-auth-api` fail until cross-crate call sites move owned locals.
 
-#[path = "common/integration_test_helpers.rs"]
-mod integration_test_helpers;
+use std::fs;
+use std::process::Command;
+use tempfile::TempDir;
 
-use integration_test_helpers::MultiFileTest;
+#[test]
+fn cross_crate_owned_forwarder_must_move_not_borrow() {
+    let tmp = TempDir::new().expect("tempdir");
 
-const PATH_PKG: &str = r#"
+    let path_src = tmp.path().join("path_src");
+    fs::create_dir_all(&path_src).expect("mkdir path_src");
+    fs::write(
+        path_src.join("path_pkg.wj"),
+        r#"
 pub fn join_path(left: string, right: string) -> string {
     left
 }
-"#;
+"#,
+    )
+    .unwrap();
 
-const APP: &str = r#"
-use crate::path_pkg::join_path
+    let path_gen = tmp.path().join("path_gen");
+    let path_build = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            path_src.to_str().unwrap(),
+            "--output",
+            path_gen.to_str().unwrap(),
+            "--library",
+            "--no-cargo",
+            "--module-file",
+        ])
+        .output()
+        .expect("path_pkg build");
+    assert!(
+        path_build.status.success(),
+        "path_pkg library build failed:\n{}",
+        String::from_utf8_lossy(&path_build.stderr)
+    );
+
+    let metadata_path = path_gen.join("metadata.json");
+    assert!(
+        metadata_path.exists(),
+        "path_pkg must emit metadata.json for cross-crate calls"
+    );
+
+    let app_src = tmp.path().join("app_src");
+    fs::create_dir_all(&app_src).expect("mkdir app_src");
+    fs::write(
+        app_src.join("app.wj"),
+        r#"
+use path_pkg::join_path
 
 pub fn resolve(left: string, right: string) -> string {
     let l = own(left)
@@ -41,41 +78,50 @@ pub fn resolve(left: string, right: string) -> string {
 fn own(value: string) -> string {
     value
 }
-"#;
-
-fn app_forwarder_fixture() -> MultiFileTest {
-    let mut test = MultiFileTest::new();
-    test.add_file(
-        "mod.wj",
-        r#"
-pub mod path_pkg
-pub mod app
 "#,
+    )
+    .unwrap();
+
+    let app_gen = tmp.path().join("app_gen");
+    let app_build = Command::new(env!("CARGO_BIN_EXE_wj"))
+        .args([
+            "build",
+            app_src.join("app.wj").to_str().unwrap(),
+            "--output",
+            app_gen.to_str().unwrap(),
+            "--no-cargo",
+            "--metadata",
+            &format!("path_pkg={}", metadata_path.display()),
+        ])
+        .output()
+        .expect("app build");
+    assert!(
+        app_build.status.success(),
+        "app build failed:\n{}",
+        String::from_utf8_lossy(&app_build.stderr)
     );
-    test.add_file("path_pkg.wj", PATH_PKG);
-    test.add_file("app.wj", APP);
-    test
-}
 
-#[test]
-fn cross_module_owned_forwarder_must_move_not_borrow() {
-    let mut test = app_forwarder_fixture();
-    let map = test
-        .compile()
-        .expect("app multipass forwarder compile should succeed");
-    let app_rs = map.get("app.rs").expect("app.rs must be generated");
-
-    let bad_emit = app_rs.contains("join_path(&l")
-        || app_rs.contains("join_path(&left")
-        || app_rs.contains("join_path( &l");
+    let generated = fs::read_to_string(app_gen.join("app.rs")).expect("app.rs");
+    let bad_emit = generated.contains("join_path(&l")
+        || generated.contains("join_path(&left")
+        || generated.contains("join_path( &l");
     assert!(
         !bad_emit,
-        "RED: owned cross-module formal must receive moved String, not borrow. Got:\n{app_rs}"
+        "RED: cross-crate owned String formal must receive moved local, not borrow:\n{generated}"
     );
     assert!(
-        app_rs.contains("join_path(l") || app_rs.contains("join_path(l,"),
-        "expected bare move into owned String formal:\n{app_rs}"
+        generated.contains("join_path(l") || generated.contains("join_path(l,"),
+        "expected bare move into owned String formal:\n{generated}"
     );
-    test.cargo_check()
-        .expect("moved String forwarder must cargo-check");
+
+    let cargo = Command::new("cargo")
+        .arg("check")
+        .current_dir(&app_gen)
+        .output()
+        .expect("cargo check");
+    assert!(
+        cargo.status.success(),
+        "cross-crate moved forwarder must cargo-check.\nstderr:\n{}",
+        String::from_utf8_lossy(&cargo.stderr)
+    );
 }
