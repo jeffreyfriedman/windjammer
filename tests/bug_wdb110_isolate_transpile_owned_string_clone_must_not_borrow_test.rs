@@ -1,0 +1,189 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "codegen_tests",
+    feature = "integration_tests",
+))]
+
+//! WDB-110: isolate-transpile must not emit `&path.clone()` into owned `String` formals.
+//!
+//! WindjammerDB Phase 189 observed after per-file `wj build --no-cargo`:
+//!   `wave1_sf1_cli_run_parquet_load(&li_path.clone(), &ord_path.clone(), …)`
+//! when callee keeps owned `string` → `String` formals (E0308).
+//!
+//! Gate A: same-file tip must cargo-check.
+//! Gate B: tip isolate callee + caller; owned formals must receive move/clone, not borrow.
+
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+
+use tempfile::TempDir;
+use windjammer::build_project;
+use windjammer::CompilationTarget;
+
+const CALLEE: &str = r#"
+use windjammer_runtime::strings
+
+pub fn run_parquet_load(
+    lineitem_path: string,
+    orders_path: string,
+    max_rows: u64,
+    postgres_line_rows: u64,
+    postgres_ready: bool,
+) -> u64 {
+    let mut rows = max_rows
+    if !strings::is_empty(lineitem_path) {
+        rows = rows + (lineitem_path.len() as u64)
+    }
+    if !strings::is_empty(orders_path) {
+        rows = rows + 1
+    }
+    if postgres_ready {
+        rows = rows + postgres_line_rows
+    }
+    rows
+}
+"#;
+
+const CALLER: &str = r#"
+use crate::callee::run_parquet_load
+
+pub fn call_from_paths(li_path: string, ord_path: string) -> u64 {
+    run_parquet_load(li_path.clone(), ord_path.clone(), 3, 0, false)
+}
+"#;
+
+fn assert_caller_owned_string_formals(callee_rs: &str, caller_rs: &str) {
+    let owned_li = callee_rs.contains("lineitem_path: String");
+    let owned_ord = callee_rs.contains("orders_path: String");
+    assert!(
+        owned_li && owned_ord,
+        "WDB-110: expected owned String formals in callee.\n--- callee ---\n{callee_rs}"
+    );
+    assert!(
+        !caller_rs.contains("run_parquet_load(&li_path.clone()")
+            && !caller_rs.contains("run_parquet_load(& ord_path.clone()")
+            && !caller_rs.contains(", &li_path.clone(),")
+            && !caller_rs.contains(", &ord_path.clone(),"),
+        "WDB-110: owned String formals must not receive &path.clone() at isolate call site.\n--- callee ---\n{callee_rs}\n--- caller ---\n{caller_rs}"
+    );
+    assert!(
+        caller_rs.contains("run_parquet_load(li_path.clone()")
+            || caller_rs.contains("run_parquet_load(li_path,"),
+        "WDB-110: expected move/clone into owned String formal.\n--- caller ---\n{caller_rs}"
+    );
+}
+
+#[test]
+fn wdb110_same_file_owned_string_clone_call_site_cargo_checks() {
+    let source = r#"
+use windjammer_runtime::strings
+
+pub fn run_parquet_load(
+    lineitem_path: string,
+    orders_path: string,
+    max_rows: u64,
+    postgres_line_rows: u64,
+    postgres_ready: bool,
+) -> u64 {
+    let mut rows = max_rows
+    if !strings::is_empty(lineitem_path) {
+        rows = rows + (lineitem_path.len() as u64)
+    }
+    if !strings::is_empty(orders_path) {
+        rows = rows + 1
+    }
+    if postgres_ready {
+        rows = rows + postgres_line_rows
+    }
+    rows
+}
+
+pub fn call_from_paths(li_path: string, ord_path: string) -> u64 {
+    run_parquet_load(li_path.clone(), ord_path.clone(), 3, 0, false)
+}
+"#;
+    let tmp = TempDir::new().expect("tempdir");
+    let wj = tmp.path().join("test.wj");
+    fs::write(&wj, source).unwrap();
+    let out = tmp.path().join("build");
+    build_project(&wj, &out, CompilationTarget::Rust, false).expect("transpile");
+    test_utils::cargo_check_generated(&out);
+}
+
+fn read_first_rs(dir: &std::path::Path) -> String {
+    if let Ok(s) = fs::read_to_string(dir.join("callee.rs")) {
+        return s;
+    }
+    if let Ok(s) = fs::read_to_string(dir.join("caller.rs")) {
+        return s;
+    }
+    fs::read_dir(dir)
+        .ok()
+        .and_then(|d| {
+            d.filter_map(|e| e.ok())
+                .find(|e| e.path().extension().is_some_and(|x| x == "rs"))
+                .and_then(|e| fs::read_to_string(e.path()).ok())
+        })
+        .unwrap_or_default()
+}
+
+fn isolate_transpile_with(wj_bin: &std::path::Path) -> (String, String) {
+    let tmp = TempDir::new().expect("tempdir");
+    let src = tmp.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("callee.wj"), CALLEE).unwrap();
+    fs::write(src.join("caller.wj"), CALLER).unwrap();
+
+    let callee_out = tmp.path().join("callee_out");
+    let caller_out = tmp.path().join("caller_out");
+
+    for (wj, out) in [
+        (src.join("callee.wj"), &callee_out),
+        (src.join("caller.wj"), &caller_out),
+    ] {
+        let build = Command::new(wj_bin)
+            .args([
+                "build",
+                wj.to_str().unwrap(),
+                "-o",
+                out.to_str().unwrap(),
+                "--no-cargo",
+                "--library",
+            ])
+            .output()
+            .unwrap_or_else(|e| panic!("run {}: {e}", wj_bin.display()));
+        assert!(
+            build.status.success(),
+            "{} build failed for {}:\n{}",
+            wj_bin.display(),
+            wj.display(),
+            String::from_utf8_lossy(&build.stderr)
+        );
+    }
+
+    let callee_rs = read_first_rs(&callee_out);
+    let caller_rs = read_first_rs(&caller_out);
+    assert!(
+        !callee_rs.is_empty() && !caller_rs.is_empty(),
+        "missing isolate .rs"
+    );
+    (callee_rs, caller_rs)
+}
+
+#[test]
+fn wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site() {
+    let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
+    let (callee_rs, caller_rs) = isolate_transpile_with(&wj);
+    assert_caller_owned_string_formals(&callee_rs, &caller_rs);
+}
