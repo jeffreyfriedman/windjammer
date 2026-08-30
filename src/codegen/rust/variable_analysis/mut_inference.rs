@@ -58,7 +58,9 @@ impl<'ast> CodeGenerator<'ast> {
     pub(crate) fn variable_needs_mut(&self, var_name: &str) -> bool {
         let statements = &self.current_function_body;
         for stmt in statements.iter() {
-            if self.statement_mutates_variable_field(stmt, var_name) {
+            if self.statement_mutates_variable_field(stmt, var_name)
+                || self.statement_nonreadonly_method_call_on_var(stmt, var_name)
+            {
                 return true;
             }
         }
@@ -411,7 +413,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
-                            return false;
                         }
 
                         if crate::analyzer::stdlib_method_traits::method_call_mutates_receiver(

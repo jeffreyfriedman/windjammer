@@ -514,6 +514,27 @@ pub fn finalize_collection_key_call_site_arg(
     if arg_already_rust_ref {
         return;
     }
+    // Composite keys `(x, y)` / struct literals: Rust needs `&(...)` not `.clone()`.
+    if arg_str.ends_with(".clone()")
+        && matches!(
+            arg_expr,
+            Expression::Identifier { .. }
+                | Expression::Tuple { .. }
+                | Expression::StructLiteral { .. }
+        )
+    {
+        if let Some(stripped) = arg_str.strip_suffix(".clone()") {
+            *arg_str = stripped.to_string();
+        }
+    }
+    if matches!(
+        arg_expr,
+        Expression::Tuple { .. } | Expression::StructLiteral { .. }
+    ) && !arg_str.starts_with('&')
+    {
+        *arg_str = format!("&({arg_str})");
+        return;
+    }
     crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);
 }
 

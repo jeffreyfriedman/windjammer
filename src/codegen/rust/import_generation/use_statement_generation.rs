@@ -320,11 +320,15 @@ impl CodeGenerator<'_> {
 
         if let Some(alias_name) = alias {
             if is_directory_prefix {
-                let rp = self.expand_bare_module_path_for_type(&rust_path);
-                format!(
-                    "{}use {}{} as {};\n",
-                    pub_prefix, import_prefix, rp, alias_name
-                )
+                if let Some(resolved) = self.rust_use_path_from_current_file(&rust_path) {
+                    format!("{}use {} as {};\n", pub_prefix, resolved, alias_name)
+                } else {
+                    let rp = self.expand_bare_module_path_for_type(&rust_path);
+                    format!(
+                        "{}use {}{} as {};\n",
+                        pub_prefix, import_prefix, rp, alias_name
+                    )
+                }
             } else if is_actual_module_file {
                 if self.is_output_mod_rs() {
                     format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name)
@@ -340,8 +344,12 @@ impl CodeGenerator<'_> {
         } else if rust_path.ends_with("::*") {
             format!("{}use {};\n", pub_prefix, rust_path)
         } else if is_directory_prefix {
-            let rp = self.expand_bare_module_path_for_type(&rust_path);
-            format!("{}use {}{};\n", pub_prefix, import_prefix, rp)
+            if let Some(resolved) = self.rust_use_path_from_current_file(&rust_path) {
+                format!("{}use {};\n", pub_prefix, resolved)
+            } else {
+                let rp = self.expand_bare_module_path_for_type(&rust_path);
+                format!("{}use {}{};\n", pub_prefix, import_prefix, rp)
+            }
         } else if is_actual_module_file {
             if self.is_output_mod_rs() {
                 format!("{}use self::{};\n", pub_prefix, rust_path)

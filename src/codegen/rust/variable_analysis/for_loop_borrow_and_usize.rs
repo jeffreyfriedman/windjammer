@@ -21,6 +21,57 @@ impl<'ast> CodeGenerator<'ast> {
         Self::count_for_loop_iterable_identifiers(body, &mut counts);
         self.precompute_for_loop_borrows_walk(body, 0, &counts);
         self.mark_for_loop_borrow_when_iterable_used_after_siblings(body);
+        self.mark_for_loop_borrow_when_iterable_reused_in_body(body);
+    }
+
+    /// `for v in vertices { f(vertices, v) }` — iterable must be borrowed so the loop
+    /// body can reuse the collection (E0382 after into_iter move).
+    fn mark_for_loop_borrow_when_iterable_reused_in_body(
+        &mut self,
+        stmts: &[&'ast Statement<'ast>],
+    ) {
+        for stmt in stmts {
+            if let Statement::For {
+                iterable,
+                pattern,
+                body,
+                ..
+            } = stmt
+            {
+                if let Expression::Identifier { name, .. } = iterable {
+                    let pattern_name = pattern_analysis::extract_pattern_identifier(pattern);
+                    if pattern_name.as_deref() != Some(name.as_str())
+                        && Self::variable_used_in_statements(body, name)
+                    {
+                        self.for_loop_borrow_needed.insert(name.clone());
+                    }
+                }
+                self.mark_for_loop_borrow_when_iterable_reused_in_body(body);
+            }
+            match stmt {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    self.mark_for_loop_borrow_when_iterable_reused_in_body(then_block);
+                    if let Some(e) = else_block {
+                        self.mark_for_loop_borrow_when_iterable_reused_in_body(e);
+                    }
+                }
+                Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                    self.mark_for_loop_borrow_when_iterable_reused_in_body(body);
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            self.mark_for_loop_borrow_when_iterable_reused_in_body(statements);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     /// When `for x in items` is followed (in the same block) by statements that use `items`,
