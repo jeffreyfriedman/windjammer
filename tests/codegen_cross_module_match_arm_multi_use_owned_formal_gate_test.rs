@@ -27,10 +27,12 @@ fn cross_module_match_arm_multi_use_owned_formal_must_move_not_borrow() {
     test.add_file(
         "parser.wj",
         r#"
+use std::strings
+
 pub fn parse_twice(json: string) -> int {
-    let a = json.len()
-    let b = json.len()
-    a + b
+    let _ = strings.len(json + "")
+    let _ = strings.len(json + "")
+    0
 }
 "#,
     );
