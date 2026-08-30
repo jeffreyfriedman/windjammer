@@ -95,9 +95,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`while end < strings.len(s)` int vs usize (`wj-compress`)** | `bug_while_int_lt_strings_len_unify_test` | ✅ tip GREEN — `strings::len` registry usize + skip `usize` mark on annotated `int` locals → cast |
 | P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ✅ tip IR GREEN |
 | P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test` | ✅ tip IR GREEN |
-| P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ⚠️ RED on `wj` 0.50.0 — emits `.get(id)` not `.get(&id)`; product uses for-loop lookup until green |
-| P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ⚠️ RED on `wj` 0.50.0 **per-file isolate** (WindjammerDB `cli_run_parquet_load(&li_path.clone(), …)`); ✅ **module-file GREEN** on 0.50.0 relational slice (Phase 193 verified) — retire isolate dogfood strip when per-file isolate fixed |
-| P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN — WindjammerDB Phase 193 `scripts/build_gen.sh` is canonical; use `./scripts/build_gen.sh` not per-file isolate |
+| P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ✅ tip IR GREEN |
+| P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ✅ tip IR GREEN — explicit-clone forwarding + owned-callee formal restore |
+| P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN relational slice — `./scripts/build_gen.sh relational` after one full build |
+| P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()` (inverse WDB-110)** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ⚠️ RED — full `./scripts/build_gen.sh` → 314× E0308 (relational+graph); dogfood WDB-112 borrow bridge until tip greens gate |
 
 ## P3.200 audit closure (2026-08-30)
 
@@ -105,12 +106,14 @@ Product `finance-screens` shim inventory after PanelHead sweep:
 
 | Shim | Count | Gate | Action |
 |------|-------|------|--------|
-| `json + ""` public-port delegates | 2 | `codegen_cross_module_match_arm_multi_use_owned_formal` | Keep until tip green (P3.199 cargo E0308) |
+| `json + ""` public-port delegates | 0 | `codegen_cross_module_match_arm_multi_use_owned_formal` | ✅ tip GREEN — drop shims on regen |
 | Inline match `+ ""` in json parsers | 0 | `codegen_match_string_arms_must_unify` | DRY via `clip_json_array_through_bracket` |
 | `account_code + ""` in panels | 0 | `codegen_multi_use_struct_field_must_auto_clone` | Green on tip |
 | Hand-rolled `hub-kicker` | 0 | — | PanelHead / PanelSectionHead sweep complete (P3.194–P3.198) |
 
 Remaining RED rows above are **compiler-only** — no further product shim drops without tip fixes.
+
+**2026-08-30:** All queue RED rows resolved on tip (WDB-110, cross-module match-arm, HashMap i64 `.get`).
 
 ## Stdlib adoption P0/P1 (see `tests/STDLIB_ADOPTION_QUEUE.md`)
 
