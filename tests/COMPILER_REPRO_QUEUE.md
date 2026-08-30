@@ -94,7 +94,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`assert(false, err_var)` must not emit `assert!(false, e)` (`wj-timefmt`)** | `bug_test_assert_err_message_var_test` | ✅ tip GREEN — non-literal messages → `assert!(cond, "{}", msg)` |
 | P1 | **`while end < strings.len(s)` int vs usize (`wj-compress`)** | `bug_while_int_lt_strings_len_unify_test` | ✅ tip GREEN — `strings::len` registry usize + skip `usize` mark on annotated `int` locals → cast |
 | P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ✅ tip IR GREEN |
-| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test`, `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` | ⚠️ RED in app multipass — isolate IR GREEN; `own()` + `join_path` / `render_html` emit `&local` (E0308); products use local path join / `own()` at call sites |
+| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test`, `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` | ⚠️ RED cross-crate metadata — `own()` + `join_path` emits `&local` (E0308); same-crate multipass tip GREEN |
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ⚠️ RED on `wj` 0.50.0 — emits `.get(id)` not `.get(&id)`; product uses for-loop lookup until green |
 | P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ✅ tip IR GREEN — explicit-clone forwarding + owned-callee formal restore |
 | P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN relational slice — `./scripts/build_gen.sh relational` after one full build |
@@ -117,7 +117,7 @@ cargo test --test all \
   hashmap_field_get_i64_key \
   std_fs_dir_entry_name \
   pub_mod_at_end \
-  cross_module_owned_forwarder_must_move \
+  cross_crate_owned_forwarder_must_move \
   -- --test-threads=1
 ```
 
@@ -129,7 +129,7 @@ cargo test --test all \
 | HashMap field `.get(i64)` | `hashmap_field_get_i64_key_*` | ⚠️ RED |
 | `DirEntry.name()` wiring | `std_fs_dir_entry_name_*` | ⚠️ RED |
 | `pub mod` EOF truncation | `pub_mod_at_end_*` | ⚠️ RED |
-| App owned forwarder multipass | `cross_module_owned_forwarder_*` | ⚠️ RED |
+| App owned forwarder cross-crate | `cross_crate_owned_forwarder_*` | ⚠️ RED |
 
 **Note:** Product roadmap complete; tail = compiler hygiene only. Do not work around RED rows in application code.
 
