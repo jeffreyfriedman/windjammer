@@ -10,53 +10,12 @@
     feature = "integration_tests",
 ))]
 
-// Bug #11: Support platform-specific module declarations (DEFERRED)
+// Bug #11: Platform-specific module declarations
 //
-// STATUS: Tests are #[ignore]d because the feature is not yet needed.
-// -------
-// These tests document what Bug #11 WOULD do if/when it's needed.
-// They fail because Windjammer's lexer doesn't support # character yet.
-// windjammer-ui works fine without this feature (uses manual cfg attributes).
+// When generated or hand-written `.rs` files start with `#![cfg(...)]`, `mod.rs` /
+// `lib.rs` must emit matching `#[cfg(...)]` on `pub mod` so non-target builds skip them.
 //
-// TO ENABLE: When Bug #11 is needed:
-// 1. Add # character support to lexer (for #![cfg(...)])
-// 2. Implement cfg detection in module_system.rs
-// 3. Remove #[ignore] from tests
-// 4. Validate tests pass
-//
-// Problem:
-// --------
-// Generated .rs files may contain `#![cfg(target_arch = "wasm32")]` at the top,
-// but the module declarations in mod.rs don't have corresponding `#[cfg(...)]`.
-//
-// This causes compilation errors on non-wasm targets because rustc tries to
-// load the module but the entire file is gated behind a cfg attribute.
-//
-// Example:
-// --------
-// examples_wasm.rs:
-//   #![cfg(target_arch = "wasm32")]
-//   pub fn run() { ... }
-//
-// mod.rs (WRONG):
-//   pub mod examples_wasm;  // <- Fails on non-wasm targets
-//
-// mod.rs (CORRECT):
-//   #[cfg(target_arch = "wasm32")]
-//   pub mod examples_wasm;  // <- Only loads on wasm targets
-//
-// Solution:
-// ---------
-// When generating mod.rs:
-// 1. Check each .rs file for `#![cfg(...)]` at the top (within first 200 chars)
-// 2. If found, extract the cfg condition
-// 3. Add `#[cfg(...)]` to the module declaration
-//
-// Test Strategy:
-// --------------
-// 1. Create wasm-specific .wj file that generates `#![cfg(target_arch = "wasm32")]`
-// 2. Compile to get .rs output
-// 3. Verify mod.rs has `#[cfg(target_arch = "wasm32")]` before `pub mod`
+// Tests inject cfg-gated `.rs` after the first compile (simulates hand-written output).
 
 use std::fs;
 use std::path::Path;
@@ -89,7 +48,6 @@ fn compile_wj_project(source_dir: &Path, output_dir: &Path) -> Result<(), String
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "Bug #11 deferred: Windjammer lexer doesn't support # character yet. Feature not needed for current use cases (windjammer-ui works without it). Can be enabled when/if needed."]
 fn test_wasm_specific_module_declaration() {
     // This test verifies that when .rs files have #![cfg(...)] attributes,
     // the module system detects them and adds #[cfg(...)] to module declarations
@@ -145,33 +103,18 @@ pub fn run_wasm_example() {
         lib_rs_content
     );
 
-    // Verify examples_wasm has cfg attribute
-    // The module system should detect #![cfg(...)] in examples_wasm.rs
-    // and add #[cfg(...)] to the module declaration
-    let _has_wasm_cfg_declaration = lib_rs_content.contains(r#"#[cfg(target_arch = "wasm32")]"#)
-        || lib_rs_content.contains(r#"pub mod examples_wasm;"#);
-
-    // For now, just check that examples_wasm is declared
-    // (We'll implement the cfg detection in the fix)
+    // Module system detects #![cfg(...)] in sibling .rs files and gates the mod declaration.
     assert!(
-        lib_rs_content.contains("pub mod examples_wasm;"),
-        "lib.rs should declare examples_wasm module: {}",
-        lib_rs_content
+        lib_rs_content.contains("#[cfg(target_arch = \"wasm32\")]")
+            && lib_rs_content.contains("pub mod examples_wasm;"),
+        "lib.rs should gate examples_wasm with #[cfg(target_arch = \"wasm32\")]:\n{lib_rs_content}"
     );
-
-    // TODO: After implementing the fix, uncomment this assertion:
-    // assert!(
-    //     has_wasm_cfg_declaration && lib_rs_content.contains("#[cfg(target_arch = \"wasm32\")]\npub mod examples_wasm;"),
-    //     "lib.rs should have #[cfg(target_arch = \"wasm32\")] before pub mod examples_wasm;\n{}",
-    //     lib_rs_content
-    // );
 }
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-#[ignore = "Bug #11 deferred: Windjammer lexer doesn't support # character yet. Feature not needed for current use cases (windjammer-ui works without it). Can be enabled when/if needed."]
 fn test_desktop_specific_module_declaration() {
-    // Test #[cfg(feature = "desktop")] case
+    // Same strategy as WASM: inject cfg-gated `.rs` after first compile.
     let temp_dir = tempdir().unwrap();
     let project_root = temp_dir.path();
 
@@ -180,34 +123,37 @@ fn test_desktop_specific_module_declaration() {
 
     fs::write(src_dir.join("mod.wj"), "").unwrap();
 
-    // Desktop-only module with feature gate
     fs::write(
-        src_dir.join("desktop_app.wj"),
-        r#"#![cfg(feature = "desktop")]
-
-pub struct DesktopApp {
-    pub window_title: string
-}
-"#,
+        src_dir.join("core.wj"),
+        "pub struct Core { pub id: int }",
     )
     .unwrap();
 
     let output_dir = project_root.join("out");
     fs::create_dir_all(&output_dir).unwrap();
 
-    compile_wj_project(&src_dir, &output_dir).expect("Compilation should succeed");
+    compile_wj_project(&src_dir, &output_dir).expect("First compilation should succeed");
+
+    fs::write(
+        output_dir.join("desktop_app.rs"),
+        r#"#![cfg(feature = "desktop")]
+
+pub struct DesktopApp {
+    pub window_title: String,
+}
+"#,
+    )
+    .unwrap();
+
+    compile_wj_project(&src_dir, &output_dir).expect("Second compilation should succeed");
 
     let lib_rs_path = output_dir.join("lib.rs");
     let lib_rs_content = fs::read_to_string(&lib_rs_path).unwrap();
     eprintln!("=== lib.rs content ===\n{}", lib_rs_content);
 
-    // Verify #[cfg(feature = "desktop")] is applied
-    let has_desktop_cfg = lib_rs_content.contains(r#"#[cfg(feature = "desktop")]"#)
-        && lib_rs_content.contains("pub mod desktop_app;");
-
     assert!(
-        has_desktop_cfg,
-        "lib.rs should have #[cfg(feature = \"desktop\")] before pub mod desktop_app;\n{}",
-        lib_rs_content
+        lib_rs_content.contains(r#"#[cfg(feature = "desktop")]"#)
+            && lib_rs_content.contains("pub mod desktop_app;"),
+        "lib.rs should gate desktop_app with #[cfg(feature = \"desktop\")]:\n{lib_rs_content}"
     );
 }

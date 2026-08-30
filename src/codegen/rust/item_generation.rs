@@ -1237,7 +1237,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         for (caller_idx, func) in functions.iter().enumerate() {
             let mut callees = HashSet::new();
-            Self::collect_self_method_calls_in_body(&func.body, &mut callees);
+            Self::collect_impl_sibling_method_calls_in_body(&func.body, &name_set, &mut callees);
             for callee in callees {
                 if !name_set.contains(callee.as_str()) {
                     continue;
@@ -1279,29 +1279,38 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn collect_self_method_calls_in_body(
+    fn collect_impl_sibling_method_calls_in_body(
         body: &[&'ast Statement<'ast>],
+        sibling_methods: &HashSet<&str>,
         out: &mut HashSet<String>,
     ) {
         for stmt in body {
-            Self::collect_self_method_calls_in_statement(stmt, out);
+            Self::collect_impl_sibling_method_calls_in_statement(stmt, sibling_methods, out);
         }
     }
 
-    fn collect_self_method_calls_in_statement(stmt: &Statement<'ast>, out: &mut HashSet<String>) {
+    fn collect_impl_sibling_method_calls_in_statement(
+        stmt: &Statement<'ast>,
+        sibling_methods: &HashSet<&str>,
+        out: &mut HashSet<String>,
+    ) {
         match stmt {
             Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
-                Self::collect_self_method_calls_in_expression(expr, out);
+                Self::collect_impl_sibling_method_calls_in_expression(expr, sibling_methods, out);
             }
             Statement::Return { .. } => {}
             Statement::Let { value, else_block, .. } => {
-                Self::collect_self_method_calls_in_expression(value, out);
+                Self::collect_impl_sibling_method_calls_in_expression(value, sibling_methods, out);
                 if let Some(block) = else_block {
-                    Self::collect_self_method_calls_in_body(block.as_slice(), out);
+                    Self::collect_impl_sibling_method_calls_in_body(
+                        block.as_slice(),
+                        sibling_methods,
+                        out,
+                    );
                 }
             }
             Statement::Assignment { value, .. } => {
-                Self::collect_self_method_calls_in_expression(value, out);
+                Self::collect_impl_sibling_method_calls_in_expression(value, sibling_methods, out);
             }
             Statement::If {
                 condition,
@@ -1309,70 +1318,142 @@ impl<'ast> CodeGenerator<'ast> {
                 else_block,
                 ..
             } => {
-                Self::collect_self_method_calls_in_expression(condition, out);
-                Self::collect_self_method_calls_in_body(then_block.as_slice(), out);
+                Self::collect_impl_sibling_method_calls_in_expression(
+                    condition,
+                    sibling_methods,
+                    out,
+                );
+                Self::collect_impl_sibling_method_calls_in_body(
+                    then_block.as_slice(),
+                    sibling_methods,
+                    out,
+                );
                 if let Some(block) = else_block {
-                    Self::collect_self_method_calls_in_body(block.as_slice(), out);
+                    Self::collect_impl_sibling_method_calls_in_body(
+                        block.as_slice(),
+                        sibling_methods,
+                        out,
+                    );
                 }
             }
             Statement::While { body, condition, .. } => {
-                Self::collect_self_method_calls_in_expression(condition, out);
-                Self::collect_self_method_calls_in_body(body.as_slice(), out);
+                Self::collect_impl_sibling_method_calls_in_expression(
+                    condition,
+                    sibling_methods,
+                    out,
+                );
+                Self::collect_impl_sibling_method_calls_in_body(
+                    body.as_slice(),
+                    sibling_methods,
+                    out,
+                );
             }
             Statement::For { body, iterable, .. } => {
-                Self::collect_self_method_calls_in_expression(iterable, out);
-                Self::collect_self_method_calls_in_body(body.as_slice(), out);
+                Self::collect_impl_sibling_method_calls_in_expression(
+                    iterable,
+                    sibling_methods,
+                    out,
+                );
+                Self::collect_impl_sibling_method_calls_in_body(
+                    body.as_slice(),
+                    sibling_methods,
+                    out,
+                );
             }
             Statement::Loop { body, .. }
             | Statement::Thread { body, .. }
             | Statement::Async { body, .. } => {
-                Self::collect_self_method_calls_in_body(body.as_slice(), out);
+                Self::collect_impl_sibling_method_calls_in_body(
+                    body.as_slice(),
+                    sibling_methods,
+                    out,
+                );
             }
             Statement::Match { value, arms, .. } => {
-                Self::collect_self_method_calls_in_expression(value, out);
+                Self::collect_impl_sibling_method_calls_in_expression(value, sibling_methods, out);
                 for arm in arms {
-                    Self::collect_self_method_calls_in_expression(&arm.body, out);
+                    Self::collect_impl_sibling_method_calls_in_expression(
+                        &arm.body,
+                        sibling_methods,
+                        out,
+                    );
                 }
             }
             Statement::Defer { statement, .. } => {
-                Self::collect_self_method_calls_in_statement(statement, out);
+                Self::collect_impl_sibling_method_calls_in_statement(
+                    statement,
+                    sibling_methods,
+                    out,
+                );
             }
             _ => {}
         }
     }
 
-    fn collect_self_method_calls_in_expression(expr: &Expression<'ast>, out: &mut HashSet<String>) {
+    fn collect_impl_sibling_method_calls_in_expression(
+        expr: &Expression<'ast>,
+        sibling_methods: &HashSet<&str>,
+        out: &mut HashSet<String>,
+    ) {
         match expr {
             Expression::MethodCall { object, method, .. } => {
-                if crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
-                    object,
-                ) {
+                if sibling_methods.contains(method.as_str())
+                    || crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(
+                        object,
+                    )
+                    || matches!(&**object, Expression::Identifier { name, .. } if name == "Self")
+                {
                     out.insert(method.clone());
                 }
-                Self::collect_self_method_calls_in_expression(object, out);
+                Self::collect_impl_sibling_method_calls_in_expression(object, sibling_methods, out);
             }
             Expression::Call { function, arguments, .. } => {
-                Self::collect_self_method_calls_in_expression(function, out);
+                if let Expression::FieldAccess { object, field, .. } = &**function {
+                    if matches!(&**object, Expression::Identifier { name, .. } if name == "Self")
+                        && sibling_methods.contains(field.as_str())
+                    {
+                        out.insert(field.clone());
+                    }
+                } else if let Expression::Identifier { name, .. } = &**function {
+                    if let Some((_, method)) = name.rsplit_once("::") {
+                        if name.starts_with("Self::") && sibling_methods.contains(method) {
+                            out.insert(method.to_string());
+                        }
+                    }
+                }
+                Self::collect_impl_sibling_method_calls_in_expression(
+                    function,
+                    sibling_methods,
+                    out,
+                );
                 for (_, arg) in arguments {
-                    Self::collect_self_method_calls_in_expression(arg, out);
+                    Self::collect_impl_sibling_method_calls_in_expression(
+                        arg,
+                        sibling_methods,
+                        out,
+                    );
                 }
             }
             Expression::Binary { left, right, .. } => {
-                Self::collect_self_method_calls_in_expression(left, out);
-                Self::collect_self_method_calls_in_expression(right, out);
+                Self::collect_impl_sibling_method_calls_in_expression(left, sibling_methods, out);
+                Self::collect_impl_sibling_method_calls_in_expression(right, sibling_methods, out);
             }
             Expression::Unary { operand, .. } => {
-                Self::collect_self_method_calls_in_expression(operand, out);
+                Self::collect_impl_sibling_method_calls_in_expression(operand, sibling_methods, out);
             }
             Expression::FieldAccess { object, .. } => {
-                Self::collect_self_method_calls_in_expression(object, out);
+                Self::collect_impl_sibling_method_calls_in_expression(object, sibling_methods, out);
             }
             Expression::Index { object, index, .. } => {
-                Self::collect_self_method_calls_in_expression(object, out);
-                Self::collect_self_method_calls_in_expression(index, out);
+                Self::collect_impl_sibling_method_calls_in_expression(object, sibling_methods, out);
+                Self::collect_impl_sibling_method_calls_in_expression(index, sibling_methods, out);
             }
             Expression::Block { statements, .. } => {
-                Self::collect_self_method_calls_in_body(statements.as_slice(), out);
+                Self::collect_impl_sibling_method_calls_in_body(
+                    statements.as_slice(),
+                    sibling_methods,
+                    out,
+                );
             }
             _ => {}
         }

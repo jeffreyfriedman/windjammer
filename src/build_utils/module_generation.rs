@@ -72,6 +72,39 @@ fn mod_declared_in(content: &str, name: &str) -> bool {
         || content.contains(&format!("pub mod {} {{", name))
 }
 
+/// `#![cfg(...)]` on the first lines of a generated/hand-written `.rs` module file.
+fn rs_inner_cfg_predicate(rs_path: &Path) -> Option<String> {
+    let content = std::fs::read_to_string(rs_path).ok()?;
+    let head: String = content.chars().take(512).collect();
+    let start = head.find("#![cfg(")?;
+    let rest = &head[start + "#![cfg(".len()..];
+    let end = rest.find(')')?;
+    let predicate = rest[..end].trim();
+    if predicate.is_empty() {
+        None
+    } else {
+        Some(predicate.to_string())
+    }
+}
+
+fn module_needs_desktop_feature_gate(module: &str) -> bool {
+    module.starts_with("desktop_") || (module.starts_with("app_") && module != "app_reactive")
+}
+
+/// Emit `#[cfg(...)]` + `pub mod name;` honoring test gates, `#![cfg]` in `name.rs`, and desktop heuristics.
+fn push_pub_mod_declaration(out: &mut String, output_dir: &Path, module: &str) {
+    if is_test_module(module) {
+        out.push_str("#[cfg(test)]\n");
+    }
+    let rs_path = output_dir.join(format!("{module}.rs"));
+    if let Some(predicate) = rs_inner_cfg_predicate(&rs_path) {
+        out.push_str(&format!("#[cfg({predicate})]\n"));
+    } else if module_needs_desktop_feature_gate(module) {
+        out.push_str("#[cfg(feature = \"desktop\")]\n");
+    }
+    out.push_str(&format!("pub mod {module};\n"));
+}
+
 /// When `mod.wj` exists, stub-merge must not re-add stale `.rs` files for modules no longer
 /// declared in `mod.wj` (the compiler already regenerated `mod.rs` without them). Hand-written
 /// `foo.rs` without `foo.wj` is still merged when `mod.wj` exists but omits `foo` (legacy FFI pattern).
@@ -425,12 +458,10 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                 if !extra_modules.is_empty() {
                     extra_modules.sort();
                     for m in &extra_modules {
-                        if is_test_module(m) {
-                            updated.push_str("\n#[cfg(test)]");
-                            updated.push_str(&format!("\npub mod {};", m));
-                        } else {
-                            updated.push_str(&format!("\npub mod {};", m));
-                            updated.push_str(&format!("\npub use {}::*;", m));
+                        updated.push('\n');
+                        push_pub_mod_declaration(&mut updated, output_dir, m);
+                        if !is_test_module(m) {
+                            updated.push_str(&format!("pub use {m}::*;\n"));
                         }
                     }
                     updated.push('\n');
@@ -693,17 +724,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     content.push_str("// This file declares all generated Windjammer modules\n\n");
 
     for module in &modules {
-        let needs_desktop_gate = module.starts_with("desktop_")
-            || (module.starts_with("app_") && module != "app_reactive");
-        let needs_test_gate = is_test_module(module);
-
-        if needs_test_gate {
-            content.push_str("#[cfg(test)]\n");
-        }
-        if needs_desktop_gate {
-            content.push_str("#[cfg(feature = \"desktop\")]\n");
-        }
-        content.push_str(&format!("pub mod {};\n", module));
+        push_pub_mod_declaration(&mut content, output_dir, module);
     }
 
     content.push_str("\n// Re-export public items\n");
@@ -840,6 +861,44 @@ pub fn cleanup_stale_module_files_recursive(dir: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod cfg_gated_module_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn rs_inner_cfg_predicate_reads_wasm_arch_gate() {
+        let temp = tempfile::tempdir().unwrap();
+        let rs = temp.path().join("examples_wasm.rs");
+        fs::write(
+            &rs,
+            "#![cfg(target_arch = \"wasm32\")]\n\npub fn run() {}\n",
+        )
+        .unwrap();
+        assert_eq!(
+            rs_inner_cfg_predicate(&rs).as_deref(),
+            Some("target_arch = \"wasm32\"")
+        );
+    }
+
+    #[test]
+    fn push_pub_mod_declaration_emits_matching_cfg() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(
+            temp.path().join("desktop_app.rs"),
+            "#![cfg(feature = \"desktop\")]\npub struct DesktopApp;\n",
+        )
+        .unwrap();
+        let mut out = String::new();
+        push_pub_mod_declaration(&mut out, temp.path(), "desktop_app");
+        assert!(
+            out.contains("#[cfg(feature = \"desktop\")]\n")
+                && out.contains("pub mod desktop_app;\n"),
+            "got:\n{out}"
+        );
+    }
 }
 
 #[cfg(test)]

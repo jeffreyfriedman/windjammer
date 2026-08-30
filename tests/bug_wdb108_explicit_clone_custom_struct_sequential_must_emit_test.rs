@@ -12,7 +12,7 @@
 
 //! WDB-108: explicit `.clone()` on sequential owned custom-struct / Vec reuse
 //! (Phase 167 PEG `parse_ast_with_registry`) must emit in generated Rust.
-//! WDB-106 covered owned `string`; PRE still drops clones for `WdbSqlParser`-shaped locals.
+//! WDB-106 covered owned `string`; explicit `.clone()` on custom-struct locals must survive IR reconcile.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

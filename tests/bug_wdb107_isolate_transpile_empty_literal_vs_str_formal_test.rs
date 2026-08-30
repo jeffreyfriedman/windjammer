@@ -22,8 +22,6 @@
 //! Gate A: same-file tip must cargo-check.
 //! Gate B: tip isolate of callee + caller (no shared multipass metadata); if
 //! callee demotes to `&str`, caller must not own empty literals at that call site.
-//! Gate C (optional): PRE dogfood binary when `.worktrees/wj-pre-ir/.../wj` exists
-//! — live as of PRE `wj` 0.50.0 (soft-skip if absent).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -36,7 +34,7 @@ use tempfile::TempDir;
 use windjammer::build_project;
 use windjammer::CompilationTarget;
 
-/// Read-only string formals → PRE typically demotes to `&str`.
+/// Read-only string formals demote to `&str` under IR emission contract.
 const CALLEE: &str = r#"
 use windjammer_runtime::strings
 
@@ -174,23 +172,5 @@ fn isolate_transpile_with(wj_bin: &std::path::Path) -> (String, String) {
 fn wdb107_tip_isolate_caller_must_not_own_empty_literal_into_str_formal() {
     let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let (callee_rs, caller_rs) = isolate_transpile_with(&wj);
-    assert_caller_compatible_with_callee(&callee_rs, &caller_rs);
-}
-
-#[test]
-fn wdb107_pre_isolate_caller_must_not_own_empty_literal_into_str_formal() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let pre = manifest
-        .join("..")
-        .join(".worktrees")
-        .join("wj-pre-ir")
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !pre.exists() {
-        eprintln!("skip WDB-107 PRE gate: {}", pre.display());
-        return;
-    }
-    let (callee_rs, caller_rs) = isolate_transpile_with(&pre);
     assert_caller_compatible_with_callee(&callee_rs, &caller_rs);
 }

@@ -540,10 +540,17 @@ fn statement_consumes_self(stmt: &Statement) -> bool {
                     .is_some_and(|b| b.iter().any(|s| statement_consumes_self(s)))
         }
         Statement::Match { value, arms, .. } => {
-            expression_is_bare_self(value)
-                || arms.iter().any(|arm| {
+            if expression_is_bare_self(value) {
+                // `match self { Variant(x) => ... }` with read-only arms is `&self` in Rust.
+                arms.iter().any(|arm| {
                     expression_is_bare_self(&arm.body) || expression_consumes_self(&arm.body)
                 })
+            } else {
+                expression_is_bare_self(value)
+                    || arms.iter().any(|arm| {
+                        expression_is_bare_self(&arm.body) || expression_consumes_self(&arm.body)
+                    })
+            }
         }
         _ => false,
     }

@@ -333,6 +333,19 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.remove(&param.name);
                     return format!("{}: &str", param.name);
                 }
+                // Associated static helpers (`Self::extract_extension(path)`) that only
+                // return their `string` param emit `&str` + `.to_string()` in the body.
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && self.associated_text_identity_return_may_borrow(func, param, analyzed)
+                {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    return format!("{}: &str", param.name);
+                }
                 // Readonly comparison-only text helpers (`is_match(pattern, path)`) demote to
                 // `&str` so loop callers can reuse owned parameters (wj-glob `filter`).
                 if param.name != "self"

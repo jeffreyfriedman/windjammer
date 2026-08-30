@@ -18,16 +18,12 @@
 //!   → Rust formal `map: &GraphVertexI64Map`
 //!   → call site still `graph_vertex_i64_get(distances, v)` → E0308
 //!
-//! Gate A: main `wj` multipass must emit `&map` (or equivalent borrow).
-//! Gate B: PRE dogfood binary (`#[ignore]`) — same assertion when present.
+//! IR call-site coercion must emit `&map` (or equivalent borrow).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
 
 fn wdb101_sources() -> (&'static str, &'static str, &'static str) {
     (
@@ -86,50 +82,4 @@ fn wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site() {
         .expect("WDB-101 multipass compile should succeed");
     let rs = map.get("consumer.rs").expect("consumer.rs generated");
     assert_consumer_borrows_map(rs);
-}
-
-#[test]
-fn wdb101_pre_ir_dogfood_must_auto_borrow_vertex_map_getter() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let pre = manifest
-        .join("..")
-        .join(".worktrees")
-        .join("wj-pre-ir")
-        .join("target")
-        .join("release")
-        .join("wj");
-    if !pre.exists() {
-        eprintln!("skip WDB-101 PRE gate: {}", pre.display());
-        return;
-    }
-
-    let tmp = tempfile::TempDir::new().expect("tempdir");
-    let src = tmp.path().join("src");
-    let out = tmp.path().join("out");
-    fs::create_dir_all(&src).unwrap();
-    let (mod_wj, vertex_map, consumer) = wdb101_sources();
-    fs::write(src.join("mod.wj"), mod_wj).unwrap();
-    fs::write(src.join("vertex_map.wj"), vertex_map).unwrap();
-    fs::write(src.join("consumer.wj"), consumer).unwrap();
-
-    let build = Command::new(&pre)
-        .args([
-            "build",
-            src.to_str().unwrap(),
-            "-o",
-            out.to_str().unwrap(),
-            "--no-cargo",
-            "--library",
-            "--no-generate-cargo-toml",
-        ])
-        .output()
-        .expect("run PRE wj");
-    assert!(
-        build.status.success(),
-        "PRE wj build failed:\n{}",
-        String::from_utf8_lossy(&build.stderr)
-    );
-
-    let rs = fs::read_to_string(out.join("consumer.rs")).expect("consumer.rs");
-    assert_consumer_borrows_map(&rs);
 }

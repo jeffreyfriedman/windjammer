@@ -356,6 +356,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        for module in Self::collect_runtime_std_module_refs_from_program(
+            program,
+            &self.runtime_std_module_imports,
+        ) {
+            self.runtime_std_module_imports.insert(module);
+        }
+
         // Auto-detect operator trait implementations (impl Add, impl Sub, etc.)
         // and add the necessary std::ops imports (only if not already explicitly imported)
         for item in &program.items {
@@ -902,6 +909,27 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if self.needs_hashset_import && !imports.contains("std::collections::HashSet") {
             implicit_imports.push_str("use std::collections::HashSet;\n");
+        }
+
+        for module in self.runtime_std_module_imports.iter() {
+            if imports.contains(&format!("windjammer_runtime::{module}"))
+                || imports.contains(&format!("{module}::"))
+                || imports.contains(&format!("use {module}"))
+            {
+                continue;
+            }
+            let registry = crate::analyzer::SignatureRegistry::stdlib();
+            let use_line = registry
+                .runtime_rust_stem(module)
+                .map(|stem| {
+                    crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
+                        module, stem, None,
+                    )
+                })
+                .unwrap_or_else(|| format!("use windjammer_runtime::{module};\n"));
+            if !use_line.is_empty() && !implicit_imports.contains(&use_line) {
+                implicit_imports.push_str(&use_line);
+            }
         }
 
         // THE WINDJAMMER WAY: Auto-import sibling types in module directories

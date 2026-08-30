@@ -234,6 +234,35 @@ impl CodeGenerator<'_> {
         self.expand_type_path_after_crate_root(&segs).join("::")
     }
 
+    /// Resolve a bare multipass import (e.g. `adapters::seed_writer::SeedWriter`) to the correct
+    /// Rust module-relative path using the Windjammer module tree — not filesystem nesting depth.
+    ///
+    /// From `composition/deps.wj` (`composition::deps`) importing `adapters::seed_writer::SeedWriter`
+    /// yields `super::super::adapters::seed_writer::SeedWriter`, not `super::adapters::…` (E0433).
+    pub(crate) fn rust_use_path_from_current_file(&self, rust_path: &str) -> Option<String> {
+        let base = self.library_source_root.as_ref()?;
+        let current =
+            crate::analyzer::type_collector::wj_file_to_module_path(base, &self.current_wj_file)?;
+
+        let expanded = self.expand_bare_module_path_for_type(rust_path);
+        let segs: Vec<String> = expanded.split("::").map(String::from).collect();
+        if segs.is_empty() {
+            return None;
+        }
+
+        let last = segs.last()?;
+        let defining_module = &segs[..segs.len() - 1];
+        if defining_module.is_empty() {
+            return Some(last.clone());
+        }
+
+        crate::analyzer::type_collector::rust_use_path_from_module_to_type(
+            &current,
+            defining_module,
+            last,
+        )
+    }
+
     /// Rewrite `crate::parent::Type` → `crate::parent::submodule::Type` using multipass `type_defining_modules`.
     pub(crate) fn expand_crate_path_string(&self, rust_path: &str) -> String {
         if self.type_defining_modules.is_empty() {

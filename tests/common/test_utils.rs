@@ -628,7 +628,7 @@ pub fn path_to_toml_string(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
-/// Get the path to the `wj` compiler binary.
+/// Get the path to the `wj` compiler binary (tip / dev build under test).
 pub fn wj_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }

@@ -46,17 +46,53 @@ impl<'ast> CodeGenerator<'ast> {
         self.coerce_string_literals_to_owned = prev_coerce;
         self.in_field_access_object = prev_field_access;
         self.in_explicit_clone_call = prev_explicit_clone;
-        // E0507: `collection[i].method(args)` on non-Copy elements must clone before the call.
-        // Rust cannot move out of a Vec index. Even when the registry says `&self`, library
-        // multipass metadata can disagree with the emitted receiver (`self` vs `&self`), so
-        // always clone indexed non-Copy receivers (extra clone on `&self` methods is correct).
+        // E0507: `collection[i].method(args)` on non-Copy elements must clone before the call
+        // only when the method consumes an owned receiver. Borrowed receivers (`&self`) may
+        // call through the index expression directly (signature-driven, not always-clone).
         if matches!(object, Expression::Index { .. }) && !obj_str.ends_with(".clone()") {
-            let is_copy = self
-                .infer_expression_type(object)
-                .as_ref()
-                .is_some_and(|t| self.is_type_copy(t));
-            if !is_copy {
-                obj_str = format!("{}.clone()", obj_str);
+            if let Some(recv_ty) = self.infer_expression_type(object) {
+                if !self.is_type_copy(&recv_ty) {
+                    let mut needs_clone = false;
+                    if let Some(tn) = Self::type_to_name(&recv_ty) {
+                        let qualified = format!("{tn}::{method}");
+                        let sig_opt = self
+                            .get_signature_with_global(&qualified)
+                            .or_else(|| self.signature_registry.get_signature(&qualified))
+                            .or_else(|| {
+                                let base = tn.split('<').next().unwrap_or(&tn);
+                                self.get_signature_with_global(&format!("{base}::{method}"))
+                            });
+                        needs_clone = sig_opt.is_some_and(|sig| {
+                            if !sig.has_self_receiver {
+                                return false;
+                            }
+                            let base = tn.split('<').next().unwrap_or(tn.as_str());
+                            let ownership_recv =
+                                self.effective_method_self_ownership(&qualified, sig);
+                            let ownership_base = self
+                                .effective_method_self_ownership(&format!("{base}::{method}"), sig);
+                            let ownership = match (ownership_recv, ownership_base) {
+                                (crate::analyzer::OwnershipMode::MutBorrowed, _)
+                                | (_, crate::analyzer::OwnershipMode::MutBorrowed) => {
+                                    crate::analyzer::OwnershipMode::MutBorrowed
+                                }
+                                (crate::analyzer::OwnershipMode::Borrowed, _)
+                                | (_, crate::analyzer::OwnershipMode::Borrowed) => {
+                                    crate::analyzer::OwnershipMode::Borrowed
+                                }
+                                (other, _) => other,
+                            };
+                            !matches!(
+                                ownership,
+                                crate::analyzer::OwnershipMode::Borrowed
+                                    | crate::analyzer::OwnershipMode::MutBorrowed
+                            ) && self.method_requires_consuming_self_receiver(&qualified, sig)
+                        });
+                    }
+                    if needs_clone {
+                        obj_str = format!("{}.clone()", obj_str);
+                    }
+                }
             }
         }
 

@@ -39,6 +39,32 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        if let Expression::Index { object, .. } = object {
+            if let Expression::FieldAccess {
+                object: field_obj,
+                field,
+                ..
+            } = &**object
+            {
+                if let Expression::Identifier { name, .. } = &**field_obj {
+                    if name == "self" {
+                        if let Some(sn) = &self.current_struct_name {
+                            if let Some(fields) = self.lookup_struct_field_types(sn) {
+                                if let Some(field_type) = fields.get(field.as_str()) {
+                                    if let Some(elem_type) =
+                                        Self::extract_iterator_element_type(field_type)
+                                    {
+                                        if let Some(tn) = Self::type_to_name(&elem_type) {
+                                            return Some(tn);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         self.infer_type_name(object)
     }
 
