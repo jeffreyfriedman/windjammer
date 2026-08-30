@@ -94,15 +94,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`assert(false, err_var)` must not emit `assert!(false, e)` (`wj-timefmt`)** | `bug_test_assert_err_message_var_test` | ✅ tip GREEN — non-literal messages → `assert!(cond, "{}", msg)` |
 | P1 | **`while end < strings.len(s)` int vs usize (`wj-compress`)** | `bug_while_int_lt_strings_len_unify_test` | ✅ tip GREEN — `strings::len` registry usize + skip `usize` mark on annotated `int` locals → cast |
 | P1 | **Same-module `Vec<string>` helper reuse emits `.clone()` not `&` (`wj-cors`)** | `bug_same_module_vec_helper_reuse_clone_instead_of_borrow_test` | ✅ tip IR GREEN |
-| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test` | ✅ tip IR GREEN |
+| P1 | **App forwarder → cross-crate owned `String` emits `&` / borrowed emits `.to_string()` (`wj-auth-api`)** | `bug_app_cross_crate_owned_forwarder_emits_borrow_test`, `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` | ⚠️ RED in app multipass — isolate IR GREEN; `own()` + `join_path` / `render_html` emit `&local` (E0308); products use local path join / `own()` at call sites |
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ⚠️ RED on `wj` 0.50.0 — emits `.get(id)` not `.get(&id)`; product uses for-loop lookup until green |
 | P1 | **WDB-110: isolate-transpile `.clone()` into owned `string` formal must not emit `&path.clone()`** | `wdb110_same_file_owned_string_clone_call_site_cargo_checks`, `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ✅ tip IR GREEN — explicit-clone forwarding + owned-callee formal restore |
 | P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN relational slice — `./scripts/build_gen.sh relational` after one full build |
 | P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()` (inverse WDB-110)** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ⚠️ RED — demoted `&str` + owned `.clone()` call sites fail `cargo check` (E0308); gate now asserts rustc failure until tip greens |
-| P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()` (graph batch engines)** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ⚠️ RED — ~193 graph E0308 (`take_out_edges(csr.clone())` vs `&mut DenseCsr`); blocks cargo green after full build_gen |
+| P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()` (graph batch engines)** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ⚠️ RED — demote+clone multipass fixture; emit assertion + `cargo_check` on green path |
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
-| P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — std stub declares `name()`; runtime `DirEntry` has `file_name()` only; product uses `path()` + basename |
-| P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — emits `first_positional(argv.clone())` vs `&Vec<String>` formal; product duplicates argv parsing locally |
+| P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — must emit `file_name()`; `assert_stdlib_runtime_links` + cargo check |
+| P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — demote+clone multipass; emit assertion + `cargo_check` on green path |
+| P1 | **`pub mod` at end of `lib.wj` must not truncate root codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — root `pub fn` dropped when `pub mod` trails file |
 | P1 | **`pub mod` at end of `lib.wj` truncates root function codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` after domain fns yields ~21-line `lib.rs` (struct only); workaround: declare `pub mod` at top of `lib.wj` |
 
 ## P3.200 audit closure (2026-08-30)
@@ -140,8 +141,17 @@ Remaining RED rows above are **compiler-only** — no further product shim drops
 | Change | Status |
 |--------|--------|
 | WDB-112 gate: emit assertion + `cargo_check()` when borrow fix lands | ⚠️ RED — demoted `&str` + `.clone()` call sites |
-| `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — `first_positional(argv.clone())` vs `&Vec<String>` |
-| WDB-113 / `std_fs DirEntry.name` / HashMap i64 `.get` | ⚠️ RED — unchanged; compiler `src/` only |
+| `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — demote+clone multipass `&Vec` borrow |
+| WDB-113 / `std_fs DirEntry.name` / HashMap i64 `.get` | ⚠️ RED — strengthened in P3.204 |
+
+## P3.204 repro harness closure (2026-08-30)
+
+| Change | Status |
+|--------|--------|
+| WDB-113 demote+clone multipass fixture + `cargo_check` green path | ⚠️ RED |
+| `bug_hashmap_field_get_i64_key_auto_borrow_test` multipass + `cargo_check` | ⚠️ RED |
+| `bug_std_fs_dir_entry_name_wiring_test` requires `file_name()` emit | ⚠️ RED |
+| `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` at EOF truncates root fns |
 
 **Note:** Product roadmap complete; tail = compiler hygiene. Do not work around RED rows in application code.
 

@@ -40,9 +40,9 @@ pub fn first_file_name(dir: string) -> Result<string, string> {
     }
 }
 "#;
-    let generated = test_utils::assert_stdlib_runtime_links(source, &["read_dir", "name("]);
+    let generated = test_utils::assert_stdlib_runtime_links(source, &["read_dir", "file_name("]);
     assert!(
-        generated.contains("file_name(") || generated.contains(".name()"),
-        "DirEntry.name() must codegen to runtime file_name(); emitted:\n{generated}"
+        !generated.contains(".name()"),
+        "DirEntry.name() must codegen to runtime file_name(), not missing .name(); emitted:\n{generated}"
     );
 }

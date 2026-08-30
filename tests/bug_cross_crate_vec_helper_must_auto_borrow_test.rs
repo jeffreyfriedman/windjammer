@@ -94,6 +94,10 @@ fn cross_crate_vec_string_helper_must_auto_borrow_at_call_site() {
         );
         test.cargo_check()
             .expect("borrowed Vec call sites must cargo-check");
+    } else if bad_clone_emit {
+        panic!(
+            "RED: explicit .clone() call sites must not mismatch callee formals. callee:\n{helper}\ncaller:\n{clone_caller}"
+        );
     } else {
         assert!(
             helper.contains("args: Vec<String>"),
