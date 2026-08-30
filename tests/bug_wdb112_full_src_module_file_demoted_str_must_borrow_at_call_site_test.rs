@@ -23,7 +23,7 @@
 //! borrowed locals — call sites with explicit `.clone()` must auto-borrow or callee must stay owned.
 //!
 //! Gate A: multipass with demote + clone callers must cargo-check when emit is correct.
-//! Gate B: until fixed, demoted `&str` + owned `.clone()` call sites must fail `cargo check` (E0308).
+//! Gate B: until fixed, demoted `&str` + owned `.clone()` call sites fail the emit assertion (RED).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -87,25 +87,19 @@ fn wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites
         || clone_caller.contains("run_parquet_load( li_path.clone()");
 
     if demoted {
+        assert!(
+            !bad_clone_emit,
+            "WDB-112 RED: demoted &str + owned .clone() call sites must borrow. Got:\n{clone_caller}"
+        );
         let borrowed = clone_caller.contains("run_parquet_load(&li_path")
             || clone_caller.contains("run_parquet_load(&li_path.clone()")
             || clone_caller.contains("run_parquet_load(li_path.as_");
-        if bad_clone_emit {
-            let err = test
-                .cargo_check()
-                .expect_err("WDB-112: demoted &str + owned .clone() call sites must not cargo-check until fixed");
-            assert!(
-                err.contains("E0308") || err.contains("expected `&str`"),
-                "WDB-112: expected rustc E0308 for owned clone into &str formal; got:\n{err}"
-            );
-        } else {
-            assert!(
-                borrowed,
-                "WDB-112: when multipass demotes to &str, .clone() call sites must borrow. Got:\n{clone_caller}"
-            );
-            test.cargo_check()
-                .expect("WDB-112: borrowed clone call sites must cargo-check");
-        }
+        assert!(
+            borrowed,
+            "WDB-112: when multipass demotes to &str, .clone() call sites must borrow. Got:\n{clone_caller}"
+        );
+        test.cargo_check()
+            .expect("WDB-112: borrowed clone call sites must cargo-check");
     } else {
         assert!(
             cli.contains("lineitem_path: String") && cli.contains("orders_path: String"),

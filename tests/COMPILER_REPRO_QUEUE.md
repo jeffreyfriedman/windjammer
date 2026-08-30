@@ -103,6 +103,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — std stub declares `name()`; runtime `DirEntry` has `file_name()` only; product uses `path()` + basename |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — emits `first_positional(argv.clone())` vs `&Vec<String>` formal; product duplicates argv parsing locally |
+| P1 | **`pub mod` at end of `lib.wj` truncates root function codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ⚠️ RED — `pub mod` after domain fns yields ~21-line `lib.rs` (struct only); workaround: declare `pub mod` at top of `lib.wj` |
 
 ## P3.200 audit closure (2026-08-30)
 
@@ -138,7 +139,7 @@ Remaining RED rows above are **compiler-only** — no further product shim drops
 
 | Change | Status |
 |--------|--------|
-| WDB-112 gate: `cargo_check()` must fail E0308 until demoted `&str` + `.clone()` call sites borrow | ⚠️ RED — rustc gate documents compiler fix target |
+| WDB-112 gate: emit assertion + `cargo_check()` when borrow fix lands | ⚠️ RED — demoted `&str` + `.clone()` call sites |
 | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — `first_positional(argv.clone())` vs `&Vec<String>` |
 | WDB-113 / `std_fs DirEntry.name` / HashMap i64 `.get` | ⚠️ RED — unchanged; compiler `src/` only |
 
