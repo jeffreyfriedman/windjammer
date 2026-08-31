@@ -304,15 +304,17 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if let Expression::Identifier { name, .. } = value {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(name, self.current_statement_idx)
-                            .is_some()
-                            && !value_str.ends_with(".clone()")
-                        {
-                            value_str = self.maybe_auto_clone(name, &value_str);
-                            if !value_str.ends_with(".clone()") {
-                                value_str = format!("{}.clone()", value_str);
+                    if !Self::is_mut_local_self_rebind(pattern, value, mutable, auto_needs_mut) {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(name, self.current_statement_idx)
+                                .is_some()
+                                && !value_str.ends_with(".clone()")
+                            {
+                                value_str = self.maybe_auto_clone(name, &value_str);
+                                if !value_str.ends_with(".clone()") {
+                                    value_str = format!("{}.clone()", value_str);
+                                }
                             }
                         }
                     }
@@ -415,15 +417,17 @@ impl<'ast> CodeGenerator<'ast> {
                 self.apply_owned_param_field_extract_clone(value, &mut value_str);
 
                 if let Expression::Identifier { name, .. } = value {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(name, self.current_statement_idx)
-                            .is_some()
-                            && !value_str.ends_with(".clone()")
-                        {
-                            value_str = self.maybe_auto_clone(name, &value_str);
-                            if !value_str.ends_with(".clone()") {
-                                value_str = format!("{}.clone()", value_str);
+                    if !Self::is_mut_local_self_rebind(pattern, value, mutable, auto_needs_mut) {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(name, self.current_statement_idx)
+                                .is_some()
+                                && !value_str.ends_with(".clone()")
+                            {
+                                value_str = self.maybe_auto_clone(name, &value_str);
+                                if !value_str.ends_with(".clone()") {
+                                    value_str = format!("{}.clone()", value_str);
+                                }
                             }
                         }
                     }
@@ -587,15 +591,17 @@ impl<'ast> CodeGenerator<'ast> {
                 self.apply_owned_param_field_extract_clone(value, &mut value_str);
 
                 if let Expression::Identifier { name, .. } = value {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
-                            .needs_clone(name, self.current_statement_idx)
-                            .is_some()
-                            && !value_str.ends_with(".clone()")
-                        {
-                            value_str = self.maybe_auto_clone(name, &value_str);
-                            if !value_str.ends_with(".clone()") {
-                                value_str = format!("{}.clone()", value_str);
+                    if !Self::is_mut_local_self_rebind(pattern, value, mutable, auto_needs_mut) {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            if analysis
+                                .needs_clone(name, self.current_statement_idx)
+                                .is_some()
+                                && !value_str.ends_with(".clone()")
+                            {
+                                value_str = self.maybe_auto_clone(name, &value_str);
+                                if !value_str.ends_with(".clone()") {
+                                    value_str = format!("{}.clone()", value_str);
+                                }
                             }
                         }
                     }
@@ -829,5 +835,24 @@ impl<'ast> CodeGenerator<'ast> {
                 self.local_var_types.insert(binding.to_string(), ty.clone());
             }
         }
+    }
+
+    /// `let mut x = x` (or `let mut x = x` with MutBinding) must move, not auto-clone.
+    fn is_mut_local_self_rebind(
+        pattern: &Pattern,
+        value: &Expression,
+        mutable: bool,
+        auto_needs_mut: bool,
+    ) -> bool {
+        let bound = match pattern {
+            Pattern::Identifier(name) | Pattern::MutBinding(name) => Some(name.as_str()),
+            _ => None,
+        };
+        let init = match value {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            _ => None,
+        };
+        matches!((bound, init), (Some(b), Some(i)) if b == i)
+            && (mutable || auto_needs_mut || matches!(pattern, Pattern::MutBinding(_)))
     }
 }

@@ -1,0 +1,6 @@
+pub fn first_positional(args: Vec<string>) -> Option<string> {
+    if args.len() == 0 {
+        return None
+    }
+    Some(args[0])
+}

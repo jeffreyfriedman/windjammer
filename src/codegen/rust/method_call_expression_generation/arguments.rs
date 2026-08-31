@@ -398,7 +398,13 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         receiver_type_name
                             .map(str::to_string)
+                            .or_else(|| self.self_field_access_receiver_type_name(object))
                             .or_else(|| self.mc_infer_method_receiver_type_name(object))
+                            .or_else(|| self.infer_type_name(object))
+                            .or_else(|| {
+                                self.infer_expression_type(object)
+                                    .and_then(|t| Self::type_to_name(&t))
+                            })
                             .or_else(|| {
                                 sig_for_effective.as_ref().and_then(|sig| {
                                     crate::codegen::rust::stdlib_method_traits::receiver_type_from_qualified_sig(sig)
@@ -429,10 +435,19 @@ impl<'ast> CodeGenerator<'ast> {
                             .cloned()
                             .or_else(|| method_signature.clone())
                             .unwrap_or_default();
-                        let receiver_rt = receiver_for_ir
-                            .as_deref()
-                            .or(self.current_struct_name.as_deref())
-                            .or(receiver_type_name);
+                        let receiver_rt = receiver_for_ir.as_deref().or(receiver_type_name).or_else(
+                            || {
+                                if matches!(
+                                    object,
+                                    Expression::Identifier { name, .. }
+                                        if name == "self" || name == "Self"
+                                ) {
+                                    self.current_struct_name.as_deref()
+                                } else {
+                                    None
+                                }
+                            },
+                        );
                         let mut contract_sig = receiver_rt
                             .as_deref()
                             .and_then(|rt| {
@@ -486,12 +501,21 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(arguments.len()),
                             false,
                         );
-                        coerced =
-                            crate::codegen::rust::string_utilities::restore_stripped_explicit_user_clone(
-                                arg_to_generate,
-                                &arg_str,
-                                &coerced,
-                            );
+                        let borrowed_text = self
+                            .inferred_borrowed_params
+                            .iter()
+                            .chain(self.str_ref_optimized_params.iter())
+                            .cloned()
+                            .collect::<std::collections::HashSet<_>>();
+                        coerced = crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
+                            arg_to_generate,
+                            &arg_str,
+                            &coerced,
+                            Some(&contract_sig),
+                            i,
+                            &borrowed_text,
+                            &self.current_function_params,
+                        );
                         return coerced;
                     }
                     debug_assert!(

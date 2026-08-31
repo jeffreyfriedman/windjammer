@@ -13,7 +13,9 @@ FILTERS=(
   cross_crate_vec_string_helper
   hashmap_field_get_i64_key
   std_fs_dir_entry_name
+  std_fs_dir_entry_name_multipass
   app_test_http_method_public_port_must_pass_wj_test
+  app_module_file_http_method_public_port_must_pass_wj_test
 )
 
 echo "Running ${#FILTERS[@]} RED repro gates (expect failures on tip)..."

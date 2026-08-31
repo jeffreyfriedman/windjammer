@@ -1074,6 +1074,19 @@ pub(crate) fn build_library_multipass(
             wrap_converged_borrow_param_types(sig);
         }
     }
+    {
+        use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
+        let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        crate::compiler::multipass_bare_pass_demotion::promote_callees_from_bare_pass_callers(
+            reg,
+            &program_refs,
+            &global_copy_structs,
+        );
+        for sig in reg.signatures.values_mut() {
+            wrap_converged_borrow_param_types(sig);
+        }
+    }
     profile_phase("Step 4B-a-IR: IR lowering", step4b_ir_start);
 
     // Detect if any file in the project uses serde (via `use std::json`).

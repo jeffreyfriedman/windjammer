@@ -638,6 +638,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.promote_callee_forwarded_mut_borrows(func);
         self.promote_readonly_operand_borrows(func, analyzed);
         self.strip_borrow_inference_for_owning_param_uses(func);
+        self.strip_borrow_inference_for_explicit_clone_demoted_callees(func);
         if self.in_impl_block {
             if self.current_struct_name.is_some() {
                 self.sync_method_registry_from_inferred_borrows(func, analyzed);
@@ -702,6 +703,9 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
                 if !matches!(ownership, crate::analyzer::OwnershipMode::MutBorrowed) {
+                    continue;
+                }
+                if self.param_rebound_as_mutable_local(func.body.as_slice(), param_name) {
                     continue;
                 }
                 if func.parameters.iter().any(|p| {
@@ -821,6 +825,29 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Params that only forward explicit `.clone()` to demoted borrow callees stay owned (WDB-112/113).
+    fn strip_borrow_inference_for_explicit_clone_demoted_callees(
+        &mut self,
+        func: &FunctionDecl<'ast>,
+    ) {
+        for param in &func.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            if self.param_used_via_explicit_user_clone(func.body.as_slice(), &param.name)
+                || self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
+                || self.param_explicit_clone_forwards_to_demoted_borrow_callee(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+            {
+                self.inferred_borrowed_params.remove(&param.name);
+                self.inferred_mut_borrowed_params.remove(&param.name);
+            }
+        }
+    }
+
     /// Promote params forwarded to `&mut T` callees (e.g. `cache.clear(grid, …)`).
     fn promote_callee_forwarded_mut_borrows(&mut self, func: &FunctionDecl<'ast>) {
         for param in &func.parameters {
@@ -828,6 +855,9 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             if self.inferred_mut_borrowed_params.contains(&param.name) {
+                continue;
+            }
+            if self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name) {
                 continue;
             }
             if self.param_passed_to_mut_borrowing_callee(func.body.as_slice(), &param.name, func) {
@@ -4520,8 +4550,8 @@ impl<'ast> CodeGenerator<'ast> {
             .insert(func.name.clone(), field_written);
     }
 
-    /// True when WJ declares a bare owned non-text formal that is not field-mutated
-    /// (take/restore). Field writes mean the callee emits `&mut`, not owned.
+    /// True when WJ AST declares a bare owned formal at `arg_index` (owned `string` or bare
+    /// non-text Custom). Field-mutated formals return false (emit `&mut`, not owned).
     pub(in crate::codegen::rust) fn free_function_ast_arg_is_owned_wj_formal(
         &self,
         callee_name: &str,
@@ -4540,9 +4570,11 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         return false;
                     }
-                    return crate::codegen::rust::signature_promotion::wj_ast_bare_owned_non_text_type(
-                        t,
-                    );
+                    return (crate::codegen::rust::types::is_windjammer_text_type(t)
+                        && !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+                        || crate::codegen::rust::signature_promotion::wj_ast_bare_owned_non_text_type(
+                            t,
+                        );
                 }
             }
         }
@@ -8754,6 +8786,449 @@ impl<'ast> CodeGenerator<'ast> {
         };
         self.for_each_param_call_argument_site(body, param_name, func, &mut visit);
         saw_site && all_borrowed_text
+    }
+
+    /// Explicit WJ `.clone()` on `param` at any call site (WDB-110/112/113 outer-formal guard).
+    pub(in crate::codegen::rust) fn param_used_via_explicit_user_clone(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        let mut found = false;
+        let mut visit_expr = |expr: &Expression<'ast>| {
+            self.expression_visit_explicit_user_clone_of_param(expr, param_name, &mut found);
+        };
+        for stmt in body {
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => visit_expr(expr),
+                Statement::Let { value, .. } => visit_expr(value),
+                _ => {}
+            }
+        }
+        found
+    }
+
+    fn expression_visit_explicit_user_clone_of_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        found: &mut bool,
+    ) {
+        match expr {
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                for (_, arg) in arguments {
+                    if crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg)
+                        && crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg)
+                            == Some(param_name)
+                    {
+                        *found = true;
+                    }
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for stmt in statements {
+                    if let Statement::Expression { expr, .. }
+                    | Statement::Return {
+                        value: Some(expr), ..
+                    } = stmt
+                    {
+                        self.expression_visit_explicit_user_clone_of_param(expr, param_name, found);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// `let mut param = param` rebind before mut-callee bare pass (WDB-113 batch_mut).
+    pub(in crate::codegen::rust) fn param_rebound_as_mutable_local(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            let Statement::Let {
+                pattern,
+                value,
+                mutable,
+                ..
+            } = stmt
+            else {
+                return false;
+            };
+            let pattern_binds_param = matches!(
+                pattern,
+                Pattern::Identifier(name) if name == param_name
+            ) || matches!(
+                pattern,
+                Pattern::MutBinding(name) if name == param_name
+            );
+            let is_mut_binding =
+                *mutable || matches!(pattern, Pattern::MutBinding(_));
+            is_mut_binding
+                && pattern_binds_param
+                && matches!(value, Expression::Identifier { name, .. } if name == param_name)
+        })
+    }
+
+    /// Explicit WJ `.clone()` forwards into callees that still emit owned formals (WDB-110).
+    pub(in crate::codegen::rust) fn param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut saw_clone_site = false;
+        let mut all_owned_targets = true;
+        let mut check_expr = |expr: &Expression<'ast>| {
+            self.expression_check_explicit_clone_owned_forward(
+                expr,
+                param_name,
+                func,
+                &mut saw_clone_site,
+                &mut all_owned_targets,
+            );
+        };
+        for stmt in body {
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => check_expr(expr),
+                Statement::Let { value, .. } => check_expr(value),
+                _ => {}
+            }
+        }
+        saw_clone_site && all_owned_targets
+    }
+
+    /// Explicit WJ `.clone()` into demoted `&T` / `&mut T` callees keeps caller owned (WDB-112/113).
+    pub(in crate::codegen::rust) fn param_explicit_clone_forwards_to_demoted_borrow_callee(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut saw_clone_site = false;
+        let mut all_demoted_borrow = true;
+        let mut check_expr = |expr: &Expression<'ast>| {
+            self.expression_check_explicit_clone_demoted_borrow_forward(
+                expr,
+                param_name,
+                func,
+                &mut saw_clone_site,
+                &mut all_demoted_borrow,
+            );
+        };
+        for stmt in body {
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => check_expr(expr),
+                Statement::Let { value, .. } => check_expr(value),
+                _ => {}
+            }
+        }
+        saw_clone_site && all_demoted_borrow
+    }
+
+    /// Explicit `.clone()` into demoted `&mut T` callees needs `mut` on the owned formal (WDB-113).
+    pub(in crate::codegen::rust) fn param_explicit_clone_targets_mut_borrow_callee(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut saw_clone_site = false;
+        let mut all_mut_targets = true;
+        let mut check_expr = |expr: &Expression<'ast>| {
+            self.expression_check_explicit_clone_mut_borrow_forward(
+                expr,
+                param_name,
+                func,
+                &mut saw_clone_site,
+                &mut all_mut_targets,
+            );
+        };
+        for stmt in body {
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => check_expr(expr),
+                Statement::Let { value, .. } => check_expr(value),
+                _ => {}
+            }
+        }
+        saw_clone_site && all_mut_targets
+    }
+
+    fn callee_arg_is_demoted_mut_borrow_contract(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        pidx: usize,
+    ) -> bool {
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return false;
+        }
+        matches!(
+            sig.param_types.get(pidx),
+            Some(crate::parser::Type::MutableReference(_))
+        ) || matches!(
+            sig.param_ownership.get(pidx),
+            Some(crate::analyzer::OwnershipMode::MutBorrowed)
+        )
+    }
+
+    fn expression_check_explicit_clone_mut_borrow_forward(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+        saw_clone_site: &mut bool,
+        all_mut_targets: &mut bool,
+    ) {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let call_arg_count = arguments.len();
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg)
+                        || crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg)
+                            != Some(param_name)
+                    {
+                        continue;
+                    }
+                    let Some(sig) = self
+                        .resolve_free_call_signature(function, Some(call_arg_count))
+                        .and_then(|local| {
+                            let callee_name =
+                                crate::codegen::rust::ast_utilities::extract_function_name(function);
+                            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                                Some(local),
+                                &callee_name,
+                                i,
+                                self.global_signature_registry.as_deref(),
+                                &self.signature_registry,
+                            )
+                        })
+                        .or_else(|| self.global_free_call_signature_fallback(function))
+                    else {
+                        *all_mut_targets = false;
+                        continue;
+                    };
+                    *saw_clone_site = true;
+                    let pidx = sig.arg_param_index(i);
+                    if !self.callee_arg_is_demoted_mut_borrow_contract(&sig, pidx) {
+                        *all_mut_targets = false;
+                    }
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for stmt in statements {
+                    if let Statement::Expression { expr, .. }
+                    | Statement::Return {
+                        value: Some(expr), ..
+                    } = stmt
+                    {
+                        self.expression_check_explicit_clone_mut_borrow_forward(
+                            expr,
+                            param_name,
+                            func,
+                            saw_clone_site,
+                            all_mut_targets,
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn callee_arg_is_demoted_borrow_contract(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        pidx: usize,
+    ) -> bool {
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
+            return false;
+        }
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
+            return true;
+        }
+        matches!(
+            sig.param_types.get(pidx),
+            Some(crate::parser::Type::MutableReference(_))
+        ) || matches!(
+            sig.param_ownership.get(pidx),
+            Some(
+                crate::analyzer::OwnershipMode::MutBorrowed
+                    | crate::analyzer::OwnershipMode::Borrowed
+            )
+        )
+    }
+
+    fn expression_check_explicit_clone_demoted_borrow_forward(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+        saw_clone_site: &mut bool,
+        all_demoted_borrow: &mut bool,
+    ) {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let call_arg_count = arguments.len();
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg)
+                        || crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg)
+                            != Some(param_name)
+                    {
+                        continue;
+                    }
+                    let Some(sig) = self
+                        .resolve_free_call_signature(function, Some(call_arg_count))
+                        .and_then(|local| {
+                            let callee_name =
+                                crate::codegen::rust::ast_utilities::extract_function_name(function);
+                            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                                Some(local),
+                                &callee_name,
+                                i,
+                                self.global_signature_registry.as_deref(),
+                                &self.signature_registry,
+                            )
+                        })
+                        .or_else(|| self.global_free_call_signature_fallback(function))
+                    else {
+                        *all_demoted_borrow = false;
+                        continue;
+                    };
+                    *saw_clone_site = true;
+                    let pidx = sig.arg_param_index(i);
+                    if !self.callee_arg_is_demoted_borrow_contract(&sig, pidx) {
+                        *all_demoted_borrow = false;
+                    }
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for stmt in statements {
+                    if let Statement::Expression { expr, .. }
+                    | Statement::Return {
+                        value: Some(expr), ..
+                    } = stmt
+                    {
+                        self.expression_check_explicit_clone_demoted_borrow_forward(
+                            expr,
+                            param_name,
+                            func,
+                            saw_clone_site,
+                            all_demoted_borrow,
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn expression_check_explicit_clone_owned_forward(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+        saw_clone_site: &mut bool,
+        all_owned_targets: &mut bool,
+    ) {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if let Expression::Identifier { name: callee, .. } = function {
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg)
+                            || crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg)
+                                != Some(param_name)
+                        {
+                            continue;
+                        }
+                        let ast_owned_text = self
+                            .free_function_ast_arg_is_owned_wj_formal(callee.as_str(), i);
+                        if ast_owned_text {
+                            *saw_clone_site = true;
+                            continue;
+                        }
+                    }
+                }
+                let call_arg_count = arguments.len();
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg)
+                        || crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg)
+                            != Some(param_name)
+                    {
+                        continue;
+                    }
+                    if let Expression::Identifier { name: callee, .. } = function {
+                        let ast_owned_text = self
+                            .free_function_ast_arg_is_owned_wj_formal(callee.as_str(), i);
+                        if ast_owned_text {
+                            *saw_clone_site = true;
+                            continue;
+                        }
+                    }
+                    let Some(sig) = self
+                        .resolve_free_call_signature(function, Some(call_arg_count))
+                        .or_else(|| self.global_free_call_signature_fallback(function))
+                    else {
+                        *all_owned_targets = false;
+                        continue;
+                    };
+                    *saw_clone_site = true;
+                    let pidx = sig.arg_param_index(i);
+                    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
+                        *all_owned_targets = false;
+                        continue;
+                    }
+                    if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &sig, pidx,
+                    ) && !crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, pidx)
+                    {
+                        *all_owned_targets = false;
+                    }
+                }
+            }
+            Expression::Block { statements, .. } => {
+                for stmt in statements {
+                    if let Statement::Expression { expr, .. }
+                    | Statement::Return {
+                        value: Some(expr), ..
+                    } = stmt
+                    {
+                        self.expression_check_explicit_clone_owned_forward(
+                            expr,
+                            param_name,
+                            func,
+                            saw_clone_site,
+                            all_owned_targets,
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     fn for_each_param_call_argument_site<F>(

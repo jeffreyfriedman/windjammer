@@ -11,6 +11,7 @@ mod dependency_resolution;
 pub mod incremental;
 mod library_copy_registry;
 pub mod library_multipass;
+mod multipass_bare_pass_demotion;
 mod salsa_library_build;
 
 pub use cache_management::write_if_changed;

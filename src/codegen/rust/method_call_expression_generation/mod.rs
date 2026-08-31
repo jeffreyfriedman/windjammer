@@ -95,8 +95,13 @@ impl<'ast> CodeGenerator<'ast> {
         let method_signature =
             self.mc_resolve_method_call_signature(object, effective_method, arguments);
         let type_name = self
-            .mc_infer_method_receiver_type_name(object)
-            .or_else(|| self.infer_type_name(object));
+            .self_field_access_receiver_type_name(object)
+            .or_else(|| self.mc_infer_method_receiver_type_name(object))
+            .or_else(|| self.infer_type_name(object))
+            .or_else(|| {
+                self.infer_expression_type(object)
+                    .and_then(|t| Self::type_to_name(&t))
+            });
         let (args, prev_float) = self.mc_build_method_call_arg_strings(
             object,
             effective_method,

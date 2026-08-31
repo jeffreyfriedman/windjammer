@@ -15,7 +15,7 @@
 //!
 //! Ecosystem `wj-webhook`: `struct BusEventBody` + `WebhookApp { bus_queue: Vec<BusEventBody> }`
 //! emitted `use BusEventBody;` before the struct definition → E0255 duplicate name.
-//! Workaround: store `Vec<Event>` from `wj-event` instead of a local mirror struct.
+//! Workaround: move mirror struct to sibling module file (`domain/bus_event.wj`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

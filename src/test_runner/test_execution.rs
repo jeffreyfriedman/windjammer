@@ -259,6 +259,25 @@ fn project_cargo_has_dep(dep_name: &str, project_root: &Path) -> bool {
     content.contains(&format!("{} =", dep_name))
 }
 
+/// Read `windjammer-runtime = { path = "..." }` from a generated library `Cargo.toml`.
+fn windjammer_runtime_path_from_cargo_toml(cargo_toml: &Path) -> Option<PathBuf> {
+    let content = std::fs::read_to_string(cargo_toml).ok()?;
+    let key = "windjammer-runtime";
+    let start = content.find(key)?;
+    let after = &content[start + key.len()..];
+    let path_key = "path = \"";
+    let path_start = after.find(path_key)? + path_key.len();
+    let path_end = after[path_start..].find('"')? + path_start;
+    let raw = &after[path_start..path_end];
+    let cargo_dir = cargo_toml.parent()?;
+    let resolved = PathBuf::from(raw);
+    if resolved.is_absolute() {
+        Some(resolved)
+    } else {
+        Some(cargo_dir.join(resolved))
+    }
+}
+
 /// Detect and compile the library being tested (if it exists)
 /// Returns `(crate_name, package_name, cargo_dep_path, metadata_dir)`, or None
 fn detect_and_compile_library(
@@ -978,7 +997,16 @@ pub(crate) fn generate_test_harness(
         .clone()
         .unwrap_or_else(crate::cargo_toml::find_windjammer_runtime_path);
 
-    let runtime_dep_line = if opts.no_runtime_copy {
+    let (runtime_path, no_runtime_copy) =
+        if let Some((_, _, lib_path, _)) = &library_dependency {
+            windjammer_runtime_path_from_cargo_toml(&lib_path.join("Cargo.toml"))
+                .map(|p| (p, true))
+                .unwrap_or((runtime_path, opts.no_runtime_copy))
+        } else {
+            (runtime_path, opts.no_runtime_copy)
+        };
+
+    let runtime_dep_line = if no_runtime_copy {
         format!(
             "windjammer-runtime = {{ path = \"{}\", default-features = false }}",
             path_to_toml_string(&runtime_path)

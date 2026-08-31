@@ -22,31 +22,9 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-const CLI_ARGS: &str = r#"
-pub fn first_positional(args: Vec<string>) -> Option<string> {
-    if args.len() == 0 {
-        return None
-    }
-    Some(args[0])
-}
-"#;
-
-const DEMOTE_CALLER: &str = r#"
-use crate::cli_args::first_positional
-
-/// Bare `argv` reuse demotes helper formal in multipass.
-pub fn peek(argv: Vec<string>) -> Option<string> {
-    first_positional(argv)
-}
-"#;
-
-const CLONE_CALLER: &str = r#"
-use crate::cli_args::first_positional
-
-pub fn use_positional(argv: Vec<string>) -> Option<string> {
-    first_positional(argv.clone())
-}
-"#;
+const CLI_ARGS: &str = include_str!("fixtures/library_multipass/cli_args_first_positional.wj");
+const DEMOTE_CALLER: &str = include_str!("fixtures/library_multipass/cli_demote_peek_argv.wj");
+const CLONE_CALLER: &str = include_str!("fixtures/library_multipass/migrate_cli_use_positional.wj");
 
 fn cross_crate_vec_fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();

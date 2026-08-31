@@ -1,0 +1,6 @@
+use crate::cli_args::first_positional
+
+/// Bare `argv` reuse demotes helper formal in multipass (`wj-cors` class).
+pub fn peek(argv: Vec<string>) -> Option<string> {
+    first_positional(argv)
+}

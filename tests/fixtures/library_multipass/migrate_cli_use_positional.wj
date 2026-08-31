@@ -1,0 +1,6 @@
+use crate::cli_args::first_positional
+
+/// Explicit `.clone()` call site (`wj-migrate-cli` class).
+pub fn use_positional(argv: Vec<string>) -> Option<string> {
+    first_positional(argv.clone())
+}

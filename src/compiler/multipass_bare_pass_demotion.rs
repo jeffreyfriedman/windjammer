@@ -1,0 +1,302 @@
+//! Multipass library builds: sibling modules that pass bare bindings (`f(path)` not
+//! `f(path.clone())`) signal that callee formals should demote to shared/mut borrow
+//! (WDB-112 / cross-crate Vec / WDB-113).
+
+use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
+use crate::parser::{Expression, Item, Program, Statement, Type};
+
+/// Scan all library programs for bare-identifier call sites and promote callee
+/// `param_ownership` in the merged global registry before per-file codegen.
+pub fn promote_callees_from_bare_pass_callers(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+    copy_types: &std::collections::HashSet<String>,
+) {
+    let mut hints: Vec<(String, usize, OwnershipMode)> = Vec::new();
+    for program in programs {
+        collect_bare_pass_hints(program, registry, copy_types, &mut hints);
+    }
+    hints.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    hints.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+    for (callee_key, param_idx, mode) in hints {
+        apply_bare_pass_hint(registry, &callee_key, param_idx, mode);
+    }
+}
+
+fn collect_bare_pass_hints(
+    program: &Program,
+    registry: &SignatureRegistry,
+    copy_types: &std::collections::HashSet<String>,
+    hints: &mut Vec<(String, usize, OwnershipMode)>,
+) {
+    for item in &program.items {
+        let Item::Function { decl, .. } = item else {
+            continue;
+        };
+        walk_statements_for_calls(&decl.body, registry, copy_types, hints);
+    }
+}
+
+fn walk_statements_for_calls<'ast>(
+    stmts: &[&'ast Statement<'ast>],
+    registry: &SignatureRegistry,
+    copy_types: &std::collections::HashSet<String>,
+    hints: &mut Vec<(String, usize, OwnershipMode)>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => visit_expr_for_calls(expr, registry, copy_types, hints),
+            Statement::Let { value, else_block, .. } => {
+                visit_expr_for_calls(value, registry, copy_types, hints);
+                if let Some(b) = else_block {
+                    walk_statements_for_calls(b, registry, copy_types, hints);
+                }
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                visit_expr_for_calls(condition, registry, copy_types, hints);
+                walk_statements_for_calls(then_block, registry, copy_types, hints);
+                if let Some(b) = else_block {
+                    walk_statements_for_calls(b, registry, copy_types, hints);
+                }
+            }
+            Statement::While { body, condition, .. } => {
+                visit_expr_for_calls(condition, registry, copy_types, hints);
+                walk_statements_for_calls(body, registry, copy_types, hints);
+            }
+            Statement::For { body, iterable, .. } => {
+                visit_expr_for_calls(iterable, registry, copy_types, hints);
+                walk_statements_for_calls(body, registry, copy_types, hints);
+            }
+            Statement::Match { value, arms, .. } => {
+                visit_expr_for_calls(value, registry, copy_types, hints);
+                for arm in arms {
+                    visit_expr_for_calls(&arm.body, registry, copy_types, hints);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn visit_expr_for_calls(
+    expr: &Expression,
+    registry: &SignatureRegistry,
+    copy_types: &std::collections::HashSet<String>,
+    hints: &mut Vec<(String, usize, OwnershipMode)>,
+) {
+    match expr {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            record_bare_pass_call_hints(function, arguments, registry, copy_types, hints);
+            visit_expr_for_calls(function, registry, copy_types, hints);
+            for (_, arg) in arguments {
+                visit_expr_for_calls(arg, registry, copy_types, hints);
+            }
+        }
+        Expression::MethodCall {
+            object,
+            arguments,
+            ..
+        } => {
+            visit_expr_for_calls(object, registry, copy_types, hints);
+            for (_, arg) in arguments {
+                visit_expr_for_calls(arg, registry, copy_types, hints);
+            }
+        }
+        Expression::Block { statements, .. } => {
+            walk_statements_for_calls(statements, registry, copy_types, hints);
+        }
+        Expression::Binary { left, right, .. } => {
+            visit_expr_for_calls(left, registry, copy_types, hints);
+            visit_expr_for_calls(right, registry, copy_types, hints);
+        }
+        Expression::Unary { operand, .. }
+        | Expression::FieldAccess { object: operand, .. }
+        | Expression::Index { object: operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. }
+        | Expression::Cast { expr: operand, .. } => {
+            visit_expr_for_calls(operand, registry, copy_types, hints);
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
+            for elem in elements {
+                visit_expr_for_calls(elem, registry, copy_types, hints);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn record_bare_pass_call_hints<'ast>(
+    function: &'ast Expression<'ast>,
+    arguments: &[(Option<String>, &'ast Expression<'ast>)],
+    registry: &SignatureRegistry,
+    copy_types: &std::collections::HashSet<String>,
+    hints: &mut Vec<(String, usize, OwnershipMode)>,
+) {
+    let Some(callee_name) = callee_name_from_expr(function) else {
+        return;
+    };
+    for key in callee_registry_keys(&callee_name, registry) {
+        let Some(sig) = registry.get_signature(&key) else {
+            continue;
+        };
+        for (i, (_, arg)) in arguments.iter().enumerate() {
+            if !is_bare_binding_pass(arg) {
+                continue;
+            }
+            let pidx = sig.arg_param_index(i);
+            let formal_ty = sig
+                .formal_param_types
+                .get(pidx)
+                .or_else(|| sig.param_types.get(pidx));
+            let Some(formal_ty) = formal_ty else {
+                continue;
+            };
+            if matches!(
+                sig.param_ownership.get(pidx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            ) {
+                continue;
+            }
+            let Some(mode) = bare_pass_target_ownership(formal_ty, copy_types) else {
+                continue;
+            };
+            hints.push((key.clone(), pidx, mode));
+        }
+    }
+}
+
+fn callee_name_from_expr(function: &Expression) -> Option<String> {
+    match function {
+        Expression::Identifier { name, .. } => Some(name.clone()),
+        Expression::FieldAccess { object, field, .. } => {
+            let base = callee_name_from_expr(object)?;
+            Some(format!("{base}::{field}"))
+        }
+        _ => None,
+    }
+}
+
+fn callee_registry_keys(callee_name: &str, registry: &SignatureRegistry) -> Vec<String> {
+    let mut keys: Vec<String> = registry
+        .signatures
+        .keys()
+        .filter(|k| {
+            **k == callee_name
+                || k.ends_with(&format!("::{callee_name}"))
+                || k.rsplit("::").next() == Some(callee_name)
+        })
+        .cloned()
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys
+}
+
+fn is_bare_binding_pass(expr: &Expression) -> bool {
+    matches!(expr, Expression::Identifier { .. })
+}
+
+fn bare_pass_target_ownership(
+    formal_ty: &Type,
+    copy_types: &std::collections::HashSet<String>,
+) -> Option<OwnershipMode> {
+    if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
+        return Some(OwnershipMode::Borrowed);
+    }
+    if is_vec_container_type(formal_ty) {
+        return Some(OwnershipMode::Borrowed);
+    }
+    if let Type::Custom(name) = formal_ty {
+        if copy_types.contains(name) {
+            return None;
+        }
+        return Some(OwnershipMode::MutBorrowed);
+    }
+    None
+}
+
+fn is_vec_container_type(ty: &Type) -> bool {
+    matches!(ty, Type::Vec(_))
+        || matches!(ty, Type::Parameterized(name, _) if name == "Vec")
+        || matches!(ty, Type::Custom(name) if name.starts_with("Vec"))
+}
+
+fn apply_bare_pass_hint(
+    registry: &mut SignatureRegistry,
+    key: &str,
+    param_idx: usize,
+    mode: OwnershipMode,
+) {
+    let Some(mut sig) = registry.get_signature(key).cloned() else {
+        return;
+    };
+    if sig.param_ownership.is_empty() {
+        let n = sig
+            .formal_param_types
+            .len()
+            .max(sig.param_types.len());
+        sig.param_ownership = vec![OwnershipMode::Owned; n];
+    }
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+    ) {
+        return;
+    }
+    if sig.param_ownership.len() <= param_idx {
+        return;
+    }
+    sig.param_ownership[param_idx] = mode;
+    let n = sig.param_ownership.len();
+    let mut ref_flags = sig
+        .emitted_rust_ref_params
+        .clone()
+        .unwrap_or_else(|| vec![false; n]);
+    if ref_flags.len() < n {
+        ref_flags.resize(n, false);
+    }
+    ref_flags[param_idx] = matches!(mode, OwnershipMode::Borrowed);
+    sig.emitted_rust_ref_params = Some(ref_flags);
+    wrap_param_type_for_borrow(&mut sig, param_idx, mode);
+    registry.signatures.insert(key.to_string(), sig.clone());
+    if let Some(bare) = key.rsplit("::").next() {
+        if bare != key && registry.signatures.contains_key(bare) {
+            registry.signatures.insert(bare.to_string(), sig);
+        }
+    }
+}
+
+fn wrap_param_type_for_borrow(sig: &mut FunctionSignature, param_idx: usize, mode: OwnershipMode) {
+    let bare = sig
+        .formal_param_types
+        .get(param_idx)
+        .cloned()
+        .or_else(|| sig.param_types.get(param_idx).cloned());
+    let Some(bare) = bare else {
+        return;
+    };
+    let wrapped = match mode {
+        OwnershipMode::Borrowed if crate::codegen::rust::types::is_windjammer_text_type(&bare) => {
+            Type::Reference(Box::new(Type::String))
+        }
+        OwnershipMode::Borrowed => Type::Reference(Box::new(bare.clone())),
+        OwnershipMode::MutBorrowed => Type::MutableReference(Box::new(bare.clone())),
+        OwnershipMode::Owned => return,
+    };
+    if sig.param_types.len() > param_idx {
+        sig.param_types[param_idx] = wrapped;
+    }
+}
