@@ -1,0 +1,16 @@
+use std::collections::HashMap
+
+pub struct Note {
+    pub id: int,
+    pub title: string,
+}
+
+pub struct NoteStore {
+    pub notes: HashMap<int, Note>,
+}
+
+impl NoteStore {
+    pub fn get(self, id: int) -> Option<Note> {
+        self.notes.get(id)
+    }
+}

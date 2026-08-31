@@ -22,24 +22,7 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-const NOTE_STORE: &str = r#"
-use std::collections::HashMap
-
-pub struct Note {
-    pub id: int,
-    pub title: string,
-}
-
-pub struct NoteStore {
-    pub notes: HashMap<int, Note>,
-}
-
-impl NoteStore {
-    pub fn get(self, id: int) -> Option<Note> {
-        self.notes.get(id)
-    }
-}
-"#;
+const NOTE_STORE: &str = include_str!("fixtures/library_multipass/note_store_hashmap_field_get.wj");
 
 const NOTE_LOOKUP: &str = r#"
 use crate::note_store::{NoteStore}
