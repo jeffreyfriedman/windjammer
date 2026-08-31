@@ -100,11 +100,47 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **WDB-111: multipass `--module-file` cross-module owned `string` + `.clone()` (WindjammerDB fix path)** | `wdb111_multipass_cross_module_owned_string_clone_must_not_borrow` | ✅ tip GREEN relational slice — `./scripts/build_gen.sh relational` after one full build |
 | P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()` (inverse WDB-110)** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ⚠️ RED — demoted `&str` + owned `.clone()` call sites fail `cargo check` (E0308); gate now asserts rustc failure until tip greens |
 | P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()` (graph batch engines)** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ⚠️ RED — demote+clone multipass fixture; emit assertion + `cargo_check` on green path |
+| P1 | **WDB-114: `--module-file` emits `Vec<T>` type annotations without importing `T` (WindjammerDB job_store tests)** | `wdb114_module_file_vec_type_annotation_must_import_element_type` | ⚠️ RED — `Vec<JobRecord>` in generated test without `use ...::JobRecord`; E0425 in wdb-layers |
+| P1 | **WDB-115: early `return self.private_method()` mis-emits sibling method (`wdb-reducer`)** | `wdb115_early_return_private_method_must_emit_correct_callee` | ⚠️ RED — `return self.handle_reducer_panic()` → `return self.target_label()` |
+| P1 | **WDB-115: early `return self.private_method()` mis-emits sibling method (`wdb-reducer` `reducer_runtime`)** | `wdb115_early_return_private_method_must_emit_correct_callee` | ⚠️ RED — `return self.handle_reducer_panic()` → `return self.target_label()` (E0308); blocks wdb-reducer gen rebuild |
 | P1 | **`db::Connection` reuse across helpers must borrow, not `.clone()` (`wj-migrate`)** | `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ tip GREEN — multipass emits `&conn` at reuse sites |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()` (`wj-migrate`)** | `bug_std_fs_dir_entry_name_wiring_test` | ⚠️ RED — must emit `file_name()`; `assert_stdlib_runtime_links` + cargo check |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow (`wj-migrate-cli` / `wj-cli-args`)** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — demote+clone multipass; emit assertion + `cargo_check` on green path |
 | P1 | **`pub mod` at end of `lib.wj` must not truncate root codegen (`wj-migrate`)** | `bug_pub_mod_at_end_truncates_lib_codegen_test` | ✅ tip GREEN — regression guard |
 | P1 | **Multipass cross-module owned `String` param / literal call sites** | `bug_cross_crate_owned_formal_multipass_call_site_test` | ✅ tip GREEN — `pretty(body)` move + `render_html` literal `.to_string()` |
+| P1 | **`std::http::HttpMethod` lib public port vs `tests/*_test.wj` call sites (`wj-webhook`)** | `bug_app_test_http_method_type_mismatch_test` | ⚠️ RED — 17× E0308; workaround: public port `string` + adapter enum→label |
+| P1 | **`self.get(id)` codegen emits `self.delete(id)` when both methods exist (`wj-notes-api`)** | `bug_self_get_call_emits_delete_method_test` | ⚠️ RED — create/update match `delete` not `get`; product uses `lookup_note` free fn |
+
+## P3.209 repro harness closure (2026-08-31)
+
+| Change | Status |
+|--------|--------|
+| `wj-notes-api` hexagonal deepen: `domain/config.wj`, internal `HttpMethod`, adapter `ServerResponse` helpers, `lookup_note` HashMap workaround | ✅ 24/24 tests green |
+| `bug_self_get_call_emits_delete_method_test` — `self.get` must not codegen as `self.delete` | ⚠️ RED |
+| `wj-auth-api` / `wj-webhook` regression | ✅ 11/11 + 15/15 green |
+
+## P3.208 repro harness closure (2026-08-31)
+
+| Change | Status |
+|--------|--------|
+| `wj-auth-api` hexagonal deepen: `domain/config.wj`, internal `HttpMethod`, adapter `ServerResponse` helpers | ✅ 11/11 tests green |
+| `wj-webhook` | ✅ 15/15 tests green (regression) |
+
+## P3.207 repro harness closure (2026-08-31)
+
+| Change | Status |
+|--------|--------|
+| `bug_app_test_http_method_type_mismatch_test` — mini app `wj test` with `HttpMethod` lib port + test `HttpMethod::GET` | ⚠️ RED |
+| `tests/run_red_repro_bundle.sh` — runnable 7-gate RED bundle | ✅ shipped |
+
+## P3.208 repro harness closure (2026-08-31)
+
+| Change | Status |
+|--------|--------|
+| `bug_wdb114_module_file_vec_annotation_must_import_element_type_test` | ⚠️ RED — `Vec<JobRecord>` without `use JobRecord` |
+| `bug_wdb115_early_return_private_method_call_test` | ⚠️ RED — early return mis-emits sibling method |
+| `run_red_repro_bundle.sh` expanded (WDB-114 + HttpMethod) | ✅ shipped |
+| All gates verified RED on tip (`cargo test`, no `src/` patches) | ✅ |
 
 ## P3.206 repro harness closure (2026-08-30)
 
@@ -114,6 +150,8 @@ Verified on clean tip (`cargo test --test all`, no local `src/` patches):
 |------|--------|
 | WDB-112 | ⚠️ RED |
 | WDB-113 | ⚠️ RED |
+| WDB-114 | ⚠️ RED |
+| WDB-115 | ⚠️ RED |
 | Cross-module Vec borrow | ⚠️ RED |
 | HashMap field `.get(i64)` | ⚠️ RED |
 | `DirEntry.name()` | ⚠️ RED |
@@ -127,21 +165,14 @@ New: `bug_cross_crate_owned_formal_multipass_call_site_test` — `pretty(body)` 
 Run all tail RED gates (expect failures on tip until compiler `src/` greens):
 
 ```bash
-cargo test --test all \
-  wdb112_full_library \
-  wdb113_full_library \
-  cross_crate_vec_string_helper \
-  hashmap_field_get_i64_key \
-  std_fs_dir_entry_name \
-  pub_mod_at_end \
-  cross_crate_owned_forwarder_must_move \
-  -- --test-threads=1
+bash tests/run_red_repro_bundle.sh
 ```
 
 | Gate | Repro test | Status |
 |------|------------|--------|
 | WDB-112 demoted `&str` + `.clone()` | `wdb112_full_library_multipass_*` | ⚠️ RED |
 | WDB-113 demoted `&mut T` + `.clone()` | `wdb113_full_library_multipass_*` | ⚠️ RED |
+| WDB-114 `Vec<T>` annotation missing import | `wdb114_module_file_vec_type_annotation_*` | ⚠️ RED |
 | Cross-module Vec borrow | `cross_crate_vec_string_helper_*` | ⚠️ RED |
 | HashMap field `.get(i64)` | `hashmap_field_get_i64_key_*` | ⚠️ RED |
 | `DirEntry.name()` wiring | `std_fs_dir_entry_name_*` | ⚠️ RED |
