@@ -816,6 +816,9 @@ pub fn call_site_expects_mut_borrow(sig: &FunctionSignature, param_idx: usize) -
 }
 
 pub fn call_site_expects_owned_pass(sig: &FunctionSignature, param_idx: usize) -> bool {
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx) {
+        return false;
+    }
     matches!(
         safety_type_from_signature_param(sig, param_idx).ownership,
         OwnedType::Owned

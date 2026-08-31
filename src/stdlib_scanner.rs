@@ -1374,6 +1374,16 @@ mod tests {
     }
 
     #[test]
+    fn scanned_runtime_dir_entry_file_name_registers_under_type_method() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        assert!(
+            reg.get_signature("DirEntry::file_name").is_some(),
+            "DirEntry::file_name must register from fs.rs impl scan"
+        );
+    }
+
+    #[test]
     fn scanned_runtime_http_post_is_free_two_str_refs() {
         let mut reg = SignatureRegistry::new();
         populate_runtime_signatures(&mut reg).expect("scan runtime");

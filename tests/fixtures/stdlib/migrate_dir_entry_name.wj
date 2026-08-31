@@ -1,0 +1,16 @@
+use std::fs
+
+/// Pre-workaround `wj-migrate` pattern: `entry.name()` per `std/fs.wj` stub.
+pub fn first_sql_file_name(dir: string) -> Result<string, string> {
+    match fs.read_dir(dir) {
+        Ok(entries) => {
+            for entry in entries {
+                if entry.is_file() {
+                    return Ok(entry.name())
+                }
+            }
+            Err("no files")
+        },
+        Err(e) => Err(e),
+    }
+}

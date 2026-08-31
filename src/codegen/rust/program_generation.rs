@@ -838,6 +838,12 @@ impl<'ast> CodeGenerator<'ast> {
             implicit_imports.push_str(&auto_super_type_imports);
         }
 
+        let body_type_imports =
+            self.format_body_inferred_custom_type_imports(&body, &imports, program);
+        if !body_type_imports.is_empty() {
+            implicit_imports.push_str(&body_type_imports);
+        }
+
         // Add trait imports for inferred bounds
         if !self.needs_trait_imports.is_empty() {
             let mut sorted_traits: Vec<_> = self.needs_trait_imports.iter().collect();

@@ -912,6 +912,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         &mut arg_str,
                                         &self.current_function_params,
                                         &self.inferred_mut_borrowed_params,
+                                        true,
                                     );
                                 }
                             }
@@ -942,6 +943,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         &mut arg_str,
                                         &self.current_function_params,
                                         &self.inferred_mut_borrowed_params,
+                                        true,
                                     );
                                 }
                             }
@@ -1383,7 +1385,45 @@ impl<'ast> CodeGenerator<'ast> {
                 )
                 .unwrap_or_else(|| method.to_string())
             } else {
-                method.to_string()
+                let inferred_rt = receiver_type_name
+                    .clone()
+                    .or_else(|| self.infer_type_name(object))
+                    .or_else(|| {
+                        self.infer_expression_type(object)
+                            .and_then(|t| Self::type_to_name(&t))
+                    })
+                    .or_else(|| {
+                        if let Expression::Identifier { name, .. } = object {
+                            self.local_var_types.get(name).and_then(|t| {
+                                let bare = match t {
+                                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                                        inner.as_ref()
+                                    }
+                                    other => other,
+                                };
+                                Self::type_to_name(bare)
+                            })
+                        } else {
+                            None
+                        }
+                    });
+                if let Some(rt) = inferred_rt.as_deref() {
+                    let type_base = rt.rsplit("::").next().unwrap_or(rt);
+                    crate::codegen::rust::stdlib_method_traits::resolve_runtime_emit_method_name_for_type(
+                        type_base,
+                        method,
+                        &self.signature_registry,
+                        self.global_signature_registry.as_deref(),
+                    )
+                    .unwrap_or_else(|| method.to_string())
+                } else {
+                    crate::analyzer::SignatureRegistry::resolve_runtime_emit_method_name_unambiguous(
+                        method,
+                        &self.signature_registry,
+                        self.global_signature_registry.as_deref(),
+                    )
+                    .unwrap_or_else(|| method.to_string())
+                }
             };
             format!(
                 "{}{}{}{}({})",

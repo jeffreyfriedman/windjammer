@@ -6,6 +6,32 @@ use crate::parser::Expression;
 use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Registry type name for `self.field` from struct field maps (multipass-safe).
+    pub(in crate::codegen::rust) fn self_field_access_receiver_type_name(
+        &self,
+        object: &Expression<'ast>,
+    ) -> Option<String> {
+        let Expression::FieldAccess { object: base, field, .. } = object else {
+            return None;
+        };
+        let Expression::Identifier { name, .. } = &**base else {
+            return None;
+        };
+        if name != "self" {
+            return None;
+        }
+        let struct_name = self.current_struct_name.as_ref()?;
+        let fields = self.lookup_struct_field_types(struct_name).or_else(|| {
+            struct_name
+                .split('<')
+                .next()
+                .and_then(|base| self.lookup_struct_field_types(base))
+        })?;
+        fields
+            .get(field.as_str())
+            .and_then(|ft| Self::type_to_name(ft))
+    }
+
     /// Resolve the receiver type for method signature lookup (`self.field` → field type, not owner struct).
     pub(in crate::codegen::rust) fn mc_infer_method_receiver_type_name(
         &self,
