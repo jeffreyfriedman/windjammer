@@ -855,6 +855,34 @@ pub fn runtime_std_module_for_type(type_name: &str) -> Option<&'static str> {
     SignatureRegistry::stdlib().runtime_module_for_type(type_name)
 }
 
+/// WJ std stub keys to try when resolving runtime Rust method names (`fs::DirEntry::name`).
+pub fn runtime_emit_method_lookup_keys(type_base: &str, method: &str) -> Vec<String> {
+    let base = type_base.rsplit("::").next().unwrap_or(type_base);
+    let mut keys = Vec::new();
+    if let Some(module) = runtime_std_module_for_type(base) {
+        keys.push(format!("{module}::{base}::{method}"));
+    }
+    keys.push(format!("{base}::{method}"));
+    keys
+}
+
+/// Resolve WJ method name → runtime Rust segment for a receiver type base (`DirEntry` → `file_name`).
+pub fn resolve_runtime_emit_method_name_for_type(
+    type_base: &str,
+    method: &str,
+    local: &SignatureRegistry,
+    global: Option<&SignatureRegistry>,
+) -> Option<String> {
+    for key in runtime_emit_method_lookup_keys(type_base, method) {
+        if let Some(emit) =
+            SignatureRegistry::resolve_runtime_emit_method_name_chain(&key, local, global)
+        {
+            return Some(emit);
+        }
+    }
+    None
+}
+
 /// Scanned runtime Rust signature borrows this arg while the WJ formal is still owned.
 ///
 /// Driven by `stdlib_scanner` / registry `param_ownership` and `emitted_rust_ref_params`
@@ -1012,6 +1040,31 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
         }
     }
     false
+}
+
+/// Receiver type for map/set key lookup: prefer inferred receiver, then type-qualified callee.
+pub fn collection_key_receiver_type(
+    callee_name: &str,
+    receiver_type_name: Option<&str>,
+    sig: &FunctionSignature,
+) -> Option<String> {
+    receiver_type_name.map(|rt| rt.split('<').next().unwrap_or(rt).to_string()).or_else(|| {
+        if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            callee_name,
+        ) {
+            callee_name.rsplit_once("::").map(|(ty, _)| {
+                ty.rsplit("::")
+                    .next()
+                    .unwrap_or(ty)
+                    .split('<')
+                    .next()
+                    .unwrap_or(ty)
+                    .to_string()
+            })
+        } else {
+            receiver_type_from_qualified_sig(sig).map(|s| s.to_string())
+        }
+    })
 }
 
 /// Map/set key lookup: first arg must be borrowed when the receiver is a map/set type.

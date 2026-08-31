@@ -1083,6 +1083,71 @@ pub fn strip_redundant_auto_clone_before_explicit_clone(obj_str: &mut String, me
     }
 }
 
+/// Terminal explicit-clone policy: demoted callees strip clone and borrow (WDB-112/113);
+/// owned callees keep `.clone()` (WDB-108/110).
+pub fn finalize_explicit_user_clone_call_site<'ast>(
+    arg_expr: &Expression<'ast>,
+    prepared_arg: &str,
+    coerced: &str,
+    sig: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+    borrowed_text_params: &std::collections::HashSet<String>,
+    function_params: &[crate::parser::Parameter<'ast>],
+) -> String {
+    if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr) {
+        return coerced.to_string();
+    }
+    let Some(sig) = sig else {
+        return restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced);
+    };
+    let pidx = sig.arg_param_index(arg_index);
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
+        let base = coerced.trim_end_matches(".clone()");
+        return if base.starts_with('&') && !base.starts_with("&mut ") {
+            base.to_string()
+        } else {
+            format!("&{}", base.trim_start_matches('&'))
+        };
+    }
+    if sig.param_types.get(pidx).is_some_and(|t| matches!(t, Type::MutableReference(_)))
+        || (matches!(
+            sig.param_ownership.get(pidx),
+            Some(crate::analyzer::OwnershipMode::MutBorrowed)
+        ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            sig, pidx,
+        ))
+    {
+        let base = crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(
+            arg_expr,
+        )
+        .map(str::to_string)
+        .unwrap_or_else(|| coerced.trim_end_matches(".clone()").to_string());
+        if base.starts_with("&mut ") {
+            return base.to_string();
+        }
+        if base.starts_with('&') {
+            return format!("&mut {}", base.trim_start_matches('&'));
+        }
+        return format!("&mut {base}");
+    }
+    let callee_wants_owned = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+        sig, pidx,
+    ) || (crate::ir::signature_bridge::call_site_expects_owned_pass(sig, pidx)
+        && crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+            sig, arg_index,
+        ));
+    if callee_wants_owned {
+        let restored = restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced);
+        return lower_explicit_clone_call(
+            arg_expr,
+            &restored,
+            borrowed_text_params,
+            function_params,
+        );
+    }
+    restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced)
+}
+
 /// Restore `.clone()` when IR / borrow passes stripped an explicit user clone (WDB-108).
 pub fn restore_stripped_explicit_user_clone(
     arg_expr: &Expression,

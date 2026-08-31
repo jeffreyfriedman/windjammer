@@ -1364,6 +1364,17 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
         if flags.get(idx).copied() != Some(false) {
             continue;
         }
+        // Bare-pass multipass demotion records MutBorrowed + `MutableReference(T)` with
+        // `emitted_rust_ref_params[idx] == false` (false = not shared `&T`). Do not peel
+        // back to owned Custom (WDB-113).
+        if sig.param_types.get(idx).is_some_and(|t| matches!(t, Type::MutableReference(_)))
+            && matches!(
+                sig.param_ownership.get(idx),
+                Some(OwnershipMode::MutBorrowed)
+            )
+        {
+            continue;
+        }
         // Body-converged / promoted borrow metadata beats stale engine emitted-owned flags,
         // except when the WJ formal is bare Custom (including Copy aggregates like Lsn) —
         // those always emit owned formals. Non-Copy demotions to `&T` set

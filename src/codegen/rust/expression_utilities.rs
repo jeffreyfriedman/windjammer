@@ -169,6 +169,7 @@ pub fn apply_mut_borrow_coercion(
     arg_str: &mut String,
     current_function_params: &[Parameter],
     inferred_mut_borrowed_params: &HashSet<String>,
+    callee_requires_mut: bool,
 ) -> bool {
     if super::expression_helpers::is_reference_expression(arg) {
         return false;
@@ -189,7 +190,7 @@ pub fn apply_mut_borrow_coercion(
                 && !matches!(&p.type_, Type::Reference(_) | Type::MutableReference(_))
                 && !inferred_mut_borrowed_params.contains(name)
         });
-        if is_owned_non_mut_param {
+        if is_owned_non_mut_param && !callee_requires_mut {
             if !arg_str.starts_with('&') {
                 super::rust_coercion_rules::Coercion::Borrow.apply(arg_str);
             }

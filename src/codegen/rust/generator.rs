@@ -1381,6 +1381,67 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    pub(crate) fn global_signature_for_function(
+        &self,
+        func: &FunctionDecl<'ast>,
+    ) -> Option<&crate::analyzer::FunctionSignature> {
+        let global = self.global_signature_registry.as_ref()?;
+        if let Some(sig) = global.get_signature(&func.name) {
+            return Some(sig);
+        }
+        if let Some(stem) = self.current_wj_file.file_stem() {
+            let stem = stem.to_string_lossy();
+            if !stem.is_empty() {
+                if let Some(sig) = global.get_signature(&format!("{stem}::{}", func.name)) {
+                    return Some(sig);
+                }
+            }
+        }
+        if let Some(root) = self.library_source_root.as_ref() {
+            if let Some(module) =
+                crate::analyzer::type_collector::wj_file_to_module_path(root, &self.current_wj_file)
+            {
+                let path = module.join("::");
+                if let Some(sig) = global.get_signature(&format!("{path}::{}", func.name)) {
+                    return Some(sig);
+                }
+            }
+        }
+        None
+    }
+
+    /// Multipass global registry recorded shared-ref emission for this formal (bare-pass scan).
+    pub(crate) fn multipass_global_ref_formal_demoted(
+        &self,
+        func: &FunctionDecl<'ast>,
+        param_idx: usize,
+    ) -> bool {
+        if self.library_source_root.is_none() {
+            return false;
+        }
+        let Some(sig) = self.global_signature_for_function(func) else {
+            return false;
+        };
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(true)
+        {
+            return true;
+        }
+        // WDB-113: bare-pass sibling demotion for non-Copy custom structs records
+        // MutBorrowed + `MutableReference(T)` without setting shared-ref emission flags.
+        matches!(
+            sig.param_ownership.get(param_idx),
+            Some(crate::analyzer::OwnershipMode::MutBorrowed)
+        ) && sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)))
+    }
+
     pub(crate) fn get_signature_with_global(&self, name: &str) -> Option<&FunctionSignature> {
         let local = self.signature_registry.get_signature(name);
         let global = self
@@ -1433,6 +1494,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
             (Some(l), Some(g))
                 if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(l, g) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::mut_borrow_emission_beats(g, l) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::mut_borrow_emission_beats(l, g) =>
             {
                 Some(l)
             }

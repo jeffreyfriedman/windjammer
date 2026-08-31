@@ -340,6 +340,33 @@ impl SignatureRegistry {
             .or_else(|| Self::stdlib().resolve_runtime_emit_method_name(wj_qualified))
     }
 
+    /// Resolve emit alias from method name alone when exactly one stdlib type maps
+    /// unambiguously (e.g. `DirEntry::name` → `file_name`).
+    pub fn resolve_runtime_emit_method_name_unambiguous(
+        wj_method: &str,
+        local: &Self,
+        global: Option<&Self>,
+    ) -> Option<String> {
+        let suffix = format!("::{wj_method}");
+        let mut emit_names = Vec::new();
+        for key in Self::stdlib().signatures.keys() {
+            if key.ends_with(&suffix) && key.contains("::") {
+                if let Some(emit) =
+                    Self::resolve_runtime_emit_method_name_chain(key, local, global)
+                {
+                    emit_names.push(emit);
+                }
+            }
+        }
+        emit_names.sort();
+        emit_names.dedup();
+        if emit_names.len() == 1 {
+            emit_names.into_iter().next()
+        } else {
+            None
+        }
+    }
+
     /// When a WJ std stub (`random::range`) shadows a differently-named runtime fn
     /// (`random::int_range`), return the runtime Rust method segment for codegen.
     pub fn resolve_runtime_emit_method_name(&self, wj_qualified: &str) -> Option<String> {
@@ -353,10 +380,13 @@ impl SignatureRegistry {
         {
             return None;
         }
-        let (module, wj_method) = wj_qualified.rsplit_once("::")?;
-        if !self.has_runtime_std_module(module) {
-            return None;
-        }
+        let parts: Vec<&str> = wj_qualified.split("::").collect();
+        let (match_module, wj_method) = match parts.as_slice() {
+            [module, ty, method] if self.has_runtime_std_module(module) => (*ty, *method),
+            [head, method] if self.has_runtime_std_module(head) => (*head, *method),
+            [ty, method] if self.runtime_module_for_type(ty).is_some() => (*ty, *method),
+            _ => return None,
+        };
         let wj_sig = self.get_signature(wj_qualified)?;
         let fallback = self.global_fallback.as_ref()?;
         let mut hits: Vec<String> = Vec::new();
@@ -364,12 +394,36 @@ impl SignatureRegistry {
             let Some((rt_module, rt_method)) = key.rsplit_once("::") else {
                 continue;
             };
-            if rt_module != module || rt_method == wj_method || sig.has_self_receiver {
+            if rt_module != match_module || rt_method == wj_method {
+                continue;
+            }
+            if wj_sig.has_self_receiver {
+                if !sig.has_self_receiver
+                    || wj_sig.param_types.len() != sig.param_types.len()
+                    || !Self::wj_runtime_return_compatible(&wj_sig.return_type, &sig.return_type)
+                {
+                    continue;
+                }
+                let renamed_runtime_method = rt_method != wj_method
+                    && rt_method.ends_with(wj_method)
+                    && rt_method
+                        .as_bytes()
+                        .get(rt_method.len().wrapping_sub(wj_method.len()).saturating_sub(1))
+                        .is_some_and(|&b| b == b'_');
+                if rt_method != wj_method && !renamed_runtime_method {
+                    continue;
+                }
+                let wj_args = wj_sig.param_types.get(1..).unwrap_or(&[]);
+                let rt_args = sig.param_types.get(1..).unwrap_or(&[]);
+                if Self::wj_runtime_param_lists_compatible(wj_args, rt_args) {
+                    hits.push(rt_method.to_string());
+                }
+                continue;
+            }
+            if sig.has_self_receiver {
                 continue;
             }
             if sig.param_types.len() == wj_sig.param_types.len()
-                && !sig.has_self_receiver
-                && !wj_sig.has_self_receiver
                 && rt_method.ends_with(wj_method)
                 && Self::wj_runtime_param_lists_compatible(&wj_sig.param_types, &sig.param_types)
             {
@@ -380,6 +434,29 @@ impl SignatureRegistry {
             Some(hits.remove(0))
         } else {
             None
+        }
+    }
+
+    fn wj_runtime_return_compatible(wj: &Option<Type>, rt: &Option<Type>) -> bool {
+        match (wj.as_ref(), rt.as_ref()) {
+            (None, None) => true,
+            (Some(a), Some(b)) => {
+                fn peel(t: &Type) -> Type {
+                    match t {
+                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                            (**inner).clone()
+                        }
+                        other => other.clone(),
+                    }
+                }
+                let a = peel(a);
+                let b = peel(b);
+                a == b
+                    || (matches!(a, Type::String) && matches!(b, Type::String))
+                    || (matches!(a, Type::Custom(n) if n.as_str() == "string" || n == "String")
+                        && matches!(b, Type::Custom(m) if m.as_str() == "string" || m == "String"))
+            }
+            _ => false,
         }
     }
 
@@ -538,7 +615,10 @@ impl SignatureRegistry {
 
     /// WJ std stubs whose exported name differs from the scanned runtime Rust fn.
     fn register_wj_runtime_name_aliases(registry: &mut SignatureRegistry) {
-        let aliases = [("random::range", "random::int_range")];
+        let aliases = [
+            ("random::range", "random::int_range"),
+            ("DirEntry::name", "DirEntry::file_name"),
+        ];
         let pending: Vec<(&str, &str)> = aliases
             .iter()
             .copied()
@@ -1808,6 +1888,16 @@ pub fn parse_field(line: string) -> string {
             reg.resolve_runtime_emit_method_name("random::range").as_deref(),
             Some("int_range"),
             "WJ random::range stub must codegen to scanned int_range"
+        );
+    }
+
+    #[test]
+    fn resolve_runtime_emit_method_name_maps_dir_entry_name_to_file_name() {
+        let reg = SignatureRegistry::stdlib();
+        assert_eq!(
+            reg.resolve_runtime_emit_method_name("DirEntry::name").as_deref(),
+            Some("file_name"),
+            "WJ fs DirEntry::name stub must codegen to runtime file_name()"
         );
     }
 }

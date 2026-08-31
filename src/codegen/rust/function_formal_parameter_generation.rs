@@ -55,6 +55,77 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(param_idx, param)| {
+                if param.name != "self"
+                    && (self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
+                        || self.param_used_via_explicit_user_clone(
+                            func.body.as_slice(),
+                            &param.name,
+                        ))
+                {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    let type_str = self.type_to_rust(&param.type_);
+                    let mut_prefix = if self
+                        .param_explicit_clone_targets_mut_borrow_callee(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ) {
+                        "mut "
+                    } else {
+                        ""
+                    };
+                    return format!("{mut_prefix}{}: {type_str}", param.name);
+                }
+                if param.name != "self" && self.multipass_global_ref_formal_demoted(func, param_idx)
+                {
+                    if self.param_used_via_explicit_user_clone(func.body.as_slice(), &param.name)
+                        || self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
+                        || self.param_explicit_clone_forwards_to_demoted_borrow_callee(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ) || (crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                        && self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ))
+                    {
+                        self.inferred_borrowed_params.remove(&param.name);
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                        return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                    }
+                    let mut_borrow_formal = self
+                        .global_signature_for_function(func)
+                        .and_then(|sig| sig.param_types.get(param_idx))
+                        .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+                        || matches!(
+                            self.global_signature_for_function(func)
+                                .and_then(|sig| sig.param_ownership.get(param_idx)),
+                            Some(OwnershipMode::MutBorrowed)
+                        );
+                    let type_str = if mut_borrow_formal {
+                        format!("&mut {}", self.type_to_rust(&param.type_))
+                    } else {
+                        self.borrowed_formal_rust_type_for_param(param, func, param_idx)
+                    };
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    if mut_borrow_formal {
+                        self.inferred_mut_borrowed_params.insert(param.name.clone());
+                        self.inferred_borrowed_params.remove(&param.name);
+                    } else {
+                        self.inferred_borrowed_params.insert(param.name.clone());
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                    }
+                    if type_str == "&str"
+                        || type_str.starts_with("&'a str")
+                        || type_str.ends_with(" str")
+                    {
+                        self.str_ref_optimized_params.insert(param.name.clone());
+                    }
+                    return format!("{}: {}", param.name, type_str);
+                }
                 let payload_stored = self.param_stored_in_owned_payload(
                     func.body.as_slice(),
                     &param.name,
@@ -286,6 +357,34 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !(analyzed.mutated_parameters.contains(&param.name)
                         && !analyzed.returned_parameters.contains(&param.name));
+                // WDB-110: explicit `.clone()` into AST-owned `string` callees keeps caller `String`.
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    return format!("{}: String", param.name);
+                }
+                // WDB-112/113: explicit `.clone()` into demoted borrow callees keeps caller owned.
+                if param.name != "self"
+                    && !self.is_type_copy(&param.type_)
+                    && !self.in_trait_impl
+                    && self.param_explicit_clone_forwards_to_demoted_borrow_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                }
                 // Port-trait owned `string` forwards keep caller `String` (E0053 / deps tests).
                 // Skip when the body only forwards to readonly text callees (`find_index`) —
                 // those siblings emit `&str` and the outer formal should match (blackboard set_*).
@@ -319,6 +418,10 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     ) || (self.param_only_forwards_to_borrowed_text_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
                         func.body.as_slice(),
                         &param.name,
                         func,
@@ -364,6 +467,11 @@ impl<'ast> CodeGenerator<'ast> {
                     && !analyzed.returned_parameters.contains(&param.name)
                     && !analyzed.mutated_parameters.contains(&param.name)
                     && !self.param_only_forwards_to_path_asref_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
                         func.body.as_slice(),
                         &param.name,
                         func,
@@ -926,6 +1034,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
                             || analyzed.str_ref_optimizable_params.contains(&param.name))
+                            && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            )
                             && !asref_runtime_keep_owned
                             && !payload_forces_owned
                             && !self.in_trait_impl
@@ -1177,6 +1290,11 @@ impl<'ast> CodeGenerator<'ast> {
                         if param.name != "self" {
                             let str_ref_formal_ok = (self.str_ref_optimized_params.contains(&param.name)
                                 || analyzed.str_ref_optimizable_params.contains(&param.name))
+                                && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
                                 && !asref_runtime_keep_owned
                                 && !payload_forces_owned
                                 && !self.in_trait_impl
@@ -2137,6 +2255,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.name,
                                     func,
                                 ))
+                                && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
                                 && !asref_fwd;
                             if asref_fwd {
                                 if _debug_formal {

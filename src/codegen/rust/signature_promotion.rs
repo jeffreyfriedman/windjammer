@@ -662,20 +662,68 @@ pub(crate) fn converged_has_reference_params_over_bare(
 /// after `refresh_method_registry_from_emitted_formals` — beats stale analyzer borrow.
 /// Copy codegen-time `emitted_rust_ref_params` (and aligned param metadata) from an
 /// alternate registry entry when call-site resolution picked a stale analysis stub.
+fn pick_stronger_codegen_refresh<'a>(
+    current: Option<&'a FunctionSignature>,
+    candidate: &'a FunctionSignature,
+) -> &'a FunctionSignature {
+    match current {
+        None => candidate,
+        Some(cur) if shared_ref_emission_beats(candidate, cur) => candidate,
+        Some(cur) if shared_ref_emission_beats(cur, candidate) => cur,
+        Some(cur) if mut_borrow_emission_beats(candidate, cur) => candidate,
+        Some(cur) if mut_borrow_emission_beats(cur, candidate) => cur,
+        Some(cur) => {
+            let count_true = |sig: &FunctionSignature| {
+                sig.emitted_rust_ref_params
+                    .as_ref()
+                    .map(|flags| flags.iter().filter(|&&f| f).count())
+                    .unwrap_or(0)
+            };
+            if count_true(candidate) > count_true(cur) {
+                candidate
+            } else {
+                cur
+            }
+        }
+    }
+}
+
 pub(crate) fn merge_codegen_refresh_metadata(
     into: &mut FunctionSignature,
     from: &FunctionSignature,
 ) {
-    let Some(ref flags) = from.emitted_rust_ref_params else {
+    let Some(ref from_flags) = from.emitted_rust_ref_params else {
         return;
     };
-    into.emitted_rust_ref_params = Some(flags.clone());
+    let prior_flags = into.emitted_rust_ref_params.clone();
+    let merged_flags: Vec<bool> = match &prior_flags {
+        Some(existing) => {
+            let n = from_flags.len().max(existing.len());
+            (0..n)
+                .map(|idx| {
+                    from_flags.get(idx).copied().unwrap_or(false)
+                        || existing.get(idx).copied().unwrap_or(false)
+                })
+                .collect()
+        }
+        None => from_flags.clone(),
+    };
+    into.emitted_rust_ref_params = Some(merged_flags);
+    let flags = from_flags;
     if let Some(ref string_ref) = from.string_ref_string_formal_params {
         into.string_ref_string_formal_params = Some(string_ref.clone());
     }
     for idx in 0..flags.len().min(into.param_types.len()) {
         match flags.get(idx).copied() {
             Some(false) => {
+                if prior_flags
+                    .as_ref()
+                    .and_then(|f| f.get(idx))
+                    .copied()
+                    == Some(true)
+                {
+                    continue;
+                }
                 // `false` means "not shared `&T`" — either owned or `&mut T`.
                 // Prefer `from`'s MutBorrowed / MutableReference over forcing Owned.
                 if matches!(
@@ -762,14 +810,24 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
     registry: &crate::analyzer::SignatureRegistry,
     keys: &[String],
 ) {
+    let mut best: Option<&FunctionSignature> = None;
     for key in keys {
         let Some(reg) = registry.get_signature(key) else {
             continue;
         };
         if reg.emitted_rust_ref_params.is_some() {
-            merge_codegen_refresh_metadata(into, reg);
-            return;
+            best = Some(pick_stronger_codegen_refresh(best, reg));
         }
+    }
+    if let Some(simple) = keys.last().map(|k| k.rsplit("::").next().unwrap_or(k.as_str())) {
+        if let Some(reg) = registry.find_unique_signature_ending_with(simple) {
+            if reg.emitted_rust_ref_params.is_some() {
+                best = Some(pick_stronger_codegen_refresh(best, reg));
+            }
+        }
+    }
+    if let Some(reg) = best {
+        merge_codegen_refresh_metadata(into, reg);
     }
 }
 
@@ -1156,10 +1214,21 @@ where
     let mut first = None;
     let mut refresh_without_shared_ref = None;
     let mut shared_ref_refresh = None;
+    let mut mut_borrow_refresh = None;
     for cand in candidates {
         let Some(sig) = cand else {
             continue;
         };
+        let has_mut_borrow = sig.param_ownership.iter().enumerate().any(|(idx, own)| {
+            matches!(own, OwnershipMode::MutBorrowed)
+                && sig.param_types
+                    .get(idx)
+                    .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+        });
+        if has_mut_borrow && mut_borrow_refresh.is_none() {
+            mut_borrow_refresh = Some(sig);
+            continue;
+        }
         if let Some(ref flags) = sig.emitted_rust_ref_params {
             // Prefer defining-module refresh that confirmed at least one `&str`/`&T`
             // slot over importer stubs with all-false emission flags — but defer when a
@@ -1228,8 +1297,31 @@ where
         }
     }
     shared_ref_refresh
+        .or(mut_borrow_refresh)
         .or(refresh_without_shared_ref)
         .or(first)
+}
+
+/// True when `preferred` recorded at least one `&mut T` formal and `other` did not.
+pub(crate) fn mut_borrow_emission_beats(
+    preferred: &FunctionSignature,
+    other: &FunctionSignature,
+) -> bool {
+    let pref_mut = preferred.param_ownership.iter().enumerate().any(|(idx, own)| {
+        matches!(own, OwnershipMode::MutBorrowed)
+            && preferred
+                .param_types
+                .get(idx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+    });
+    let other_mut = other.param_ownership.iter().enumerate().any(|(idx, own)| {
+        matches!(own, OwnershipMode::MutBorrowed)
+            && other
+                .param_types
+                .get(idx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+    });
+    pref_mut && !other_mut
 }
 
 /// True when `preferred` recorded at least one shared-ref formal and `other` did not.
@@ -1351,11 +1443,35 @@ pub(crate) fn local_user_fn_beats_runtime_std_homonym(
     let resolved_shared = (0..resolved.param_ownership.len()).any(|idx| {
         crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&resolved, idx)
     });
-    if !resolved_shared {
+    let resolved_mut = (0..resolved.param_ownership.len()).any(|idx| {
+        matches!(
+            resolved.param_ownership.get(idx),
+            Some(OwnershipMode::MutBorrowed)
+        ) && resolved.param_types.get(idx).is_some_and(|t| {
+            matches!(t, Type::MutableReference(_))
+        })
+    });
+    if !resolved_shared && !resolved_mut {
         return resolved;
     }
     if resolved.name != local_sig.name {
+        // Cross-module bare imports (`run_parquet_load` in sf1_cli_clone) must see the
+        // defining module's bare-pass demotion (`sf1_cli::run_parquet_load` with
+        // `emitted_rust_ref_params`). Do not swap in the importer stub — but still let
+        // local user APIs beat runtime-std homonyms (`join` vs `strings::join`).
+        if !signature_is_wj_std_stub_or_runtime_qualified(&resolved)
+            && (shared_ref_emission_beats(&resolved, local_sig)
+                || mut_borrow_emission_beats(&resolved, local_sig))
+        {
+            return resolved;
+        }
         return local_sig.clone();
+    }
+    // Same bare name: defining-module codegen refresh beats importer stubs (WDB-112/113).
+    if shared_ref_emission_beats(&resolved, local_sig)
+        || mut_borrow_emission_beats(&resolved, local_sig)
+    {
+        return resolved;
     }
     if method_registry_reflects_emitted_owned(local_sig) {
         return local_sig.clone();
@@ -1416,6 +1532,7 @@ pub(crate) fn prefer_shared_ref_signature(
                 challenger, param_idx,
             )
             && !signature_is_wj_std_stub_or_runtime_qualified(challenger)
+            && !shared_ref_emission_beats(challenger, pref)
         {
             return Some(pref.clone());
         }
@@ -1423,6 +1540,11 @@ pub(crate) fn prefer_shared_ref_signature(
     if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
         challenger, param_idx,
     ) {
+        if let Some(ref pref) = preferred {
+            if mut_borrow_emission_beats(challenger, pref) {
+                return Some(challenger.clone());
+            }
+        }
         return preferred;
     }
     let Some(pref) = preferred else {
@@ -1452,6 +1574,9 @@ pub(crate) fn prefer_shared_ref_signature(
             == Some(true);
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
         if challenger_runtime_str_ref && signature_is_wj_std_stub_or_runtime_qualified(&pref) {
+            return Some(challenger.clone());
+        }
+        if shared_ref_emission_beats(challenger, &pref) {
             return Some(challenger.clone());
         }
         return Some(pref);
@@ -1486,7 +1611,18 @@ pub(crate) fn prefer_shared_ref_signature(
             crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                 challenger, param_idx,
             );
-        if challenger_codegen_shared && !challenger_also_plain_wj_string {
+        let pref_stale_owned_emission = pref
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(false)
+            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                &pref, param_idx,
+            );
+        if challenger_codegen_shared
+            && (!challenger_also_plain_wj_string || pref_stale_owned_emission)
+        {
             return Some(challenger.clone());
         }
         return Some(pref);
@@ -2107,6 +2243,204 @@ pub fn join_tail(parts: Vec<string>) -> string {
             generated.contains("strings::join(&parts")
                 || generated.contains("strings::join(parts,"),
             "expected shared borrow into join. Got:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Type;
+
+        let mut demoted = FunctionSignature {
+            name: "sf1_cli::run_parquet_load".into(),
+            param_types: vec![
+                Type::String,
+                Type::String,
+                Type::Custom("u64".into()),
+                Type::Custom("u64".into()),
+                Type::Custom("bool".into()),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Custom("u64".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true, false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let importer_stub = FunctionSignature {
+            name: "run_parquet_load".into(),
+            param_types: demoted.param_types.clone(),
+            formal_param_types: demoted.formal_param_types.clone(),
+            param_ownership: demoted.param_ownership.clone(),
+            return_type: demoted.return_type.clone(),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let mut global = crate::analyzer::SignatureRegistry::new();
+        global
+            .signatures
+            .insert("sf1_cli::run_parquet_load".into(), demoted.clone());
+        global.signatures.insert("run_parquet_load".into(), demoted);
+
+        let mut local = crate::analyzer::SignatureRegistry::new();
+        local
+            .signatures
+            .insert("run_parquet_load".into(), importer_stub.clone());
+
+        let refreshed = refresh_call_site_signature_for_arg(
+            Some(importer_stub),
+            "run_parquet_load",
+            0,
+            Some(&global),
+            &local,
+        )
+        .expect("refresh");
+        assert!(
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&refreshed, 0),
+            "global bare-pass demotion must win at import call sites"
+        );
+    }
+
+    #[test]
+    fn local_user_fn_homonym_keeps_global_bare_pass_when_bare_names_match() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Type;
+
+        let demoted = FunctionSignature {
+            name: "run_parquet_load".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::String)),
+                Type::Reference(Box::new(Type::String)),
+                Type::Custom("u64".into()),
+                Type::Custom("u64".into()),
+                Type::Custom("bool".into()),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Custom("u64".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true, false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let importer_stub = FunctionSignature {
+            name: "run_parquet_load".into(),
+            param_types: demoted.param_types.clone(),
+            formal_param_types: demoted.formal_param_types.clone(),
+            param_ownership: demoted.param_ownership.clone(),
+            return_type: demoted.return_type.clone(),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let mut local = crate::analyzer::SignatureRegistry::new();
+        local
+            .signatures
+            .insert("run_parquet_load".into(), importer_stub);
+
+        let picked = local_user_fn_beats_runtime_std_homonym(
+            &local,
+            "run_parquet_load",
+            demoted.clone(),
+        );
+        assert!(
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&picked, 0),
+            "same bare name: global demotion must beat importer stub"
+        );
+    }
+
+    #[test]
+    fn refresh_call_site_prefers_global_mut_bare_pass_demotion_over_importer_stub() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Type;
+
+        let demoted = FunctionSignature {
+            name: "take_out_edges".into(),
+            param_types: vec![Type::MutableReference(Box::new(Type::Custom(
+                "DenseCsr".into(),
+            )))],
+            formal_param_types: vec![Type::Custom("DenseCsr".into())],
+            param_ownership: vec![OwnershipMode::MutBorrowed],
+            return_type: Some(Type::Custom("GraphOutEdgesCopy".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let importer_stub = FunctionSignature {
+            name: "take_out_edges".into(),
+            param_types: vec![Type::Custom("DenseCsr".into())],
+            formal_param_types: vec![Type::Custom("DenseCsr".into())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: demoted.return_type.clone(),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let mut global = crate::analyzer::SignatureRegistry::new();
+        global
+            .signatures
+            .insert("take_out_edges".into(), demoted.clone());
+
+        let mut local = crate::analyzer::SignatureRegistry::new();
+        local
+            .signatures
+            .insert("take_out_edges".into(), importer_stub.clone());
+
+        let refreshed = refresh_call_site_signature_for_arg(
+            Some(importer_stub),
+            "take_out_edges",
+            0,
+            Some(&global),
+            &local,
+        )
+        .expect("refresh");
+        assert!(
+            refreshed.param_types.get(0).is_some_and(|t| {
+                matches!(t, Type::MutableReference(_))
+            }),
+            "global mut bare-pass demotion must win at import call sites"
         );
     }
 }

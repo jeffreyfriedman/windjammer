@@ -15,21 +15,10 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
 ) {
     let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
     let registry_sig = gen
-        .signature_registry
-        .get_signature(func_name)
+        .get_signature_with_global(func_name)
         .cloned()
-        .or_else(|| gen.signature_registry.get_signature(simple_name).cloned())
-        .or_else(|| signature.as_ref().cloned())
-        .or_else(|| {
-            gen.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(func_name).cloned())
-        })
-        .or_else(|| {
-            gen.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(simple_name).cloned())
-        });
+        .or_else(|| gen.get_signature_with_global(simple_name).cloned())
+        .or_else(|| signature.as_ref().cloned());
     let emitted_indices = gen
         .function_emitted_mut_arg_indices
         .get(func_name)
@@ -39,23 +28,32 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
         let Some((_, arg_expr)) = arguments.get(i) else {
             continue;
         };
+        if !matches!(arg_expr, Expression::Identifier { .. }) {
+            continue;
+        }
+        let refreshed_sig =
+            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                registry_sig.clone(),
+                func_name,
+                i,
+                gen.global_signature_registry.as_deref(),
+                &gen.signature_registry,
+            );
         let local_emitted_mut = emitted_indices.is_some_and(|indices| indices.contains(&i));
+        let callee_expects_mut = refreshed_sig.as_ref().is_some_and(|sig| {
+            crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
+                sig, i,
+            )
+        });
         if !local_emitted_mut
+            && !callee_expects_mut
             && crate::codegen::rust::call_signature_resolution::has_ownership_collision_for_call(
                 gen, func_name,
             )
         {
             continue;
         }
-        if !matches!(arg_expr, Expression::Identifier { .. }) {
-            continue;
-        }
-        let needs_mut = emitted_indices.is_some_and(|indices| indices.contains(&i))
-            || registry_sig.as_ref().is_some_and(|sig| {
-                crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
-                    sig, i,
-                )
-            });
+        let needs_mut = local_emitted_mut || callee_expects_mut;
         if needs_mut && !arg_str.starts_with("&mut ") {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if gen.identifier_already_mut_ref(name)

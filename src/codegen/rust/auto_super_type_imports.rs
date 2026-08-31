@@ -103,6 +103,125 @@ impl<'ast> CodeGenerator<'ast> {
         }
         format!("#[allow(unused_imports)]\n{uses}")
     }
+
+    /// Import custom element types referenced only in generated Rust type ascriptions
+    /// (e.g. `let jobs: Vec<JobRecord> = loaded.1`) when the AST did not `use` them.
+    pub(crate) fn format_body_inferred_custom_type_imports(
+        &self,
+        body: &str,
+        existing_imports: &str,
+        program: &Program<'ast>,
+    ) -> String {
+        if !self.is_module || self.type_defining_modules.is_empty() {
+            return String::new();
+        }
+        let local_types = crate::analyzer::type_collector::collect_local_type_names(program);
+        let current_module = self.library_source_root.as_ref().and_then(|base| {
+            crate::analyzer::type_collector::wj_file_to_module_path(base, &self.current_wj_file)
+        });
+        let mut names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for token in extract_custom_types_from_rust_type_annotations(body) {
+            if local_types.contains(&token) {
+                continue;
+            }
+            if crate::type_classification::is_prelude_or_primitive(&token) {
+                continue;
+            }
+            if existing_imports.contains(&format!("::{token}"))
+                || existing_imports.contains(&format!("{token};"))
+                || existing_imports.contains(&format!(" {token};"))
+            {
+                continue;
+            }
+            names.insert(token);
+        }
+        if names.is_empty() {
+            return String::new();
+        }
+        let mut uses = String::new();
+        for type_name in names {
+            let resolved = if let Some(ref cur) = current_module {
+                self.type_defining_modules.get(&type_name).and_then(|candidates| {
+                    if candidates.is_empty() {
+                        return None;
+                    }
+                    let best_lcp = candidates
+                        .iter()
+                        .map(|def_mod| {
+                            crate::analyzer::type_collector::longest_common_prefix_len(cur, def_mod)
+                        })
+                        .max()?;
+                    let tied: Vec<&Vec<String>> = candidates
+                        .iter()
+                        .filter(|def_mod| {
+                            crate::analyzer::type_collector::longest_common_prefix_len(
+                                cur, def_mod,
+                            ) == best_lcp
+                        })
+                        .collect();
+                    let best = tied.iter().min_by_key(|def_mod| {
+                        let tail = &def_mod[best_lcp..];
+                        (tail.len(), tail.iter().map(|s| s.len()).sum::<usize>())
+                    })?;
+                    crate::analyzer::type_collector::rust_use_path_from_module_to_type(
+                        cur, best, &type_name,
+                    )
+                })
+            } else {
+                None
+            };
+            let rust_path = if let Some(r) = resolved {
+                r
+            } else {
+                let expanded = self.expand_crate_path_string(&format!("crate::{type_name}"));
+                if expanded == format!("crate::{type_name}") {
+                    continue;
+                }
+                expanded
+            };
+            uses.push_str(&format!("#[allow(unused_imports)]\nuse {rust_path};\n"));
+        }
+        uses
+    }
+}
+
+/// Collect PascalCase type names appearing in generated Rust generic annotations.
+fn extract_custom_types_from_rust_type_annotations(body: &str) -> Vec<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let wrappers = [
+        "Vec<", "Option<", "SmallVec<[", "HashMap<", "HashSet<", "BTreeMap<", "BTreeSet<",
+    ];
+    for wrapper in wrappers {
+        let mut rest = body;
+        while let Some(start) = rest.find(wrapper) {
+            let after = &rest[start + wrapper.len()..];
+            let Some(end) = after.find('>') else {
+                break;
+            };
+            let inner = &after[..end];
+            for segment in inner.split(',') {
+                let seg = segment.trim();
+                let name = seg
+                    .split(':')
+                    .next()
+                    .unwrap_or(seg)
+                    .split('<')
+                    .next()
+                    .unwrap_or(seg)
+                    .trim();
+                if name
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                {
+                    out.insert(name.to_string());
+                }
+            }
+            rest = &after[end..];
+        }
+    }
+    out.into_iter().collect()
 }
 
 /// `use std::{module}::*` / `use std::{module}::{Type}` already brings `type_name` into scope.
