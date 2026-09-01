@@ -133,6 +133,7 @@ extcol = {{ path = "{ext_path}" }}
     .unwrap();
     let view = view_rs
         .replace("use crate::", "use ")
+        .replace("use super::extcol::", "use extcol::")
         .replace("use super::*;\n", "");
     fs::write(
         crate_dir.join("src/lib.rs"),
@@ -287,6 +288,7 @@ exttable = {{ path = "{ext_path}" }}
     .unwrap();
     let view = view_rs
         .replace("use crate::", "use ")
+        .replace("use super::extcol::", "use extcol::")
         .replace("use super::*;\n", "");
     fs::write(
         crate_dir.join("src/lib.rs"),
