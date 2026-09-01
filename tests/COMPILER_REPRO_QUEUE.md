@@ -101,10 +101,27 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()`** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ✅ tip GREEN |
 | P1 | **WDB-114: `--module-file` emits `Vec<T>` without importing `T`** | `wdb114_module_file_vec_type_annotation_must_import_element_type` | ✅ tip GREEN |
 | P1 | **WDB-115: early `return self.private_method()` mis-emits sibling method** | `wdb115_early_return_private_method_must_emit_correct_callee` | ✅ tip GREEN (regression guard) |
-| P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()`** | `bug_std_fs_dir_entry_name_wiring_test`, `bug_std_fs_dir_entry_name_multipass_test` | ⚠️ RED multipass only — fixture `migrate_dir_entry_name.wj`; isolate single-file GREEN |
+| P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()`** | `bug_std_fs_dir_entry_name_wiring_test`, `bug_std_fs_dir_entry_name_multipass_test` | ✅ tip GREEN — fixture `migrate_dir_entry_name.wj` |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ✅ tip GREEN — fixtures `cli_args_*` / `migrate_cli_use_positional.wj` |
 | P1 | **`std::http::HttpMethod` lib public port vs `tests/*_test.wj`** | `bug_app_test_http_method_type_mismatch_test`, `bug_app_test_http_method_module_file_test` | ✅ tip GREEN (in-tree `wj`); regression guards |
+| P1 | **Multipass HTTP adapter must pass owned `HttpReply` / `string` to response helpers** | `bug_multipass_http_adapter_owned_reply_test` | ⚠️ RED — `base_response(body: String)` owned on tip; `to_response(&mut …)` / `json_response(&…)` remain |
+| P1 | **Multipass `for ch in strings.chars` must not emit `&mut char` loop binding** | `bug_multipass_strings_chars_for_in_mut_char_test` | ⚠️ RED — fixture `parse_positive_int_chars.wj` |
+| P1 | **`use std::async_runtime::sleep_ms_blocking` must not alias module as `async`** | `bug_multipass_std_async_runtime_import_test` | ⚠️ RED — blocks `wj-retry::pause_ms` |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
+
+## P3.212 repro harness closure (2026-08-31)
+
+Verified on in-tree tip (`cargo test --test all`, `CARGO_BIN_EXE_wj`):
+
+| Change | Status |
+|--------|--------|
+| `bug_multipass_http_adapter_owned_reply_test` — hexagonal HTTP adapter owned reply/body | ⚠️ RED |
+| `bug_multipass_strings_chars_for_in_mut_char_test` + `parse_positive_int_chars.wj` | ⚠️ RED |
+| `bug_multipass_std_async_runtime_import_test` — `std::async_runtime` import alias | ⚠️ RED |
+| `bug_std_fs_dir_entry_name_multipass_test` — DirEntry multipass (P3.211 carry) | ✅ tip GREEN |
+| `run_red_repro_bundle.sh` — **3-gate** tail RED bundle | ⚠️ RED |
+
+**Compiler agent:** green HTTP adapter owned emit, `strings.chars` loop binding, `async_runtime` import.
 
 ## P3.211 repro harness closure (2026-08-31)
 
