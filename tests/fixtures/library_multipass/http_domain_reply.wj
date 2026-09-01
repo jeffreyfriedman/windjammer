@@ -1,0 +1,17 @@
+pub struct HttpReply {
+    pub status: u16,
+    pub body: string,
+    pub allow_origin: string,
+}
+
+pub struct App {}
+
+impl App {
+    pub fn handle(self, path: string, body: string) -> HttpReply {
+        HttpReply {
+            status: 200,
+            body: body,
+            allow_origin: "",
+        }
+    }
+}

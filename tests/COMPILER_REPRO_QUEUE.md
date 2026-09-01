@@ -104,10 +104,36 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()`** | `bug_std_fs_dir_entry_name_wiring_test`, `bug_std_fs_dir_entry_name_multipass_test` | ✅ tip GREEN — fixture `migrate_dir_entry_name.wj` |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ✅ tip GREEN — fixtures `cli_args_*` / `migrate_cli_use_positional.wj` |
 | P1 | **`std::http::HttpMethod` lib public port vs `tests/*_test.wj`** | `bug_app_test_http_method_type_mismatch_test`, `bug_app_test_http_method_module_file_test` | ✅ tip GREEN (in-tree `wj`); regression guards |
-| P1 | **Multipass HTTP adapter must pass owned `HttpReply` / `string` to response helpers** | `bug_multipass_http_adapter_owned_reply_test` | ⚠️ RED — `base_response(body: String)` owned on tip; `to_response(&mut …)` / `json_response(&…)` remain |
-| P1 | **Multipass `for ch in strings.chars` must not emit `&mut char` loop binding** | `bug_multipass_strings_chars_for_in_mut_char_test` | ⚠️ RED — fixture `parse_positive_int_chars.wj` |
-| P1 | **`use std::async_runtime::sleep_ms_blocking` must not alias module as `async`** | `bug_multipass_std_async_runtime_import_test` | ⚠️ RED — blocks `wj-retry::pause_ms` |
+| P1 | **Multipass HTTP adapter must pass owned `HttpReply` / `string` to response helpers** | `bug_multipass_http_adapter_owned_reply_test`, `bug_multipass_http_adapter_hexagonal_test` | ⚠️ RED hexagonal — `adapters/http_server.wj`; single-module fixture GREEN |
+| P1 | **Multipass `for ch in strings.chars` must not emit `&mut char` loop binding** | `bug_multipass_strings_chars_for_in_mut_char_test`, `bug_multipass_config_parse_positive_int_chars_test` | ✅ tip GREEN — fixtures `parse_positive_int_chars.wj`, `config_parse_positive_int_chars.wj` |
+| P1 | **`use std::async_runtime::sleep_ms_blocking` must not alias module as `async`** | `bug_multipass_std_async_runtime_import_test` | ✅ tip GREEN — `pause_ms_async_runtime.wj` |
+| P1 | **Cross-crate `join_url(base, path)` owned base must cargo-check (`wj-sitegen`)** | `bug_multipass_cross_crate_join_url_owned_base_test` | ⚠️ RED — owned `String` vs metadata `&str` E0308 |
+| P1 | **Cross-crate `render(owned_template(), vars)` must cargo-check (`wj-template`)** | `bug_multipass_cross_crate_render_owned_template_helper_test` | ⚠️ RED — helper `String` vs demoted `&str` E0308 |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
+
+## P3.214 repro harness closure (2026-09-01)
+
+| Change | Status |
+|--------|--------|
+| `bug_json_is_array_len_owned_value_borrow_test` — multipass `json.is_array`/`json.len` after `json.parse` (`wj-todo-cli` `todos_from_json`) | ⚠️ RED — owned `Value` vs runtime `&Value` E0308 (single-file emit gate passes; multipass `cargo check` fails) |
+| `run_red_repro_bundle.sh` — **3-gate** tail repro bundle (+ json is_array/len) | ⚠️ RED |
+
+**Compiler agent:** auto-borrow owned `Value` for `is_array` / `len` / `as_*` predicates (signature registry). **Ecosystem:** `wj-todo-cli` uses `[` prefix check + `get_index` loop until green.
+
+## P3.213 repro harness closure (2026-09-01)
+
+Verified on in-tree tip (`cargo test --test all`, 2026-09-01):
+
+| Change | Status |
+|--------|--------|
+| `bug_multipass_cross_crate_join_url_owned_base_test` — `wj-sitegen` `join_url` class | ⚠️ RED |
+| `bug_multipass_cross_crate_render_owned_template_helper_test` — `wj-template` `render(helper())` class | ⚠️ RED |
+| `bug_multipass_http_adapter_hexagonal_test` — `domain/` + `adapters/` layout | ⚠️ RED |
+| `bug_multipass_config_parse_positive_int_chars_test` — hexagonal `domain/config` | ✅ tip GREEN |
+| `http_adapter_owned_reply.wj` + hexagonal fixtures (DRY) | ✅ shipped |
+| `run_red_repro_bundle.sh` — **3-gate** tail RED bundle | ⚠️ verified |
+
+**Compiler agent:** green cross-crate owned/borrow at app→package boundary; hexagonal HTTP adapter owned emit.
 
 ## P3.212 repro harness closure (2026-09-01)
 
@@ -115,13 +141,13 @@ Verified on in-tree tip `61e4ed30` (`cargo test --test all`):
 
 | Change | Status |
 |--------|--------|
-| `bug_multipass_http_adapter_owned_reply_test` — hexagonal HTTP adapter owned reply/body | ⚠️ RED |
-| `bug_multipass_strings_chars_for_in_mut_char_test` + `parse_positive_int_chars.wj` | ⚠️ RED |
-| `bug_multipass_std_async_runtime_import_test` + `pause_ms_async_runtime.wj` | ⚠️ RED |
+| `bug_multipass_http_adapter_owned_reply_test` — hexagonal HTTP adapter owned reply/body | ✅ tip GREEN |
+| `bug_multipass_strings_chars_for_in_mut_char_test` + `parse_positive_int_chars.wj` | ✅ tip GREEN |
+| `bug_multipass_std_async_runtime_import_test` + `pause_ms_async_runtime.wj` | ✅ tip GREEN |
 | `bug_std_fs_dir_entry_name_multipass_test` — DirEntry multipass (P3.211 carry) | ✅ tip GREEN |
-| `run_red_repro_bundle.sh` — **3-gate** tail RED bundle | ⚠️ all RED verified |
+| `run_red_repro_bundle.sh` — **3-gate** tail repro bundle | ✅ all GREEN |
 
-**Compiler agent:** green HTTP adapter owned emit, `strings.chars` loop binding, `async_runtime` import.
+**Compiler agent:** (done) HTTP adapter owned emit, `strings.chars` loop binding, `async_runtime` import.
 
 ## P3.211 repro harness closure (2026-08-31)
 
