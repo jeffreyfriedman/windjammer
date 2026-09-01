@@ -1,0 +1,8 @@
+use crate::domain::config::parse_positive_int
+
+pub fn port_from_env(text: string) -> int {
+    match parse_positive_int(text) {
+        Some(value) => value,
+        None => 8080,
+    }
+}

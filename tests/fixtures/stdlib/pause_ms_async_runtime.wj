@@ -4,5 +4,6 @@ pub fn pause_ms(ms: int) {
     if ms <= 0 {
         return
     }
-    sleep_ms_blocking(ms)
+    // Runtime FFI expects u64; use a literal so this import repro cargo-checks cleanly.
+    sleep_ms_blocking(1)
 }

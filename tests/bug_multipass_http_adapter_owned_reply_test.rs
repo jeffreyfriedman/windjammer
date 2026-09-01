@@ -23,55 +23,7 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-const HTTP_ADAPTER: &str = r#"
-use std::http::*
-use std::sync::{Arc, Mutex}
-
-pub struct HttpReply {
-    pub status: u16,
-    pub body: string,
-}
-
-pub struct App {}
-
-impl App {
-    pub fn handle(self, method: string, path: string, body: string) -> HttpReply {
-        let _method = method
-        let _path = path
-        HttpReply { status: 200, body: body }
-    }
-}
-
-pub fn dispatch(req: ServerRequest, state: Arc<Mutex<App>>) -> ServerResponse {
-    match state.lock() {
-        Ok(mut app) => {
-            let reply = app.handle("GET", req.path, req.body)
-            to_response(reply)
-        },
-        Err(_) => server_error("internal server error"),
-    }
-}
-
-fn to_response(reply: HttpReply) -> ServerResponse {
-    let resp = base_response(reply.status, reply.body)
-    resp
-}
-
-fn base_response(status: u16, body: string) -> ServerResponse {
-    if status == 400 {
-        return json_response(ServerResponse::bad_request(body))
-    }
-    ServerResponse::json(body)
-}
-
-fn json_response(resp: ServerResponse) -> ServerResponse {
-    resp.header("Content-Type", "application/json")
-}
-
-fn server_error(message: string) -> ServerResponse {
-    json_response(ServerResponse::internal_error(message))
-}
-"#;
+const HTTP_ADAPTER: &str = include_str!("fixtures/library_multipass/http_adapter_owned_reply.wj");
 
 #[test]
 fn multipass_http_adapter_must_use_owned_reply_and_body() {
