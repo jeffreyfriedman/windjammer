@@ -473,6 +473,9 @@ impl<'ast> CodeGenerator<'ast> {
                             func.body.as_slice(),
                             &param.name,
                             func,
+                        ) && !crate::compiler::multipass_bare_pass_demotion::param_forwards_fields_in_call_args_only(
+                            func.body.as_slice(),
+                            &param.name,
                         ) {
                             self.inferred_mut_borrowed_params.insert(param.name.clone());
                         }
@@ -729,6 +732,9 @@ impl<'ast> CodeGenerator<'ast> {
                     func.body.as_slice(),
                     param_name,
                     func,
+                ) || crate::compiler::multipass_bare_pass_demotion::param_forwards_fields_in_call_args_only(
+                    func.body.as_slice(),
+                    param_name,
                 ) {
                     continue;
                 }
@@ -887,6 +893,15 @@ impl<'ast> CodeGenerator<'ast> {
                     &param.name,
                     func,
                 )
+                || crate::compiler::multipass_bare_pass_demotion::param_forwards_fields_in_call_args_only(
+                    func.body.as_slice(),
+                    &param.name,
+                )
+                || self.param_only_used_as_owned_custom_method_receiver(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                 || self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
                 || (self
@@ -995,6 +1010,10 @@ impl<'ast> CodeGenerator<'ast> {
                     self.param_only_used_via_field_or_index_projection(
                         func.body.as_slice(),
                         &param.name,
+                    ) && !self.param_only_used_as_owned_custom_method_receiver(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
                     ) && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
                         && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                         && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
@@ -1075,6 +1094,11 @@ impl<'ast> CodeGenerator<'ast> {
             if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                 && !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
                 && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
+                && !self.param_only_used_as_owned_custom_method_receiver(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
             {
                 self.inferred_borrowed_params.insert(param.name.clone());
             }
@@ -1303,6 +1327,58 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         found
+    }
+
+    /// `param.method()` that returns an owned Custom type consumes the receiver (HTTP
+    /// `json_response(resp) { resp.header(...) }`) — not readonly projection demotion.
+    pub(in crate::codegen::rust) fn param_only_used_as_owned_custom_method_receiver(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let Some(ret) = func.return_type.as_ref() else {
+            return false;
+        };
+        if !matches!(ret, Type::Custom(_)) {
+            return false;
+        }
+        let mut saw_receiver = false;
+        for stmt in body {
+            match stmt {
+                Statement::Return {
+                    value: Some(expr), ..
+                }
+                | Statement::Expression { expr, .. } => {
+                    if !Self::expr_is_direct_method_receiver(expr, param_name) {
+                        return false;
+                    }
+                    saw_receiver = true;
+                }
+                Statement::Let { value, .. } => {
+                    if !Self::expr_is_direct_method_receiver(value, param_name) {
+                        return false;
+                    }
+                    saw_receiver = true;
+                }
+                _ => {
+                    if Self::statement_mentions_identifier(stmt, param_name) {
+                        return false;
+                    }
+                }
+            }
+        }
+        saw_receiver
+    }
+
+    fn expr_is_direct_method_receiver(expr: &Expression<'ast>, param_name: &str) -> bool {
+        match expr {
+            Expression::MethodCall { object, .. } => matches!(
+                &**object,
+                Expression::Identifier { name, .. } if name == param_name
+            ),
+            _ => false,
+        }
     }
 
     /// Assignment LHS roots at `param` via field/index (`c.value = …`, `arr[i] = …`).

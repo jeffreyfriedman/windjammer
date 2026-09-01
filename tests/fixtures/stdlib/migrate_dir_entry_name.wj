@@ -1,6 +1,6 @@
 use std::fs
 
-/// Pre-workaround `wj-migrate` pattern: `entry.name()` per `std/fs.wj` stub.
+/// `wj-migrate` pattern: read first file name from a directory listing.
 pub fn first_sql_file_name(dir: string) -> Result<string, string> {
     match fs.read_dir(dir) {
         Ok(entries) => {
