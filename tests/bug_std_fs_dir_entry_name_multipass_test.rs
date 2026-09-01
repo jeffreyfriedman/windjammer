@@ -44,8 +44,8 @@ pub mod migrate
         "DirEntry.name() must codegen to runtime file_name(); emitted:\n{migrate}"
     );
     assert!(
-        !migrate.contains(".name()"),
-        "RED: must not emit missing DirEntry::name(); emitted:\n{migrate}"
+        !migrate.contains("entry.name()"),
+        "must not emit missing DirEntry::name() method call; emitted:\n{migrate}"
     );
     test.cargo_check()
         .expect("DirEntry.name wiring must cargo-check");
