@@ -1,0 +1,8 @@
+use std::async_runtime::sleep_ms_blocking
+
+pub fn pause_ms(ms: int) {
+    if ms <= 0 {
+        return
+    }
+    sleep_ms_blocking(ms)
+}

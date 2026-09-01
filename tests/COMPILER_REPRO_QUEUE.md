@@ -109,17 +109,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`use std::async_runtime::sleep_ms_blocking` must not alias module as `async`** | `bug_multipass_std_async_runtime_import_test` | ⚠️ RED — blocks `wj-retry::pause_ms` |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
 
-## P3.212 repro harness closure (2026-08-31)
+## P3.212 repro harness closure (2026-09-01)
 
-Verified on in-tree tip (`cargo test --test all`, `CARGO_BIN_EXE_wj`):
+Verified on in-tree tip `61e4ed30` (`cargo test --test all`):
 
 | Change | Status |
 |--------|--------|
 | `bug_multipass_http_adapter_owned_reply_test` — hexagonal HTTP adapter owned reply/body | ⚠️ RED |
 | `bug_multipass_strings_chars_for_in_mut_char_test` + `parse_positive_int_chars.wj` | ⚠️ RED |
-| `bug_multipass_std_async_runtime_import_test` — `std::async_runtime` import alias | ⚠️ RED |
+| `bug_multipass_std_async_runtime_import_test` + `pause_ms_async_runtime.wj` | ⚠️ RED |
 | `bug_std_fs_dir_entry_name_multipass_test` — DirEntry multipass (P3.211 carry) | ✅ tip GREEN |
-| `run_red_repro_bundle.sh` — **3-gate** tail RED bundle | ⚠️ RED |
+| `run_red_repro_bundle.sh` — **3-gate** tail RED bundle | ⚠️ all RED verified |
 
 **Compiler agent:** green HTTP adapter owned emit, `strings.chars` loop binding, `async_runtime` import.
 
