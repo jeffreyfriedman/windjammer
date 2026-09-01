@@ -20,16 +20,7 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-const PAUSE_ADAPTER: &str = r#"
-use std::async_runtime::sleep_ms_blocking
-
-pub fn pause_ms(ms: int) {
-    if ms <= 0 {
-        return
-    }
-    sleep_ms_blocking(ms)
-}
-"#;
+const PAUSE_ADAPTER: &str = include_str!("fixtures/stdlib/pause_ms_async_runtime.wj");
 
 #[test]
 fn multipass_std_async_runtime_import_must_not_alias_async_keyword() {
