@@ -65,6 +65,7 @@ pub mod wjsl;
 #[cfg(feature = "cli")]
 pub mod build_utils;
 #[cfg(feature = "cli")]
+pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 #[cfg(feature = "cli")]
 pub mod cli;

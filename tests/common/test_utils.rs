@@ -87,9 +87,7 @@ where
 /// Caching deps here avoids recompiling `windjammer-runtime`, `serde`, etc.
 /// from scratch in every fresh temp directory.
 fn shared_cargo_target_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("wj_integration_verify")
+    windjammer::cargo_cache::verify_target_dir()
 }
 
 /// Type-check generated Rust code via `cargo check` with a shared dependency cache.

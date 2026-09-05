@@ -10,8 +10,20 @@ pub fn execute(all: bool) -> Result<()> {
 
     total_freed += clean_temp_artifacts()?;
 
+    // Always soft-prune the shared cache when disk is low.
+    let prune_report = crate::cargo_cache::prune_if_low_disk();
+    total_freed += prune_report.freed_bytes;
+    for p in &prune_report.removed_paths {
+        println!(
+            "  {} pruned {}",
+            "cleaned".green(),
+            p.display()
+        );
+    }
+
     if all {
         total_freed += clean_local_target()?;
+        total_freed += clean_shared_cache_prompt()?;
     }
 
     println!();
@@ -110,6 +122,27 @@ fn clean_local_target() -> Result<u64> {
         }
     }
 
+    Ok(freed)
+}
+
+fn clean_shared_cache_prompt() -> Result<u64> {
+    // Non-interactive deep clean of shared+verify trees (user passed --all).
+    let shared = crate::cargo_cache::shared_target_dir();
+    let verify = crate::cargo_cache::verify_target_dir();
+    let mut freed = 0u64;
+    for dir in [shared, verify] {
+        if dir.exists() {
+            let size = dir_size(&dir);
+            println!(
+                "  {} removing shared cache {} ({})",
+                "cleaning".yellow(),
+                dir.display(),
+                format_size(size)
+            );
+            std::fs::remove_dir_all(&dir)?;
+            freed += size;
+        }
+    }
     Ok(freed)
 }
 

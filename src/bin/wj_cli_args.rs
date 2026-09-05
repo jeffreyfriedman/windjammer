@@ -360,6 +360,12 @@ pub enum Commands {
         all: bool,
     },
 
+    /// Manage the shared Cargo target cache (outside application repos)
+    Cache {
+        #[command(subcommand)]
+        action: CacheCommand,
+    },
+
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
     SelfInstall,
@@ -367,4 +373,24 @@ pub enum Commands {
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
     Plugin(Vec<String>),
+}
+
+#[derive(Subcommand)]
+pub enum CacheCommand {
+    /// Print the shared (or --verify) Cargo target directory
+    Path {
+        /// Use the ephemeral verify cache (integration / codegen cargo checks)
+        #[arg(long)]
+        verify: bool,
+    },
+    /// Show cache sizes and free disk
+    Status,
+    /// Reclaim space (old incremental; aggressive when disk is low)
+    Prune {
+        /// Also clear debug incremental trees when reclaiming
+        #[arg(long)]
+        aggressive: bool,
+    },
+    /// Write env.sh / env.ps1 for bare `cargo` invocations
+    Setup,
 }

@@ -25,6 +25,13 @@ bd show <id>          # View issue details
 bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
 bd sync               # Sync with git
+
+# Shared Cargo cache (outside repos — see docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md)
+wj cache status       # sizes + free disk
+wj cache prune        # reclaim when disk is low
+wj cache setup        # write env.sh for bare `cargo`
+source ~/Library/Caches/windjammer/env.sh   # macOS; Linux uses ~/.cache/windjammer/env.sh
+export CARGO_TARGET_DIR="$(wj cache path)"  # overrides Cursor sandbox redirects
 ```
 
 ## Ecosystem seed

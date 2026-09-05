@@ -294,7 +294,5 @@ fn windjammer_runtime_path_for_integration_tests() -> PathBuf {
 
 /// Shared target directory so integration tests don't rebuild deps from scratch.
 fn shared_cargo_target_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("wj_integration_verify")
+    windjammer::cargo_cache::verify_target_dir()
 }
