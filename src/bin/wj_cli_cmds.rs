@@ -1,6 +1,6 @@
 //! Dispatch handlers for the `wj` binary (`cargo`-friendly shim crate splits parsing vs logic).
 
-use crate::wj_cli_args::{Cli, Commands};
+use crate::wj_cli_args::{CacheCommand, Cli, Commands};
 use anyhow::Result;
 
 pub fn run(cli: Cli) -> Result<()> {
@@ -173,6 +173,20 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;
         }
+        Commands::Cache { action } => match action {
+            CacheCommand::Path { verify } => {
+                windjammer::cli::cache::execute_path(verify)?;
+            }
+            CacheCommand::Status => {
+                windjammer::cli::cache::execute_status()?;
+            }
+            CacheCommand::Prune { aggressive } => {
+                windjammer::cli::cache::execute_prune(aggressive)?;
+            }
+            CacheCommand::Setup => {
+                windjammer::cli::cache::execute_setup()?;
+            }
+        },
         Commands::SelfInstall => {
             windjammer::cli::self_install::execute()?;
         }
