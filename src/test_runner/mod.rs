@@ -163,10 +163,11 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
         println!();
     }
 
+    let _ = crate::cargo_cache::prune_if_low_disk();
     let mut cmd = Command::new("cargo");
-    cmd.arg("test")
-        .current_dir(&temp_dir)
-        .env_remove("CARGO_TARGET_DIR");
+    cmd.arg("test").current_dir(&temp_dir);
+    // Ephemeral test crates share the verify tree (often identical package names).
+    crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Verify);
 
     // Dogfood `--use-build-dir` / project-Cargo layouts path-depend on crates whose
     // `build.rs` tip-transpiles unless SKIP_WJ_REGEN is set. Default it for Cargo

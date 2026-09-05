@@ -52,8 +52,38 @@ cargo install windjammer
 git clone https://github.com/jeffreyfriedman/windjammer.git
 cd windjammer
 cargo build --release
+# After the first build, prefer the shared Cargo cache (see below):
+#   ./target/release/wj cache setup && source ~/Library/Caches/windjammer/env.sh   # macOS
+#   cargo build --release   # subsequent builds land outside the repo
 ./target/release/wj --version
 ```
+
+### Shared Cargo cache (disk-friendly builds)
+
+Compiled Cargo artifacts (`.rlib`, incremental, etc.) are kept **outside** application repos so they do not pollute each project and can be cleaned in one place. Matching dependencies are shared across Windjammer ecosystem crates.
+
+| Platform | Default location |
+|----------|------------------|
+| macOS | `~/Library/Caches/windjammer/cargo-target/` |
+| Linux | `~/.cache/windjammer/cargo-target/` (or `$XDG_CACHE_HOME/…`) |
+| Windows | `%LOCALAPPDATA%\windjammer\cargo-target\` |
+
+```bash
+wj cache setup          # write env.sh / env.ps1
+source ~/Library/Caches/windjammer/env.sh   # macOS; Linux: ~/.cache/windjammer/env.sh
+# PowerShell: . "$env:LOCALAPPDATA\windjammer\env.ps1"
+
+wj cache status         # sizes + free disk
+wj cache path           # print shared target dir (for scripts)
+wj cache prune          # reclaim old incremental; aggressive when disk is low
+wj clean --all          # also wipe shared + local target trees
+```
+
+Override the root with `WJ_CARGO_TARGET_ROOT`. Force in-repo `./target` with `WJ_USE_LOCAL_TARGET=1`.
+
+`wj`, `wj test`, and `wj game build` set `CARGO_TARGET_DIR` automatically. Sourcing `env.sh` is for bare `cargo` invocations.
+
+Design notes: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md)
 
 ### Hello World
 
@@ -410,6 +440,7 @@ See the [examples/](examples/) directory for more:
 - [Language Guide](docs/GUIDE.md)
 - [API Reference](docs/API_REFERENCE.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Shared Cargo cache design](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md)
 - [Comparison with Rust and Go](docs/COMPARISON.md)
 - [Contributing](CONTRIBUTING.md)
 - [Roadmap](ROADMAP.md)

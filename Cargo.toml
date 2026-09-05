@@ -123,5 +123,9 @@ harness = false
 name = "cache_locality_aosoa_bench"
 harness = false
 
+[profile.dev]
+# Smaller artifacts; still enough debuginfo for backtraces / line mapping.
+debug = "line-tables-only"
+
 [profile.release]
 opt-level = 3
