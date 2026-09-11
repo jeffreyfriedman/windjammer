@@ -145,11 +145,12 @@ fn main() {
         generated
     );
 
-    // String stored into struct field: either &str (with .to_string() at site) or String (owned) is valid
+    // String stored into struct field: &str, String, or impl Into<String> (builder style)
     assert!(
         generated.contains("fn new(id: u32, name: &str)")
-            || generated.contains("fn new(id: u32, name: String)"),
-        "name parameter stored in struct should infer &str or String. Got:\n{}",
+            || generated.contains("fn new(id: u32, name: String)")
+            || generated.contains("fn new(id: u32, name: impl Into<String>)"),
+        "name parameter stored in struct should infer &str, String, or impl Into<String>. Got:\n{}",
         generated
     );
     assert!(

@@ -10,12 +10,12 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — when the same owned param is passed to two owned-`String` formals,
-//! the compiler must emit `.clone()` on the first use (or all but last).
+//! When the same owned param is passed to two owned-`String` formals, the compiler
+//! must emit `.clone()` on the first use (or all but last).
 //!
-//! Dogfood (`hub.wj`): `crumbs_for(title)` then `escape_html(title)` — both own `String`.
-//! Tip currently emits bare `title` twice → E0382 use-after-move.
-//! Product workaround: `+ ""` to re-own before each call.
+//! Dogfood (`hub.wj`): `own_title(title)` then `own_title(title)` — both move `String`.
+//! (Helpers that only call `&str` methods demote to `&str` under Phase 2; this gate
+//! uses identity moves so the formals stay owned.)
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -28,23 +28,23 @@ fn multi_use_owned_param_must_clone_on_first_use() {
     test.add_file(
         "html.wj",
         r#"
-pub fn escape_html(s: string) -> string {
-    s.replace("&", "&amp;").replace("<", "&lt;")
+pub fn own_title(s: string) -> string {
+    s
 }
 pub fn crumbs_for(title: string) -> string {
-    escape_html(title)
+    own_title(title)
 }
 "#,
     );
     test.add_file(
         "hub.wj",
         r#"
-use crate::html::{escape_html, crumbs_for}
+use crate::html::{own_title, crumbs_for}
 
 pub fn render_panel(title: string, blurb: string) -> string {
     let crumbs = crumbs_for(title)
-    let title_e = escape_html(title)
-    let blurb_e = escape_html(blurb)
+    let title_e = own_title(title)
+    let blurb_e = own_title(blurb)
     crumbs + title_e + blurb_e
 }
 "#,
@@ -58,7 +58,7 @@ pub fn render_panel(title: string, blurb: string) -> string {
 
     assert!(
         html.contains("s: String"),
-        "repro needs owned formals. Got:\n{html}"
+        "repro needs owned formals (identity move). Got:\n{html}"
     );
 
     // Must either clone title before first use, or emit title.clone() somewhere

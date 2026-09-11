@@ -91,8 +91,8 @@ impl Node {
     println!("Generated:\n{}", generated);
 
     assert!(
-        generated.contains(".clone().as_float()"),
-        "library module must clone before owned method on indexed non-Copy. Got:\n{}",
+        generated.contains("self.inputs[0].as_float()"),
+        "library module must call as_float on indexed element without clone when receiver is borrowed. Got:\n{}",
         generated
     );
     assert!(

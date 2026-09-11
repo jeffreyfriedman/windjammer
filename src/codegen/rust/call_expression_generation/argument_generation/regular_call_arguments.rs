@@ -55,9 +55,32 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             {
                 gen.suppress_borrowed_clone = true;
             }
+            // Signature-driven nested context (e.g. `vec![tenant_id, …]` into
+            // `params: Vec<string>`) — same IR element coercion as method args.
+            let prev_call_arg_expected = gen.call_arg_expected_type.clone();
+            let prev_arg_float_target = gen.assignment_float_target_type.clone();
+            if let Some(ref sig) = signature {
+                let pidx = sig.arg_param_index(i);
+                let param_ty = sig
+                    .param_type_for_arg(i)
+                    .or_else(|| sig.formal_param_type(pidx))
+                    .or_else(|| sig.param_types.get(pidx))
+                    .cloned();
+                if param_ty.as_ref().is_some_and(
+                    crate::codegen::rust::type_classification_utilities::is_float_type,
+                ) && gen.assignment_float_target_type.is_none()
+                {
+                    gen.assignment_float_target_type = param_ty.clone();
+                }
+                if let Some(ty) = param_ty {
+                    gen.call_arg_expected_type = Some(ty);
+                }
+            }
             let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg);
             gen.restore_arg_gen_scope(scope);
+            gen.assignment_float_target_type = prev_arg_float_target;
+            gen.call_arg_expected_type = prev_call_arg_expected;
             gen.suppress_borrowed_clone = prev_suppress;
             arg_str = gen.peel_copy_ref_match_binding_for_value(arg, &arg_str);
             if let Expression::Identifier { name, .. } = arg {
@@ -351,6 +374,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 sig, pidx,
                             ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 sig, pidx,
+                            ) && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                &gen.signature_registry,
+                                func_name,
+                                Some(sig),
+                                i,
                             )
                         }) && gen.auto_clone_analysis.as_ref().is_some_and(|a| {
                             a.needs_clone(name, gen.current_statement_idx).is_some()
@@ -364,6 +392,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 sig,
                                 sig.arg_param_index(i),
+                            ) && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                &gen.signature_registry,
+                                func_name,
+                                Some(sig),
+                                i,
                             )
                         })
                     {

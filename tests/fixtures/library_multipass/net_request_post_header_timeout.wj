@@ -1,0 +1,9 @@
+use std::net::Request
+
+/// `wj-fetch` POST class: `Request::post(url, body).header(k, v).timeout(secs).send()`.
+pub fn timed_post(url: string, body: string, secs: int) -> Result<string, string> {
+    match Request::post(url, body).header("Content-Type", "application/json").timeout(secs).send() {
+        Ok(response) => Ok(response.body),
+        Err(e) => Err(e),
+    }
+}

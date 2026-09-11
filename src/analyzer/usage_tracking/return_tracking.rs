@@ -184,7 +184,9 @@ impl<'ast> Analyzer<'ast> {
                 if let Expression::Identifier { name: fn_name, .. } = &**function {
                     if crate::type_classification::is_language_level_payload_call_name(fn_name) {
                         for (_label, arg) in arguments {
-                            if self.expression_uses_identifier(name, arg) {
+                            // Recurse with return semantics: `Some(args[0])` returns an
+                            // element, not the container (cross-crate Vec demotion / wj-migrate).
+                            if self.expression_uses_identifier_for_return(name, arg) {
                                 return true;
                             }
                         }
@@ -193,10 +195,10 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
 
-            // Tuple expression: (a, b, c)
+            // Tuple expression: (a, b, c) — same return-shape recursion as payload wraps
             Expression::Tuple { elements, .. } => {
                 for elem in elements {
-                    if self.expression_uses_identifier(name, elem) {
+                    if self.expression_uses_identifier_for_return(name, elem) {
                         return true;
                     }
                 }
@@ -231,6 +233,9 @@ impl<'ast> Analyzer<'ast> {
                 }
                 self.expression_uses_identifier_for_return(name, object)
             }
+
+            // `container[i]` returns / moves an element — the container itself stays borrowable.
+            Expression::Index { .. } => false,
 
             // CRITICAL FIX: Binary expressions (comparisons, arithmetic) return the RESULT, not the parameter
             // Example: `id == "test"` returns bool, NOT id

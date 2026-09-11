@@ -62,6 +62,14 @@ pub fn join_url(base: string, relative: string) -> Result<string, string> {
     let app_src = tmp.path().join("app_src");
     fs::create_dir_all(&app_src).expect("mkdir app_src");
     fs::write(
+        app_src.join("wj.toml"),
+        format!(
+            "[package]\nname = \"app_src\"\n\n[dependencies.url_pkg]\npath = \"{}\"\npackage = \"url_src\"\n",
+            url_gen.display()
+        ),
+    )
+    .unwrap();
+    fs::write(
         app_src.join("feeds.wj"),
         r#"
 use url_pkg::join_url
@@ -91,6 +99,28 @@ pub fn page_url(base_url: string, html_path: string) -> Result<string, string> {
         "app build failed:\n{}",
         String::from_utf8_lossy(&app_build.stderr)
     );
+
+    let cargo_toml_path = app_gen.join("Cargo.toml");
+    if cargo_toml_path.exists() {
+        let cargo_toml = fs::read_to_string(&cargo_toml_path).expect("read app Cargo.toml");
+        let dep_line = format!(
+            "url_pkg = {{ path = \"{}\", package = \"url_src\" }}",
+            url_gen.display()
+        );
+        let mut lines: Vec<String> = cargo_toml
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("url_pkg"))
+            .map(str::to_string)
+            .collect();
+        if let Some(idx) = lines.iter().position(|l| l.trim() == "[dependencies]") {
+            lines.insert(idx + 1, dep_line);
+        } else {
+            lines.push(String::new());
+            lines.push("[dependencies]".to_string());
+            lines.push(dep_line);
+        }
+        fs::write(&cargo_toml_path, format!("{}\n", lines.join("\n"))).expect("patch app Cargo.toml");
+    }
 
     let generated = fs::read_to_string(app_gen.join("feeds.rs")).expect("feeds.rs");
     assert!(

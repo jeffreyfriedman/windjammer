@@ -1,0 +1,12 @@
+pub struct App {
+    logs: Vec<string>,
+}
+
+impl App {
+    /// `wj-proxy` `clear_logs` class — must clear Vec field without pop-loop workaround.
+    pub fn clear_logs(self) -> int {
+        let before = self.logs.len()
+        self.logs = Vec::new()
+        before
+    }
+}

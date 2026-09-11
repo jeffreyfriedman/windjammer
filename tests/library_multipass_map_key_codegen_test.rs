@@ -194,6 +194,10 @@ fn test_library_multipass_strings_split_pipe_delimiter() {
         !rs.contains("\"|\".to_string()"),
         "pipe delimiter must not coerce to String in library multipass. Got:\n{rs}"
     );
+    assert!(
+        !rs.contains("String::from(\"|\")"),
+        "pipe delimiter must stay bare &str (not String::from) in library multipass. Got:\n{rs}"
+    );
 
     test.assert_compiles_without_error();
 }

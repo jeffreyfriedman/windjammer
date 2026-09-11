@@ -205,6 +205,24 @@ impl<'ast> Analyzer<'ast> {
             .unwrap_or_else(|| method.to_string())
     }
 
+    /// Registry key for a MethodCall callee: typed receiver → `Type::method`, otherwise
+    /// module/path free call → `strings::len` / `std::strings::len`.
+    pub(crate) fn module_or_type_qualified_callee_key(
+        &self,
+        object: &Expression,
+        method: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> String {
+        if let Some(base) = self.infer_receiver_type_base(object, func) {
+            return format!("{}::{}", base, method);
+        }
+        // Untyped path receiver: `strings.len` / `crate::util.helper` → qualified free fn.
+        if let Some(prefix) = self.extract_function_name(object) {
+            return format!("{}::{}", prefix, method);
+        }
+        method.to_string()
+    }
+
     /// MULTI-PASS: Infer ownership from pass-through calls using signature registry
     /// If param is ONLY passed to functions whose signatures are known, match their ownership
     pub(super) fn infer_passthrough_ownership(
@@ -336,7 +354,27 @@ impl<'ast> Analyzer<'ast> {
             let ownership = if sig.is_extern && Self::is_windjammer_text_param_type(param_type) {
                 OwnershipMode::Borrowed
             } else if let Some(&own) = sig.param_ownership.get(adjusted_position) {
-                own
+                // WJ `std/*.wj` stubs declare `string` Owned while runtime Rust is AsRef/&str.
+                // Merge can leave registry Owned; call sites already pass `&arg`. Do not
+                // inherit Owned into the caller (wipes Phase-2 `&str` demotion — demoted_str).
+                if matches!(own, OwnershipMode::Owned)
+                    && Self::is_windjammer_text_param_type(param_type)
+                    && crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(
+                        func_name,
+                    )
+                    && sig.param_types.get(adjusted_position).is_some_and(|ty| {
+                        Self::is_windjammer_text_param_type(ty)
+                            || matches!(
+                                ty,
+                                Type::Reference(inner)
+                                    if Self::is_windjammer_text_param_type(inner)
+                            )
+                    })
+                {
+                    OwnershipMode::Borrowed
+                } else {
+                    own
+                }
             } else {
                 continue;
             };
@@ -696,7 +734,13 @@ impl<'ast> Analyzer<'ast> {
                     if matches!(&**inner, Expression::Identifier { name, .. } if name == "self"));
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if self.expr_is_identifier(arg, param_name) {
-                        let method_key = self.qualified_method_registry_key(object, method, func);
+                        // `strings.len(x)` / `std::strings.trim(x)` parse as MethodCall on a
+                        // module path, not a typed receiver. Key as `strings::len` (not bare
+                        // `len`) so AsRef runtime formals resolve — bare `len` collided with
+                        // Owned homonyms and forced Owned (demoted_str / parse_body).
+                        let method_key = self.module_or_type_qualified_callee_key(
+                            object, method, func,
+                        );
                         results.push((method_key, i, is_self_field_call, false));
                     }
                 }
@@ -715,6 +759,9 @@ impl<'ast> Analyzer<'ast> {
             }
             Expression::Unary { operand, .. } => {
                 self.collect_passthrough_from_expr(param_name, operand, func, results);
+            }
+            Expression::Cast { expr, .. } => {
+                self.collect_passthrough_from_expr(param_name, expr, func, results);
             }
             Expression::Binary { left, right, .. } => {
                 self.collect_passthrough_from_expr(param_name, left, func, results);

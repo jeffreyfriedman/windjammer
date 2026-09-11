@@ -44,41 +44,13 @@ impl CodeGenerator<'_> {
                 return Some(format!("use std::{};\n", module_name));
             }
             crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime { rust_stem } => {
-                let rust_import = format!("windjammer_runtime::{rust_stem}");
-                if let Some(alias_name) = alias {
-                    return Some(format!("use {} as {};\n", rust_import, alias_name));
-                }
-                if rust_stem.ends_with("_mod") || rust_stem.ends_with("_runtime") {
-                    // `use std::log::*` must glob the runtime module (functions + types).
-                    // Alias-only `use log_mod as log` leaves `info()` / `init_with_level()` out of scope.
-                    if module_name.ends_with("::*") {
-                        return Some(format!("use {rust_import}::*;\n"));
-                    }
-                    let original_name = rust_stem
-                        .strip_suffix("_mod")
-                        .or_else(|| rust_stem.strip_suffix("_runtime"))
-                        .unwrap_or(&rust_stem);
-                    let mut result = format!("use {} as {};\n", rust_import, original_name);
-                    let registry = crate::analyzer::SignatureRegistry::stdlib();
-                    for ty in registry.runtime_exported_types_for_module(original_name) {
-                        result.push_str(&format!("use {rust_import}::{ty};\n"));
-                    }
-                    return Some(result);
-                }
-                let rest = module_name
-                    .strip_prefix(module_base.split("::").next().unwrap_or(module_base))
-                    .unwrap_or("");
-                // `use windjammer_runtime::json;` alone does not bring `Value` into
-                // scope — also import scanned public types (Response, Value, …).
-                let mut result = format!("use {rust_import}{rest};\n");
-                if rest.is_empty() && !module_name.ends_with("::*") {
-                    let registry = crate::analyzer::SignatureRegistry::stdlib();
-                    let stem = module_base.split("::").next().unwrap_or(module_base);
-                    for ty in registry.runtime_exported_types_for_module(stem) {
-                        result.push_str(&format!("use {rust_import}::{ty};\n"));
-                    }
-                }
-                return Some(result);
+                Some(
+                    crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
+                        module_name,
+                        &rust_stem,
+                        alias,
+                    ),
+                )
             }
         }
     }

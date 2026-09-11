@@ -35,6 +35,8 @@ pub struct MultiFileTest {
     project_root: PathBuf,
     src_root: PathBuf,
     build_dir: PathBuf,
+    /// Extra `windjammer-runtime` Cargo features for [`Self::cargo_check`] (e.g. `"db"`).
+    runtime_features: Vec<String>,
     _temp_dir: TempDir,
 }
 
@@ -56,8 +58,15 @@ impl MultiFileTest {
             project_root,
             src_root,
             build_dir,
+            runtime_features: Vec::new(),
             _temp_dir: temp_dir,
         }
+    }
+
+    /// Enable `windjammer-runtime` features for subsequent [`Self::cargo_check`] (e.g. `"db"`).
+    pub fn with_runtime_features(mut self, features: &[&str]) -> Self {
+        self.runtime_features = features.iter().map(|s| (*s).to_string()).collect();
+        self
     }
 
     /// Path to the generated output directory (`build/`).
@@ -152,7 +161,7 @@ impl MultiFileTest {
         } else {
             write_flat_lib_rs(&self.build_dir).map_err(|e| format!("write lib.rs: {e}"))?;
         }
-        write_verify_cargo_toml(&self.build_dir)
+        write_verify_cargo_toml(&self.build_dir, &self.runtime_features)
             .map_err(|e| format!("write Cargo.toml for cargo check: {e}"))?;
 
         let _guard = CARGO_CHECK_LOCK.lock().unwrap_or_else(|p| p.into_inner());
@@ -262,9 +271,18 @@ fn path_to_toml_string(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
-fn write_verify_cargo_toml(build_dir: &Path) -> io::Result<()> {
+fn write_verify_cargo_toml(build_dir: &Path, runtime_features: &[String]) -> io::Result<()> {
     let runtime = windjammer_runtime_path_for_integration_tests();
     let runtime_display = path_to_toml_string(&runtime.canonicalize().unwrap_or(runtime));
+    let features_toml = if runtime_features.is_empty() {
+        String::new()
+    } else {
+        let quoted: Vec<String> = runtime_features
+            .iter()
+            .map(|f| format!("\"{}\"", f.replace('"', "")))
+            .collect();
+        format!(", features = [{}]", quoted.join(", "))
+    };
     let cargo = format!(
         r#"[package]
 name = "wj_multi_file_integration_verify"
@@ -274,7 +292,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-windjammer-runtime = {{ path = "{}", default-features = false }}
+windjammer-runtime = {{ path = "{}", default-features = false{} }}
 smallvec = "1.13"
 serde = {{ version = "1.0", features = ["derive"] }}
 
@@ -282,7 +300,7 @@ serde = {{ version = "1.0", features = ["derive"] }}
 path = "lib.rs"
 name = "wj_multi_file_integration_verify"
 "#,
-        runtime_display
+        runtime_display, features_toml
     );
     fs::write(build_dir.join("Cargo.toml"), cargo)
 }

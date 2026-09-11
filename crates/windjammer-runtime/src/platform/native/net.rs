@@ -4,6 +4,32 @@ use std::time::Duration;
 
 pub type NetResult<T> = Result<T, String>;
 
+/// HTTP method verb (GET, POST, …) — matches WJ `std::net::HttpMethod`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+}
+
+impl HttpMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HttpMethod::GET => "GET",
+            HttpMethod::POST => "POST",
+            HttpMethod::PUT => "PUT",
+            HttpMethod::DELETE => "DELETE",
+            HttpMethod::PATCH => "PATCH",
+            HttpMethod::HEAD => "HEAD",
+            HttpMethod::OPTIONS => "OPTIONS",
+        }
+    }
+}
+
 /// HTTP Response
 #[derive(Debug, Clone)]
 pub struct Response {
@@ -16,7 +42,7 @@ pub struct Response {
 #[derive(Debug, Clone)]
 pub struct Request {
     pub url: String,
-    pub method: String,
+    pub method: HttpMethod,
     pub headers: Vec<(String, String)>,
     pub body: Option<String>,
     pub timeout: Option<i32>,
@@ -27,7 +53,7 @@ impl Request {
     pub fn get(url: String) -> Self {
         Self {
             url,
-            method: "GET".to_string(),
+            method: HttpMethod::GET,
             headers: Vec::new(),
             body: None,
             timeout: None,
@@ -38,7 +64,7 @@ impl Request {
     pub fn post(url: String, body: String) -> Self {
         Self {
             url,
-            method: "POST".to_string(),
+            method: HttpMethod::POST,
             headers: Vec::new(),
             body: Some(body),
             timeout: None,
@@ -68,13 +94,19 @@ impl Request {
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-        let mut request = match self.method.as_str() {
-            "GET" => client.get(&self.url),
-            "POST" => client.post(&self.url),
-            "PUT" => client.put(&self.url),
-            "DELETE" => client.delete(&self.url),
-            "PATCH" => client.patch(&self.url),
-            _ => return Err(format!("Unsupported HTTP method: {}", self.method)),
+        let mut request = match self.method {
+            HttpMethod::GET => client.get(&self.url),
+            HttpMethod::POST => client.post(&self.url),
+            HttpMethod::PUT => client.put(&self.url),
+            HttpMethod::DELETE => client.delete(&self.url),
+            HttpMethod::PATCH => client.patch(&self.url),
+            HttpMethod::HEAD => client.head(&self.url),
+            other => {
+                return Err(format!(
+                    "Unsupported HTTP method for blocking client: {}",
+                    other.as_str()
+                ))
+            }
         };
 
         // Add headers
@@ -131,13 +163,19 @@ impl Request {
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-        let mut request = match self.method.as_str() {
-            "GET" => client.get(&self.url),
-            "POST" => client.post(&self.url),
-            "PUT" => client.put(&self.url),
-            "DELETE" => client.delete(&self.url),
-            "PATCH" => client.patch(&self.url),
-            _ => return Err(format!("Unsupported HTTP method: {}", self.method)),
+        let mut request = match self.method {
+            HttpMethod::GET => client.get(&self.url),
+            HttpMethod::POST => client.post(&self.url),
+            HttpMethod::PUT => client.put(&self.url),
+            HttpMethod::DELETE => client.delete(&self.url),
+            HttpMethod::PATCH => client.patch(&self.url),
+            HttpMethod::HEAD => client.head(&self.url),
+            other => {
+                return Err(format!(
+                    "Unsupported HTTP method for async client: {}",
+                    other.as_str()
+                ))
+            }
         };
 
         // Add headers

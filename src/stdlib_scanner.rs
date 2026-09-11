@@ -33,47 +33,106 @@ pub fn populate_runtime_signatures(registry: &mut SignatureRegistry) -> Result<(
         return populate_fallback_signatures(registry);
     };
 
-    // Scan all .rs files in runtime
-    scan_directory(&runtime_path, registry)?;
+    // WJ std stems first so nested platform leaves (`net`) can alias onto them.
     register_wj_std_module_names(registry);
+    // Scan all .rs files in runtime (including platform/native/…).
+    scan_directory_recursive(&runtime_path, &runtime_path, registry)?;
     register_runtime_modules_from_signature_keys(registry);
 
     Ok(())
 }
 
-fn scan_directory(path: &Path, registry: &mut SignatureRegistry) -> Result<(), String> {
+/// Recursive scan so nested runtime modules (`platform/native/net.rs`) register under
+/// `platform::native::net` and alias WJ `std::net`.
+fn scan_directory_recursive(
+    root: &Path,
+    path: &Path,
+    registry: &mut SignatureRegistry,
+) -> Result<(), String> {
     if !path.is_dir() {
         return Ok(());
     }
 
     for entry in fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))? {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let path = entry.path();
+        let child = entry.path();
 
-        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("rs") {
-            scan_rust_file(&path, registry)?;
+        if child.is_dir() {
+            scan_directory_recursive(root, &child, registry)?;
+        } else if child.is_file() && child.extension().and_then(|s| s.to_str()) == Some("rs") {
+            let module_name = rust_module_stem_from_runtime_path(root, &child);
+            scan_rust_file(&child, &module_name, registry)?;
         }
     }
 
     Ok(())
 }
 
-fn scan_rust_file(path: &Path, registry: &mut SignatureRegistry) -> Result<(), String> {
+/// `…/src/http.rs` → `http`; `…/src/platform/native/net.rs` → `platform::native::net`.
+fn rust_module_stem_from_runtime_path(root: &Path, file: &Path) -> String {
+    let rel = file.strip_prefix(root).unwrap_or(file);
+    let without_ext = rel.with_extension("");
+    without_ext
+        .components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(s) => s.to_str(),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("::")
+}
+
+/// Leaf of `platform::native::{leaf}` (path shape only).
+fn platform_native_leaf(rust_stem: &str) -> Option<&str> {
+    let parts: Vec<&str> = rust_stem.split("::").collect();
+    match parts.as_slice() {
+        ["platform", "native", leaf] if !leaf.is_empty() && *leaf != "mod" => Some(*leaf),
+        _ => None,
+    }
+}
+
+/// Leaf of `platform::native::{leaf}` when no crate-root `{leaf}.rs` owns the WJ name.
+fn platform_native_leaf_for_wj_alias(rust_stem: &str) -> Option<&str> {
+    let leaf = platform_native_leaf(rust_stem)?;
+    if crate_root_runtime_module_exists(leaf) {
+        None
+    } else {
+        Some(leaf)
+    }
+}
+
+fn crate_root_runtime_module_exists(leaf: &str) -> bool {
+    resolve_runtime_src_for_scan()
+        .map(|root| root.join(format!("{leaf}.rs")).is_file())
+        .unwrap_or(false)
+}
+
+/// `platform::native::{leaf}` → WJ leaf alias when crate-root does not define `{leaf}.rs`.
+fn maybe_register_platform_leaf_alias(registry: &mut SignatureRegistry, rust_stem: &str) {
+    if let Some(leaf) = platform_native_leaf_for_wj_alias(rust_stem) {
+        registry.register_runtime_stem_alias(leaf, rust_stem);
+    }
+}
+
+fn scan_rust_file(
+    path: &Path,
+    module_name: &str,
+    registry: &mut SignatureRegistry,
+) -> Result<(), String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
 
-    // Extract module name from file path (e.g., "game.rs" -> "game")
-    let module_name = path
+    // Skip lib.rs / mod.rs (re-exports / module trees only).
+    let file_stem = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown");
-
-    // Skip lib.rs (just re-exports)
-    if module_name == "lib" {
+    if file_stem == "lib" || file_stem == "mod" {
         return Ok(());
     }
 
     registry.register_runtime_file_stem(module_name);
+    maybe_register_platform_leaf_alias(registry, module_name);
 
     // Track `impl Type { ... }` so methods register as `Type::fn` (free functions
     // keep exclusive claim on `module::fn` — see `register_scanned_runtime_signature`).
@@ -203,6 +262,16 @@ fn register_scanned_runtime_signature(
             }
             registry.add_function(aliased.name.clone(), aliased);
             registry.register_runtime_std_module(short);
+        }
+        // `platform::native::net::get` → WJ `net::get` (only when no crate-root `net.rs`).
+        if let Some(leaf) = platform_native_leaf_for_wj_alias(module_name) {
+            let mut aliased = sig.clone();
+            aliased.name = format!("{leaf}::{method_name}");
+            if mark_sanitizer {
+                registry.register_taint_sanitizer(&aliased.name);
+            }
+            registry.add_function(aliased.name.clone(), aliased);
+            registry.register_runtime_std_module(leaf);
         }
     }
     registry.register_runtime_file_stem(module_name);
@@ -830,10 +899,16 @@ fn parse_owned_rust_type_name(ty: &str) -> Type {
 }
 
 fn strings_split_signature(name: &str) -> FunctionSignature {
+    // Match scanner output for `split<S: AsRef<str>>(s: S, delimiter: &str)` so
+    // prefer_shared_ref / call-site literal peels treat the delimiter as `&str`
+    // even when this fallback shadows a missing runtime scan.
     FunctionSignature {
         name: name.to_string(),
-        param_types: vec![Type::String, Type::String],
-        formal_param_types: vec![Type::String, Type::String],
+        param_types: vec![
+            Type::Reference(Box::new(Type::Custom("str".into()))),
+            Type::Reference(Box::new(Type::Custom("str".into()))),
+        ],
+        formal_param_types: vec![],
         param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
         return_type: Some(Type::Vec(Box::new(Type::String))),
         return_ownership: OwnershipMode::Owned,
@@ -1121,6 +1196,22 @@ mod tests {
             classify_wj_std_import("process"),
             WjStdImportKind::Runtime { rust_stem } if rust_stem == "process"
         ));
+        assert!(
+            matches!(
+                classify_wj_std_import("net"),
+                WjStdImportKind::Runtime { rust_stem }
+                    if rust_stem == "platform::native::net"
+            ),
+            "std::net must map to platform::native::net"
+        );
+        assert!(
+            matches!(
+                classify_wj_std_import("dialog"),
+                WjStdImportKind::Runtime { rust_stem }
+                    if rust_stem == "platform::native::dialog"
+            ),
+            "std::dialog must map to scanned platform::native::dialog"
+        );
         assert!(matches!(
             classify_wj_std_import("collections"),
             WjStdImportKind::RustStd
@@ -1130,8 +1221,8 @@ mod tests {
             "rustc std modules without a runtime .rs file stay `use std::fmt`"
         );
         assert!(
-            matches!(classify_wj_std_import("dialog"), WjStdImportKind::Skip),
-            "WJ-only std/*.wj with no runtime file must not emit windjammer_runtime::dialog"
+            matches!(classify_wj_std_import("config"), WjStdImportKind::Skip),
+            "WJ-only std/config with no runtime file must not emit windjammer_runtime::config"
         );
     }
 

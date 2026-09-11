@@ -741,6 +741,22 @@ pub fn module_qualified_method_name(
         if is_imported_runtime_std_module(name) {
             return format!("{name}::{method}");
         }
+        // Multipass may resolve `json.is_array` before import tracking is visible to
+        // this CodeGenerator. When `{name}::{method}` exists in the runtime/stdlib
+        // scanner baseline, prefer that key over a bare method (homonym-safe: full key).
+        if name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase())
+        {
+            let key = format!("{name}::{method}");
+            let stdlib = SignatureRegistry::stdlib();
+            if stdlib.get_signature(&key).is_some()
+                || stdlib.get_fallback_signature(&key).is_some()
+            {
+                return key;
+            }
+        }
         if name.chars().next().is_some_and(|c| c.is_uppercase()) {
             return format!("{name}::{method}");
         }
@@ -759,7 +775,7 @@ pub enum WjStdImportKind {
     RustStd,
     /// Framework / platform modules with no crate-level `use` line.
     Skip,
-    /// `windjammer_runtime::{rust_stem}` (`csv` → `csv_mod`).
+    /// `windjammer_runtime::{rust_stem}` (`csv` → `csv_mod`, `net` → `platform::native::net`).
     Runtime { rust_stem: String },
 }
 
@@ -767,7 +783,7 @@ pub enum WjStdImportKind {
 ///
 /// - Runtime `.rs` stem → `windjammer_runtime::{stem}`
 /// - Native rust std overlay (`collections` HashMap, `cmp`, `ops`)
-/// - WJ-only `std/*.wj` with no runtime file (dialog, net, …) → skip crate `use`
+/// - WJ-only `std/*.wj` with no runtime file (dialog, …) → skip crate `use`
 /// - Otherwise rustc `std::{module}` (`fmt`, `sync`, …)
 pub fn classify_wj_std_import(module_base: &str) -> WjStdImportKind {
     let base = module_base.split("::").next().unwrap_or(module_base);
@@ -786,36 +802,103 @@ pub fn classify_wj_std_import(module_base: &str) -> WjStdImportKind {
     WjStdImportKind::RustStd
 }
 
-/// Rust `use` line for a scanned runtime stem (`csv` → `csv_mod`, `log` → `log_mod`).
+/// True when `name` cannot be a Rust `use … as {name}` alias (strict keywords).
+pub fn rust_ident_is_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+    )
+}
+
+/// Append `use windjammer_runtime::{stem}::{Type}` lines for scanned public types.
+fn append_runtime_exported_type_uses(out: &mut String, rust_import: &str, lookup_keys: &[&str]) {
+    let registry = SignatureRegistry::stdlib();
+    let mut seen = std::collections::HashSet::new();
+    for key in lookup_keys {
+        for ty in registry.runtime_exported_types_for_module(key) {
+            if seen.insert(ty.to_string()) {
+                out.push_str(&format!("use {rust_import}::{ty};\n"));
+            }
+        }
+    }
+}
+
+/// Rust `use` line for a scanned runtime stem (`csv` → `csv_mod`, `log` → `log_mod`,
+/// `net` → `platform::native::net`).
 ///
-/// Globs and subpaths import the stem directly (`log_mod::*`, `log_mod::info`).
-/// Bare `use std::log` aliases `_mod`/`_runtime` stems so `log::info` still works.
+/// Item paths (`async_runtime::sleep_ms_blocking`) import the item directly.
+/// Bare `_mod`/`_runtime` stems alias to the WJ name unless that name is a Rust keyword
+/// (`async_runtime` → never `as async`; use a glob so item names stay in scope).
 pub fn format_runtime_std_use(module_name: &str, rust_stem: &str, alias: Option<&str>) -> String {
     let rust_import = format!("windjammer_runtime::{rust_stem}");
     if let Some(alias_name) = alias {
         return format!("use {rust_import} as {alias_name};\n");
     }
-    let wj_first = module_name
-        .strip_suffix("::*")
-        .unwrap_or(module_name)
-        .split("::")
-        .next()
-        .unwrap_or(module_name);
-    let rest = module_name.strip_prefix(wj_first).unwrap_or("");
+    let is_glob = module_name.ends_with("::*");
+    let stripped = module_name.strip_suffix("::*").unwrap_or(module_name);
+    let wj_first = stripped.split("::").next().unwrap_or(stripped);
+    let rest = stripped.strip_prefix(wj_first).unwrap_or("");
+    if is_glob {
+        return format!("use {rust_import}::*;\n");
+    }
+    if !rest.is_empty() {
+        // `use std::async_runtime::sleep_ms_blocking` → item import (no keyword alias).
+        return format!("use {rust_import}{rest};\n");
+    }
     let renamed = rust_stem.ends_with("_mod") || rust_stem.ends_with("_runtime");
-    if renamed && rest.is_empty() {
+    if renamed {
         let original_name = rust_stem
             .strip_suffix("_mod")
             .or_else(|| rust_stem.strip_suffix("_runtime"))
             .unwrap_or(rust_stem);
-        let mut result = format!("use {rust_import} as {original_name};\n");
-        let registry = SignatureRegistry::stdlib();
-        for ty in registry.runtime_exported_types_for_module(original_name) {
-            result.push_str(&format!("use {rust_import}::{ty};\n"));
+        if rust_ident_is_keyword(original_name) {
+            // Glob keeps `sleep_ms_blocking` in scope without `as async`.
+            return format!("use {rust_import}::*;\n");
         }
+        let mut result = format!("use {rust_import} as {original_name};\n");
+        append_runtime_exported_type_uses(&mut result, &rust_import, &[original_name, rust_stem]);
         return result;
     }
-    format!("use {rust_import}{rest};\n")
+    let mut result = format!("use {rust_import};\n");
+    // Nested stems register exports under the full stem; WJ short name may be empty.
+    append_runtime_exported_type_uses(&mut result, &rust_import, &[wj_first, rust_stem]);
+    result
 }
 
 /// Scanned WJ `std::module` name (runtime `.rs` stem + `_mod`/`_runtime` aliases + `std/*.wj`).
@@ -989,21 +1072,36 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
 ) -> bool {
-    // Defining-module codegen refresh beats stale registry/stdlib Borrowed stubs that
-    // lack `emitted_rust_ref_params` (multipass owned `Vec` / Custom formals).
+    // Runtime/stdlib scanner baseline wins over layered WJ stubs — including stubs that
+    // codegen-confirmed owned emission when analyzing `std/json.wj`
+    // (`is_array(value: Value) { false }` → `emitted_rust_ref_params=[false]`).
+    // The real Rust API still takes `&Value`; multipass must auto-borrow.
+    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+    if let Some(baseline) = stdlib
+        .get_signature(callee_name)
+        .or_else(|| stdlib.get_fallback_signature(callee_name))
+    {
+        if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
+            return true;
+        }
+    }
+
+    // Defining-module codegen-confirmed owned emission beats stale Borrowed stubs
+    // for *user* free-fns not covered by the runtime baseline (`build_html`).
     if let Some(sig) = signature {
         let pidx = sig.arg_param_index(arg_index);
-        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
-            return false;
-        }
-        // Codegen recorded owned `String` (emitted false) — never consult stale
-        // registry/stdlib Borrowed baselines for user free-fns (`escape_html`).
-        if sig
+        let codegen_confirmed_non_shared_ref = sig
             .emitted_rust_ref_params
             .as_ref()
             .and_then(|flags| flags.get(pidx))
             .copied()
-            == Some(false)
+            == Some(false);
+        if codegen_confirmed_non_shared_ref
+            && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+        {
+            return false;
+        }
+        if codegen_confirmed_non_shared_ref
             && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                 sig, pidx,
             )
@@ -1021,20 +1119,6 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
         }
     }
     if let Some(baseline) = registry.get_fallback_signature(callee_name) {
-        if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
-            return true;
-        }
-    }
-    // Local codegen registries may not layer `global_fallback`; still consult the
-    // shared stdlib/runtime scan. Use the full callee key only — bare `query` would
-    // collide across modules (http vs Connection).
-    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
-    if let Some(baseline) = stdlib.get_signature(callee_name) {
-        if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
-            return true;
-        }
-    }
-    if let Some(baseline) = stdlib.get_fallback_signature(callee_name) {
         if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
             return true;
         }
@@ -1494,6 +1578,99 @@ mod pattern_registry_tests {
         assert!(
             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&owned, 0),
             "Owned String + emitted false must be owned arg contract"
+        );
+    }
+
+    #[test]
+    fn wj_owned_custom_stub_still_honors_json_runtime_borrow_baseline() {
+        use crate::parser::Type;
+        let mut stub = FunctionSignature::default();
+        stub.name = "json::is_array".into();
+        stub.param_types = vec![Type::Custom("Value".into())];
+        stub.formal_param_types = vec![Type::Custom("Value".into())];
+        stub.param_ownership = vec![OwnershipMode::Owned];
+        stub.emitted_rust_ref_params = None;
+        assert!(
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&stub, 0),
+            "WJ Owned Custom stub claims owned emission (the multipass trap)"
+        );
+        let reg = SignatureRegistry::empty();
+        assert!(
+            runtime_std_param_needs_auto_borrow_resolved(
+                &reg,
+                "json::is_array",
+                Some(&stub),
+                0
+            ),
+            "stdlib runtime baseline must still auto-borrow despite WJ Owned Custom stub"
+        );
+        stub.emitted_rust_ref_params = Some(vec![false]);
+        assert!(
+            runtime_std_param_needs_auto_borrow_resolved(
+                &reg,
+                "json::is_array",
+                Some(&stub),
+                0
+            ),
+            "codegen-confirmed WJ stub owned emission must not beat runtime &Value baseline"
+        );
+        for key in ["json::len", "json::get", "json::get_index"] {
+            let mut s = stub.clone();
+            s.name = key.into();
+            assert!(
+                runtime_std_param_needs_auto_borrow_resolved(&reg, key, Some(&s), 0),
+                "{key}: WJ Owned Custom stub must not block runtime &Value borrow"
+            );
+        }
+    }
+
+    #[test]
+    fn module_qualified_method_name_prefers_stdlib_key_for_lowercase_module() {
+        use crate::parser::Expression;
+        let json = Expression::Identifier {
+            name: "json".into(),
+            location: None,
+        };
+        assert_eq!(
+            module_qualified_method_name(None, &json, "is_array", |_| false),
+            "json::is_array",
+            "stdlib baseline key must win even when import tracking is unavailable"
+        );
+        let local = Expression::Identifier {
+            name: "server".into(),
+            location: None,
+        };
+        // No stdlib `server::is_array` — stay bare (do not invent module paths).
+        assert_eq!(
+            module_qualified_method_name(None, &local, "is_array", |_| false),
+            "is_array"
+        );
+    }
+
+    #[test]
+    fn format_runtime_std_use_never_aliases_async_keyword() {
+        let item = format_runtime_std_use("async_runtime::sleep_ms_blocking", "async_runtime", None);
+        assert_eq!(
+            item,
+            "use windjammer_runtime::async_runtime::sleep_ms_blocking;\n"
+        );
+        let bare = format_runtime_std_use("async_runtime", "async_runtime", None);
+        assert!(
+            !bare.contains(" as async"),
+            "must not alias async_runtime as Rust keyword async; got {bare}"
+        );
+        assert!(
+            bare.contains("async_runtime::*"),
+            "keyword stem must glob so item names stay in scope; got {bare}"
+        );
+    }
+
+    #[test]
+    fn format_runtime_std_use_still_aliases_log_mod() {
+        let bare = format_runtime_std_use("log", "log_mod", None);
+        assert!(
+            bare.contains("use windjammer_runtime::log_mod as log;"),
+            "non-keyword _mod stems still alias; got {bare}"
         );
     }
 }

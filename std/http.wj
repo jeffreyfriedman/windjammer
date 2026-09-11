@@ -72,21 +72,33 @@ fn get(url: string) -> Result<Response, string> {
 }
 
 @async
-fn post(url: string) -> RequestBuilder {
-    // Implementation wraps: reqwest::Client::new().post(url)
-    RequestBuilder {}
+fn post(url: string, body: string) -> Result<Response, string> {
+    // Implementation wraps: reqwest::Client::new().post(url).body(body)
+    Err("HTTP client requires reqwest (auto-added)")
 }
 
 @async
-fn put(url: string) -> RequestBuilder {
-    // Implementation wraps: reqwest::Client::new().put(url)
-    RequestBuilder {}
+fn put(url: string, body: string) -> Result<Response, string> {
+    // Implementation wraps: reqwest::Client::new().put(url).body(body)
+    Err("HTTP client requires reqwest (auto-added)")
 }
 
 @async
-fn delete(url: string) -> RequestBuilder {
+fn patch(url: string, body: string) -> Result<Response, string> {
+    // Implementation wraps: reqwest::Client::new().patch(url).body(body)
+    Err("HTTP client requires reqwest (auto-added)")
+}
+
+@async
+fn delete(url: string) -> Result<Response, string> {
     // Implementation wraps: reqwest::Client::new().delete(url)
-    RequestBuilder {}
+    Err("HTTP client requires reqwest (auto-added)")
+}
+
+@async
+fn head(url: string) -> Result<Response, string> {
+    // Implementation wraps: reqwest::Client::new().head(url)
+    Err("HTTP client requires reqwest (auto-added)")
 }
 
 // Response Methods

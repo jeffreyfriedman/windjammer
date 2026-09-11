@@ -1,0 +1,13 @@
+use crate::domain::decode_store::decode_store
+
+fn read_file(path: string) -> Result<string, string> {
+    Ok(path)
+}
+
+/// `wj-todo-cli` `import` branch — adapter calls domain `decode_store` with owned match binding.
+pub fn load_snapshot(raw_path: string) -> Result<int, string> {
+    match read_file(raw_path) {
+        Ok(body) => decode_store(body),
+        Err(e) => Err(e),
+    }
+}

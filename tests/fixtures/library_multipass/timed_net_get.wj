@@ -1,0 +1,17 @@
+use std::net::Request
+use std::net::HttpMethod
+
+/// `wj-fetch` timed GET adapter class — needs native `std::net::Request` imports.
+pub fn timed_get(url: string, secs: int) -> Result<string, string> {
+    let req = Request {
+        url: url,
+        method: HttpMethod.GET,
+        headers: Vec::new(),
+        body: None,
+        timeout: Some(secs),
+    }
+    match req.send() {
+        Ok(response) => Ok(response.body),
+        Err(e) => Err(e),
+    }
+}

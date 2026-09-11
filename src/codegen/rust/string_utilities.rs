@@ -69,6 +69,44 @@ pub fn match_arm_needs_string_ascription(body: &Expression) -> bool {
         || crate::codegen::rust::arm_string_analysis::arm_returns_converted_string(body)
 }
 
+pub fn match_arm_body_is_string_literal(body: &Expression) -> bool {
+    matches!(
+        body,
+        Expression::Literal {
+            value: Literal::String(_),
+            ..
+        }
+    )
+}
+
+/// Match arms must unify to owned `String` when a literal arm meets an owned-text arm
+/// or a scrutinee typed `Option<string>` / `Result<string, _>` (including empty `""`).
+pub fn match_arms_need_owned_string_coercion<'ast>(
+    arms: &[crate::parser::MatchArm<'ast>],
+    scrutinee_type: Option<&Type>,
+    return_type: &Option<Type>,
+    arm_suggests_owned: impl Fn(&Expression<'ast>) -> bool,
+) -> bool {
+    if return_type_expects_owned_string(return_type) {
+        return true;
+    }
+    if arms.iter().any(|arm| {
+        crate::codegen::rust::string_analysis::expression_produces_string(arm.body)
+            || crate::codegen::rust::arm_string_analysis::arm_returns_converted_string(arm.body)
+    }) {
+        return true;
+    }
+    if !arms.iter().any(|arm| match_arm_body_is_string_literal(arm.body)) {
+        return false;
+    }
+    if scrutinee_type.is_some_and(type_expects_owned_string_payload) {
+        return true;
+    }
+    arms.iter().any(|arm| {
+        !match_arm_body_is_string_literal(arm.body) && arm_suggests_owned(arm.body)
+    })
+}
+
 /// True when `ty` is Windjammer/Rust owned string (`string` / `String`).
 pub fn type_is_owned_string(ty: &Type) -> bool {
     matches!(ty, Type::String) || matches!(ty, Type::Custom(n) if n == "String" || n == "string")

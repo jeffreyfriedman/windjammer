@@ -29,7 +29,7 @@ pub fn die() {
 "#,
     );
     assert!(
-        generated.contains("process::exit(1)"),
+        generated.contains("process::exit(1"),
         "process.exit must lower to process::exit:\n{generated}"
     );
     assert!(

@@ -1,0 +1,11 @@
+use std::sync::{Arc, Mutex}
+
+use crate::domain::app::App
+
+/// `wj-proxy` `dispatch` class: Mutex adapter must call `handle_local` after `stats_reply` is `&self`.
+pub fn dispatch(path: string, state: Arc<Mutex<App>>) -> int {
+    match state.lock() {
+        Ok(mut app) => app.handle_local(path),
+        Err(_) => 500,
+    }
+}

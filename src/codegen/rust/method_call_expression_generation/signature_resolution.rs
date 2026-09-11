@@ -465,5 +465,38 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                 })
             })
+            .or_else(|| {
+                // Match bindings (`Ok(mut app)` after Mutex::lock) often have no
+                // inferred receiver. Still prefer a codegen-refreshed `Type::method`
+                // so demoted `&str` formals borrow at the call site.
+                let suffix = format!("::{method}");
+                let mut candidates: Vec<Option<FunctionSignature>> = Vec::new();
+                let push = |reg: &crate::analyzer::SignatureRegistry,
+                            out: &mut Vec<Option<FunctionSignature>>| {
+                    for (key, sig) in &reg.signatures {
+                        if key.ends_with(&suffix) && validate_arg_count(sig, arguments.len()) {
+                            out.push(Some(sig.clone()));
+                        }
+                    }
+                };
+                if let Some(g) = self.global_signature_registry() {
+                    push(g, &mut candidates);
+                }
+                push(&self.signature_registry, &mut candidates);
+                candidates.push(mc_resolved.clone());
+                candidates.push(resolved_from_mc.as_ref().cloned());
+                pick_codegen_refreshed_signature(candidates)
+                    .filter(|s| is_usable(s))
+                    .map(|sig| {
+                        if trace {
+                            eprintln!(
+                                "[wj-sig] call-site {method} arg#{}: no-receiver pick_codegen_refreshed ({:?})",
+                                arguments.len(),
+                                sig.param_types,
+                            );
+                        }
+                        finalize_call_site_signature(sig)
+                    })
+            })
     }
 }

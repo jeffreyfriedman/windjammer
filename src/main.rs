@@ -6,6 +6,7 @@ pub mod analyzer;
 pub mod auto_clone; // Automatic clone insertion for ergonomics
 pub mod auto_fix; // Automatic error fixing
 pub mod build_utils;
+pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 pub mod cargo_toml;
 pub mod cli;

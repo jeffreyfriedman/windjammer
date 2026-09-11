@@ -162,11 +162,10 @@ fn test_mime_from_filename() {
 #[test]
 fn test_mime_from_extension() {
     let mime = mime::from_extension("js");
-    // Both are valid MIME types for JavaScript
-    assert!(mime == "application/javascript" || mime == "text/javascript");
+    assert_eq!(mime, mime::APPLICATION_JAVASCRIPT);
 
     let mime = mime::from_extension("css");
-    assert_eq!(mime, "text/css");
+    assert_eq!(mime, mime::TEXT_CSS);
 }
 
 #[test]

@@ -10,14 +10,15 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — multipass `domain/codec.wj` calling `json.is_array(root)` / `json.len(root)`
-//! after `json.parse` must `cargo check`. Runtime takes `&Value`; multipass emits owned `Value` → E0308.
-//! Ecosystem `wj-todo-cli` `todos_from_json` hit this; workaround uses `[` prefix + `get_index` loop.
+//! Multipass `json.is_array` / `json.len` on owned `Value` must auto-borrow (`&Value`)
+//! and cast scanned `usize` returns to `i64` for WJ `int`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
+
+const CODEC: &str = include_str!("fixtures/library_multipass/codec_json_array_len.wj");
 
 #[test]
 fn json_is_array_len_owned_value_multipass_must_cargo_check() {
@@ -29,26 +30,24 @@ pub mod codec
 pub use codec::array_len
 "#,
     );
-    project.add_file(
-        "codec.wj",
-        r#"
-use std::json
+    project.add_file("codec.wj", CODEC);
 
-pub fn array_len(text: string) -> int {
-    match json.parse(text) {
-        Ok(root) => {
-            if !json.is_array(root) {
-                return 0
-            }
-            json.len(root)
-        },
-        Err(_) => 0,
-    }
-}
-"#,
+    let map = project.compile().expect("codec multipass compile should succeed");
+    let codec_rs = map.get("codec.rs").expect("codec.rs");
+    assert!(
+        codec_rs.contains("is_array(&root)") || codec_rs.contains("is_array(& root)"),
+        "json.is_array must auto-borrow owned Value; emitted:\n{codec_rs}"
+    );
+    assert!(
+        codec_rs.contains("len(&root)") || codec_rs.contains("len(& root)"),
+        "json.len must auto-borrow owned Value; emitted:\n{codec_rs}"
+    );
+    assert!(
+        codec_rs.contains("as i64"),
+        "json.len usize return must cast to i64; emitted:\n{codec_rs}"
     );
 
     project
         .cargo_check()
-        .expect_err("multipass json.is_array/json.len on owned Value must fail cargo check until borrow codegen is fixed");
+        .expect("multipass json.is_array/len on owned Value must cargo-check");
 }

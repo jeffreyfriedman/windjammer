@@ -72,6 +72,7 @@ pub mod optimizations;
 pub mod pattern_analysis;
 pub mod pattern_generation;
 pub mod program_generation;
+pub mod recursive_struct_layout;
 pub mod return_statement_generation;
 pub mod rust_coercion_rules;
 pub mod self_analysis;

@@ -1,0 +1,6 @@
+pub fn optional_path(value: Option<string>) -> string {
+    match value {
+        Some(path) => path,
+        None => "",
+    }
+}

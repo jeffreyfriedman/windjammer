@@ -1,0 +1,11 @@
+use super::super::domain::row::{Row, col_string, col_int}
+
+/// Hexagonal outbound adapter — parse without `"col" + ""` workarounds.
+pub fn parse_payment(row: Row) -> string {
+    let (row, id) = col_string(row, "id")
+    let (row, amount_cents) = col_int(row, "amount_cents")
+    let _ = amount_cents
+    let (row, status) = col_string(row, "status")
+    let _ = row
+    id + ":" + status
+}
