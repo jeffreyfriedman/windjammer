@@ -1,0 +1,9 @@
+use std::async_runtime::sleep_ms_blocking
+
+/// `wj-retry` `pause_ms` class — owned `int` into `sleep_ms_blocking` (not a literal).
+pub fn pause_ms(ms: int) {
+    if ms <= 0 {
+        return
+    }
+    sleep_ms_blocking(ms)
+}

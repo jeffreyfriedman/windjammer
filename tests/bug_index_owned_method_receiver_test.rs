@@ -48,8 +48,8 @@ impl Node {
     println!("Generated:\n{}", generated);
 
     assert!(
-        generated.contains(".clone().as_float()"),
-        "owned method on indexed non-Copy element must clone. Got:\n{}",
+        generated.contains("self.inputs[0].as_float()"),
+        "indexed element with borrowed receiver must call as_float without clone. Got:\n{}",
         generated
     );
     assert!(

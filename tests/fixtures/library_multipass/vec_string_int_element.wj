@@ -1,0 +1,5 @@
+/// LedgerKit binds ints into `Vec<string>` query params. Tip emits bare `amount`
+/// (i64) into `Vec<String>` → E0308; product uses `amount + ""` workaround.
+pub fn bind_amount(amount: int) -> Vec<string> {
+    vec!["demo", amount]
+}

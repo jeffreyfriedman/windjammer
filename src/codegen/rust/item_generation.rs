@@ -69,12 +69,23 @@ impl<'ast> CodeGenerator<'ast> {
         self.usize_struct_fields
             .insert(s.name.clone(), usize_fields);
 
-        // STRUCT FIELD TYPE TRACKING: Record all field types for type inference
+        // STRUCT FIELD TYPE TRACKING: Record all field types for type inference.
+        // Preserve / re-apply Box on recursive SCCs (WDB-116) so emit stays finite-size.
         let mut field_types = std::collections::HashMap::new();
         for field in &s.fields {
-            field_types.insert(field.name.clone(), field.field_type.clone());
+            let ty = self
+                .struct_field_types
+                .get(&s.name)
+                .and_then(|m| m.get(&field.name))
+                .filter(|t| crate::codegen::rust::recursive_struct_layout::type_is_box(t))
+                .cloned()
+                .unwrap_or_else(|| field.field_type.clone());
+            field_types.insert(field.name.clone(), ty);
         }
         self.struct_field_types.insert(s.name.clone(), field_types);
+        crate::codegen::rust::recursive_struct_layout::apply_recursive_struct_boxing(
+            &mut self.struct_field_types,
+        );
 
         // Convert decorators to Rust attributes
         let decorator_reg = crate::decorator_registry::DecoratorRegistry::new();
@@ -292,11 +303,16 @@ impl<'ast> CodeGenerator<'ast> {
             // have Rust-style per-field privacy.  If the user explicitly marked the
             // struct pub, every field is accessible from sibling modules.
             let pub_keyword = if field.is_pub || s.is_pub { "pub " } else { "" };
+            let effective_ty = self
+                .struct_field_types
+                .get(&s.name)
+                .and_then(|m| m.get(&field.name))
+                .unwrap_or(&field.field_type);
             output.push_str(&format!(
                 "    {}{}: {},\n",
                 pub_keyword,
                 field.name,
-                self.type_to_rust(&field.field_type)
+                self.type_to_rust(effective_ty)
             ));
         }
 

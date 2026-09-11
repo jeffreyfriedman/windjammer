@@ -63,6 +63,14 @@ pub fn render(template: string, vars: HashMap<string, string>) -> string {
     let app_src = tmp.path().join("app_src");
     fs::create_dir_all(&app_src).expect("mkdir app_src");
     fs::write(
+        app_src.join("wj.toml"),
+        format!(
+            "[package]\nname = \"app_src\"\n\n[dependencies.tpl_pkg]\npath = \"{}\"\npackage = \"tpl_src\"\n",
+            tpl_gen.display()
+        ),
+    )
+    .unwrap();
+    fs::write(
         app_src.join("render.wj"),
         r#"
 use std::collections::HashMap
@@ -100,6 +108,28 @@ pub fn render_document(title: string, body: string) -> string {
         "app build failed:\n{}",
         String::from_utf8_lossy(&app_build.stderr)
     );
+
+    let cargo_toml_path = app_gen.join("Cargo.toml");
+    if cargo_toml_path.exists() {
+        let cargo_toml = fs::read_to_string(&cargo_toml_path).expect("read app Cargo.toml");
+        let dep_line = format!(
+            "tpl_pkg = {{ path = \"{}\", package = \"tpl_src\" }}",
+            tpl_gen.display()
+        );
+        let mut lines: Vec<String> = cargo_toml
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("tpl_pkg"))
+            .map(str::to_string)
+            .collect();
+        if let Some(idx) = lines.iter().position(|l| l.trim() == "[dependencies]") {
+            lines.insert(idx + 1, dep_line);
+        } else {
+            lines.push(String::new());
+            lines.push("[dependencies]".to_string());
+            lines.push(dep_line);
+        }
+        fs::write(&cargo_toml_path, format!("{}\n", lines.join("\n"))).expect("patch app Cargo.toml");
+    }
 
     let generated = fs::read_to_string(app_gen.join("render.rs")).expect("render.rs");
     assert!(

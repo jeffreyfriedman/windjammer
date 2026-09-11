@@ -33,6 +33,30 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     _runtime_module: Option<&str>,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> Vec<String> {
+    let mut refreshed = sig.clone();
+    let mut keys: Vec<String> = Vec::new();
+    if let Some(tn) = type_name.as_deref() {
+        keys.push(format!("{tn}::{call_method}"));
+    }
+    if !refreshed.name.is_empty() {
+        keys.push(refreshed.name.clone());
+    }
+    if keys.is_empty() {
+        keys.push(call_method.to_string());
+    }
+    crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+        &mut refreshed,
+        &gen.signature_registry,
+        &keys,
+    );
+    if let Some(global) = gen.global_signature_registry.as_ref() {
+        crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+            &mut refreshed,
+            global,
+            &keys,
+        );
+    }
+    let sig = &refreshed;
     let qualified_name = module_qualified_call_name(type_name, call_method, call_obj, |name| {
         gen.is_imported_runtime_std_module(name)
     });

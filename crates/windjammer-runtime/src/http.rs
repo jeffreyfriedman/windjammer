@@ -197,15 +197,42 @@ pub fn post_json<T: serde::Serialize>(url: &str, body: &T) -> Result<Response, S
 
 /// Perform a POST request with string body
 pub fn post(url: &str, body: &str) -> Result<Response, String> {
+    client_send_with_body(reqwest::Method::POST, url, Some(body))
+}
+
+/// Perform a PUT request with string body
+pub fn put(url: &str, body: &str) -> Result<Response, String> {
+    client_send_with_body(reqwest::Method::PUT, url, Some(body))
+}
+
+/// Perform a PATCH request with string body
+pub fn patch(url: &str, body: &str) -> Result<Response, String> {
+    client_send_with_body(reqwest::Method::PATCH, url, Some(body))
+}
+
+/// Perform a DELETE request
+pub fn delete(url: &str) -> Result<Response, String> {
+    client_send_with_body(reqwest::Method::DELETE, url, None)
+}
+
+/// Perform a HEAD request
+pub fn head(url: &str) -> Result<Response, String> {
+    client_send_with_body(reqwest::Method::HEAD, url, None)
+}
+
+fn client_send_with_body(
+    method: reqwest::Method,
+    url: &str,
+    body: Option<&str>,
+) -> Result<Response, String> {
     let rt = Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
         let client = reqwest::Client::new();
-        let response = client
-            .post(url)
-            .body(body.to_string())
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let mut builder = client.request(method, url);
+        if let Some(body) = body {
+            builder = builder.body(body.to_string());
+        }
+        let response = builder.send().await.map_err(|e| e.to_string())?;
 
         let status = response.status().as_u16();
         let headers = response

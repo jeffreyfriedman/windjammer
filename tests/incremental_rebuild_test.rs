@@ -481,3 +481,77 @@ fn reexport_type_import_depends_on_defining_module_not_package_mod() {
         sorted
     );
 }
+
+#[test]
+fn hexagonal_adapters_depend_on_domain_app_before_codegen() {
+    let dir = TempDir::new().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir_all(src.join("domain")).unwrap();
+    fs::create_dir_all(src.join("adapters")).unwrap();
+
+    let root_mod = src.join("mod.wj");
+    let domain_mod = src.join("domain/mod.wj");
+    let domain_app = src.join("domain/app.wj");
+    let adapters_mod = src.join("adapters/mod.wj");
+    let adapters_http = src.join("adapters/http_server.wj");
+
+    fs::write(&root_mod, "pub mod domain\npub mod adapters\n").unwrap();
+    fs::write(&domain_mod, "pub mod app\n").unwrap();
+    fs::write(
+        &domain_app,
+        r#"
+pub struct HttpReply { pub body: string }
+pub struct App {}
+impl App {
+    pub fn handle(self, path: string, body: string) -> HttpReply {
+        HttpReply { body: body }
+    }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(&adapters_mod, "pub mod http_server\n").unwrap();
+    fs::write(
+        &adapters_http,
+        r#"
+use crate::domain::app::{App, HttpReply}
+pub fn dispatch(app: App, path: string, body: string) -> HttpReply {
+    app.handle(path, body)
+}
+"#,
+    )
+    .unwrap();
+
+    // Discovery order: adapters before domain (alphabetical) — sort must invert.
+    let sources = vec![
+        (adapters_http.clone(), fs::read_to_string(&adapters_http).unwrap()),
+        (adapters_mod.clone(), fs::read_to_string(&adapters_mod).unwrap()),
+        (domain_app.clone(), fs::read_to_string(&domain_app).unwrap()),
+        (domain_mod.clone(), fs::read_to_string(&domain_mod).unwrap()),
+        (root_mod.clone(), fs::read_to_string(&root_mod).unwrap()),
+    ];
+    let mut parsers = Vec::new();
+    let mut programs = Vec::new();
+    for (file, source) in &sources {
+        let (parser, program) = parse_file(file, source);
+        parsers.push(parser);
+        programs.push(program);
+    }
+    let _keep = parsers;
+    let graph = DependencyGraph::build(&sources, &programs, &src);
+    let deps = graph.depends_on_for_tests();
+    assert!(
+        deps.get(&0).is_some_and(|d| d.contains(&2)),
+        "adapters/http_server must depend on domain/app for braced use; deps[0]={:?} all={:?}",
+        deps.get(&0),
+        deps
+    );
+    let sorted = graph.sort_indices_for_codegen(&[0, 1, 2, 3, 4]);
+    let http_pos = sorted.iter().position(|&i| i == 0).expect("http_server");
+    let app_pos = sorted.iter().position(|&i| i == 2).expect("domain/app");
+    assert!(
+        app_pos < http_pos,
+        "domain/app must codegen before adapters/http_server, got {:?}",
+        sorted
+    );
+}

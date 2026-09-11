@@ -169,6 +169,15 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Drive int literal suffixes from a usize peer operand (WDB-121: `while i < 1`).
+        let prev_bin_int = self.assignment_int_target_type.clone();
+        if (is_comparison || is_arithmetic)
+            && self.assignment_int_target_type.is_none()
+            && ((left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal))
+        {
+            self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+        }
+
         let mut left_str = match left {
             Expression::Binary { op: left_op, .. } => {
                 let child_is_cmp = matches!(
@@ -213,6 +222,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => self.generate_expression(right),
         };
+        self.assignment_int_target_type = prev_bin_int;
 
         // TDD FIX: Reset string comparison context flag after generating operands
         if is_string_comparison {

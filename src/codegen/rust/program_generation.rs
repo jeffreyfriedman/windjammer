@@ -230,11 +230,24 @@ impl<'ast> CodeGenerator<'ast> {
             if let Item::Struct { decl: s, .. } = item {
                 let mut field_types = std::collections::HashMap::new();
                 for field in &s.fields {
-                    field_types.insert(field.name.clone(), field.field_type.clone());
+                    // Preserve Box layouts already applied via multipass global fields (WDB-116).
+                    let ty = self
+                        .struct_field_types
+                        .get(&s.name)
+                        .and_then(|m| m.get(&field.name))
+                        .filter(|t| {
+                            crate::codegen::rust::recursive_struct_layout::type_is_box(t)
+                        })
+                        .cloned()
+                        .unwrap_or_else(|| field.field_type.clone());
+                    field_types.insert(field.name.clone(), ty);
                 }
                 self.struct_field_types.insert(s.name.clone(), field_types);
             }
         }
+        crate::codegen::rust::recursive_struct_layout::apply_recursive_struct_boxing(
+            &mut self.struct_field_types,
+        );
 
         // Track explicitly imported traits to avoid duplication with auto-imports
         let mut explicitly_imported_traits: std::collections::HashSet<String> =
@@ -924,15 +937,20 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
-            let registry = crate::analyzer::SignatureRegistry::stdlib();
-            let use_line = registry
-                .runtime_rust_stem(module)
-                .map(|stem| {
-                    crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
-                        module, stem, None,
-                    )
-                })
-                .unwrap_or_else(|| format!("use windjammer_runtime::{module};\n"));
+            // `std::map` / rustc std / WJ-only stubs must not invent `windjammer_runtime::{module}`.
+            let use_line = match crate::codegen::rust::stdlib_method_traits::classify_wj_std_import(
+                module,
+            ) {
+                crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime {
+                    rust_stem,
+                } => crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
+                    module, &rust_stem, None,
+                ),
+                crate::codegen::rust::stdlib_method_traits::WjStdImportKind::RustStd
+                | crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Skip => {
+                    continue;
+                }
+            };
             if !use_line.is_empty() && !implicit_imports.contains(&use_line) {
                 implicit_imports.push_str(&use_line);
             }

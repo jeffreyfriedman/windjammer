@@ -357,11 +357,8 @@ impl<'ast> CodeGenerator<'ast> {
     fn method_call_rust_emits_usize(&self, expr: &Expression) -> bool {
         let (method, object) = match expr {
             Expression::MethodCall { method, object, .. } => (method.as_str(), &**object),
-            Expression::Call {
-                function,
-                arguments,
-                ..
-            } if arguments.is_empty() => {
+            // `json.len(v)` / `strings.len(s)` parse as Call(FieldAccess), often with args.
+            Expression::Call { function, .. } => {
                 if let Expression::FieldAccess { object, field, .. } = &**function {
                     (field.as_str(), &**object)
                 } else {
@@ -371,7 +368,23 @@ impl<'ast> CodeGenerator<'ast> {
             _ => return false,
         };
         // `strings.len(s)` — registry `strings::len` → usize (module is not a receiver type).
+        // Prefer the runtime/stdlib scanner baseline over WJ stubs that declare `-> int`
+        // (`json.len` → `usize` in windjammer_runtime).
         if let Expression::Identifier { name, .. } = object {
+            let key = format!("{name}::{method}");
+            let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+            if let Some(baseline) = stdlib
+                .get_signature(&key)
+                .or_else(|| stdlib.get_fallback_signature(&key))
+            {
+                if baseline
+                    .return_type
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::type_casting::type_is_usize)
+                {
+                    return true;
+                }
+            }
             if let Some(ret) = self.runtime_std_module_fn_return_type(name, method) {
                 if matches!(ret, Type::Custom(ref n) if n == "usize") {
                     return true;
@@ -423,7 +436,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Handles: int→usize cast, i64/int cast rewrite, usize variable skip,
     /// non-negative literal skip, binary expression parenthesization.
-    fn identifier_emits_as_usize(&self, name: &str) -> bool {
+    pub(in crate::codegen::rust) fn identifier_emits_as_usize(&self, name: &str) -> bool {
         self.current_function_params.iter().any(|p| {
             p.name == name && matches!(&p.type_, Type::Custom(s) if s == "usize")
         }) || self
@@ -546,6 +559,83 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
+    /// Narrow/widen a returned integer to the function's declared int width (`-> i32`).
+    ///
+    /// Default WJ `int` counters emit as `i64`; an explicit `i32` return needs `as i32`
+    /// (same ergonomics as `usize` → `int` casts elsewhere).
+    pub(in crate::codegen::rust) fn maybe_cast_to_function_return_int_width(
+        &self,
+        expr_str: &mut String,
+        expr: &Expression<'ast>,
+    ) {
+        use crate::type_inference::int_implicit_casts::{get_cast_suffix, is_safe_implicit_cast};
+        use crate::type_inference::IntType;
+
+        let Some(ret) = &self.current_function_return_type else {
+            return;
+        };
+        let to = match ret {
+            Type::Int32 => IntType::I32,
+            Type::Custom(name) if name == "i32" => IntType::I32,
+            Type::Int => IntType::I64,
+            Type::Custom(name) if name == "i64" || name == "int" => IntType::I64,
+            _ => return,
+        };
+        if expr_str.contains(" as i32") || expr_str.contains(" as i64") {
+            return;
+        }
+        let mut from = self.natural_int_emission_type(expr).unwrap_or_else(|| {
+            // Unannotated `let mut count = 0` defaults to WJ `int` → Rust `i64`.
+            match expr {
+                Expression::Identifier { .. }
+                | Expression::Literal {
+                    value: Literal::Int(_),
+                    ..
+                }
+                | Expression::Binary { .. } => IntType::I64,
+                _ => IntType::Unknown,
+            }
+        });
+        // Numeric inference may unify a counter to `i32` from `-> i32` while codegen still
+        // emits default WJ `int` bindings as `i64` (`count += 1_i64`). Prefer emission width.
+        if to == IntType::I32 && from == IntType::I32 {
+            if let Expression::Identifier { name, .. } = expr {
+                let emits_default_i64 = match self.local_var_types.get(name.as_str()) {
+                    Some(Type::Int32) => false,
+                    Some(Type::Custom(n)) if n == "i32" => false,
+                    Some(Type::Int) => true,
+                    Some(Type::Custom(n)) if n == "int" || n == "i64" => true,
+                    None => true,
+                    Some(_) => false,
+                };
+                if emits_default_i64 {
+                    from = IntType::I64;
+                }
+            } else if matches!(
+                expr,
+                Expression::Literal {
+                    value: Literal::Int(_),
+                    ..
+                } | Expression::Binary { .. }
+            ) {
+                from = IntType::I64;
+            }
+        }
+        if from == IntType::Unknown || from == to {
+            return;
+        }
+        if !is_safe_implicit_cast(from, to) {
+            return;
+        }
+        let suffix = get_cast_suffix(to);
+        let needs_parens = matches!(expr, Expression::Binary { .. });
+        if needs_parens {
+            *expr_str = format!("({}) as {}", expr_str, suffix);
+        } else {
+            *expr_str = format!("{} as {}", expr_str, suffix);
+        }
+    }
+
     /// Cast an if/else branch tail to the solver-unified integer type (e.g. `int` + `len` → `usize`).
     pub(in crate::codegen::rust) fn maybe_cast_branch_tail_to_unified_int(
         &self,
@@ -582,5 +672,39 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             *expr_str = format!("{} as {}", expr_str, suffix);
         }
+    }
+}
+
+#[cfg(test)]
+mod i32_return_width_tests {
+    use crate::analyzer::Analyzer;
+    use crate::codegen::rust::CodeGenerator;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use crate::CompilationTarget;
+
+    #[test]
+    fn trailing_int_counter_into_i32_return_casts() {
+        let source = r#"
+pub fn count_data_lines(lines: Vec<string>) -> i32 {
+    let mut count = 0
+    for line in lines {
+        count = count + 1
+    }
+    count
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            generated.contains("count as i32"),
+            "i32 return must cast i64 counter. Got:\n{generated}"
+        );
     }
 }

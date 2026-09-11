@@ -55,12 +55,27 @@ impl<'ast> CodeGenerator<'ast> {
             });
 
             let prev_assign_ty = self.assignment_float_target_type.take();
+            let prev_assign_int = self.assignment_int_target_type.take();
             let tgt_ty = self.infer_expression_type(target);
             if tgt_ty
                 .as_ref()
                 .is_some_and(Self::assignment_target_needs_float_codegen_context)
             {
                 self.assignment_float_target_type = tgt_ty.clone();
+            }
+            if tgt_ty
+                .as_ref()
+                .is_some_and(Self::assignment_target_needs_int_codegen_context)
+            {
+                self.assignment_int_target_type = tgt_ty.clone();
+            }
+            // Annotated / local usize bindings beat weak inference (WDB-121).
+            if let Expression::Identifier { name, .. } = target {
+                if let Some(t) = self.local_var_types.get(name) {
+                    if Self::assignment_target_needs_int_codegen_context(t) {
+                        self.assignment_int_target_type = Some(t.clone());
+                    }
+                }
             }
             let mut value_str = self.generate_expression(value);
 
@@ -101,6 +116,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
+            self.assignment_int_target_type = prev_assign_int;
             self.assignment_float_target_type = prev_assign_ty;
 
             // String += String doesn't work in Rust (needs String += &str).
@@ -217,12 +233,26 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(op_str);
                     output.push(' ');
                     let prev_assign_ty = self.assignment_float_target_type.take();
+                    let prev_assign_int = self.assignment_int_target_type.take();
                     let tgt_ty = self.infer_expression_type(target);
                     if tgt_ty
                         .as_ref()
                         .is_some_and(Self::assignment_target_needs_float_codegen_context)
                     {
                         self.assignment_float_target_type = tgt_ty.clone();
+                    }
+                    if tgt_ty
+                        .as_ref()
+                        .is_some_and(Self::assignment_target_needs_int_codegen_context)
+                    {
+                        self.assignment_int_target_type = tgt_ty.clone();
+                    }
+                    if let Expression::Identifier { name, .. } = target {
+                        if let Some(t) = self.local_var_types.get(name) {
+                            if Self::assignment_target_needs_int_codegen_context(t) {
+                                self.assignment_int_target_type = Some(t.clone());
+                            }
+                        }
                     }
                     let mut right_str = self.generate_expression(right);
 
@@ -256,6 +286,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
 
+                    self.assignment_int_target_type = prev_assign_int;
                     self.assignment_float_target_type = prev_assign_ty;
 
                     output.push_str(&right_str);
@@ -366,6 +397,19 @@ impl<'ast> CodeGenerator<'ast> {
                 if assignment_target_is_text
                     && !value_str.contains(".clone()")
                     && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
+                {
+                    value_str = format!("{}.into()", value_str);
+                }
+            }
+            if self.into_string_formal_params.contains(name) {
+                let target_type = self.infer_expression_type(target);
+                let assignment_target_is_text = target_type
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+                if assignment_target_is_text
+                    && !value_str.ends_with(".into()")
+                    && !value_str.ends_with(".clone()")
+                    && !value_str.ends_with(".to_string()")
                 {
                     value_str = format!("{}.into()", value_str);
                 }

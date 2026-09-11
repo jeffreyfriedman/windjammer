@@ -139,12 +139,39 @@ impl<'ast> CodeGenerator<'ast> {
                             if self.inferred_mut_borrowed_params.contains(name)
                     );
 
-                let call_site_sig = self.mc_select_call_site_signature(
+                let mut call_site_sig = self.mc_select_call_site_signature(
                     object,
                     method,
                     arguments,
                     method_signature,
                 );
+                // Defining-module `&str` demotion may only exist on the global registry
+                // after that file's codegen (`emitted_rust_ref_params`). Merge before IR
+                // coercion so FieldAccess args (`req.path`) borrow instead of moving.
+                // Match bindings (`Ok(mut app)`) often lack an inferred receiver type —
+                // still refresh via the selected signature's qualified name (`App::handle`).
+                if let Some(ref mut sig) = call_site_sig {
+                    let mut keys: Vec<String> = Vec::new();
+                    if let Some(rt) = receiver_type_name {
+                        keys.push(format!("{rt}::{method}"));
+                    }
+                    if !sig.name.is_empty() {
+                        keys.push(sig.name.clone());
+                    }
+                    if keys.is_empty() {
+                        keys.push(method.to_string());
+                    }
+                    crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                        sig,
+                        &self.signature_registry,
+                        &keys,
+                    );
+                    if let Some(global) = self.global_signature_registry.as_ref() {
+                        crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                            sig, global, &keys,
+                        );
+                    }
+                }
 
                 let sig_for_effective = call_site_sig.as_ref().or(method_signature.as_ref());
                 let effective_ownership = if external_module_mut_reborrow {

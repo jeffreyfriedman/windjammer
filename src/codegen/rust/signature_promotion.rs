@@ -1324,6 +1324,32 @@ pub(crate) fn mut_borrow_emission_beats(
     pref_mut && !other_mut
 }
 
+/// Prefer restored/AST-owned `Custom(T)` over stale `MutBorrowed` analysis that
+/// misread field moves (`reply.body`) as `&mut` mutation (HTTP adapter class).
+pub(crate) fn owned_custom_beats_stale_mut_borrow(
+    owned_side: &FunctionSignature,
+    mut_side: &FunctionSignature,
+) -> bool {
+    for (idx, own) in owned_side.param_ownership.iter().enumerate() {
+        if !matches!(own, OwnershipMode::Owned) {
+            continue;
+        }
+        if !matches!(
+            mut_side.param_ownership.get(idx),
+            Some(OwnershipMode::MutBorrowed)
+        ) {
+            continue;
+        }
+        if owned_side
+            .formal_param_type(idx)
+            .is_some_and(|t| matches!(t, Type::Custom(_)))
+        {
+            return true;
+        }
+    }
+    false
+}
+
 /// True when `preferred` recorded at least one shared-ref formal and `other` did not.
 ///
 /// Importer stubs often keep `emitted_rust_ref_params = Some([false, …])` while the
@@ -1573,6 +1599,18 @@ pub(crate) fn prefer_shared_ref_signature(
             .copied()
             == Some(true);
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
+        // Runtime-scanned `&str`/`AsRef<str>` at *this* slot beats WJ owned emission even
+        // when preferred recorded mixed `emitted_rust_ref_params` (e.g. `self: &Self` +
+        // `sql: String`, or `parts: &Vec` + `delimiter: String`). Matching names alone is
+        // not enough — `shared_ref_emission_beats` looks for *any* true flag, so a partial
+        // WJ stub can block the runtime challenger (Connection::query, strings::split).
+        if challenger_runtime_str_ref
+            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                &pref, param_idx,
+            )
+        {
+            return Some(challenger.clone());
+        }
         if challenger_runtime_str_ref && signature_is_wj_std_stub_or_runtime_qualified(&pref) {
             return Some(challenger.clone());
         }
@@ -1621,7 +1659,10 @@ pub(crate) fn prefer_shared_ref_signature(
                 &pref, param_idx,
             );
         if challenger_codegen_shared
-            && (!challenger_also_plain_wj_string || pref_stale_owned_emission)
+            && (!challenger_also_plain_wj_string
+                || pref_stale_owned_emission
+                || pref.emitted_rust_ref_params.is_none()
+                || shared_ref_emission_beats(challenger, &pref))
         {
             return Some(challenger.clone());
         }
@@ -1730,6 +1771,10 @@ pub(crate) fn refresh_call_site_signature_for_arg(
             callee_name,
         );
     let skip_local_homonym_fallback = skip_runtime_std_fallback_for_local_homonym(local, callee_name);
+    // Multipass analyzes `std/*.wj` stubs into the crate registry without layering the
+    // scanned runtime baseline — always challenge `SignatureRegistry::stdlib()` so
+    // `strings::split` / `Connection::query` keep `&str` literal peels.
+    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
     let challengers: Vec<Option<&FunctionSignature>> = if type_qualified || skip_bare_homonym {
         vec![
             global.and_then(|g| g.get_signature(callee_name)),
@@ -1744,6 +1789,7 @@ pub(crate) fn refresh_call_site_signature_for_arg(
             } else {
                 local.get_fallback_signature(callee_name)
             },
+            stdlib.get_signature(callee_name),
         ]
     } else {
         vec![
@@ -1773,6 +1819,8 @@ pub(crate) fn refresh_call_site_signature_for_arg(
             } else {
                 local.get_fallback_signature(simple)
             },
+            stdlib.get_signature(callee_name),
+            stdlib.get_signature(simple),
         ]
     };
     for challenger in challengers {
@@ -1808,6 +1856,10 @@ pub fn pick_best_resolved_signature(
         }
         (Some(l), Some(g)) if codegen_refreshed_beats_analysis_only(&g.sig, &l.sig) => Some(g),
         (Some(l), Some(g)) if codegen_refreshed_beats_analysis_only(&l.sig, &g.sig) => Some(l),
+        // Defining-module `&str` demotion (`emitted=[…, true, …]`) beats importer stubs
+        // that already recorded all-false emission flags (hexagonal adapters vs domain).
+        (Some(l), Some(g)) if shared_ref_emission_beats(&g.sig, &l.sig) => Some(g),
+        (Some(l), Some(g)) if shared_ref_emission_beats(&l.sig, &g.sig) => Some(l),
         (Some(l), Some(g))
             if converged_has_reference_params_over_bare(&g.sig, &l.sig)
                 && method_registry_reflects_emitted_owned(&g.sig) =>
@@ -2174,6 +2226,53 @@ pub fn exercise(parts: Vec<string>) -> string {
         assert!(
             generated.contains("strings::join"),
             "must lower as strings::join, not a stdlib type method. Got:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn refresh_split_delimiter_uses_stdlib_runtime_over_wj_owned_stub() {
+        let mut local = crate::analyzer::SignatureRegistry::empty();
+        // Simulate multipass analyzing std/strings.wj without layering runtime scan.
+        local.add_function(
+            "strings::split".into(),
+            FunctionSignature {
+                name: "strings::split".into(),
+                param_types: vec![Type::String, Type::String],
+                formal_param_types: vec![Type::String, Type::String],
+                param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                return_type: Some(Type::Vec(Box::new(Type::String))),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false, false]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let refreshed = refresh_call_site_signature_for_arg(
+            local.get_signature("strings::split").cloned(),
+            "strings::split",
+            1,
+            Some(&local),
+            &local,
+        )
+        .expect("refresh");
+        assert_eq!(
+            refreshed
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|f| f.get(1))
+                .copied(),
+            Some(true),
+            "stdlib runtime &str delimiter must beat WJ owned stub. Got {:?}",
+            refreshed
+        );
+        assert!(
+            !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &refreshed, 1
+            ),
+            "delimiter must not expect owned String"
         );
     }
 

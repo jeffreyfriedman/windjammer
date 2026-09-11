@@ -5,11 +5,50 @@
 //! - String concatenation operations
 //! - Format string optimization
 
+use crate::analyzer::OwnershipMode;
+use crate::ir::coercion::{compute_coercion, CoercionKind};
+use crate::ir::signature_bridge::safety_type_from_parser_type;
+use crate::ir::target_encodings::{apply_coercion, Target};
 use crate::parser::{Expression, Type};
 
 use super::{string_analysis, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Expected element type for `vec![…]` from return type or call-arg context.
+    fn vec_macro_expected_element_type(&self) -> Option<Type> {
+        for ctx_ty in [
+            self.current_function_return_type.as_ref(),
+            self.call_arg_expected_type.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Some(elem) = Self::peeled_collection_element_type(ctx_ty) {
+                return Some(elem.clone());
+            }
+        }
+        None
+    }
+
+    /// Apply IR coercion when a `vec!` element must match an expected collection slot type.
+    fn coerce_vec_macro_element(
+        &self,
+        arg_expr: &Expression<'ast>,
+        generated: &str,
+        expected_elem: &Type,
+    ) -> String {
+        if crate::codegen::rust::string_utilities::already_owned_string_expr(generated) {
+            return generated.to_string();
+        }
+        let actual = self.infer_actual_safety_type(arg_expr, generated);
+        let expected = safety_type_from_parser_type(expected_elem, Some(OwnershipMode::Owned));
+        let kind = compute_coercion(&actual, &expected);
+        if kind == CoercionKind::Identity {
+            return generated.to_string();
+        }
+        apply_coercion(&kind, generated, Target::Rust)
+    }
+
     /// Generate code for macro invocation expression
     /// Handles format!, println!, vec!, and other macros with special semantics
     pub(in crate::codegen::rust) fn generate_macro_invocation(
@@ -143,24 +182,29 @@ impl<'ast> CodeGenerator<'ast> {
         // Use semicolon for repeat, comma for regular args
         let separator = if is_repeat { "; " } else { ", " };
 
-        // WINDJAMMER FIX: String literal coercion in vec![]
-        // In Windjammer, `string` maps to Rust `String`, so vec!["a", "b"] must
-        // become vec!["a".to_string(), "b".to_string()] for Vec<String>.
-        // Only apply when: macro is vec, brackets delimiter, has string literal args.
+        // WINDJAMMER FIX: Element coercion in vec![]
+        // When context expects `Vec<string>`, each element must own as `String`:
+        // string literals → `.to_string()`, ints → `.to_string()`, etc.
+        // Signature/type-driven via IR `compute_coercion` (same as Vec::push).
         let final_arg_strs: Vec<String> =
             if name == "vec" && matches!(delimiter, MacroDelimiter::Brackets) && !is_repeat {
+                let expected_elem = self.vec_macro_expected_element_type();
                 arg_strs
                     .iter()
                     .enumerate()
                     .map(|(idx, s)| {
-                        // Check if the original arg is a string literal
+                        if let Some(ref exp_ty) = expected_elem {
+                            if idx < args.len() {
+                                return self.coerce_vec_macro_element(&args[idx], s, exp_ty);
+                            }
+                        }
+                        // Untyped vec!: keep legacy string-literal-only coercion.
                         if idx < args.len() {
                             if let Expression::Literal {
                                 value: Literal::String(_),
                                 ..
                             } = &args[idx]
                             {
-                                // Add .to_string() if not already present
                                 if !s.ends_with(".to_string()") {
                                     return format!("{}.to_string()", s);
                                 }

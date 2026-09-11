@@ -1,0 +1,17 @@
+/// Builder formals with owned `string` should accept Rust `&str` via `impl Into<String>`
+/// (windjammer-ui StatusChip / AuthFetch dogfood — hand-patched today in generated/).
+pub struct StatusChip {
+    status: string,
+    label: string,
+}
+
+impl StatusChip {
+    pub fn new(status: string) -> StatusChip {
+        StatusChip { status: status, label: "" }
+    }
+
+    pub fn label(self, label: string) -> StatusChip {
+        self.label = label
+        self
+    }
+}

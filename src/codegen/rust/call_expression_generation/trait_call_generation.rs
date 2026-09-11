@@ -26,18 +26,16 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             registry,
         );
 
-    let prev_explicit_clone = gen.in_explicit_clone_call;
+    // Same receiver lowering as `MethodCall` — parser often emits
+    // `Call(FieldAccess)` for `row.get_string(col)`. Without method-receiver
+    // context, auto-clone inserts `row.clone().get_string` even for `&self`.
+    let mut obj_str = gen.mc_build_method_receiver_string(call_obj, call_method);
     if is_type_preserving {
-        gen.in_explicit_clone_call = true;
+        crate::codegen::rust::string_utilities::strip_redundant_auto_clone_before_explicit_clone(
+            &mut obj_str,
+            call_method,
+        );
     }
-    let mut obj_str = gen.generate_expression(call_obj);
-    gen.in_explicit_clone_call = prev_explicit_clone;
-
-    // Strip redundant auto-clone before an explicit language-level `.clone()`.
-    crate::codegen::rust::string_utilities::strip_redundant_auto_clone_before_explicit_clone(
-        &mut obj_str,
-        call_method,
-    );
 
     // Prefer converged signature_registry (Owned consumers like MannequinMesh::generate)
     // over per-body method_signatures_by_type (may infer Borrowed when a formal is reused
@@ -102,26 +100,79 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     let method_signature = method_signature.or_else(|| {
         let module = runtime_module?;
         let key = format!("{module}::{call_method}");
-        let registry = gen
-            .global_signature_registry()
-            .unwrap_or(&gen.signature_registry);
-        // Prefer runtime scanner fallback (`&str`) over WJ-owned stubs for the same key.
-        let baseline = registry
-            .get_fallback_signature(&key)
-            .or_else(|| registry.get_signature(&key))?;
-        let mut sig = baseline.clone();
-        if let Some(local) = registry.get_signature(&key) {
-            if let Some(preferred) =
-                crate::codegen::rust::signature_promotion::prefer_shared_ref_signature(
-                    Some(local.clone()),
-                    Some(&sig),
-                    0,
-                )
-            {
-                sig = preferred;
+        // Multipass analyzes `std/*.wj` stubs into the crate registry without a layered
+        // runtime fallback — `refresh_call_site_signature_for_arg` challenges
+        // `SignatureRegistry::stdlib()` so `&str`/`AsRef<str>` beat owned WJ formals
+        // (`strings::split` delimiter, `fs::write` path, …).
+        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+            gen.get_signature_with_global(&key).cloned(),
+            &key,
+            0,
+            gen.global_signature_registry.as_deref(),
+            &gen.signature_registry,
+        )
+        .map(call_signature_resolution::finalize_call_site_signature)
+    });
+
+    // Match bindings (`Ok(mut app)` after `Mutex::lock`) often have no inferred
+    // receiver type, so `Type::method` resolution above is skipped. Still pick a
+    // codegen-refreshed `*::method` (hexagonal `app.handle` → `App::handle` `&str`).
+    let method_signature = method_signature.or_else(|| {
+        let suffix = format!("::{call_method}");
+        let mut candidates: Vec<Option<crate::analyzer::FunctionSignature>> = Vec::new();
+        let push_matching = |reg: &crate::analyzer::SignatureRegistry,
+                             out: &mut Vec<Option<crate::analyzer::FunctionSignature>>| {
+            for (key, sig) in &reg.signatures {
+                if key.ends_with(&suffix)
+                    && call_signature_resolution::validate_arg_count(sig, arguments.len())
+                {
+                    out.push(Some(sig.clone()));
+                }
+            }
+        };
+        if let Some(g) = gen.global_signature_registry() {
+            push_matching(g, &mut candidates);
+        }
+        push_matching(&gen.signature_registry, &mut candidates);
+        crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(candidates)
+            .map(call_signature_resolution::finalize_call_site_signature)
+    });
+
+    // Always overlay defining-module `emitted_rust_ref_params` before IR arg coercion.
+    let method_signature = method_signature.map(|mut sig| {
+        let mut keys: Vec<String> = Vec::new();
+        if let Some(tn) = type_name.as_deref() {
+            keys.push(format!("{tn}::{call_method}"));
+        }
+        if !sig.name.is_empty() {
+            keys.push(sig.name.clone());
+        }
+        keys.push(format!("::{call_method}"));
+        crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+            &mut sig,
+            &gen.signature_registry,
+            &keys,
+        );
+        if let Some(global) = gen.global_signature_registry() {
+            crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                &mut sig, global, &keys,
+            );
+            // Suffix keys alone may not hit `get_signature` — pull shared-ref winners.
+            let suffix = format!("::{call_method}");
+            for (key, gsig) in &global.signatures {
+                if key.ends_with(&suffix)
+                    && call_signature_resolution::validate_arg_count(gsig, arguments.len())
+                    && crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
+                        gsig, &sig,
+                    )
+                {
+                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                        &mut sig, gsig,
+                    );
+                }
             }
         }
-        Some(call_signature_resolution::finalize_call_site_signature(sig))
+        call_signature_resolution::finalize_call_site_signature(sig)
     });
 
     let mut args: Vec<String> = {

@@ -246,15 +246,31 @@ impl SignatureRegistry {
 
     fn insert_runtime_rust_stem(&mut self, wj_name: &str, rust_stem: &str) {
         match self.runtime_std_rust_stems.get(wj_name) {
-            Some(existing) if existing.len() >= rust_stem.len() => {}
-            _ => {
-                self.runtime_std_rust_stems
-                    .insert(wj_name.to_string(), rust_stem.to_string());
+            Some(existing) => {
+                let existing_nested = existing.contains("::");
+                let new_nested = rust_stem.contains("::");
+                // Crate-root stems (`process.rs`) win over nested platform paths
+                // (`platform::native::process`). Nested still wins when no crate-root exists (`net`).
+                if !existing_nested && new_nested {
+                    return;
+                }
+                if existing_nested && !new_nested {
+                    // replace with crate-root
+                } else if existing.len() >= rust_stem.len() {
+                    return;
+                }
             }
+            None => {}
         }
+        self.runtime_std_rust_stems
+            .insert(wj_name.to_string(), rust_stem.to_string());
     }
 
     /// Record `impl Type` from a runtime module file (`Connection` in `db.rs` → `db`).
+    ///
+    /// Crate-root modules (`http`) win over nested platform paths (`platform::native::net`)
+    /// for the global type→module map so `Request`/`HttpMethod` stay on `http` when both
+    /// define the same type name. Nested modules still record exports for import-driven FQ.
     pub fn register_runtime_type_module(&mut self, type_name: &str, module: &str) {
         let wj = module
             .strip_suffix("_mod")
@@ -263,10 +279,35 @@ impl SignatureRegistry {
         if type_name.is_empty() || wj.is_empty() {
             return;
         }
-        self.runtime_type_modules
-            .insert(type_name.to_string(), wj.to_string());
+        let new_nested = wj.contains("::");
+        let keep_existing = match self.runtime_type_modules.get(type_name) {
+            Some(existing) => {
+                let existing_nested = existing.contains("::");
+                if !existing_nested && new_nested {
+                    true // crate-root already owns the name
+                } else if existing_nested && !new_nested {
+                    false // crate-root replaces nested
+                } else {
+                    true // keep first registration
+                }
+            }
+            None => false,
+        };
+        if !keep_existing {
+            self.runtime_type_modules
+                .insert(type_name.to_string(), wj.to_string());
+        }
         self.register_runtime_std_module(module);
         self.register_runtime_exported_type(module, type_name);
+    }
+
+    /// Map a WJ `std::{name}` to a nested runtime stem (`net` → `platform::native::net`).
+    pub fn register_runtime_stem_alias(&mut self, wj_name: &str, rust_stem: &str) {
+        if wj_name.is_empty() || rust_stem.is_empty() {
+            return;
+        }
+        self.register_runtime_std_module(wj_name);
+        self.insert_runtime_rust_stem(wj_name, rust_stem);
     }
 
     /// Record a public type (`pub struct` / `pub enum` / `pub use …::T`) on a runtime module.
@@ -285,10 +326,14 @@ impl SignatureRegistry {
         {
             return;
         }
-        for key in [wj, module] {
+        let keys = [wj.to_string(), module.to_string()];
+        // Nested stems keep exports under the full path (`platform::native::net`).
+        // Do NOT also key under the leaf (`net`/`fs`) — that pollutes crate-root
+        // modules (`fs::FileEntry` from platform::native::fs while rust import is `fs`).
+        for key in keys {
             let entry = self
                 .runtime_exported_types
-                .entry(key.to_string())
+                .entry(key)
                 .or_default();
             if !entry.iter().any(|t| t == type_name) {
                 entry.push(type_name.to_string());
@@ -1772,6 +1817,73 @@ mod tests {
                 sig, 0
             )
         );
+    }
+
+    #[test]
+    fn test_runtime_json_is_array_and_len_scanned_as_borrowed() {
+        let reg = SignatureRegistry::new();
+        for key in ["json::is_array", "json::len", "json::get_index"] {
+            let sig = reg
+                .get_signature(key)
+                .unwrap_or_else(|| panic!("{key} must be in stdlib baseline"));
+            assert_eq!(
+                sig.param_ownership.first().copied(),
+                Some(OwnershipMode::Borrowed),
+                "{key} value param must be Borrowed, got {:?}",
+                sig.param_ownership
+            );
+            assert!(
+                crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                    sig, 0
+                ),
+                "{key} must need runtime auto-borrow"
+            );
+        }
+    }
+
+    #[test]
+    fn test_analyzed_json_is_array_keeps_runtime_borrow_despite_wj_owned_stub() {
+        use crate::analyzer::Analyzer;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+
+        // WJ `std/json.wj` declares `is_array(value: Value)` owned; runtime takes `&Value`.
+        let source = r#"
+use std::json
+
+pub fn array_len(text: string) -> int {
+    match json.parse(text) {
+        Ok(root) => {
+            if json.is_array(root) {
+                json.len(root)
+            } else {
+                0
+            }
+        },
+        Err(_) => 0,
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().unwrap();
+        let mut analyzer = Analyzer::new();
+        let (_, registry, _) = analyzer.analyze_program(&program).unwrap();
+        for key in ["json::is_array", "json::len"] {
+            let sig = registry.get_signature(key).unwrap_or_else(|| panic!("{key}"));
+            assert!(
+                crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &registry,
+                    key,
+                    Some(sig),
+                    0,
+                ),
+                "{key}: WJ owned stub must not block runtime &Value borrow; ownership={:?} emitted_ref={:?}",
+                sig.param_ownership,
+                sig.emitted_rust_ref_params
+            );
+        }
     }
 
     #[test]

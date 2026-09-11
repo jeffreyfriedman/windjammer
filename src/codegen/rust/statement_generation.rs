@@ -46,6 +46,50 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
+    pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
+        ty: &Type,
+    ) -> bool {
+        match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::assignment_target_needs_int_codegen_context(inner)
+            }
+            Type::Vec(inner) | Type::Array(inner, _) => {
+                Self::assignment_target_needs_int_codegen_context(inner)
+            }
+            other => Self::is_int_numeric_type(other),
+        }
+    }
+
+    /// Map an int/usize context type to `IntType` for literal suffixes.
+    pub(in crate::codegen::rust) fn int_type_from_assignment_target(
+        ty: &Type,
+    ) -> Option<crate::type_inference::IntType> {
+        use crate::type_inference::IntType;
+        match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::int_type_from_assignment_target(inner)
+            }
+            Type::Int => Some(IntType::I64),
+            Type::Int32 => Some(IntType::I32),
+            Type::Uint => Some(IntType::U64),
+            Type::Custom(n) => match n.as_str() {
+                "usize" => Some(IntType::Usize),
+                "isize" => Some(IntType::Isize),
+                "i64" | "int" => Some(IntType::I64),
+                "i32" => Some(IntType::I32),
+                "i16" => Some(IntType::I16),
+                "i8" => Some(IntType::I8),
+                "u64" => Some(IntType::U64),
+                "u32" => Some(IntType::U32),
+                "u16" => Some(IntType::U16),
+                "u8" => Some(IntType::U8),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub(in crate::codegen::rust) fn is_float_numeric_type(t: &Type) -> bool {
         match t {
             Type::Float => true,
@@ -138,7 +182,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Whether an expression's value should be treated as owned `String` for if/else branch coercion.
-    fn expr_suggests_owned_string_coercion(&self, expr: &Expression<'ast>) -> bool {
+    pub(in crate::codegen::rust) fn expr_suggests_owned_string_coercion(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
         if string_analysis::expression_produces_string(expr) {
             return true;
         }

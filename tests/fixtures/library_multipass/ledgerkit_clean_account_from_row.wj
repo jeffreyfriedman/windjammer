@@ -1,0 +1,45 @@
+use std::db::Row
+use std::strings
+
+/// LedgerKit `postgres_row_mapping.wj` dogfood shape after tip greened get_string
+/// borrow, Ok/Err own, and owned `(Row, T)` chain moves (P3.237–P3.240).
+/// No `+ ""` workarounds.
+
+pub fn col_string(row: Row, col: string) -> (Row, string) {
+    let value = match row.get_string(col) {
+        Ok(v) => v,
+        Err(_) => "",
+    }
+    (row, value)
+}
+
+pub fn col_int(row: Row, col: string) -> (Row, int) {
+    let value = match row.get_int(col) {
+        Ok(v) => v,
+        Err(_) => 0,
+    }
+    (row, value)
+}
+
+pub struct Account {
+    code: string,
+    name: string,
+    account_type: string,
+    balance_cents: int,
+}
+
+pub fn account_from_row(row: Row) -> Option<Account> {
+    let (row, code) = col_string(row, "code")
+    let (row, name) = col_string(row, "name")
+    let (row, account_type) = col_string(row, "account_type")
+    let (_row, balance_cents) = col_int(row, "balance_cents")
+    if strings.len(code) == 0 {
+        return None
+    }
+    Some(Account {
+        code: code,
+        name: name,
+        account_type: account_type,
+        balance_cents: balance_cents,
+    })
+}

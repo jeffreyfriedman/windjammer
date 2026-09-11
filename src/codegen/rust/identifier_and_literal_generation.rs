@@ -37,6 +37,13 @@ impl<'ast> CodeGenerator<'ast> {
             name.to_string()
         };
         let base_name = self.qualify_external_path_identifier(&base_name);
+        // Import-driven FQ for stdlib types (`use std::net::Request` → native net path),
+        // so associated calls don't lower to a colliding crate-root type (`http::Request`).
+        let base_name = if !is_parameter && !is_local_variable {
+            self.qualify_stdlib_type_identifier(&base_name)
+        } else {
+            base_name
+        };
 
         // `None` parses as Identifier but lowers to Option::None. It cannot be a binding
         // name alongside normal locals/params — but auto_clone / needs_clone lookups can

@@ -165,6 +165,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.inferred_mut_borrowed_params.clear();
         self.current_fn_emitted_mut_arg_indices.clear();
         self.str_ref_optimized_params.clear();
+        self.into_string_formal_params.clear();
         self.collection_key_owned_params.clear();
         self.emitted_rust_ref_formals.clear();
         self.current_fn_mixed_forwarder_params.clear();
@@ -3003,6 +3004,15 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                // Owned-self receiver methods (`resp.header(...)`) consume the param.
+                if matches!(
+                    object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    if self.method_call_receiver_expects_owned_self(object, method, func) {
+                        return true;
+                    }
+                }
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     let arg_is_param_or_field =
                         matches!(
@@ -6459,6 +6469,41 @@ impl<'ast> CodeGenerator<'ast> {
                 .formal_param_type(pidx)
                 .or_else(|| sig.param_types.get(pidx))
                 .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_))))
+    }
+
+    /// True when `object.method(...)` resolves to an owned-self method (builder / consume).
+    fn method_call_receiver_expects_owned_self(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let Some(sig) = self.method_call_signature_for_arg(object, method, 0, func) else {
+            return false;
+        };
+        if !sig.has_self_receiver {
+            return false;
+        }
+        let receiver_type = self
+            .infer_type_name(object)
+            .or_else(|| {
+                if let Expression::Identifier { name, .. } = object {
+                    self.infer_local_binding_type_name(func.body.as_slice(), name)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+        let qualified = if receiver_type.is_empty() {
+            method.to_string()
+        } else {
+            format!("{receiver_type}::{method}")
+        };
+        self.method_requires_consuming_self_receiver(&qualified, &sig)
+            || matches!(
+                sig.param_ownership.first(),
+                Some(crate::analyzer::OwnershipMode::Owned)
+            )
     }
 
     fn method_call_arg_expects_borrow(

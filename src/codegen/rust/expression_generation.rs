@@ -97,6 +97,27 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // Strip `*` for owned Copy bindings (WDB-134: HashMap::get + `.copied()`
+                // then user-written `Some(*v)` — same policy as `generate_unary`).
+                if matches!(op, UnaryOp::Deref) {
+                    if let Expression::Identifier { name, .. } = &**operand {
+                        let is_borrowed = self.inferred_borrowed_params.contains(name.as_str())
+                            || self.borrowed_iterator_vars.contains(name);
+                        let is_local_ref = self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        });
+                        if !is_borrowed && !is_local_ref {
+                            let is_copy = self
+                                .infer_expression_type(operand)
+                                .as_ref()
+                                .is_some_and(|t| self.is_type_copy(t));
+                            if is_copy {
+                                return self.generate_expression_immut(operand);
+                            }
+                        }
+                    }
+                }
+
                 // TDD FIX: Skip explicit * deref of &String in string comparisons
                 // Problem: In Rust, *(&String) yields &str (not String), breaking &str == &String
                 // Solution: Just use the identifier without *, making it &String == &String
@@ -389,16 +410,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .or_else(|| sig.param_types.get(sig_param_idx));
                         let already_usize = match arg {
                             Expression::Identifier { name, .. } => {
-                                self.current_function_params
-                                    .iter()
-                                    .find(|p| p.name == *name)
-                                    .is_some_and(|p| {
-                                        matches!(&p.type_, Type::Custom(n) if n == "usize")
-                                    })
-                                    || self.local_var_types.get(name).is_some_and(|t| {
-                                        matches!(t, Type::Custom(n) if n == "usize")
-                                    })
-                                    || self.usize_variables.contains(name)
+                                self.identifier_emits_as_usize(name)
                             }
                             _ => {
                                 self.infer_expression_type_is_usize(arg)
@@ -855,10 +867,41 @@ impl<'ast> CodeGenerator<'ast> {
                     return crate::codegen::rust::literals::generate_literal(lit);
                 }
                 use crate::type_inference::IntType;
+                // Priority 0: explicit int/usize target from let/assign/call-arg context
+                // (annotated `let mut i: usize = 0` must not become `0_i64` under `-> int`).
+                if let Some(ctx_ty) = self
+                    .assignment_int_target_type
+                    .as_ref()
+                    .or(self.call_arg_expected_type.as_ref())
+                {
+                    if let Some(it) = Self::int_type_from_assignment_target(ctx_ty) {
+                        if it != IntType::Unknown {
+                            return format!("{}_{}", i, it.rust_suffix());
+                        }
+                    }
+                }
                 let inferred = if let Some(ni) = &self.numeric_inference {
                     ni.get_int_type(expr)
                 } else {
                     IntType::Unknown
+                };
+                // Branch unification may pick `usize` from `json::len` / `.len()` while the
+                // enclosing WJ `int` return casts those arms with `as i64`. Prefer `_i64`
+                // literals so if/else arms stay consistent (never `0_usize` vs `len as i64`).
+                // Skip when an explicit int/usize slot is in force (WDB-121).
+                let inferred = if inferred == IntType::Usize
+                    && self.assignment_int_target_type.is_none()
+                    && self
+                        .call_arg_expected_type
+                        .as_ref()
+                        .is_none_or(|t| !crate::codegen::rust::type_casting::type_is_usize(t))
+                    && self.current_function_return_type.as_ref().is_some_and(|t| {
+                        matches!(t, Type::Int)
+                            || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                    }) {
+                    IntType::I64
+                } else {
+                    inferred
                 };
                 if inferred != IntType::Unknown {
                     let suffix = inferred.rust_suffix();

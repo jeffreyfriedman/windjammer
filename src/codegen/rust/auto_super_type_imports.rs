@@ -186,6 +186,9 @@ impl<'ast> CodeGenerator<'ast> {
 }
 
 /// Collect PascalCase type names appearing in generated Rust generic annotations.
+///
+/// Handles tuple element types inside collections (WDB-118): `Vec<(Key, Value)>`
+/// must yield `Key` and `Value`, not the paren-stained tokens `(Key` / `Value)`.
 fn extract_custom_types_from_rust_type_annotations(body: &str) -> Vec<String> {
     let mut out = std::collections::BTreeSet::new();
     let wrappers = [
@@ -195,33 +198,67 @@ fn extract_custom_types_from_rust_type_annotations(body: &str) -> Vec<String> {
         let mut rest = body;
         while let Some(start) = rest.find(wrapper) {
             let after = &rest[start + wrapper.len()..];
-            let Some(end) = after.find('>') else {
+            let Some(end) = find_matching_angle_close(after) else {
                 break;
             };
             let inner = &after[..end];
-            for segment in inner.split(',') {
-                let seg = segment.trim();
-                let name = seg
-                    .split(':')
-                    .next()
-                    .unwrap_or(seg)
-                    .split('<')
-                    .next()
-                    .unwrap_or(seg)
-                    .trim();
-                if name
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-                {
-                    out.insert(name.to_string());
-                }
-            }
+            collect_pascal_case_type_idents(inner, &mut out);
             rest = &after[end..];
         }
     }
     out.into_iter().collect()
+}
+
+/// Depth-aware `>` matcher so nested generics (`Vec<Option<(A, B)>>`) stay intact.
+fn find_matching_angle_close(s: &str) -> Option<usize> {
+    let mut depth = 1usize;
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '<' => depth += 1,
+            '>' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn collect_pascal_case_type_idents(s: &str, out: &mut std::collections::BTreeSet<String>) {
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_uppercase() {
+            let start = i;
+            i += 1;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            let name: String = chars[start..i].iter().collect();
+            if !crate::type_classification::is_prelude_or_primitive(&name) {
+                out.insert(name);
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
+#[cfg(test)]
+mod extract_annotation_type_tests {
+    use super::extract_custom_types_from_rust_type_annotations;
+
+    #[test]
+    fn extracts_tuple_element_types_inside_vec() {
+        let names = extract_custom_types_from_rust_type_annotations(
+            "let pairs: Vec<(Key, Value)> = to_pairs();",
+        );
+        assert!(names.iter().any(|n| n == "Key"), "got {names:?}");
+        assert!(names.iter().any(|n| n == "Value"), "got {names:?}");
+    }
 }
 
 /// `use std::{module}::*` / `use std::{module}::{Type}` already brings `type_name` into scope.

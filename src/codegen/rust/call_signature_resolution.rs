@@ -539,34 +539,44 @@ pub fn resolve_method_for_call_site(
 
     pick_best_resolved_signature(local_filtered, global_filtered).map(|mut resolved| {
         let qualified = format!("{receiver_type}::{method}");
-        if resolved.sig.emitted_rust_ref_params.is_none() {
-            if let Some(alt) = &codegen_refresh_source {
+        // Merge defining-module shared-ref refresh even when the importer already has
+        // stale `emitted_rust_ref_params = Some([false, …])` (hexagonal App::handle path).
+        let should_merge_refresh = |from: &FunctionSignature| {
+            resolved.sig.emitted_rust_ref_params.is_none()
+                || crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
+                    from, &resolved.sig,
+                )
+        };
+        if let Some(alt) = &codegen_refresh_source {
+            if should_merge_refresh(&alt.sig) {
                 crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
                     &mut resolved.sig,
                     &alt.sig,
                 );
-            } else if let Some(g) = global {
-                // Defining-module refresh may only sit on the exact qualified key when
-                // suffix/homonym resolution picked a stale body-converged borrow stub
-                // (builder `Column` → `Table` owned column/row forward).
-                if let Some(refreshed) = g.get_signature(&qualified) {
-                    if refreshed.emitted_rust_ref_params.is_some() {
-                        crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
-                            &mut resolved.sig,
-                            refreshed,
-                        );
-                    }
-                } else if let Some((_, refreshed)) =
-                    best_method_signature_for_receiver(g, receiver_type, method, arg_count)
+            }
+        } else if let Some(g) = global {
+            // Defining-module refresh may only sit on the exact qualified key when
+            // suffix/homonym resolution picked a stale body-converged borrow stub
+            // (builder `Column` → `Table` owned column/row forward).
+            if let Some(refreshed) = g.get_signature(&qualified) {
+                if refreshed.emitted_rust_ref_params.is_some() && should_merge_refresh(refreshed)
                 {
-                    // Bare `Type::method` may have been filtered; module-qualified
-                    // defining-module meta still carries `emitted_rust_ref_params`.
-                    if refreshed.emitted_rust_ref_params.is_some() {
-                        crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
-                            &mut resolved.sig,
-                            &refreshed,
-                        );
-                    }
+                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                        &mut resolved.sig,
+                        refreshed,
+                    );
+                }
+            } else if let Some((_, refreshed)) =
+                best_method_signature_for_receiver(g, receiver_type, method, arg_count)
+            {
+                // Bare `Type::method` may have been filtered; module-qualified
+                // defining-module meta still carries `emitted_rust_ref_params`.
+                if refreshed.emitted_rust_ref_params.is_some() && should_merge_refresh(&refreshed)
+                {
+                    crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                        &mut resolved.sig,
+                        &refreshed,
+                    );
                 }
             }
         }

@@ -292,3 +292,94 @@ fn quest_local_borrowed_bare_global_borrowed_reference_types() {
         Type::Reference(_)
     ));
 }
+
+/// Hexagonal multipass: importer analysis stubs often keep
+/// `emitted_rust_ref_params = Some([false, …])` while the defining module later
+/// records `&str` demotion as `true`. Call sites must merge that refresh
+/// (otherwise `app.handle(req.path, …)` stays owned and E0308s against `&str`).
+#[test]
+fn defining_module_shared_ref_refresh_beats_stale_all_false_emission() {
+    let mut local = SignatureRegistry::new();
+    local.add_function(
+        "App::handle".into(),
+        FunctionSignature {
+            name: "App::handle".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::String,
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::String,
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Custom("HttpReply".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        },
+    );
+
+    let mut global = SignatureRegistry::new();
+    global.add_function(
+        "App::handle".into(),
+        FunctionSignature {
+            name: "App::handle".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::String,
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Custom("HttpReply".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        },
+    );
+
+    let resolved = resolve_method_for_call_site(&local, Some(&global), "App", "handle", 2)
+        .expect("resolve App::handle");
+
+    assert_eq!(
+        resolved
+            .sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .map(|f| f.get(1).copied()),
+        Some(Some(true)),
+        "defining-module &str demotion must refresh path formal; got {:?}",
+        resolved.sig.emitted_rust_ref_params
+    );
+    assert!(
+        matches!(
+            effective_param_ownership_for_arg(&resolved.sig, 0),
+            OwnershipMode::Borrowed
+        ),
+        "path arg must be Borrowed after refresh; ownership={:?}",
+        resolved.sig.param_ownership
+    );
+}

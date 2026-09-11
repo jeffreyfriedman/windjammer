@@ -1,0 +1,19 @@
+use std::json
+
+pub fn field_count(text: string, key: string) -> int {
+    match json.parse(text) {
+        Ok(root) => {
+            match json.get(root, key) {
+                Some(v) => {
+                    if json.is_array(v) {
+                        json.len(v)
+                    } else {
+                        0
+                    }
+                },
+                None => 0,
+            }
+        },
+        Err(_) => 0,
+    }
+}

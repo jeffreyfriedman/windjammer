@@ -768,8 +768,14 @@ pub(crate) fn collect_stdlib_api_types_for_modules(
         if matches!(module.as_str(), "collections" | "cmp" | "ops" | "process") {
             continue;
         }
-        let path = stdlib_dir.join(format!("{module}.wj"));
-        let Ok(source) = std::fs::read_to_string(&path) else {
+        let candidates = [
+            stdlib_dir.join(format!("{module}.wj")),
+            stdlib_dir.join(module).join("mod.wj"),
+        ];
+        let Some(source) = candidates
+            .iter()
+            .find_map(|path| std::fs::read_to_string(path).ok())
+        else {
             continue;
         };
         let mut lexer = Lexer::new(&source);

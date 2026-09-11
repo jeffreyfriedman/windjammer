@@ -1,0 +1,15 @@
+/// Chain helper: return `(Row, T)` so hexagonal postgres adapters can read
+/// multiple columns without `&Row` (W0001) or a move-WJ0007 on each call.
+/// LedgerKit `postgres_row_mapping.wj` still uses `"col" + ""` until this greens.
+pub struct Row {
+    leftover: string,
+}
+
+pub fn col_string(row: Row, name: string) -> (Row, string) {
+    (row, name)
+}
+
+pub fn col_int(row: Row, name: string) -> (Row, int) {
+    let _ = name
+    (row, 0)
+}

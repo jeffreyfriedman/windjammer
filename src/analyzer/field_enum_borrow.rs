@@ -175,3 +175,124 @@ pub(crate) fn param_only_used_as_field_enum_match_scrutinee<'ast>(
     }
     saw_scrutinee && !other_use
 }
+
+/// True when `name` is a bare argument to an enum variant constructor (`Shape::Named(name)`).
+///
+/// Used to keep concrete `String` formals (not `impl Into<String>`) when the value is
+/// moved into a variant payload that is typed as owned `String`.
+pub(crate) fn param_consumed_by_enum_variant_ctor<'ast>(
+    name: &str,
+    statements: &[&'ast Statement<'ast>],
+) -> bool {
+    statements
+        .iter()
+        .any(|stmt| stmt_has_enum_variant_consuming(name, stmt))
+}
+
+fn looks_like_enum_variant_constructor(fn_name: &str) -> bool {
+    fn_name
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_uppercase())
+}
+
+fn stmt_has_enum_variant_consuming(name: &str, stmt: &Statement<'_>) -> bool {
+    match stmt {
+        Statement::Let { value, .. } | Statement::Expression { expr: value, .. } => {
+            expr_has_enum_variant_consuming(name, value)
+        }
+        Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Assignment { value: expr, .. } => expr_has_enum_variant_consuming(name, expr),
+        Statement::Match { value, arms, .. } => {
+            expr_has_enum_variant_consuming(name, value)
+                || arms
+                    .iter()
+                    .any(|arm| expr_has_enum_variant_consuming(name, arm.body))
+        }
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expr_has_enum_variant_consuming(name, condition)
+                || then_block
+                    .iter()
+                    .any(|s| stmt_has_enum_variant_consuming(name, s))
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| stmt_has_enum_variant_consuming(name, s)))
+        }
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Loop { body, .. } => {
+            body.iter().any(|s| stmt_has_enum_variant_consuming(name, s))
+        }
+        _ => false,
+    }
+}
+
+fn expr_has_enum_variant_consuming(name: &str, expr: &Expression<'_>) -> bool {
+    match expr {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            let is_enum_variant = match &**function {
+                Expression::Identifier { name: fn_name, .. } => {
+                    looks_like_enum_variant_constructor(fn_name)
+                }
+                Expression::FieldAccess { field, .. } => {
+                    field.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                }
+                _ => false,
+            };
+            if is_enum_variant
+                && arguments.iter().any(|(_label, arg)| {
+                    matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                })
+            {
+                return true;
+            }
+            arguments
+                .iter()
+                .any(|(_label, arg)| expr_has_enum_variant_consuming(name, arg))
+                || expr_has_enum_variant_consuming(name, function)
+        }
+        Expression::MethodCall {
+            method,
+            arguments,
+            object,
+            ..
+        } => {
+            if method
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_uppercase())
+                && arguments.iter().any(|(_label, arg)| {
+                    matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                })
+            {
+                return true;
+            }
+            arguments
+                .iter()
+                .any(|(_label, arg)| expr_has_enum_variant_consuming(name, arg))
+                || expr_has_enum_variant_consuming(name, object)
+        }
+        Expression::Unary { operand, .. } => expr_has_enum_variant_consuming(name, operand),
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| stmt_has_enum_variant_consuming(name, s)),
+        Expression::Tuple { elements, .. } => elements
+            .iter()
+            .any(|el| expr_has_enum_variant_consuming(name, el)),
+        Expression::StructLiteral { fields, .. } => fields
+            .iter()
+            .any(|(_, v)| expr_has_enum_variant_consuming(name, v)),
+        _ => false,
+    }
+}

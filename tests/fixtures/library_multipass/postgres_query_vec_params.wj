@@ -1,0 +1,7 @@
+use super::super::domain::ports::query
+
+/// Hexagonal outbound adapter — owned/`string` locals + literals into `Vec<string>`
+/// without `tenant_id + ""` / `"demo" + ""` workarounds (LedgerKit postgres_*).
+pub fn list_for_tenant(tenant_id: string) -> Result<string, string> {
+    query("SELECT 1", vec![tenant_id, "demo"])
+}

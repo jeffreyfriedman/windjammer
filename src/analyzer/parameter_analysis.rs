@@ -140,7 +140,12 @@ impl<'ast> Analyzer<'ast> {
 
         // 2.4. `if callee(param) { use(param) } else { use(param) }` needs an owned binding:
         // the condition may borrow, but both branches move/consume the value.
-        if self.is_used_in_if_with_condition_and_branches(param_name, body) {
+        // Windjammer text: condition + branch reuse is `&str`-safe (PartialEq, Display,
+        // `.trim()` / `strings.len`) — do not force Owned (blocks Phase-2 demotion for
+        // `parse_body` / demoted_str gates).
+        if self.is_used_in_if_with_condition_and_branches(param_name, body)
+            && !Self::is_windjammer_text_param_type(param_type)
+        {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -223,11 +228,20 @@ impl<'ast> Analyzer<'ast> {
                 current_func_name,
                 func,
             ) {
-                // Passthrough to a borrowed callee: wrapper keeps Borrowed so signatures
-                // chain (`fn wrapper(items: &Vec<T>) { process(items) }`).
-                // Extern FFI callees still surface Borrowed for `string` wrappers via
-                // infer_passthrough_ownership's extern rule.
-                return Ok(mode);
+                // Module `string` + Owned passthrough: WJ stdlib often declares
+                // `strings::len(s: string)` Owned while Rust is AsRef. Returning Owned
+                // here wiped Phase-2 `str_ref` demotion (demoted_str / parse_body).
+                // Defer to the text-specific block below.
+                if !(Self::is_windjammer_text_param_type(param_type)
+                    && func.parent_type.is_none()
+                    && matches!(mode, OwnershipMode::Owned))
+                {
+                    // Passthrough to a borrowed callee: wrapper keeps Borrowed so signatures
+                    // chain (`fn wrapper(items: &Vec<T>) { process(items) }`).
+                    // Extern FFI callees still surface Borrowed for `string` wrappers via
+                    // infer_passthrough_ownership's extern rule.
+                    return Ok(mode);
+                }
             }
             // Plain `string` may passthrough to extern on a later convergence pass — do not
             // pin Owned here or FFI wrappers never reach Borrowed (module_qualified autoborrow).
@@ -337,8 +351,10 @@ impl<'ast> Analyzer<'ast> {
         // Dogfooding evidence: 6+ E0308 errors in windjammer-game-editor
         // from read-only params generating owned types while call sites pass &T.
         //
-        // Module-level `string`: owned when passed to calls or used in comparisons;
-        // Phase-2 `&str` for read-only receiver usage (`text.len()`) and struct-literal storage.
+        // Module-level `string`: Phase-2 `&str` for read-only usage including
+        // equality (`pattern == path`) so loop reuse can borrow (wj-glob filter).
+        // Concat (`+`) is arithmetic and stays Owned via step 2.x / concat paths.
+        // Consuming call/store paths above keep Owned.
         if Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_none() {
             // Function/method calls only — macro args (format!/println!) are Display reads, not moves.
             if self.is_passed_by_value_as_function_call_arg(param_name, body) {
@@ -356,11 +372,19 @@ impl<'ast> Analyzer<'ast> {
                 // (codegen may lower to &str). Owned is for consuming callees resolved above.
                 return Ok(OwnershipMode::Borrowed);
             }
-            if self.is_used_in_binary_op(param_name, body)
-                && !self.is_used_in_arithmetic_op(param_name, body)
+            // Unused `string` formals keep Owned (API/FFI contract) — same policy as
+            // unused Vec. Demoting unused params to `&str` made multipass call sites
+            // asymmetric (WDB-152: claim_next got `.to_string()`, heartbeat_tick kept
+            // a bare literal into a sibling owned formal).
+            if !body
+                .iter()
+                .any(|stmt| self.statement_uses_identifier(param_name, stmt))
             {
                 return Ok(OwnershipMode::Owned);
             }
+            // Comparisons (`==`, `!=`, ordering) are PartialEq/Ord reads — do NOT force
+            // Owned. Forcing Owned here wiped str_ref_optimizable (retain drops Owned)
+            // and broke loop reuse of demoted `&str` formals.
             // param_needs_string_ref == false → can use &str → Borrowed
             // param_needs_string_ref == true → needs &String (e.g. Vec::contains) → still Borrowed
             // (consuming patterns like push/insert are caught by is_stored above)

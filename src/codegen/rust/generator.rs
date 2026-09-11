@@ -206,6 +206,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_fn_mixed_forwarder_params: std::collections::HashSet<String>,
     /// Params that borrow at self/sibling calls inside if conditions (forward-ref guard).
     pub(crate) current_fn_forward_ref_if_params: std::collections::HashSet<String>,
+    /// Pub builder formals emitted as `impl Into<String>` (windjammer-ui Rust interop).
+    pub(crate) into_string_formal_params: std::collections::HashSet<String>,
     /// True when the current function body is a single `self[.field].method(...)` forward.
     pub(crate) current_func_is_pure_forwarding_delegate: bool,
     // USER-WRITTEN CLOSURE: When true, suppress auto-borrowing transformations (preserve user intent)
@@ -219,6 +221,9 @@ pub struct CodeGenerator<'ast> {
     /// While generating an assignment RHS, use this LHS type for float literal suffixes when
     /// numeric inference returns Unknown (multipass ExprId mismatch, etc.).
     pub(crate) assignment_float_target_type: Option<Type>,
+    /// Parallel to `assignment_float_target_type` for int/usize literal suffixes
+    /// (`let mut i: usize = 0` → `0_usize`, not `0_i64` under an `int` return).
+    pub(crate) assignment_int_target_type: Option<Type>,
     /// Expected type of the call argument currently being generated (method/fn param type
     /// after signature specialization). Drives nested tuple slot ownership
     /// (`Vec<(string,string)>::push((k, ""))` → own empty string).
@@ -629,12 +634,14 @@ impl<'ast> CodeGenerator<'ast> {
             current_fn_emitted_mut_arg_indices: std::collections::HashSet::new(),
             current_fn_mixed_forwarder_params: std::collections::HashSet::new(),
             current_fn_forward_ref_if_params: std::collections::HashSet::new(),
+            into_string_formal_params: std::collections::HashSet::new(),
             current_func_is_pure_forwarding_delegate: false,
             in_user_written_closure: false,
             user_closure_params: std::collections::HashSet::new(),
             closure_predicate_typed_params: false,
             generating_assignment_target: false,
             assignment_float_target_type: None,
+            assignment_int_target_type: None,
             call_arg_expected_type: None,
             collect_target_type: None,
             in_void_block: false,
@@ -1497,6 +1504,21 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 Some(l)
             }
+            // Field-forward restore / AST-owned Custom beats stale MutBorrowed analysis.
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::owned_custom_beats_stale_mut_borrow(
+                    g, l,
+                ) =>
+            {
+                Some(g)
+            }
+            (Some(l), Some(g))
+                if crate::codegen::rust::signature_promotion::owned_custom_beats_stale_mut_borrow(
+                    l, g,
+                ) =>
+            {
+                Some(l)
+            }
             (Some(l), Some(g))
                 if crate::codegen::rust::signature_promotion::mut_borrow_emission_beats(g, l) =>
             {
@@ -1907,6 +1929,77 @@ impl<'ast> CodeGenerator<'ast> {
             &self.extern_submodule_qualifiers,
             &normalized,
         )
+    }
+
+    /// Rewrite `Request` / `Request::get` using import-driven stdlib type paths.
+    ///
+    /// Prefer modules the file actually `use`d (`std::net::Request`) over the global
+    /// type→module map (`Request` → `http`), so associated calls don't collide.
+    pub(crate) fn qualify_stdlib_type_identifier(&self, name: &str) -> String {
+        let normalized = name.replace('.', "::");
+        let (head, tail) = match normalized.split_once("::") {
+            Some((h, t)) => (h, Some(t)),
+            None => (normalized.as_str(), None),
+        };
+        if !head
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_uppercase())
+        {
+            return name.to_string();
+        }
+        let fq = self.fq_path_for_imported_stdlib_type(head).or_else(|| {
+            self.stdlib_type_rust_paths.get(head).cloned().filter(|path| {
+                // Runtime `collections` only re-exports Rust std HashMap/HashSet —
+                // never rewrite those constructors to the runtime crate path.
+                !path.starts_with("windjammer_runtime::collections::")
+            })
+        });
+        let Some(fq) = fq else {
+            return name.to_string();
+        };
+        match tail {
+            Some(rest) => format!("{fq}::{rest}"),
+            None => fq,
+        }
+    }
+
+    /// Fully-qualified path for a PascalCase type exported by an imported WJ std module.
+    pub(crate) fn fq_path_for_imported_stdlib_type(&self, type_name: &str) -> Option<String> {
+        if self.runtime_std_module_imports.is_empty() {
+            return None;
+        }
+        let registry = crate::analyzer::SignatureRegistry::stdlib();
+        for module in &self.runtime_std_module_imports {
+            // Rust-std overlays (`collections`, `cmp`, `ops`) keep bare names so
+            // `use std::collections::HashMap` + `HashMap::new()` resolve without the
+            // runtime re-export shim (`windjammer_runtime::collections::HashMap`).
+            match crate::codegen::rust::stdlib_method_traits::classify_wj_std_import(module) {
+                crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime {
+                    rust_stem,
+                } => {
+                    let stem = rust_stem.as_str();
+                    let under_module = registry
+                        .runtime_exported_types_for_module(module)
+                        .iter()
+                        .any(|t| *t == type_name);
+                    let under_stem = stem != module.as_str()
+                        && registry
+                            .runtime_exported_types_for_module(stem)
+                            .iter()
+                            .any(|t| *t == type_name);
+                    if !(under_module || under_stem) {
+                        continue;
+                    }
+                    return Some(format!("windjammer_runtime::{stem}::{type_name}"));
+                }
+                crate::codegen::rust::stdlib_method_traits::WjStdImportKind::RustStd
+                | crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Skip => {
+                    continue;
+                }
+            }
+        }
+        None
     }
 
     pub fn new_for_module(registry: SignatureRegistry, target: CompilationTarget) -> Self {
@@ -2624,11 +2717,43 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Current statement restores `binding` after moving it into a call
+    /// (`let (binding, …) = f(binding, …)` / WDB-084/087). Later same-name uses are a
+    /// new generation — not multi-use of this move.
+    pub(in crate::codegen::rust) fn current_stmt_restores_binding_after_move(
+        &self,
+        binding: &str,
+    ) -> bool {
+        let body: Vec<&crate::parser::Statement> =
+            self.current_function_body.iter().copied().collect();
+        crate::auto_clone::AutoCloneAnalysis::stmt_restores_binding_after_move(
+            &body,
+            binding,
+            self.current_statement_idx,
+        )
+    }
+
     pub(in crate::codegen::rust) fn param_has_later_owned_formal_pass(
         &self,
         param_name: &str,
         from_stmt_idx: usize,
     ) -> bool {
+        // Same-stmt ownership restore (`let (row, id) = col_string(row, …)`): later
+        // `row` uses the rebound value, so this move must not auto-clone.
+        if from_stmt_idx == self.current_statement_idx
+            && self.current_stmt_restores_binding_after_move(param_name)
+        {
+            return false;
+        }
+        let body: Vec<&crate::parser::Statement> =
+            self.current_function_body.iter().copied().collect();
+        if crate::auto_clone::AutoCloneAnalysis::stmt_restores_binding_after_move(
+            &body,
+            param_name,
+            from_stmt_idx,
+        ) {
+            return false;
+        }
         for (idx, stmt) in self.current_function_body.iter().enumerate() {
             if idx <= from_stmt_idx {
                 continue;

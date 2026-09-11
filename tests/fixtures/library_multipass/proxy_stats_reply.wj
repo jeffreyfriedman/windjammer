@@ -1,0 +1,34 @@
+pub struct Entry {
+    pub path: string,
+}
+
+pub struct App {
+    logs: Vec<Entry>,
+}
+
+impl App {
+    pub fn handle_local(self, path: string) -> int {
+        if path == "/stats" {
+            return self.stats_reply()
+        }
+        404
+    }
+
+    fn list_logs(self) -> int {
+        let entries = self.logs
+        count_entries(entries)
+    }
+
+    fn stats_reply(self) -> int {
+        let snapshot = self.logs.clone()
+        count_entries(snapshot)
+    }
+}
+
+fn count_entries(entries: Vec<Entry>) -> int {
+    let mut n = 0
+    for _e in entries {
+        n = n + 1
+    }
+    n
+}

@@ -44,9 +44,12 @@ impl<'ast> CodeGenerator<'ast> {
                 let target = match &self.current_function_return_type {
                     Some(Type::Int) => Some("int"),
                     Some(Type::Custom(name)) if name == "i64" || name == "int" => Some("int"),
+                    Some(Type::Int32) => Some("i32"),
+                    Some(Type::Custom(name)) if name == "i32" => Some("i32"),
                     _ => None,
                 };
                 self.maybe_cast_usize_to_int_target(&mut return_str, e, target);
+                self.maybe_cast_to_function_return_int_width(&mut return_str, e);
             }
 
             self.coerce_option_ref_return_to_owned(&mut return_str, e);

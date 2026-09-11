@@ -77,7 +77,12 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     return format!("{mut_prefix}{}: {type_str}", param.name);
                 }
-                if param.name != "self" && self.multipass_global_ref_formal_demoted(func, param_idx)
+                if param.name != "self"
+                    && self.multipass_global_ref_formal_demoted(func, param_idx)
+                    && !(self.pub_module_api_keeps_owned_string_formal(func)
+                        && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
+                    && !(analyzed.returned_parameters.contains(&param.name)
+                        && !self.is_type_copy(&param.type_))
                 {
                     if self.param_used_via_explicit_user_clone(func.body.as_slice(), &param.name)
                         || self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
@@ -413,6 +418,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
                     && !self.function_return_is_text(func)
+                    && !self.pub_module_api_keeps_owned_string_formal(func)
                     && (self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
                         &param.name,
@@ -441,6 +447,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
+                    && !self.pub_module_api_keeps_owned_string_formal(func)
                     && self.associated_text_identity_return_may_borrow(func, param, analyzed)
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
@@ -580,9 +587,19 @@ impl<'ast> CodeGenerator<'ast> {
                     && !analyzer_or_ir_owned
                     && !self.param_single_arg_owned_self_or_field_forward(param, func)
                     && !self.in_trait_impl
+                    // Pub crate API: keep WJ `string` owned even when unused / analyzer Borrowed
+                    // so cross-module callers can pass `req.path` without racing `&str` demotion.
+                    && !(self.pub_module_api_keeps_owned_string_formal(func)
+                        && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
                     && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
                     && !analyzed.returned_parameters.contains(&param.name)
+                    // Consuming / owned-self methods (`resp.header(...)`) require owned formals.
+                    && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     // Multiparam store forwards (`apply_patch_put` → `apply_put`) store via
                     // owned callees; still emit `&Key` + clone (regression-047 full store layout).
                     && (!(moves_via_struct_init && !vec_store_borrow_ok) || borrow_delegation)
@@ -1010,6 +1027,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
+                            && !self.pub_module_api_keeps_owned_string_formal(func)
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
                                 &param.name,
@@ -1042,6 +1060,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !payload_forces_owned
                             && !self.in_trait_impl
+                            && !self.pub_module_api_keeps_owned_string_formal(func)
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
@@ -1089,6 +1108,12 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             return "&self".to_string();
                         }
+                        // Public API keeps owned `string` despite Ref / analyzer demotion.
+                        if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                            && self.pub_module_api_keeps_owned_string_formal(func)
+                        {
+                            return self.type_to_rust(&param.type_);
+                        }
                         // Don't add & if the type is already a Reference
                         if matches!(
                             formal_type,
@@ -1110,6 +1135,11 @@ impl<'ast> CodeGenerator<'ast> {
                             // TDD FIX: Copy types pass by value even with Ref hint
                             if self.is_type_copy(formal_type) {
                                 self.type_to_rust(formal_type)
+                            } else if crate::codegen::rust::types::is_windjammer_text_type(
+                                &param.type_,
+                            ) && self.pub_module_api_keeps_owned_string_formal(func)
+                            {
+                                self.type_to_rust(&param.type_)
                             } else {
                                 // TDD FIX: Borrowed → &T (including &String for strings)
                                 // Correctness > idioms: &String works with Vec<String> methods
@@ -1298,6 +1328,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !asref_runtime_keep_owned
                                 && !payload_forces_owned
                                 && !self.in_trait_impl
+                                && !self.pub_module_api_keeps_owned_string_formal(func)
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(
@@ -1330,6 +1361,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
+                            && !self.pub_module_api_keeps_owned_string_formal(func)
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                             && !analyzed.returned_parameters.contains(&param.name)
@@ -2236,11 +2268,14 @@ impl<'ast> CodeGenerator<'ast> {
                             if _debug_formal {
                                 eprintln!("[FORMAL-POST-MUT-BLOCK] ownership_mode={:?}", ownership_mode);
                             }
-                            // Readonly unused WJ `string` formals emit `&str` so forward-ref
-                            // call sites (DialogCondition → Inventory::has_item) see converged borrow.
+                            // Readonly unused WJ `string` formals historically demoted to `&str`
+                            // for forward-ref call sites (DialogCondition → Inventory::has_item).
                             // Free functions included (wal `replay_all(path)`).
                             // Discard-only `let _ = path` / `let _ = (path, …)` also demote — analyzer
                             // often keeps Owned for the move-into-discard, which must not win here.
+                            // Pure unused + analyzer Owned stay Owned (WDB-152): sibling APIs that
+                            // return/consume the same `string` formal must share call-site
+                            // `.to_string()` (claim_next vs heartbeat_tick).
                             // Runtime AsRef modules: keep owned `String` + `&` at the call
                             // site only when callees do not already expect a borrow.
                             let asref_fwd = self.param_asref_runtime_forces_owned_formal(
@@ -2270,6 +2305,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                                 ownership_mode = OwnershipMode::Owned;
                             }
+                            let analyzer_keeps_owned_string = matches!(
+                                analyzed.inferred_ownership.get(&param.name),
+                                Some(OwnershipMode::Owned)
+                            );
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
                                 && !self.pub_module_api_keeps_owned_string_formal(func)
@@ -2279,7 +2318,8 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.name,
                                     func,
                                 )
-                                && (unused_params.contains(&param.name)
+                                && ((unused_params.contains(&param.name)
+                                    && !analyzer_keeps_owned_string)
                                     || self.param_only_used_in_simple_or_tuple_discard(
                                         func.body.as_slice(),
                                         &param.name,
@@ -2506,7 +2546,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 OwnershipMode::Borrowed => {
                                     let is_string = matches!(formal_type, Type::String)
                                         || matches!(formal_type, Type::Custom(ref name) if name == "string");
-                                    if is_string && !trait_impl_owned_string {
+                                    if is_string
+                                        && !trait_impl_owned_string
+                                        && self.pub_module_api_keeps_owned_string_formal(func)
+                                    {
+                                        // Public API keeps owned `string` even when body analysis
+                                        // / IR marked Borrowed (unused path → &str races callers).
+                                        self.str_ref_optimized_params.remove(&param.name);
+                                        self.inferred_borrowed_params.remove(&param.name);
+                                        self.type_to_rust(&param.type_)
+                                    } else if is_string && !trait_impl_owned_string {
                                         // Only force owned `String` when explicitly marked
                                         // (collection_key_owned_params) or when
                                         // `is_collection_key_owned_param` agrees — that helper
@@ -2673,6 +2722,31 @@ impl<'ast> CodeGenerator<'ast> {
                     type_str = self.type_to_rust(&param.type_);
                 }
 
+                // Public crate API: never emit demoted `&str` for WJ `string` formals —
+                // cross-module callers pass owned fields (`req.path`) before defining-module
+                // demotion is visible at the call site (hexagonal HTTP adapters).
+                if param.name != "self"
+                    && type_str.starts_with('&')
+                    && !type_str.starts_with("&mut ")
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && self.pub_module_api_keeps_owned_string_formal(func)
+                {
+                    type_str = self.type_to_rust(&param.type_);
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
+                }
+
+                // windjammer-ui / Rust interop: pub builder formals that store owned `string`
+                // into payload fields accept `&str` via `impl Into<String>`.
+                if param.name != "self"
+                    && type_str == "String"
+                    && self.param_should_emit_into_string_formal(func, param, payload_stored)
+                {
+                    type_str = "impl Into<String>".to_string();
+                    self.into_string_formal_params.insert(param.name.clone());
+                }
+
                 // Explicitly Copy types kept as owned (instead of &mut) still need `mut`
                 // when the analyzer inferred MutBorrowed — the body mutates the value.
                 let copy_mut_as_owned = self.is_type_copy(formal_type)
@@ -2775,9 +2849,199 @@ impl<'ast> CodeGenerator<'ast> {
             .collect()
     }
 
-    /// Public module APIs keep WJ `string` as owned `String` unless `@str_ref` opts in.
-    fn pub_module_api_keeps_owned_string_formal(&self, func: &FunctionDecl<'_>) -> bool {
-        func.is_pub && func.parent_type.is_none() && !self.in_trait_impl
+    /// Pub builder/setter formals that store owned WJ `string` into a custom return payload.
+    fn param_should_emit_into_string_formal(
+        &self,
+        func: &FunctionDecl<'_>,
+        param: &crate::parser::Parameter,
+        payload_stored: bool,
+    ) -> bool {
+        use crate::parser::Type;
+
+        if param.name == "self" || self.in_trait_impl || !func.is_pub {
+            return false;
+        }
+        if param.decorators.iter().any(|d| d.name == "string_ref") {
+            return false;
+        }
+        if !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_) {
+            return false;
+        }
+        if !payload_stored {
+            return false;
+        }
+        // `impl Into<String>` cannot participate in `==` / ordering against `&str`
+        // (WDB-139). Keep a concrete `String` formal when the body compares the param.
+        if Self::param_used_in_binary_comparison(&param.name, &func.body) {
+            return false;
+        }
+        // Enum variant payloads are concrete `String` — Into formals omit `.into()` at
+        // construction sites and break ownership gates (`Shape::Named(name)`).
+        if crate::analyzer::field_enum_borrow::param_consumed_by_enum_variant_ctor(
+            &param.name,
+            &func.body,
+        ) {
+            return false;
+        }
+        let Some(ret) = func.return_type.as_ref() else {
+            return false;
+        };
+        match ret {
+            Type::String | Type::Int | Type::Float | Type::Bool | Type::Int32 | Type::Uint => {
+                false
+            }
+            Type::Custom(name) if name == "string" || name == "String" => false,
+            Type::Custom(_) => true,
+            Type::Parameterized(name, _) if name != "Result" && name != "Option" => true,
+            _ => false,
+        }
+    }
+
+    /// True when `param` appears as an operand of `==` / `!=` / ordering in `body`.
+    fn param_used_in_binary_comparison(param: &str, body: &[&Statement<'_>]) -> bool {
+        fn expr_compares(param: &str, expr: &Expression<'_>) -> bool {
+            match expr {
+                Expression::Binary { left, op, right, .. } => {
+                    let is_cmp = matches!(
+                        op,
+                        BinaryOp::Eq
+                            | BinaryOp::Ne
+                            | BinaryOp::Lt
+                            | BinaryOp::Le
+                            | BinaryOp::Gt
+                            | BinaryOp::Ge
+                    );
+                    if is_cmp {
+                        let left_is = matches!(
+                            *left,
+                            Expression::Identifier { name, .. } if name == param
+                        );
+                        let right_is = matches!(
+                            *right,
+                            Expression::Identifier { name, .. } if name == param
+                        );
+                        if left_is || right_is {
+                            return true;
+                        }
+                    }
+                    expr_compares(param, left) || expr_compares(param, right)
+                }
+                Expression::Unary { operand, .. }
+                | Expression::TryOp { expr: operand, .. }
+                | Expression::Await { expr: operand, .. }
+                | Expression::AsyncCall { expr: operand, .. }
+                | Expression::SpawnCall { expr: operand, .. }
+                | Expression::Cast { expr: operand, .. }
+                | Expression::Closure { body: operand, .. } => expr_compares(param, operand),
+                Expression::Call {
+                    function,
+                    arguments,
+                    ..
+                } => {
+                    expr_compares(param, function)
+                        || arguments.iter().any(|(_, a)| expr_compares(param, a))
+                }
+                Expression::MethodCall {
+                    object, arguments, ..
+                } => {
+                    expr_compares(param, object)
+                        || arguments.iter().any(|(_, a)| expr_compares(param, a))
+                }
+                Expression::FieldAccess { object, .. } => expr_compares(param, object),
+                Expression::Index { object, index, .. } => {
+                    expr_compares(param, object) || expr_compares(param, index)
+                }
+                Expression::StructLiteral { fields, .. } => {
+                    fields.iter().any(|(_, v)| expr_compares(param, v))
+                }
+                Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                    elements.iter().any(|e| expr_compares(param, e))
+                }
+                Expression::MapLiteral { pairs, .. } => pairs
+                    .iter()
+                    .any(|(k, v)| expr_compares(param, k) || expr_compares(param, v)),
+                Expression::Range { start, end, .. } => {
+                    expr_compares(param, start) || expr_compares(param, end)
+                }
+                Expression::Block { statements, .. } => {
+                    statements.iter().any(|s| stmt_compares(param, s))
+                }
+                Expression::MacroInvocation { args, .. } => {
+                    args.iter().any(|a| expr_compares(param, a))
+                }
+                Expression::ChannelSend { channel, value, .. } => {
+                    expr_compares(param, channel) || expr_compares(param, value)
+                }
+                Expression::ChannelRecv { channel, .. } => expr_compares(param, channel),
+                Expression::Literal { .. } | Expression::Identifier { .. } => false,
+            }
+        }
+        fn stmt_compares(param: &str, stmt: &Statement<'_>) -> bool {
+            match stmt {
+                Statement::Expression { expr, .. } => expr_compares(param, expr),
+                Statement::Return { value: Some(e), .. }
+                | Statement::Const { value: e, .. }
+                | Statement::Static { value: e, .. } => expr_compares(param, e),
+                Statement::Let {
+                    value, else_block, ..
+                } => {
+                    expr_compares(param, value)
+                        || else_block
+                            .as_ref()
+                            .is_some_and(|b| b.iter().any(|s| stmt_compares(param, s)))
+                }
+                Statement::Assignment { target, value, .. } => {
+                    expr_compares(param, target) || expr_compares(param, value)
+                }
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    expr_compares(param, condition)
+                        || then_block.iter().any(|s| stmt_compares(param, s))
+                        || else_block
+                            .as_ref()
+                            .is_some_and(|b| b.iter().any(|s| stmt_compares(param, s)))
+                }
+                Statement::While {
+                    condition, body, ..
+                } => {
+                    expr_compares(param, condition) || body.iter().any(|s| stmt_compares(param, s))
+                }
+                Statement::For { iterable, body, .. } => {
+                    expr_compares(param, iterable) || body.iter().any(|s| stmt_compares(param, s))
+                }
+                Statement::Loop { body, .. }
+                | Statement::Thread { body, .. }
+                | Statement::Async { body, .. } => body.iter().any(|s| stmt_compares(param, s)),
+                Statement::Match { value, arms, .. } => {
+                    expr_compares(param, value)
+                        || arms.iter().any(|arm| {
+                            expr_compares(param, arm.body)
+                                || arm
+                                    .guard
+                                    .as_ref()
+                                    .is_some_and(|g| expr_compares(param, g))
+                        })
+                }
+                Statement::Defer { statement, .. } => stmt_compares(param, statement),
+                _ => false,
+            }
+        }
+        body.iter().any(|s| stmt_compares(param, s))
+    }
+
+    /// Whether pub crate APIs must refuse `&str` demotion for WJ `string` formals.
+    ///
+    /// Always false: ownership is body-/signature-driven (Phase 2, IR, payload store,
+    /// owning callees). A blanket `is_pub → Owned` race-guard blocked read-only demotion
+    /// (`concatenate` `&b`/`&c`, `HashSet::contains`, unused `on_click` handlers) and
+    /// forced call-site `.clone()`. Cross-module callers sync via the signature registry
+    /// (WDB-112); payload stores use owned/`impl Into<String>`, not pub-ness.
+    fn pub_module_api_keeps_owned_string_formal(&self, _func: &FunctionDecl<'_>) -> bool {
+        false
     }
 
     /// Shared guard: never demote a param that needs mutable access to shared `&T`.

@@ -66,10 +66,13 @@ pub fn unary_op_to_rust(op: &UnaryOp) -> &'static str {
     }
 }
 
-/// Returns the precedence level for a binary operator
+/// Returns the precedence level for a binary operator **as Rust parses it**.
 ///
-/// Higher numbers indicate higher precedence (tighter binding).
-/// This follows Rust's operator precedence rules:
+/// Used by Rust codegen to decide when to emit parentheses. Windjammer's
+/// *parser* may differ (WDB-153: shifts bind tighter than additive); emission
+/// must still follow Rust so `Add(a, Shl(b,c))` becomes `a + (b << c)`.
+///
+/// Higher numbers indicate higher precedence (tighter binding):
 /// - 10: Multiplicative (*, /, %)
 /// - 9: Additive (+, -)
 /// - 8: Bitshift (<<, >>)
@@ -89,6 +92,7 @@ pub fn unary_op_to_rust(op: &UnaryOp) -> &'static str {
 /// assert_eq!(op_precedence(&BinaryOp::Mul), 10); // Highest
 /// assert_eq!(op_precedence(&BinaryOp::Add), 9);
 /// assert_eq!(op_precedence(&BinaryOp::Or), 1);   // Lowest
+/// assert!(op_precedence(&BinaryOp::Add) > op_precedence(&BinaryOp::Shl));
 /// ```
 pub fn op_precedence(op: &BinaryOp) -> i32 {
     match op {

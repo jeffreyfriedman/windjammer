@@ -1,0 +1,7 @@
+pub fn query(sql: string, params: Vec<string>) -> Result<string, string> {
+    let _ = sql
+    if params.len() == 0 {
+        return Err("empty")
+    }
+    Ok(params[0])
+}

@@ -788,11 +788,56 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // `impl Into<String>` formals must `.into()` when stored into owned
+                // `String` fields (`BenchRow { algorithm: name }` — not only shorthand).
+                if let Expression::Identifier { name: id, .. } = expr {
+                    if self.into_string_formal_params.contains(id)
+                        && !expr_str.ends_with(".into()")
+                        && !expr_str.ends_with(".to_string()")
+                    {
+                        let struct_name = self.current_struct_literal_name.as_deref().unwrap_or("");
+                        let field_is_string = self
+                            .lookup_struct_field_types(struct_name)
+                            .and_then(|ft| ft.get(field_name))
+                            .is_some_and(|t| {
+                                matches!(t, Type::String)
+                                    || matches!(
+                                        t,
+                                        Type::Custom(ref n) if n == "string" || n == "String"
+                                    )
+                            });
+                        if field_is_string {
+                            expr_str = format!("{}.into()", expr_str);
+                        }
+                    }
+                }
+
+                // WDB-116: recursive layout fields emit as Box<T> — wrap literal values.
+                if let Some(field_ty) = self
+                    .lookup_struct_field_types(name)
+                    .and_then(|ft| ft.get(field_name).cloned())
+                {
+                    if crate::codegen::rust::recursive_struct_layout::type_is_box(&field_ty)
+                        && !expr_str.starts_with("Box::new(")
+                    {
+                        expr_str = format!("Box::new({})", expr_str);
+                    }
+                }
+
                 // Check for field shorthand: if expr is just the field name AND no conversion applied, use shorthand
                 // Only use shorthand if the generated expression exactly matches the field name
                 // (no .to_string(), .clone(), etc. conversions)
                 if let Expression::Identifier { name: id, .. } = expr {
                     if id == field_name && expr_str == *field_name {
+                        if self.into_string_formal_params.contains(id) {
+                            let used_multiple_times = identifier_usage_counts
+                                .get(id)
+                                .is_some_and(|count| *count > 1);
+                            if used_multiple_times {
+                                return format!("{}: {}.clone().into()", field_name, field_name);
+                            }
+                            return format!("{}: {}.into()", field_name, field_name);
+                        }
                         let used_multiple_times = identifier_usage_counts
                             .get(id)
                             .is_some_and(|count| *count > 1);
@@ -819,7 +864,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Restore struct literal context
         self.current_struct_literal_name = prev_struct_name;
 
-        let qualified_name = self.qualify_external_path_identifier(name);
+        let qualified_name = self.qualify_stdlib_type_identifier(
+            &self.qualify_external_path_identifier(name),
+        );
         format!("{} {{ {} }}", qualified_name, field_str.join(", "))
     }
 
@@ -887,6 +934,17 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.maybe_cast_index_to_usize(&mut idx_str, index);
         let final_idx = idx_str;
+
+        // WJ `string[i]` / `String[i]` / `&str[i]` → Rust byte indexing (WDB-120).
+        // `str` does not implement `Index<usize>`; Cap UTF-8 body→`Vec<u8>` needs
+        // `as_bytes()[i]`. Driven by text-type predicate — not method-name heuristics.
+        if self
+            .infer_expression_type(object)
+            .as_ref()
+            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+        {
+            return format!("{}.as_bytes()[{}]", obj_str, final_idx);
+        }
 
         let base_expr = format!("{}[{}]", obj_str, final_idx);
 

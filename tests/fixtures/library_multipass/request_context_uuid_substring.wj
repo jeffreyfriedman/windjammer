@@ -1,0 +1,33 @@
+// LedgerKit `adapters/inbound/request_context.wj` class — UUID hex slices +
+// Bearer strip without empty-concat. Tip must cargo-check substring int lits
+// and `strings.len` end indices (no `String as usize`).
+
+use std::strings
+use std::crypto
+use std::time
+
+fn int_to_string(n: int) -> string {
+    "${n}"
+}
+
+pub fn bearer_token_from_authorization(value: string) -> Option<string> {
+    if !strings.starts_with(value, "Bearer ") {
+        return None
+    }
+    let token = strings.substring(value, 7, strings.len(value))
+    if strings.len(token) == 0 {
+        return None
+    }
+    Some(token)
+}
+
+pub fn generate_request_id(method: string, path: string, bearer_token: string) -> string {
+    let seed = method + path + bearer_token + int_to_string(time.now_unix())
+    let hex = crypto.sha256(seed)
+    let part0 = strings.substring(hex, 0, 8)
+    let part1 = strings.substring(hex, 8, 12)
+    let part2 = strings.substring(hex, 12, 16)
+    let part3 = strings.substring(hex, 16, 20)
+    let part4 = strings.substring(hex, 20, 32)
+    part0 + "-" + part1 + "-" + part2 + "-" + part3 + "-" + part4
+}

@@ -1,0 +1,24 @@
+fn parse_id(token: string) -> Result<int, string> {
+    if token == "" {
+        return Err("empty id")
+    }
+    Ok(1)
+}
+
+/// `wj-todo-cli` `parse_command` `edit` branch class: trailing `match` inside `if` must return.
+pub fn parse_edit_branch(args: Vec<string>) -> Result<int, string> {
+    if args.len() == 0 {
+        return Err("usage")
+    }
+    let verb = args[0]
+    if verb == "edit" {
+        if args.len() < 3 {
+            return Err("usage: edit <id> <title>")
+        }
+        match parse_id(args[1]) {
+            Ok(id) => Ok(id),
+            Err(e) => Err(e),
+        }
+    }
+    Err("unknown verb")
+}

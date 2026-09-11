@@ -258,6 +258,10 @@ impl<'ast> CodeGenerator<'ast> {
                 if Self::assignment_target_needs_float_codegen_context(t) {
                     self.assignment_float_target_type = Some(t.clone());
                 }
+                let prev_assign_int = self.assignment_int_target_type.take();
+                if Self::assignment_target_needs_int_codegen_context(t) {
+                    self.assignment_int_target_type = Some(t.clone());
+                }
                 let prev_suppress_turbo = self.suppress_collection_turbofish;
                 let suppress_turbofish_here =
                     crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t);
@@ -275,6 +279,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 self.collect_target_type = prev_collect_target;
                 self.suppress_collection_turbofish = prev_suppress_turbo;
+                self.assignment_int_target_type = prev_assign_int;
                 self.assignment_float_target_type = prev_assign_float;
 
                 self.in_expression_context = old_ctx;
@@ -461,6 +466,10 @@ impl<'ast> CodeGenerator<'ast> {
                 if Self::assignment_target_needs_float_codegen_context(t) {
                     self.assignment_float_target_type = Some(t.clone());
                 }
+                let prev_assign_int = self.assignment_int_target_type.take();
+                if Self::assignment_target_needs_int_codegen_context(t) {
+                    self.assignment_int_target_type = Some(t.clone());
+                }
                 let prev_suppress_turbo = self.suppress_collection_turbofish;
                 let suppress_turbofish_here =
                     crate::codegen::rust::collection_detection::type_is_collect_turbofish_target(t);
@@ -478,6 +487,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 self.collect_target_type = prev_collect_target;
                 self.suppress_collection_turbofish = prev_suppress_turbo;
+                self.assignment_int_target_type = prev_assign_int;
                 self.assignment_float_target_type = prev_assign_float;
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, Some(t), &mut value_str);

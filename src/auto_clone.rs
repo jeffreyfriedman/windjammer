@@ -135,23 +135,28 @@ impl AutoCloneAnalysis {
         match stmt {
             Statement::Let { pattern, value, .. } => {
                 // `let copy = param` moves the param; field reads partial-move too.
-                let value_kind = match value {
-                    Expression::FieldAccess { .. } | Expression::Identifier { .. } => {
-                        UsageKind::Move
+                // `let x = { match ... }` / match-as-expression: nested statements must
+                // consume outer counter indices so the following body statement does not
+                // collide with the Match (false `same_stmt_read_after_move` → `row.clone()`).
+                if let Expression::Block { statements, .. } = value {
+                    for stmt in statements {
+                        Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                     }
-                    _ => UsageKind::Read,
-                };
-                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map, registry);
-
-                if let Pattern::Identifier(name) = pattern {
-                    map.entry(name.clone()).or_default().push(Usage {
-                        statement_idx: idx,
-                        kind: UsageKind::Definition,
-                        is_move: false,
-                        in_loop,
-                        is_projection_parent: false,
-                    });
+                } else {
+                    let value_kind = match value {
+                        Expression::FieldAccess { .. } | Expression::Identifier { .. } => {
+                            UsageKind::Move
+                        }
+                        _ => UsageKind::Read,
+                    };
+                    Self::collect_usages_from_expression(
+                        value, idx, value_kind, in_loop, map, registry,
+                    );
                 }
+
+                // Tuple / struct destructure rebinds (`let (row, id) = …`) — register all
+                // pattern bindings so moves after the let refer to the new definition.
+                Self::register_pattern_definitions(pattern, idx, in_loop, map);
             }
             Statement::Assignment { target, value, .. } => {
                 Self::collect_usages_from_expression(target, idx, UsageKind::Write, in_loop, map, registry);
@@ -525,23 +530,59 @@ impl AutoCloneAnalysis {
                 arguments,
                 ..
             } => {
-                Self::collect_usages_from_expression(function, idx, UsageKind::Read, in_loop, map, registry);
-                for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
-                    let arg_kind = if registry
-                        .is_some_and(|r| Self::callee_arg_field_extracts(function, i, r))
-                    {
-                        UsageKind::Read
-                    } else {
-                        UsageKind::Move
-                    };
+                // Parser often emits `Call(FieldAccess)` for `recv.method(args)` —
+                // treat like MethodCall so `&self` receivers stay Reads (not moves via
+                // FieldAccess path bookkeeping alone).
+                if let Expression::FieldAccess {
+                    object,
+                    field: method,
+                    ..
+                } = function
+                {
+                    if let Some(path) = Self::extract_expression_path(expr) {
+                        map.entry(path).or_default().push(Usage {
+                            statement_idx: idx,
+                            kind,
+                            is_move: kind == UsageKind::Move,
+                            in_loop,
+                            is_projection_parent: false,
+                        });
+                    }
                     Self::collect_usages_from_expression(
-                        arg_expr,
+                        object,
                         idx,
-                        arg_kind,
+                        UsageKind::Read,
                         in_loop,
                         map,
                         registry,
                     );
+                    for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
+                        let arg_kind = Self::method_call_arg_usage_kind(
+                            method,
+                            i,
+                            arguments.len(),
+                            registry,
+                        );
+                        Self::collect_usages_from_expression(
+                            arg_expr, idx, arg_kind, in_loop, map, registry,
+                        );
+                    }
+                } else {
+                    Self::collect_usages_from_expression(
+                        function, idx, UsageKind::Read, in_loop, map, registry,
+                    );
+                    for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
+                        let arg_kind = if registry
+                            .is_some_and(|r| Self::callee_arg_field_extracts(function, i, r))
+                        {
+                            UsageKind::Read
+                        } else {
+                            UsageKind::Move
+                        };
+                        Self::collect_usages_from_expression(
+                            arg_expr, idx, arg_kind, in_loop, map, registry,
+                        );
+                    }
                 }
             }
             Expression::MethodCall {
@@ -916,6 +957,7 @@ impl AutoCloneAnalysis {
     /// Patterns (same global counter scheme as [`build_usage_map`]):
     /// - `binding = f(binding, …)` (WDB-084)
     /// - `let t = f(binding, …); …; binding = t.i` (WDB-087 tuple writeback)
+    /// - `let (binding, …) = f(binding, …)` / `let binding = f(binding, …)` (same-stmt restore)
     fn collect_direct_writeback_indices(
         statements: &[&Statement],
         binding: &str,
@@ -924,6 +966,40 @@ impl AutoCloneAnalysis {
         let mut counter: usize = 0;
         Self::collect_direct_writeback_indices_in_stmts(statements, binding, &mut counter, &mut out);
         out
+    }
+
+    /// True when `stmt_idx` moves `binding` into a call and restores it in the same statement
+    /// (direct assign, same-name let, or tuple-slot rebind). Used by codegen multi-use guards.
+    pub fn stmt_restores_binding_after_move(
+        statements: &[&Statement],
+        binding: &str,
+        stmt_idx: usize,
+    ) -> bool {
+        Self::collect_direct_writeback_indices(statements, binding).contains(&stmt_idx)
+    }
+
+    fn pattern_binds_identifier(pattern: &Pattern, name: &str) -> bool {
+        match pattern {
+            Pattern::Identifier(n) | Pattern::MutBinding(n) | Pattern::Ref(n) | Pattern::RefMut(n) => {
+                n == name
+            }
+            Pattern::Tuple(patterns) | Pattern::Or(patterns) => patterns
+                .iter()
+                .any(|p| Self::pattern_binds_identifier(p, name)),
+            Pattern::Reference(inner) => Self::pattern_binds_identifier(inner, name),
+            Pattern::EnumVariant(_, binding) => match binding {
+                crate::parser::EnumPatternBinding::None
+                | crate::parser::EnumPatternBinding::Wildcard => false,
+                crate::parser::EnumPatternBinding::Single(n) => n == name,
+                crate::parser::EnumPatternBinding::Tuple(patterns) => patterns
+                    .iter()
+                    .any(|p| Self::pattern_binds_identifier(p, name)),
+                crate::parser::EnumPatternBinding::Struct(fields, _) => fields
+                    .iter()
+                    .any(|(_, p)| Self::pattern_binds_identifier(p, name)),
+            },
+            Pattern::Wildcard | Pattern::Literal(_) => false,
+        }
     }
 
     fn collect_direct_writeback_indices_in_stmts(
@@ -940,6 +1016,16 @@ impl AutoCloneAnalysis {
                 out.insert(idx);
             }
 
+            // Same-stmt ownership restore: `let binding = f(binding, …)` or
+            // `let (binding, …) = f(binding, …)` — move then rebind (Row chain / WDB-087).
+            if let Statement::Let { pattern, value, .. } = stmt {
+                if Self::pattern_binds_identifier(pattern, binding)
+                    && Self::expr_call_or_method_has_field_arg(value, binding)
+                {
+                    out.insert(idx);
+                }
+            }
+
             // WDB-087: `let t = f(binding, …); …; binding = t.0` — mark the Let (move site).
             if let Statement::Let {
                 pattern: Pattern::Identifier(tmp),
@@ -947,7 +1033,7 @@ impl AutoCloneAnalysis {
                 ..
             } = stmt
             {
-                if Self::expr_call_or_method_has_field_arg(value, binding) {
+                if tmp != binding && Self::expr_call_or_method_has_field_arg(value, binding) {
                     let restored = statements[i + 1..].iter().any(|later| {
                         Self::stmt_assigns_binding_or_prefix_to_field_path(later, tmp, binding)
                     });
@@ -958,6 +1044,18 @@ impl AutoCloneAnalysis {
             }
 
             match stmt {
+                Statement::Let { value, .. } => {
+                    // Match `collect_usages_from_statement`: nested Block stmts advance
+                    // the shared counter (let-match-as-expression).
+                    if let Expression::Block { statements, .. } = value {
+                        Self::collect_direct_writeback_indices_in_stmts(
+                            statements.as_slice(),
+                            binding,
+                            counter,
+                            out,
+                        );
+                    }
+                }
                 Statement::If {
                     then_block,
                     else_block,
@@ -1163,12 +1261,15 @@ impl AutoCloneAnalysis {
     }
 
     /// Find variables that are bound to string literals
-    /// These don't need .clone() because they're just &str references
+    /// These don't need .clone() because they're just &str references.
+    /// Mutable bindings (`let mut s = "…"`) are promoted to owned `String` when
+    /// reassigned — they still move at owned call sites and need reuse clones (WDB-143).
     fn find_string_literal_vars<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             match stmt {
                 Statement::Let {
                     pattern: Pattern::Identifier(var_name),
+                    mutable: false,
                     value,
                     ..
                 }
@@ -1177,7 +1278,7 @@ impl AutoCloneAnalysis {
                         self.string_literal_vars.insert(var_name.clone());
                     }
                 Statement::Let { .. } => {
-                    // Non-identifier patterns (tuple, wildcard, etc.)
+                    // Mutable / non-identifier patterns (tuple, wildcard, etc.)
                 }
                 Statement::If {
                     then_block,

@@ -187,9 +187,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 Some(Type::Custom(name)) if name == "i64" || name == "int" => {
                                     Some("int")
                                 }
+                                Some(Type::Int32) => Some("i32"),
+                                Some(Type::Custom(name)) if name == "i32" => Some("i32"),
                                 _ => None,
                             };
                             self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
+                            self.maybe_cast_to_function_return_int_width(&mut expr_str, expr);
                         }
 
                         self.coerce_option_ref_return_to_owned(&mut expr_str, expr);
@@ -304,9 +307,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     Some(Type::Custom(name)) if name == "i64" || name == "int" => {
                                         Some("int")
                                     }
+                                    Some(Type::Int32) => Some("i32"),
+                                    Some(Type::Custom(name)) if name == "i32" => Some("i32"),
                                     _ => None,
                                 };
                                 self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
+                                self.maybe_cast_to_function_return_int_width(&mut expr_str, expr);
                             }
 
                             self.coerce_option_ref_return_to_owned(&mut expr_str, expr);
@@ -378,15 +384,12 @@ impl<'ast> CodeGenerator<'ast> {
                     if method == "find" {
                     }
                 }
-                // Align with auto_clone Expression::Block indexing: nested Match is
-                // collected at `block_counter = enclosing_stmt_idx + 1` while the parent
-                // counter is not advanced. Outer `generate_block` already set
-                // `auto_clone_counter = enclosing_idx + 1`, so Match must use that index
-                // for clone sites (scrutinee struct literals / moves). Skipping this
-                // desyncs `needs_clone` and causes E0382 (move in match scrutinee, clone
-                // on the following statement that shares the analysis index).
+                // Align with auto_clone: `let x = match …` nests Match on the outer
+                // counter (Statement::Let Block branch), so consume one index here and
+                // leave the following body statement on the next index.
                 let saved_stmt_idx = self.current_statement_idx;
                 self.current_statement_idx = self.auto_clone_counter;
+                self.auto_clone_counter += 1;
 
                 // Check if this is an if-let pattern that should be generated as `if let`
                 let is_if_let_pattern = arms.len() == 2
@@ -476,12 +479,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // WINDJAMMER PHILOSOPHY: Detect if any arm returns String and convert all arms
                 let needs_string_conversion_from_type = self.coerce_string_literals_to_owned
-                    || string_utilities::return_type_expects_owned_string(
+                    || string_utilities::match_arms_need_owned_string_coercion(
+                        arms,
+                        self.infer_expression_type(value).as_ref(),
                         &self.current_function_return_type,
-                    )
-                    || arms
-                        .iter()
-                        .any(|arm| string_utilities::match_arm_needs_string_ascription(arm.body));
+                        |body| self.expr_suggests_owned_string_coercion(body),
+                    );
 
                 // Set context flag BEFORE generating arms
                 let old_in_match_arm = self.in_match_arm_needing_string;
@@ -715,6 +718,21 @@ impl<'ast> CodeGenerator<'ast> {
                                     &expr_str,
                                 );
                             }
+                        }
+
+                        {
+                            self.maybe_cast_branch_tail_to_unified_int(&mut expr_str, expr);
+                            let target = match &self.current_function_return_type {
+                                Some(Type::Int) => Some("int"),
+                                Some(Type::Custom(name)) if name == "i64" || name == "int" => {
+                                    Some("int")
+                                }
+                                Some(Type::Int32) => Some("i32"),
+                                Some(Type::Custom(name)) if name == "i32" => Some("i32"),
+                                _ => None,
+                            };
+                            self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
+                            self.maybe_cast_to_function_return_int_width(&mut expr_str, expr);
                         }
 
                         output.push_str(&expr_str);

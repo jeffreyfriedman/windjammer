@@ -9,7 +9,7 @@
 
 use crate::parser::*;
 
-use super::{pattern_analysis, string_analysis, string_utilities, CodeGenerator};
+use super::{pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a match statement
@@ -19,8 +19,6 @@ impl<'ast> CodeGenerator<'ast> {
         value: &'ast Expression<'ast>,
         arms: &[crate::parser::MatchArm<'ast>],
     ) -> String {
-        use super::arm_string_analysis;
-
         // TDD FIX: Optimize boolean match expressions to matches! macro
         if arms.len() == 2 && arms[0].guard.is_none() && arms[1].guard.is_none() {
             let arm0_is_true = matches!(
@@ -746,12 +744,12 @@ impl<'ast> CodeGenerator<'ast> {
                 || borrow_break_as_ref
         };
 
-        let needs_string_conversion =
-            string_utilities::return_type_expects_owned_string(&self.current_function_return_type)
-                || arms.iter().any(|arm| {
-                    string_analysis::expression_produces_string(arm.body)
-                        || arm_string_analysis::arm_returns_converted_string(arm.body)
-                });
+        let needs_string_conversion = string_utilities::match_arms_need_owned_string_coercion(
+            arms,
+            self.infer_expression_type(value).as_ref(),
+            &self.current_function_return_type,
+            |body| self.expr_suggests_owned_string_coercion(body),
+        );
 
         let old_in_statement_match = self.in_statement_match;
         let match_is_statement = self.current_function_return_type.is_none();
@@ -938,7 +936,11 @@ impl<'ast> CodeGenerator<'ast> {
             let mut match_bound_type_entries: Vec<(String, Type)> =
                 if use_owned_clone_borrow_break || use_owned_copy_borrow_break {
                     self.infer_match_bound_types_owned(value, &arm.pattern)
-                } else if use_copied_borrow_break || use_cloned_borrow_break {
+                } else if use_copied_borrow_break
+                    || use_cloned_borrow_break
+                    || use_copied_option
+                {
+                    // HashMap::get + `.copied()` → owned Copy bindings (WDB-134).
                     self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
                 } else {
                     self.infer_match_bound_types(value, &arm.pattern)
@@ -948,7 +950,8 @@ impl<'ast> CodeGenerator<'ast> {
             let skip_ref_wrap_on_bound_types = use_copied_borrow_break
                 || use_cloned_borrow_break
                 || use_owned_copy_borrow_break
-                || use_owned_clone_borrow_break;
+                || use_owned_clone_borrow_break
+                || use_copied_option;
             if !skip_ref_wrap_on_bound_types && match_scrutinee_ref_prefix == "&mut " {
                 for entry in &mut match_bound_type_entries {
                     if !matches!(entry.1, Type::Reference(_) | Type::MutableReference(_)) {

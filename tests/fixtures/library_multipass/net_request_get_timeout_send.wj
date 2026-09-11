@@ -1,0 +1,9 @@
+use std::net::Request
+
+/// `wj-fetch` timed GET: builder chain `Request::get(url).timeout(secs).send()`.
+pub fn timed_get(url: string, secs: int) -> Result<string, string> {
+    match Request::get(url).timeout(secs).send() {
+        Ok(response) => Ok(response.body),
+        Err(e) => Err(e),
+    }
+}

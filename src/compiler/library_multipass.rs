@@ -462,6 +462,12 @@ pub(crate) fn build_library_multipass(
     );
     profile_phase("Declaration stub registry (parallel)", stub_registry_start);
 
+    // WDB-116: insert Box on one owned field per recursive SCC so rustc E0072
+    // cannot fire on mutually recursive embeds (complete-chain / reducer graphs).
+    crate::codegen::rust::recursive_struct_layout::apply_recursive_struct_boxing(
+        &mut global_struct_fields,
+    );
+
     // Step 3: Global multi-pass iteration until convergence
     // Wrap read-only data in Arc for O(1) sharing across all files (avoids O(n) deep clones).
     let global_struct_fields = std::sync::Arc::new(global_struct_fields);
@@ -1030,6 +1036,29 @@ pub(crate) fn build_library_multipass(
         }
     }
 
+    // Bare-pass demotion / field-forward restore must run before IR lowering so
+    // call-site constraints see the final ownership (e.g. owned HttpReply, not &mut).
+    {
+        use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        for sig in reg.signatures.values_mut() {
+            wrap_converged_borrow_param_types(sig);
+        }
+    }
+    {
+        use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
+        let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        crate::compiler::multipass_bare_pass_demotion::promote_callees_from_bare_pass_callers(
+            reg,
+            &program_refs,
+            &global_copy_structs,
+        );
+        for sig in reg.signatures.values_mut() {
+            wrap_converged_borrow_param_types(sig);
+        }
+    }
+
     // Step 4B-a-IR: Lower converged analyses to IR using the merged global registry.
     // Cross-file call constraints resolve against final_global_registry.
     let step4b_ir_start = Instant::now();
@@ -1067,25 +1096,15 @@ pub(crate) fn build_library_multipass(
             ir_functions_by_index[i] = Some(module.functions);
         }
     }
+    // IR sync can re-promote field-forward helpers to MutBorrowed from analyzer
+    // body classification — restore owned formals again for call-site codegen.
     {
-        use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
-        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-        for sig in reg.signatures.values_mut() {
-            wrap_converged_borrow_param_types(sig);
-        }
-    }
-    {
-        use crate::codegen::rust::signature_promotion::wrap_converged_borrow_param_types;
         let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
         let reg = std::sync::Arc::make_mut(&mut final_global_registry);
-        crate::compiler::multipass_bare_pass_demotion::promote_callees_from_bare_pass_callers(
+        crate::compiler::multipass_bare_pass_demotion::restore_owned_field_forward_formals(
             reg,
             &program_refs,
-            &global_copy_structs,
         );
-        for sig in reg.signatures.values_mut() {
-            wrap_converged_borrow_param_types(sig);
-        }
     }
     profile_phase("Step 4B-a-IR: IR lowering", step4b_ir_start);
 
@@ -1145,6 +1164,20 @@ pub(crate) fn build_library_multipass(
         .collect();
     codegen_indices = dependency_graph.sort_indices_for_codegen(&codegen_indices);
 
+    if std::env::var_os("WJ_DEBUG_CODEGEN_ORDER").is_some() {
+        let order: Vec<String> = codegen_indices
+            .iter()
+            .filter_map(|i| {
+                sources[*i]
+                    .0
+                    .strip_prefix(&src_base)
+                    .ok()
+                    .map(|p| p.display().to_string())
+            })
+            .collect();
+        eprintln!("WJ_DEBUG_CODEGEN_ORDER: {order:?}");
+    }
+
     let codegen_written_count = codegen_indices.len();
     if user_file_count > 16 {
         eprintln!(
@@ -1201,6 +1234,27 @@ pub(crate) fn build_library_multipass(
                 .unwrap_or(&parsed_programs[*i]);
 
             let mut full_registry = analysis.registry.clone();
+            // Prefer post-bare-pass / field-forward restored ownership over stale
+            // per-file analysis MutBorrowed so preregistered formals and call sites agree.
+            for (name, gsig) in final_global_registry.signatures.iter() {
+                match full_registry.signatures.get_mut(name) {
+                    Some(local)
+                        if crate::codegen::rust::signature_promotion::owned_custom_beats_stale_mut_borrow(
+                            gsig, local,
+                        ) || crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
+                            gsig, local,
+                        ) || crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                            gsig, local,
+                        ) =>
+                    {
+                        *local = gsig.clone();
+                    }
+                    None => {
+                        full_registry.signatures.insert(name.clone(), gsig.clone());
+                    }
+                    _ => {}
+                }
+            }
             {
                 let mut tmp_analyzer = Analyzer::for_library_pass(
                     global_copy_structs.clone(),

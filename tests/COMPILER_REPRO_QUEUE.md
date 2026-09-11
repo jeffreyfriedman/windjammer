@@ -104,12 +104,174 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()`** | `bug_std_fs_dir_entry_name_wiring_test`, `bug_std_fs_dir_entry_name_multipass_test` | ✅ tip GREEN — fixture `migrate_dir_entry_name.wj` |
 | P1 | **Cross-crate `Vec<string>` helper call must auto-borrow** | `bug_cross_crate_vec_helper_must_auto_borrow_test` | ✅ tip GREEN — fixtures `cli_args_*` / `migrate_cli_use_positional.wj` |
 | P1 | **`std::http::HttpMethod` lib public port vs `tests/*_test.wj`** | `bug_app_test_http_method_type_mismatch_test`, `bug_app_test_http_method_module_file_test` | ✅ tip GREEN (in-tree `wj`); regression guards |
-| P1 | **Multipass HTTP adapter must pass owned `HttpReply` / `string` to response helpers** | `bug_multipass_http_adapter_owned_reply_test`, `bug_multipass_http_adapter_hexagonal_test` | ⚠️ RED hexagonal — `adapters/http_server.wj`; single-module fixture GREEN |
+| P1 | **Multipass HTTP adapter must pass owned `HttpReply` / `string` to response helpers** | `bug_multipass_http_adapter_owned_reply_test`, `bug_multipass_http_adapter_hexagonal_test` | ✅ tip GREEN |
 | P1 | **Multipass `for ch in strings.chars` must not emit `&mut char` loop binding** | `bug_multipass_strings_chars_for_in_mut_char_test`, `bug_multipass_config_parse_positive_int_chars_test` | ✅ tip GREEN — fixtures `parse_positive_int_chars.wj`, `config_parse_positive_int_chars.wj` |
 | P1 | **`use std::async_runtime::sleep_ms_blocking` must not alias module as `async`** | `bug_multipass_std_async_runtime_import_test` | ✅ tip GREEN — `pause_ms_async_runtime.wj` |
-| P1 | **Cross-crate `join_url(base, path)` owned base must cargo-check (`wj-sitegen`)** | `bug_multipass_cross_crate_join_url_owned_base_test` | ⚠️ RED — owned `String` vs metadata `&str` E0308 |
-| P1 | **Cross-crate `render(owned_template(), vars)` must cargo-check (`wj-template`)** | `bug_multipass_cross_crate_render_owned_template_helper_test` | ⚠️ RED — helper `String` vs demoted `&str` E0308 |
+| P1 | **Cross-crate `join_url(base, path)` owned base must cargo-check (`wj-sitegen`)** | `bug_multipass_cross_crate_join_url_owned_base_test` | ✅ tip GREEN |
+| P1 | **Cross-crate `render(owned_template(), vars)` must cargo-check (`wj-template`)** | `bug_multipass_cross_crate_render_owned_template_helper_test` | ✅ tip GREEN |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
+| P1 | **WDB-151: owned store `T→T` formal must not demote to `&T`** | `bug_wdb151_module_file_owned_store_formal_must_not_demote_to_ref_test` | ✅ tip GREEN |
+| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_wdb155_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ⚠️ **RED** — blocks wdb-layers cold `gen/` rebuild |
+| P1 | **WDB-154: `use crate::<mod>::reexport` must keep module path** | `bug_wdb154_module_file_use_crate_mod_reexport_must_keep_path_test` | ✅ tip GREEN |
+| P1 | **WDB-153: `a + (b as u32) << shift` must shift masked byte first** | `bug_wdb153_add_shift_precedence_must_shift_masked_byte_first_test` | ✅ tip GREEN — WJ shifts bind tighter than `+`; Rust emit `value + ((…) << shift)` |
+| P1 | **WDB-152: string lit into owned `string` formal must `.to_string()`** | `bug_wdb152_module_file_string_lit_into_owned_string_formal_must_to_string_test` | ✅ tip GREEN — `"worker_hb".to_string()` (recheck 2026-09-10) |
+| P1 | **LedgerKit clean row mapping without empty-concat** | `bug_ledgerkit_clean_row_mapping_no_plus_empty_test` | ✅ tip GREEN — P3.241 dogfood |
+| P1 | **WDB-116: mutually recursive owned struct fields → Box** | `wdb116_module_file_mutually_recursive_struct_fields_must_box_or_cargo_check` | ✅ tip GREEN (recheck 2026-09-10) |
+| P1 | **`strings.substring` int indices must not emit `i64 + 1_usize`** | `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN — `(i + j + 1) as usize` (cargo+CLI 2026-09-11) |
+| P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ⚠️ **RED** — emits `decode_store(&body)`; blocks seed-overlay dogfood |
+| P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
+
+## P3.247 (2026-09-11) — owned match binding RED + request_context dogfood
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup (`/tmp/wj-*`, tip debug) | ✅ ~34Gi free |
+| Tip recheck mime charset / yaml empty | ✅ GREEN (P3.246) |
+| Tip recheck `owned_match_binding_*` (same-file + hexagonal) | ⚠️ **RED** — `decode_store(&body)` |
+| Tip recheck WDB-155 owned AST formal | ⚠️ **RED** (out of LedgerKit dogfood path) |
+| Fixture + gate `request_context_uuid_substring` (no `+ ""`) | ✅ GREEN cargo+hexagonal |
+| Product `request_context.wj` Bearer + UUID drop empty-concat | ✅ P3.247 |
+| `run_red_repro_bundle.sh` — OMB → RED_FILTERS; request_context → GREEN | ✅ |
+
+**Compiler agent:** green `Ok(body) => decode_store(body)` move (not `&body`). Do not demote owned `string` formals when the arg is a match binding. Residual: WDB-155.
+
+## P3.246 compiler/runtime (2026-09-11) — mime charset, yaml empty, WDB-153
+
+| Change | Status |
+|--------|--------|
+| `mime` known-ext table mirrors `std/mime.wj` constants (charset) | ✅ |
+| `is_text` matches WJ (`application/json` / `javascript` / `xml`) | ✅ |
+| `yaml::parse`/`to_json` reject empty/whitespace (`Err("empty yaml")`) | ✅ |
+| Parser: shifts bind tighter than additive; Rust emit keeps Rust precedence for parens | ✅ |
+| Gates: mime charset, yaml empty, WDB-153; tip recheck join_url/render/hexagonal HTTP | ✅ tip GREEN |
+| `run_red_repro_bundle.sh` — mime/yaml/WDB-153 → GREEN_FILTERS | ✅ |
+
+## P3.245 dogfood (2026-09-11) — LedgerKit `haystack_contains` drop empty-concat
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup | ✅ ~40–47Gi free |
+| Tip recheck haystack substring int indices | ✅ GREEN — `(i + j + 1) as usize` |
+| Hexagonal + CLI haystack gates | ✅ GREEN |
+| Product `domain/string_contains.wj` drop `+ ""` | ✅ |
+| `run_red_repro_bundle.sh` — haystack → GREEN_FILTERS | ✅ |
+
+## P3.244 repro harness (2026-09-11) — `std::yaml` empty input parity
+
+| Change | Status |
+|--------|--------|
+| `bug_std_yaml_empty_parity_test` — `to_json("")` / whitespace-only must `Err`, not Ok(`"null"`) | ✅ tip GREEN — runtime rejects empty/whitespace |
+
+**Dogfood:** `wj-yaml` can drop empty/whitespace pre-check once packages pick up tip runtime.
+
+## P3.243 repro harness (2026-09-11) — `std::mime` charset parity
+
+| Change | Status |
+|--------|--------|
+| `bug_std_mime_charset_parity_test` — `from_extension`/`from_path` must equal `APPLICATION_*`/`TEXT_*` | ✅ tip GREEN — runtime known-ext table mirrors `std/mime.wj` |
+
+**Dogfood:** `wj-mime` can thin-wrap lookup/predicates against tip runtime.
+
+## P3.244 CSV multipass + runtime `&str` literals + `-> i32` counters (2026-09-11)
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup (artifacts/tmp) | ✅ |
+| `prefer_shared_ref`: runtime `&str`/`AsRef` beats partial WJ `emitted_rust_ref` owned slots | ✅ |
+| `refresh_call_site_signature_for_arg` challenges `SignatureRegistry::stdlib()` | ✅ |
+| `Call(FieldAccess)` module paths (`strings::split`) use refresh (not param-0-only prefer) | ✅ |
+| `apply_owned_string_literal_coercion` uses refresh (no post-IR re-own) | ✅ |
+| Fallback `strings_split_signature` matches scanner (`Reference(str)` + empty formals) | ✅ |
+| `-> i32` trailing counter: cast when emission is still WJ `int`/`i64` | ✅ |
+| Gates: `test_library_multipass_csv_*`, `test_library_multipass_strings_split_pipe`, Connection::query prefer_shared, `refresh_split_delimiter` | ✅ tip GREEN |
+| Unit: `trailing_int_counter_into_i32_return_casts` | ✅ |
+| `haystack_contains_substring_int_indices` — mixed `i64 + 1_usize` → `(expr) as usize` | ✅ tip GREEN |
+
+**Root causes:** Multipass analyzes `std/*.wj` owned stubs without layering the scanned runtime baseline; literal coercion / FieldAccess paths skipped stdlib refresh. Separately, numeric inference unified counters to `i32` from `-> i32` while codegen still emitted `1_i64`. `coerce_arg_str_for_usize_formal` treated compound `… + 1_usize` as already-usize.
+
+## P3.242 repro harness (2026-09-10) — substring int index unify
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup | ✅ |
+| Tip-recheck WDB-116/139/145/149/150/151/152 + LedgerKit clean mapping | ✅ GREEN |
+| Tip-recheck join_url / render / http hexagonal / json is_array | ✅ GREEN |
+| `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN — coerce wraps `i + j + 1` as `(…) as usize` (no mixed `1_usize`); cargo+CLI+hexagonal 2026-09-11 |
+| Product `domain/string_contains.wj` drop empty-concat | ✅ P3.245 |
+| `run_red_repro_bundle.sh` includes haystack RED filter | ✅ |
+| windjammer-ui AuthFetch Into note | ✅ tip-GREEN wording |
+| Product `make api-check` still int/usize + demote/Self cluster | ⚠️ tip |
+
+**Compiler agent:** ✅ tip GREEN for haystack substring int unify (P3.244). Residual: empty-concat outside row helpers; `std::mime` charset parity (P3.243).
+
+## P3.241 LedgerKit dogfood + tip recheck (2026-09-10)
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup | ✅ ~25–28Gi free |
+| `postgres_row_mapping.wj` drop empty-concat in helpers | ✅ |
+| `col_string`/`col_int` call sites drop `"lit" + ""` (8 outbound adapters) | ✅ |
+| `bug_ledgerkit_clean_row_mapping_no_plus_empty_test` | ✅ GREEN |
+| Tip-recheck WDB-116 / 151 / 152 | ✅ GREEN |
+| Residual product empty-concat on query `vec![…]` / owned fields | ⚠️ still present — drop only when tip covers |
+
+**Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
+
+## P3.218 WindjammerDB CQ-C5 — multicol Ready-wrap + WDB-155 (2026-09-11)
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup | ✅ ~22Gi free (debug target pruned) |
+| Product: multicol hook wraps Ready serve (`pg_wire_serve_sf1_multicol_state_from_ready`) — root cause was rebuild Startup serve after startup | ✅ `.wj` written |
+| Tip **WDB-155** Option/match AST pipeline must keep owned formal (not `&mut`) | ⚠️ **RED** — `wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal` |
+| Product gen: cold `transpile_relational_module_file` + dogfood no longer rebuilds green `gen/` (E0596/E0308 storm) | ⚠️ **BLOCKED** on WDB-155 (prior green gen was gitignored; overwritten this session) |
+| OTLP stack export `metric_name` | ⏳ deferred until gen compiles |
+| layers full `--lib` | ⚠️ blocked (cannot compile) |
+
+**Compiler agent priority:** **WDB-155** (unblocks layers gen cold rebuild), then **WDB-154**, **WDB-153**, **WDB-150**.
+
+## P3.217 WindjammerDB CQ-C5 — semantic Cap call-cycle cut + WDB-154 (2026-09-11)
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup | ✅ ~49Gi free |
+| Product: cut semantic `*from_band_inequality*` Cap call SCC (inequality parents **non-from** equality_readback) | ✅ E0072 cleared; `check_semantic_cap_call_cycles.py` **0** |
+| Guardrail: `scripts/check_semantic_cap_call_cycles.py` | ✅ |
+| Cap filter `from_band_inequality` | ✅ **20/20** |
+| Tip **WDB-116** 2-cycle Box | ✅ tip GREEN (also Boxes one edge in 3-cycle fixture) |
+| Tip **WDB-154** `use crate::<mod>::reexport` path keep | ⚠️ FILED |
+| Dogfood: column_i64/f64 String::from strip; lsqb owned graph; job_store &store strip; cdlp/sql test path fixes | ✅ |
+| layers full `--lib` | ⚠️ running toward INT-EXIT |
+
+**Compiler agent priority:** **WDB-154**, **WDB-152**, **WDB-153**, **WDB-150**.
+
+## P3.216 WindjammerDB CQ-C5 — protobuf fixture/varint + WDB-153 (2026-09-10)
+
+| Change | Status |
+|--------|--------|
+| Product: full_decode / resource_payload Cap fixtures pad to wire `payload_len=12` | ✅ protobuf **46/46** |
+| Product: varint decode uses intermediate `piece` (shift-before-add) | ✅ `test_otlp_protobuf_varint_multi_byte_300` |
+| Product: depth_guard malformed fixture uses single-byte len 127 (oversize) | ✅ |
+| Tip **WDB-153** `a + (b as u32) << shift` grouping | ⚠️ FILED |
+| Dogfood: owned Vec/field formals for protobuf siblings | ✅ |
+
+**Compiler agent priority:** **WDB-153**, **WDB-152**, **WDB-150**.
+
+## P3.215 WindjammerDB CQ-C5 — job store release Cap + WDB-151/152 (2026-09-10)
+
+| Change | Status |
+|--------|--------|
+| Product: `job_store_release_cap_after_heartbeat` threads claim→heartbeat→release on **one** store (was fresh `job_store_cap_demo()` after heartbeat → `jobs_released=0`) | ✅ product fix — unit tests green |
+| Product: enterprise listener release reaper stack Cap no longer double-invokes release_stack Cap (stack overflow) | ✅ flattened; **40** listener reaper stacks batch-fixed |
+| Guardrail: `scripts/check_listener_reaper_stack_double_invoke.py` | ✅ **0** offenders |
+| `job_store_release` lib filter | ✅ **18/18** |
+| Tip **WDB-151** owned store formal must not demote to `&T` | ✅ tip isolate GREEN — product dogfood still after tip-sync |
+| Tip **WDB-152** string lit → owned `string` formal must `.to_string()` | ⚠️ **RED** — product dogfood for claim/heartbeat `"worker_hb"` |
+| Dogfood: `dogfood_restore_check.py` owned release + strip `&store` + worker_id `.to_string()` | ✅ |
+| complete_ops `post_body_trace_complete_ops` filter | ✅ **28/28** |
+| Cap call cycles | ✅ **0** |
+
+**Compiler agent priority:** **WDB-152**, **WDB-150**, **WDB-145**, **WDB-139**.
 
 ## P3.214 repro harness closure (2026-09-01)
 

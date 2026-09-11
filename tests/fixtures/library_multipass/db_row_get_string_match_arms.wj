@@ -1,0 +1,18 @@
+use std::db::Row
+
+/// LedgerKit `postgres_row_mapping.wj` still uses `v + ""` / `"col" + ""` class
+/// workarounds. Tip greened get_string borrow + Ok/Err own (P3.237). P3.238:
+/// `two_columns` must move `row` into `col_string(row, …)` (not `row.clone()`).
+pub fn col_string(row: Row, col: string) -> (Row, string) {
+    let value = match row.get_string(col) {
+        Ok(v) => v,
+        Err(_) => "",
+    }
+    (row, value)
+}
+
+pub fn two_columns(row: Row) -> string {
+    let (row, id) = col_string(row, "id")
+    let (_row, name) = col_string(row, "name")
+    id + ":" + name
+}

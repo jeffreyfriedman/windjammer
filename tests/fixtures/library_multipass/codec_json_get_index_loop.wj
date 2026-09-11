@@ -1,0 +1,25 @@
+use std::json
+
+pub fn count_array_items(text: string) -> int {
+    match json.parse(text) {
+        Ok(root) => {
+            if !json.is_array(root) {
+                return 0
+            }
+            let n = json.len(root)
+            let mut i = 0
+            let mut count = 0
+            while i < n {
+                match json.get_index(root, i) {
+                    Some(_) => {
+                        count = count + 1
+                    },
+                    None => {},
+                }
+                i = i + 1
+            }
+            count
+        },
+        Err(_) => 0,
+    }
+}

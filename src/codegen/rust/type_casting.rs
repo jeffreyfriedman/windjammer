@@ -88,17 +88,37 @@ pub fn coerce_arg_str_for_usize_formal(
     if arg_already_usize {
         return;
     }
-    if arg_str.contains(" as usize") || arg_str.ends_with("_usize") {
+    // Whole-expression casts are done. Do **not** treat `i + j + 1_usize` as already
+    // usize — that mixes i64 counters with a usize literal suffix (haystack / LedgerKit).
+    if arg_str.contains(" as usize") {
+        return;
+    }
+    if arg_str.ends_with("_usize") {
+        if matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ) {
+            return;
+        }
+        // Binary / nested expr with a mid-tree `_usize` literal: normalize then cast.
+        let cleaned = strip_embedded_usize_literal_suffixes(arg_str);
+        *arg_str = format!("({cleaned}) as usize");
         return;
     }
     // Never usize-cast text / constructed values. A wrong suffix signature
     // (Vec::insert vs HashMap::insert) must not turn `"key".to_string()` into usize.
+    // Struct / tuple literals into owned Custom formals must never become `as usize`
+    // (WDB-133 `drain(DenseCsr { n: 3 })`).
     if matches!(
         arg,
         Expression::Literal {
             value: Literal::String(_),
             ..
-        }
+        } | Expression::StructLiteral { .. }
+            | Expression::Tuple { .. }
     ) || arg_str.contains(".to_string()")
         || arg_str.contains("String::")
     {
@@ -125,12 +145,52 @@ pub fn coerce_arg_str_for_usize_formal(
             *arg_str = format!("{val}_usize");
         }
         Expression::Identifier { .. } => {
-            *arg_str = format!("{arg_str} as usize");
+            // Owned `usize` formals take by value — peel stale `&` / `&mut` from
+            // reuse / mut-local tracking (`&mut i as usize` is E0606).
+            let base = arg_str
+                .strip_prefix("&mut ")
+                .or_else(|| arg_str.strip_prefix('&'))
+                .unwrap_or(arg_str);
+            *arg_str = format!("{base} as usize");
         }
         _ => {
             *arg_str = format!("({arg_str}) as usize");
         }
     }
+}
+
+/// Peel `N_usize` → `N` inside compound expressions so the outer `(…) as usize` is valid.
+fn strip_embedded_usize_literal_suffixes(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_digit() {
+            let start = i;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+            let num = &s[start..i];
+            if s[i..].starts_with("_usize") {
+                // Only rewrite when the digit run is a bare literal, not `x1_usize`.
+                let prev_ok = start == 0
+                    || matches!(
+                        bytes[start - 1],
+                        b'(' | b'[' | b' ' | b'+' | b'-' | b'*' | b'/' | b'%' | b',' | b'='
+                    );
+                if prev_ok {
+                    out.push_str(num);
+                    i += "_usize".len();
+                    continue;
+                }
+            }
+            out.push_str(&s[start..i]);
+            continue;
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
 }
 
 /// Generate a cast for usize in binary operations
@@ -182,5 +242,30 @@ mod tests {
         let (left, right) = cast_for_usize_binary_op("x", "y", false, false);
         assert_eq!(left, "x");
         assert_eq!(right, "y");
+    }
+
+    #[test]
+    fn coerce_usize_formal_wraps_mixed_i64_plus_usize_literal() {
+        use crate::parser::{Expression, Literal, Type};
+        // Approximate Binary `i + j + 1` lowered as `i + j + 1_usize`.
+        let arg = Expression::Literal {
+            value: Literal::Int(1),
+            location: Default::default(),
+        };
+        // Use a non-literal expr shape via Identifier so we hit the binary path —
+        // the AST kind gates the early-return; the string is what we normalize.
+        let arg = Expression::Identifier {
+            name: "i".into(),
+            location: Default::default(),
+        };
+        let mut s = "i + j + 1_usize".to_string();
+        coerce_arg_str_for_usize_formal(
+            &arg,
+            &mut s,
+            Some(&Type::Custom("usize".into())),
+            false,
+        );
+        assert_eq!(s, "(i + j + 1) as usize");
+        let _ = Literal::Int(0);
     }
 }

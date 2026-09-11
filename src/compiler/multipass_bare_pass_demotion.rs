@@ -24,6 +24,327 @@ pub fn promote_callees_from_bare_pass_callers(
         }
         apply_bare_pass_hint(registry, &callee_key, param_idx, mode);
     }
+    // Undo MutBorrowed on Custom formals that only forward fields into callees
+    // (`to_response(reply) { base_response(reply.status, reply.body) }`). Those must
+    // stay owned moves — `&mut HttpReply` cannot move `reply.body`.
+    restore_owned_field_forward_formals(registry, programs);
+    // Undo bare-pass MutBorrowed when the callee returns the whole binding (identity /
+    // chain helpers like `col_string(row, name) -> (Row, string)`).
+    restore_owned_returned_formals(registry, programs);
+}
+
+/// When a formal was demoted to `MutBorrowed` but the body only forwards `param.field`
+/// into call arguments, restore owned `T` (HTTP adapter / consume-via-fields pattern).
+pub fn restore_owned_field_forward_formals(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+) {
+    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
+    for key in keys {
+        let Some(sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let n = sig.param_ownership.len();
+        let mut changed = false;
+        let mut new_sig = sig.clone();
+        for idx in 0..n {
+            if !matches!(
+                new_sig.param_ownership.get(idx),
+                Some(OwnershipMode::MutBorrowed)
+            ) {
+                continue;
+            }
+            let formal_ty = new_sig
+                .formal_param_types
+                .get(idx)
+                .or_else(|| new_sig.param_types.get(idx));
+            let Some(formal_ty) = formal_ty else {
+                continue;
+            };
+            let bare = match formal_ty {
+                Type::Custom(name) => name.clone(),
+                Type::MutableReference(inner) => match inner.as_ref() {
+                    Type::Custom(name) => name.clone(),
+                    _ => continue,
+                },
+                _ => continue,
+            };
+            if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
+                continue;
+            }
+            let Some((param_name, body)) =
+                find_function_body_for_registry_key(programs, &key, idx)
+            else {
+                continue;
+            };
+            if !(param_forwards_fields_in_call_args_only(body, param_name)
+                || param_stored_in_struct_literal(body, param_name)
+                || param_whole_binding_returned(body, param_name))
+            {
+                continue;
+            }
+            new_sig.param_ownership[idx] = OwnershipMode::Owned;
+            let owned_ty = Type::Custom(bare);
+            if new_sig.param_types.len() > idx {
+                new_sig.param_types[idx] = owned_ty.clone();
+            }
+            if new_sig.formal_param_types.len() > idx {
+                // Keep AST formal as the bare Custom when present.
+                if matches!(
+                    new_sig.formal_param_types[idx],
+                    Type::MutableReference(_)
+                ) {
+                    new_sig.formal_param_types[idx] = owned_ty;
+                }
+            }
+            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
+                if flags.len() > idx {
+                    flags[idx] = false;
+                }
+            }
+            changed = true;
+        }
+        if changed {
+            registry.signatures.insert(key.clone(), new_sig.clone());
+            if let Some(bare) = key.rsplit("::").next() {
+                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                    registry.signatures.insert(bare.to_string(), new_sig);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse_program(src: &'static str) -> &'static Program<'static> {
+        let mut lexer = Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        Box::leak(Box::new(parser.parse().expect("parse")))
+    }
+
+    fn owned_custom_sig(name: &str, ty: &str) -> FunctionSignature {
+        FunctionSignature {
+            name: name.to_string(),
+            param_types: vec![Type::Custom(ty.into())],
+            formal_param_types: vec![Type::Custom(ty.into())],
+            param_ownership: vec![OwnershipMode::Owned],
+            return_type: Some(Type::Int),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    #[test]
+    fn bare_pass_skips_option_struct_literal_field_forward_custom() {
+        // WDB-155 class: `emit_sql(ast) { Some(SqlEmit { table: ast.table }) }`
+        let caller = parse_program(
+            r#"
+struct SqlAst { table: string }
+struct SqlEmit { table: string }
+fn parse_then_emit(sql: string) -> bool {
+    let ast = match parse_ast(sql) {
+        Some(a) => a,
+        None => { return false }
+    }
+    let _ = emit_sql(ast)
+    true
+}
+fn parse_ast(sql: string) -> Option<SqlAst> {
+    Some(SqlAst { table: sql })
+}
+"#,
+        );
+        let callee = parse_program(
+            r#"
+struct SqlAst { table: string }
+struct SqlEmit { table: string }
+fn emit_sql(ast: SqlAst) -> Option<SqlEmit> {
+    Some(SqlEmit { table: ast.table })
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "emit_sql".to_string(),
+            owned_custom_sig("emit_sql", "SqlAst"),
+        );
+        let programs = vec![caller, callee];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let sig = registry.signatures.get("emit_sql").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "WDB-155: Option+struct-literal field forward must stay owned, got {:?}",
+            sig.param_ownership
+        );
+    }
+
+    #[test]
+    fn bare_pass_does_not_demote_copy_char_formal() {
+        let caller = parse_program(
+            r#"
+fn parse(text: string) -> Option<int> {
+    for ch in strings.chars(text) {
+        let _ = char_to_digit(ch)
+    }
+    None
+}
+"#,
+        );
+        let callee = parse_program(
+            r#"
+fn char_to_digit(ch: char) -> Option<int> {
+    if ch == '0' { return Some(0) }
+    None
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "char_to_digit".to_string(),
+            FunctionSignature {
+                name: "char_to_digit".into(),
+                param_types: vec![Type::Custom("char".into())],
+                formal_param_types: vec![Type::Custom("char".into())],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: Some(Type::Option(Box::new(Type::Int))),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let programs = vec![caller, callee];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let sig = registry.signatures.get("char_to_digit").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "char formal must stay owned, got {:?}",
+            sig.param_ownership
+        );
+    }
+
+    #[test]
+    fn bare_pass_skips_http_reply_field_forward_helper() {
+        let program = parse_program(
+            r#"
+struct HttpReply { status: u16, body: string }
+fn dispatch(reply: HttpReply) -> int {
+    to_response(reply)
+}
+fn to_response(reply: HttpReply) -> int {
+    let resp = base_response(reply.status, reply.body)
+    resp
+}
+fn base_response(status: u16, body: string) -> int {
+    status
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry
+            .signatures
+            .insert("to_response".to_string(), owned_custom_sig("to_response", "HttpReply"));
+        let programs = vec![program];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let sig = registry.signatures.get("to_response").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "field-forward HttpReply helper must stay owned, got {:?}",
+            sig.param_ownership
+        );
+    }
+
+    #[test]
+    fn restore_undoes_preexisting_mut_borrow_on_field_forward() {
+        let program = parse_program(
+            r#"
+struct HttpReply { status: u16, body: string }
+fn to_response(reply: HttpReply) -> int {
+    let resp = base_response(reply.status, reply.body)
+    resp
+}
+fn base_response(status: u16, body: string) -> int {
+    status
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        let mut sig = owned_custom_sig("to_response", "HttpReply");
+        sig.param_ownership[0] = OwnershipMode::MutBorrowed;
+        sig.param_types[0] = Type::MutableReference(Box::new(Type::Custom("HttpReply".into())));
+        registry.signatures.insert("to_response".to_string(), sig);
+        let programs = vec![program];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let out = registry.signatures.get("to_response").unwrap();
+        assert_eq!(
+            out.param_ownership[0],
+            OwnershipMode::Owned,
+            "restore must undo MutBorrowed field-forward formal; got {:?}",
+            out.param_ownership
+        );
+        assert!(
+            matches!(out.param_types[0], Type::Custom(ref n) if n == "HttpReply"),
+            "param type must unwrap to owned HttpReply; got {:?}",
+            out.param_types[0]
+        );
+    }
+
+    #[test]
+    fn bare_pass_skips_row_col_chain_tuple_return_helper() {
+        let domain = parse_program(
+            r#"
+struct Row { leftover: string }
+pub fn col_string(row: Row, name: string) -> (Row, string) {
+    (row, name)
+}
+"#,
+        );
+        let adapter = parse_program(
+            r#"
+use crate::row::{Row, col_string}
+pub fn parse_payment(row: Row) -> string {
+    let (row, id) = col_string(row, "id")
+    let _ = row
+    id
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry
+            .signatures
+            .insert("col_string".to_string(), owned_custom_sig("col_string", "Row"));
+        let programs = vec![adapter, domain];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let sig = registry.signatures.get("col_string").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "tuple-return Row chain helper must stay owned, got {:?}",
+            sig.param_ownership
+        );
+    }
 }
 
 fn collect_bare_pass_hints(
@@ -234,12 +555,22 @@ fn bare_pass_target_ownership(
         return Some(OwnershipMode::Borrowed);
     }
     if let Type::Custom(name) = formal_ty {
-        if copy_types.contains(name) {
+        // Copy primitives (`char`, `i64`, …) and known Copy aggregates stay owned —
+        // bare-pass demotion must not invent `&mut char` for comparison-only helpers.
+        if is_copy_formal_name(name, copy_types) {
             return None;
         }
         return Some(OwnershipMode::MutBorrowed);
     }
     None
+}
+
+fn is_copy_formal_name(name: &str, copy_types: &std::collections::HashSet<String>) -> bool {
+    let base = name.split("::").last().unwrap_or(name);
+    copy_types.contains(name)
+        || copy_types.contains(base)
+        || crate::type_classification::is_copy_primitive(base)
+        || crate::type_classification::is_known_copy_aggregate(base)
 }
 
 fn is_vec_container_type(ty: &Type) -> bool {
@@ -330,17 +661,184 @@ fn bare_pass_hint_should_skip(
     {
         return true;
     }
+    if matches!(mode, OwnershipMode::Borrowed)
+        && callee_pub_owned_text_api(&sig, programs, callee_key, param_idx)
+    {
+        return true;
+    }
     let Some((param_name, body)) = find_function_body_for_registry_key(programs, callee_key, param_idx)
     else {
         return false;
     };
     match mode {
-        OwnershipMode::MutBorrowed => param_forwards_fields_in_call_args_only(body, param_name),
+        // WDB-155: non-Copy Custom bare-pass targets MutBorrowed, but read-only
+        // `Some(Emit { table: ast.table })` field projection must stay owned (same
+        // skip as Borrowed). Asymmetric skip caused `&mut SqlAst` + E0596.
+        OwnershipMode::MutBorrowed => {
+            param_stored_in_struct_literal(body, param_name)
+                || param_forwards_fields_in_call_args_only(body, param_name)
+                || param_whole_binding_returned(body, param_name)
+        }
         OwnershipMode::Borrowed => {
             param_stored_in_struct_literal(body, param_name)
                 || param_forwards_fields_in_call_args_only(body, param_name)
+                || param_whole_binding_returned(body, param_name)
         }
         OwnershipMode::Owned => false,
+    }
+}
+
+/// Callee returns the whole `param` binding (directly or in a tuple) — must stay owned
+/// so `(Row, T)` chain helpers can move `Row` out of the return type.
+pub fn param_whole_binding_returned(body: &[&Statement], param_name: &str) -> bool {
+    let len = body.len();
+    for (i, stmt) in body.iter().enumerate() {
+        let is_last = i == len - 1;
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            } => {
+                if expr_returns_whole_binding(param_name, expr) {
+                    return true;
+                }
+            }
+            Statement::Expression { expr, .. } if is_last => {
+                let is_void_call = if let Expression::Call { function, .. } = expr {
+                    matches!(
+                        &**function,
+                        Expression::Identifier { name, .. }
+                            if matches!(
+                                name.as_str(),
+                                "println" | "print" | "eprintln" | "eprint" | "assert" | "panic"
+                            )
+                    )
+                } else {
+                    false
+                };
+                if !is_void_call && expr_returns_whole_binding(param_name, expr) {
+                    return true;
+                }
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                if param_whole_binding_returned(then_block, param_name) {
+                    return true;
+                }
+                if let Some(b) = else_block {
+                    if param_whole_binding_returned(b, param_name) {
+                        return true;
+                    }
+                }
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    if expr_returns_whole_binding(param_name, &arm.body) {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn expr_returns_whole_binding(param_name: &str, expr: &Expression) -> bool {
+    match expr {
+        Expression::Identifier { name, .. } if name == param_name => true,
+        Expression::Tuple { elements, .. } => elements
+            .iter()
+            .any(|elem| expr_returns_whole_binding(param_name, elem)),
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            if let Expression::Identifier { name: fn_name, .. } = &**function {
+                if crate::type_classification::is_language_level_payload_call_name(fn_name) {
+                    return arguments.iter().any(|(_, arg)| {
+                        matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    });
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Restore owned Custom formals demoted by bare-pass when the body returns the whole param.
+pub fn restore_owned_returned_formals(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+) {
+    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
+    for key in keys {
+        let Some(sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let n = sig.param_ownership.len();
+        let mut changed = false;
+        let mut new_sig = sig.clone();
+        for idx in 0..n {
+            if !matches!(
+                new_sig.param_ownership.get(idx),
+                Some(OwnershipMode::MutBorrowed | OwnershipMode::Borrowed)
+            ) {
+                continue;
+            }
+            let formal_ty = new_sig
+                .formal_param_types
+                .get(idx)
+                .or_else(|| new_sig.param_types.get(idx));
+            let Some(formal_ty) = formal_ty else {
+                continue;
+            };
+            let bare = match formal_ty {
+                Type::Custom(name) => name.clone(),
+                Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                    Type::Custom(name) => name.clone(),
+                    _ => continue,
+                },
+                _ => continue,
+            };
+            if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
+                continue;
+            }
+            let Some((param_name, body)) =
+                find_function_body_for_registry_key(programs, &key, idx)
+            else {
+                continue;
+            };
+            if !param_whole_binding_returned(body, param_name) {
+                continue;
+            }
+            new_sig.param_ownership[idx] = OwnershipMode::Owned;
+            let owned_ty = Type::Custom(bare);
+            if new_sig.param_types.len() > idx {
+                new_sig.param_types[idx] = owned_ty.clone();
+            }
+            if new_sig.formal_param_types.len() > idx {
+                new_sig.formal_param_types[idx] = owned_ty;
+            }
+            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
+                if flags.len() > idx {
+                    flags[idx] = false;
+                }
+            }
+            changed = true;
+        }
+        if changed {
+            registry.signatures.insert(key.clone(), new_sig.clone());
+            if let Some(bare) = key.rsplit("::").next() {
+                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                    registry.signatures.insert(bare.to_string(), new_sig);
+                }
+            }
+        }
     }
 }
 /// Owned `string`/`Vec` formals on builders that return a Custom type store payload — keep
@@ -359,6 +857,41 @@ fn callee_owned_text_builder_stores_payload(sig: &FunctionSignature, param_idx: 
             matches!(t, Type::Custom(_))
                 || matches!(t, Type::Parameterized(name, _) if name != "Result" && name != "Option")
         })
+}
+
+/// Public module APIs (`pub fn generate_page(path: string, …) -> string`) keep owned
+/// `String` formals even when cross-module callers pass bare bindings in pass 1.
+fn callee_pub_owned_text_api(
+    sig: &FunctionSignature,
+    programs: &[&Program],
+    callee_key: &str,
+    param_idx: usize,
+) -> bool {
+    let owned_text = sig
+        .formal_param_types
+        .get(param_idx)
+        .or_else(|| sig.param_types.get(param_idx))
+        .is_some_and(|t| {
+            crate::codegen::rust::types::is_windjammer_text_type(t)
+                && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        });
+    if !owned_text {
+        return false;
+    }
+    let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    for program in programs {
+        for item in &program.items {
+            if let Item::Function { decl, .. } = item {
+                if (decl.name == simple || callee_key.ends_with(&format!("::{simple}")))
+                    && decl.is_pub
+                    && decl.parent_type.is_none()
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn find_function_body_for_registry_key<'a>(

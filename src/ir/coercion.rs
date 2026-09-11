@@ -348,7 +348,33 @@ pub(crate) fn is_vec_base(base: &BaseType) -> bool {
 }
 
 fn needs_string_owned_coercion(actual: &BaseType, expected: &BaseType) -> bool {
-    is_string_base(expected) && is_string_base(actual)
+    if !is_string_base(expected) {
+        return false;
+    }
+    if is_string_base(actual) {
+        return true;
+    }
+    is_display_coercible_to_string(actual)
+}
+
+/// Types that lower to Rust `Display` and may become owned `String` via `.to_string()`.
+fn is_display_coercible_to_string(base: &BaseType) -> bool {
+    matches!(
+        base,
+        BaseType::I8
+            | BaseType::I16
+            | BaseType::I32
+            | BaseType::I64
+            | BaseType::I128
+            | BaseType::U8
+            | BaseType::U16
+            | BaseType::U32
+            | BaseType::U64
+            | BaseType::U128
+            | BaseType::F32
+            | BaseType::F64
+            | BaseType::Bool
+    )
 }
 
 fn needs_numeric_cast(actual: &BaseType, expected: &BaseType) -> bool {
@@ -516,6 +542,16 @@ mod tests {
         assert_eq!(
             compute_coercion(&actual, &expected),
             CoercionKind::NumericCast(BaseType::F64)
+        );
+    }
+
+    #[test]
+    fn int_to_owned_string_needs_to_owned() {
+        let actual = copy(BaseType::I64);
+        let expected = owned(BaseType::String);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::ToOwnedString
         );
     }
 

@@ -89,10 +89,12 @@ impl Parser {
             Token::Le => Some((BinaryOp::Le, 7)),
             Token::Gt => Some((BinaryOp::Gt, 7)),
             Token::Ge => Some((BinaryOp::Ge, 7)),
-            Token::Shl => Some((BinaryOp::Shl, 8)), // Shift left
-            Token::Shr => Some((BinaryOp::Shr, 8)), // Shift right
-            Token::Plus => Some((BinaryOp::Add, 9)),
-            Token::Minus => Some((BinaryOp::Sub, 9)),
+            // WDB-153: Windjammer binds shifts tighter than additive (unlike Rust/C),
+            // so `a + b << c` means `a + (b << c)`. Rust codegen must parenthesize.
+            Token::Plus => Some((BinaryOp::Add, 8)),
+            Token::Minus => Some((BinaryOp::Sub, 8)),
+            Token::Shl => Some((BinaryOp::Shl, 9)), // Shift left
+            Token::Shr => Some((BinaryOp::Shr, 9)), // Shift right
             Token::Star => Some((BinaryOp::Mul, 10)),
             Token::Slash => Some((BinaryOp::Div, 10)),
             Token::Percent => Some((BinaryOp::Mod, 10)),

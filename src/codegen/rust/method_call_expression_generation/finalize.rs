@@ -1089,8 +1089,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Explicit `.clone()` in WJ source is Rust leakage (W0005). Prefer stripping, but
-        // preserve when reuse analysis, loop body, or call-argument context needs it
-        // (WDB-105 loop / WDB-106 sequential owned moves — stripping leaves E0382).
+        // preserve when reuse analysis, loop body, call-argument context, or a borrowed
+        // field/index place needs it (E0507 move from `&self.field` / WDB-style snapshots).
         if crate::type_classification::is_language_level_explicit_clone(method)
             && arguments.is_empty()
         {
@@ -1107,7 +1107,18 @@ impl<'ast> CodeGenerator<'ast> {
             // (WDB-106/108). Reuse analysis often misses the first move because the
             // explicit clone masks it; IR/reconcile must not strip afterward.
             let preserve_at_call_site = self.in_call_argument_generation;
-            if preserve_in_loop || preserve_for_reuse || preserve_at_call_site {
+            // Field/index places: user wrote `.clone()` to avoid E0507 moves (`self.logs`).
+            // Preserve regardless of whether `self` is already inferred as borrowed —
+            // stripping here forces owned `self` and breaks `&mut self` callers.
+            let preserve_place_clone = matches!(
+                object,
+                Expression::FieldAccess { .. } | Expression::Index { .. }
+            );
+            if preserve_in_loop
+                || preserve_for_reuse
+                || preserve_at_call_site
+                || preserve_place_clone
+            {
                 if let Expression::Identifier { name, .. } = object {
                     let is_borrowed_string = self.inferred_borrowed_params.contains(name)
                         && self.current_function_params.iter().any(|p| {

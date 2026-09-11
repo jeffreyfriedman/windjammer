@@ -10,15 +10,15 @@
     feature = "analyzer_tests",
 ))]
 
-//! Pit-of-success: Windjammer `string` in a function signature is owned `String` in Rust.
-//! Read-only domain validators and HTTP helpers must not silently become `&str` — that
-//! breaks call sites passing owned locals without `+ ""` or `&` workarounds.
+//! Phase-2: read-only WJ `string` formals (equality / `strings.len`) demote to `&str`.
+//! Concat / store / return-consuming formals stay owned `String`. Call sites borrow
+//! demoted formals; literals into owned formals still `.to_string()`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn explicit_string_formal_generates_owned_rust_param() {
+fn comparison_only_string_formal_demotes_to_str() {
     let source = r#"
 pub fn account_type_valid(account_type: string) -> bool {
     account_type == "Asset"
@@ -34,21 +34,43 @@ pub fn check(msg: string) -> bool {
 "#;
     let rust = test_utils::compile_single(source);
     assert!(
-        rust.contains("fn account_type_valid(account_type: String)"),
-        "explicit string param must codegen as owned String. Got:\n{rust}"
+        rust.contains("fn account_type_valid(account_type: &str)"),
+        "comparison-only string formal demotes to &str (Phase-2 / loop reuse). Got:\n{rust}"
     );
     assert!(
         rust.contains("fn error_json(message: String)"),
-        "explicit string param must codegen as owned String. Got:\n{rust}"
+        "concat-consuming string formal stays owned String. Got:\n{rust}"
     );
     assert!(
-        !rust.contains("fn account_type_valid(account_type: &str)"),
-        "must not lower read-only string formals to &str. Got:\n{rust}"
+        rust.contains("account_type_valid(&msg)")
+            || rust.contains("account_type_valid(msg.as_str())")
+            || rust.contains("account_type_valid(&*msg)")
+            || rust.contains("account_type_valid(msg)"),
+        "caller must pass into demoted &str formal (borrow owned or forward &str). Got:\n{rust}"
     );
 }
 
 #[test]
 fn string_literal_coerces_for_owned_string_formal() {
+    let source = r#"
+pub fn error_json(message: string) -> string {
+    "{\"error\":\"" + message + "\"}"
+}
+
+fn main() {
+    error_json("boom")
+}
+"#;
+    let rust = test_utils::compile_single(source);
+    assert!(
+        rust.contains(r#"error_json("boom".to_string())"#)
+            || rust.contains(r#"error_json(String::from("boom"))"#),
+        "string literal must coerce to owned String for owned formal. Got:\n{rust}"
+    );
+}
+
+#[test]
+fn string_literal_stays_bare_for_demoted_str_formal() {
     let source = r#"
 pub fn account_type_valid(account_type: string) -> bool {
     account_type == "Asset"
@@ -60,8 +82,8 @@ fn main() {
 "#;
     let rust = test_utils::compile_single(source);
     assert!(
-        rust.contains(r#"account_type_valid("Asset".to_string())"#)
-            || rust.contains(r#"account_type_valid(String::from("Asset"))"#),
-        "string literal must coerce to owned String for owned formal. Got:\n{rust}"
+        rust.contains(r#"account_type_valid("Asset")"#)
+            && !rust.contains(r#"account_type_valid("Asset".to_string())"#),
+        "literal into demoted &str formal stays bare. Got:\n{rust}"
     );
 }

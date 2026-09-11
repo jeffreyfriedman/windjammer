@@ -2044,7 +2044,17 @@ impl<'ast> CodeGenerator<'ast> {
             if self.match_arm_bindings.contains(name.as_str()) {
                 let expects_shared_text =
                     crate::ir::signature_bridge::call_site_wants_shared_text_ref(&sig, param_idx);
-                if expects_shared_text {
+                let expects_owned_text = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, param_idx,
+                ) && sig.formal_param_type(param_idx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::codegen::rust::types::is_windjammer_text_type(t)
+                });
+                if expects_owned_text {
+                    if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                        coerced = coerced.trim_start_matches('&').to_string();
+                    }
+                } else if expects_shared_text {
                     if coerced.ends_with(".clone()") {
                         coerced = coerced[..coerced.len() - ".clone()".len()].to_string();
                     }
@@ -2473,6 +2483,12 @@ impl<'ast> CodeGenerator<'ast> {
                 && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
                 )
+                && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &self.signature_registry,
+                    &sig.name,
+                    Some(sig),
+                    param_idx.saturating_sub(usize::from(sig.has_self_receiver_slot())),
+                )
             {
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
                 let skip = match arg_expr {
@@ -2510,6 +2526,9 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         };
         // Statement-local reuse only (matches method-arg policy in arguments.rs).
+        // `needs_clone_anywhere` covers stmt-index drift for multipass; writeback
+        // detection must keep false clone sites off rebound bindings
+        // (`let (row, id) = f(row); g(row)`).
         let needs = match arg_expr {
             Expression::Identifier { name, .. } => {
                 let local = analysis
@@ -2518,7 +2537,8 @@ impl<'ast> CodeGenerator<'ast> {
                 let anywhere = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
                 ) && !self.binding_is_copy_pass_by_value_scalar(name)
-                    && analysis.needs_clone_anywhere(name);
+                    && analysis.needs_clone_anywhere(name)
+                    && !self.current_stmt_restores_binding_after_move(name);
                 let reused_owned = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
                 ) && self.caller_owned_non_copy_formal(name)
@@ -2905,13 +2925,25 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Mut-borrow from signature / codegen-recorded mut slots.
-        let wants_mut = self.ir_callee_arg_expects_mut_borrow(
-            registry,
-            callee_name,
-            arg_index,
-            user_arg_count,
-            Some(&sig),
-        ) || self.ir_sig_arg_expects_mut_borrow(&sig, arg_index);
+        // Defining-module owned Custom formals (field-forward restore / bare emit) must
+        // not re-acquire `&mut` from stale MutBorrowed layered stubs.
+        let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            &sig, param_idx,
+        ) || crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
+            || matches!(
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                    &sig, arg_index,
+                ),
+                crate::analyzer::OwnershipMode::Owned,
+            );
+        let wants_mut = !owned_slot
+            && (self.ir_callee_arg_expects_mut_borrow(
+                registry,
+                callee_name,
+                arg_index,
+                user_arg_count,
+                Some(&sig),
+            ) || self.ir_sig_arg_expects_mut_borrow(&sig, arg_index));
         if (!has_ownership_collision || wants_mut)
             && wants_mut
             && !coerced.starts_with("&mut ")
@@ -3256,7 +3288,16 @@ impl<'ast> CodeGenerator<'ast> {
                     matches!(t, Type::Vec(_))
                         || matches!(t, Type::Parameterized(n, _) if n == "Vec")
                 }))));
-            if coerced.starts_with('&') && !coerced.starts_with("&mut ") && owned_slot {
+            if coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && owned_slot
+                && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    registry,
+                    callee_name,
+                    Some(&text_sig),
+                    arg_index,
+                )
+            {
                 let key_receiver =
                     crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
                         callee_name,
@@ -3473,6 +3514,7 @@ impl<'ast> CodeGenerator<'ast> {
             arg_index,
             &sig,
             receiver_type_name,
+            receiver,
         );
 
         // Terminal: strip collision-blocked borrows again after text/forwarder
@@ -3578,19 +3620,13 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Identifier / local already typed as `usize` — skip `as usize` / `_usize`.
+    ///
+    /// Do **not** treat `usize_variables` alone as emitted usize: loop-counter
+    /// analysis marks `i` for comparisons (`while i < n`) while the Rust binding
+    /// may still be `i64` (WDB-119). Match [`identifier_emits_as_usize`].
     pub(crate) fn arg_expression_already_usize(&self, arg: &Expression<'ast>) -> bool {
         match arg {
-            Expression::Identifier { name, .. } => {
-                self.current_function_params
-                    .iter()
-                    .find(|p| p.name == *name)
-                    .is_some_and(|p| matches!(&p.type_, Type::Custom(n) if n == "usize"))
-                    || self
-                        .local_var_types
-                        .get(name)
-                        .is_some_and(|t| matches!(t, Type::Custom(n) if n == "usize"))
-                    || self.usize_variables.contains(name)
-            }
+            Expression::Identifier { name, .. } => self.identifier_emits_as_usize(name),
             _ => self.infer_expression_type_is_usize(arg) || self.expression_produces_usize(arg),
         }
     }
@@ -3637,6 +3673,7 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         sig: &crate::analyzer::FunctionSignature,
         receiver_type_name: Option<&str>,
+        receiver: Option<&Expression<'ast>>,
     ) {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         // Prefer receiver-qualified formals so suffix-ambiguous methods
@@ -3645,18 +3682,63 @@ impl<'ast> CodeGenerator<'ast> {
             .param_types
             .len()
             .saturating_sub(usize::from(sig.has_self_receiver_slot()));
-        let cast_sig = receiver_type_name
-            .and_then(|rt| self.resolve_method_function_signature(rt, simple, user_argc))
+        let inferred_recv = receiver.and_then(|r| self.infer_expression_type(r));
+        let mut cast_sig = receiver_type_name
+            .and_then(|rt| {
+                self.resolve_method_function_signature_specialized(
+                    rt,
+                    simple,
+                    user_argc,
+                    inferred_recv.as_ref(),
+                )
+            })
             .unwrap_or_else(|| sig.clone());
+        // Stdlib generics stay `T`/`E` until specialized from the concrete receiver
+        // (`Vec<usize>::push` → `usize`). Registry base names are unparameterized (`Vec`).
+        if let Some(recv_ty) =
+            crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                receiver_type_name,
+                inferred_recv.as_ref(),
+                self.current_function_return_type.as_ref(),
+            )
+        {
+            crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                &mut cast_sig,
+                &recv_ty,
+            );
+        }
         let pidx = cast_sig.arg_param_index(arg_index);
         let formal = cast_sig
             .formal_param_type(pidx)
             .or_else(|| cast_sig.param_types.get(pidx));
         let mut fallback_usize_formal = None;
+        let collection_elem_usize = inferred_recv
+            .as_ref()
+            .and_then(|rty| Self::peeled_collection_element_type(rty))
+            .filter(|elem| crate::codegen::rust::type_casting::type_is_usize(elem))
+            .cloned();
         let formal_for_usize = if formal.is_some_and(crate::codegen::rust::type_casting::type_is_usize)
         {
             formal
-        } else if self.fallback_signature_param_is_usize(callee_name, simple, pidx) {
+        } else if formal.is_some_and(|t| {
+            matches!(t, Type::Custom(n) | Type::Generic(n) if n == "T" || n == "E")
+        }) && collection_elem_usize.is_some()
+        {
+            // Unspecialized store formal + concrete `Vec<usize>` / similar receiver.
+            fallback_usize_formal = collection_elem_usize;
+            fallback_usize_formal.as_ref()
+        } else if formal.is_none_or(|t| {
+            // Runtime fallback may declare `usize` while WJ stubs still say `int`.
+            // Never override a concrete non-int formal (WDB-133: `drain(DenseCsr {..})`
+            // must not become `(DenseCsr {..}) as usize` via a colliding fallback key).
+            crate::codegen::rust::type_casting::type_is_wj_int_formal(t)
+                || matches!(
+                    t,
+                    Type::Custom(n) | Type::Generic(n)
+                        if n == "T" || n == "E" || n == "K" || n == "V" || n == "int"
+                )
+        }) && self.fallback_signature_param_is_usize(callee_name, simple, pidx)
+        {
             fallback_usize_formal = Some(Type::Custom("usize".to_string()));
             fallback_usize_formal.as_ref()
         } else if formal
@@ -3697,9 +3779,12 @@ impl<'ast> CodeGenerator<'ast> {
             already_usize,
         );
         // Numeric inference may have already emitted `1_usize` from a Vec::insert
-        // suffix match; undo when the receiver-qualified formal is not usize.
+        // suffix match; undo when the *effective* formal is not usize (after
+        // specialization / collection-element recovery — not raw `T`).
         crate::codegen::rust::type_casting::strip_erroneous_usize_suffix_for_non_usize_formal(
-            arg_expr, coerced, formal,
+            arg_expr,
+            coerced,
+            formal_for_usize.or(formal),
         );
 
         let skip_cast = self.should_skip_int_to_float_auto_cast_with_global(
@@ -3855,18 +3940,23 @@ impl<'ast> CodeGenerator<'ast> {
                 ppidx,
             )
         };
-        // Owned emission wins over a stale Borrowed stub among layered candidates
-        // (dogfood `policy: Policy`). Never peel `&mut` when any candidate expects mut-borrow.
-        if peel_owned && !any_expects_mut && !confirmed_shared_ref {
-            if coerced.starts_with("&mut ") {
-                if any_emitted_owned || any_expects_owned {
-                    *coerced =
-                        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-                            .to_string();
-                }
-            } else if coerced.starts_with('&') && (any_emitted_owned || any_expects_owned) {
-                *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-                    .to_string();
+        // Owned emission wins over stale Borrowed/MutBorrowed stubs (HTTP `to_response(reply)`).
+        // Only keep `&mut` when *this* codegen recorded a mut formal slot — not when a
+        // layered analysis candidate still says MutBorrowed after field-forward restore.
+        if peel_owned && !confirmed_shared_ref {
+            if coerced.starts_with("&mut ")
+                && (any_emitted_owned || any_expects_owned)
+                && !mut_arg_emitted
+            {
+                *coerced =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+            } else if !any_expects_mut
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && (any_emitted_owned || any_expects_owned)
+            {
+                *coerced =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
             }
         }
     }
@@ -4100,12 +4190,30 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Signature-driven `(wants_shared_ref, wants_owned)` for a call-site slot.
     /// Owned Copy-aggregate emission beats stale IR Ref (regression-060).
+    /// Runtime-std baseline borrow (`json::is_array` `&Value`) beats WJ Owned stubs.
     pub(crate) fn call_site_slot_wants_ref_and_owned(
         &self,
         sig: &crate::analyzer::FunctionSignature,
         arg_index: usize,
     ) -> (bool, bool) {
+        self.call_site_slot_wants_ref_and_owned_for(sig, arg_index, &sig.name)
+    }
+
+    pub(crate) fn call_site_slot_wants_ref_and_owned_for(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+        callee_name: &str,
+    ) -> (bool, bool) {
         let pidx = sig.arg_param_index(arg_index);
+        if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+            &self.signature_registry,
+            callee_name,
+            Some(sig),
+            arg_index,
+        ) {
+            return (true, false);
+        }
         let wants_owned =
             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
                 || crate::codegen::rust::call_site_borrow::sig_formal_is_copy_aggregate_owned(
@@ -4133,7 +4241,8 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type_name: Option<&str>,
         is_collection_key_site: bool,
     ) {
-        let (wants_ref, wants_owned) = self.call_site_slot_wants_ref_and_owned(sig, arg_index);
+        let (wants_ref, wants_owned) =
+            self.call_site_slot_wants_ref_and_owned_for(sig, arg_index, callee_name);
         let pidx = sig.arg_param_index(arg_index);
         let is_collection_key = is_collection_key_site
             || {
@@ -5651,6 +5760,30 @@ impl<'ast> CodeGenerator<'ast> {
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        // Field-forward / defining-module owned Custom formals never ask for `&mut`.
+        let owned_from = |sig: &crate::analyzer::FunctionSignature| {
+            let pidx = sig.arg_param_index(arg_index);
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+                || matches!(
+                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                        sig, arg_index,
+                    ),
+                    crate::analyzer::OwnershipMode::Owned,
+                )
+        };
+        if local_sig.is_some_and(owned_from)
+            || registry.get_signature(callee_name).is_some_and(owned_from)
+            || registry.get_signature(simple).is_some_and(owned_from)
+            || self
+                .global_signature_registry
+                .as_ref()
+                .is_some_and(|g| {
+                    g.get_signature(callee_name).is_some_and(owned_from)
+                        || g.get_signature(simple).is_some_and(owned_from)
+                })
+        {
+            return false;
+        }
         if self
             .function_emitted_mut_arg_indices
             .get(callee_name)

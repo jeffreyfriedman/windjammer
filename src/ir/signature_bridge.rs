@@ -1013,6 +1013,17 @@ pub fn sync_ir_ownership_to_registry(
             {
                 continue;
             }
+            // Inverse: bare-pass / field-forward restore already set Owned Custom —
+            // do not let IR MutRef (field moves misread as mutation) clobber it.
+            if matches!(prior, OwnershipMode::Owned)
+                && matches!(mode, OwnershipMode::MutBorrowed)
+                && sig.formal_param_type(idx).is_some_and(|t| {
+                    matches!(t, Type::Custom(_))
+                        && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                })
+            {
+                continue;
+            }
             sig.param_ownership[idx] = mode;
             if matches!(mode, OwnershipMode::Owned)
                 && idx < sig.param_types.len()

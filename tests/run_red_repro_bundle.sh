@@ -1,32 +1,58 @@
 #!/usr/bin/env bash
-# Run tail compiler RED repro gates (expect failures on tip until src/ greens).
-# See tests/COMPILER_REPRO_QUEUE.md § P3.214 repro bundle.
+# Run tip compiler repro gates. See tests/COMPILER_REPRO_QUEUE.md § P3.247+.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-FILTERS=(
-  json_is_array_len_owned_value_multipass_must_cargo_check
-  multipass_cross_crate_join_url_owned_base_must_cargo_check
-  multipass_cross_crate_render_owned_template_helper_must_cargo_check
-  multipass_http_hexagonal_adapter_must_use_owned
+RED_FILTERS=(
+  owned_match_binding_cross_fn_owned_string_formal_must_move
+  owned_match_binding_hexagonal_cross_module_must_move
 )
 
-echo "Running ${#FILTERS[@]} RED repro gate(s) (expect failures on tip)..."
-PASSED=0
-for f in "${FILTERS[@]}"; do
+GREEN_FILTERS=(
+  request_context_uuid_substring_must_cargo_check_without_plus_empty
+  hexagonal_request_context_uuid_substring_must_cargo_check_without_plus_empty
+  haystack_contains_substring_int_indices_must_unify_usize
+  hexagonal_haystack_contains_substring_int_indices_must_unify_usize
+  ledgerkit_clean_account_from_row_must_emit_without_plus_empty
+  hexagonal_ledgerkit_clean_account_from_row_must_emit_without_plus_empty
+  db_row_get_string_must_not_emit_row_clone
+  hexagonal_db_row_get_string_must_not_emit_row_clone
+  db_row_col_chain_call_site_must_move_owned_row
+  hexagonal_db_row_col_chain_call_site_must_move_owned_row
+  vec_string_int_element_must_own_via_to_string
+  hexagonal_query_vec_string_params_must_own_demoted_str
+  db_row_get_string_match_arms_must_unify_owned_string
+  hexagonal_postgres_row_col_chain_must_cargo_check
+  ui_builder_string_formal_must_emit_impl_into_string
+  row_col_chain_same_file_must_not_demote_mut_row_and_return_owned
+  wdb116_module_file_mutually_recursive_struct_fields_must_box
+  wdb152_module_file_string_lit_into_owned_string_formal_must_to_string
+  wdb153_shift_applies_to_masked_byte_before_add
+  std_mime_from_extension_json_matches_application_json_constant
+  std_yaml_to_json_rejects_empty_input
+)
+
+echo "Running ${#GREEN_FILTERS[@]} GREEN regression gate(s)..."
+for f in "${GREEN_FILTERS[@]}"; do
   echo "--- $f ---"
-  if cargo test --test all "$f" -- --test-threads=1 2>&1; then
-    echo "UNEXPECTED PASS: $f"
-    PASSED=$((PASSED + 1))
-  else
-    echo "expected RED: $f"
-  fi
+  cargo test --release --test all "$f" -- --test-threads=1 2>&1 || { echo "REGRESSION: $f"; exit 1; }
+  echo "GREEN: $f"
 done
 
-if [[ "$PASSED" -gt 0 ]]; then
-  echo "Done: $PASSED gate(s) unexpectedly passed — update COMPILER_REPRO_QUEUE.md"
-  exit 1
+if ((${#RED_FILTERS[@]} > 0)); then
+  echo "Running ${#RED_FILTERS[@]} RED gate(s)..."
+  for f in "${RED_FILTERS[@]}"; do
+    echo "--- $f ---"
+    if cargo test --release --test all "$f" -- --test-threads=1 2>&1; then
+      echo "FIXED: $f — update COMPILER_REPRO_QUEUE.md"
+      exit 1
+    else
+      echo "RED: $f"
+    fi
+  done
+  echo "Done: ${#GREEN_FILTERS[@]} GREEN + ${#RED_FILTERS[@]} RED gates verified."
+else
+  echo "Done: ${#GREEN_FILTERS[@]} GREEN gates verified (no RED filters)."
 fi
-echo "Done: all ${#FILTERS[@]} gates failed as expected (RED on tip)."
