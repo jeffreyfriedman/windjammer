@@ -9,6 +9,8 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  seed_overlay_remember_must_cargo_check_without_plus_empty
+  hexagonal_seed_overlay_remember_must_cargo_check_without_plus_empty
   i64_bitand_hex_mask_must_not_emit_u8_literal
   wdb157_module_file_string_formal_must_not_emit_impl_into_string_with_clone
   wdb158_module_file_value_compare_must_not_demote_to_mut_ref
