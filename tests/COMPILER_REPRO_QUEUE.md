@@ -111,42 +111,59 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Cross-crate `render(owned_template(), vars)` must cargo-check (`wj-template`)** | `bug_multipass_cross_crate_render_owned_template_helper_test` | ✅ tip GREEN |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
 | P1 | **WDB-151: owned store `T→T` formal must not demote to `&T`** | `bug_wdb151_module_file_owned_store_formal_must_not_demote_to_ref_test` | ✅ tip GREEN |
-| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_wdb155_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ⚠️ **RED** — binder-forwarder demotes `emit_sql` to `&mut`; emit-only fixture false-GREEN |
+| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_wdb155_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ✅ tip GREEN — bare-pass match-scrutinee + struct-literal field skip |
 | P1 | **WDB-154: `use crate::<mod>::reexport` must keep module path** | `bug_wdb154_module_file_use_crate_mod_reexport_must_keep_path_test` | ✅ tip GREEN |
 | P1 | **WDB-153: `a + (b as u32) << shift` must shift masked byte first** | `bug_wdb153_add_shift_precedence_must_shift_masked_byte_first_test` | ✅ tip GREEN — WJ shifts bind tighter than `+`; Rust emit `value + ((…) << shift)` |
 | P1 | **WDB-152: string lit into owned `string` formal must `.to_string()`** | `bug_wdb152_module_file_string_lit_into_owned_string_formal_must_to_string_test` | ✅ tip GREEN — `"worker_hb".to_string()` (recheck 2026-09-10) |
 | P1 | **LedgerKit clean row mapping without empty-concat** | `bug_ledgerkit_clean_row_mapping_no_plus_empty_test` | ✅ tip GREEN — P3.241 dogfood |
 | P1 | **WDB-116: mutually recursive owned struct fields → Box** | `wdb116_module_file_mutually_recursive_struct_fields_must_box_or_cargo_check` | ✅ tip GREEN (recheck 2026-09-10) |
 | P1 | **`strings.substring` int indices must not emit `i64 + 1_usize`** | `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN — `(i + j + 1) as usize` (cargo+CLI 2026-09-11) |
-| P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ⚠️ **RED** — emits `decode_store(&body)`; blocks seed-overlay dogfood |
+| P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN — literal-equality pub APIs keep owned `String` |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
+| P0 | **`i64 & 0xff` must not emit `255_u8` (`wj-uuid` v1/v7)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ❌ tip RED (P3.250) — 0.50.0 GREEN |
+
+## P3.250 (2026-09-12) — `i64 & 0xff` hex mask → `u8` literal
+
+| Change | Status |
+|--------|--------|
+| Ecosystem `wj-uuid` v7 + nil/max (TDD; **20/20** on `wj` 0.50.0) | ✅ |
+| Tip `wj` fails packing: `value & 255_u8` (E0277 / E0308) | ❌ tip RED |
+| Gate `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ❌ tip RED (expected) |
+
+**Compiler agent:** hex / byte masks in `i64` bitops must keep integer width matching the LHS (`i64`), not infer `u8` from `0xff` alone.
+
+## P3.249 (2026-09-12) — owned match binding + WDB-155
+
+| Change | Status |
+|--------|--------|
+| Pub free `string` formals with literal-only `==`/`!=` keep Owned (analyzer + str_ref skip) | ✅ |
+| Relational `pattern == path` still demotes for loop reuse | ✅ regression GREEN |
+| Bare-pass: MutBorrowed skip includes struct-literal field store; restore too | ✅ |
+| Bare-pass: `Match` stmt usage includes scrutinee (`match bind_ast(ast)`) | ✅ |
+| Gates: OMB same-file + hexagonal; WDB-155 binder-forwarder | ✅ tip GREEN |
+| `run_red_repro_bundle.sh` — OMB + WDB-155 → GREEN_FILTERS | ✅ |
 
 ## P3.248 (2026-09-11) — seed overlay read-body dogfood
 
 | Change | Status |
 |--------|--------|
 | Disk cleanup after push | ✅ ~36Gi free |
-| Tip recheck `owned_match_binding_*` | ⚠️ still **RED** (`decode_store(&body)`) |
+| Tip recheck `owned_match_binding_*` | ✅ tip GREEN (P3.249) |
 | Fixture + gate `seed_overlay_read_body` (return-arm unify, no `+ ""`) | ✅ GREEN |
 | Product `seed_bank_*_overlay.wj` ×4 drop `body + ""` / `"" + ""` | ✅ P3.248 |
-| `run_red_repro_bundle.sh` — seed overlay → GREEN_FILTERS; OMB stays RED | ✅ |
-
-**Compiler agent:** still need owned match binding → owned formal **move** (P3.247 RED). Return-arm unify is already green.
+| `run_red_repro_bundle.sh` — seed overlay → GREEN_FILTERS | ✅ |
 
 ## P3.247 (2026-09-11) — owned match binding RED + request_context dogfood
 
 | Change | Status |
 |--------|--------|
 | Disk cleanup (`/tmp/wj-*`, tip debug) | ✅ ~34Gi free |
-| Tip recheck mime charset / yaml empty | ✅ GREEN (P3.246) |
-| Tip recheck `owned_match_binding_*` (same-file + hexagonal) | ⚠️ **RED** — `decode_store(&body)` |
-| Tip recheck WDB-155 owned AST formal | ⚠️ **RED** (out of LedgerKit dogfood path) |
+| Tip recheck `owned_match_binding_*` (same-file + hexagonal) | ✅ tip GREEN (P3.249) |
+| Tip recheck WDB-155 owned AST formal | ✅ tip GREEN (P3.249) |
 | Fixture + gate `request_context_uuid_substring` (no `+ ""`) | ✅ GREEN cargo+hexagonal |
 | Product `request_context.wj` Bearer + UUID drop empty-concat | ✅ P3.247 |
-| `run_red_repro_bundle.sh` — OMB → RED_FILTERS; request_context → GREEN | ✅ |
-
-**Compiler agent:** green `Ok(body) => decode_store(body)` move (not `&body`). Do not demote owned `string` formals when the arg is a match binding. Residual: WDB-155.
+| `run_red_repro_bundle.sh` — request_context → GREEN | ✅ |
 
 ## P3.246 compiler/runtime (2026-09-11) — mime charset, yaml empty, WDB-153
 
@@ -236,12 +253,12 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | Disk cleanup | ✅ ~33–36Gi free |
 | Product: multicol Ready-wrap + OTLP `metric=` KV parse | ✅ `.wj` + tip-sync |
-| Tip **WDB-155** emit-only Option/match fixture | ⚠️ false-GREEN |
-| Tip **WDB-155** binder-forwarder (`emit_sql` → `bind_ast`) | ⚠️ **RED** — `emit_sql(ast: &mut SqlAst)` + `bind_ast(ast.clone())` |
-| Product gen cold rebuild | ⚠️ blocked — tip over-demotes AST/writeback; dogfood strip partial (~600 rustc errs) |
-| layers full `--lib` | ⚠️ blocked |
+| Tip **WDB-155** emit-only Option/match fixture | ✅ superseded — binder-forwarder gate is source of truth |
+| Tip **WDB-155** binder-forwarder (`emit_sql` → `bind_ast`) | ✅ tip GREEN (P3.249 — match-scrutinee bare-pass skip) |
+| Product gen cold rebuild | ⚠️ recheck on tip after P3.249 |
+| layers full `--lib` | ⚠️ recheck on tip after P3.249 |
 
-**Compiler agent priority:** **WDB-155** binder-forwarder demotion (do not demote owned forwarders that only `.clone()` into owned callees); auto-`let mut` if demoted.
+**Compiler agent:** ✅ WDB-155 binder-forwarder tip GREEN (P3.249). Recheck wdb-layers cold `gen/` rebuild on tip.
 
 ## P3.217 WindjammerDB CQ-C5 — semantic Cap call-cycle cut + WDB-154 (2026-09-11)
 

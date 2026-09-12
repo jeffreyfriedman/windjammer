@@ -146,6 +146,55 @@ mod tests {
     }
 
     #[test]
+    fn bare_pass_skips_match_scrutinee_owned_forwarder() {
+        // WDB-155 strengthened: emit_sql(ast) { match bind_ast(ast) { … } }
+        let caller = parse_program(
+            r#"
+struct SqlAst { table: string }
+fn parse_then_emit(ast: SqlAst) -> bool {
+    let _ = emit_sql(ast)
+    true
+}
+"#,
+        );
+        let callee = parse_program(
+            r#"
+struct SqlAst { table: string }
+struct SqlResolved { table: string }
+struct SqlEmit { table: string }
+fn bind_ast(ast: SqlAst) -> Option<SqlResolved> {
+    Some(SqlResolved { table: ast.table })
+}
+fn emit_sql(ast: SqlAst) -> Option<SqlEmit> {
+    match bind_ast(ast) {
+        Some(resolved) => Some(SqlEmit { table: resolved.table }),
+        None => None,
+    }
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "emit_sql".to_string(),
+            owned_custom_sig("emit_sql", "SqlAst"),
+        );
+        registry.signatures.insert(
+            "bind_ast".to_string(),
+            owned_custom_sig("bind_ast", "SqlAst"),
+        );
+        let programs = vec![caller, callee];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let emit = registry.signatures.get("emit_sql").unwrap();
+        assert_eq!(
+            emit.param_ownership[0],
+            OwnershipMode::Owned,
+            "WDB-155: match-scrutinee forwarder must stay owned, got {:?}",
+            emit.param_ownership
+        );
+    }
+
+    #[test]
     fn bare_pass_skips_option_struct_literal_field_forward_custom() {
         // WDB-155 class: `emit_sql(ast) { Some(SqlEmit { table: ast.table }) }`
         let caller = parse_program(

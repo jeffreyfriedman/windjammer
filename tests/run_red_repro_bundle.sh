@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Run tip compiler repro gates. See tests/COMPILER_REPRO_QUEUE.md § P3.248+.
+# Run tip compiler repro gates. See tests/COMPILER_REPRO_QUEUE.md § P3.249+.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  owned_match_binding_cross_fn_owned_string_formal_must_move
-  owned_match_binding_hexagonal_cross_module_must_move
 )
 
 GREEN_FILTERS=(
+  owned_match_binding_cross_fn_owned_string_formal_must_move
+  owned_match_binding_hexagonal_cross_module_must_move
+  wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal
   seed_overlay_read_body_must_cargo_check_without_plus_empty
   hexagonal_seed_overlay_read_body_must_cargo_check_without_plus_empty
   request_context_uuid_substring_must_cargo_check_without_plus_empty
