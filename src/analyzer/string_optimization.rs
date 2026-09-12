@@ -385,65 +385,6 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn stmt_param_equality_use_only(
-        &self,
-        param_name: &str,
-        stmt: &Statement,
-        saw_eq: &mut bool,
-    ) -> bool {
-        match stmt {
-            Statement::If { condition, then_block, else_block, .. } => {
-                if !self.expr_is_equality_use_of_param(param_name, condition, saw_eq) {
-                    return false;
-                }
-                then_block.iter().all(|s| self.stmt_param_equality_use_only(param_name, s, saw_eq))
-                    && else_block.as_ref().map_or(true, |b| {
-                        b.iter()
-                            .all(|s| self.stmt_param_equality_use_only(param_name, s, saw_eq))
-                    })
-            }
-            Statement::Return {
-                value: Some(expr), ..
-            } => self.expr_is_equality_use_of_param(param_name, expr, saw_eq)
-                || !self.expr_contains_bare_param(param_name, expr),
-            Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
-                self.expr_is_equality_use_of_param(param_name, expr, saw_eq)
-                    || !self.expr_contains_bare_param(param_name, expr)
-            }
-            _ => true,
-        }
-    }
-
-    fn expr_is_equality_use_of_param(
-        &self,
-        param_name: &str,
-        expr: &Expression,
-        saw_eq: &mut bool,
-    ) -> bool {
-        match expr {
-            Expression::Binary { left, right, op, .. }
-                if matches!(
-                    op,
-                    crate::parser::BinaryOp::Eq | crate::parser::BinaryOp::Ne
-                ) =>
-            {
-                if self.expr_contains_bare_param(param_name, left)
-                    || self.expr_contains_bare_param(param_name, right)
-                {
-                    *saw_eq = true;
-                    true
-                } else {
-                    false
-                }
-            }
-            Expression::Binary { left, right, .. } => {
-                !self.expr_contains_bare_param(param_name, left)
-                    && !self.expr_contains_bare_param(param_name, right)
-            }
-            _ => !self.expr_contains_bare_param(param_name, expr),
-        }
-    }
-
     /// True when every use of `param_name` is as a callee argument (no operators, returns, etc.).
     pub(crate) fn param_used_only_as_call_argument(
         &self,

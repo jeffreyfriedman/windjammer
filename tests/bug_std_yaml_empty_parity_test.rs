@@ -18,7 +18,7 @@
 //! - Ecosystem contract: empty YAML is an error (`Err("empty yaml")`)
 //!
 //! Wiring gate (`bug_std_yaml_module_test`) is green; this is **semantic parity**.
-//! `wj-yaml` pre-checks until runtime rejects empty input.
+//! ✅ tip GREEN (P3.244) — `wj-yaml` thin-wraps `std::yaml.to_json` without package pre-check.
 
 use std::fs;
 use std::process::Command;

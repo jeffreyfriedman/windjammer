@@ -21,6 +21,7 @@
 //! - `from_path("index.html")` → `"text/html"` vs `TEXT_HTML` with charset
 //!
 //! Wiring gate (`bug_std_mime_module_wiring_test`) is green; this is **semantic parity**.
+//! ✅ tip GREEN (P3.243) — `wj-mime` fully thin-wraps `std::mime`.
 
 use std::fs;
 use std::process::Command;

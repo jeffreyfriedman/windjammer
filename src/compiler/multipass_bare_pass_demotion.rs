@@ -995,8 +995,10 @@ fn stmt_param_usage(stmt: &Statement, param_name: &str) -> ParamUsage {
             }
             usage
         }
-        Statement::Match { arms, .. } => {
-            let mut usage = ParamUsage::None;
+        Statement::Match { value, arms, .. } => {
+            // WDB-155: `match bind_ast(ast) { … }` — the bare/field forward is in the
+            // scrutinee call; arm bodies often never mention `ast` again.
+            let mut usage = expr_param_usage(value, param_name);
             for arm in arms {
                 usage = usage.merge(expr_param_usage(&arm.body, param_name));
             }

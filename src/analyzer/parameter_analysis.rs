@@ -382,6 +382,15 @@ impl<'ast> Analyzer<'ast> {
             {
                 return Ok(OwnershipMode::Owned);
             }
+            // Pub free validation APIs that only compare against string literals
+            // (`text == ""`) keep Owned so match-arm payloads can move
+            // (`Ok(body) => decode_store(body)`). Relational predicates
+            // (`pattern == path`) stay Borrowed for loop reuse (wj-glob).
+            if func.is_pub
+                && self.param_has_readonly_string_equality_comparison(param_name, body)
+            {
+                return Ok(OwnershipMode::Owned);
+            }
             // Comparisons (`==`, `!=`, ordering) are PartialEq/Ord reads — do NOT force
             // Owned. Forcing Owned here wiped str_ref_optimizable (retain drops Owned)
             // and broke loop reuse of demoted `&str` formals.
