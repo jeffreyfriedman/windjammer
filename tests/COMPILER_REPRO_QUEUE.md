@@ -270,6 +270,20 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.252 WindjammerDB CQ-C5 — tip 157–160 product rebuild + WDB-162 (2026-09-12)
+
+| Change | Status |
+|--------|--------|
+| Rebuild tip `wj` (shared cache) after tip greens | ✅ |
+| Cold relational module-file + Cap SQL owned restore | ✅ |
+| Tip-cluster: binder/CLI + dispatch/mvcc/opt (as_ref / `&mut Value`) | ✅ gen/relational clean; full multipass still RED |
+| `cargo check --lib` | ⚠️ **~236–259** (was ~643 → ~358 → ~236) |
+| Tip **WDB-160** | ✅ tip + product GREEN (`exit(2_i32)`) |
+| Tip **WDB-161** product as_ref | ✅ tip full multipass cleared (product gate GREEN) |
+| Tip **WDB-162** `&mut Value::Int64` into owned Value | ❌ tip **RED** (product gen 11×; tip-cluster clean) |
+
+**Compiler agent priority:** WDB-162 (full multipass vs tip-cluster `&mut Value` temps); residual String/`&str`/Vec/E0596.
+
 ## P3.251 WindjammerDB CQ-C5 — cold tip rebuild + dogfood Cap SQL restore + WDB-160/161 (2026-09-12)
 
 | Change | Status |
