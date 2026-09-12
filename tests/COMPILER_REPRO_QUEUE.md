@@ -284,8 +284,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | **WDB-157** `string` ≠ `impl Into<String>`+clone | ✅ tip GREEN — Into only on `self` methods | `pg_wire_parse` |
 | **WDB-158** Cell/Value compare ≠ `&mut` | ✅ tip GREEN — match-scrutinee skip/restore | `found &mut` (~154) |
 | **WDB-159** owned string → demoted `&str` borrow not clone | ✅ tip GREEN (fixture); product cold may still `sql.clone()` | `expected &str, found String` |
-| **WDB-160** `process::exit` → i32 | ❌ tip RED (gate shipped) | int-width exit |
-| **WDB-161** no spurious `.as_ref()` on method recv | ❌ tip RED (gate shipped) | binder_port |
+| **WDB-160** `process::exit` → i32 | ✅ tip GREEN — std `i32` + call-site coerce | int-width exit |
+| **WDB-161** no spurious `.as_ref()` on method recv | ❌ tip RED — strengthened clone/demote + product gen 11× | binder_port |
 
 **Coverage honesty:** tip 157–159 green does **not** clear all cold-gen rustc errors. Next: WDB-160/161 + int-width/Vec residuals.
 
