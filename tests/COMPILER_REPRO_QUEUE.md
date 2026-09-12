@@ -267,13 +267,13 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip cold `transpile_relational_module_file` + sync | ✅ tip 0.50.0 |
 | Dogfood: **stop** Cap SQL `String→&str` demotion under module-file | ✅ TDD `test_dogfood_module_file_keeps_owned_cap_sql.py` FAIL→PASS |
 | `cargo check --lib` after fix | ⚠️ **359** errors (was ~643 stale / ~380 demoted) |
-| Tip **WDB-157** `impl Into<String>` | ⚠️ tip **RED** |
-| Tip **WDB-158** Cell/Value `&mut` | ⚠️ tip **RED** (~122 `found &mut`) |
+| Tip **WDB-157** `impl Into<String>` | ✅ tip GREEN |
+| Tip **WDB-158** Cell/Value `&mut` | ✅ tip GREEN |
 | Tip **WDB-159** sql.clone→&str | ✅ tip GREEN; product false path was dogfood demotion |
-| Tip **WDB-160** `process::exit` → `i32` not `i64` | ⚠️ tip **RED** (ran; emit `2_i64`) — ~78 int-width/exit |
-| Tip **WDB-161** `resolver.clone().has_table` ≠ `.as_ref()` | ⚠️ FILED / run — product binder E0599 (~40) |
+| Tip **WDB-160** `process::exit` → `i32` not `i64` | ✅ tip GREEN |
+| Tip **WDB-161** full multipass `.as_ref()` | ❌ tip **RED** (product gen 11×; tip-cluster clean) |
 
-**Compiler agent priority:** WDB-157, WDB-158, WDB-160, WDB-161 (then residual E0596 / expected-String).
+**Compiler agent priority:** WDB-161 (full multipass vs tip-cluster as_ref); then residual E0596 / expected-String / Vec.
 
 ## P3.250 WindjammerDB CQ-C5 — cold-gen storm gates WDB-156–161 (2026-09-12)
 
