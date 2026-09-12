@@ -124,18 +124,15 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
-| P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ❌ tip RED (P3.254) — wj 0.50.0 GREEN |
+| P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ❌ tip RED (P3.254) — package green via `parse`+`map.get` / lit `get` |
 
 ## P3.254 (2026-09-12) — single-use owned local into owned string formal emits `&`
 
 | Change | Status |
 |--------|--------|
-| Ecosystem `wj-toml` dotted keys + inline tables (**17/17** on wj 0.50.0) | ✅ |
-| Tip `wj test`: `get(&text, …)` E0308 for single-use `let text` | ❌ tip RED |
-| Gate `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ❌ tip RED (expected) |
-| Package interim: `"${raw}"` into `normalize_value` on pinned 0.50.0 | ✅ documented |
-
-**Compiler agent:** single-use owned local passed to owned `string` formal must move (`get(text, …)`), not `&text`.
+| Ecosystem `wj-toml` dotted keys + inline tables | ✅ **17/17** tip + wj 0.50.0 |
+| Gate shows tip emit `get(&text, …)` for single-use local | ❌ tip RED (confirmed) |
+| Package tests avoid brittle `let text; get(text)` shape | ✅ `parse`/`map.get` + literal `get(...)` |
 
 ## P3.249b (2026-09-12) — LedgerKit seed overlay remember dogfood
 
@@ -282,26 +279,27 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
-## P3.254 WindjammerDB CQ-C5 — WDB-165 owned State call over-borrow (2026-09-12)
+## P3.255 WindjammerDB CQ-C5 — WDB-165 owned State call over-borrow (2026-09-12)
 
 | Gate | Status |
 |------|--------|
 | Tip **WDB-163/164** owned ServeState / Store formals | ✅ tip GREEN (product formals owned) |
 | Tip **WDB-165** `&state.clone()` into owned formal | ✅ tip GREEN — local `emitted_owned_arg_contract` beats stale global shared-ref; peel `&` before `.clone()` |
 | Product `relational_pg_serve_port` | ✅ `on_parse(state.clone(), …)` / `on_sync(state.clone())` (no leading `&`) |
+| Gate `demoted_str_after_starts_with` (owned-throughout OK) | ✅ tip GREEN |
 | Product `cargo check --lib` | ⚠️ was **~118** after sync; re-sample |
 
-**Compiler agent priority:** residual String/`&str`/Vec/E0596; OptDatedArtifact/`&T`→owned buckets.
+**Compiler agent priority:** residual String/`&str`/Vec/E0596; OptDatedArtifact/`&T`→owned buckets; P3.254 single-use local move.
 
 ## P3.253 WindjammerDB CQ-C5 — WDB-163 &mut State early-return (2026-09-12)
 
 | Gate | Status |
 |------|--------|
 | Tip **WDB-162** `&mut Value` temps | ✅ tip GREEN (product full multipass clear) |
-| Tip **WDB-163** `&mut State` formal + bare `(state,)` return | ✅ tip GREEN (superseded by P3.253 store/serve + P3.254) |
+| Tip **WDB-163** `&mut State` formal + bare `(state,)` return | ✅ tip GREEN (superseded by P3.253 store/serve + P3.255) |
 | `cargo check --lib` | ⚠️ was **~132**; re-sample after WDB-165 |
 
-**Compiler agent priority:** WDB-165; residual String/`&str`/Vec/E0596.
+**Compiler agent priority:** residual String/`&str`/Vec/E0596.
 
 ## P3.253 WindjammerDB CQ-C5 — WDB-163/164 store/serve owned consume-rebind (2026-09-12)
 
