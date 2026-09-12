@@ -10,19 +10,23 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-161: demoted `&Resolver` + `resolver.clone().has_table` must not emit `.as_ref()`.
+//! WDB-161: full relational `--module-file` must not emit `.as_ref()` on CatalogResolver.
 //!
-//! Product `resolve_select(resolver: RelationalCatalogResolver, …)` tip-demotes to
-//! `&RelationalCatalogResolver`, then rewrites:
-//!   `.wj`: `resolver.clone().has_table(...)`
-//!   tip:  `resolver.as_ref().has_table(...)` → E0599 (~40).
+//! Product evidence (tip cold `transpile_relational_module_file`):
+//!   `gen/relational_module_file/relational_sql_binder_port.rs` contains
+//!   `resolver.as_ref().has_table(...)` → E0599 (~40 in full layers check).
 //!
-//! After demotion, method call must be `resolver.has_table(...)` (already `&self`).
+//! Tip-cluster of the same `.wj` alone emits `resolver.has_table(...)` (GREEN).
+//! Full multipass of the relational slice still invents `.as_ref()` (RED).
+//!
+//! Gate A: minimal multipass must not invent `.as_ref()` (regression).
+//! Gate B: if product `relational_module_file` binder is present, it must not contain `.as_ref()`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
+use std::path::PathBuf;
 
 const MOD: &str = r#"
 pub mod catalog
@@ -58,16 +62,23 @@ pub fn resolve_column(resolver: RelationalCatalogResolver, table: string, logica
     resolver.has_table(table) && logical.len() > 0
 }
 
-pub fn resolve_select(resolver: RelationalCatalogResolver, table: string) -> bool {
+pub fn resolve_select(resolver: RelationalCatalogResolver, table: string, n: int) -> bool {
     if !resolver.clone().has_table(table.clone()) {
         return false
     }
-    let ok = resolve_column(resolver.clone(), table.clone(), "c0")
-    ok
+    let mut i = 0
+    while i < n {
+        let ok = resolve_column(resolver.clone(), table.clone(), "c0")
+        if !ok {
+            return false
+        }
+        i = i + 1
+    }
+    true
 }
 
 pub fn cap() -> bool {
-    resolve_select(make_resolver(), "t")
+    resolve_select(make_resolver(), "t", 3)
 }
 "#;
 
@@ -87,27 +98,46 @@ fn wdb161_module_file_clone_method_receiver_must_not_emit_as_ref() {
         .expect("WDB-161 multipass compile should succeed (codegen may still be wrong)");
     let bind_rs = map.get("bind.rs").expect("bind.rs");
 
-    eprintln!("WDB-161 bind.rs:\n{bind_rs}");
+    eprintln!("WDB-161 minimal bind.rs:\n{bind_rs}");
 
-    let demoted = bind_rs.contains("resolver: &RelationalCatalogResolver")
-        || bind_rs.contains("resolver:&RelationalCatalogResolver");
-
-    if bind_rs.contains(".as_ref()") {
-        panic!(
-            "WDB-161 RED: tip rewrote demoted resolver.clone().has_table → .as_ref().has_table. \
-             Product: relational_sql_binder_port resolve_select → E0599 (~40)."
-        );
-    }
-
-    if demoted {
-        // Borrowed formal: trait &self method must call through resolver directly.
-        assert!(
-            bind_rs.contains("resolver.has_table(") || bind_rs.contains("(*resolver).has_table("),
-            "WDB-161 RED: demoted &Resolver must call has_table without .as_ref(). Got:\n{bind_rs}"
-        );
-    }
+    assert!(
+        !bind_rs.contains(".as_ref()"),
+        "WDB-161: minimal multipass must not invent .as_ref() on CatalogResolver receivers."
+    );
 
     test.cargo_check().expect(
-        "WDB-161: demoted CatalogResolver method receivers must cargo-check without .as_ref().",
+        "WDB-161: minimal CatalogResolver receivers must cargo-check without .as_ref().",
+    );
+}
+
+#[test]
+fn wdb161_product_full_relational_module_file_binder_must_not_emit_as_ref() {
+    // Product gen is gitignored but present during WindjammerDB dogfooding sessions.
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.pop(); // windjammer/
+    path.push("windjammerdb/crates/wdb-layers/gen/relational_module_file/relational_sql_binder_port.rs");
+
+    if !path.exists() {
+        eprintln!(
+            "WDB-161: skip product gate — {} missing (run transpile_relational_module_file.sh)",
+            path.display()
+        );
+        return;
+    }
+
+    let text = std::fs::read_to_string(&path).expect("read product binder gen");
+    let as_ref_count = text.matches(".as_ref()").count();
+    eprintln!(
+        "WDB-161 product binder {} as_ref_count={}",
+        path.display(),
+        as_ref_count
+    );
+
+    assert!(
+        as_ref_count == 0,
+        "WDB-161 RED: full relational --module-file still emits .as_ref() ({as_ref_count}×) in {}. \
+         Tip-cluster of the same binder alone is clean — tip must not invent .as_ref() in full multipass. \
+         Product: resolver.as_ref().has_table → E0599.",
+        path.display()
     );
 }
