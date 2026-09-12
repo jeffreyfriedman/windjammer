@@ -4571,6 +4571,12 @@ impl<'ast> CodeGenerator<'ast> {
         // strips Copy-aggregate `&T` while analyzer metadata may still wrap the type.
         // Never treat true `&mut T` / MutBorrowed slots as owned Copy (apply_rotation /
         // fill_grid / update_health_regen).
+        //
+        // WDB-165: when *this* callee's emission record says owned (`emitted_owned_arg_contract`),
+        // do not let a stale *global* shared-ref hit (`global_emits_shared_ref`) block stripping
+        // `&state.clone()` into an owned `PgWireServeState` formal.
+        let local_owned_emission =
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx);
         let copy_aggregate_owned = !expects_mut
             && sig
                 .formal_param_type(param_idx)
@@ -4587,7 +4593,7 @@ impl<'ast> CodeGenerator<'ast> {
                         && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                 })
             && !emits_shared_ref
-            && !global_emits_shared_ref;
+            && (local_owned_emission || !global_emits_shared_ref);
         let force_owned = !expects_mut
             && !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
                 sig,
@@ -4613,9 +4619,8 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     }),
             )
-            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                sig, param_idx,
-            ) || copy_aggregate_owned
+            && (local_owned_emission
+                || copy_aggregate_owned
                 || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
                     sig, param_idx,
                 )
@@ -4626,7 +4631,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Never strip `&` for text formals the callee emits as `&str` / shared ref
             // (regression-049 `replay_to_lsn(&self.path)`).
             && !emits_shared_ref
-            && !global_emits_shared_ref;
+            && (local_owned_emission || !global_emits_shared_ref);
         // Owned emission wins over stale analyzer/IR Ref expectations (regression-060
         // `is_at_or_before(&through)` → `other: Lsn`). Strip before shared-borrow path.
         // Do not strip `.clone()` — Copy aggregates still need multi-use clones (dogfood seed_write).
@@ -4667,10 +4672,17 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx) {
             // Owned clones/`to_string` already satisfy `&str` / `&T` via deref —
             // never emit `&x.clone()` (E0308 into owned String, redundant for `&str`).
+            // WDB-165: also peel a leading `&` so `&state.clone()` cannot survive when
+            // shared-borrow was expected from stale metadata but the arg is already owned.
             if coerced.ends_with(".clone()")
                 || coerced.ends_with(".to_string()")
                 || coerced.ends_with(".to_owned()")
             {
+                let mut s = coerced.trim().to_string();
+                while s.starts_with('&') {
+                    s = s[1..].trim().to_string();
+                }
+                *coerced = s;
                 return;
             }
             if matches!(

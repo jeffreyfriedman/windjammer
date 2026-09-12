@@ -190,6 +190,21 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
             return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
         }
+        // WDB-165: metadata may omit formal/param types while ownership + emission flags
+        // already say owned — still report Owned so call sites do not over-borrow.
+        if matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Owned)
+        ) {
+            return SafetyType {
+                base: BaseType::Custom("T".into()),
+                ownership: OwnedType::Owned,
+                effects: EffectSet::pure(),
+                taint: TaintStatus::Clean,
+                const_eval: ConstEval::Runtime,
+                exec_mode: None,
+            };
+        }
     }
 
     // Converged bare AST formal (`other: Lsn`) beats stale `Reference(Lsn)` in `param_types`
