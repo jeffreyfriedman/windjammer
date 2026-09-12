@@ -79,7 +79,8 @@ pub fn restore_owned_field_forward_formals(
             };
             if !(param_forwards_fields_in_call_args_only(body, param_name)
                 || param_stored_in_struct_literal(body, param_name)
-                || param_whole_binding_returned(body, param_name))
+                || param_whole_binding_returned(body, param_name)
+                || param_used_only_as_match_scrutinee(body, param_name))
             {
                 continue;
             }
@@ -727,14 +728,141 @@ fn bare_pass_hint_should_skip(
             param_stored_in_struct_literal(body, param_name)
                 || param_forwards_fields_in_call_args_only(body, param_name)
                 || param_whole_binding_returned(body, param_name)
+                // WDB-158: compare helpers that only `match` the formal must stay owned
+                // (not `&mut Cell` / `&mut Value`).
+                || param_used_only_as_match_scrutinee(body, param_name)
         }
         OwnershipMode::Borrowed => {
             param_stored_in_struct_literal(body, param_name)
                 || param_forwards_fields_in_call_args_only(body, param_name)
                 || param_whole_binding_returned(body, param_name)
+                || param_used_only_as_match_scrutinee(body, param_name)
         }
         OwnershipMode::Owned => false,
     }
+}
+
+/// WDB-158: formals used only as `match` scrutinees (equality/discriminant compare)
+/// must not demote to `&mut T`. Nested match on the same binding still counts.
+pub fn param_used_only_as_match_scrutinee(body: &[&Statement], param_name: &str) -> bool {
+    let mut saw_scrutinee = false;
+    for stmt in body {
+        match stmt_match_scrutinee_only(stmt, param_name, &mut saw_scrutinee) {
+            ScrutineeScan::OtherUse => return false,
+            ScrutineeScan::Ok => {}
+        }
+    }
+    saw_scrutinee
+}
+
+enum ScrutineeScan {
+    Ok,
+    OtherUse,
+}
+
+fn stmt_match_scrutinee_only(
+    stmt: &Statement,
+    param_name: &str,
+    saw: &mut bool,
+) -> ScrutineeScan {
+    match stmt {
+        Statement::Match { value, arms, .. } => {
+            if expr_is_bare_param(value, param_name) {
+                *saw = true;
+            } else if expr_mentions_param(value, param_name) {
+                return ScrutineeScan::OtherUse;
+            }
+            for arm in arms {
+                if let ScrutineeScan::OtherUse =
+                    expr_match_scrutinee_only(&arm.body, param_name, saw)
+                {
+                    return ScrutineeScan::OtherUse;
+                }
+                if let Some(g) = &arm.guard {
+                    if expr_mentions_param(g, param_name) {
+                        return ScrutineeScan::OtherUse;
+                    }
+                }
+            }
+            ScrutineeScan::Ok
+        }
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            if expr_mentions_param(condition, param_name) {
+                return ScrutineeScan::OtherUse;
+            }
+            for s in then_block {
+                if let ScrutineeScan::OtherUse = stmt_match_scrutinee_only(s, param_name, saw) {
+                    return ScrutineeScan::OtherUse;
+                }
+            }
+            if let Some(b) = else_block {
+                for s in b {
+                    if let ScrutineeScan::OtherUse = stmt_match_scrutinee_only(s, param_name, saw) {
+                        return ScrutineeScan::OtherUse;
+                    }
+                }
+            }
+            ScrutineeScan::Ok
+        }
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        } => expr_match_scrutinee_only(expr, param_name, saw),
+        Statement::Return { .. } => ScrutineeScan::Ok,
+        Statement::Let { value, else_block, .. } => {
+            if let ScrutineeScan::OtherUse = expr_match_scrutinee_only(value, param_name, saw) {
+                return ScrutineeScan::OtherUse;
+            }
+            if let Some(b) = else_block {
+                for s in b {
+                    if let ScrutineeScan::OtherUse = stmt_match_scrutinee_only(s, param_name, saw) {
+                        return ScrutineeScan::OtherUse;
+                    }
+                }
+            }
+            ScrutineeScan::Ok
+        }
+        _ => {
+            if statement_mentions_param(stmt, param_name) {
+                ScrutineeScan::OtherUse
+            } else {
+                ScrutineeScan::Ok
+            }
+        }
+    }
+}
+
+fn expr_match_scrutinee_only(
+    expr: &Expression,
+    param_name: &str,
+    saw: &mut bool,
+) -> ScrutineeScan {
+    match expr {
+        Expression::Block { statements, .. } => {
+            for s in statements {
+                if let ScrutineeScan::OtherUse = stmt_match_scrutinee_only(s, param_name, saw) {
+                    return ScrutineeScan::OtherUse;
+                }
+            }
+            ScrutineeScan::Ok
+        }
+        _ => {
+            if expr_mentions_param(expr, param_name) {
+                ScrutineeScan::OtherUse
+            } else {
+                ScrutineeScan::Ok
+            }
+        }
+    }
+}
+
+fn expr_is_bare_param(expr: &Expression, param_name: &str) -> bool {
+    matches!(expr, Expression::Identifier { name, .. } if name == param_name)
 }
 
 /// Callee returns the whole `param` binding (directly or in a tuple) — must stay owned

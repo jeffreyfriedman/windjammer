@@ -2861,6 +2861,12 @@ impl<'ast> CodeGenerator<'ast> {
         if param.name == "self" || self.in_trait_impl || !func.is_pub {
             return false;
         }
+        // WDB-157: free functions (`pg_wire_parse`, etc.) keep concrete `String`.
+        // `impl Into<String>` is for method builders (`self` receivers) so Rust
+        // callers can pass `&str` (windjammer-ui StatusChip).
+        if !func.parameters.iter().any(|p| p.name == "self") {
+            return false;
+        }
         if param.decorators.iter().any(|d| d.name == "string_ref") {
             return false;
         }
