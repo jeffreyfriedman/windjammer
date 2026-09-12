@@ -16,6 +16,12 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         type_: &Type,
     ) -> String {
+        // P3.250: outer call-arg / assignment int targets (e.g. `Vec<u8>::push`) must not
+        // suffix nested bitop/shift literals as `_u8`. The cast result carries the target
+        // width; the operand is typed from its own peers (i64 & 0xff → 255_i64).
+        let prev_call_arg = self.call_arg_expected_type.take();
+        let prev_assign_int = self.assignment_int_target_type.take();
+
         // Add parentheses around binary expressions for correct precedence
         // because `as` has higher precedence than arithmetic in Rust:
         // `a + b as usize` is parsed as `a + (b as usize)`, not `(a + b) as usize`
@@ -25,6 +31,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => self.generate_expression(expr),
         };
+
+        self.call_arg_expected_type = prev_call_arg;
+        self.assignment_int_target_type = prev_assign_int;
         // E0606 FIX: Cannot cast &T as U (e.g. &i32 as usize).
         // When the cast source is a borrowed parameter or a borrowed match arm
         // binding, auto-deref first.

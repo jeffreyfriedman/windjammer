@@ -121,17 +121,29 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN — literal-equality pub APIs keep owned `String` |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
-| P0 | **`i64 & 0xff` must not emit `255_u8` (`wj-uuid` v1/v7)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ❌ tip RED (P3.250) — 0.50.0 GREEN |
+| P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
+| P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ❌ tip/0.50 RED (P3.251) |
 
-## P3.250 (2026-09-12) — `i64 & 0xff` hex mask → `u8` literal
+## P3.251 (2026-09-12) — demoted `&str` after starts_with into owned formal
+
+| Change | Status |
+|--------|--------|
+| Ecosystem `wj-toml` inline tables + dotted keys (TDD) | ✅ (uses `"${raw}"` force-own interim) |
+| Gate `bug_demoted_str_after_starts_with_must_auto_own_test` | ❌ RED (expected) |
+
+**Compiler agent:** read-only `strings.starts_with`/`ends_with` must not demote a later move into an owned `string` formal; auto-`.to_string()` at that call site.
+
+## P3.250 (2026-09-12) — `i64` shift/mask → `u8` inside `Vec<u8>::push`
 
 | Change | Status |
 |--------|--------|
 | Ecosystem `wj-uuid` v7 + nil/max (TDD; **20/20** on `wj` 0.50.0) | ✅ |
-| Tip `wj` fails packing: `value & 255_u8` (E0277 / E0308) | ❌ tip RED |
-| Gate `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ❌ tip RED (expected) |
+| Tip: `out.push(((ms >> 40) & 0xff) as u8)` keeps `_i64` masks/shifts | ✅ |
+| Gate `bug_i64_bitand_hex_mask_must_not_emit_u8_test` (pack + push shape) | ✅ tip GREEN |
+| Codegen: `generate_cast` clears `call_arg_expected_type` / assign int target | ✅ |
+| Inference: cast operand not constrained by outer return/call context | ✅ |
 
-**Compiler agent:** hex / byte masks in `i64` bitops must keep integer width matching the LHS (`i64`), not infer `u8` from `0xff` alone.
+**Root cause:** `Vec<u8>::push` set `call_arg_expected_type = u8`, which suffix-polluted nested `>>` / `&` literals (`40_u8`, `255_u8`). Cast result carries the u8 width; operand literals follow typed peers.
 
 ## P3.249 (2026-09-12) — owned match binding + WDB-155
 
@@ -247,6 +259,20 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.250 WindjammerDB CQ-C5 — cold-gen storm gates WDB-156–159 (2026-09-12)
+
+| Gate | Status | Product bucket |
+|------|--------|----------------|
+| **WDB-155** binder-forwarder | ✅ tip GREEN | AST owned formal (cleared; storm remains) |
+| **WDB-156** writeback owned | ⚠️ tip often GREEN (false-GREEN vs product) | writeback `&mut` |
+| **WDB-157** `string` ≠ `impl Into<String>`+clone | ⚠️ tip **RED** (ran) | `pg_wire_parse` |
+| **WDB-158** Cell/Value compare ≠ `&mut` | ⚠️ tip **RED** (ran) | `found &mut` (~154) |
+| **WDB-159** owned string → demoted `&str` borrow not clone | ⚠️ tip **GREEN** on multipass fixture (`&sql`) but product cold `gen/` still `sql.clone()` into `&str` fronts — **false-GREEN vs product path** | `expected &str, found String` (~157) |
+
+**Coverage honesty:** fixing tip RED gates (157/158) does **not** clear all ~643 rustc errors. WDB-159 tip fixture does not yet catch product cold emit. Ungated / weak: int-width (~86), Vec (~33), expected-String (~93), E0596 cascades (~54), product-only `sql.clone()→&str`.
+
+**Compiler agent priority:** WDB-157, WDB-158; reproduce WDB-159 on **product-shaped multipass / module-file** path that still emits `sql.clone()`; then int-width/Vec/expected-String residuals.
+
 ## P3.218 WindjammerDB CQ-C5 — multicol Ready-wrap + WDB-155 (2026-09-11)
 
 | Change | Status |
@@ -255,10 +281,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Product: multicol Ready-wrap + OTLP `metric=` KV parse | ✅ `.wj` + tip-sync |
 | Tip **WDB-155** emit-only Option/match fixture | ✅ superseded — binder-forwarder gate is source of truth |
 | Tip **WDB-155** binder-forwarder (`emit_sql` → `bind_ast`) | ✅ tip GREEN (P3.249 — match-scrutinee bare-pass skip) |
-| Product gen cold rebuild | ⚠️ recheck on tip after P3.249 |
-| layers full `--lib` | ⚠️ recheck on tip after P3.249 |
+| Product gen cold rebuild | ⚠️ still ~643 rustc after tip WDB-155 — see P3.250 |
+| layers full `--lib` | ⚠️ blocked on cold gen |
 
-**Compiler agent:** ✅ WDB-155 binder-forwarder tip GREEN (P3.249). Recheck wdb-layers cold `gen/` rebuild on tip.
+**Compiler agent:** ✅ WDB-155 tip GREEN. Next: P3.250 (WDB-157/158/159).
 
 ## P3.217 WindjammerDB CQ-C5 — semantic Cap call-cycle cut + WDB-154 (2026-09-11)
 

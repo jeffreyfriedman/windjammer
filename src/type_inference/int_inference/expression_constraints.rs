@@ -267,9 +267,10 @@ impl IntInference {
             Expression::Cast {
                 expr: inner, type_, ..
             } => {
-                // Cast converts between types - do NOT constrain operand to match target.
-                // e.g. (x as usize) is valid when x is i32, u32, etc.
-                self.collect_expression_constraints(inner, return_type);
+                // Cast converts between types - do NOT constrain operand to match target
+                // (or an outer call-arg / return context like Vec<u8>::push → u8).
+                // e.g. ((x >> 40) & 0xff) as u8: mask/shift literals follow i64 peers.
+                self.collect_expression_constraints(inner, None);
                 // Constrain the cast RESULT to the target type (fixes return type conflicts)
                 if let Some(int_ty) = self.extract_int_type(type_) {
                     let cast_id = self.get_expr_id(expr);

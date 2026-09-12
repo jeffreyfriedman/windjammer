@@ -10,13 +10,13 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-159: owned `string` into demoted `&str` formal must borrow, not `.clone()`.
+//! WDB-159: owned `string` into demoted `&str` formal must borrow (`&sql`), not `.clone()`.
 //!
-//! Product dispatch: `relational_sql_parse_*_front(sql.clone())` where formal is `&str`
-//! → E0308 expected `&str`, found `String` (~158 diagnostics).
+//! Product `relational_pg_serve_dispatch_kind(sql: String)` calls many
+//! `relational_sql_parse_*_front(sql: &str)` with `sql.clone()` → E0308 expected `&str`, found `String`.
 //!
-//! Use `string` in `.wj` (W0010). Tip may demote read-only formals to `&str`; call sites
-//! that reuse the local must emit `&sql`, never `sql.clone()`.
+//! Multipass: several read-only fronts demote to `&str`; dispatch keeps owned `String` and
+//! probes sequentially — each call must be `parse_*(&sql)`, never `sql.clone()`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -29,18 +29,36 @@ pub mod dispatch
 "#;
 
 const PARSE: &str = r#"
-pub fn parse_front(sql: string) -> bool {
+pub fn parse_a_front(sql: string) -> bool {
     sql.len() > 0
+}
+
+pub fn parse_b_front(sql: string) -> bool {
+    sql.len() > 1
+}
+
+pub fn parse_c_front(sql: string) -> bool {
+    sql.len() > 2
 }
 "#;
 
 const DISPATCH: &str = r#"
-use crate::parse::parse_front
+use crate::parse::parse_a_front
+use crate::parse::parse_b_front
+use crate::parse::parse_c_front
 
-pub fn dispatch_sql(sql: string) -> bool {
-    let first = parse_front(sql)
-    let second = parse_front(sql)
-    first || second
+pub fn dispatch_kind(sql: string) -> string {
+    let mut tag = "unknown"
+    if parse_a_front(sql) {
+        tag = "a"
+    } else if parse_b_front(sql) {
+        tag = "b"
+    } else if parse_c_front(sql) {
+        tag = "c"
+    }
+    let mut out = sql
+    out = out + tag
+    out
 }
 "#;
 
@@ -61,24 +79,34 @@ fn wdb159_module_file_owned_string_into_str_formal_must_borrow_not_clone() {
     let parse_rs = map.get("parse.rs").expect("parse.rs");
     let dispatch_rs = map.get("dispatch.rs").expect("dispatch.rs");
 
-    let demoted = parse_rs.contains("sql: &str") || parse_rs.contains("sql:&str");
-    let cloned_into = dispatch_rs.contains("parse_front(sql.clone())");
+    let fronts_demoted = parse_rs.matches("sql: &str").count() >= 2
+        || parse_rs.matches("sql:&str").count() >= 2;
+    let dispatch_owned = dispatch_rs.contains("sql: String") || dispatch_rs.contains("sql:String");
+    let cloned_into = dispatch_rs.contains("sql.clone()");
+    let borrow_a = dispatch_rs.contains("parse_a_front(&sql)");
+    let borrow_b = dispatch_rs.contains("parse_b_front(&sql)");
+    let borrow_c = dispatch_rs.contains("parse_c_front(&sql)");
 
     eprintln!("WDB-159 parse.rs:\n{parse_rs}\ndispatch.rs:\n{dispatch_rs}");
 
-    if demoted && cloned_into {
+    assert!(
+        fronts_demoted,
+        "WDB-159: expected tip to demote read-only parse_*_front formals to &str (product PEG fronts)."
+    );
+    assert!(
+        dispatch_owned,
+        "WDB-159: dispatch_kind must keep owned String (product relational_pg_serve_dispatch_kind)."
+    );
+
+    if cloned_into {
         panic!(
-            "WDB-159 RED: demoted &str formal received sql.clone() (String). \
+            "WDB-159 RED: owned String probed into demoted &str fronts via sql.clone(). \
              Product: relational_sql_parse_*_front(sql.clone()) → E0308 expected &str, found String."
         );
     }
 
-    // When tip demotes to &str, reuse must borrow (`&sql`), not clone-to-String.
-    if demoted {
-        let borrowed = dispatch_rs.contains("parse_front(&sql)");
-        assert!(
-            borrowed,
-            "WDB-159 RED: demoted &str formal needs &sql on reused local. Product dispatch front parsers."
-        );
-    }
+    assert!(
+        borrow_a && borrow_b && borrow_c,
+        "WDB-159 RED: sequential demoted &str fronts need &sql on each probe. Product dispatch_kind."
+    );
 }

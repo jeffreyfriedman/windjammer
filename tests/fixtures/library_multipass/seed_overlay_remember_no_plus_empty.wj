@@ -1,0 +1,67 @@
+// LedgerKit seed_bank_*_overlay `remember_*` class — loop + split + append
+// without empty-concat. Tip must cargo-check index reuse + owned formals.
+
+use std::fs
+use std::env
+use std::strings
+
+pub fn append_overlay_row(acc: string, row: string) -> string {
+    if acc == "" {
+        return row
+    }
+    acc + "\n" + row
+}
+
+pub fn overlay_row2(a: string, b: string) -> string {
+    a + "|" + b
+}
+
+fn overlay_path() -> string {
+    match env::get("LK_SEED_BANK_MATCHES") {
+        Some(path) => {
+            if strings.len(path) > 0 {
+                return path
+            }
+        },
+        None => {},
+    }
+    ".seed-bank-matches.tsv"
+}
+
+fn read_overlay_body() -> string {
+    match fs::read_to_string(overlay_path()) {
+        Ok(body) => body,
+        Err(_) => "",
+    }
+}
+
+pub fn remember_seed_bank_match(line_id: string, journal_entry_id: string) -> Result<(), string> {
+    if strings.len(line_id) == 0 || strings.len(journal_entry_id) == 0 {
+        return Err("line_id and journal_entry_id are required")
+    }
+    let body = read_overlay_body()
+    let lines = strings.split(body, "\n")
+    let mut out = ""
+    let mut replaced = false
+    let mut i = 0
+    while i < lines.len() {
+        let row = lines[i]
+        if strings.len(row) > 0 {
+            let parts = strings.split(row, "|")
+            if parts.len() >= 1 && parts[0] == line_id {
+                out = append_overlay_row(out, overlay_row2(line_id, journal_entry_id))
+                replaced = true
+            } else {
+                out = append_overlay_row(out, row)
+            }
+        }
+        i = i + 1
+    }
+    if !replaced {
+        out = append_overlay_row(out, overlay_row2(line_id, journal_entry_id))
+    }
+    match fs::write(overlay_path(), out) {
+        Ok(_) => Ok(()),
+        Err(_) => Err("failed to persist seed bank match"),
+    }
+}
