@@ -46,7 +46,7 @@ pub fn pid() -> int {
 }
 
 /// Exit the process with a status code
-pub fn exit(code: int) {
-    std::process::exit(code as i32)
+pub fn exit(code: i32) {
+    std::process::exit(code)
 }
 
