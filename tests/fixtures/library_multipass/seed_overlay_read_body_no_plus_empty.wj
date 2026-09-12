@@ -1,0 +1,15 @@
+// LedgerKit seed_bank_*_overlay `read_overlay_body` class — match arms must
+// unify owned `string` without empty-concat (`Ok(body) => body`, `Err(_) => ""`).
+
+use std::fs
+
+fn overlay_path() -> string {
+    ".seed-bank-matches.tsv"
+}
+
+pub fn read_overlay_body() -> string {
+    match fs::read_to_string(overlay_path()) {
+        Ok(body) => body,
+        Err(_) => "",
+    }
+}

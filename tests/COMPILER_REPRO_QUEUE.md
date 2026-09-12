@@ -120,6 +120,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`strings.substring` int indices must not emit `i64 + 1_usize`** | `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN — `(i + j + 1) as usize` (cargo+CLI 2026-09-11) |
 | P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ⚠️ **RED** — emits `decode_store(&body)`; blocks seed-overlay dogfood |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
+| P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
+
+## P3.248 (2026-09-11) — seed overlay read-body dogfood
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup after push | ✅ ~36Gi free |
+| Tip recheck `owned_match_binding_*` | ⚠️ still **RED** (`decode_store(&body)`) |
+| Fixture + gate `seed_overlay_read_body` (return-arm unify, no `+ ""`) | ✅ GREEN |
+| Product `seed_bank_*_overlay.wj` ×4 drop `body + ""` / `"" + ""` | ✅ P3.248 |
+| `run_red_repro_bundle.sh` — seed overlay → GREEN_FILTERS; OMB stays RED | ✅ |
+
+**Compiler agent:** still need owned match binding → owned formal **move** (P3.247 RED). Return-arm unify is already green.
 
 ## P3.247 (2026-09-11) — owned match binding RED + request_context dogfood
 
@@ -162,7 +175,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | `bug_std_yaml_empty_parity_test` — `to_json("")` / whitespace-only must `Err`, not Ok(`"null"`) | ✅ tip GREEN — runtime rejects empty/whitespace |
 
-**Dogfood:** `wj-yaml` can drop empty/whitespace pre-check once packages pick up tip runtime.
+**Dogfood:** ✅ `wj-yaml` dropped empty/whitespace pre-check (2026-09-11).
 
 ## P3.243 repro harness (2026-09-11) — `std::mime` charset parity
 
@@ -170,7 +183,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | `bug_std_mime_charset_parity_test` — `from_extension`/`from_path` must equal `APPLICATION_*`/`TEXT_*` | ✅ tip GREEN — runtime known-ext table mirrors `std/mime.wj` |
 
-**Dogfood:** `wj-mime` can thin-wrap lookup/predicates against tip runtime.
+**Dogfood:** ✅ `wj-mime` fully thin-wraps `std::mime` (2026-09-11).
 
 ## P3.244 CSV multipass + runtime `&str` literals + `-> i32` counters (2026-09-11)
 
@@ -202,7 +215,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | windjammer-ui AuthFetch Into note | ✅ tip-GREEN wording |
 | Product `make api-check` still int/usize + demote/Self cluster | ⚠️ tip |
 
-**Compiler agent:** ✅ tip GREEN for haystack substring int unify (P3.244). Residual: empty-concat outside row helpers; `std::mime` charset parity (P3.243).
+**Compiler agent:** ✅ tip GREEN for haystack substring int unify (P3.242). Residual: empty-concat outside row helpers. P3.243 mime charset + P3.244 yaml empty ✅ tip GREEN; ecosystem dogfood complete.
 
 ## P3.241 LedgerKit dogfood + tip recheck (2026-09-10)
 
@@ -484,9 +497,11 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 | P0 | **`std::time.utc_now` / `timestamp_millis`** | `bug_std_time_utc_now_test`, `bug_std_time_timestamp_millis_test` | ✅ |
 | P0 | **`std::uuid.v4`** | `bug_std_uuid_v4_module_test` | ✅ |
 | P0 | **`std::mime` constants + from_extension** | `bug_std_mime_module_wiring_test` | ✅ |
+| P0 | **`std::mime` charset parity (`from_extension`/`from_path` = constants)** | `bug_std_mime_charset_parity_test` | ✅ tip GREEN (P3.243) |
 | P0 | **`std::path` join / file_name** | `bug_std_path_join_module_test` | ✅ |
 | P0 | **`std::jwt` HS256 sign/verify wiring** | `bug_std_jwt_hs256_wiring_test` | ✅ |
 | P1 | **`std::yaml` parse / to_json** | `bug_std_yaml_module_test` | ✅ |
+| P1 | **`std::yaml` empty/whitespace input rejection** | `bug_std_yaml_empty_parity_test` | ✅ tip GREEN (P3.244) |
 | P1 | **`std::csv` idiomatic `Result<…, string>`** | `bug_std_csv_parse_idiomatic_test` | ✅ |
 | P1 | **`std::csv.write` owned `Vec<Vec<string>>` auto-borrow** | `bug_std_csv_write_owned_rows_auto_borrow_test` | ✅ tip GREEN (homonym `pub fn write` → `csv.write`) |
 | P1 | **`std::db` connect + execute** | `bug_std_db_execute_wiring_test` | ✅ |
