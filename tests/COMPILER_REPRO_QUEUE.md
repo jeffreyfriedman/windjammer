@@ -121,17 +121,28 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN — literal-equality pub APIs keep owned `String` |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
+| P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
-| P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ❌ tip/0.50 RED (P3.251) |
+| P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
+
+## P3.249b (2026-09-12) — LedgerKit seed overlay remember dogfood
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup + tip rebuild release `wj` | ✅ |
+| Tip recheck OMB + WDB-155 | ✅ GREEN |
+| Fixture + gate `seed_overlay_remember` (no `+ ""`) | ✅ GREEN (2/2 run) |
+| Product `seed_bank_*_overlay.wj` path/remember/lookup drop empty-concat | ✅ |
+| `run_red_repro_bundle.sh` — seed remember → GREEN_FILTERS | ✅ |
 
 ## P3.251 (2026-09-12) — demoted `&str` after starts_with into owned formal
 
 | Change | Status |
 |--------|--------|
 | Ecosystem `wj-toml` inline tables + dotted keys (TDD) | ✅ (uses `"${raw}"` force-own interim) |
-| Gate `bug_demoted_str_after_starts_with_must_auto_own_test` | ❌ RED (expected) |
+| Gate `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN (added 2026-09-12) |
 
-**Compiler agent:** read-only `strings.starts_with`/`ends_with` must not demote a later move into an owned `string` formal; auto-`.to_string()` at that call site.
+**Compiler agent:** if a true RED multipass shape resurfaces (demoted `&str` into owned formal without auto-own), file the missing gate; do not treat stale queue ❌ as current tip truth.
 
 ## P3.250 (2026-09-12) — `i64` shift/mask → `u8` inside `Vec<u8>::push`
 
@@ -271,9 +282,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-158** Cell/Value `&mut` | ✅ tip GREEN |
 | Tip **WDB-159** sql.clone→&str | ✅ tip GREEN; product false path was dogfood demotion |
 | Tip **WDB-160** `process::exit` → `i32` not `i64` | ✅ tip GREEN |
-| Tip **WDB-161** full multipass `.as_ref()` | ❌ tip **RED** (product gen 11×; tip-cluster clean) |
+| Tip **WDB-161** full multipass `.as_ref()` | ✅ tip GREEN — product retranspile 0×; Gate A cargo-check |
 
-**Compiler agent priority:** WDB-161 (full multipass vs tip-cluster as_ref); then residual E0596 / expected-String / Vec.
+**Compiler agent priority:** residual E0596 / expected-String / Vec; WDB-159 product cold if still clones.
 
 ## P3.250 WindjammerDB CQ-C5 — cold-gen storm gates WDB-156–161 (2026-09-12)
 
@@ -285,11 +296,11 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | **WDB-158** Cell/Value compare ≠ `&mut` | ✅ tip GREEN — match-scrutinee skip/restore | `found &mut` (~154) |
 | **WDB-159** owned string → demoted `&str` borrow not clone | ✅ tip GREEN (fixture); product cold may still `sql.clone()` | `expected &str, found String` |
 | **WDB-160** `process::exit` → i32 | ✅ tip GREEN — std `i32` + call-site coerce | int-width exit |
-| **WDB-161** no spurious `.as_ref()` on method recv | ❌ tip RED — strengthened clone/demote + product gen 11× | binder_port |
+| **WDB-161** no spurious `.as_ref()` on method recv | ✅ tip GREEN — stale gen cleared; explicit-clone walk If/While keeps owned | binder_port |
 
 **Coverage honesty:** tip 157–159 green does **not** clear all cold-gen rustc errors. Next: WDB-160/161 + int-width/Vec residuals.
 
-**Compiler agent priority:** WDB-160 (`process::exit` i32), WDB-161 (spurious `as_ref`); strengthen WDB-159 if product cold still clones.
+**Compiler agent priority:** residual E0596 / expected-String / Vec; strengthen WDB-159 if product cold still clones.
 
 ## P3.218 WindjammerDB CQ-C5 — multicol Ready-wrap + WDB-155 (2026-09-11)
 

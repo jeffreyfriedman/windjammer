@@ -99,6 +99,7 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         self.inferred_borrowed_params.remove(&param.name);
                         self.inferred_mut_borrowed_params.remove(&param.name);
+                        self.str_ref_optimized_params.remove(&param.name);
                         return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                     }
                     let mut_borrow_formal = self

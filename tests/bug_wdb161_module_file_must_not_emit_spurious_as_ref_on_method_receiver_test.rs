@@ -104,8 +104,11 @@ fn wdb161_module_file_clone_method_receiver_must_not_emit_as_ref() {
         !bind_rs.contains(".as_ref()"),
         "WDB-161: minimal multipass must not invent .as_ref() on CatalogResolver receivers."
     );
-    // cargo-check of this fixture may still hit demoted `&str` + `.clone()`→String (separate
-    // residual). Gate A is emit-only; Gate B is the product full-multipass RED.
+    // Also require cargo-check: demoted `&str` + `.clone()` into owned `String` formals
+    // must auto-own (`.to_string()`), not leave E0308.
+    test.cargo_check().expect(
+        "WDB-161: minimal CatalogResolver receivers must cargo-check (no as_ref; demoted &str owned).",
+    );
 }
 
 #[test]

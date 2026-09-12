@@ -1226,13 +1226,19 @@ pub fn lower_explicit_clone_call<'ast>(
     borrowed_params: &std::collections::HashSet<String>,
     function_params: &[crate::parser::Parameter<'ast>],
 ) -> String {
-    if let Expression::Identifier { name, .. } = object {
-        if borrowed_params.contains(name.as_str())
+    // Call sites pass the full `param.clone()` MethodCall; peel to the binding name.
+    let binding = match object {
+        Expression::Identifier { name, .. } => Some(name.as_str()),
+        _ => crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(object),
+    };
+    if let Some(name) = binding {
+        if borrowed_params.contains(name)
             && function_params.iter().any(|p| {
-                p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                p.name == name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
             })
         {
-            return format!("{}.to_string()", obj_str);
+            let base = obj_str.trim_end_matches(".clone()");
+            return format!("{base}.to_string()");
         }
     }
     obj_str.to_string()

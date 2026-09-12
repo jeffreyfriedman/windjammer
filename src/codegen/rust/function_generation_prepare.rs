@@ -8910,26 +8910,99 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Explicit WJ `.clone()` on `param` at any call site (WDB-110/112/113 outer-formal guard).
+    ///
+    /// Must walk `if`/`while`/`for`/`match` (WDB-161): clones often sit in conditions and
+    /// loop bodies — skipping those demoted `&str` while still emitting `.clone()` → E0308.
     pub(in crate::codegen::rust) fn param_used_via_explicit_user_clone(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,
     ) -> bool {
         let mut found = false;
-        let mut visit_expr = |expr: &Expression<'ast>| {
-            self.expression_visit_explicit_user_clone_of_param(expr, param_name, &mut found);
-        };
         for stmt in body {
-            match stmt {
-                Statement::Expression { expr, .. }
-                | Statement::Return {
-                    value: Some(expr), ..
-                } => visit_expr(expr),
-                Statement::Let { value, .. } => visit_expr(value),
-                _ => {}
+            self.statement_visit_explicit_user_clone_of_param(stmt, param_name, &mut found);
+            if found {
+                break;
             }
         }
         found
+    }
+
+    fn statement_visit_explicit_user_clone_of_param(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Assignment { value: expr, .. } => {
+                self.expression_visit_explicit_user_clone_of_param(expr, param_name, found);
+            }
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(value, param_name, found);
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
+                    }
+                }
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(condition, param_name, found);
+                for s in then_block {
+                    self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
+                }
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
+                    }
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(condition, param_name, found);
+                for s in body {
+                    self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
+                }
+            }
+            Statement::For {
+                iterable, body, ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(iterable, param_name, found);
+                for s in body {
+                    self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_visit_explicit_user_clone_of_param(value, param_name, found);
+                for arm in arms {
+                    self.expression_visit_explicit_user_clone_of_param(&arm.body, param_name, found);
+                }
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                for s in body {
+                    self.statement_visit_explicit_user_clone_of_param(s, param_name, found);
+                }
+            }
+            Statement::Return { value: None, .. } => {}
+            _ => {}
+        }
     }
 
     fn expression_visit_explicit_user_clone_of_param(
@@ -8938,26 +9011,92 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         found: &mut bool,
     ) {
+        if *found {
+            return;
+        }
+        if crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(expr)
+            && crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(expr)
+                == Some(param_name)
+        {
+            *found = true;
+            return;
+        }
         match expr {
-            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(function, param_name, found);
                 for (_, arg) in arguments {
-                    if crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg)
-                        && crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg)
-                            == Some(param_name)
-                    {
-                        *found = true;
-                    }
+                    self.expression_visit_explicit_user_clone_of_param(arg, param_name, found);
+                }
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(object, param_name, found);
+                for (_, arg) in arguments {
+                    self.expression_visit_explicit_user_clone_of_param(arg, param_name, found);
+                }
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_visit_explicit_user_clone_of_param(object, param_name, found);
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_visit_explicit_user_clone_of_param(object, param_name, found);
+                self.expression_visit_explicit_user_clone_of_param(index, param_name, found);
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_visit_explicit_user_clone_of_param(left, param_name, found);
+                self.expression_visit_explicit_user_clone_of_param(right, param_name, found);
+            }
+            Expression::Unary { operand, .. }
+            | Expression::Cast { expr: operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::AsyncCall { expr: operand, .. }
+            | Expression::SpawnCall { expr: operand, .. }
+            | Expression::ChannelRecv {
+                channel: operand, ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(operand, param_name, found);
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                for e in elements {
+                    self.expression_visit_explicit_user_clone_of_param(e, param_name, found);
+                }
+            }
+            Expression::StructLiteral { fields, .. } => {
+                for (_, e) in fields {
+                    self.expression_visit_explicit_user_clone_of_param(e, param_name, found);
+                }
+            }
+            Expression::MapLiteral { pairs, .. } => {
+                for (k, v) in pairs {
+                    self.expression_visit_explicit_user_clone_of_param(k, param_name, found);
+                    self.expression_visit_explicit_user_clone_of_param(v, param_name, found);
+                }
+            }
+            Expression::Range { start, end, .. } | Expression::ChannelSend {
+                channel: start,
+                value: end,
+                ..
+            } => {
+                self.expression_visit_explicit_user_clone_of_param(start, param_name, found);
+                self.expression_visit_explicit_user_clone_of_param(end, param_name, found);
+            }
+            Expression::Closure { body, .. } => {
+                self.expression_visit_explicit_user_clone_of_param(body, param_name, found);
+            }
+            Expression::MacroInvocation { args, .. } => {
+                for e in args {
+                    self.expression_visit_explicit_user_clone_of_param(e, param_name, found);
                 }
             }
             Expression::Block { statements, .. } => {
                 for stmt in statements {
-                    if let Statement::Expression { expr, .. }
-                    | Statement::Return {
-                        value: Some(expr), ..
-                    } = stmt
-                    {
-                        self.expression_visit_explicit_user_clone_of_param(expr, param_name, found);
-                    }
+                    self.statement_visit_explicit_user_clone_of_param(stmt, param_name, found);
                 }
             }
             _ => {}
