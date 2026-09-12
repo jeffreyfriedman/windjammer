@@ -270,6 +270,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.253 WindjammerDB CQ-C5 — WDB-163 &mut State early-return (2026-09-12)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-162** `&mut Value` temps | ✅ tip GREEN (product full multipass clear) |
+| Tip **WDB-163** `&mut State` formal + bare `(state,)` return | ❌ tip **RED** — full multipass `relational_pg_serve_port` mut_formal=5 + bare_return=6; tip-cluster owned |
+| `cargo check --lib` | ⚠️ **~132** errors |
+
+**Compiler agent priority:** WDB-163; residual String/`&str`/Vec/E0596.
+
 ## P3.252 WindjammerDB CQ-C5 — tip 157–160 product rebuild + WDB-162 (2026-09-12)
 
 | Change | Status |
