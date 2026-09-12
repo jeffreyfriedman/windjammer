@@ -77,21 +77,23 @@ fn wdb166_module_file_owned_field_clone_into_str_formal_must_borrow() {
     eprintln!("WDB-166 ffi.rs:\n{ffi_rs}\nexec.rs:\n{exec_rs}");
 
     let demoted = ffi_rs.contains("sql: &str") || ffi_rs.contains("sql:&str");
-    let owned_clone_into_str = demoted
-        && (exec_rs.contains("emit.sql.clone()")
-            || exec_rs.contains("sql_via_provider(emit.table.clone(), emit.sql.clone())"));
+    let owned_clone_into_str = exec_rs.contains("emit.sql.clone()")
+        || exec_rs.contains("sql_via_provider(emit.table.clone(), emit.sql.clone())");
     let borrows_field = exec_rs.contains("&emit.sql")
         || exec_rs.contains("sql_via_provider(&emit.table, &emit.sql)")
-        || exec_rs.contains("sql_via_provider(emit.table.as_str()")
         || exec_rs.contains("&emit.table");
 
-    // GREEN if formal stays owned String, or demoted + borrow (not bare .clone() into &str).
-    let keeps_owned_formal = ffi_rs.contains("sql: String") || ffi_rs.contains("sql:String");
-
-    assert!(
-        keeps_owned_formal || !owned_clone_into_str || borrows_field,
-        "WDB-166 RED: demoted &str formal still receives emit.sql.clone() (owned String). Got exec:\n{exec_rs}\nffi:\n{ffi_rs}"
-    );
+    // Product FFI demotes read-only sql to &str. Tip must either keep owned String
+    // (also GREEN) or, when demoted, borrow field clones (`&emit.sql`) — never
+    // bare `.clone()` into `&str` (product analytic E0308 storm).
+    if demoted {
+        assert!(
+            !owned_clone_into_str || borrows_field,
+            "WDB-166 RED: demoted &str formal still receives emit.sql.clone(). Got exec:\n{exec_rs}\nffi:\n{ffi_rs}"
+        );
+    } else {
+        eprintln!("WDB-166: tip kept owned sql formal (acceptable); product gate still requires no clone-into-&str");
+    }
 }
 
 #[test]

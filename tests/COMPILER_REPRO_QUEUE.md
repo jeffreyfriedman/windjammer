@@ -287,7 +287,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | `cargo check --lib` (in-repo target) | ⚠️ **254** errors (E0308×250, E0382×4); **`found &mut` = 0** |
 | Dominant bucket | **168×** `expected &str, found String` (e.g. `emit.sql.clone()` → demoted FFI `sql: &str`) |
 | Tip **WDB-159** sequential owned→&str borrow | ✅ tip GREEN (does **not** cover struct-field `.clone()`) |
-| Tip **WDB-166** field `.clone()` into demoted `&str` | ❌ tip **RED** (filed) — product analytic gate |
+| Tip **WDB-166** field `.clone()` into demoted `&str` | ❌ **product RED** (ran); tip fixture GREEN when formal stays owned — product `emit.sql.clone()` into `sql: &str` |
 
 **Compiler agent priority:** WDB-166 (signature-driven borrow of owned field/`clone` into demoted `&str`); then `&T`↔owned Custom (OptDatedArtifact, MvccStore, …).
 

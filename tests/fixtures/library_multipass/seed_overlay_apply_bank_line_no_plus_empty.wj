@@ -1,0 +1,52 @@
+// LedgerKit seed_bank_*_overlay `apply_*` class — BankLineView rebuild without
+// empty-concat. Module `const string` into owned struct field must own
+// (`.to_string()`), not `.clone()` on `&str`.
+
+pub struct BankLineView {
+    pub id: string,
+    pub account_code: string,
+    pub transaction_date: string,
+    pub amount_cents: int,
+    pub description: string,
+    pub external_id: string,
+    pub status: string,
+    pub matched_journal_entry_id: string,
+    pub cleared: bool,
+}
+
+pub const LINE_STATUS_MATCHED: string = "matched"
+
+fn lookup_seed_bank_match(line_id: string) -> Option<string> {
+    if line_id == "" {
+        return None
+    }
+    Some("je-1")
+}
+
+pub fn apply_seed_bank_match_overlay(lines: Vec<BankLineView>) -> Vec<BankLineView> {
+    let mut out: Vec<BankLineView> = vec![]
+    let mut i = 0
+    while i < lines.len() {
+        let line = lines[i]
+        match lookup_seed_bank_match(line.id) {
+            Some(je) => {
+                out.push(BankLineView {
+                    id: line.id,
+                    account_code: line.account_code,
+                    transaction_date: line.transaction_date,
+                    amount_cents: line.amount_cents,
+                    description: line.description,
+                    external_id: line.external_id,
+                    status: LINE_STATUS_MATCHED,
+                    matched_journal_entry_id: je,
+                    cleared: line.cleared,
+                })
+            },
+            None => {
+                out.push(line)
+            },
+        }
+        i = i + 1
+    }
+    out
+}
