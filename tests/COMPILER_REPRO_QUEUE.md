@@ -111,7 +111,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Cross-crate `render(owned_template(), vars)` must cargo-check (`wj-template`)** | `bug_multipass_cross_crate_render_owned_template_helper_test` | ✅ tip GREEN |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
 | P1 | **WDB-151: owned store `T→T` formal must not demote to `&T`** | `bug_wdb151_module_file_owned_store_formal_must_not_demote_to_ref_test` | ✅ tip GREEN |
-| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_wdb155_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ⚠️ **RED** — blocks wdb-layers cold `gen/` rebuild |
+| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_wdb155_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ⚠️ **RED** — binder-forwarder demotes `emit_sql` to `&mut`; emit-only fixture false-GREEN |
 | P1 | **WDB-154: `use crate::<mod>::reexport` must keep module path** | `bug_wdb154_module_file_use_crate_mod_reexport_must_keep_path_test` | ✅ tip GREEN |
 | P1 | **WDB-153: `a + (b as u32) << shift` must shift masked byte first** | `bug_wdb153_add_shift_precedence_must_shift_masked_byte_first_test` | ✅ tip GREEN — WJ shifts bind tighter than `+`; Rust emit `value + ((…) << shift)` |
 | P1 | **WDB-152: string lit into owned `string` formal must `.to_string()`** | `bug_wdb152_module_file_string_lit_into_owned_string_formal_must_to_string_test` | ✅ tip GREEN — `"worker_hb".to_string()` (recheck 2026-09-10) |
@@ -234,14 +234,14 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Disk cleanup | ✅ ~22Gi free (debug target pruned) |
-| Product: multicol hook wraps Ready serve (`pg_wire_serve_sf1_multicol_state_from_ready`) — root cause was rebuild Startup serve after startup | ✅ `.wj` written |
-| Tip **WDB-155** Option/match AST pipeline must keep owned formal (not `&mut`) | ⚠️ **RED** — `wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal` |
-| Product gen: cold `transpile_relational_module_file` + dogfood no longer rebuilds green `gen/` (E0596/E0308 storm) | ⚠️ **BLOCKED** on WDB-155 (prior green gen was gitignored; overwritten this session) |
-| OTLP stack export `metric_name` | ⏳ deferred until gen compiles |
-| layers full `--lib` | ⚠️ blocked (cannot compile) |
+| Disk cleanup | ✅ ~33–36Gi free |
+| Product: multicol Ready-wrap + OTLP `metric=` KV parse | ✅ `.wj` + tip-sync |
+| Tip **WDB-155** emit-only Option/match fixture | ⚠️ false-GREEN |
+| Tip **WDB-155** binder-forwarder (`emit_sql` → `bind_ast`) | ⚠️ **RED** — `emit_sql(ast: &mut SqlAst)` + `bind_ast(ast.clone())` |
+| Product gen cold rebuild | ⚠️ blocked — tip over-demotes AST/writeback; dogfood strip partial (~600 rustc errs) |
+| layers full `--lib` | ⚠️ blocked |
 
-**Compiler agent priority:** **WDB-155** (unblocks layers gen cold rebuild), then **WDB-154**, **WDB-153**, **WDB-150**.
+**Compiler agent priority:** **WDB-155** binder-forwarder demotion (do not demote owned forwarders that only `.clone()` into owned callees); auto-`let mut` if demoted.
 
 ## P3.217 WindjammerDB CQ-C5 — semantic Cap call-cycle cut + WDB-154 (2026-09-11)
 
