@@ -9,6 +9,7 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  i64_bitand_hex_mask_must_not_emit_u8_literal
   owned_match_binding_cross_fn_owned_string_formal_must_move
   owned_match_binding_hexagonal_cross_module_must_move
   wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal

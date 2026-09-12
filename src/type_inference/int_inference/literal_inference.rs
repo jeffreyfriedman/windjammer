@@ -428,7 +428,8 @@ impl IntInference {
             0
         };
         for (i, (_label, arg)) in arguments.iter().enumerate() {
-            if let Some(param_type) = param_types.get(i + param_offset) {
+            let param_type = param_types.get(i + param_offset);
+            if let Some(param_type) = param_type {
                 if let Some(int_ty) = self.extract_int_type(param_type) {
                     let arg_id = self.get_expr_id(arg);
                     self.constraints.push(IntConstraint::MustBe(
@@ -438,7 +439,12 @@ impl IntInference {
                     ));
                 }
             }
-            self.collect_expression_constraints(arg, return_type);
+            // Prefer the formal's type over the enclosing function return (Vec<u8>
+            // returns must not pollute push-arg nested bitops via nested extract).
+            self.collect_expression_constraints(
+                arg,
+                param_type.or(return_type),
+            );
         }
     }
 }
