@@ -280,6 +280,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** WDB-163; residual String/`&str`/Vec/E0596.
 
+## P3.253 WindjammerDB CQ-C5 — WDB-163/164 store/serve owned consume-rebind (2026-09-12)
+
+| Change | Status |
+|--------|--------|
+| Tip **WDB-164** `let mut out = store` keep owned Store | ✅ tip GREEN — Assignment call-hint walk + `param_moved_into_let_binding` skip/restore |
+| Tip **WDB-163** early-return owned ServeState | ✅ tip fixture GREEN; product retranspile → owned `PgWireServeState` (no `&mut` formal) |
+| Product cold retranspile after tip | ✅ `relational_mvcc_put_version(store: RelationalMvccStore, …)`; serve formals owned |
+| `cargo check --lib` | ⚠️ re-sample after this tip |
+
+**Compiler agent priority:** residual String/`&str`/Vec/E0596; sample next rustc bucket.
+
 ## P3.252 WindjammerDB CQ-C5 — tip 157–160 product rebuild + WDB-162 (2026-09-12)
 
 | Change | Status |

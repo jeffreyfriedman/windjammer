@@ -80,6 +80,7 @@ pub fn restore_owned_field_forward_formals(
             if !(param_forwards_fields_in_call_args_only(body, param_name)
                 || param_stored_in_struct_literal(body, param_name)
                 || param_whole_binding_returned(body, param_name)
+                || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name))
             {
                 continue;
@@ -292,6 +293,75 @@ fn char_to_digit(ch: char) -> Option<int> {
     }
 
     #[test]
+    fn bare_pass_skips_store_consumed_via_let_mut_rebind() {
+        // WDB-164: `put_version(store) { let mut out = store; …; out }` must stay owned.
+        // Call sites use assignment `store = put_version(store, …)` (was invisible to hint walk).
+        let program = parse_program(
+            r#"
+struct Store { n: int }
+fn seed() -> int {
+    let mut store = Store { n: 0 }
+    store = put_version(store)
+    store.n
+}
+fn put_version(store: Store) -> Store {
+    let mut out = store
+    out.n = out.n + 1
+    out
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry
+            .signatures
+            .insert("put_version".to_string(), owned_custom_sig("put_version", "Store"));
+        let programs = vec![program];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let sig = registry.signatures.get("put_version").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "WDB-164: consume-via-let-mut-rebind Store must stay owned, got {:?}",
+            sig.param_ownership
+        );
+        assert!(
+            !matches!(sig.param_types[0], Type::MutableReference(_)),
+            "WDB-164: param type must not wrap MutableReference, got {:?}",
+            sig.param_types[0]
+        );
+    }
+
+    #[test]
+    fn restore_undoes_preexisting_mut_borrow_on_let_mut_rebind_consume() {
+        let program = parse_program(
+            r#"
+struct Store { n: int }
+fn put_version(store: Store) -> Store {
+    let mut out = store
+    out.n = out.n + 1
+    out
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        let mut sig = owned_custom_sig("put_version", "Store");
+        sig.param_ownership[0] = OwnershipMode::MutBorrowed;
+        sig.param_types[0] = Type::MutableReference(Box::new(Type::Custom("Store".into())));
+        registry.signatures.insert("put_version".to_string(), sig);
+        let programs = vec![program];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let out = registry.signatures.get("put_version").unwrap();
+        assert_eq!(
+            out.param_ownership[0],
+            OwnershipMode::Owned,
+            "WDB-164 restore must undo MutBorrowed let-mut-rebind consume; got {:?}",
+            out.param_ownership
+        );
+    }
+
+    #[test]
     fn bare_pass_skips_http_reply_field_forward_helper() {
         let program = parse_program(
             r#"
@@ -458,6 +528,11 @@ fn walk_statements_for_calls<'ast>(
             Statement::For { body, iterable, .. } => {
                 visit_expr_for_calls(iterable, programs, registry, copy_types, hints);
                 walk_statements_for_calls(body, programs, registry, copy_types, hints);
+            }
+            // WDB-164: `store = put_version(store, …)` assignment call sites must participate
+            // in bare-pass hints (otherwise consume-rebinding callees are missed).
+            Statement::Assignment { value, .. } => {
+                visit_expr_for_calls(value, programs, registry, copy_types, hints);
             }
             Statement::Match { value, arms, .. } => {
                 visit_expr_for_calls(value, programs, registry, copy_types, hints);
@@ -728,6 +803,8 @@ fn bare_pass_hint_should_skip(
             param_stored_in_struct_literal(body, param_name)
                 || param_forwards_fields_in_call_args_only(body, param_name)
                 || param_whole_binding_returned(body, param_name)
+                // WDB-164: `let mut out = store` consumes owned `store` — cannot be `&mut Store`.
+                || param_moved_into_let_binding(body, param_name)
                 // WDB-158: compare helpers that only `match` the formal must stay owned
                 // (not `&mut Cell` / `&mut Value`).
                 || param_used_only_as_match_scrutinee(body, param_name)
@@ -736,6 +813,7 @@ fn bare_pass_hint_should_skip(
             param_stored_in_struct_literal(body, param_name)
                 || param_forwards_fields_in_call_args_only(body, param_name)
                 || param_whole_binding_returned(body, param_name)
+                || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
         }
         OwnershipMode::Owned => false,
@@ -990,7 +1068,9 @@ pub fn restore_owned_returned_formals(
             else {
                 continue;
             };
-            if !param_whole_binding_returned(body, param_name) {
+            if !param_whole_binding_returned(body, param_name)
+                && !param_moved_into_let_binding(body, param_name)
+            {
                 continue;
             }
             new_sig.param_ownership[idx] = OwnershipMode::Owned;
@@ -1125,6 +1205,66 @@ pub fn param_forwards_fields_in_call_args_only(body: &[&Statement], param_name: 
 fn param_stored_in_struct_literal(body: &[&Statement], param_name: &str) -> bool {
     body.iter()
         .any(|stmt| statement_stores_param_in_struct_literal(stmt, param_name))
+}
+
+/// WDB-164: callee moves the formal into a local (`let mut out = store`) then mutates /
+/// returns that local. The formal must stay owned — `&mut Store` cannot move into `out`.
+fn param_moved_into_let_binding(body: &[&Statement], param_name: &str) -> bool {
+    body.iter()
+        .any(|stmt| statement_moves_param_into_let(stmt, param_name))
+}
+
+fn statement_moves_param_into_let(stmt: &Statement, param_name: &str) -> bool {
+    match stmt {
+        Statement::Let { value, else_block, .. } => {
+            expr_is_bare_param(value, param_name)
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| statement_moves_param_into_let(s, param_name))
+                })
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| statement_moves_param_into_let(s, param_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| statement_moves_param_into_let(s, param_name))
+                })
+        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| statement_moves_param_into_let(s, param_name)),
+        Statement::Match { arms, .. } => arms.iter().any(|arm| {
+            if let Expression::Block { statements, .. } = &arm.body {
+                statements
+                    .iter()
+                    .any(|s| statement_moves_param_into_let(s, param_name))
+            } else {
+                false
+            }
+        }),
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Assignment { value: expr, .. } => {
+            if let Expression::Block { statements, .. } = expr {
+                statements
+                    .iter()
+                    .any(|s| statement_moves_param_into_let(s, param_name))
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
 }
 
 enum ParamUsage {
