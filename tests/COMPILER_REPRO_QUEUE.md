@@ -259,19 +259,37 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
-## P3.250 WindjammerDB CQ-C5 — cold-gen storm gates WDB-156–159 (2026-09-12)
+## P3.251 WindjammerDB CQ-C5 — cold tip rebuild + dogfood Cap SQL restore + WDB-160/161 (2026-09-12)
+
+| Change | Status |
+|--------|--------|
+| Disk cleanup (debug targets + `/tmp/wj_*`) | ✅ ~23 Gi free |
+| Tip cold `transpile_relational_module_file` + sync | ✅ tip 0.50.0 |
+| Dogfood: **stop** Cap SQL `String→&str` demotion under module-file | ✅ TDD `test_dogfood_module_file_keeps_owned_cap_sql.py` FAIL→PASS |
+| `cargo check --lib` after fix | ⚠️ **359** errors (was ~643 stale / ~380 demoted) |
+| Tip **WDB-157** `impl Into<String>` | ⚠️ tip **RED** |
+| Tip **WDB-158** Cell/Value `&mut` | ⚠️ tip **RED** (~122 `found &mut`) |
+| Tip **WDB-159** sql.clone→&str | ✅ tip GREEN; product false path was dogfood demotion |
+| Tip **WDB-160** `process::exit` → `i32` not `i64` | ⚠️ tip **RED** (ran; emit `2_i64`) — ~78 int-width/exit |
+| Tip **WDB-161** `resolver.clone().has_table` ≠ `.as_ref()` | ⚠️ FILED / run — product binder E0599 (~40) |
+
+**Compiler agent priority:** WDB-157, WDB-158, WDB-160, WDB-161 (then residual E0596 / expected-String).
+
+## P3.250 WindjammerDB CQ-C5 — cold-gen storm gates WDB-156–161 (2026-09-12)
 
 | Gate | Status | Product bucket |
 |------|--------|----------------|
-| **WDB-155** binder-forwarder | ✅ tip GREEN | AST owned formal (cleared; storm remains) |
-| **WDB-156** writeback owned | ⚠️ tip often GREEN (false-GREEN vs product) | writeback `&mut` |
-| **WDB-157** `string` ≠ `impl Into<String>`+clone | ⚠️ tip **RED** (ran) | `pg_wire_parse` |
-| **WDB-158** Cell/Value compare ≠ `&mut` | ⚠️ tip **RED** (ran) | `found &mut` (~154) |
-| **WDB-159** owned string → demoted `&str` borrow not clone | ⚠️ tip **GREEN** on multipass fixture (`&sql`) but product cold `gen/` still `sql.clone()` into `&str` fronts — **false-GREEN vs product path** | `expected &str, found String` (~157) |
+| **WDB-155** binder-forwarder | ✅ tip GREEN | AST owned formal |
+| **WDB-156** writeback owned | ✅ tip GREEN (fixture) | writeback `&mut` |
+| **WDB-157** `string` ≠ `impl Into<String>`+clone | ✅ tip GREEN — Into only on `self` methods | `pg_wire_parse` |
+| **WDB-158** Cell/Value compare ≠ `&mut` | ✅ tip GREEN — match-scrutinee skip/restore | `found &mut` (~154) |
+| **WDB-159** owned string → demoted `&str` borrow not clone | ✅ tip GREEN (fixture); product cold may still `sql.clone()` | `expected &str, found String` |
+| **WDB-160** `process::exit` → i32 | ❌ tip RED (gate shipped) | int-width exit |
+| **WDB-161** no spurious `.as_ref()` on method recv | ❌ tip RED (gate shipped) | binder_port |
 
-**Coverage honesty:** fixing tip RED gates (157/158) does **not** clear all ~643 rustc errors. WDB-159 tip fixture does not yet catch product cold emit. Ungated / weak: int-width (~86), Vec (~33), expected-String (~93), E0596 cascades (~54), product-only `sql.clone()→&str`.
+**Coverage honesty:** tip 157–159 green does **not** clear all cold-gen rustc errors. Next: WDB-160/161 + int-width/Vec residuals.
 
-**Compiler agent priority:** WDB-157, WDB-158; reproduce WDB-159 on **product-shaped multipass / module-file** path that still emits `sql.clone()`; then int-width/Vec/expected-String residuals.
+**Compiler agent priority:** WDB-160 (`process::exit` i32), WDB-161 (spurious `as_ref`); strengthen WDB-159 if product cold still clones.
 
 ## P3.218 WindjammerDB CQ-C5 — multicol Ready-wrap + WDB-155 (2026-09-11)
 

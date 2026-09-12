@@ -423,6 +423,11 @@ impl<'ast> CodeGenerator<'ast> {
                             formal,
                             already_usize,
                         );
+                        crate::codegen::rust::type_casting::coerce_arg_str_for_i32_formal(
+                            arg,
+                            &mut arg_str,
+                            formal,
+                        );
                     }
 
                     // Ownership-based string coercion for instance method calls

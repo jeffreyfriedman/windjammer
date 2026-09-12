@@ -3778,6 +3778,12 @@ impl<'ast> CodeGenerator<'ast> {
             formal_for_usize,
             already_usize,
         );
+        // WDB-160: runtime `process::exit(i32)` — cast WJ `int`/`i64` args.
+        crate::codegen::rust::type_casting::coerce_arg_str_for_i32_formal(
+            arg_expr,
+            coerced,
+            formal.or(formal_for_usize),
+        );
         // Numeric inference may have already emitted `1_usize` from a Vec::insert
         // suffix match; undo when the *effective* formal is not usize (after
         // specialization / collection-element recovery — not raw `T`).

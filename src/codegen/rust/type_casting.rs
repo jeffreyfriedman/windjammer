@@ -34,6 +34,47 @@ pub fn type_is_wj_int_formal(ty: &Type) -> bool {
         || matches!(ty, Type::Custom(n) if n == "int" || n == "i64" || n == "i32")
 }
 
+/// True when a formal is Rust `i32` (e.g. `process::exit`, FFI status codes).
+pub fn type_is_i32(ty: &Type) -> bool {
+    matches!(ty, Type::Int32) || matches!(ty, Type::Custom(n) if n == "i32")
+}
+
+/// Coerce a WJ `int`/`i64` argument to an `i32` formal (WDB-160 / `process::exit`).
+///
+/// Signature-driven: only when the resolved formal is `i32`. Literals already
+/// suffixed `_i32` are left alone; identifiers/`i64` bindings get `as i32`.
+pub fn coerce_arg_str_for_i32_formal(
+    arg: &Expression,
+    arg_str: &mut String,
+    formal: Option<&Type>,
+) {
+    if !formal.is_some_and(type_is_i32) {
+        return;
+    }
+    if arg_str.contains(" as i32") || arg_str.ends_with("_i32") {
+        return;
+    }
+    // Already a narrow int literal without suffix is fine for Rust inference,
+    // but WJ defaults emit `_i64` — strip and re-suffix, or cast bindings.
+    if let Expression::Literal {
+        value: Literal::Int(val),
+        ..
+    } = arg
+    {
+        let i64_suf = format!("{val}_i64");
+        if *arg_str == i64_suf || *arg_str == val.to_string() {
+            *arg_str = format!("{val}_i32");
+            return;
+        }
+    }
+    let needs_parens = matches!(arg, Expression::Binary { .. }) || arg_str.contains(' ');
+    if needs_parens {
+        *arg_str = format!("({}) as i32", arg_str);
+    } else {
+        *arg_str = format!("{} as i32", arg_str);
+    }
+}
+
 /// Coerce a call argument to match a `usize` formal (Rust collection capacity/index).
 ///
 /// Signature-driven: only runs when the resolved formal is `usize`. Skips when the
