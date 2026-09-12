@@ -10,13 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-161: method calls on owned/locals must not emit spurious `.as_ref()`.
+//! WDB-161: demoted `&Resolver` + `resolver.clone().has_table` must not emit `.as_ref()`.
 //!
-//! WindjammerDB CQ-C5 cold tip gen (`relational_sql_binder_port.rs`):
-//!   `resolver.as_ref().has_table(...)` → E0599 AsRef not satisfied (~40 residuals).
+//! Product `resolve_select(resolver: RelationalCatalogResolver, …)` tip-demotes to
+//! `&RelationalCatalogResolver`, then rewrites:
+//!   `.wj`: `resolver.clone().has_table(...)`
+//!   tip:  `resolver.as_ref().has_table(...)` → E0599 (~40).
 //!
-//! Idiomatic Windjammer never writes `.as_ref()`; tip must not invent it for method
-//! receivers that are already the correct type (owned or `&T`).
+//! After demotion, method call must be `resolver.has_table(...)` (already `&self`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -29,33 +30,44 @@ pub mod bind
 "#;
 
 const CATALOG: &str = r#"
-pub struct Resolver {
+pub trait CatalogResolver {
+    fn has_table(self, name: string) -> bool
+}
+
+pub struct RelationalCatalogResolver {
     pub name: string,
 }
 
-pub fn has_table(resolver: Resolver, table: string) -> bool {
-    resolver.name == table
+impl CatalogResolver for RelationalCatalogResolver {
+    fn has_table(self, name: string) -> bool {
+        self.name == name
+    }
 }
 
-pub fn make_resolver() -> Resolver {
-    Resolver { name: "t" }
+pub fn make_resolver() -> RelationalCatalogResolver {
+    RelationalCatalogResolver { name: "t" }
 }
 "#;
 
 const BIND: &str = r#"
-use crate::catalog::Resolver
-use crate::catalog::has_table
+use crate::catalog::CatalogResolver
+use crate::catalog::RelationalCatalogResolver
 use crate::catalog::make_resolver
 
-pub fn check(table: string) -> bool {
-    let resolver = make_resolver()
-    has_table(resolver, table)
+pub fn resolve_column(resolver: RelationalCatalogResolver, table: string, logical: string) -> bool {
+    resolver.has_table(table) && logical.len() > 0
 }
 
-pub fn check_method(table: string) -> bool {
-    let resolver = make_resolver()
-    // Prefer free-fn path above; if tip emits method style, must not insert .as_ref()
-    has_table(resolver, table)
+pub fn resolve_select(resolver: RelationalCatalogResolver, table: string) -> bool {
+    if !resolver.clone().has_table(table.clone()) {
+        return false
+    }
+    let ok = resolve_column(resolver.clone(), table.clone(), "c0")
+    ok
+}
+
+pub fn cap() -> bool {
+    resolve_select(make_resolver(), "t")
 }
 "#;
 
@@ -68,24 +80,34 @@ fn wdb161_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb161_module_file_must_not_emit_spurious_as_ref_on_method_receiver() {
-    let test = wdb161_fixture();
+fn wdb161_module_file_clone_method_receiver_must_not_emit_as_ref() {
+    let mut test = wdb161_fixture();
     let map = test
         .compile()
         .expect("WDB-161 multipass compile should succeed (codegen may still be wrong)");
     let bind_rs = map.get("bind.rs").expect("bind.rs");
-    let catalog_rs = map.get("catalog.rs").expect("catalog.rs");
 
-    eprintln!("WDB-161 catalog.rs:\n{catalog_rs}\nbind.rs:\n{bind_rs}");
+    eprintln!("WDB-161 bind.rs:\n{bind_rs}");
 
-    let spurious = bind_rs.contains(".as_ref()") || catalog_rs.contains(".as_ref()");
-    if spurious {
+    let demoted = bind_rs.contains("resolver: &RelationalCatalogResolver")
+        || bind_rs.contains("resolver:&RelationalCatalogResolver");
+
+    if bind_rs.contains(".as_ref()") {
         panic!(
-            "WDB-161 RED: tip must not emit .as_ref() on resolver/method receivers. \
-             Product: resolver.as_ref().has_table → E0599 (~40)."
+            "WDB-161 RED: tip rewrote demoted resolver.clone().has_table → .as_ref().has_table. \
+             Product: relational_sql_binder_port resolve_select → E0599 (~40)."
         );
     }
 
-    test.cargo_check()
-        .expect("WDB-161: resolver call sites must cargo-check without .as_ref().");
+    if demoted {
+        // Borrowed formal: trait &self method must call through resolver directly.
+        assert!(
+            bind_rs.contains("resolver.has_table(") || bind_rs.contains("(*resolver).has_table("),
+            "WDB-161 RED: demoted &Resolver must call has_table without .as_ref(). Got:\n{bind_rs}"
+        );
+    }
+
+    test.cargo_check().expect(
+        "WDB-161: demoted CatalogResolver method receivers must cargo-check without .as_ref().",
+    );
 }
