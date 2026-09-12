@@ -279,6 +279,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.256 WindjammerDB CQ-C5 — census after WDB-165 + WDB-166 field-clone→&str (2026-09-12)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-165** owned State call | ✅ tip + product GREEN |
+| `cargo check --lib` (in-repo target) | ⚠️ **254** errors (E0308×250, E0382×4); **`found &mut` = 0** |
+| Dominant bucket | **168×** `expected &str, found String` (e.g. `emit.sql.clone()` → demoted FFI `sql: &str`) |
+| Tip **WDB-159** sequential owned→&str borrow | ✅ tip GREEN (does **not** cover struct-field `.clone()`) |
+| Tip **WDB-166** field `.clone()` into demoted `&str` | ❌ tip **RED** (filed) — product analytic gate |
+
+**Compiler agent priority:** WDB-166 (signature-driven borrow of owned field/`clone` into demoted `&str`); then `&T`↔owned Custom (OptDatedArtifact, MvccStore, …).
+
 ## P3.255 WindjammerDB CQ-C5 — WDB-165 owned State call over-borrow (2026-09-12)
 
 | Gate | Status |
@@ -287,7 +299,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-165** `&state.clone()` into owned formal | ✅ tip GREEN — local `emitted_owned_arg_contract` beats stale global shared-ref; peel `&` before `.clone()` |
 | Product `relational_pg_serve_port` | ✅ `on_parse(state.clone(), …)` / `on_sync(state.clone())` (no leading `&`) |
 | Gate `demoted_str_after_starts_with` (owned-throughout OK) | ✅ tip GREEN |
-| Product `cargo check --lib` | ⚠️ was **~118** after sync; re-sample |
+| Product `cargo check --lib` | ⚠️ was **~118** after sync; re-sample → see P3.256 (**254**, mut cleared) |
 
 **Compiler agent priority:** residual String/`&str`/Vec/E0596; OptDatedArtifact/`&T`→owned buckets; P3.254 single-use local move.
 

@@ -1072,6 +1072,37 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
 ) -> bool {
+    // P3.254: bare user free-fns with owned `string` formals must not inherit stdlib
+    // homonym borrow (`get(text, key)` vs `json::get` / `Map::get` / `env::get`).
+    // Qualified runtime callees (`json::get`) still honor the baseline below.
+    if let Some(sig) = signature {
+        let pidx = sig.arg_param_index(arg_index);
+        let bare_user = !callee_name.contains("::")
+            && !sig.name.contains("::")
+            && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                sig,
+            )
+            && !sig.formal_param_types.is_empty();
+        if bare_user
+            && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                sig, pidx,
+            )
+            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+                || sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(pidx))
+                    .copied()
+                    == Some(false)
+                || matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(OwnershipMode::Owned)
+                ))
+        {
+            return false;
+        }
+    }
+
     // Runtime/stdlib scanner baseline wins over layered WJ stubs — including stubs that
     // codegen-confirmed owned emission when analyzing `std/json.wj`
     // (`is_array(value: Value) { false }` → `emitted_rust_ref_params=[false]`).
@@ -1544,6 +1575,29 @@ mod pattern_registry_tests {
             Some(&owned),
             0
         ));
+    }
+
+    #[test]
+    fn bare_user_get_owned_string_beats_stdlib_get_homonym_borrow() {
+        use crate::parser::Type;
+        // P3.254 / wj-toml: user `get(text: string, key: string)` must move, not inherit
+        // stdlib/map/json `get` borrow baseline → `get(&text, …)`.
+        let mut sig = FunctionSignature::default();
+        sig.name = "get".into();
+        sig.param_types = vec![Type::String, Type::String];
+        sig.formal_param_types = vec![Type::String, Type::String];
+        sig.param_ownership = vec![OwnershipMode::Owned, OwnershipMode::Owned];
+        sig.emitted_rust_ref_params = Some(vec![false, false]);
+        let mut reg = SignatureRegistry::empty();
+        reg.add_function(sig.name.clone(), sig.clone());
+        assert!(
+            !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&sig), 0),
+            "bare user get(text: String) must not auto-borrow via stdlib get homonym"
+        );
+        assert!(
+            !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&sig), 1),
+            "bare user get key: String must not auto-borrow"
+        );
     }
 
     #[test]
