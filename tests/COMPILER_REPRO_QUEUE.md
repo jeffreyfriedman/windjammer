@@ -280,9 +280,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | `cargo check --lib` | ⚠️ **~236–259** (was ~643 → ~358 → ~236) |
 | Tip **WDB-160** | ✅ tip + product GREEN (`exit(2_i32)`) |
 | Tip **WDB-161** product as_ref | ✅ tip full multipass cleared (product gate GREEN) |
-| Tip **WDB-162** `&mut Value::Int64` into owned Value | ❌ tip **RED** (product gen 11×; tip-cluster clean) |
+| Tip **WDB-162** `&mut Value::Int64` into owned Value | ✅ tip GREEN — while/push/assignment struct-literal store skips MutBorrowed demotion |
 
-**Compiler agent priority:** WDB-162 (full multipass vs tip-cluster `&mut Value` temps); residual String/`&str`/Vec/E0596.
+**Compiler agent priority:** residual String/`&str`/Vec/E0596; store MutBorrowed on put_version if still wrong.
 
 ## P3.251 WindjammerDB CQ-C5 — cold tip rebuild + dogfood Cap SQL restore + WDB-160/161 (2026-09-12)
 

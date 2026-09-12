@@ -10,15 +10,17 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-162: full relational `--module-file` must not pass `&mut Value::Int64(...)`
-//! into owned `Value` formals.
+//! WDB-162: owned `Value` formal must not receive `&mut Value::Int64(...)` temporaries.
 //!
 //! Product cold gen (`relational_pg_serve_dispatch_port.rs`):
-//!   `relational_mvcc_put_version(..., &mut Value::Int64(42))` → E0308 (~98).
-//! Tip-cluster of dispatch+execute+mvcc emits owned `Value::Int64(42)` (GREEN).
+//!   `relational_mvcc_put_version(..., &mut Value::Int64(42))` → E0308.
 //!
-//! Gate A: minimal multipass must not invent `&mut` on enum temporaries.
-//! Gate B: product `relational_module_file` dispatch must not contain `&mut Value::Int64`.
+//! Root cause: bare-pass demotion to MutBorrowed when struct-literal store of `value`
+//! lives under `while` / `versions[i] = Version { value }` / `.push(Version { value })`
+//! — `param_stored_in_struct_literal` previously skipped those shapes.
+//!
+//! Gate A: multipass fixture matching put_version must not invent `&mut` + cargo-check.
+//! Gate B: product dispatch gen must not contain `&mut Value::Int64`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -41,17 +43,43 @@ pub enum Value {
 const STORE: &str = r#"
 use crate::value::Value
 
-pub fn put_version(id: i64, value: Value) -> i64 {
-    match value {
-        Value::Int64(v) => id + v,
-        Value::Null => id,
+pub struct Version {
+    pub row_id: i64,
+    pub xmin: u64,
+    pub value: Value,
+}
+
+pub struct Store {
+    pub versions: Vec<Version>,
+}
+
+pub fn put_version(store: Store, row_id: i64, xmin: u64, value: Value) -> Store {
+    let mut out = store
+    let mut i = 0
+    while i < out.versions.len() {
+        if out.versions[i].row_id == row_id && out.versions[i].xmin == xmin {
+            out.versions[i] = Version {
+                row_id: row_id,
+                xmin: xmin,
+                value: value,
+            }
+            return out
+        }
+        i = i + 1
     }
+    out.versions.push(Version {
+        row_id: row_id,
+        xmin: xmin,
+        value: value,
+    })
+    out
 }
 
 pub fn seed() -> i64 {
-    let mut n = put_version(1, Value::Int64(42))
-    n = put_version(n, Value::Int64(7))
-    n
+    let mut store = Store { versions: Vec::new() }
+    store = put_version(store, 7, 10, Value::Int64(42))
+    store = put_version(store, 1, 10, Value::Int64(10))
+    store.versions.len() as i64
 }
 "#;
 
@@ -65,17 +93,26 @@ fn wdb162_fixture() -> MultiFileTest {
 
 #[test]
 fn wdb162_module_file_owned_value_formal_must_not_receive_mut_ref_temporary() {
-    let test = wdb162_fixture();
+    let mut test = wdb162_fixture();
     let map = test
         .compile()
         .expect("WDB-162 multipass compile should succeed (codegen may still be wrong)");
     let store_rs = map.get("store.rs").expect("store.rs");
 
-    eprintln!("WDB-162 minimal store.rs:\n{store_rs}");
+    eprintln!("WDB-162 store.rs:\n{store_rs}");
+
+    let bad = store_rs.contains("&mut Value::Int64")
+        || store_rs.contains("&mut value::Value::Int64")
+        || store_rs.contains(", &mut Value::")
+        || store_rs.contains(",&mut Value::");
 
     assert!(
-        !store_rs.contains("&mut Value::Int64") && !store_rs.contains("&mut value::Value::Int64"),
-        "WDB-162: minimal multipass must not invent &mut on Value temporaries."
+        !bad,
+        "WDB-162 RED: owned Value formal received &mut temporary. Got:\n{store_rs}"
+    );
+
+    test.cargo_check().expect(
+        "WDB-162: owned Value literal args must cargo-check without &mut temporaries.",
     );
 }
 
@@ -106,7 +143,6 @@ fn wdb162_product_full_relational_module_file_must_not_emit_mut_ref_value_temp()
     assert!(
         bad == 0,
         "WDB-162 RED: full relational --module-file still emits &mut Value::Int64 ({bad}×) in {}. \
-         Tip-cluster of dispatch+mvcc alone is clean — tip must not invent &mut on owned Value temps. \
          Product: relational_mvcc_put_version(..., &mut Value::Int64(42)).",
         path.display()
     );

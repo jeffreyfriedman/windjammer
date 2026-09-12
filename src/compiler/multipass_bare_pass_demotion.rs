@@ -1289,7 +1289,10 @@ fn statement_stores_param_in_struct_literal(stmt: &Statement, param_name: &str) 
         Statement::Expression { expr, .. }
         | Statement::Return {
             value: Some(expr), ..
-        } => expr_stores_param_in_struct_literal(expr, param_name),
+        }
+        | Statement::Assignment { value: expr, .. } => {
+            expr_stores_param_in_struct_literal(expr, param_name)
+        }
         Statement::Let { value, else_block, .. } => {
             expr_stores_param_in_struct_literal(value, param_name)
                 || else_block.as_ref().is_some_and(|b| {
@@ -1310,6 +1313,19 @@ fn statement_stores_param_in_struct_literal(stmt: &Statement, param_name: &str) 
                         .any(|s| statement_stores_param_in_struct_literal(s, param_name))
                 })
         }
+        // WDB-162: `while { out.versions[i] = Version { value: value } }` / push in loop
+        // body must keep owned Value formals (not `&mut Value` at call sites).
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| statement_stores_param_in_struct_literal(s, param_name)),
+        Statement::Match { value, arms, .. } => {
+            expr_stores_param_in_struct_literal(value, param_name)
+                || arms
+                    .iter()
+                    .any(|arm| expr_stores_param_in_struct_literal(&arm.body, param_name))
+        }
         _ => false,
     }
 }
@@ -1323,6 +1339,32 @@ fn expr_stores_param_in_struct_literal(expr: &Expression, param_name: &str) -> b
             expr_stores_param_in_struct_literal(arg, param_name)
                 || matches!(arg, Expression::Identifier { name, .. } if name == param_name)
         }),
+        Expression::MethodCall {
+            object, arguments, ..
+        } => {
+            expr_stores_param_in_struct_literal(object, param_name)
+                || arguments.iter().any(|(_, arg)| {
+                    expr_stores_param_in_struct_literal(arg, param_name)
+                        || matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                })
+        }
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_stores_param_in_struct_literal(s, param_name)),
+        Expression::Binary { left, right, .. } => {
+            expr_stores_param_in_struct_literal(left, param_name)
+                || expr_stores_param_in_struct_literal(right, param_name)
+        }
+        Expression::Unary { operand, .. }
+        | Expression::Cast { expr: operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. } => {
+            expr_stores_param_in_struct_literal(operand, param_name)
+        }
+        Expression::Index { object, index, .. } => {
+            expr_stores_param_in_struct_literal(object, param_name)
+                || expr_stores_param_in_struct_literal(index, param_name)
+        }
         _ => false,
     }
 }
