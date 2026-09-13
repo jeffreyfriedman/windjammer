@@ -351,12 +351,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         i,
                         true,
                     );
-                    let borrowed_text = gen
-                        .inferred_borrowed_params
-                        .iter()
-                        .chain(gen.str_ref_optimized_params.iter())
-                        .cloned()
-                        .collect::<std::collections::HashSet<_>>();
                     coerced =
                         crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
                             arg,
@@ -364,7 +358,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &coerced,
                             peel_sig.as_ref(),
                             i,
-                            &borrowed_text,
+                            &gen.emitted_rust_ref_formals,
                             &gen.current_function_params,
                         );
                     if let Expression::Identifier { name, .. } = arg {

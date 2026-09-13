@@ -528,19 +528,13 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(arguments.len()),
                             false,
                         );
-                        let borrowed_text = self
-                            .inferred_borrowed_params
-                            .iter()
-                            .chain(self.str_ref_optimized_params.iter())
-                            .cloned()
-                            .collect::<std::collections::HashSet<_>>();
                         coerced = crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
                             arg_to_generate,
                             &arg_str,
                             &coerced,
                             Some(&contract_sig),
                             i,
-                            &borrowed_text,
+                            &self.emitted_rust_ref_formals,
                             &self.current_function_params,
                         );
                         return coerced;

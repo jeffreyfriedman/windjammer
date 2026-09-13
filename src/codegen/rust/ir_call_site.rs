@@ -2271,19 +2271,13 @@ impl<'ast> CodeGenerator<'ast> {
             param_idx = sig.arg_param_index(arg_index);
         }
 
-        let borrowed_text = self
-            .inferred_borrowed_params
-            .iter()
-            .chain(self.str_ref_optimized_params.iter())
-            .cloned()
-            .collect::<std::collections::HashSet<_>>();
         coerced = crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
             arg_expr,
             arg_str,
             &coerced,
             Some(&sig),
             arg_index,
-            &borrowed_text,
+            &self.emitted_rust_ref_formals,
             &self.current_function_params,
         );
 

@@ -220,7 +220,7 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
                             &mut s,
                             e,
-                            &self.inferred_borrowed_params,
+                            &self.emitted_rust_ref_formals,
                             &self.current_function_params,
                         );
                         // Demoted params that skipped auto-clone (Copy `&str`) still need own.
