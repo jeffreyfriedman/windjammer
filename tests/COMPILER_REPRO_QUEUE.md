@@ -362,6 +362,31 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.275 WindjammerDB CQ-C5 — gen-lag + pg_wire parse REDs WDB-188–191 (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **134** (↓ from 165) |
+| Tip-out/product **WDB-182/184–187** prior gates | ✅ GREEN (recheck) — tip-out fixed; gen lag for f32/&String/feed_unified |
+| Tip **WDB-176/177** | ❌ still tip-out RED |
+| Tip **WDB-188** gen `graph_score: 0.0_f32` lag | ❌ filed + ran RED |
+| Tip **WDB-189** gen `&String`→owned parse lag | ❌ filed + ran RED |
+| Tip **WDB-190** module-file `on_startup` owned `Vec` + no `&encode` | ✅ tip GREEN (P3.275) — registry-owned pub `Vec` formal emission |
+| Tip **WDB-190** gen feed_unified borrow→owned startup | ❌ gen lag (tip-out clean; regen needed) |
+| Tip **WDB-191** module-file demoted `&str`→owned `wire_parse` | ✅ tip GREEN (P3.271 class) |
+| Tip **WDB-191** product gen demoted `&str`→owned `pg_wire_parse` | ❌ gen lag |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip-out→gen sync (188/189/190 gen); tip greens 176/177. No Phase 606+.
+
+## P3.275b (2026-09-13) — WDB-190 pub `Vec` registry-owned formal emission
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_wdb190_module_file_feed_unified_owned_startup_must_not_borrow_test` (fixture) | ✅ tip GREEN |
+| Fix | `is_public_owned_non_copy_formal_api`: when multipass `restore_pub_owned_non_copy_api_formals` locked registry `Owned` for pub `Vec`, emit owned formal (not readonly-only demotion) |
+| WDB-171 `finish_execute` demoted `&Vec` | ✅ unchanged — registry converged Borrowed from bare-pass callers |
+
 ## P3.273 WindjammerDB CQ-C5 — WDB-182/183/184 tip greens + tip-out regen (2026-09-13)
 
 | Gate | Status |

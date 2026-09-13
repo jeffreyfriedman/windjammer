@@ -3479,9 +3479,28 @@ impl<'ast> CodeGenerator<'ast> {
         if !func.is_pub || param.name == "self" || func.parent_type.is_some() {
             return false;
         }
-        // WDB-175: pub `Vec` wire/decode APIs stay owned (`pg_wire_decode_startup`).
-        // Readonly pub helpers (`vertex_lookup_len`, `buf_len` probes) still demote to `&Vec`.
+        // WDB-175/190: pub `Vec` wire/decode/on_startup APIs stay owned when multipass
+        // `restore_pub_owned_non_copy_api_formals` locked the registry to Owned.
+        // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry
+        // converged to Borrowed from bare-pass caller hints.
         if Self::param_type_is_vec_container(&param.type_) {
+            let param_idx = func
+                .parameters
+                .iter()
+                .position(|p| p.name == param.name)
+                .unwrap_or(0);
+            if self.global_signature_for_function(func).is_some_and(|sig| {
+                matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
+                    && sig
+                        .formal_param_types
+                        .get(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx))
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        })
+            }) {
+                return true;
+            }
             return !self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                 || self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
