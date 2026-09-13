@@ -279,6 +279,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.257 WindjammerDB CQ-C5 — coverage REDs WDB-167/168 for ungated build buckets (2026-09-12)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **277** E0308 (`found &mut` = 0) |
+| Tip **WDB-166** field clone→`&str` | ✅ product GREEN after tip-cluster; full multipass still needs tip |
+| Tip **WDB-167** owned Provider/`triple.0` → demoted `&Provider` | ❌ **product RED** (65 Caps; tip fixture GREEN when formal stays owned) |
+| Tip **WDB-168** lit `"s1"` → demoted `&str` must not `String::from` | ❌ **product RED** (wave1_opt; tip fixture GREEN when formal stays owned) |
+| Residual `&str`←`String` beyond 167/168 | ⚠️ still ~162 class; dogfood/tip-cluster interim only |
+
+**Compiler agent priority:** WDB-167 + WDB-168 (signature-driven). Goal: eliminate `dogfood_gen_p153.py` / tip-cluster patches once tip greens these. No Phase 606+.
+
 ## P3.256 WindjammerDB CQ-C5 — census after WDB-165 + WDB-166 field-clone→&str (2026-09-12)
 
 | Gate | Status |
@@ -286,10 +298,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-165** owned State call | ✅ tip + product GREEN |
 | `cargo check --lib` (in-repo target) | ⚠️ **254** errors (E0308×250, E0382×4); **`found &mut` = 0** |
 | Dominant bucket | **168×** `expected &str, found String` (e.g. `emit.sql.clone()` → demoted FFI `sql: &str`) |
-| Tip **WDB-159** sequential owned→&str borrow | ✅ tip GREEN (does **not** cover struct-field `.clone()`) |
-| Tip **WDB-166** field `.clone()` into demoted `&str` | ❌ **product RED** (ran); tip fixture GREEN when formal stays owned — product `emit.sql.clone()` into `sql: &str` |
+| Tip **WDB-159** sequential owned→`&str` borrow | ✅ tip GREEN (does **not** cover struct-field `.clone()`) |
+| Tip **WDB-166** field `.clone()` into demoted `&str` | ✅ product GREEN via tip-cluster; see P3.257 for remaining `&str`←`String` |
 
-**Compiler agent priority:** WDB-166 (signature-driven borrow of owned field/`clone` into demoted `&str`); then `&T`↔owned Custom (OptDatedArtifact, MvccStore, …).
+**Compiler agent priority:** WDB-167/168 (P3.257); then residual `&T`↔owned Custom.
 
 ## P3.255 WindjammerDB CQ-C5 — WDB-165 owned State call over-borrow (2026-09-12)
 
