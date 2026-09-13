@@ -128,7 +128,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
-| P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ⚠️ product RED (P3.261); interim `digits_to_int("${v}")` |
+| P1 | **Cross-crate module `touch_grid(grid)` must reborrow `&mut Grid`, not `grid.clone()`** | `bug_cross_crate_mut_borrow_module_fn_test` | ✅ tip GREEN (P3.274) — `sig_arg_confirms_owned_emission` must not strip `&mut T` |
+| P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.274) |
 | P1 | **Cross-crate lib `from_toml(text)` → owned `parse(String)` without metadata guesses `&` (`wj-config`)** | `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ✅ tip GREEN w/ metadata (P3.262); tip auth still RED on Owned→`&` |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
@@ -150,12 +151,12 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Gate `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ❌ tip RED (filed) |
-| Product interim: rebuild owned Draft in env_* + composition before port call | 🔧 in progress |
-| Product: authenticate Option `.clone()`, login owned locals, request_context → domain `int_string`, http_json named empty Vecs, bank_recon Into/`mut draft` | 🔧 in progress |
-| Full tip `make api-check` | 🎯 unblock for tester rebuilds |
+| Gate `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (minimal + hexagonal) |
+| Product interim: `env_channel` / `env_inventory` duplicate seed bodies (not thin forward) | ✅ clears E0053/`&Self` on prior tip |
+| Product: authenticate Option `.clone()`, login owned locals, request_context → domain `int_string`, http_json named empty Vecs, bank_recon / routes / party create_item | ✅ prior tip 20-error cluster cleared |
+| Full tip `make api-check` after tip binary rebuild (~18:33) | ❌ **58** new-class errors (`string_concat` int/uint, HashMap insert, overlay args) — tip churn |
 
-**Compiler agent:** thin `impl Trait` forwarders that only pass `draft` must keep the trait’s owned formal (not `&mut Draft`). Free composition fns taking `AppDeps` must not emit `deps: &Self`.
+**Compiler agent:** thin `impl Trait` forwarders that only pass `draft` must keep the trait’s owned formal (not `&mut Draft`). Free composition fns taking `AppDeps` must not emit `deps: &Self`. Tip mid-slice rebuild introduced unrelated `string_concat` / HashMap ownership regressions — fix tip or pin wj for platform gate.
 
 ## P3.262 (2026-09-13) — wj-config demoted `&str` into cross-crate owned `parse`
 
@@ -179,16 +180,22 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** keep int↔string format/parse without empty-concat; product recon overlays use domain helper.
 
-## P3.261 (2026-09-13) — HashMap get binding into demoted `&str` + `.clone()`
+## P3.274 (2026-09-13) — cross-crate `&mut T` metadata + HashMap get demoted `&str`
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_cross_crate_mut_borrow_module_fn_test` (engine metadata `MutBorrowed` → call site reborrow) | ✅ tip GREEN |
+| Gate `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN |
+| Fix | `sig_arg_confirms_owned_emission`: `Reference`/`MutableReference` formals are never owned contracts |
+
+**Compiler agent:** cross-crate `touch_grid(grid: &mut Grid)` must pass `grid` (reborrow), not `grid.clone()`. Demoted `&str` formals must borrow HashMap get bindings (no `.clone()`).
+
+## P3.261 (2026-09-13) — HashMap get binding into demoted `&str` + `.clone()` (superseded by P3.274)
 
 | Change | Status |
 |--------|--------|
 | Ecosystem `wj-auth-api` `config_from_toml` via `wj-config`/`wj-toml` | ✅ **15/15** |
-| Product: `parse_positive_int(v)` after `map.get` demoted to `&str` but emitted `v.clone()` | ❌ tip RED |
-| Interim | `digits_to_int("${v}")` owned template |
-| Gate `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | filed |
-
-**Compiler agent:** demoted `&str` formals must borrow HashMap get bindings (no `.clone()`). Related to demoted-str clone-skip gates; HashMap Option binding path still RED in auth dogfood.
+| Gate `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.274) |
 
 ## P3.254 (2026-09-12) — single-use owned local into owned string formal emits `&`
 
