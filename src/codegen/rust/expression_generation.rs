@@ -423,10 +423,12 @@ impl<'ast> CodeGenerator<'ast> {
                             formal,
                             already_usize,
                         );
+                        let arg_ty = self.infer_expression_type(arg);
                         crate::codegen::rust::type_casting::coerce_arg_str_for_i32_formal(
                             arg,
                             &mut arg_str,
                             formal,
+                            arg_ty.as_ref(),
                         );
                     }
 

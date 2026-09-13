@@ -776,7 +776,26 @@ impl<'ast> CodeGenerator<'ast> {
                 ia.cmp(&ib)
             }
         });
+        self.preregistered_free_function_emitted_params.clear();
+        // Borrow-passthrough wrappers (`wrapper` → `process`) after defining callees.
+        top_level_funcs.sort_by_key(|af| {
+            af.decl.parameters.iter().any(|p| {
+                p.name != "self"
+                    && self.param_passed_to_borrowing_callee(
+                        af.decl.body.as_slice(),
+                        &p.name,
+                        &af.decl,
+                    )
+            }) as u8
+        });
+        for _ in 0..4 {
+            for analyzed_func in &top_level_funcs {
+                self.select_ir_function_for(&analyzed_func.decl.name);
+                self.prepare_codegen_environment_for_regular_function(analyzed_func);
+            }
+        }
         for analyzed_func in &top_level_funcs {
+            self.select_ir_function_for(&analyzed_func.decl.name);
             self.preregister_function_formals_in_registry(analyzed_func);
         }
         for analyzed_func in top_level_funcs {

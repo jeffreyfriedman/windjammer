@@ -43,12 +43,17 @@ pub fn type_is_i32(ty: &Type) -> bool {
 ///
 /// Signature-driven: only when the resolved formal is `i32`. Literals already
 /// suffixed `_i32` are left alone; identifiers/`i64` bindings get `as i32`.
+/// Skip when the argument is already `i32` — avoids `quantity as i32` noise.
 pub fn coerce_arg_str_for_i32_formal(
     arg: &Expression,
     arg_str: &mut String,
     formal: Option<&Type>,
+    arg_type: Option<&Type>,
 ) {
     if !formal.is_some_and(type_is_i32) {
+        return;
+    }
+    if arg_type.is_some_and(type_is_i32) {
         return;
     }
     if arg_str.contains(" as i32") || arg_str.ends_with("_i32") {

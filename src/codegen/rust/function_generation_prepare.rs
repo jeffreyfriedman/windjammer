@@ -638,7 +638,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Track variables that should have their drops deferred to background thread
         self.defer_drop_optimizations = analyzed.defer_drop_optimizations.clone();
 
+        self.promote_params_used_in_loop_bodies_to_borrowed(func);
         self.promote_callee_forwarded_borrows(func);
+        self.preserve_owned_formals_for_tryop_forwards(func);
         self.promote_callee_forwarded_mut_borrows(func);
         self.promote_readonly_operand_borrows(func, analyzed);
         self.strip_borrow_inference_for_owning_param_uses(func);
@@ -699,6 +701,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }) {
                     continue;
                 }
+                if self.param_passed_via_tryop_to_borrowing_callee(
+                    func.body.as_slice(),
+                    param_name,
+                    func,
+                ) {
+                    continue;
+                }
                 self.inferred_borrowed_params.insert(param_name.clone());
                 self.inferred_mut_borrowed_params.remove(param_name);
             }
@@ -750,6 +759,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.inferred_borrowed_params.remove(param_name);
             }
         }
+        // TryOp forwards consume the actual at the call site — re-run after IR/analyzer
+        // borrow promotion so `process(data)?` wrappers keep owned formals.
+        self.preserve_owned_formals_for_tryop_forwards(func);
     }
 
     /// Text map/set key params prefer `&str` when body-only lookup usage converges
@@ -880,6 +892,10 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" || self.is_type_copy(&param.type_) {
                 continue;
             }
+            // Loop body reuse beats single owning callee signature (dialog game_state).
+            if Self::param_is_used_inside_loop_body(func.body.as_slice(), &param.name) {
+                continue;
+            }
             if self.param_is_non_self_forward_facade_borrow_candidate(param, func) {
                 continue;
             }
@@ -889,11 +905,15 @@ impl<'ast> CodeGenerator<'ast> {
                     &param.name,
                     func,
                 )
-                || self.param_only_forwards_to_emitted_owned_callees(
+                || (self.param_only_forwards_to_emitted_owned_callees(
                     func.body.as_slice(),
                     &param.name,
                     func,
-                )
+                ) && !self.param_only_forwards_to_registry_borrow_callees(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                ))
                 || crate::compiler::multipass_bare_pass_demotion::param_forwards_fields_in_call_args_only(
                     func.body.as_slice(),
                     &param.name,
@@ -973,6 +993,13 @@ impl<'ast> CodeGenerator<'ast> {
             if self.inferred_borrowed_params.contains(&param.name)
                 || self.inferred_mut_borrowed_params.contains(&param.name)
             {
+                continue;
+            }
+            if self.param_passed_via_tryop_to_borrowing_callee(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
                 continue;
             }
             // Mutated params (field writes or `&mut self` methods) must not become shared `&T`.
@@ -1672,6 +1699,23 @@ impl<'ast> CodeGenerator<'ast> {
         self.expression_param_projection_usage(expr, param_name)
     }
 
+    /// TryOp forwards (`process(data)?`) keep owned outer formals — borrow only at the call site.
+    fn preserve_owned_formals_for_tryop_forwards(&mut self, func: &FunctionDecl<'ast>) {
+        for param in &func.parameters {
+            if param.name != "self"
+                && self.param_passed_via_tryop_to_borrowing_callee(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+            {
+                self.inferred_borrowed_params.remove(&param.name);
+                self.inferred_mut_borrowed_params.remove(&param.name);
+                self.emitted_rust_ref_formals.remove(&param.name);
+            }
+        }
+    }
+
     /// Promote owned params to borrowed when the body only forwards them to borrowing callees.
     fn promote_callee_forwarded_borrows(&mut self, func: &FunctionDecl<'ast>) {
         for param in &func.parameters {
@@ -1717,6 +1761,11 @@ impl<'ast> CodeGenerator<'ast> {
                     self.str_ref_optimized_params.insert(param.name.clone());
                 }
             } else if self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
+                && !self.param_passed_via_tryop_to_borrowing_callee(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
                 && !self.param_single_arg_owned_self_or_field_forward(param, func)
                 && !self.param_passes_to_wj_owned_sibling_call(
                     func.body.as_slice(),
@@ -1730,6 +1779,15 @@ impl<'ast> CodeGenerator<'ast> {
                 )
                 && !self.param_has_forward_ref_keep_owned(func.body.as_slice(), &param.name, func)
             {
+                self.inferred_borrowed_params.insert(param.name.clone());
+                if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                }
+            } else if self.param_only_forwards_to_registry_borrow_callees(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
                 self.inferred_borrowed_params.insert(param.name.clone());
                 if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
                     self.str_ref_optimized_params.insert(param.name.clone());
@@ -3557,6 +3615,160 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// True when every call-site forward of `param_name` targets a callee formal that
+    /// already converged to shared borrow in the signature registry (post-preregister).
+    pub(in crate::codegen::rust) fn param_only_forwards_to_registry_borrow_callees(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if !self.param_only_used_as_call_argument(body, param_name, func) {
+            return false;
+        }
+        let mut registry_sites = 0usize;
+        let mut registry_borrow_sites = 0usize;
+        self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, arg_index| {
+            registry_sites += 1;
+            if self.signature_param_expects_borrow(sig, arg_index) {
+                registry_borrow_sites += 1;
+            }
+        });
+        if registry_sites > 0 && registry_borrow_sites == registry_sites {
+            return true;
+        }
+        // Preregistered emitted formals (same-file `wrapper` → `process`) when registry
+        // lookup is not yet visible to `resolve_free_call_signature`.
+        for stmt in body {
+            let expr = match stmt {
+                Statement::Expression { expr, .. } => Some(expr),
+                Statement::Return {
+                    value: Some(expr), ..
+                } => Some(expr),
+                _ => None,
+            };
+            let Some(expr) = expr else { continue };
+            let Expression::Call {
+                function,
+                arguments,
+                ..
+            } = expr
+            else {
+                continue;
+            };
+            let Expression::Identifier { name: callee, .. } = &**function else {
+                continue;
+            };
+            let Some(formals) = self
+                .preregistered_free_function_emitted_params
+                .get(callee.as_str())
+            else {
+                continue;
+            };
+            for (arg_index, (_, arg)) in arguments.iter().enumerate() {
+                if !matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                    continue;
+                }
+                let shared = formals.get(arg_index).is_some_and(|s| {
+                    (s.contains(": &") || s.contains(": &'a "))
+                        && !s.contains(": &mut ")
+                        && !s.contains(": &'a mut ")
+                });
+                if shared {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// True when `param_name` is a call/method argument inside `callee(arg)?`.
+    /// TryOp call sites consume the owned actual — keep the outer formal owned (TDD tryop).
+    pub(in crate::codegen::rust) fn param_passed_via_tryop_to_borrowing_callee(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_passes_param_via_tryop_call(stmt, param_name, func) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_passes_param_via_tryop_call(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_passes_param_via_tryop_call(expr, param_name, func),
+            Statement::Let { value, else_block, .. } => {
+                self.expression_passes_param_via_tryop_call(value, param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_passed_via_tryop_to_borrowing_callee(
+                            b.as_slice(),
+                            param_name,
+                            func,
+                        )
+                    })
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.param_passed_via_tryop_to_borrowing_callee(
+                    then_block.as_slice(),
+                    param_name,
+                    func,
+                ) || else_block.as_ref().is_some_and(|b| {
+                    self.param_passed_via_tryop_to_borrowing_callee(b.as_slice(), param_name, func)
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_passes_param_via_tryop_call(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::TryOp { expr: operand, .. } => {
+                self.expression_forwards_param_as_direct_call_arg(operand, param_name)
+            }
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                self.statement_passes_param_via_tryop_call(s, param_name, func)
+            }),
+            _ => false,
+        }
+    }
+
+    fn expression_forwards_param_as_direct_call_arg(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments.iter().any(|(_, arg)| {
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        || Self::expr_is_field_or_index_of_param(arg, param_name)
+                })
+            }
+            _ => false,
+        }
     }
 
     /// True when every direct method-arg use of `param_name` is a map/set key lookup.
@@ -6896,6 +7108,10 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
+                    ) && !self.param_passed_via_tryop_to_borrowing_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
                     ) && !to_owned_method
                         && (!self.param_passed_to_self_or_field_receiver_method_arg(
                             func.body.as_slice(),
@@ -9081,10 +9297,44 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if !emitted_owned {
                 all_emitted_owned = false;
+            } else if self.preregistered_free_call_arg_expects_borrow(&sig.name, arg_index) {
+                all_emitted_owned = false;
             }
         };
         self.for_each_param_call_argument_site(body, param_name, func, &mut visit);
-        saw_site && all_emitted_owned
+        if saw_site {
+            return all_emitted_owned;
+        }
+        // Registry miss: preregistered same-file callee still counts.
+        for stmt in body {
+            let expr = match stmt {
+                Statement::Expression { expr, .. } => Some(expr),
+                Statement::Return {
+                    value: Some(expr), ..
+                } => Some(expr),
+                _ => None,
+            };
+            let Some(expr) = expr else { continue };
+            let Expression::Call {
+                function,
+                arguments,
+                ..
+            } = expr
+            else {
+                continue;
+            };
+            let Expression::Identifier { name: callee, .. } = &**function else {
+                continue;
+            };
+            for (arg_index, (_, arg)) in arguments.iter().enumerate() {
+                if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    && self.preregistered_free_call_arg_expects_borrow(callee, arg_index)
+                {
+                    return false;
+                }
+            }
+        }
+        false
     }
 
     /// True when the body only forwards `param_name` to callees that take borrowed text (`&str`).
@@ -9921,16 +10171,40 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    fn preregistered_free_call_arg_expects_borrow(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        for key in [callee_name, simple] {
+            let Some(formals) = self.preregistered_free_function_emitted_params.get(key) else {
+                continue;
+            };
+            if let Some(formal) = formals.get(arg_index) {
+                return (formal.contains(": &") || formal.contains(": &'a "))
+                    && !formal.contains(": &mut ")
+                    && !formal.contains(": &'a mut ");
+            }
+        }
+        false
+    }
+
     fn free_call_arg_expects_borrow(&self, callee_name: &str, arg_index: usize) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        if let Some(g) = self.global_signature_registry.as_ref() {
-            if let Some(sig) = g
-                .get_signature(callee_name)
+        let registry_borrow = if let Some(g) = self.global_signature_registry.as_ref() {
+            g.get_signature(callee_name)
                 .or_else(|| g.lookup_method(callee_name))
                 .or_else(|| g.find_signature_ending_with(simple))
-            {
-                return self.signature_param_expects_borrow(sig, arg_index);
-            }
+                .map(|sig| self.signature_param_expects_borrow(sig, arg_index))
+        } else {
+            None
+        };
+        if registry_borrow == Some(true) {
+            return true;
+        }
+        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index) {
+            return true;
         }
         if let Some(sig) = self
             .signature_registry
@@ -9940,7 +10214,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return self.signature_param_expects_borrow(sig, arg_index);
         }
-        false
+        registry_borrow.unwrap_or(false)
     }
 
     fn signature_param_expects_borrow(
@@ -9980,11 +10254,21 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return true;
         }
-        sig.forwarding_borrow_params
+        if sig
+            .forwarding_borrow_params
             .as_ref()
             .and_then(|flags| flags.get(pidx))
             .copied()
             .unwrap_or(false)
+        {
+            return true;
+        }
+        // Analyzer ownership on WJ bare formals (e.g. `process(items)` readonly → Borrowed)
+        // before codegen refreshes `param_types` / `emitted_rust_ref_params`.
+        matches!(
+            sig.param_ownership.get(pidx).copied(),
+            Some(crate::analyzer::OwnershipMode::Borrowed)
+        )
     }
 
     fn signature_param_expects_mut_borrow(

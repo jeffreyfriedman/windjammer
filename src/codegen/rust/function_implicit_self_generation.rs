@@ -78,8 +78,12 @@ impl<'ast> CodeGenerator<'ast> {
                     self.function_modifies_self_or_derived(&analyzed.decl)
                 };
                 let consumes_self = super::self_analysis::function_consumes_self(&analyzed.decl);
+                let matches_on_self =
+                    super::self_analysis::function_matches_on_self(&analyzed.decl);
                 let self_param = match ownership {
-                    OwnershipMode::Borrowed if !self.in_trait_impl && consumes_self => {
+                    OwnershipMode::Borrowed
+                        if !self.in_trait_impl && (consumes_self || matches_on_self) =>
+                    {
                         if body_modifies {
                             "mut self"
                         } else {
@@ -89,7 +93,9 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipMode::Borrowed => {
                         if !self.in_trait_impl && body_modifies {
                             "&mut self"
-                        } else if !self.in_trait_impl && self.current_struct_is_copy() {
+                        } else if !self.in_trait_impl
+                            && (self.current_struct_is_copy() || matches_on_self)
+                        {
                             "self"
                         } else {
                             "&self"

@@ -24,6 +24,75 @@ impl<'ast> CodeGenerator<'ast> {
         self.mark_for_loop_borrow_when_iterable_reused_in_body(body);
     }
 
+    /// Params referenced inside `for`/`while`/`loop` bodies must borrow — each iteration
+    /// reuses the binding (dialog `game_state` in `for condition in … { check(game_state) }`).
+    pub(crate) fn promote_params_used_in_loop_bodies_to_borrowed(
+        &mut self,
+        func: &crate::parser::FunctionDecl<'ast>,
+    ) {
+        for param in &func.parameters {
+            if param.name == "self" {
+                continue;
+            }
+            if self.is_type_copy(&param.type_)
+                && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+            {
+                continue;
+            }
+            if self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name) {
+                continue;
+            }
+            if Self::param_is_used_inside_loop_body(func.body.as_slice(), &param.name) {
+                self.inferred_borrowed_params.insert(param.name.clone());
+            }
+        }
+    }
+
+    pub(in crate::codegen::rust) fn param_is_used_inside_loop_body(
+        stmts: &[&Statement],
+        param_name: &str,
+    ) -> bool {
+        for stmt in stmts {
+            match stmt {
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if Self::variable_used_in_statements(body, param_name) {
+                        return true;
+                    }
+                    if Self::param_is_used_inside_loop_body(body, param_name) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if Self::param_is_used_inside_loop_body(then_block, param_name) {
+                        return true;
+                    }
+                    if let Some(e) = else_block {
+                        if Self::param_is_used_inside_loop_body(e, param_name) {
+                            return true;
+                        }
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            if Self::param_is_used_inside_loop_body(statements, param_name) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// `for v in vertices { f(vertices, v) }` — iterable must be borrowed so the loop
     /// body can reuse the collection (E0382 after into_iter move).
     fn mark_for_loop_borrow_when_iterable_reused_in_body(

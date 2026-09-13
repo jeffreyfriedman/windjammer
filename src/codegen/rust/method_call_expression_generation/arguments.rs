@@ -30,8 +30,9 @@ impl<'ast> CodeGenerator<'ast> {
             crate::codegen::rust::type_classification_utilities::is_float_type(rty)
                 || matches!(rty, Type::Custom(n) if n == "float")
         });
-        let is_float_method =
-            is_primitive_float_method && (receiver_is_float || receiver_type_inferred.is_none());
+        // Only apply float literal context when the receiver is known float — never when
+        // inference is absent (i32 `.max(-100).min(100)` must not cast bounds to f32).
+        let is_float_method = is_primitive_float_method && receiver_is_float;
         if is_float_method {
             use crate::type_inference::FloatType;
             let from_numeric =
