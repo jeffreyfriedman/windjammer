@@ -73,13 +73,7 @@ rapier3d = "0.17"
 
     // Run wj build (with --no-cargo to avoid cargo build)
     // Use the locally built wj binary, not the one from PATH
-    let wj_binary = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     println!("Using wj binary at: {:?}", wj_binary);
 
@@ -155,13 +149,7 @@ fn test_build_system_without_ffi_still_works() {
     .unwrap();
 
     // Run wj build with locally built binary
-    let wj_binary = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let build_dir = project_dir.join("build");
     let output = std::process::Command::new(&wj_binary)

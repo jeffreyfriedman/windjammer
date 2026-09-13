@@ -1737,6 +1737,9 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Identifier { name, .. } => {
                                 self.binding_is_copy_pass_by_value_scalar(name)
                             }
+                            Expression::Index { .. } => {
+                                self.index_expression_is_copy_scalar(arg_expr)
+                            }
                             _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
                                 let bare = match &t {
                                     Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -1774,6 +1777,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Identifier { name, .. } => {
                     self.binding_is_copy_pass_by_value_scalar(name)
                 }
+                Expression::Index { .. } => self.index_expression_is_copy_scalar(arg_expr),
                 _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
                     let bare = match &t {
                         Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -2655,6 +2659,9 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                 });
             if !emits_shared {
+                if self.index_expression_is_copy_scalar(arg_expr) {
+                    return arg_str.to_string();
+                }
                 let needs_clone = match self.infer_expression_type(arg_expr) {
                     None => true,
                     Some(t) => {

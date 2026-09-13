@@ -45,38 +45,68 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
                 sig, i,
             )
         });
-        let owned_contract = refreshed_sig
+        let is_mutable_raw_pointer_formal = refreshed_sig
             .as_ref()
             .is_some_and(|sig| {
                 let pidx = sig.arg_param_index(i);
-                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-                    || matches!(
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            sig, i,
-                        ),
-                        OwnershipMode::Owned,
+                sig.formal_param_type(pidx)
+                    .or_else(|| sig.param_types.get(pidx))
+                    .is_some_and(
+                        crate::codegen::rust::call_signature_resolution::param_type_is_mutable_raw_pointer,
                     )
             })
             || gen.get_signature_with_global(func_name).is_some_and(|sig| {
                 let pidx = sig.arg_param_index(i);
-                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-                    || matches!(
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            sig, i,
-                        ),
-                        OwnershipMode::Owned,
+                sig.formal_param_type(pidx)
+                    .or_else(|| sig.param_types.get(pidx))
+                    .is_some_and(
+                        crate::codegen::rust::call_signature_resolution::param_type_is_mutable_raw_pointer,
                     )
             })
             || gen.get_signature_with_global(simple_name).is_some_and(|sig| {
                 let pidx = sig.arg_param_index(i);
-                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-                    || matches!(
+                sig.formal_param_type(pidx)
+                    .or_else(|| sig.param_types.get(pidx))
+                    .is_some_and(
+                        crate::codegen::rust::call_signature_resolution::param_type_is_mutable_raw_pointer,
+                    )
+            });
+        let owned_contract = !is_mutable_raw_pointer_formal
+            && (refreshed_sig
+                .as_ref()
+                .is_some_and(|sig| {
+                    let pidx = sig.arg_param_index(i);
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, pidx,
+                    ) || matches!(
                         crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                             sig, i,
                         ),
                         OwnershipMode::Owned,
                     )
-            });
+                })
+                || gen.get_signature_with_global(func_name).is_some_and(|sig| {
+                    let pidx = sig.arg_param_index(i);
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, pidx,
+                    ) || matches!(
+                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                            sig, i,
+                        ),
+                        OwnershipMode::Owned,
+                    )
+                })
+                || gen.get_signature_with_global(simple_name).is_some_and(|sig| {
+                    let pidx = sig.arg_param_index(i);
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, pidx,
+                    ) || matches!(
+                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                            sig, i,
+                        ),
+                        OwnershipMode::Owned,
+                    )
+                }));
         if !local_emitted_mut
             && !callee_expects_mut
             && crate::codegen::rust::call_signature_resolution::has_ownership_collision_for_call(
