@@ -3762,6 +3762,7 @@ impl<'ast> CodeGenerator<'ast> {
         if coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
             && !forward_ref_keeps_borrow
+            && !is_collection_key_site
             && !self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
             && (self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
                 || Self::sig_arg_confirms_owned_emission(&sig, arg_index)
@@ -4610,6 +4611,11 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                     if needs_reuse_clone && self.caller_owned_non_copy_formal(name) && !skip_self {
                         *coerced = format!("{coerced}.clone()");
+                    } else if self.caller_demoted_non_copy_formal_into_owned_callee(name)
+                        && !coerced.ends_with(".clone()")
+                    {
+                        // WDB-174: demoted `&Store` caller formal into owned callee (inverse WDB-165).
+                        *coerced = format!("{coerced}.clone()");
                     }
                 }
             }
@@ -4623,6 +4629,8 @@ impl<'ast> CodeGenerator<'ast> {
         {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if self.caller_owned_non_copy_formal(name) {
+                    *coerced = format!("{coerced}.clone()");
+                } else if self.caller_demoted_non_copy_formal_into_owned_callee(name) {
                     *coerced = format!("{coerced}.clone()");
                 }
             }

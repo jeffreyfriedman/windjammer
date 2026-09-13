@@ -2593,6 +2593,14 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// Demoted `&T` outer formal (multipass readonly reuse) passed into an owned callee.
+    pub(crate) fn caller_demoted_non_copy_formal_into_owned_callee(&self, name: &str) -> bool {
+        self.emitted_rust_ref_formals.contains(name)
+            && self.current_function_params.iter().any(|p| {
+                p.name == name && !self.is_type_copy(&p.type_)
+            })
+    }
+
     /// Local `let` bindings that hold owned non-Copy values (not outer formals).
     pub(crate) fn local_binding_is_owned_non_copy(&self, name: &str) -> bool {
         self.local_var_types.get(name).is_some_and(|t| {

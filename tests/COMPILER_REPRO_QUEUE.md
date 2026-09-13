@@ -330,6 +330,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.267 WindjammerDB CQ-C5 — WDB-174 demoted `&Store` into owned mvcc + HashMap key `&K` IR terminal peel (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-174** demoted `&MvccStore` / `&RelationalMvccStore` → owned `put_version` must `.clone()` | ✅ tip GREEN — `caller_demoted_non_copy_formal_into_owned_callee` in IR reconcile |
+| Tip **WDB-174** inverse WDB-165 (owned callee must not get bare `&store`) | ✅ tip GREEN |
+| IR terminal owned-formal `&` peel must not strip HashMap/Set `contains_key`/`get` `&K` | ✅ tip GREEN — `!is_collection_key_site` guard on reconcile terminal peel |
+| Sample: `test_library_multipass_graph_bfs_hashmap_compiles` | ✅ tip GREEN (was RED post-P3.266) |
+| Sample: `test_library_multipass_hashmap_get_borrow_break_single_copied` | ✅ tip GREEN |
+| Sample: `test_library_multipass_hashmap_i64_key_auto_borrow` | ✅ tip GREEN |
+
+**Compiler agent next:** residual sample REDs — loop counter i32/i64 unify (`loop_reused_graph_borrow`), FFI/build_system harness, explicit_string demotion, csv_while owned string.
+
 ## P3.261 WindjammerDB CQ-C5 — coverage REDs WDB-172/173 for CatalogResolver + `&String` (2026-09-13)
 
 | Gate | Status |
