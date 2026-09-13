@@ -1017,6 +1017,47 @@ pub fn runtime_std_param_needs_auto_borrow(
     signature.is_some_and(|sig| runtime_wj_owned_rust_borrowed_param(sig, arg_index))
 }
 
+/// Bare user free-fn with an owned WJ `string` formal — beats stdlib/map/json `get`
+/// (and similar) borrow baselines. Signature-driven: ownership + text type, not name lists.
+fn bare_user_owned_wj_string_beats_stdlib_homonym(
+    callee_name: &str,
+    signature: Option<&crate::analyzer::FunctionSignature>,
+    arg_index: usize,
+) -> bool {
+    let Some(sig) = signature else {
+        return false;
+    };
+    if callee_name.contains("::")
+        || sig.name.contains("::")
+        || callee_path_is_runtime_std(&sig.name)
+    {
+        return false;
+    }
+    let pidx = sig.arg_param_index(arg_index);
+    let plain_wj_string =
+        crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            sig, pidx,
+        ) || sig.param_types.get(pidx).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::codegen::rust::types::is_windjammer_text_type(t)
+        });
+    if !plain_wj_string {
+        return false;
+    }
+    // Shared-ref emission / AsRef contracts must still auto-borrow.
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
+        return false;
+    }
+    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+        || sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(false)
+        || matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Owned))
+}
+
 fn runtime_std_module_arg_needs_rust_borrow(
     sig: &crate::analyzer::FunctionSignature,
     arg_index: usize,
@@ -1075,31 +1116,27 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     // P3.254: bare user free-fns with owned `string` formals must not inherit stdlib
     // homonym borrow (`get(text, key)` vs `json::get` / `Map::get` / `env::get`).
     // Qualified runtime callees (`json::get`) still honor the baseline below.
-    if let Some(sig) = signature {
-        let pidx = sig.arg_param_index(arg_index);
-        let bare_user = !callee_name.contains("::")
-            && !sig.name.contains("::")
-            && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
-                sig,
-            )
-            && !sig.formal_param_types.is_empty();
-        if bare_user
-            && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                sig, pidx,
-            )
-            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-                || sig
-                    .emitted_rust_ref_params
-                    .as_ref()
-                    .and_then(|flags| flags.get(pidx))
-                    .copied()
-                    == Some(false)
-                || matches!(
-                    sig.param_ownership.get(pidx),
-                    Some(OwnershipMode::Owned)
-                ))
-        {
-            return false;
+    //
+    // Do **not** require `formal_param_types` (live same-file call sites often have only
+    // `param_types` filled) and do **not** use `signature_is_wj_std_stub_or_runtime_qualified`
+    // here — that helper treats empty formals as stubs and falsely skips this guard.
+    if bare_user_owned_wj_string_beats_stdlib_homonym(callee_name, signature, arg_index) {
+        return false;
+    }
+    // Layered registry may still hold the user owned `get` after IR prefer_global swapped
+    // the call-site sig to a borrowed stdlib/global homonym — honor the local shadow.
+    if !callee_name.contains("::") {
+        if let Some(local) = registry.get_signature(callee_name) {
+            let already = signature.is_some_and(|s| std::ptr::eq(s, local));
+            if !already
+                && bare_user_owned_wj_string_beats_stdlib_homonym(
+                    callee_name,
+                    Some(local),
+                    arg_index,
+                )
+            {
+                return false;
+            }
         }
     }
 
@@ -1597,6 +1634,51 @@ mod pattern_registry_tests {
         assert!(
             !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&sig), 1),
             "bare user get key: String must not auto-borrow"
+        );
+    }
+
+    #[test]
+    fn bare_user_get_with_empty_formal_param_types_still_beats_stdlib_homonym() {
+        use crate::parser::Type;
+        // Live same-file call sites often have `param_types` only — empty
+        // `formal_param_types` must not skip the P3.254 guard (that used to treat
+        // empty formals as stdlib stubs and fall through to Map/json `get` borrow).
+        let mut sig = FunctionSignature::default();
+        sig.name = "get".into();
+        sig.param_types = vec![Type::String, Type::String];
+        sig.formal_param_types = vec![];
+        sig.param_ownership = vec![OwnershipMode::Owned, OwnershipMode::Owned];
+        sig.emitted_rust_ref_params = None;
+        let mut reg = SignatureRegistry::empty();
+        reg.add_function(sig.name.clone(), sig.clone());
+        assert!(
+            !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&sig), 0),
+            "empty formal_param_types + owned param_types String must still beat stdlib get"
+        );
+    }
+
+    #[test]
+    fn layered_user_get_beats_stdlib_even_when_call_site_sig_is_homonym_borrow() {
+        use crate::parser::Type;
+        // After prefer_global swaps the call-site sig to a borrowed stdlib/global
+        // homonym, the layered registry still holds the user owned `get`.
+        let mut user = FunctionSignature::default();
+        user.name = "get".into();
+        user.param_types = vec![Type::String, Type::String];
+        user.param_ownership = vec![OwnershipMode::Owned, OwnershipMode::Owned];
+        let mut stale_homonym = FunctionSignature::default();
+        stale_homonym.name = "get".into();
+        stale_homonym.param_types = vec![
+            Type::Reference(Box::new(Type::String)),
+            Type::Reference(Box::new(Type::String)),
+        ];
+        stale_homonym.param_ownership = vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed];
+        stale_homonym.emitted_rust_ref_params = Some(vec![true, true]);
+        let mut reg = SignatureRegistry::empty();
+        reg.add_function(user.name.clone(), user);
+        assert!(
+            !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&stale_homonym), 0),
+            "layered user owned get must beat call-site borrowed homonym + stdlib baseline"
         );
     }
 

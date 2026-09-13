@@ -422,6 +422,32 @@ impl<'ast> CodeGenerator<'ast> {
                         ) {
                             return false;
                         }
+                        // P3.254: bare user owned WJ `string` must not yield to a stdlib/
+                        // global `get` (etc.) Borrowed homonym — keep the defining-module
+                        // owned contract so call sites move, not `&text`.
+                        if !callee_name.contains("::")
+                            && !local_sig.name.contains("::")
+                            && !crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(
+                                &local_sig.name,
+                            )
+                            && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                local_sig, idx,
+                            ) || local_sig.param_types.get(idx).is_some_and(|t| {
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && crate::codegen::rust::types::is_windjammer_text_type(t)
+                            }))
+                            && (matches!(
+                                local_sig.param_ownership.get(idx),
+                                Some(crate::analyzer::OwnershipMode::Owned)
+                            ) || local_sig
+                                .emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(idx))
+                                .copied()
+                                == Some(false))
+                        {
+                            return false;
+                        }
                         if local_sig.formal_param_type(idx).is_some_and(|t| {
                             let bare = match t {
                                 Type::Reference(inner) | Type::MutableReference(inner) => {
