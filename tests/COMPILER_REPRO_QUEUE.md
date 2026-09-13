@@ -372,6 +372,21 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent next:** FFI mut-pointer locals, Copy scalar vec-index push (e0308), build_system FFI harness. Re-sync full `wdb-layers/gen/` locally (gitignored) after tip compiler changes.
 
+## P3.273 WindjammerDB CQ-C5 — coverage REDs WDB-185/186/187 gen Vec + &String + live_row (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **165** (↑ from 127; Vec←&Vec×35, f64←f32×15, …) |
+| Tip **WDB-174/179/180/181/183** tip-out/product | ✅ **GREEN** (recheck after P3.271 ownership fix) |
+| Tip **WDB-182** `graph_score: 0.0_f32` | ❌ still tip-out RED |
+| Tip **WDB-184** `&state.clone()` gen lag | ❌ still gen RED (tip-out green) |
+| Tip **WDB-185** gen tpch demoted `&Vec` → owned median | filed — product gen (tip-out owned) |
+| Tip **WDB-186** `&String` → owned `parse_i64` | filed — tip-out job_store |
+| Tip **WDB-187** owned artifact → demoted `&` live_row | filed — tip-out bakeoff |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** WDB-182/184 sync, then WDB-185–187. No Phase 606+. No dogfood transforms.
+
 ## P3.272 WindjammerDB CQ-C5 — coverage REDs WDB-182/183/184 f32 field + OptEcon + PgWire `&clone` (2026-09-13)
 
 | Gate | Status |
