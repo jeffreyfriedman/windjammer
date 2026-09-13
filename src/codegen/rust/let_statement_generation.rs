@@ -169,9 +169,28 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // Literal types: let x = 25 → i32, let y = 3.14 → f32, let b = true → bool
                     Expression::Literal {
-                        value: crate::parser::Literal::Int(_),
+                        value: crate::parser::Literal::Int(n),
                         ..
-                    } => Some(Type::Int),
+                    } => {
+                        // Seed untyped `let mut total = 0` from function return width (WDB-081).
+                        if *n == 0 && mutable {
+                            if let Some(ret_ty) = &self.current_function_return_type {
+                                match ret_ty {
+                                    Type::Int32 => Some(Type::Int32),
+                                    Type::Custom(name)
+                                        if matches!(name.as_str(), "u32" | "i32") =>
+                                    {
+                                        Some(ret_ty.clone())
+                                    }
+                                    _ => Some(Type::Int),
+                                }
+                            } else {
+                                Some(Type::Int)
+                            }
+                        } else {
+                            Some(Type::Int)
+                        }
+                    }
                     Expression::Literal {
                         value: crate::parser::Literal::Float(_),
                         ..
@@ -351,6 +370,17 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
+                } else if mutable {
+                    if let Some(ret_ty) = &self.current_function_return_type {
+                        match ret_ty {
+                            Type::Int32 => output.push_str(": i32"),
+                            Type::Custom(n) if matches!(n.as_str(), "u32" | "i32") => {
+                                output.push_str(": ");
+                                output.push_str(n);
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 output.push_str(" = ");
                 if needs_mut_ref {
@@ -367,11 +397,21 @@ impl<'ast> CodeGenerator<'ast> {
                     self.suppress_collection_turbofish = true;
                 }
 
+                let prev_assign_int = self.assignment_int_target_type.take();
+                if mutable {
+                    if let Some(ret_ty) = &self.current_function_return_type {
+                        if Self::assignment_target_needs_int_codegen_context(ret_ty) {
+                            self.assignment_int_target_type = Some(ret_ty.clone());
+                        }
+                    }
+                }
+
                 // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
                 // String literals assigned to variables should become String (not &str)
                 // because they may be passed to functions expecting String later.
                 // This is safe because String auto-borrows to &str when needed.
                 let mut value_str = self.generate_expression(value);
+                self.assignment_int_target_type = prev_assign_int;
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, None, &mut value_str);
                 if let Expression::Literal {

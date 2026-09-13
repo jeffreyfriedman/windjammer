@@ -78,6 +78,49 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{mut_prefix}{}: {type_str}", param.name);
                 }
                 if param.name != "self"
+                    && self.param_passed_via_tryop_to_borrowing_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
+                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                }
+                // Same-file borrow passthrough wrappers (`wrapper` → `process`) must emit
+                // `&T` once the callee's preregistered/emitted formal converged to shared borrow.
+                if param.name != "self"
+                    && self.func_is_pure_forwarding_delegate(func)
+                    && (self.param_only_forwards_to_registry_borrow_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) || self.param_passed_to_borrowing_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ))
+                    && !self.param_passed_via_tryop_to_borrowing_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    let type_str = self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    if type_str == "&str"
+                        || type_str.starts_with("&'a str")
+                        || type_str.ends_with(" str")
+                    {
+                        self.str_ref_optimized_params.insert(param.name.clone());
+                    }
+                    return format!("{}: {}", param.name, type_str);
+                }
+                if param.name != "self"
                     && self.multipass_global_ref_formal_demoted(func, param_idx)
                     && !self.function_return_is_text(func)
                     && !(self.pub_module_api_keeps_owned_string_formal(func)
@@ -266,6 +309,36 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());
                     self.inferred_mut_borrowed_params.remove(&param.name);
+                    return format!("{}: {}", param.name, type_str);
+                }
+
+                // HashMap<string,_>::get(key) — text keys demote to `&str` (no `get(&key)`).
+                let text_map_key_borrow_forward = param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && self.param_only_forwarded_to_map_key_callee(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
+                    && !payload_forces_owned
+                    && !field_move_forces_owned_early;
+                if text_map_key_borrow_forward {
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                    return format!("{}: &str", param.name);
+                }
+
+                if param.name != "self"
+                    && self.inferred_borrowed_params.contains(&param.name)
+                    && Self::param_is_used_inside_loop_body(func.body.as_slice(), &param.name)
+                    && !self.is_type_copy(&param.type_)
+                {
+                    let type_str =
+                        self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
                     return format!("{}: {}", param.name, type_str);
                 }
 
@@ -590,7 +663,12 @@ impl<'ast> CodeGenerator<'ast> {
                         && !map_key_borrow_forward
                         // Codegen promoted to borrow via callee forwarding — do not let
                         // stale analyzer Owned block `&T` formals (static method passthrough).
-                        && !self.inferred_borrowed_params.contains(&param.name));
+                        && !self.inferred_borrowed_params.contains(&param.name)
+                        && !self.param_only_forwards_to_registry_borrow_callees(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ));
                 if param.name != "self"
                     && !analyzer_or_ir_owned
                     && !self.param_single_arg_owned_self_or_field_forward(param, func)
@@ -616,7 +694,17 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.type_,
                         Type::Reference(_) | Type::MutableReference(_)
                     )
-                    && !self.func_is_pure_forwarding_delegate(func)
+                    && (!self.func_is_pure_forwarding_delegate(func)
+                        || self.param_passed_to_borrowing_callee(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )
+                        || self.param_only_forwards_to_registry_borrow_callees(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        ))
                     // Multiple call sites block demotion only when the param must stay
                     // Owned (moved into several owning callees). Analyzer Borrowed / codegen
                     // promote of pure borrowing forwards means shared `&T` — reusable across
@@ -679,8 +767,18 @@ impl<'ast> CodeGenerator<'ast> {
                         || field_proj_readonly
                         || map_key_borrow_forward
                         || vec_store_borrow_ok
+                        || self.param_only_forwards_to_registry_borrow_callees(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )
                         || (self.inferred_borrowed_params.contains(&param.name)
-                            && !self.param_is_single_arg_call_only_delegate(param, func)
+                            && (!self.param_is_single_arg_call_only_delegate(param, func)
+                                || self.param_passed_to_borrowing_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                ))
                             && (!self.param_passed_from_multiple_statements(
                                 func.body.as_slice(),
                                 &param.name,
@@ -1560,11 +1658,15 @@ impl<'ast> CodeGenerator<'ast> {
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
-                                ) || !self.param_passed_to_borrowing_callee(
+                                ) || (!self.param_passed_to_borrowing_callee(
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
-                                ))
+                                ) && !self.param_only_forwards_to_registry_borrow_callees(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )))
                             {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.inferred_borrowed_params.remove(&param.name);
@@ -2104,7 +2206,17 @@ impl<'ast> CodeGenerator<'ast> {
                                         &param.name,
                                         func,
                                     )
-                                    && !borrow_delegation)
+                                    && !borrow_delegation
+                                    && !self.param_only_forwards_to_registry_borrow_callees(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    )
+                                    && !self.param_passed_to_borrowing_callee(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    ))
                                 || analyzed.field_extract_parameters.contains(&param.name)
                                 || (analyzed.returned_parameters.contains(&param.name)
                                     && !self.associated_text_identity_return_may_borrow(
@@ -2329,7 +2441,15 @@ impl<'ast> CodeGenerator<'ast> {
                                     func,
                                 )
                                 && ((unused_params.contains(&param.name)
-                                    && !analyzer_keeps_owned_string)
+                                    && (!analyzer_keeps_owned_string
+                                        || (!self.pub_module_api_keeps_owned_string_formal(func)
+                                            && !analyzed.returned_parameters.contains(&param.name)
+                                            && !self.param_has_owning_method_use(
+                                                func.body.as_slice(),
+                                                &param.name,
+                                                func,
+                                            )
+                                            && !payload_stored)))
                                     || self.param_only_used_in_simple_or_tuple_discard(
                                         func.body.as_slice(),
                                         &param.name,
@@ -2451,6 +2571,18 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                             }
                             if cross_module_borrow_keep_owned {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.inferred_borrowed_params.remove(&param.name);
+                                self.inferred_mut_borrowed_params.remove(&param.name);
+                                self.emitted_rust_ref_formals.remove(&param.name);
+                            }
+                            if param.name != "self"
+                                && self.param_passed_via_tryop_to_borrowing_callee(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                    func,
+                                )
+                            {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.inferred_borrowed_params.remove(&param.name);
                                 self.inferred_mut_borrowed_params.remove(&param.name);
@@ -2872,10 +3004,26 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         // WDB-157: free functions (`pg_wire_parse`, etc.) keep concrete `String`.
-        // `impl Into<String>` is for method builders (`self` receivers) so Rust
-        // callers can pass `&str` (windjammer-ui StatusChip).
-        if !func.parameters.iter().any(|p| p.name == "self") {
-            return false;
+        // `impl Into<String>` is for impl builders/constructors so Rust callers can
+        // pass `&str` (windjammer-ui StatusChip::new / .label).
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+        if !has_self_receiver {
+            if !self.in_impl_block {
+                return false;
+            }
+            let Some(ret) = func.return_type.as_ref() else {
+                return false;
+            };
+            let returns_impl_type = matches!(
+                ret,
+                Type::Custom(name) if self
+                    .current_struct_name
+                    .as_deref()
+                    .is_some_and(|sn| sn == name.as_str())
+            );
+            if !returns_impl_type {
+                return false;
+            }
         }
         if param.decorators.iter().any(|d| d.name == "string_ref") {
             return false;

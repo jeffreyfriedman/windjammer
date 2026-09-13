@@ -285,7 +285,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 other => other,
                             };
                             if let Expression::Identifier { name, .. } = inner {
-                                if self.identifier_already_ref(name)
+                                if self.identifier_already_mut_ref(name)
+                                    || self.identifier_already_ref(name)
                                     || self.str_ref_optimized_params.contains(name.as_str())
                                     || self.emitted_rust_ref_formals.contains(name.as_str())
                                     || (self.inferred_borrowed_params.contains(name.as_str())
@@ -338,6 +339,13 @@ impl<'ast> CodeGenerator<'ast> {
                                         .is_some_and(|indices| indices.contains(&i))
                                 });
                             if is_collection_key || !can_mut {
+                                // `&mut T` formals reborrow bare — never stack shared `&`
+                                // (`take_edges(&csr)` → `&&mut DenseCsr`).
+                                if let Some(Expression::Identifier { name, .. }) = arg_expr {
+                                    if self.identifier_already_mut_ref(name) {
+                                        return arg_str;
+                                    }
+                                }
                                 apply_borrow(&mut arg_str);
                                 arg_str
                             } else if callee_formal_is_copy
@@ -390,6 +398,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     if let Expression::Identifier { name, .. } = arg_expr {
                                         if (self.emitted_rust_ref_formals.contains(name.as_str())
                                             || self.str_ref_optimized_params.contains(name.as_str())
+                                            || self.identifier_already_mut_ref(name)
                                             || self.identifier_already_ref(name))
                                             && !self.collection_key_owned_params.contains(name.as_str())
                                         {

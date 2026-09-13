@@ -3829,10 +3829,12 @@ impl<'ast> CodeGenerator<'ast> {
             already_usize,
         );
         // WDB-160: runtime `process::exit(i32)` — cast WJ `int`/`i64` args.
+        let arg_ty = self.infer_expression_type(arg_expr);
         crate::codegen::rust::type_casting::coerce_arg_str_for_i32_formal(
             arg_expr,
             coerced,
             formal.or(formal_for_usize),
+            arg_ty.as_ref(),
         );
         // Numeric inference may have already emitted `1_usize` from a Vec::insert
         // suffix match; undo when the *effective* formal is not usize (after
@@ -3849,6 +3851,16 @@ impl<'ast> CodeGenerator<'ast> {
             Some(callee_name),
         );
         if skip_cast {
+            return;
+        }
+        // Integer receivers (`i32.max(-100).min(100)`) must not cast bounds to f32 when
+        // only float `min`/`max` stubs exist in the registry.
+        if receiver_type_name
+            .is_some_and(crate::type_classification::is_integer_type)
+            || inferred_recv
+                .as_ref()
+                .is_some_and(crate::codegen::rust::type_casting::type_is_wj_int_formal)
+        {
             return;
         }
         let Some(param_ty) = cast_sig

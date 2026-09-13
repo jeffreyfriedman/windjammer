@@ -323,7 +323,9 @@ impl<'ast> CodeGenerator<'ast> {
                     recv_early.as_deref(),
                     &self.signature_registry,
                 ) {
-                    return obj_ty_early;
+                    if let Some(ty) = obj_ty_early {
+                        return Some(ty);
+                    }
                 }
                 // Option/Result owned-self adapters: peel wrapper from receiver type.
                 if let Some(obj_type) = obj_ty_early.as_ref() {

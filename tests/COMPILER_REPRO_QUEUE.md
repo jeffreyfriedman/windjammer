@@ -786,6 +786,19 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
    (`let r = f(self.field); self.field = r.sub`) emits `std::mem::take(&mut self.field)`.
    Gate: `codegen_owned_field_call_writeback_gate_test`.
 
+## P3.265 (2026-09-13) — suite filter batch GREEN
+
+Verified on tip after P3.264 + ownership batch:
+
+| Filter | Status |
+|--------|--------|
+| `function_args_3layer_test`, `codegen_cross_module_signature_test`, `method_call_reference_args_test` | ✅ |
+| `param_ownership_multiple_use_test`, `tryop_ownership_inference_test`, `library_multipass_wdb_csr_gates_test` | ✅ |
+| `codegen_copy_type_arg_test`, `match_arm_binding_method_call_test`, `void_return_semicolon_test`, … (13/18 named filters) | ✅ |
+| `cross_crate_dogfooding_ownership_test` (subset), `codegen_component_library_regen_gates`, `bug_match_none_arm_string_after_split` | 🔴 follow-up |
+
+Fix themes: skip `as i32` when arg already `i32`; text HashMap keys → `&str`; loop-body param borrow; TryOp owned early return; `u32` counter literals + `u32 as usize` vs `.len()`.
+
 ## Run repros
 
 ```bash

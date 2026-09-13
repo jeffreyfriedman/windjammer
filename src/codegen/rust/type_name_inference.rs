@@ -125,7 +125,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MethodCall { object, method, .. } => {
                 // For method chains, try to resolve the return type of the method.
                 // If the method returns Self (or the same type), the type propagates.
-                let obj_type = self.infer_type_name(object);
+                let obj_type = self
+                    .infer_type_name(object)
+                    .or_else(|| {
+                        self.infer_expression_type(object)
+                            .and_then(|t| Self::type_to_name(&t))
+                    });
                 if let Some(ref tn) = obj_type {
                     let qualified = format!("{}::{}", tn, method);
                     if let Some(sig) = self.get_signature_with_global(&qualified) {
@@ -224,6 +229,9 @@ impl<'ast> CodeGenerator<'ast> {
             // Chained `Type { .. }.method(...)` must resolve like let-bound struct literals
             // (WDB-091 / signature-driven string coercion).
             Expression::StructLiteral { name, .. } => Some(name.clone()),
+            Expression::Binary { .. } => self
+                .infer_expression_type(expr)
+                .and_then(|t| Self::type_to_name(&t)),
             _ => None,
         }
     }

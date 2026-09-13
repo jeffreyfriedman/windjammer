@@ -169,13 +169,38 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Drive int literal suffixes from a usize peer operand (WDB-121: `while i < 1`).
+        // Drive int literal suffixes from a peer operand (WDB-121 usize, WDB-081 u32).
         let prev_bin_int = self.assignment_int_target_type.clone();
-        if (is_comparison || is_arithmetic)
-            && self.assignment_int_target_type.is_none()
-            && ((left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal))
-        {
-            self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+        if (is_comparison || is_arithmetic) && self.assignment_int_target_type.is_none() {
+            let peer_int_type = |expr: &Expression<'ast>| -> Option<Type> {
+                let Expression::Identifier { name, .. } = expr else {
+                    return None;
+                };
+                self.local_var_types
+                    .get(name)
+                    .cloned()
+                    .or_else(|| {
+                        self.current_function_params
+                            .iter()
+                            .find(|p| p.name == *name)
+                            .map(|p| p.type_.clone())
+                    })
+                    .filter(|t| {
+                        Self::assignment_target_needs_int_codegen_context(t)
+                            && Self::int_type_from_assignment_target(t).is_some()
+                    })
+            };
+            if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal) {
+                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+            } else if right_is_int_literal {
+                if let Some(t) = peer_int_type(left) {
+                    self.assignment_int_target_type = Some(t);
+                }
+            } else if left_is_int_literal {
+                if let Some(t) = peer_int_type(right) {
+                    self.assignment_int_target_type = Some(t);
+                }
+            }
         }
 
         let mut left_str = match left {
@@ -246,7 +271,25 @@ impl<'ast> CodeGenerator<'ast> {
         // - int < items.len()       →  int < (items.len() as i64)
         // - (done * 100) / total    →  (done * 100) / (total as i64)  when total is usize
         // - usize < items.len()     →  no cast (both usize)
-        if usize_signed_int_cast_will_apply {
+        // u32/i32 vs `.len()`/usize: cast the counter to `usize`, not len to i64 (WDB-081).
+        let mut skip_mixed_int_promotion = false;
+        if is_comparison {
+            let narrow_unsigned = |expr: &Expression<'ast>| {
+                self.infer_expression_type(expr).is_some_and(|t| {
+                    matches!(t, Type::Int32)
+                        || matches!(t, Type::Custom(n) if n == "u32" || n == "i32")
+                })
+            };
+            if narrow_unsigned(left) && right_is_usize {
+                left_str = format!("{left_str} as usize");
+                skip_mixed_int_promotion = true;
+            } else if narrow_unsigned(right) && left_is_usize {
+                right_str = format!("{right_str} as usize");
+                skip_mixed_int_promotion = true;
+            }
+        }
+
+        if usize_signed_int_cast_will_apply && !skip_mixed_int_promotion {
             if left_is_usize {
                 (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
                     &left_str,
@@ -286,7 +329,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Mixed concrete integer types (e.g. u32 vs i32): Rust needs explicit `as T`.
         // Only when int inference has resolved BOTH sides and they differ.
         // Skip if the usize/len() heuristic already cast one operand to usize.
-        if !usize_signed_int_cast_will_apply {
+        if !usize_signed_int_cast_will_apply && !skip_mixed_int_promotion {
             // `usize`/`len()` ± untyped literal: Rust infers the literal as `usize` — do not
             // rewrite to `1_usize as i64` etc.
             let skip_int_promotion_usize_arith_untyped_lit = is_arithmetic

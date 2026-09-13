@@ -200,6 +200,9 @@ pub struct CodeGenerator<'ast> {
     /// Per-function call-site arg indices that need `&mut` (from emitted `&mut T` formals).
     pub(crate) function_emitted_mut_arg_indices:
         std::collections::HashMap<String, std::collections::HashSet<usize>>,
+    /// Emitted non-self formal strings from preregister (callee borrow passthrough).
+    pub(crate) preregistered_free_function_emitted_params:
+        std::collections::HashMap<String, Vec<String>>,
     /// Arg indices recorded while emitting the current function's `&mut T` formals.
     pub(crate) current_fn_emitted_mut_arg_indices: std::collections::HashSet<usize>,
     /// Params that keep owned Rust formals but borrow at select call sites (dogfood `put_value`).
@@ -631,6 +634,7 @@ impl<'ast> CodeGenerator<'ast> {
             collection_key_owned_params: std::collections::HashSet::new(),
             emitted_rust_ref_formals: std::collections::HashSet::new(),
             function_emitted_mut_arg_indices: std::collections::HashMap::new(),
+            preregistered_free_function_emitted_params: std::collections::HashMap::new(),
             current_fn_emitted_mut_arg_indices: std::collections::HashSet::new(),
             current_fn_mixed_forwarder_params: std::collections::HashSet::new(),
             current_fn_forward_ref_if_params: std::collections::HashSet::new(),
@@ -2234,8 +2238,15 @@ impl<'ast> CodeGenerator<'ast> {
         if self.collection_key_owned_params.contains(name.as_str()) {
             return;
         }
-        // `&mut T` is not a shared ref — keep `query(&sql)` reborrows into AsRef/&str.
+        // `&mut T` formals: peel stacked shared `&` (`take_edges(&csr)` → `&&mut T`).
         if self.identifier_already_mut_ref(name) {
+            if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                let base =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
+                if base == name.as_str() {
+                    *arg_str = name.clone();
+                }
+            }
             return;
         }
         let text_borrowed_formal = self.inferred_borrowed_params.contains(name.as_str())
@@ -2363,6 +2374,17 @@ impl<'ast> CodeGenerator<'ast> {
     pub(crate) fn identifier_already_mut_ref(&self, name: &str) -> bool {
         if self.inferred_mut_borrowed_params.contains(name) {
             return true;
+        }
+        if self.current_function_params.iter().any(|p| p.name == name) {
+            let user_idx = self
+                .current_function_params
+                .iter()
+                .filter(|p| p.name != "self")
+                .position(|p| p.name == name);
+            if user_idx.is_some_and(|idx| self.current_fn_emitted_mut_arg_indices.contains(&idx))
+            {
+                return true;
+            }
         }
         self.current_function_params
             .iter()
