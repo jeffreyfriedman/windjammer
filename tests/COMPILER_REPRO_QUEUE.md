@@ -335,6 +335,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Disk:** non-destructive prune → ~224 Gi free.
 
+## P3.263 (2026-09-13) — WDB-110/111: emitted-ref formals drive clone→to_string
+
+| Gate | Status |
+|------|--------|
+| `wdb110_*` isolate + same-file | ✅ tip GREEN — `li_path.clone()` stays clone into owned `String` |
+| `wdb111_*` multipass | ✅ tip GREEN — no `&…clone()` / no `.to_string()` rewrite |
+| IR `owned String → owned String` | ✅ Identity (not `ToOwnedString`) |
+| Clone rewrite / lower / finalize | ✅ keyed off `emitted_rust_ref_formals`, not stale `inferred_borrowed_params` |
+
+**Root cause:** analyzer `Borrowed` + IR `ToOwnedString` rewrote owned-place `.clone()` to `.to_string()` / borrowed call sites even when codegen still emitted `String` formals.
+
+**Fix:** coercion Identity for String→String; string clone helpers use codegen-confirmed `&str` emit set.
+
 ## P3.260 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
 
 | Gate | Status |

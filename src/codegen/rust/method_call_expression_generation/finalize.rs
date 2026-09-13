@@ -1120,12 +1120,12 @@ impl<'ast> CodeGenerator<'ast> {
                 || preserve_place_clone
             {
                 if let Expression::Identifier { name, .. } = object {
-                    let is_borrowed_string = self.inferred_borrowed_params.contains(name)
+                    let is_emitted_str_ref = self.emitted_rust_ref_formals.contains(name)
                         && self.current_function_params.iter().any(|p| {
                             p.name == *name
                                 && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                         });
-                    if is_borrowed_string {
+                    if is_emitted_str_ref {
                         return format!("{}.to_string()", obj_str);
                     }
                 }
@@ -1134,7 +1134,7 @@ impl<'ast> CodeGenerator<'ast> {
             return crate::codegen::rust::string_utilities::lower_explicit_clone_call(
                 object,
                 &obj_str,
-                &self.inferred_borrowed_params,
+                &self.emitted_rust_ref_formals,
                 &self.current_function_params,
             );
         }

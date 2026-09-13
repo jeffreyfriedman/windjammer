@@ -78,6 +78,11 @@ fn assert_caller_owned_string_formals(callee_rs: &str, caller_rs: &str) {
         "WDB-110: owned String formals must not receive &path.clone() at isolate call site.\n--- callee ---\n{callee_rs}\n--- caller ---\n{caller_rs}"
     );
     assert!(
+        !caller_rs.contains("li_path.to_string()")
+            && !caller_rs.contains("ord_path.to_string()"),
+        "WDB-110: owned String formals must keep .clone(), not .to_string().\n--- caller ---\n{caller_rs}"
+    );
+    assert!(
         caller_rs.contains("run_parquet_load(li_path.clone()")
             || caller_rs.contains("run_parquet_load(li_path,"),
         "WDB-110: expected move/clone into owned String formal.\n--- caller ---\n{caller_rs}"

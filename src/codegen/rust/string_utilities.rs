@@ -1068,9 +1068,14 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
     }
 }
 
-/// When `expr_str` ends with `.clone()` and the cloned identifier is a borrowed
-/// string parameter, rewrite `.clone()` to `.to_string()`. Cloning a `&str`
-/// produces another `&str`; `.to_string()` produces an owned `String`.
+/// When `expr_str` ends with `.clone()` and the cloned identifier is a
+/// **codegen-confirmed** demoted `&str` formal, rewrite `.clone()` to
+/// `.to_string()`. Cloning a `&str` produces another `&str`; `.to_string()`
+/// produces an owned `String`.
+///
+/// `emitted_rust_ref_formals` is the source of truth — stale analyzer
+/// `Borrowed` alone must not rewrite when the formal still emits `String`
+/// (WDB-110/111: `li_path.clone()` into owned formals).
 ///
 /// Handles both explicit `.clone()` MethodCall AST and codegen-appended
 /// `.clone()` on an Identifier (auto-clone / tuple slot reuse).
@@ -1079,7 +1084,7 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
 pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
     expr_str: &mut String,
     expr: &Expression<'ast>,
-    borrowed_params: &std::collections::HashSet<String>,
+    emitted_rust_ref_formals: &std::collections::HashSet<String>,
     function_params: &[crate::parser::Parameter<'ast>],
 ) -> bool {
     if !expr_str.ends_with(".clone()") {
@@ -1102,8 +1107,8 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
         let is_string_type = function_params.iter().any(|p| {
             p.name == name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
         });
-        let is_borrowed = borrowed_params.contains(name);
-        if is_borrowed && is_string_type {
+        let is_emitted_str_ref = emitted_rust_ref_formals.contains(name);
+        if is_emitted_str_ref && is_string_type {
             *expr_str = expr_str.replacen(".clone()", ".to_string()", 1);
             return true;
         }
@@ -1129,7 +1134,7 @@ pub fn finalize_explicit_user_clone_call_site<'ast>(
     coerced: &str,
     sig: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
-    borrowed_text_params: &std::collections::HashSet<String>,
+    emitted_rust_ref_formals: &std::collections::HashSet<String>,
     function_params: &[crate::parser::Parameter<'ast>],
 ) -> String {
     if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr) {
@@ -1179,7 +1184,7 @@ pub fn finalize_explicit_user_clone_call_site<'ast>(
         return lower_explicit_clone_call(
             arg_expr,
             &restored,
-            borrowed_text_params,
+            emitted_rust_ref_formals,
             function_params,
         );
     }
@@ -1218,12 +1223,16 @@ pub fn restore_stripped_explicit_user_clone(
     }
 }
 
-/// W0005: explicit WJ `.clone()` is stripped; borrowed WJ `string` (`&str`) needs
-/// `.to_string()` because `&str::clone` stays `&str`.
+/// W0005: explicit WJ `.clone()` is stripped; demoted WJ `string` (`&str` emit)
+/// needs `.to_string()` because `&str::clone` stays `&str`.
+///
+/// Only rewrite when the binding is in `emitted_rust_ref_formals` (codegen
+/// confirmed `&str`). Stale analyzer Borrowed with owned `String` emit must keep
+/// `.clone()` (WDB-110/111).
 pub fn lower_explicit_clone_call<'ast>(
     object: &Expression<'ast>,
     obj_str: &str,
-    borrowed_params: &std::collections::HashSet<String>,
+    emitted_rust_ref_formals: &std::collections::HashSet<String>,
     function_params: &[crate::parser::Parameter<'ast>],
 ) -> String {
     // Call sites pass the full `param.clone()` MethodCall; peel to the binding name.
@@ -1232,7 +1241,7 @@ pub fn lower_explicit_clone_call<'ast>(
         _ => crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(object),
     };
     if let Some(name) = binding {
-        if borrowed_params.contains(name)
+        if emitted_rust_ref_formals.contains(name)
             && function_params.iter().any(|p| {
                 p.name == name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
             })

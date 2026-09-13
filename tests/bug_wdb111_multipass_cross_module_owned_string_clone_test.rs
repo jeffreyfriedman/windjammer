@@ -65,6 +65,10 @@ fn assert_multipass_no_borrow_on_owned_string_clone(test_rs: &str) {
         "WDB-111: multipass must not borrow .clone() into owned String formals. Got:\n{test_rs}"
     );
     assert!(
+        !test_rs.contains("li_path.to_string()") && !test_rs.contains("ord_path.to_string()"),
+        "WDB-111: owned String formals must keep .clone(), not .to_string(). Got:\n{test_rs}"
+    );
+    assert!(
         test_rs.contains("run_parquet_load(li_path.clone()")
             || test_rs.contains("run_parquet_load(li_path,"),
         "WDB-111: expected move/clone into owned String formal. Got:\n{test_rs}"

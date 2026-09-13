@@ -3916,7 +3916,7 @@ impl<'ast> CodeGenerator<'ast> {
             super::string_utilities::rewrite_borrowed_str_clone_to_to_string(
                 expr_str,
                 expr,
-                &self.inferred_borrowed_params,
+                &self.emitted_rust_ref_formals,
                 &self.current_function_params,
             );
             if !super::string_utilities::already_owned_string_expr(expr_str) {

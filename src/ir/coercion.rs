@@ -351,8 +351,10 @@ fn needs_string_owned_coercion(actual: &BaseType, expected: &BaseType) -> bool {
     if !is_string_base(expected) {
         return false;
     }
+    // Already an owned `String` place — Identity / `.clone()`, never `.to_string()`
+    // (WDB-110/111: `li_path.clone()` must stay clone into owned formals).
     if is_string_base(actual) {
-        return true;
+        return false;
     }
     is_display_coercible_to_string(actual)
 }
@@ -438,6 +440,15 @@ mod tests {
     fn string_literal_to_ref_param_is_identity_not_borrow() {
         let actual = borrowed(BaseType::String);
         let expected = borrowed(BaseType::String);
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
+    }
+
+    #[test]
+    fn owned_string_to_owned_string_is_identity_not_to_owned() {
+        // WDB-110/111: owned String → owned String must not pick ToOwnedString
+        // (that rewrote `path.clone()` into `path.to_string()`).
+        let actual = owned(BaseType::String);
+        let expected = owned(BaseType::String);
         assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
     }
 
