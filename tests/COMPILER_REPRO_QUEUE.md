@@ -306,15 +306,15 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
-## P3.259 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
+## P3.260 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **297** E0308 (`&str←String` 108, `&T←T` 99, `String←&str` 49, `T←&T` 41) |
 | Tip **WDB-167** | ❌ product RED (65 Caps `Provider`) |
 | Tip **WDB-169** product gen | ⚠️ queue claimed tip GREEN but gen still has `&empty_bakeoff_run()` until resync — re-verify |
-| Tip **WDB-170** demoted `&str` `.clone()` → owned `String` | ❌ filed (product DF `sql.clone()` into `parse_ast(String)`) |
-| Tip **WDB-171** owned `Vec<u8>` → demoted `&Vec<u8>` | ❌ filed (product `finish_execute(…, response)`; WDB-126/127 tip GREEN ≠ product) |
+| Tip **WDB-170** demoted `&str` `.clone()` → owned `String` | ❌ **product RED** (tip fixture GREEN when caller stays owned `String`; product demotes DF `sql` then `.clone()`) |
+| Tip **WDB-171** owned `Vec<u8>` → demoted `&Vec<u8>` | ❌ **product RED** (~16); tip fixture GREEN (auto-`&`) — product residual |
 | `dogfood_gen_p153.py` | ❄️ **FREEZE** — no new transforms; `WDB_DOGFOOD_REFUSE_NEW=1` exits 2 |
 | `sync_tip_cluster.sh` | ❄️ requires `WDB_TIP_CLUSTER_OK=1` |
 
