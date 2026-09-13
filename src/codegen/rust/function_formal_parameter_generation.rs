@@ -530,7 +530,7 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    )))
+                    ) && !analyzed.returned_parameters.contains(&param.name)))
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());
@@ -2434,6 +2434,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
                                 && !self.pub_module_api_keeps_owned_string_formal(func)
+                                && !analyzed.returned_parameters.contains(&param.name)
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && !self.param_only_forwards_to_emitted_owned_callees(
                                     func.body.as_slice(),
@@ -2967,8 +2968,9 @@ impl<'ast> CodeGenerator<'ast> {
                     ""
                 };
 
-                // TDD FIX: Prefix unused parameter names with `_` to suppress warnings
-                let display_name = if unused_params.contains(&param.name) {
+                // Prefix unused formals with `_` for rustc — but keep pub API names stable
+                // (`replay_all(path: &str)` must match cross-crate signature gates).
+                let display_name = if unused_params.contains(&param.name) && !func.is_pub {
                     format!("_{}", param.name)
                 } else {
                     param.name.clone()
@@ -3032,6 +3034,28 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         if !payload_stored {
+            // Multipass pub helpers (`grid(left, right)`) forward into builder methods;
+            // `impl Into<String>` keeps external `&str` literal call sites valid.
+            let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+            if !has_self_receiver
+                && func.return_type.as_ref().is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::return_type_expects_owned_string(
+                        &Some(t.clone()),
+                    )
+                })
+                && self.param_passed_as_call_argument(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+                && !Self::param_used_in_binary_comparison(&param.name, &func.body)
+                && !crate::analyzer::field_enum_borrow::param_consumed_by_enum_variant_ctor(
+                    &param.name,
+                    &func.body,
+                )
+            {
+                return true;
+            }
             return false;
         }
         // `impl Into<String>` cannot participate in `==` / ordering against `&str`
@@ -3057,6 +3081,158 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Custom(name) if name == "string" || name == "String" => false,
             Type::Custom(_) => true,
             Type::Parameterized(name, _) if name != "Result" && name != "Option" => true,
+            _ => false,
+        }
+    }
+
+    /// Pub free functions returning `string` that only pass a param into builder/method args
+    /// (`grid(left)` → `Tile::value_html(left)`) — emit `impl Into<String>` for `&str` callers.
+    fn param_pub_free_string_builder_forward(
+        &self,
+        func: &FunctionDecl<'_>,
+        param: &crate::parser::Parameter,
+    ) -> bool {
+        if func.parameters.iter().any(|p| p.name == "self") {
+            return false;
+        }
+        if !func.return_type.as_ref().is_some_and(|t| {
+            crate::codegen::rust::string_utilities::return_type_expects_owned_string(&Some(t.clone()))
+        }) {
+            return false;
+        }
+        if !self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func) {
+            return false;
+        }
+        if Self::param_used_in_binary_comparison(&param.name, &func.body) {
+            return false;
+        }
+        if crate::analyzer::field_enum_borrow::param_consumed_by_enum_variant_ctor(
+            &param.name,
+            &func.body,
+        ) {
+            return false;
+        }
+        self.param_all_call_sites_are_method_or_call_args(func.body.as_slice(), &param.name, func)
+    }
+
+    /// Every use of `param_name` is as a direct argument in a `Call` / `MethodCall`.
+    fn param_all_call_sites_are_method_or_call_args(
+        &self,
+        body: &[&Statement<'_>],
+        param_name: &str,
+        func: &FunctionDecl<'_>,
+    ) -> bool {
+        let mut saw = false;
+        for stmt in body {
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => {
+                    if !self.param_expr_only_method_call_arg_uses(expr, param_name, &mut saw) {
+                        return false;
+                    }
+                }
+                Statement::Let { value, .. } => {
+                    if !self.param_expr_only_method_call_arg_uses(value, param_name, &mut saw) {
+                        return false;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if !self.param_all_call_sites_are_method_or_call_args(
+                        then_block.as_slice(),
+                        param_name,
+                        func,
+                    ) {
+                        return false;
+                    }
+                    if let Some(b) = else_block {
+                        if !self.param_all_call_sites_are_method_or_call_args(
+                            b.as_slice(),
+                            param_name,
+                            func,
+                        ) {
+                            return false;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        saw
+    }
+
+    fn param_expr_only_method_call_arg_uses(
+        &self,
+        expr: &Expression<'_>,
+        param_name: &str,
+        saw: &mut bool,
+    ) -> bool {
+        match expr {
+            Expression::Call { function, arguments, .. } => {
+                if self.expression_mentions_param(function, param_name) {
+                    return false;
+                }
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        *saw = true;
+                    } else if !self.param_expr_only_method_call_arg_uses(arg, param_name, saw) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                if !self.param_expr_only_method_call_arg_uses(object, param_name, saw) {
+                    return false;
+                }
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        *saw = true;
+                    } else if !self.param_expr_only_method_call_arg_uses(arg, param_name, saw) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Expression::Identifier { name, .. } if name == param_name => false,
+            _ => !self.expression_mentions_param(expr, param_name),
+        }
+    }
+
+    fn expression_mentions_param(&self, expr: &Expression<'_>, param_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                self.expression_mentions_param(object, param_name)
+            }
+            Expression::Unary { operand, .. } => self.expression_mentions_param(operand, param_name),
+            Expression::Binary { left, right, .. } => {
+                self.expression_mentions_param(left, param_name)
+                    || self.expression_mentions_param(right, param_name)
+            }
+            Expression::Call { function, arguments, .. } => {
+                self.expression_mentions_param(function, param_name)
+                    || arguments.iter().any(|(_, a)| self.expression_mentions_param(a, param_name))
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expression_mentions_param(object, param_name)
+                    || arguments.iter().any(|(_, a)| self.expression_mentions_param(a, param_name))
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| self.expression_mentions_param(e, param_name)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expression_mentions_param(v, param_name)),
             _ => false,
         }
     }

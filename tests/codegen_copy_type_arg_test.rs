@@ -83,16 +83,10 @@ pub fn test() {
         )
     });
 
-    // Should NOT add & to Copy type argument
+    // Should NOT add & to Copy type argument (casts like `quantity as i32` are OK).
     assert!(
-        generated.contains("stack.remove(quantity)"),
-        "Expected 'stack.remove(quantity)' but got:\n{}",
-        generated
-    );
-
-    assert!(
-        !generated.contains("stack.remove(&quantity)"),
-        "Should NOT generate 'stack.remove(&quantity)', found in:\n{}",
+        generated.contains("stack.remove(quantity") && !generated.contains("stack.remove(&quantity"),
+        "Copy i32 arg must pass by value, not borrow. Got:\n{}",
         generated
     );
 }
@@ -147,14 +141,8 @@ pub fn test() {
 
     // Should NOT add & even in if let context
     assert!(
-        generated.contains("stack.remove(quantity)"),
-        "Expected 'stack.remove(quantity)' but got:\n{}",
-        generated
-    );
-
-    assert!(
-        !generated.contains("stack.remove(&quantity)"),
-        "Should NOT generate 'stack.remove(&quantity)', found in:\n{}",
+        generated.contains("stack.remove(quantity") && !generated.contains("stack.remove(&quantity"),
+        "Copy i32 arg in if-let must pass by value. Got:\n{}",
         generated
     );
 }

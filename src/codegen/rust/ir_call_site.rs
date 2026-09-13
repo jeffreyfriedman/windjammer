@@ -1808,6 +1808,12 @@ impl<'ast> CodeGenerator<'ast> {
         ) && !self.ir_sig_arg_expects_shared_borrow(
             sig_for_owned_literal.as_ref().unwrap_or(&sig),
             arg_index,
+        ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+            sig_for_owned_literal.as_ref().unwrap_or(&sig),
+            sig_for_owned_literal
+                .as_ref()
+                .unwrap_or(&sig)
+                .arg_param_index(arg_index),
         ) && (crate::codegen::rust::string_utilities::string_literal_needs_to_string(
             sig_for_owned_literal.as_ref().unwrap_or(&sig),
             arg_index,
@@ -2027,10 +2033,16 @@ impl<'ast> CodeGenerator<'ast> {
             if !self.match_arm_bindings.contains(name.as_str())
                 && coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
-                && self.caller_owned_non_copy_formal(name)
-                && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                && (self.caller_owned_non_copy_formal(name)
+                    || self.local_binding_is_owned_non_copy(name)
+                    || self.local_var_types.get(name).is_some_and(|t| {
+                        crate::codegen::rust::string_utilities::type_is_owned_string(t)
+                    }))
+                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &sig, param_idx,
-                )
+                ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                    &sig, arg_index,
+                ))
                 && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                     &self.signature_registry,
                     callee_name,
@@ -4458,6 +4470,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(sig),
             );
         }
+        crate::codegen::rust::expression_utilities::collapse_redundant_clones(coerced);
     }
 
     /// Peel `&` / `(&x)` when a Copy-aggregate caller binding is passed into an
@@ -4771,6 +4784,25 @@ impl<'ast> CodeGenerator<'ast> {
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
             {
                 *coerced = format!("&{coerced}");
+            }
+            // Vec literals / helper returns at `append_put(&vec![…], &enc)` sites.
+            if !coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && matches!(
+                    arg_expr,
+                    Expression::Array { .. } | Expression::Call { .. }
+                )
+            {
+                *coerced = format!("&{coerced}");
+            }
+            // Symmetric borrows for readonly helpers (`keys_equal(&a, &b)`).
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.emitted_rust_ref_formals.contains(name)
+                    && !coerced.starts_with('&')
+                    && !coerced.starts_with("&mut ")
+                {
+                    *coerced = format!("&{coerced}");
+                }
             }
             return;
         }
