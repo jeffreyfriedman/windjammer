@@ -122,7 +122,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
 | P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
-| P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.253) |
+| P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
@@ -137,16 +137,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Root cause | `is_collection_key_lookup` treated bare free-fn `get` as Map key lookup (unknown receiver → name consensus) |
 | Fix | Signature-shaped guard: bare free-fn (no `::`, no self, no receiver) is not a collection key; also harden stdlib-homonym auto-borrow early-return for empty `formal_param_types` |
 
-## P3.253 (2026-09-12) — seed overlay apply BankLineView dogfood
+## P3.257 (2026-09-12) — LedgerKit seed overlay apply BankLineView dogfood
 
 | Change | Status |
 |--------|--------|
 | Disk cleanup | ✅ ~40–43Gi free |
 | Gate `seed_overlay_apply_bank_line_*` (module const → owned field) | ✅ tip GREEN — `.to_string()` |
-| Tip recheck WDB-166 field-clone→&str | ✅ tip GREEN (fixture + product) |
+| Tip recheck WDB-166 field-clone→&str | ✅ tip GREEN (fixture + product analytic) |
 | Tip recheck owned-helper→demoted `&str` | ✅ tip GREEN |
 | Product `seed_bank_{match,clear}_overlay.wj` apply_* drop empty-concat | ✅ |
-| `run_red_repro_bundle.sh` — apply + owned_helper → GREEN_FILTERS | ✅ |
+| `run_red_repro_bundle.sh` — apply + owned_helper + WDB-166 → GREEN_FILTERS | ✅ |
 
 ## P3.249b (2026-09-12) — LedgerKit seed overlay remember dogfood
 
@@ -325,7 +325,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | `cargo check --lib` (in-repo target) | ⚠️ **254** errors (E0308×250, E0382×4); **`found &mut` = 0** |
 | Dominant bucket | **168×** `expected &str, found String` (e.g. `emit.sql.clone()` → demoted FFI `sql: &str`) |
 | Tip **WDB-159** sequential owned→&str borrow | ✅ tip GREEN (does **not** cover struct-field `.clone()`) |
-| Tip **WDB-166** field `.clone()` into demoted `&str` | ❌ **product RED** (ran); tip fixture GREEN when formal stays owned — product `emit.sql.clone()` into `sql: &str` |
+| Tip **WDB-166** field `.clone()` into demoted `&str` | ✅ tip GREEN (fixture + product analytic; recheck 2026-09-12 P3.257) |
 
 **Compiler agent priority:** WDB-166 (signature-driven borrow of owned field/`clone` into demoted `&str`); then `&T`↔owned Custom (OptDatedArtifact, MvccStore, …).
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run tip compiler repro gates. See tests/COMPILER_REPRO_QUEUE.md § P3.249+.
+# Run tip compiler repro gates. See tests/COMPILER_REPRO_QUEUE.md § P3.257+.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,6 +9,10 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  seed_overlay_apply_bank_line_must_cargo_check_without_plus_empty
+  hexagonal_seed_overlay_apply_bank_line_must_cargo_check_without_plus_empty
+  owned_helper_into_demoted_str_formal_must_auto_borrow
+  wdb166_module_file_owned_field_clone_into_str_formal_must_borrow
   seed_overlay_remember_must_cargo_check_without_plus_empty
   hexagonal_seed_overlay_remember_must_cargo_check_without_plus_empty
   i64_bitand_hex_mask_must_not_emit_u8_literal
