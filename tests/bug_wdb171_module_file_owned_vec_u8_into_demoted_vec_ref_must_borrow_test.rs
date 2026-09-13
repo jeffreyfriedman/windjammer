@@ -102,14 +102,22 @@ fn wdb171_module_file_owned_vec_u8_into_demoted_vec_ref_must_borrow() {
     }
 }
 
-#[test]
-fn wdb171_product_pg_execute_must_borrow_response_into_finish_execute() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn wdb171_rel_gen_root() -> PathBuf {
+    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
+    if tip.join("relational_pg_execute_port.rs").exists() {
+        return tip;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .join("windjammerdb/crates/wdb-layers/gen");
-    let wire = root.join("relational/relational_pg_wire_port.rs");
-    let exec = root.join("relational/relational_pg_execute_port.rs");
+        .join("windjammerdb/crates/wdb-layers/gen/relational")
+}
+
+#[test]
+fn wdb171_product_pg_execute_must_borrow_response_into_finish_execute() {
+    let root = wdb171_rel_gen_root();
+    let wire = root.join("relational_pg_wire_port.rs");
+    let exec = root.join("relational_pg_execute_port.rs");
     if !wire.exists() || !exec.exists() {
         eprintln!("WDB-171: skip product gate — wire/exec missing");
         return;

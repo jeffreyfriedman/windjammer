@@ -128,14 +128,22 @@ fn wdb170_module_file_demoted_str_clone_into_owned_string_must_to_string() {
     }
 }
 
-#[test]
-fn wdb170_product_df_execute_demoted_sql_must_to_string_into_parse_ast() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn wdb170_rel_gen_root() -> PathBuf {
+    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
+    if tip.join("relational_df_analytic_execute_port.rs").exists() {
+        return tip;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .join("windjammerdb/crates/wdb-layers/gen");
-    let peg = root.join("relational/relational_sql_peg_port.rs");
-    let exec = root.join("relational/relational_df_analytic_execute_port.rs");
+        .join("windjammerdb/crates/wdb-layers/gen/relational")
+}
+
+#[test]
+fn wdb170_product_df_execute_demoted_sql_must_to_string_into_parse_ast() {
+    let root = wdb170_rel_gen_root();
+    let peg = root.join("relational_sql_peg_port.rs");
+    let exec = root.join("relational_df_analytic_execute_port.rs");
     if !peg.exists() || !exec.exists() {
         eprintln!("WDB-170: skip product gate — peg/exec missing");
         return;

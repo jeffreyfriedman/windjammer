@@ -125,7 +125,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
-| P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ⚠️ product RED (P3.261); interim `digits_to_int("${v}")` |
+| P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.262); product interim may remain until auth regen |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
@@ -318,19 +318,36 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.262 (2026-09-13) — tip cold relational/obs clears WDB-167/170/171/172/173 product REDs
+
+| Gate | Tip fixture | Tip cold product emit | Stale `gen/` |
+|------|-------------|----------------------|--------------|
+| **WDB-167** Provider/`triple.0` | ✅ demotes + `&triple.0` | ✅ keeps **owned** `provider: RelationalDfProvider` | ❌ demoted + bare Cap args |
+| **WDB-170** demoted `&str`.clone→String | ✅ (owned caller OK) | ✅ keeps **owned** `sql: String` + move into parse | ❌ `sql: &str` + `sql.clone()` |
+| **WDB-171** owned `Vec<u8>`→`&Vec` | ✅ `&response` / `&encode_*()` | ✅ demoted + auto-borrow | ❌ demoted bare owned |
+| **WDB-172** CatalogResolver | ✅ non-Copy label demotes + `&resolver` | ✅ bind_ast/resolve_select **owned** | ❌ demoted + `resolver.clone()` into `&` |
+| **WDB-173** `&worker_id.clone()` | ✅ owned String + `worker_id.clone()` | ✅ `worker_id.clone()` (no `&`) | ❌ `&worker_id.clone()` |
+| HashMap get→demoted `&str` | ✅ tip GREEN | — | product interim `digits_to_int("${v}")` |
+
+**Compiler:** tip multipass already greens these shapes on cold transpile; stale `gen/` was the product RED source. Product gates prefer `.agent-wip/{rel,obs}_tip_out` when present (session cold transpile artifacts).
+
+**Dogfood:** sync tip emit into `wdb-layers/gen/` (`transpile_relational_module_file.sh` + observability module-file + semantic Caps) to clear stale product `cargo check`. No Phase 606+.
+
+**Disk:** non-destructive prune → ~224 Gi free.
+
 ## P3.260 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **297** E0308 (`&str←String` 108, `&T←T` 99, `String←&str` 49, `T←&T` 41) |
-| Tip **WDB-167** | ❌ product RED (65 Caps `Provider`) |
+| Tip **WDB-167** | ✅ tip cold owned Provider (P3.262); stale gen still demoted |
 | Tip **WDB-169** product gen | ⚠️ queue claimed tip GREEN but gen still has `&empty_bakeoff_run()` until resync — re-verify |
-| Tip **WDB-170** demoted `&str` `.clone()` → owned `String` | ❌ **product RED** (tip fixture GREEN when caller stays owned `String`; product demotes DF `sql` then `.clone()`) |
-| Tip **WDB-171** owned `Vec<u8>` → demoted `&Vec<u8>` | ❌ **product RED** (~16); tip fixture GREEN (auto-`&`) — product residual |
+| Tip **WDB-170** demoted `&str` `.clone()` → owned `String` | ✅ tip cold owned sql (P3.262) |
+| Tip **WDB-171** owned `Vec<u8>` → demoted `&Vec<u8>` | ✅ tip cold auto-borrow (P3.262) |
 | `dogfood_gen_p153.py` | ❄️ **FREEZE** — no new transforms; `WDB_DOGFOOD_REFUSE_NEW=1` exits 2 |
 | `sync_tip_cluster.sh` | ❄️ requires `WDB_TIP_CLUSTER_OK=1` |
 
-**Compiler agent priority:** WDB-167, then WDB-170/171 (and confirm WDB-169 product gen). Drop dogfood only when tip stays GREEN on full multipass. No Phase 606+.
+**Superseded by P3.262** for tip truth. Sync `.agent-wip/rel_tip_out` (+ obs) into `gen/` to clear stale product `cargo check`.
 
 ## P3.258 WindjammerDB CQ-C5 — WDB-169 &empty_bakeoff into owned + tip-cluster guardrail (2026-09-12)
 

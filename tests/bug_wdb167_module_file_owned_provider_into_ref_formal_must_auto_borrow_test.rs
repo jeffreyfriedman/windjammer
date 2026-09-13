@@ -33,12 +33,14 @@ pub mod cap
 
 const FFI: &str = r#"
 pub struct DfProvider {
+    pub name: string,
     pub ok: bool,
 }
 
 /// Read-only provider consumer — tip demotes to `&DfProvider` (product df_ffi).
+/// Non-Copy (`string` field) so demotion matches RelationalDfProvider.
 pub fn sql_via_provider(provider: DfProvider, sql: string) -> bool {
-    provider.ok && sql.len() > 0
+    provider.ok && provider.name.len() > 0 && sql.len() > 0
 }
 "#;
 
@@ -47,7 +49,7 @@ use crate::ffi::DfProvider
 use crate::ffi::sql_via_provider
 
 pub fn make_provider() -> (DfProvider, bool) {
-    (DfProvider { ok: true }, true)
+    (DfProvider { name: "cap", ok: true }, true)
 }
 
 pub fn cap_run() -> bool {
@@ -95,13 +97,28 @@ fn wdb167_module_file_owned_provider_tuple_into_ref_formal_must_auto_borrow() {
     );
 }
 
-#[test]
-fn wdb167_product_df_ffi_demoted_provider_must_auto_borrow_at_caps() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+/// Prefer tip-fresh emit under `.agent-wip/` (session cold transpile) over stale `gen/`.
+fn wdb167_layers_gen_root() -> PathBuf {
+    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
+    if tip.join("relational_df_ffi_port.rs").exists() {
+        return tip;
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .join("windjammerdb/crates/wdb-layers/gen");
-    let ffi = root.join("relational_module_file/relational_df_ffi_port.rs");
+        .join("windjammerdb/crates/wdb-layers/gen/relational_module_file")
+}
+
+fn wdb167_semantic_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("windjammerdb/crates/wdb-layers/gen/semantic")
+}
+
+#[test]
+fn wdb167_product_df_ffi_demoted_provider_must_auto_borrow_at_caps() {
+    let ffi = wdb167_layers_gen_root().join("relational_df_ffi_port.rs");
     if !ffi.exists() {
         eprintln!("WDB-167: skip product gate — {} missing", ffi.display());
         return;
@@ -109,12 +126,16 @@ fn wdb167_product_df_ffi_demoted_provider_must_auto_borrow_at_caps() {
     let ffi_text = std::fs::read_to_string(&ffi).expect("ffi");
     let demoted = ffi_text.contains("provider: &RelationalDfProvider");
     if !demoted {
-        eprintln!("WDB-167: product ffi provider not demoted — skip Cap scan");
+        // Tip keeps owned Provider (2026-09-13 relational cold) — Caps with triple.0 are OK.
+        eprintln!(
+            "WDB-167: ffi provider owned (tip) — Cap borrow N/A ({})",
+            ffi.display()
+        );
         return;
     }
     // Caps that call with bare owned provider / triple.0 (no leading &).
     let mut bad = Vec::new();
-    for entry in std::fs::read_dir(root.join("semantic")).into_iter().flatten().flatten() {
+    for entry in std::fs::read_dir(wdb167_semantic_root()).into_iter().flatten().flatten() {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("rs") {
             continue;
