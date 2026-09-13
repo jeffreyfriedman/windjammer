@@ -586,6 +586,52 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.remove(&param.name);
                     return format!("{}: &str", param.name);
                 }
+                // Pub helpers forwarding into owned builder methods (`grid` → `value_html`).
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && !payload_stored
+                    && self.function_return_is_text(func)
+                    && self.param_pub_free_string_builder_forward(func, param)
+                {
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.into_string_formal_params.insert(param.name.clone());
+                    return format!("{}: impl Into<String>", param.name);
+                }
+                // Readonly text-returning helpers (`temp_path`) demote to `&str` so cross-
+                // module literal call sites stay bare (`temp_path("recover")`).
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && !payload_stored
+                    && self.function_return_is_text(func)
+                    && !self.param_only_forwards_to_path_asref_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && self.param_has_readonly_expression_use(
+                        func.body.as_slice(),
+                        &param.name,
+                    )
+                    && !self.param_used_as_call_argument(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    return format!("{}: &str", param.name);
+                }
                 // Text-returning APIs (`escape_html`, `join`) keep owned `String` formals
                 // even when analyzer marked str_ref_optimizable (`.replace` chains).
                 if param.name != "self"
@@ -2884,7 +2930,8 @@ impl<'ast> CodeGenerator<'ast> {
                 // into payload fields accept `&str` via `impl Into<String>`.
                 if param.name != "self"
                     && type_str == "String"
-                    && self.param_should_emit_into_string_formal(func, param, payload_stored)
+                    && (self.param_should_emit_into_string_formal(func, param, payload_stored)
+                        || self.param_pub_free_string_builder_forward(func, param))
                 {
                     type_str = "impl Into<String>".to_string();
                     self.into_string_formal_params.insert(param.name.clone());
@@ -3005,27 +3052,8 @@ impl<'ast> CodeGenerator<'ast> {
         if param.name == "self" || self.in_trait_impl || !func.is_pub {
             return false;
         }
-        // WDB-157: free functions (`pg_wire_parse`, etc.) keep concrete `String`.
-        // `impl Into<String>` is for impl builders/constructors so Rust callers can
-        // pass `&str` (windjammer-ui StatusChip::new / .label).
-        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
-        if !has_self_receiver {
-            if !self.in_impl_block {
-                return false;
-            }
-            let Some(ret) = func.return_type.as_ref() else {
-                return false;
-            };
-            let returns_impl_type = matches!(
-                ret,
-                Type::Custom(name) if self
-                    .current_struct_name
-                    .as_deref()
-                    .is_some_and(|sn| sn == name.as_str())
-            );
-            if !returns_impl_type {
-                return false;
-            }
+        if self.param_pub_free_string_builder_forward(func, param) {
+            return true;
         }
         if param.decorators.iter().any(|d| d.name == "string_ref") {
             return false;
@@ -3057,6 +3085,28 @@ impl<'ast> CodeGenerator<'ast> {
                 return true;
             }
             return false;
+        }
+        // WDB-157: free functions (`pg_wire_parse`, etc.) keep concrete `String`.
+        // `impl Into<String>` is for impl builders/constructors so Rust callers can
+        // pass `&str` (windjammer-ui StatusChip::new / .label).
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
+        if !has_self_receiver {
+            if !self.in_impl_block {
+                return false;
+            }
+            let Some(ret) = func.return_type.as_ref() else {
+                return false;
+            };
+            let returns_impl_type = matches!(
+                ret,
+                Type::Custom(name) if self
+                    .current_struct_name
+                    .as_deref()
+                    .is_some_and(|sn| sn == name.as_str())
+            );
+            if !returns_impl_type {
+                return false;
+            }
         }
         // `impl Into<String>` cannot participate in `==` / ordering against `&str`
         // (WDB-139). Keep a concrete `String` formal when the body compares the param.

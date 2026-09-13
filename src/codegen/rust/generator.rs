@@ -2796,24 +2796,13 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
-    /// Owned non-Copy outer formals pass by move at call sites; Rust auto-borrows for `&T` callees
-    /// unless the param is a forward-ref (used in `if` conditions / mixed forwarder branches).
+    /// Rust function calls do not auto-coerce owned non-Copy bindings to `&T` — emit `&binding`
+    /// explicitly when the callee contract expects shared borrow (dogfood `engine.put(&key)`).
     pub(crate) fn callee_call_uses_rust_auto_borrow_for_owned_struct(
         &self,
-        arg_expr: &Expression<'ast>,
+        _arg_expr: &Expression<'ast>,
     ) -> bool {
-        match arg_expr {
-            Expression::Identifier { name, .. } => {
-                if !self.caller_owned_non_copy_formal(name) {
-                    return false;
-                }
-                let body: Vec<_> = self.current_function_body.iter().copied().collect();
-                !self.current_fn_forward_ref_if_params.contains(name)
-                    && !self.param_used_in_if_with_condition_and_branches(&body, name)
-                    && !self.param_used_in_any_if_condition(&body, name)
-            }
-            _ => false,
-        }
+        false
     }
 
     /// Borrow/clone coercion for forward-ref and mixed-forwarder facade params at self calls.

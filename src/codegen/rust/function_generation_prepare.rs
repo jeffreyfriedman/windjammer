@@ -2954,6 +2954,9 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|elem| self.expression_uses_param_as_read_operand(elem, param_name)),
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|arg| self.expression_uses_param_as_read_operand(arg, param_name)),
             _ => false,
         }
     }
@@ -6760,6 +6763,15 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
+            if sig
+                .forwarding_borrow_params
+                .as_ref()
+                .and_then(|flags| flags.get(pidx))
+                .copied()
+                == Some(true)
+            {
+                return true;
+            }
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
                 return true;
             }
@@ -10171,7 +10183,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn preregistered_free_call_arg_expects_borrow(
+    pub(in crate::codegen::rust) fn preregistered_free_call_arg_expects_borrow(
         &self,
         callee_name: &str,
         arg_index: usize,
@@ -10186,6 +10198,50 @@ impl<'ast> CodeGenerator<'ast> {
                     && !formal.contains(": &mut ")
                     && !formal.contains(": &'a mut ");
             }
+        }
+        for reg in [
+            Some(&self.signature_registry),
+            self.global_signature_registry
+                .as_ref()
+                .map(|arc| arc.as_ref()),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for key in [callee_name, simple] {
+                let Some(sig) = reg
+                    .get_signature(key)
+                    .or_else(|| reg.lookup_method(key))
+                    .or_else(|| reg.find_unique_signature_ending_with(simple))
+                else {
+                    continue;
+                };
+                let pidx = sig.arg_param_index(arg_index);
+                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Preregistered codegen formals beat stale analyzer borrow metadata at call sites.
+    pub(in crate::codegen::rust) fn preregistered_free_call_arg_emits_owned(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        for key in [callee_name, simple] {
+            let Some(formals) = self.preregistered_free_function_emitted_params.get(key) else {
+                continue;
+            };
+            let Some(formal) = formals.get(arg_index) else {
+                continue;
+            };
+            return !((formal.contains(": &") || formal.contains(": &'a "))
+                && !formal.contains(": &mut ")
+                && !formal.contains(": &'a mut "));
         }
         false
     }
@@ -10728,6 +10784,9 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     updated.formal_param_types.push(pt.clone());
                 }
+            }
+            if ms.forwarding_borrow_params.is_some() {
+                updated.forwarding_borrow_params = ms.forwarding_borrow_params.clone();
             }
         } else {
             for param in &func.parameters {

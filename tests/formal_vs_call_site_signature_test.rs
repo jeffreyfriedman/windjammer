@@ -240,6 +240,7 @@ fn metadata_import_populates_formal_param_types_from_params() {
         param_ownership: vec!["Borrowed".into(), "Borrowed".into()],
         emitted_rust_ref_params: None,
         string_ref_string_formal_params: None,
+        forwarding_borrow_params: None,
         has_self_receiver: true,
         is_extern: false,
     };

@@ -3003,6 +3003,7 @@ pub fn run() {
         || rs.contains("keys_equal(existing_key.clone(), key)")
         || rs.contains("keys_equal(existing_key, key.clone())")
         || rs.contains("keys_equal(&existing_key, &key)")
+        || rs.contains("keys_equal(&existing_key, key)")
         || rs.contains("keys_equal(&existing_key, &key.clone())");
     assert!(
         upsert_ok,

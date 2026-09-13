@@ -126,7 +126,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
 | P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ⚠️ product RED (P3.261); interim `digits_to_int("${v}")` |
-| P1 | **Cross-crate lib `from_toml(text)` demoted `&str` → owned `parse(String)` (`wj-config`)** | `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ⚠️ product RED (P3.262); interim `parse("${text}")` |
+| P1 | **Cross-crate lib `from_toml(text)` → owned `parse(String)` without metadata guesses `&` (`wj-config`)** | `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ⚠️ RED if no `metadata.json`; ✅ with `--library --module-file` (P3.262) |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
@@ -147,12 +147,12 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Ecosystem `wj-config::from_toml` → `wj-toml::parse` | ❌ tip RED (`parse(text)` E0308 `&str` vs `String`) |
-| Interim | `parse("${text}")` owned template |
-| Gate `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | filed |
-| Related | WDB-170 (same-crate `.clone()`), P3.233 (app schedule demoted) |
+| Ecosystem `wj-config::from_toml` → `wj-toml::parse` | ⚠️ RED when dep `metadata.json` missing (`parse(&text)`); ✅ GREEN with `--library --module-file` metadata auto-discovered |
+| Idiomatic `parse(text)` | ✅ keep (no empty-concat interim when metadata present) |
+| Gate `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | filed — must cargo-check with `--metadata` like product |
+| Related | WDB-170, P3.233; build packages with `--library --module-file` so path deps emit ownership |
 
-**Compiler agent:** when multipass demotes a thin forwarder's `string` formal to `&str`, call sites into cross-crate owned `String` formals must auto-`.to_string()` (not bare/`clone`).
+**Compiler agent:** (1) default `wj build` for library packages should always emit `metadata.json`; (2) without metadata, do not guess borrow into owned `String` formals.
 
 ## P3.261 (2026-09-13) — HashMap get binding into demoted `&str` + `.clone()`
 
@@ -754,12 +754,12 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 | P1 | **`std::compress` gzip encode/decode (`wj-compress`)** | `bug_std_compress_gzip_wiring_test` | ✅ tip GREEN — runtime `compress` + flate2 (Base64 gzip string API) |
 | P1 | **`std::regex` wiring (`wj-regex`)** | `bug_std_regex_module_wiring_test` | ✅ tip GREEN (verify) |
 | P1 | **Reuse demoted `string` in `Ok((text, ""))` after `split_once` / `contains` (`wj-url`)** | `bug_match_none_arm_string_after_split_test` | ✅ P3.266 — `returned_parameters` blocks readonly forward demotion; all 4 filters GREEN |
-| P1 | **Cross-crate dogfooding ownership (47 filters)** | `cross_crate_dogfooding_ownership_test` | 🟡 P3.266 — **42/47 GREEN** (was 40/47 @5921d996). Fixed: `apply_patch_delete` double-clone, `replay_all(path: &str)` pub-name gate. **RED (5):** `dogfood_engine_put_delegation_passes_borrowed_key`, `dogfood_temp_path_string_literal_no_to_string`, `dogfood_wal_recovered_map_keys_equal_owned_vec_params`, `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`, `dogfood_lsm_engine_apply_writes_append_put_borrows_vec_locals` |
-| P1 | **Multipass component library regen gates** | `codegen_component_library_regen_gates_test` | 🟡 P3.266 — **4/6 GREEN**. **RED:** `multipass_string_formal_into_owned_builder_must_cargo_check` (`grid` needs `impl Into<String>`), `string_field_reuse_after_helper_must_cargo_check` (`display_text(color)` not `&color`) |
+| P1 | **Cross-crate dogfooding ownership (47 filters)** | `cross_crate_dogfooding_ownership_test` | ✅ P3.266 — **57/57 GREEN**. `forwarding_borrow_params` metadata export/import; IR terminal borrow for vec literals + helper returns; owned-strip peel without blocking forward-ref `if` params; `MemoryEngine::put` / `append_put` cross-crate borrow |
+| P1 | **Multipass component library regen gates** | `codegen_component_library_regen_gates_test` | ✅ P3.266 — **6/6 GREEN**. `impl Into<String>` pub free-fn forwarders; owned `String`/`Custom` peel at owned callees after helper reuse |
 
-### P3.266 batch (WIP @5921d996+, not pushed — suite not fully green)
+### P3.266 batch (pushed — cross-crate + component-library gates green)
 
-**Compiler (`src/`):** `returned_parameters` guard on readonly text forward demotion; pub API keeps param names (no `_path` on `replay_all`); `collapse_redundant_clones` on call-site finalize; pub free-fn `impl Into<String>` forwarders (partial); owned-local/`String` peel of spurious `&` at owned callees; literal `.to_string()` gated on `emitted_owned_arg_contract` + Borrowed ownership.
+**Compiler (`src/`):** `returned_parameters` guard on readonly text forward demotion; pub API keeps param names (no `_path` on `replay_all`); `collapse_redundant_clones` on call-site finalize; pub free-fn `impl Into<String>` forwarders; owned-local/`String` peel of spurious `&` at owned callees; literal `.to_string()` gated on `emitted_owned_arg_contract` + Borrowed ownership; **`forwarding_borrow_params` in `metadata.json`** for cross-crate vec-literal/helper borrow at `append_put`-style facades; `maybe_borrow_vec_or_helper_from_global_metadata` + `call_site_needs_shared_ref_at_emit` honor forwarding flags.
 
 **Tip-truth test gates (uncommitted WIP):** `codegen_copy_type_arg_test.rs`, `method_call_reference_args_test.rs`, `void_return_semicolon_test.rs` — accept `as i32` cast suffixes (align with P3.265).
 

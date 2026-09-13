@@ -26,6 +26,11 @@ pub(crate) fn expression_is_vec_macro_literal(expr: &Expression) -> bool {
     matches!(expr, Expression::MacroInvocation { name, .. } if name == "vec")
 }
 
+/// `vec![…]` macro or array literal producing an owned `Vec` at a call site.
+pub(crate) fn expression_is_vec_literal_producer(expr: &Expression) -> bool {
+    expression_is_vec_macro_literal(expr) || matches!(expr, Expression::Array { .. })
+}
+
 /// Zero-arg stdlib empty constructor (`Vec::new`, `HashMap::new`, `vec![]`, …).
 ///
 /// Type-driven: zero-arg *associated* call (`Type::…()`) on a
@@ -71,18 +76,24 @@ fn expression_is_owned_vec_at_call_site<'ast>(
     if expression_is_vec_new_constructor(arg_expr) {
         return true;
     }
+    if matches!(arg_expr, Expression::Array { .. }) {
+        return true;
+    }
+    if gen
+        .infer_expression_type(arg_expr)
+        .is_some_and(|t| type_is_vec_container(&t))
+    {
+        return true;
+    }
     let Expression::Identifier { name, .. } = arg_expr else {
         return false;
     };
     gen.local_var_types
         .get(name)
         .is_some_and(type_is_vec_container)
-        || gen
-            .infer_expression_type(arg_expr)
-            .is_some_and(|t| type_is_vec_container(&t))
 }
 
-fn callee_arg_expects_shared_vec_ref(sig: &FunctionSignature, arg_index: usize) -> bool {
+pub(crate) fn callee_arg_expects_shared_vec_ref(sig: &FunctionSignature, arg_index: usize) -> bool {
     let pidx = sig.arg_param_index(arg_index);
     // Owned emission wins over stale analyzer `Reference(Vec)` / Borrowed stubs.
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
@@ -165,10 +176,30 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
     }
 
     if callee_arg_expects_shared_vec_ref(sig, arg_index) {
-        format!("&{coerced}")
-    } else {
-        coerced
+        return format!("&{coerced}");
     }
+
+    if let Some(global) = gen.global_signature_registry.as_ref() {
+        let lookup_keys: Vec<String> = match (receiver_type, method) {
+            (Some(rt), Some(method)) => vec![
+                format!("{rt}::{method}"),
+                method.to_string(),
+            ],
+            _ => vec![sig.name.clone()],
+        };
+        for key in lookup_keys {
+            if let Some(gs) = global
+                .get_signature(&key)
+                .or_else(|| global.lookup_method(&key))
+            {
+                if callee_arg_expects_shared_vec_ref(gs, arg_index) {
+                    return format!("&{coerced}");
+                }
+            }
+        }
+    }
+
+    coerced
 }
 
 /// Whether a user free-function call must not add `&` because callee formals emit owned
