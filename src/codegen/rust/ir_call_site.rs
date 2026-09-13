@@ -4657,7 +4657,15 @@ impl<'ast> CodeGenerator<'ast> {
             // Never strip `&` for text formals the callee emits as `&str` / shared ref
             // (regression-049 `replay_to_lsn(&self.path)`).
             && !emits_shared_ref
-            && (local_owned_emission || !global_emits_shared_ref);
+            // WDB-169: owned Call/MethodCall temps (`empty_bakeoff_run()`) must move into
+            // owned Custom formals even when a stale global shared-ref homonym exists —
+            // `&empty_bakeoff_run()` is never a valid shared-ref binding.
+            && (local_owned_emission
+                || !global_emits_shared_ref
+                || matches!(
+                    arg_expr,
+                    Expression::Call { .. } | Expression::MethodCall { .. }
+                ));
         // Owned emission wins over stale analyzer/IR Ref expectations (regression-060
         // `is_at_or_before(&through)` → `other: Lsn`). Strip before shared-borrow path.
         // Do not strip `.clone()` — Copy aggregates still need multi-use clones (dogfood seed_write).

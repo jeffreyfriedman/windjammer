@@ -46,13 +46,27 @@ const HARDWARE: &str = r#"
 use crate::bakeoff::BakeoffRun
 use crate::bakeoff::empty_bakeoff_run
 
-pub fn build_session(point: BakeoffRun, secondary: BakeoffRun) -> bool {
-    point.nanos >= 0 && !secondary.contended
+pub fn build_session(
+    point: BakeoffRun,
+    secondary: BakeoffRun,
+    update: BakeoffRun,
+    q6: BakeoffRun,
+) -> bool {
+    point.nanos >= 0 && !secondary.contended && update.nanos >= 0 && q6.nanos >= 0
 }
 
 pub fn cap_empty_session() -> bool {
-    // Product: wave1_opt_hardware_build_session(…, empty_bakeoff_run(), …)
-    build_session(empty_bakeoff_run(), empty_bakeoff_run())
+    build_session(
+        empty_bakeoff_run(),
+        empty_bakeoff_run(),
+        empty_bakeoff_run(),
+        empty_bakeoff_run(),
+    )
+}
+
+/// Product shape: one owned binding moved into a slot; remaining slots are helper temps.
+pub fn cap_with_run(run: BakeoffRun) -> bool {
+    build_session(run, empty_bakeoff_run(), empty_bakeoff_run(), empty_bakeoff_run())
 }
 "#;
 

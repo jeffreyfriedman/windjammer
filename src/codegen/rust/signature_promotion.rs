@@ -1440,12 +1440,13 @@ pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx:
     }) {
         return false;
     }
-    sig.formal_param_type(param_idx)
-        .is_some_and(|formal| {
-            matches!(formal, Type::Custom(_))
-                && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
-                && !crate::codegen::rust::types::is_windjammer_text_type(formal)
-        })
+    let is_bare_custom = |t: &Type| {
+        matches!(t, Type::Custom(_)) && !crate::codegen::rust::types::is_windjammer_text_type(t)
+    };
+    // Live / tip-cluster call sites often fill `param_types` before `formal_param_types`
+    // (WDB-169 `BakeoffRun` slots) — treat bare Custom in either slot as owned user type.
+    sig.formal_param_type(param_idx).is_some_and(is_bare_custom)
+        || sig.param_types.get(param_idx).is_some_and(is_bare_custom)
 }
 
 /// Bare same-module user API beats runtime-std homonym at call sites
