@@ -12,8 +12,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
-| P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.258) |
-| P0 | **Full `windjammer-game-core` library rebuild hang** — after “Compiler changed — re-transpiling all sources”, ownership converges (10 passes / 669 files) then codegen stalls mid-batch (`Codegen batch 385-448/664` for 10+ min, no further progress). Blocks `wj game build` for breach-protocol. Escape hatch: `WJ_SKIP_ENGINE_TRANSPILE=1` (cargo-only) until fixed. | Minimal repro TBD: `wj build windjammer-game-core/src/mod.wj --output gen --library --no-cargo --module-file` after touching compiler binary mtime; need hang repro test under `tests/` | ❌ OPEN (2026-09-13 dogfood) |
+| P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
+| P0 | **Full `windjammer-game-core` library rebuild “hang”** — Step 4B-b looked stuck mid-batch (`385-448/664`). **Root cause:** not a deadlock — O(files×sigs) copy of the global signature map (~23k keys) into every file’s local registry before codegen (multi-second/file → hour-scale). Per-file logging showed progress at 2–15s/file. **Fix:** `promote_overlapping_global_signatures_into_local` — promote overlapping keys only; resolve the rest via `global_signature_registry` Arc. | `promote_overlapping_must_not_copy_absent_global_keys` | 🔧 IN PROGRESS (2026-09-13) |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
 | P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ |
@@ -157,7 +157,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 **Compiler agent:** (1) default library builds must emit `metadata.json`; (2) honor `param_ownership: Owned` at cross-crate call sites (no `&` into `String`); tip regression broke previously green notes/auth.
 
 
-## P3.258 (2026-09-13) — seed overlay int parse/format dogfood
+## P3.262 (2026-09-13) — seed overlay int parse/format dogfood
 
 | Change | Status |
 |--------|--------|
@@ -342,6 +342,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Residual product empty-concat on query `vec![…]` / owned fields | ⚠️ still present — drop only when tip covers |
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
+
+## P3.269 WindjammerDB CQ-C5 — coverage REDs WDB-176/177 for loop-field `&str` + Custom key (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **127** (unchanged; tip-out sync already applied) |
+| Tip **WDB-174** tip-out / **WDB-175** product | ❌ still RED (re-ran) |
+| Tip **WDB-176** loop `v.node_id.clone()` → demoted `&str` | filed — tip-out cross_signal |
+| Tip **WDB-177** demoted `&FeedbackKey` / OptDated → owned | filed — tip-out provider/row |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** WDB-175, tip-out refresh for WDB-174, then WDB-176/177. No Phase 606+.
 
 ## P3.268 WindjammerDB CQ-C5 — tip-out residual gates WDB-174/175 (2026-09-13)
 
