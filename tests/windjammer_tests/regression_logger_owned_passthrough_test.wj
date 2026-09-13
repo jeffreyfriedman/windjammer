@@ -24,7 +24,7 @@ impl Logger {
 
 pub fn test_logger_passthrough_info_warn_two_entries() {
     let mut logger = Logger::new()
-    logger.info("a".to_string())
-    logger.warn("b".to_string())
+    logger.info("a")
+    logger.warn("b")
     assert_eq(logger.entries.len() as int, 2)
 }

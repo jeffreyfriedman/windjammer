@@ -18,6 +18,9 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_method_calls_in_if_blocks() {
@@ -42,16 +45,7 @@ fn test_method_calls_in_if_blocks() {
     )
     .unwrap();
 
-    // Run wj build with locally built binary
-    let wj_binary = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj");
-
-    let output = Command::new(&wj_binary)
+    let output = Command::new(test_utils::wj_binary())
         .args(["build", test_file.to_str().unwrap(), "--no-cargo"])
         .current_dir(temp_dir.path())
         .output()
