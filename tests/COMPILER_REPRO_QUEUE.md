@@ -343,6 +343,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.268 WindjammerDB CQ-C5 — tip-out residual gates WDB-174/175 (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Tip multipass fixture WDB-174 | ✅ tip GREEN (P3.267 IR clone) |
+| Tip-out / gen **WDB-174** `job_store_put_job(store: &Store)` → `put_version(store,)` | ❌ **RED** (`wdb174_tip_out_…` ran) — tip-out artifact lag vs IR fix |
+| Tip **WDB-175** demoted `&Vec` → owned `decode_startup` | ❌ **product RED** (`wdb175_product_…` ran) |
+| Post tip-out sync `cargo check --lib` | ⚠️ **127** errors |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent:** re-transpile tip-out for job_store after WDB-174 IR fix; green WDB-175 (clone demoted Vec into owned). No Phase 606+.
+
 ## P3.267 WindjammerDB CQ-C5 — WDB-174 demoted `&Store` into owned mvcc + HashMap key `&K` IR terminal peel (2026-09-13)
 
 | Gate | Status |
@@ -354,7 +366,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Sample: `test_library_multipass_hashmap_get_borrow_break_single_copied` | ✅ tip GREEN |
 | Sample: `test_library_multipass_hashmap_i64_key_auto_borrow` | ✅ tip GREEN |
 
-**Compiler agent next:** residual sample REDs — loop counter i32/i64 unify (`loop_reused_graph_borrow`), FFI/build_system harness, explicit_string demotion, csv_while owned string.
+**Compiler agent next:** residual sample REDs — loop counter i32/i64 unify (`loop_reused_graph_borrow`), FFI/build_system harness, explicit_string demotion, csv_while owned string. **Also:** refresh `.agent-wip` tip-out so WDB-174 tip-out gate greens; WDB-175 still open.
 
 ## P3.263 WindjammerDB CQ-C5 — tip-out sync + residual WDB-174/175 (2026-09-13)
 

@@ -24,6 +24,7 @@
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
+use std::path::PathBuf;
 
 const MOD: &str = r#"
 pub mod mvcc
@@ -196,5 +197,54 @@ pub fn job_store_load_jobs(store: RelationalMvccStore, snapshot: int) -> int {
     assert!(
         !bad,
         "WDB-174 RED: product job_store demoted &store into owned mvcc_put_version without clone. Got:\n{jobs_rs}\n{mvcc_rs}"
+    );
+}
+
+/// Tip-out / gen residual gate — multipass fixture above may keep owned formals (false-GREEN).
+#[test]
+fn wdb174_tip_out_job_store_must_clone_demoted_store_into_owned_mvcc() {
+    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/obs_tip_out");
+    let rel_tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
+    let gen = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("windjammerdb/crates/wdb-layers/gen");
+    let jobs = if tip.join("observability_job_store_port.rs").exists() {
+        tip.join("observability_job_store_port.rs")
+    } else {
+        gen.join("observability/observability_job_store_port.rs")
+    };
+    let mvcc = if rel_tip.join("relational_mvcc_port.rs").exists() {
+        rel_tip.join("relational_mvcc_port.rs")
+    } else {
+        gen.join("relational/relational_mvcc_port.rs")
+    };
+    if !jobs.exists() || !mvcc.exists() {
+        eprintln!("WDB-174 tip-out: skip — jobs/mvcc missing");
+        return;
+    }
+    let jobs_text = std::fs::read_to_string(&jobs).expect("jobs");
+    let mvcc_text = std::fs::read_to_string(&mvcc).expect("mvcc");
+    let put_owned = {
+        let i = mvcc_text
+            .find("fn relational_mvcc_put_version")
+            .unwrap_or(0);
+        let sl = &mvcc_text[i..mvcc_text.len().min(i + 160)];
+        sl.contains("store: RelationalMvccStore") && !sl.contains("store: &RelationalMvccStore")
+    };
+    let caller_demoted = jobs_text.contains("fn job_store_put_job(store: &RelationalMvccStore");
+    let bare = jobs_text.contains("relational_mvcc_put_version(store,")
+        && !jobs_text.contains("relational_mvcc_put_version(store.clone()");
+    eprintln!(
+        "WDB-174 tip-out put_owned={} demoted={} bare={} path={}",
+        put_owned,
+        caller_demoted,
+        bare,
+        jobs.display()
+    );
+    assert!(
+        !(put_owned && caller_demoted && bare),
+        "WDB-174 RED: tip-out/gen job_store passes &store into owned mvcc_put_version.\n{}",
+        jobs.display()
     );
 }
