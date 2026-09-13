@@ -557,10 +557,16 @@ impl CodeGenerator<'_> {
     pub(super) fn collect_runtime_std_module_refs_from_program(
         program: &Program,
         imported_runtime_std_modules: &std::collections::HashSet<String>,
+        skip_module_roots: &std::collections::HashSet<String>,
     ) -> std::collections::HashSet<String> {
         let mut mods = std::collections::HashSet::new();
         for item in &program.items {
-            Self::item_collect_runtime_std_modules(item, imported_runtime_std_modules, &mut mods);
+            Self::item_collect_runtime_std_modules(
+                item,
+                imported_runtime_std_modules,
+                skip_module_roots,
+                &mut mods,
+            );
         }
         mods
     }
@@ -568,6 +574,7 @@ impl CodeGenerator<'_> {
     fn item_collect_runtime_std_modules(
         item: &Item,
         imported_runtime_std_modules: &std::collections::HashSet<String>,
+        skip_module_roots: &std::collections::HashSet<String>,
         mods: &mut std::collections::HashSet<String>,
     ) {
         match item {
@@ -576,6 +583,7 @@ impl CodeGenerator<'_> {
                     Self::stmt_collect_runtime_std_modules(
                         stmt,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -586,6 +594,7 @@ impl CodeGenerator<'_> {
                         Self::stmt_collect_runtime_std_modules(
                             stmt,
                             imported_runtime_std_modules,
+                            skip_module_roots,
                             mods,
                         );
                     }
@@ -596,6 +605,7 @@ impl CodeGenerator<'_> {
                     Self::item_collect_runtime_std_modules(
                         child,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -604,6 +614,7 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     value,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -614,6 +625,7 @@ impl CodeGenerator<'_> {
     fn stmt_collect_runtime_std_modules(
         stmt: &Statement,
         imported_runtime_std_modules: &std::collections::HashSet<String>,
+        skip_module_roots: &std::collections::HashSet<String>,
         mods: &mut std::collections::HashSet<String>,
     ) {
         match stmt {
@@ -623,6 +635,7 @@ impl CodeGenerator<'_> {
             } => Self::expr_collect_runtime_std_modules(
                 expr,
                 imported_runtime_std_modules,
+                skip_module_roots,
                 mods,
             ),
             Statement::Let { value, .. }
@@ -632,6 +645,7 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     value,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -644,12 +658,14 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     condition,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 for s in then_block {
                     Self::stmt_collect_runtime_std_modules(
                         s,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -658,6 +674,7 @@ impl CodeGenerator<'_> {
                         Self::stmt_collect_runtime_std_modules(
                             s,
                             imported_runtime_std_modules,
+                            skip_module_roots,
                             mods,
                         );
                     }
@@ -669,12 +686,14 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     condition,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 for s in body {
                     Self::stmt_collect_runtime_std_modules(
                         s,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -683,12 +702,14 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     iterable,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 for s in body {
                     Self::stmt_collect_runtime_std_modules(
                         s,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -700,6 +721,7 @@ impl CodeGenerator<'_> {
                     Self::stmt_collect_runtime_std_modules(
                         s,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -708,6 +730,7 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     value,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 for arm in arms {
@@ -715,12 +738,14 @@ impl CodeGenerator<'_> {
                         Self::expr_collect_runtime_std_modules(
                             g,
                             imported_runtime_std_modules,
+                            skip_module_roots,
                             mods,
                         );
                     }
                     Self::expr_collect_runtime_std_modules(
                         &arm.body,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -729,6 +754,7 @@ impl CodeGenerator<'_> {
                 Self::stmt_collect_runtime_std_modules(
                     statement,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -739,11 +765,13 @@ impl CodeGenerator<'_> {
     fn expr_collect_runtime_std_modules(
         expr: &Expression,
         imported_runtime_std_modules: &std::collections::HashSet<String>,
+        skip_module_roots: &std::collections::HashSet<String>,
         mods: &mut std::collections::HashSet<String>,
     ) {
         if let Some(module) = Self::expr_runtime_std_module_segment(
             expr,
             imported_runtime_std_modules,
+            skip_module_roots,
         ) {
             mods.insert(module);
         }
@@ -756,12 +784,14 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     function,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 for (_, arg) in arguments {
                     Self::expr_collect_runtime_std_modules(
                         arg,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -774,12 +804,14 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     object,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 for (_, arg) in arguments {
                     Self::expr_collect_runtime_std_modules(
                         arg,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -788,6 +820,7 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     object,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -795,11 +828,13 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     left,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 Self::expr_collect_runtime_std_modules(
                     right,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -807,6 +842,7 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     operand,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -814,11 +850,13 @@ impl CodeGenerator<'_> {
                 Self::expr_collect_runtime_std_modules(
                     object,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
                 Self::expr_collect_runtime_std_modules(
                     index,
                     imported_runtime_std_modules,
+                    skip_module_roots,
                     mods,
                 );
             }
@@ -827,6 +865,7 @@ impl CodeGenerator<'_> {
                     Self::stmt_collect_runtime_std_modules(
                         s,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -836,6 +875,7 @@ impl CodeGenerator<'_> {
                     Self::expr_collect_runtime_std_modules(
                         e,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -845,6 +885,7 @@ impl CodeGenerator<'_> {
                     Self::expr_collect_runtime_std_modules(
                         v,
                         imported_runtime_std_modules,
+                        skip_module_roots,
                         mods,
                     );
                 }
@@ -854,6 +895,7 @@ impl CodeGenerator<'_> {
             | Expression::Await { expr, .. } => Self::expr_collect_runtime_std_modules(
                 expr,
                 imported_runtime_std_modules,
+                skip_module_roots,
                 mods,
             ),
             _ => {}
@@ -863,10 +905,14 @@ impl CodeGenerator<'_> {
     fn expr_runtime_std_module_segment(
         expr: &Expression,
         imported_runtime_std_modules: &std::collections::HashSet<String>,
+        skip_module_roots: &std::collections::HashSet<String>,
     ) -> Option<String> {
         match expr {
             Expression::Identifier { name, .. } => {
                 if let Some((module, _)) = name.split_once("::") {
+                    if skip_module_roots.contains(module) {
+                        return None;
+                    }
                     if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module) {
                         return Some(module.to_string());
                     }
@@ -875,23 +921,39 @@ impl CodeGenerator<'_> {
             }
             Expression::FieldAccess { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
+                    if skip_module_roots.contains(name) {
+                        return None;
+                    }
                     if imported_runtime_std_modules.contains(name) {
                         return Some(name.clone());
                     }
                 }
-                Self::expr_runtime_std_module_segment(object, imported_runtime_std_modules)
+                Self::expr_runtime_std_module_segment(
+                    object,
+                    imported_runtime_std_modules,
+                    skip_module_roots,
+                )
             }
             Expression::MethodCall { object, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
+                    if skip_module_roots.contains(name) {
+                        return None;
+                    }
                     if imported_runtime_std_modules.contains(name) {
                         return Some(name.clone());
                     }
                 }
-                Self::expr_runtime_std_module_segment(object, imported_runtime_std_modules)
+                Self::expr_runtime_std_module_segment(
+                    object,
+                    imported_runtime_std_modules,
+                    skip_module_roots,
+                )
             }
-            Expression::Call { function, .. } => {
-                Self::expr_runtime_std_module_segment(function, imported_runtime_std_modules)
-            }
+            Expression::Call { function, .. } => Self::expr_runtime_std_module_segment(
+                function,
+                imported_runtime_std_modules,
+                skip_module_roots,
+            ),
             _ => None,
         }
     }
@@ -931,6 +993,7 @@ impl AssetLoader {
         let mods = CodeGenerator::collect_runtime_std_module_refs_from_program(
             &program,
             &std::collections::HashSet::new(),
+            &std::collections::HashSet::new(),
         );
         assert!(
             mods.contains("strings"),
@@ -954,6 +1017,7 @@ pub fn bfs_distance(map: HashMap<i64, i64>, vertex: i64) -> i64 {
             parse_wj_source(Path::new("graph/hashmap_i64_bfs_keys.wj"), source).expect("parse");
         let mods = CodeGenerator::collect_runtime_std_module_refs_from_program(
             &program,
+            &std::collections::HashSet::new(),
             &std::collections::HashSet::new(),
         );
         assert!(

@@ -365,6 +365,15 @@ pub fn rust_use_path_from_module_to_type(
     let lcp = longest_common_prefix_len(current_module, defining_module);
     let ups = current_module.len().saturating_sub(lcp);
     let down = &defining_module[lcp..];
+    // Crate-root files (e.g. `main.wj` → module `["main"]`) import siblings via `crate::`,
+    // not `super::math::…` (which would escape the crate root incorrectly).
+    if lcp == 0 && ups == current_module.len() && !down.is_empty() {
+        let mut path = String::from("crate::");
+        path.push_str(&down.join("::"));
+        path.push_str("::");
+        path.push_str(type_name);
+        return Some(path);
+    }
     let mut parts: Vec<&str> = vec!["super"; ups];
     for seg in down {
         parts.push(seg.as_str());
@@ -542,7 +551,17 @@ pub struct Manager {
         let def = vec!["user".into()];
         assert_eq!(
             rust_use_path_from_module_to_type(&cur, &def, "User").as_deref(),
-            Some("super::user::User")
+            Some("crate::user::User")
+        );
+    }
+
+    #[test]
+    pub(crate) fn rust_use_path_crate_root_file_to_subdir_module() {
+        let cur = vec!["main".into()];
+        let def = vec!["math".into(), "vec2".into()];
+        assert_eq!(
+            rust_use_path_from_module_to_type(&cur, &def, "Vec2").as_deref(),
+            Some("crate::math::vec2::Vec2")
         );
     }
 

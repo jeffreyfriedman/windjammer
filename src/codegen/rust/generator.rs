@@ -4080,29 +4080,51 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// True when `collection[i]` yields a Copy scalar (e.g. `Vec<u32>[0]` → `u32`).
+    pub(crate) fn index_expression_is_copy_scalar(&self, arg: &crate::parser::Expression) -> bool {
+        if !matches!(arg, crate::parser::Expression::Index { .. }) {
+            return false;
+        }
+        if let Some(t) = self.infer_expression_type(arg) {
+            return self.is_copy_move_out_type(&t);
+        }
+        if let crate::parser::Expression::Index { object, .. } = arg {
+            if let Some(elem) = self
+                .infer_expression_type(object)
+                .as_ref()
+                .and_then(|t| Self::peeled_collection_element_type(t))
+                .cloned()
+            {
+                return self.is_copy_move_out_type(&elem);
+            }
+        }
+        false
+    }
+
     /// Clone a Vec-index expression when the callee expects Owned and the element is non-Copy.
     pub(crate) fn maybe_clone_index_for_owned_param(
         &self,
         arg: &crate::parser::Expression,
         arg_str: &mut String,
     ) -> bool {
-        if let crate::parser::Expression::Index { object, .. } = arg {
+        if let crate::parser::Expression::Index { .. } = arg {
             if arg_str.ends_with(".clone()") {
                 return false;
             }
             // Clone when non-Copy, or for Custom elements (empty WJ std stubs may be mis-
             // classified Copy while runtime types are Clone-only — E0507 on `rows[0]`).
-            let needs_clone = match self.infer_expression_type(arg) {
-                None => true,
-                Some(t) => {
-                    let bare = match &t {
-                        crate::parser::Type::Reference(inner)
-                        | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
-                        other => other,
-                    };
-                    !self.is_type_copy(bare) || matches!(bare, crate::parser::Type::Custom(_))
-                }
-            };
+            let needs_clone = !self.index_expression_is_copy_scalar(arg)
+                && match self.infer_expression_type(arg) {
+                    None => true,
+                    Some(t) => {
+                        let bare = match &t {
+                            crate::parser::Type::Reference(inner)
+                            | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
+                            other => other,
+                        };
+                        !self.is_type_copy(bare) || matches!(bare, crate::parser::Type::Custom(_))
+                    }
+                };
             if needs_clone {
                 if arg_str.starts_with('&') {
                     *arg_str = format!("({}).clone()", arg_str);

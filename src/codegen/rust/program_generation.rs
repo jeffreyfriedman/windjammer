@@ -73,17 +73,12 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
             }
-            if let Some(last) = rest.rsplit("::").next() {
-                let name = last.trim();
-                if name.is_empty() {
-                    out_lines.push(line.to_string());
-                    continue;
-                }
-                if seen.insert(name.to_string()) {
-                    out_lines.push(line.to_string());
-                }
-                continue;
+            // Dedupe by full import path — not the last segment alone. Otherwise
+            // `use windjammer_runtime::ffi` drops `use crate::ffi` (same trailing `ffi`).
+            if seen.insert(rest.to_string()) {
+                out_lines.push(line.to_string());
             }
+            continue;
             out_lines.push(line.to_string());
         }
         out_lines.join("\n")
@@ -372,6 +367,7 @@ impl<'ast> CodeGenerator<'ast> {
         for module in Self::collect_runtime_std_module_refs_from_program(
             program,
             &self.runtime_std_module_imports,
+            &self.ffi_module_aliases,
         ) {
             self.runtime_std_module_imports.insert(module);
         }

@@ -88,13 +88,7 @@ wgpu = "0.19"
     .unwrap();
 
     // Run wj build with locally built binary
-    let wj_binary = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let build_dir = project_dir.join("build");
     let output = std::process::Command::new(&wj_binary)

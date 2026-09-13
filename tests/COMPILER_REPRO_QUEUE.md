@@ -365,27 +365,24 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-174/180/181** tip-out/product (recheck after regen) | ✅ tip GREEN |
 | `library_multipass_map_key` (18 tests) | ✅ tip GREEN |
 | Historical sample: `comparison_only_string_formal`, `csv_while_index`, `hashmap_str_key_no_to_string` | ✅ tip GREEN |
-| Historical sample: `ffi_auto_mut`, `build_system_ffi`, `e0308_copy_scalar`, `e0507_option_if_let` | ❌ still RED (6 failures — Copy index `.clone()`, FFI mut locals) |
-| Fresh `cargo check --lib` (wdb-layers) | ⚠️ re-run after full `gen/` sync — prior 127 included stale f32 / `&clone` |
+| Historical sample: `ffi_auto_mut`, `build_system_ffi`, `e0308_copy_scalar`, `e0507_option_if_let` | ✅ tip GREEN (P3.273) — Copy vec-index skip clone; FFI mut-pointer formals skip owned peel; import dedupe by full path; crate-root `use crate::` |
+| Fresh `cargo check --lib` (wdb-layers) | ⚠️ re-run after full `gen/` sync — regen relational module-file locally (gitignored) |
 
-**Fixes (already on tip `f59c8d77` / `ac9b3cf2`):** struct-literal field type drives float suffix; IR terminal reconcile clones demoted aggregates into owned formals; peel leading `&` on `.clone()` temps for owned Custom formals.
+**Fixes (P3.271–273):** struct-literal field float suffix; IR terminal demoted→owned clone / owned→`&` borrow; peel `&` on `.clone()` temps; `index_expression_is_copy_scalar` (no `.clone()` on Copy vec-index); mutable raw-pointer FFI formals skip owned-contract peel; `dedupe_use_lines` by full path (keeps `crate::ffi` + runtime `ffi`); crate-root sibling imports via `crate::mod::Type`.
 
-**Compiler agent next:** FFI mut-pointer locals, Copy scalar vec-index push (e0308), build_system FFI harness. Re-sync full `wdb-layers/gen/` locally (gitignored) after tip compiler changes.
-
-## P3.273 WindjammerDB CQ-C5 — coverage REDs WDB-185/186/187 gen Vec + &String + live_row (2026-09-13)
+## P3.273 WindjammerDB CQ-C5 — WDB-185/186/187 + sample harness greens (2026-09-13)
 
 | Gate | Status |
 |------|--------|
-| Fresh `cargo check --lib` | ⚠️ **165** (↑ from 127; Vec←&Vec×35, f64←f32×15, …) |
-| Tip **WDB-174/179/180/181/183** tip-out/product | ✅ **GREEN** (recheck after P3.271 ownership fix) |
-| Tip **WDB-182** `graph_score: 0.0_f32` | ❌ still tip-out RED |
-| Tip **WDB-184** `&state.clone()` gen lag | ❌ still gen RED (tip-out green) |
-| Tip **WDB-185** gen tpch demoted `&Vec` → owned median | filed — product gen (tip-out owned) |
-| Tip **WDB-186** `&String` → owned `parse_i64` | filed — tip-out job_store |
-| Tip **WDB-187** owned artifact → demoted `&` live_row | filed — tip-out bakeoff |
+| Historical sample: `e0308_copy_scalar`, `ffi_auto_mut`, `build_system_ffi*`, `e0507_option_if_let`, `integration_ffi_build`, `ffi_module`, `crate_imports`, `type_registry_full` | ✅ tip GREEN |
+| Tip **WDB-185** fixture demoted `&Vec` → owned median clone | ✅ tip GREEN — `caller_demoted_non_copy_formal_into_owned_callee` |
+| Tip **WDB-186** fixture + cold job_store (no `&String` into owned parse) | ✅ tip GREEN |
+| Tip **WDB-187** fixture + full module-file bakeoff `&a1` | ✅ tip GREEN — requires relational `--module-file` transpile (not single-file) |
+| Tip **WDB-182/184** tip-out/gen lag | ⚠️ re-sync `gen/` + `.agent-wip/*_tip_out` after tip binary |
+| Fresh `cargo check --lib` (wdb-layers) | ⚠️ re-run after full relational module-file regen |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** WDB-182/184 sync, then WDB-185–187. No Phase 606+. No dogfood transforms.
+**Compiler agent next:** full `wdb-layers` module-file regen into gitignored `gen/`; no dogfood transforms.
 
 ## P3.272 WindjammerDB CQ-C5 — coverage REDs WDB-182/183/184 f32 field + OptEcon + PgWire `&clone` (2026-09-13)
 
