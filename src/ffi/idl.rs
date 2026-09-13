@@ -230,6 +230,7 @@ mod tests {
                 string_ref_string_formal_params: None,
                 has_self_receiver: false,
                 is_extern: true,
+                forwarding_borrow_params: None,
             },
         );
 
@@ -260,6 +261,7 @@ mod tests {
                 string_ref_string_formal_params: None,
                 has_self_receiver: true,
                 is_extern: false,
+                forwarding_borrow_params: None,
             },
         );
 

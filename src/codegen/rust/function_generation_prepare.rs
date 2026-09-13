@@ -7502,6 +7502,11 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // Impl/trait methods (`load(path)` → `strings::len`) demote readonly `string` to
+        // `&str` so multipass callers with demoted formals pass by borrow (owned-string gate).
+        if func.parent_type.is_some() {
+            return false;
+        }
         if self.param_only_forwards_to_path_asref_callees(body, param_name, func) {
             return false;
         }

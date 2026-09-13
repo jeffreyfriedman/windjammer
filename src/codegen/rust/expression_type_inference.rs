@@ -352,28 +352,32 @@ impl<'ast> CodeGenerator<'ast> {
                 // Iterator methods: return the collection type so
                 // extract_iterator_element_type can extract the element type.
                 // Driven by registry return metadata (`Iterator` / `Iterator<item>`).
-                if let Some(obj_type) = self.infer_expression_type(object) {
-                    let receiver = Self::type_to_name(&obj_type);
+                //
+                // IMPORTANT: reuse `obj_ty_early` — do NOT re-infer `object`.
+                // Re-walking the receiver at each MethodCall link is ~3^depth on
+                // builder chains (scenario_presets.wj hung at depth ~32).
+                if let Some(obj_type) = obj_ty_early.as_ref() {
+                    let receiver = Self::type_to_name(obj_type);
                     if crate::codegen::rust::stdlib_method_traits::method_returns_iterable_qualified(
                         method,
                         receiver.as_deref(),
                         &self.signature_registry,
                     ) {
-                        return Some(obj_type);
+                        return Some(obj_type.clone());
                     }
                 }
-                let obj_ty = self.infer_expression_type(object);
                 // Prefer signature-registry return types (stdlib_meta) over hardcoded
                 // method-name tables — `String::trim` → `&str`, `HashMap::get` → `Option<&V>`.
                 // Must cover Parameterized/Vec/Option receivers via `type_to_name`.
-                if let Some(obj_type) = obj_ty.as_ref() {
+                if let Some(obj_type) = obj_ty_early.as_ref() {
                     if let Some(ret) = self.registry_method_return_type(obj_type, method) {
                         return Some(ret);
                     }
                 }
-                if let Some(t) =
-                    Self::rust_primitive_float_method_return_type(obj_ty.as_ref(), method.as_str())
-                {
+                if let Some(t) = Self::rust_primitive_float_method_return_type(
+                    obj_ty_early.as_ref(),
+                    method.as_str(),
+                ) {
                     return Some(t);
                 }
                 // Look up from the method return type registry (populated during impl generation)

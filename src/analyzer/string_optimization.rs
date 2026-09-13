@@ -110,7 +110,10 @@ impl<'ast> Analyzer<'ast> {
 
                 // Runtime AsRef<&str> modules (`db.connect`, `env::var`, …): keep owned
                 // WJ `string` + borrow at the call site — do not demote to `&str`.
+                // Impl/trait methods (`load(path)` → `strings::len`) still demote so
+                // multipass callers with `&str` formals can pass by borrow.
                 if !needs_string_ref
+                    && func.parent_type.is_none()
                     && self.param_only_forwarded_to_asref_str_runtime_modules(
                         &param.name,
                         &func.body,
@@ -129,17 +132,16 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
 
+                if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                    continue;
+                }
+
                 if self.is_stored(&param.name, &func.body, registry) {
                     continue;
                 }
 
                 // LHS of string `+` consumes the param (owned String), not &str.
                 if self.param_is_string_concat_lhs(&param.name, &func.body) {
-                    continue;
-                }
-
-                // Returned text construction (`"${path}"` / `format!`) consumes owned String.
-                if self.string_param_consumed_owned(&param.name, &func.body, registry) {
                     continue;
                 }
 

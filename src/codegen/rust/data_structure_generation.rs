@@ -766,9 +766,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if let Expression::Identifier { name: id, .. } = expr {
                     if let Some(ref analysis) = self.auto_clone_analysis {
-                        if analysis
+                        let needs_reuse_clone = analysis
                             .needs_clone(id, self.current_statement_idx)
                             .is_some()
+                            || analysis.needs_clone_anywhere(id);
+                        if needs_reuse_clone
                             && !expr_str.ends_with(".clone()")
                             && !expr_str.ends_with(".to_string()")
                         {

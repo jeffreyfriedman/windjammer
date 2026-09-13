@@ -506,6 +506,22 @@ pub fn normalize_owned_string_producer_for_str_ref_param(
         *arg_str = s;
         return;
     }
+    if let Expression::Identifier { name, .. } = arg_expr {
+        let mut s = arg_str.trim().to_string();
+        while s.ends_with(".clone()") {
+            s = s.trim_end_matches(".clone()").trim().to_string();
+        }
+        if let Some(stripped) = s.strip_suffix(".to_string()") {
+            if stripped.trim() == name.as_str() {
+                *arg_str = name.clone();
+                return;
+            }
+        }
+        if s == *name {
+            *arg_str = name.clone();
+            return;
+        }
+    }
     // Non-literals that already produce owned String need `&` for `&str` formals.
     if arg_str.starts_with('&') {
         return;
@@ -1009,6 +1025,28 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
         }
     );
     if !is_string_literal {
+        return;
+    }
+
+    // Owned `String` formals win over stale demoted `&str` registry metadata (Logger::warn).
+    if sig.is_some_and(|s| call_site_param_expects_owned_string(s, arg_index)) {
+        if !already_owned_string_expr(arg_str) {
+            *arg_str = coerce_expr_to_owned_string(arg_str);
+        }
+        return;
+    }
+
+    if sig.is_some_and(|s| {
+        let idx = s.arg_param_index(arg_index);
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx)
+            || crate::ir::signature_bridge::call_site_expects_shared_borrow(s, idx)
+            || s.string_ref_string_formal_for_arg(arg_index)
+            || s.param_type_for_arg(arg_index)
+                .is_some_and(param_is_rust_str_ref)
+            || s.formal_param_type_for_arg(arg_index)
+                .is_some_and(param_is_rust_str_ref)
+    }) {
+        normalize_owned_string_producer_for_str_ref_param(arg, arg_str);
         return;
     }
 

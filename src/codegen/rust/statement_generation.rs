@@ -46,6 +46,28 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when `let mut x = …` seeds a numeric counter from an int literal (not collections).
+    pub(in crate::codegen::rust) fn mut_let_rhs_is_return_width_counter(value: &Expression) -> bool {
+        match value {
+            Expression::Literal {
+                value: crate::parser::Literal::Int(_),
+                ..
+            } => true,
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Neg,
+                operand,
+                ..
+            } => matches!(
+                &**operand,
+                Expression::Literal {
+                    value: crate::parser::Literal::Int(_),
+                    ..
+                }
+            ),
+            _ => false,
+        }
+    }
+
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
     pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
         ty: &Type,
@@ -114,6 +136,44 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Custom(n) if n == "f64" => "f64",
             Type::Float => "f64",
             _ => "f32",
+        }
+    }
+
+    /// Drop forced `_i64`/`_i32`/`_usize` on small integer literals in compound updates so
+    /// Rust infers the literal width from the binding (`i32 += 1` not `i32 += 1_i64`).
+    pub(in crate::codegen::rust) fn strip_compound_assign_int_literal_suffix(value_str: &str) -> String {
+        if let Some(stripped) = value_str
+            .strip_suffix("_i64")
+            .or_else(|| value_str.strip_suffix("_i32"))
+            .or_else(|| value_str.strip_suffix("_usize"))
+        {
+            if stripped.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                return stripped.to_string();
+            }
+        }
+        value_str.to_string()
+    }
+
+    /// Concrete Rust int type name for width-unification casts (`u32 += i32`).
+    pub(in crate::codegen::rust) fn int_rust_type_name(t: &Type) -> Option<&'static str> {
+        match t {
+            Type::Int32 => Some("i32"),
+            Type::Uint => Some("u32"),
+            Type::Int => Some("i64"),
+            Type::Custom(n) => match n.as_str() {
+                "i32" => Some("i32"),
+                "u32" => Some("u32"),
+                "i64" => Some("i64"),
+                "u64" => Some("u64"),
+                "usize" => Some("usize"),
+                "isize" => Some("isize"),
+                "i8" => Some("i8"),
+                "u8" => Some("u8"),
+                "i16" => Some("i16"),
+                "u16" => Some("u16"),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
