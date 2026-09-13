@@ -13,7 +13,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
-| P0 | **Full `windjammer-game-core` library rebuild “hang”** — two issues: (1) O(files×sigs) full global signature copy into every local registry before codegen; (2) `scenario_presets.wj` stuck in codegen — `infer_expression_type` re-walked MethodCall receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | 🔧 IN PROGRESS (2026-09-13) |
+| P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ❌ tip RED (P3.263) |
+| P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
 | P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ |
@@ -144,6 +145,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN |
 
 **Compiler agent:** when multipass demotes impl `method: string` → `&str`, call-site string lits must stay bare (WDB-168 / `.to_string()` twin). Strengthen fixture until it demotes like product.
+
+## P3.263 (2026-09-13) — tip api-check: owned Draft trait forwarder + product unblock
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ❌ tip RED (filed) |
+| Product interim: rebuild owned Draft in env_* + composition before port call | 🔧 in progress |
+| Product: authenticate Option `.clone()`, login owned locals, request_context → domain `int_string`, http_json named empty Vecs, bank_recon Into/`mut draft` | 🔧 in progress |
+| Full tip `make api-check` | 🎯 unblock for tester rebuilds |
+
+**Compiler agent:** thin `impl Trait` forwarders that only pass `draft` must keep the trait’s owned formal (not `&mut Draft`). Free composition fns taking `AppDeps` must not emit `deps: &Self`.
 
 ## P3.262 (2026-09-13) — wj-config demoted `&str` into cross-crate owned `parse`
 
@@ -342,6 +354,20 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Residual product empty-concat on query `vec![…]` / owned fields | ⚠️ still present — drop only when tip covers |
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
+
+## P3.272 WindjammerDB CQ-C5 — coverage REDs WDB-182/183/184 f32 field + OptEcon + PgWire `&clone` (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **127** (f64←f32×15, OptEcon×8, PgWireServeState×6, …) |
+| Tip **WDB-175** product Vec demote | ✅ **GREEN** (recheck after `4a7ad19e`) |
+| Tip **WDB-174/180/181** tip-out/product | ❌ still RED (re-ran) |
+| Tip **WDB-182** cross-module `graph_score: 0.0` → must not `_f32` | filed — tip-out cross_signal |
+| Tip **WDB-183** demoted `&OptEconLedger` → owned econ | filed — tip-out sysbench |
+| Tip **WDB-184** `&state.clone()` → owned `PgWireServeState` | filed — product/tip-out pg_serve |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip-out 174/180/181, then WDB-182–184. No Phase 606+. No dogfood transforms.
 
 ## P3.271 WindjammerDB CQ-C5 — coverage REDs WDB-180/181 bakeoff `&str`→String + baseline borrow (2026-09-13)
 
