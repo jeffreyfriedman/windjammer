@@ -54,6 +54,12 @@ pub struct FunctionSignature {
     #[serde(default)]
     pub string_ref_string_formal_params: Option<Vec<bool>>,
 
+    /// WJ-owned formals that only forward into borrowing callees (`append_put` → `WalRecord::put`).
+    /// Cross-crate importers borrow vec literals / helper returns at call sites even when
+    /// `emitted_rust_ref_params` stayed false on owned `Vec` Rust formals.
+    #[serde(default)]
+    pub forwarding_borrow_params: Option<Vec<bool>>,
+
     /// True when the signature includes a `self` receiver (matches analyzer `has_self_receiver`)
     #[serde(default)]
     pub has_self_receiver: bool,
@@ -94,6 +100,7 @@ pub fn metadata_function_sig_from_analyzer(
             .collect(),
         emitted_rust_ref_params: sig.emitted_rust_ref_params.clone(),
         string_ref_string_formal_params: sig.string_ref_string_formal_params.clone(),
+        forwarding_borrow_params: sig.forwarding_borrow_params.clone(),
         has_self_receiver: sig.has_self_receiver,
         is_extern: sig.is_extern,
     }
@@ -170,7 +177,7 @@ pub fn try_analyzer_signature_from_metadata(
         emitted_rust_ref_params: meta_sig.emitted_rust_ref_params.clone(),
         string_ref_string_formal_params: meta_sig.string_ref_string_formal_params.clone(),
         field_extract_params: None,
-        forwarding_borrow_params: None,
+        forwarding_borrow_params: meta_sig.forwarding_borrow_params.clone(),
     })
 }
 

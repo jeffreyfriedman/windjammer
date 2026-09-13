@@ -160,6 +160,14 @@ fn apply_owned_string_literal_coercion<'ast>(
                     } else {
                         None
                     },
+                    if allow_simple_fallback {
+                        gen.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.find_unique_signature_ending_with(simple_name).cloned())
+                    } else {
+                        None
+                    },
+                    gen.get_signature_with_global(func_name).cloned(),
                     gen.signature_registry.get_signature(func_name).cloned(),
                     if allow_simple_fallback {
                         gen.signature_registry.get_signature(simple_name).cloned()
@@ -173,6 +181,9 @@ fn apply_owned_string_literal_coercion<'ast>(
             gen.global_signature_registry.as_deref(),
             &gen.signature_registry,
         );
+        if gen.preregistered_free_call_arg_expects_borrow(func_name, i) {
+            continue;
+        }
         if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
             sig.as_ref(),
             i,
@@ -205,6 +216,19 @@ fn apply_owned_string_literal_coercion<'ast>(
         ) || sig.as_ref().is_some_and(|s| {
             let idx = s.arg_param_index(i);
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx) {
+                return false;
+            }
+            if matches!(
+                s.param_ownership.get(idx),
+                Some(crate::analyzer::OwnershipMode::Borrowed)
+            ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+                s, i,
+            ) {
+                return false;
+            }
+            if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(s, idx)
+                && !crate::codegen::rust::string_utilities::string_literal_needs_to_string(s, i)
+            {
                 return false;
             }
             let text_formal = s
