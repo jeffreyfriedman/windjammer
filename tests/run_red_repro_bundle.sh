@@ -6,8 +6,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  trait_owned_draft_forwarder_must_not_demote_mut
-  hexagonal_trait_owned_draft_forwarder_must_not_demote_mut
 )
 
 GREEN_FILTERS=(
@@ -49,6 +47,8 @@ GREEN_FILTERS=(
   wdb153_shift_applies_to_masked_byte_before_add
   std_mime_from_extension_json_matches_application_json_constant
   std_yaml_to_json_rejects_empty_input
+  trait_owned_draft_forwarder_must_not_demote_mut
+  hexagonal_trait_owned_draft_forwarder_must_not_demote_mut
 )
 
 echo "Running ${#GREEN_FILTERS[@]} GREEN regression gate(s)..."
