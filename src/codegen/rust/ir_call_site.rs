@@ -25,14 +25,16 @@ impl<'ast> CodeGenerator<'ast> {
         sig.formal_param_type(pidx)
             .or_else(|| sig.param_types.get(pidx))
             .is_some_and(|t| {
-                let bare = match t {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                    other => other,
-                };
-                matches!(bare, Type::Custom(_))
-                    && !crate::codegen::rust::types::is_windjammer_text_type(bare)
-                    && !crate::codegen::rust::stdlib_method_traits::is_map_type(bare)
-                    && !crate::codegen::rust::stdlib_method_traits::is_set_type(bare)
+                // Converged `&T` / `&mut T` formals are never owned emission — stripping
+                // the wrapper and testing bare Custom misclassified cross-crate MutBorrowed
+                // metadata (`touch_grid(grid: &mut Grid)`) as owned (grid.clone()).
+                if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
+                    return false;
+                }
+                matches!(t, Type::Custom(_))
+                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                    && !crate::codegen::rust::stdlib_method_traits::is_map_type(t)
+                    && !crate::codegen::rust::stdlib_method_traits::is_set_type(t)
             })
     }
 
