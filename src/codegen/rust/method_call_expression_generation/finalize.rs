@@ -188,9 +188,16 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         arg_str = format!("&{arg_str}");
                     }
-                    // After stripping stale `&mut`, owned WJ `string` formals still need
-                    // string-literal → String coercion at the call site.
-                    if matches!(ownership, OwnershipMode::Owned) {
+                    // Owned WJ `string` / demoted `&str` formals: align literal coercion
+                    // with converged signature (not stale IR ownership alone).
+                    let formal_needs_literal_finalize = sig.formal_param_type(sig_param_idx)
+                        .or_else(|| sig.param_types.get(sig_param_idx))
+                        .is_some_and(|t| {
+                            crate::codegen::rust::string_utilities::param_is_owned_string_type(t)
+                                || crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                        });
+                    if matches!(ownership, OwnershipMode::Owned) || formal_needs_literal_finalize
+                    {
                         if let Some((_, arg_expr)) = arguments.get(i) {
                             crate::codegen::rust::string_utilities::finalize_string_literal_call_site_arg(
                                 Some(sig),
@@ -237,7 +244,11 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                     };
                     let apply_borrow = |arg_str: &mut String| {
-                        if callee_arg_emits_owned {
+                        if callee_arg_emits_owned
+                            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                &sig, sig_param_idx,
+                            )
+                        {
                             return;
                         }
                         let param_is_ref_type = sig.param_types.get(sig_param_idx).is_some_and(
@@ -446,6 +457,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     arguments.get(i).is_some_and(|(_, arg_expr)| {
                                         if let Expression::Identifier { name, .. } = *arg_expr {
                                             self.str_ref_optimized_params.contains(name.as_str())
+                                                || self.emitted_rust_ref_formals.contains(name)
                                                 || self.inferred_borrowed_params.contains(name)
                                                 || self.current_function_params.iter().any(|p| {
                                                     p.name == *name
@@ -463,6 +475,37 @@ impl<'ast> CodeGenerator<'ast> {
                                         }
                                     });
                                 if caller_passes_str_slice && !arg_str.ends_with(".to_string()") {
+                                    let callee_accepts_str_ref =
+                                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                            &sig, sig_param_idx,
+                                        )
+                                        || crate::ir::signature_bridge::call_site_expects_shared_borrow(
+                                            &sig, sig_param_idx,
+                                        )
+                                        || sig.string_ref_string_formal_for_arg(sig_param_idx)
+                                        || sig.formal_param_type(sig_param_idx).is_some_and(
+                                            |t| {
+                                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(
+                                                    t,
+                                                )
+                                            },
+                                        )
+                                        || sig.param_type_for_arg(sig_param_idx).is_some_and(|t| {
+                                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(
+                                                t,
+                                            )
+                                        })
+                                        || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                            crate::codegen::rust::string_utilities::param_is_rust_str_ref(
+                                                t,
+                                            )
+                                        });
+                                    if callee_accepts_str_ref {
+                                        if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                                            return arg_str.trim_start_matches('&').to_string();
+                                        }
+                                        return arg_str;
+                                    }
                                     return format!("{}.to_string()", arg_str);
                                 }
                                 if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
@@ -509,6 +552,27 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !arg_str.starts_with("&mut ")
                             {
                                 arg_str = arg_str[1..].trim_start().to_string();
+                            }
+                            if self.emitted_rust_ref_formals.contains(name)
+                                && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                    &sig, sig_param_idx,
+                                )
+                                    || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(
+                                            t,
+                                        )
+                                    }))
+                            {
+                                if let Some(stripped) = arg_str.strip_prefix('&') {
+                                    arg_str = stripped.to_string();
+                                }
+                                if arg_str.ends_with(".to_string()") {
+                                    arg_str =
+                                        arg_str.trim_end_matches(".to_string()").to_string();
+                                }
+                                crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                                    &mut arg_str,
+                                );
                             }
                         }
                     }
@@ -813,7 +877,9 @@ impl<'ast> CodeGenerator<'ast> {
                             if arg_str.ends_with(".clone()")
                                 && !(callee_wants_shared && !callee_wants_owned)
                                 && self.caller_keeps_owned_outer_formal(name)
-                                && self.current_function_body.len() <= 1
+                                && !self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                                    a.needs_clone(name, self.current_statement_idx).is_some()
+                                })
                             {
                                 crate::codegen::rust::expression_utilities::strip_trailing_clone(
                                     &mut arg_str,

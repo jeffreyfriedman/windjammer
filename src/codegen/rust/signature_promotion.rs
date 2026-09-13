@@ -2047,6 +2047,99 @@ pub fn param_type_is_owned_non_text(sig: &FunctionSignature, param_idx: usize) -
     })
 }
 
+/// Promote overlapping keys from `global` into `local` for Step 4B-b codegen.
+///
+/// **Must not** insert signatures that exist only in `global`. Call sites already
+/// resolve via `CodeGenerator::global_signature_registry` (`Arc`). Copying the full
+/// global map (~10k–20k+ keys) into every file's local registry is O(files×sigs)
+/// and made full `windjammer-game-core` rebuilds look hung (multi-second per file).
+pub(crate) fn promote_overlapping_global_signatures_into_local(
+    local: &mut SignatureRegistry,
+    global: &SignatureRegistry,
+) {
+    for (name, local_sig) in local.signatures.iter_mut() {
+        let Some(gsig) = global.signatures.get(name) else {
+            continue;
+        };
+        if owned_custom_beats_stale_mut_borrow(gsig, local_sig)
+            || shared_ref_emission_beats(gsig, local_sig)
+            || codegen_refreshed_beats_analysis_only(gsig, local_sig)
+        {
+            *local_sig = gsig.clone();
+        }
+    }
+}
+
+#[cfg(test)]
+mod promote_overlapping_tests {
+    use super::*;
+    use crate::analyzer::OwnershipMode;
+    use crate::parser::Type;
+    use std::time::Instant;
+
+    #[test]
+    fn promote_overlapping_must_not_copy_absent_global_keys() {
+        let mut local = SignatureRegistry::empty();
+        local.signatures.insert(
+            "LocalOnly::foo".into(),
+            FunctionSignature {
+                name: "foo".into(),
+                param_types: vec![Type::Custom("T".into())],
+                formal_param_types: vec![Type::Custom("T".into())],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: Some(Type::Custom("T".into())),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+
+        let mut global = SignatureRegistry::empty();
+        for i in 0..5_000 {
+            global.signatures.insert(
+                format!("GlobalOnly::m{i}"),
+                FunctionSignature {
+                    name: format!("m{i}"),
+                    param_types: vec![],
+                    formal_param_types: vec![],
+                    param_ownership: vec![],
+                    return_type: Some(Type::Custom("Unit".into())),
+                    return_ownership: OwnershipMode::Owned,
+                    has_self_receiver: false,
+                    is_extern: false,
+                    emitted_rust_ref_params: None,
+                    string_ref_string_formal_params: None,
+                    field_extract_params: None,
+                    forwarding_borrow_params: None,
+                },
+            );
+        }
+
+        let start = Instant::now();
+        promote_overlapping_global_signatures_into_local(&mut local, &global);
+        let elapsed = start.elapsed();
+
+        assert_eq!(
+            local.signatures.len(),
+            1,
+            "must not import absent global keys into local"
+        );
+        assert!(
+            !local.signatures.contains_key("GlobalOnly::m0"),
+            "global-only keys must stay out of local"
+        );
+        assert!(
+            elapsed.as_millis() < 200,
+            "promote of 5k globals over 1 local key must stay cheap, took {:?}",
+            elapsed
+        );
+    }
+}
+
 #[cfg(test)]
 mod prefer_shared_runtime_tests {
     use super::*;

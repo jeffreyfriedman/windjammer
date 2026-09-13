@@ -177,6 +177,23 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Some(ret_ty) = &self.current_function_return_type {
                                 match ret_ty {
                                     Type::Int32 => Some(Type::Int32),
+                                    Type::Uint => Some(Type::Uint),
+                                    Type::Custom(name)
+                                        if matches!(name.as_str(), "u32" | "i32") =>
+                                    {
+                                        Some(ret_ty.clone())
+                                    }
+                                    _ => Some(Type::Int),
+                                }
+                            } else {
+                                Some(Type::Int)
+                            }
+                        } else if mutable {
+                            // `let mut q = 1` under `-> i32`/`u32` must track width, not default i64.
+                            if let Some(ret_ty) = &self.current_function_return_type {
+                                match ret_ty {
+                                    Type::Int32 => Some(Type::Int32),
+                                    Type::Uint => Some(Type::Uint),
                                     Type::Custom(name)
                                         if matches!(name.as_str(), "u32" | "i32") =>
                                     {
@@ -370,13 +387,30 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
-                } else if mutable {
+                } else if mutable
+                    && Self::mut_let_rhs_is_return_width_counter(value)
+                {
                     if let Some(ret_ty) = &self.current_function_return_type {
                         match ret_ty {
-                            Type::Int32 => output.push_str(": i32"),
+                            Type::Int32 => {
+                                output.push_str(": i32");
+                                if let Some(vn) = var_name {
+                                    self.local_var_types.insert(vn.to_string(), Type::Int32);
+                                }
+                            }
+                            Type::Uint => {
+                                output.push_str(": u32");
+                                if let Some(vn) = var_name {
+                                    self.local_var_types.insert(vn.to_string(), Type::Uint);
+                                }
+                            }
                             Type::Custom(n) if matches!(n.as_str(), "u32" | "i32") => {
                                 output.push_str(": ");
                                 output.push_str(n);
+                                if let Some(vn) = var_name {
+                                    self.local_var_types
+                                        .insert(vn.to_string(), ret_ty.clone());
+                                }
                             }
                             _ => {}
                         }
@@ -398,7 +432,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_assign_int = self.assignment_int_target_type.take();
-                if mutable {
+                if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
                     if let Some(ret_ty) = &self.current_function_return_type {
                         if Self::assignment_target_needs_int_codegen_context(ret_ty) {
                             self.assignment_int_target_type = Some(ret_ty.clone());

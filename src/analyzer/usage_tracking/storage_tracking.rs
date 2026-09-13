@@ -539,6 +539,7 @@ impl<'ast> Analyzer<'ast> {
             // `status + ""` / string `+` consumes the LHS as owned (codegen may lower to
             // `format!`, which accepts `&str` — demotion must still be blocked).
             || self.param_is_string_concat_lhs(name, statements)
+            || self.param_used_in_string_concat_expression(name, statements)
     }
 
     fn is_only_stored_via_bare_struct_literal_field(
@@ -1502,6 +1503,40 @@ impl Builder {
             !with_value.str_ref_optimizable_params.contains("val"),
             "stored val must not be str_ref optimizable: {:?}",
             with_value.str_ref_optimizable_params
+        );
+    }
+
+    #[test]
+    fn error_json_concat_formal_stays_owned_string() {
+        let src = r#"
+pub fn error_json(message: string) -> string {
+    "{\"error\":\"" + message + "\"}"
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let f = analyzed
+            .iter()
+            .find(|f| f.decl.name == "error_json")
+            .expect("error_json");
+        assert!(
+            analyzer.param_used_in_string_concat_expression("message", &f.decl.body),
+            "message must be detected in string concat"
+        );
+        assert!(
+            analyzer.string_param_consumed_owned("message", &f.decl.body, &registry),
+            "concat-consuming message must be consumed-owned"
+        );
+        assert!(
+            !f.str_ref_optimizable_params.contains("message"),
+            "error_json message must not demote to &str: {:?}",
+            f.str_ref_optimizable_params
+        );
+        assert_eq!(
+            f.inferred_ownership.get("message"),
+            Some(&OwnershipMode::Owned),
+            "error_json message ownership"
         );
     }
 

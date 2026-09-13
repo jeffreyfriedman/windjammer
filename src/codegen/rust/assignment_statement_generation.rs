@@ -79,6 +79,25 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let mut value_str = self.generate_expression(value);
 
+            // Untyped integer literals: let Rust infer width from the binding (`i32 += 1`
+            // not `i32 += 1_i64` when `let mut i = 0` is inferred as i32 from `while i < n as i32`).
+            if matches!(
+                value,
+                Expression::Literal {
+                    value: Literal::Int(_),
+                    ..
+                }
+            ) && matches!(
+                op,
+                CompoundOp::Add
+                    | CompoundOp::Sub
+                    | CompoundOp::Mul
+                    | CompoundOp::Div
+                    | CompoundOp::Mod
+            ) {
+                value_str = Self::strip_compound_assign_int_literal_suffix(&value_str);
+            }
+
             // Mixed int/float compound assignment: `f32 += i32` → `f32 += i32 as f32`
             // Only cast when the target is genuinely a float type (not int).
             if matches!(
@@ -109,6 +128,31 @@ impl<'ast> CodeGenerator<'ast> {
                                     value_str = format!("({}) as {}", value_str, fname);
                                 } else {
                                     value_str = format!("{} as {}", value_str, fname);
+                                }
+                            }
+                        }
+                    }
+                } else if let Expression::Identifier { name, .. } = target {
+                    let tgt_int = self
+                        .local_var_types
+                        .get(name)
+                        .cloned()
+                        .or(tgt_ty.clone());
+                    if let Some(tgt) = tgt_int.as_ref() {
+                        if let Some(cast) = Self::int_rust_type_name(tgt) {
+                            let val_width = val_ty
+                                .as_ref()
+                                .and_then(Self::int_rust_type_name)
+                                .unwrap_or("i64");
+                            let already_target_cast = value_str.ends_with(&format!(" as {cast}"))
+                                || value_str.ends_with(&format!(") as {cast}"));
+                            if val_width != cast && !already_target_cast {
+                                if matches!(value, Expression::Binary { .. })
+                                    || matches!(value, Expression::Call { .. })
+                                {
+                                    value_str = format!("({value_str}) as {cast}");
+                                } else {
+                                    value_str = format!("{value_str} as {cast}");
                                 }
                             }
                         }
@@ -255,10 +299,33 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     let mut right_str = self.generate_expression(right);
+                    if matches!(
+                        right,
+                        Expression::Literal {
+                            value: Literal::Int(_),
+                            ..
+                        }
+                    ) && matches!(
+                        op,
+                        BinaryOp::Add
+                            | BinaryOp::Sub
+                            | BinaryOp::Mul
+                            | BinaryOp::Div
+                            | BinaryOp::Mod
+                    ) {
+                        right_str = Self::strip_compound_assign_int_literal_suffix(&right_str);
+                    }
 
                     // Mixed int/float: cast RHS integer to target float type
                     // Only cast when the target is genuinely a float type (not int).
-                    let synth_tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type);
+                    let synth_tgt_is_int = tgt_ty.as_ref().is_some_and(Self::is_int_numeric_type)
+                        || if let Expression::Identifier { name, .. } = target {
+                            self.local_var_types
+                                .get(name)
+                                .is_some_and(Self::is_int_numeric_type)
+                        } else {
+                            false
+                        };
                     if !synth_tgt_is_int
                         && matches!(
                             op,
@@ -280,6 +347,33 @@ impl<'ast> CodeGenerator<'ast> {
                                         right_str = format!("({}) as {}", right_str, float_name);
                                     } else {
                                         right_str = format!("{} as {}", right_str, float_name);
+                                    }
+                                }
+                            }
+                        }
+                    } else if let Expression::Identifier { name, .. } = target {
+                        let tgt_int = self
+                            .local_var_types
+                            .get(name)
+                            .cloned()
+                            .or(tgt_ty.clone());
+                        if let Some(tgt) = tgt_int.as_ref() {
+                            if let Some(cast) = Self::int_rust_type_name(tgt) {
+                                let val_width = self
+                                    .infer_expression_type(right)
+                                    .as_ref()
+                                    .and_then(Self::int_rust_type_name)
+                                    .unwrap_or("i64");
+                                let already_target_cast = right_str
+                                    .ends_with(&format!(" as {cast}"))
+                                    || right_str.ends_with(&format!(") as {cast}"));
+                                if val_width != cast && !already_target_cast {
+                                    if matches!(right, Expression::Binary { .. })
+                                        || matches!(right, Expression::Call { .. })
+                                    {
+                                        right_str = format!("({right_str}) as {cast}");
+                                    } else {
+                                        right_str = format!("{right_str} as {cast}");
                                     }
                                 }
                             }

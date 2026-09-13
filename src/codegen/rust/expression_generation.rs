@@ -902,11 +902,20 @@ impl<'ast> CodeGenerator<'ast> {
                         .call_arg_expected_type
                         .as_ref()
                         .is_none_or(|t| !crate::codegen::rust::type_casting::type_is_usize(t))
-                    && self.current_function_return_type.as_ref().is_some_and(|t| {
+                {
+                    if self.current_function_return_type.as_ref().is_some_and(|t| {
+                        matches!(t, Type::Int32)
+                            || matches!(t, Type::Custom(n) if n == "i32")
+                    }) {
+                        IntType::I32
+                    } else if self.current_function_return_type.as_ref().is_some_and(|t| {
                         matches!(t, Type::Int)
                             || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
                     }) {
-                    IntType::I64
+                        IntType::I64
+                    } else {
+                        inferred
+                    }
                 } else {
                     inferred
                 };

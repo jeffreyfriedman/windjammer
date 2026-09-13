@@ -217,10 +217,10 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
                     && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
-                    && matches!(
+                    && (matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Borrowed)
-                    )
+                    ) || self.inferred_borrowed_params.contains(&param.name))
                 {
                     let type_str =
                         self.borrowed_formal_rust_type_for_param(param, func, param_idx);
@@ -3480,8 +3480,11 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         // WDB-175: pub `Vec` wire/decode APIs stay owned (`pg_wire_decode_startup`).
+        // Readonly pub helpers (`vertex_lookup_len`, `buf_len` probes) still demote to `&Vec`.
         if Self::param_type_is_vec_container(&param.type_) {
-            return true;
+            return !self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                || self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
+                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
         }
         // WDB-178: pub Custom only when multipass restore_pub locked the global registry
         // to owned (product live_publishable). Readonly `Graph` helpers stay demotable.

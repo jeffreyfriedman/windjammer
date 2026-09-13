@@ -490,6 +490,12 @@ impl<'ast> Analyzer<'ast> {
             let str_ref_optimizable_params =
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
+            for param in &func.parameters {
+                if self.param_used_in_string_concat_expression(&param.name, &func.body) {
+                    str_ref_optimizable_params.remove(&param.name);
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                }
+            }
             str_ref_optimizable_params
                 .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
             let inferred_param_types: Vec<Type> = func
@@ -576,6 +582,12 @@ impl<'ast> Analyzer<'ast> {
             let str_ref_optimizable_params =
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
+            for param in &func.parameters {
+                if self.param_used_in_string_concat_expression(&param.name, &func.body) {
+                    str_ref_optimizable_params.remove(&param.name);
+                    inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                }
+            }
             str_ref_optimizable_params
                 .retain(|name| inferred_ownership.get(name) != Some(&OwnershipMode::Owned));
 
@@ -677,11 +689,13 @@ impl<'ast> Analyzer<'ast> {
                     }
                     // Free-function AsRef runtime forwards (`strings::substring(line)`): keep
                     // owned WJ `string` so callers pass by value (CSV while-index gate).
-                    if self.param_only_forwarded_to_asref_str_runtime_modules(
-                        &param.name,
-                        &func.body,
-                        func,
-                    ) {
+                    if func.parent_type.is_none()
+                        && self.param_only_forwarded_to_asref_str_runtime_modules(
+                            &param.name,
+                            &func.body,
+                            func,
+                        )
+                    {
                         inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                         str_ref_optimizable_params.remove(&param.name);
                         continue;

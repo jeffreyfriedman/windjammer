@@ -190,8 +190,21 @@ impl<'ast> CodeGenerator<'ast> {
                             && Self::int_type_from_assignment_target(t).is_some()
                     })
             };
-            if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal) {
-                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+            if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal)
+            {
+                let peer = if right_is_int_literal {
+                    peer_int_type(left)
+                } else {
+                    peer_int_type(right)
+                };
+                if peer.as_ref().is_some_and(|t| {
+                    matches!(t, Type::Int32)
+                        || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
+                }) {
+                    self.assignment_int_target_type = peer;
+                } else {
+                    self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                }
             } else if right_is_int_literal {
                 if let Some(t) = peer_int_type(left) {
                     self.assignment_int_target_type = Some(t);

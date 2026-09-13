@@ -494,7 +494,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self
             .local_var_types
             .get(name.as_str())
-            .is_some_and(|t| matches!(t, Type::Int))
+            .is_some_and(|t| {
+                matches!(t, Type::Int)
+                    || matches!(t, Type::Int32)
+                    || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
+            })
         {
             return;
         }
