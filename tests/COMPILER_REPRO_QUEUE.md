@@ -355,19 +355,36 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.273 WindjammerDB CQ-C5 — WDB-182/183/184 tip greens + tip-out regen (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| **WDB-182** fixture + tip-out `graph_score: 0.0_f64` | ✅ tip GREEN — struct-field float suffix (P3.271); tip-out regen drops `_f32` |
+| **WDB-183** fixture + tip-out demoted `&EconLedger` → owned clone | ✅ tip GREEN — IR terminal demoted→owned clone (P3.271) |
+| **WDB-184** fixture + product gen `state.clone()` not `&state.clone()` | ✅ tip GREEN — WDB-165/169 peel in `ir_call_site` (P3.271); gen regen |
+| Tip **WDB-174/180/181** tip-out/product (recheck after regen) | ✅ tip GREEN |
+| `library_multipass_map_key` (18 tests) | ✅ tip GREEN |
+| Historical sample: `comparison_only_string_formal`, `csv_while_index`, `hashmap_str_key_no_to_string` | ✅ tip GREEN |
+| Historical sample: `ffi_auto_mut`, `build_system_ffi`, `e0308_copy_scalar`, `e0507_option_if_let` | ❌ still RED (6 failures — Copy index `.clone()`, FFI mut locals) |
+| Fresh `cargo check --lib` (wdb-layers) | ⚠️ re-run after full `gen/` sync — prior 127 included stale f32 / `&clone` |
+
+**Fixes (already on tip `f59c8d77` / `ac9b3cf2`):** struct-literal field type drives float suffix; IR terminal reconcile clones demoted aggregates into owned formals; peel leading `&` on `.clone()` temps for owned Custom formals.
+
+**Compiler agent next:** FFI mut-pointer locals, Copy scalar vec-index push (e0308), build_system FFI harness. Re-sync full `wdb-layers/gen/` locally (gitignored) after tip compiler changes.
+
 ## P3.272 WindjammerDB CQ-C5 — coverage REDs WDB-182/183/184 f32 field + OptEcon + PgWire `&clone` (2026-09-13)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **127** (f64←f32×15, OptEcon×8, PgWireServeState×6, …) |
 | Tip **WDB-175** product Vec demote | ✅ **GREEN** (recheck after `4a7ad19e`) |
-| Tip **WDB-174/180/181** tip-out/product | ❌ still RED (re-ran) |
-| Tip **WDB-182** cross-module `graph_score: 0.0` → must not `_f32` | filed — tip-out cross_signal |
-| Tip **WDB-183** demoted `&OptEconLedger` → owned econ | filed — tip-out sysbench |
-| Tip **WDB-184** `&state.clone()` → owned `PgWireServeState` | filed — product/tip-out pg_serve |
+| Tip **WDB-174/180/181** tip-out/product | ✅ GREEN (P3.273 regen) |
+| Tip **WDB-182** cross-module `graph_score: 0.0` → must not `_f32` | ✅ GREEN (P3.273) |
+| Tip **WDB-183** demoted `&OptEconLedger` → owned econ | ✅ GREEN (P3.273) |
+| Tip **WDB-184** `&state.clone()` → owned `PgWireServeState` | ✅ GREEN (P3.273) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** tip-out 174/180/181, then WDB-182–184. No Phase 606+. No dogfood transforms.
+**Compiler agent priority:** ~~tip-out 174/180/181, then WDB-182–184~~ → see P3.273. No Phase 606+. No dogfood transforms.
 
 ## P3.271 WindjammerDB CQ-C5 — coverage REDs WDB-180/181 bakeoff `&str`→String + baseline borrow (2026-09-13)
 
