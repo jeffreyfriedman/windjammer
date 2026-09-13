@@ -13,7 +13,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
-| P0 | **Full `windjammer-game-core` library rebuild “hang”** — Step 4B-b looked stuck mid-batch (`385-448/664`). **Root cause:** not a deadlock — O(files×sigs) copy of the global signature map (~23k keys) into every file’s local registry before codegen (multi-second/file → hour-scale). Per-file logging showed progress at 2–15s/file. **Fix:** `promote_overlapping_global_signatures_into_local` — promote overlapping keys only; resolve the rest via `global_signature_registry` Arc. | `promote_overlapping_must_not_copy_absent_global_keys` | 🔧 IN PROGRESS (2026-09-13) |
+| P0 | **Full `windjammer-game-core` library rebuild “hang”** — two issues: (1) O(files×sigs) full global signature copy into every local registry before codegen; (2) `scenario_presets.wj` stuck in codegen — `infer_expression_type` re-walked MethodCall receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | 🔧 IN PROGRESS (2026-09-13) |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
 | P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ |
@@ -353,33 +353,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-181** owned baseline → demoted `&OptDatedBaseline` | filed — sysbench/tpch is_set |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** WDB-176/177 tip-out refresh, WDB-178/179 product gen sync, library_multipass residual (owned_string, for_in_vertices, f32 contains), WDB-180/181. No Phase 606+.
-
-## P3.271 WindjammerDB CQ-C5 — WDB-175 pub Vec owned + multi-callee Custom restore (2026-09-13 PM)
-
-| Gate | Status |
-|------|--------|
-| Module **WDB-175** `decode_startup(Vec)` + `buf.clone()` at demoted call | ✅ GREEN |
-| Product **WDB-175** pg_serve → pg_wire (`.agent-wip/rel_tip_out` refreshed) | ✅ GREEN |
-| Module **WDB-178** `live_publishable(DatedArtifact)` + artifact clone | ✅ GREEN |
-| Product **WDB-178** sysbench/quiet gen | ❌ RED — `windjammerdb/.../gen/` not re-transpiled (stale) |
-| `library_multipass` cluster | ⚠️ **103/108** — loop_reused_graph ✅; still RED: owned_string, for_in_vertices, borrowed_struct, f32 contains, csr_view |
-| `codegen_method_call_*` | ✅ GREEN (27) |
-| Tip **WDB-174/176/177** tip-out | ⏳ needs obs + relational tip-out re-transpile with local `wj` |
-
-**Fix:** pub `Vec` formals stay owned at emission; Custom pub owned only when multipass `restore_pub` + multi-callee bare-pass probe (`buf_len`+`decode_startup`); IR/registry borrow demotion blocked for those contracts; call-site clone for demoted→owned Vec.
+**Compiler agent priority:** WDB-175, tip-out 174/176–179, then WDB-180/181. No Phase 606+.
 
 ## P3.270 WindjammerDB CQ-C5 — coverage REDs WDB-178/179 OptDated + samples Vec (2026-09-13)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **127** (OptDated×20, `&str`←String×12, Vec↔&Vec×20, FeedbackKey×8) |
-| Tip **WDB-174–177** tip-out/product | ⏳ partial — WDB-175 product green; 174/176/177 tip-out pending refresh |
-| Tip **WDB-178** demoted `&OptDatedArtifact` → owned publishable | ✅ module; ❌ product gen lag |
+| Tip **WDB-174–177** tip-out/product | ❌ still RED (re-ran) |
+| Tip **WDB-178** demoted `&OptDatedArtifact` → owned publishable | filed — sysbench live_publishable |
 | Tip **WDB-179** demoted `&Vec<u64>` samples A/B ownership | filed — median owned + claim `&Vec` |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** tip-out refresh 174/176/177, WDB-179, product gen sync for 178. No Phase 606+.
+**Compiler agent priority:** WDB-175, tip-out 174/176/177, then WDB-178/179. No Phase 606+.
 
 ## P3.269 WindjammerDB CQ-C5 — coverage REDs WDB-176/177 for loop-field `&str` + Custom key (2026-09-13)
 
