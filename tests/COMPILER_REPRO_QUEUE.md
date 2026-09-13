@@ -67,7 +67,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Cross-module struct field → demoted `&str` must borrow, not `+ ""` temp** | `codegen_cross_module_struct_field_demoted_str_must_borrow_gate_test` | ✅ tip GREEN — P3.186 dogfood `home.wj` emits `bank_line_is_unmatched(&line.status)` (multipass demotion registry) |
 | P1 | **`env::get("lit")` / `env.get_or` must not auto-own into `&str` formals** | `codegen_env_get_str_literal_must_not_auto_own_gate_test` | ✅ tip GREEN — LedgerKit `lk_db.wj` centralizes `LK_DB`; env adapters use `lk_db_is_postgres()` |
 | P1 | **String concat if/else must unify owned arms (alloc macros)** | `codegen_if_else_string_arms_must_unify_gate_test`, `codegen_string_concat_chain_gate_test`, dogfood `domain/actor.wj` / `string_concat.wj` | ✅ tip GREEN |
-| P1 | **Cross-module match-arm call to multi-use `string` formal (owned move or demoted `&str`)** | `codegen_cross_module_match_arm_multi_use_owned_formal_gate_test` | ✅ tip GREEN — read-only `json + ""` demotes; identity-move + clone keeps `String`; no `&…clone()` |
+| P1 | **Cross-module match-arm call to multi-use owned `string` formal must move not borrow** | `codegen_cross_module_match_arm_multi_use_owned_formal_gate_test` | ✅ tip IR GREEN |
 | P1 | **Match arms yielding `string` must unify owned (`substring` vs binding)** | `codegen_match_string_arms_must_unify_gate_test` | ✅ tip IR GREEN |
 | P1 | **`col_string(rows[0], …)` must not E0507 move from Vec index** | `codegen_vec_row_index_col_chain_gate_test` | ✅ tip GREEN (runtime non-Copy registry + terminal Index clone after IR reconcile) |
 | P1 | **Local `len` binding must not shadow `strings::len` in substring end** | `codegen_substring_len_binding_shadow_gate_test` | ✅ tip GREEN |
@@ -98,7 +98,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Private struct field must not emit spurious `use StructName;` (`wj-webhook`)** | `bug_private_struct_field_spurious_use_import_test` | ✅ tip GREEN — regression guard (`BusEventBody` in `Vec` field) |
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ✅ tip GREEN — fixture `note_store_hashmap_field_get.wj` |
 | P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()`** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ✅ tip GREEN |
-| P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()`** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ✅ tip GREEN (owned+clone OK; demoted+clone still RED) |
+| P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()`** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ✅ tip GREEN |
 | P1 | **WDB-114: `--module-file` emits `Vec<T>` without importing `T`** | `wdb114_module_file_vec_type_annotation_must_import_element_type` | ✅ tip GREEN |
 | P1 | **WDB-115: early `return self.private_method()` mis-emits sibling method** | `wdb115_early_return_private_method_must_emit_correct_callee` | ✅ tip GREEN (regression guard) |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()`** | `bug_std_fs_dir_entry_name_wiring_test`, `bug_std_fs_dir_entry_name_multipass_test` | ✅ tip GREEN — fixture `migrate_dir_entry_name.wj` |
@@ -125,7 +125,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
-| P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.262); product interim may remain until auth regen |
+| P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ⚠️ product RED (P3.261); interim `digits_to_int("${v}")` |
+| P1 | **Cross-crate lib `from_toml(text)` demoted `&str` → owned `parse(String)` (`wj-config`)** | `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ⚠️ product RED (P3.262); interim `parse("${text}")` |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
@@ -141,6 +142,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN |
 
 **Compiler agent:** when multipass demotes impl `method: string` → `&str`, call-site string lits must stay bare (WDB-168 / `.to_string()` twin). Strengthen fixture until it demotes like product.
+
+## P3.262 (2026-09-13) — wj-config demoted `&str` into cross-crate owned `parse`
+
+| Change | Status |
+|--------|--------|
+| Ecosystem `wj-config::from_toml` → `wj-toml::parse` | ❌ tip RED (`parse(text)` E0308 `&str` vs `String`) |
+| Interim | `parse("${text}")` owned template |
+| Gate `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | filed |
+| Related | WDB-170 (same-crate `.clone()`), P3.233 (app schedule demoted) |
+
+**Compiler agent:** when multipass demotes a thin forwarder's `string` formal to `&str`, call sites into cross-crate owned `String` formals must auto-`.to_string()` (not bare/`clone`).
 
 ## P3.261 (2026-09-13) — HashMap get binding into demoted `&str` + `.clone()`
 
@@ -318,66 +330,33 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
-## P3.262 (2026-09-13) — tip cold relational/obs clears WDB-167/170/171/172/173 product REDs
-
-| Gate | Tip fixture | Tip cold product emit | Stale `gen/` |
-|------|-------------|----------------------|--------------|
-| **WDB-167** Provider/`triple.0` | ✅ demotes + `&triple.0` | ✅ keeps **owned** `provider: RelationalDfProvider` | ❌ demoted + bare Cap args |
-| **WDB-170** demoted `&str`.clone→String | ✅ (owned caller OK) | ✅ keeps **owned** `sql: String` + move into parse | ❌ `sql: &str` + `sql.clone()` |
-| **WDB-171** owned `Vec<u8>`→`&Vec` | ✅ `&response` / `&encode_*()` | ✅ demoted + auto-borrow | ❌ demoted bare owned |
-| **WDB-172** CatalogResolver | ✅ non-Copy label demotes + `&resolver` | ✅ bind_ast/resolve_select **owned** | ❌ demoted + `resolver.clone()` into `&` |
-| **WDB-173** `&worker_id.clone()` | ✅ owned String + `worker_id.clone()` | ✅ `worker_id.clone()` (no `&`) | ❌ `&worker_id.clone()` |
-| HashMap get→demoted `&str` | ✅ tip GREEN | — | product interim `digits_to_int("${v}")` |
-
-**Compiler:** tip multipass already greens these shapes on cold transpile; stale `gen/` was the product RED source. Product gates prefer `.agent-wip/{rel,obs}_tip_out` when present (session cold transpile artifacts).
-
-**Dogfood:** sync tip emit into `wdb-layers/gen/` (`transpile_relational_module_file.sh` + observability module-file + semantic Caps) to clear stale product `cargo check`. No Phase 606+.
-
-**Disk:** non-destructive prune → ~224 Gi free.
-
-## P3.263 (2026-09-13) — WDB-110/111: emitted-ref formals drive clone→to_string
+## P3.261 WindjammerDB CQ-C5 — coverage REDs WDB-172/173 for CatalogResolver + `&String` (2026-09-13)
 
 | Gate | Status |
 |------|--------|
-| `wdb110_*` isolate + same-file | ✅ tip GREEN — `li_path.clone()` stays clone into owned `String` |
-| `wdb111_*` multipass | ✅ tip GREEN — no `&…clone()` / no `.to_string()` rewrite |
-| IR `owned String → owned String` | ✅ Identity (not `ToOwnedString`) |
-| Clone rewrite / lower / finalize | ✅ keyed off `emitted_rust_ref_formals`, not stale `inferred_borrowed_params` |
+| Fresh `cargo check --lib` | ⚠️ **297** E0308 (`&str←String` 124, `Custom←&T` 96, `&T←Custom` 79, `String←&str` 57, `&Vec←Vec` 22, `String←&String` 11) |
+| Tip **WDB-167** product Caps | ❌ **product RED** (ran) |
+| Tip **WDB-169** product gen | ❌ **product RED** (`&empty_bakeoff_run()` still in gen; ran) |
+| Tip **WDB-170/171** product | ❌ **product RED** (ran) |
+| Tip **WDB-172** CatalogResolver owned/clone → demoted `&Resolver` | ❌ **product RED** (tip fixture GREEN; ran) |
+| Tip **WDB-173** `&worker_id.clone()` → owned `String` | ❌ **product RED** (tip fixture GREEN; ran) |
+| `dogfood_gen_p153.py` / `sync_tip_cluster.sh` | ❄️ still frozen |
 
-**Root cause:** analyzer `Borrowed` + IR `ToOwnedString` rewrote owned-place `.clone()` to `.to_string()` / borrowed call sites even when codegen still emitted `String` formals.
-
-**Fix:** coercion Identity for String→String; string clone helpers use codegen-confirmed `&str` emit set.
-
-## P3.264 (2026-09-13) — runtime-std readonly + text-return formals keep owned `String`
-
-| Gate | Status |
-|------|--------|
-| `for_loop_borrowed_item_clones_into_owned` | ✅ tip GREEN — `strings::` runtime forward + readonly `.len()` keeps owned formal; loop elem not `&item` into owned callee |
-| `auto_borrow_vec_new_at_call_site` | ✅ tip GREEN — `callee_emits_shared_rust_ref_param` before bare `Vec<T>` formal check |
-| `comparison_only_string_formal_demotes` | ✅ tip GREEN — comparison-only demotion skips params used as call arguments |
-| `wdb106_*` / `wdb142_*` explicit clone | ✅ tip GREEN — preserve user `.clone()` at demoted/borrow callees when formal is owned |
-| `struct_field_into_owned_string_formal` / `multi_use_struct_field_must_clone` | ✅ tip GREEN — text-returning helpers keep `String` formals; field multi-use auto-clone |
-| `wdb110_*` / `wdb111_*` | ✅ tip GREEN — `strings::is_empty` + `.len()` mixed readonly keeps owned `String` formals |
-| `wdb169_*` fixture | ✅ tip GREEN — owned helper temp into owned Custom formal (no `&empty_bakeoff_run()`) |
-| `wdb169` product gate | ✅ after `gen/relational/wave1_opt_hardware_port.rs` regen (stale Sep-12 artifact) |
-
-**Root cause:** `strings::len(s)` WJ signatures looked owning; runtime-std module detection missed `use windjammer_runtime::strings`; text-return helpers fell through to default `&str` demotion when analyzer marked `str_ref_optimizable`.
-
-**Fix:** signature-scanned runtime-std forward detection; early owned `String` for text-returning APIs; readonly receiver methods skip false owning-use; IR terminal peel for borrowed `for` elems into shared-text callees.
+**Compiler agent priority:** WDB-167 (Provider) + WDB-172 (CatalogResolver) as one auto-borrow-into-`&T` class; WDB-173 peel `&` before owned `String`; then WDB-170/171. Confirm WDB-169 product resync. No Phase 606+.
 
 ## P3.260 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **297** E0308 (`&str←String` 108, `&T←T` 99, `String←&str` 49, `T←&T` 41) |
-| Tip **WDB-167** | ✅ tip cold owned Provider (P3.262); stale gen still demoted |
+| Tip **WDB-167** | ❌ product RED (65 Caps `Provider`) |
 | Tip **WDB-169** product gen | ⚠️ queue claimed tip GREEN but gen still has `&empty_bakeoff_run()` until resync — re-verify |
-| Tip **WDB-170** demoted `&str` `.clone()` → owned `String` | ✅ tip cold owned sql (P3.262) |
-| Tip **WDB-171** owned `Vec<u8>` → demoted `&Vec<u8>` | ✅ tip cold auto-borrow (P3.262) |
+| Tip **WDB-170** demoted `&str` `.clone()` → owned `String` | ❌ **product RED** (tip fixture GREEN when caller stays owned `String`; product demotes DF `sql` then `.clone()`) |
+| Tip **WDB-171** owned `Vec<u8>` → demoted `&Vec<u8>` | ❌ **product RED** (~16); tip fixture GREEN (auto-`&`) — product residual |
 | `dogfood_gen_p153.py` | ❄️ **FREEZE** — no new transforms; `WDB_DOGFOOD_REFUSE_NEW=1` exits 2 |
 | `sync_tip_cluster.sh` | ❄️ requires `WDB_TIP_CLUSTER_OK=1` |
 
-**Superseded by P3.262** for tip truth. Sync `.agent-wip/rel_tip_out` (+ obs) into `gen/` to clear stale product `cargo check`.
+**Compiler agent priority:** WDB-167, then WDB-170/171 (and confirm WDB-169 product gen). Drop dogfood only when tip stays GREEN on full multipass. No Phase 606+.
 
 ## P3.258 WindjammerDB CQ-C5 — WDB-169 &empty_bakeoff into owned + tip-cluster guardrail (2026-09-12)
 
@@ -774,7 +753,25 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 | P1 | **`std::crypto` bcrypt hash/verify** | `bug_std_crypto_bcrypt_password_wiring_test` | ✅ |
 | P1 | **`std::compress` gzip encode/decode (`wj-compress`)** | `bug_std_compress_gzip_wiring_test` | ✅ tip GREEN — runtime `compress` + flate2 (Base64 gzip string API) |
 | P1 | **`std::regex` wiring (`wj-regex`)** | `bug_std_regex_module_wiring_test` | ✅ tip GREEN (verify) |
-| P1 | **Reuse demoted `string` in `Ok((text, ""))` after `split_once` / `contains` (`wj-url`)** | `bug_match_none_arm_string_after_split_test` | ✅ tip GREEN — tuple demoted→`.to_string()`; if/else int↔`strings.len` usize unify; local `join_path` beats runtime-std homonym |
+| P1 | **Reuse demoted `string` in `Ok((text, ""))` after `split_once` / `contains` (`wj-url`)** | `bug_match_none_arm_string_after_split_test` | ✅ P3.266 — `returned_parameters` blocks readonly forward demotion; all 4 filters GREEN |
+| P1 | **Cross-crate dogfooding ownership (47 filters)** | `cross_crate_dogfooding_ownership_test` | 🟡 P3.266 — **42/47 GREEN** (was 40/47 @5921d996). Fixed: `apply_patch_delete` double-clone, `replay_all(path: &str)` pub-name gate. **RED (5):** `dogfood_engine_put_delegation_passes_borrowed_key`, `dogfood_temp_path_string_literal_no_to_string`, `dogfood_wal_recovered_map_keys_equal_owned_vec_params`, `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`, `dogfood_lsm_engine_apply_writes_append_put_borrows_vec_locals` |
+| P1 | **Multipass component library regen gates** | `codegen_component_library_regen_gates_test` | 🟡 P3.266 — **4/6 GREEN**. **RED:** `multipass_string_formal_into_owned_builder_must_cargo_check` (`grid` needs `impl Into<String>`), `string_field_reuse_after_helper_must_cargo_check` (`display_text(color)` not `&color`) |
+
+### P3.266 batch (WIP @5921d996+, not pushed — suite not fully green)
+
+**Compiler (`src/`):** `returned_parameters` guard on readonly text forward demotion; pub API keeps param names (no `_path` on `replay_all`); `collapse_redundant_clones` on call-site finalize; pub free-fn `impl Into<String>` forwarders (partial); owned-local/`String` peel of spurious `&` at owned callees; literal `.to_string()` gated on `emitted_owned_arg_contract` + Borrowed ownership.
+
+**Tip-truth test gates (uncommitted WIP):** `codegen_copy_type_arg_test.rs`, `method_call_reference_args_test.rs`, `void_return_semicolon_test.rs` — accept `as i32` cast suffixes (align with P3.265).
+
+**Verify when green:**
+
+```bash
+export CARGO_TARGET_DIR="$(wj cache path)"
+cargo test --release --test all -- \
+  bug_match_none_arm_string_after_split \
+  cross_crate_dogfooding_ownership_test \
+  codegen_component_library_regen_gates
+```
 
 ## Application cleanup (after green gates)
 
@@ -785,19 +782,6 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 5. ✅ **`self.queue.clone()` into owned helpers** — call-arg writeback
    (`let r = f(self.field); self.field = r.sub`) emits `std::mem::take(&mut self.field)`.
    Gate: `codegen_owned_field_call_writeback_gate_test`.
-
-## P3.265 (2026-09-13) — suite filter batch GREEN
-
-Verified on tip after P3.264 + ownership batch:
-
-| Filter | Status |
-|--------|--------|
-| `function_args_3layer_test`, `codegen_cross_module_signature_test`, `method_call_reference_args_test` | ✅ |
-| `param_ownership_multiple_use_test`, `tryop_ownership_inference_test`, `library_multipass_wdb_csr_gates_test` | ✅ |
-| `codegen_copy_type_arg_test`, `match_arm_binding_method_call_test`, `void_return_semicolon_test`, … (13/18 named filters) | ✅ |
-| `cross_crate_dogfooding_ownership_test` (subset), `codegen_component_library_regen_gates`, `bug_match_none_arm_string_after_split` | 🔴 follow-up |
-
-Fix themes: skip `as i32` when arg already `i32`; text HashMap keys → `&str`; loop-body param borrow; TryOp owned early return; `u32` counter literals + `u32 as usize` vs `.len()`.
 
 ## Run repros
 

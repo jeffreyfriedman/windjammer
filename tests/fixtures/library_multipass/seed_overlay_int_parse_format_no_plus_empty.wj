@@ -1,0 +1,78 @@
+// LedgerKit seed_bank_recon*_overlay int_to_string / parse_int_string class —
+// no empty-concat. Tip must cargo-check owned string formals + substring reuse
+// (same shape as request_context.generate_request_id int helper).
+
+use std::strings
+
+fn digit_value(ch: string) -> int {
+    if ch == "0" { return 0 }
+    if ch == "1" { return 1 }
+    if ch == "2" { return 2 }
+    if ch == "3" { return 3 }
+    if ch == "4" { return 4 }
+    if ch == "5" { return 5 }
+    if ch == "6" { return 6 }
+    if ch == "7" { return 7 }
+    if ch == "8" { return 8 }
+    if ch == "9" { return 9 }
+    -1
+}
+
+pub fn int_to_string(value: int) -> string {
+    if value == 0 {
+        return "0"
+    }
+    if value < 0 {
+        return "-" + int_to_string(0 - value)
+    }
+    let mut n = value
+    let mut digits = ""
+    while n > 0 {
+        let d = n % 10
+        if d == 0 { digits = "0" + digits }
+        else if d == 1 { digits = "1" + digits }
+        else if d == 2 { digits = "2" + digits }
+        else if d == 3 { digits = "3" + digits }
+        else if d == 4 { digits = "4" + digits }
+        else if d == 5 { digits = "5" + digits }
+        else if d == 6 { digits = "6" + digits }
+        else if d == 7 { digits = "7" + digits }
+        else if d == 8 { digits = "8" + digits }
+        else { digits = "9" + digits }
+        n = n / 10
+    }
+    digits
+}
+
+pub fn parse_int_string(raw: string) -> int {
+    let len = strings.len(raw)
+    if len == 0 {
+        return 0
+    }
+    let mut i = 0
+    let mut neg = false
+    let first = strings.substring(raw, 0, 1)
+    if first == "-" {
+        neg = true
+        i = 1
+    }
+    let mut n = 0
+    while i < len {
+        let ch = strings.substring(raw, i, i + 1)
+        let d = digit_value(ch)
+        if d < 0 {
+            break
+        }
+        n = n * 10 + d
+        i = i + 1
+    }
+    if neg {
+        0 - n
+    } else {
+        n
+    }
+}
+
+pub fn round_trip(value: int) -> int {
+    parse_int_string(int_to_string(value))
+}

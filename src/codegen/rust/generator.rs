@@ -2593,6 +2593,15 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// Local `let` bindings that hold owned non-Copy values (not outer formals).
+    pub(crate) fn local_binding_is_owned_non_copy(&self, name: &str) -> bool {
+        self.local_var_types.get(name).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && !self.is_type_copy(t)
+                && !crate::type_classification::is_copy_pass_by_value_formal(t)
+        })
+    }
+
     /// True when `stmt` passes `param_name` to a callee formal that emits owned (not `&T`).
     pub(in crate::codegen::rust) fn statement_passes_param_to_owned_formal_callee(
         &self,
@@ -2949,7 +2958,9 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = arg_expr else {
             return;
         };
-        if !self.caller_keeps_owned_outer_formal(name) {
+        if !self.caller_keeps_owned_outer_formal(name)
+            && !self.local_binding_is_owned_non_copy(name)
+        {
             return;
         }
         if self.in_if_condition {

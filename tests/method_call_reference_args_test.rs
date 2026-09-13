@@ -108,8 +108,12 @@ pub fn add_items() {
 
     assert!(success, "Vec::push should compile. Error:\n{}", err);
     assert!(
-        generated.contains("vec.push(1)") && generated.contains("vec.push(2)"),
-        "Vec::push takes owned value, not &"
+        generated.contains("vec.push(1") && !generated.contains("vec.push(&1"),
+        "Vec::push takes owned value, not &. Got:\n{generated}"
+    );
+    assert!(
+        generated.contains("vec.push(2") && !generated.contains("vec.push(&2"),
+        "Vec::push takes owned value, not &. Got:\n{generated}"
     );
 }
 

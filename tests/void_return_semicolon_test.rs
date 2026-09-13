@@ -39,7 +39,9 @@ fn test_void_return_preserves_semicolon() {
     // we just need the statement to end with a semicolon.
     assert!(
         generated.contains("insert(key, value);")
-            || generated.contains("insert(key.to_string(), value);"),
+            || generated.contains("insert(key.to_string(), value);")
+            || generated.contains("insert(key, value as i32);")
+            || generated.contains("insert(key.to_string(), value as i32);"),
         "insert() should end with semicolon: {}",
         generated
     );

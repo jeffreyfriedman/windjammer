@@ -746,6 +746,19 @@ pub fn string_literal_needs_owned_coercion_with_enum(
         }
     }
 
+    // Plain WJ `string` formals default to bare literals unless codegen confirmed
+    // owned `String` emission (`temp_path("recover")` → `&str`, not `.to_string()`).
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+        sig, arg_index,
+    ) && (!crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx)
+        || matches!(
+            sig.param_ownership.get(idx),
+            Some(crate::analyzer::OwnershipMode::Borrowed)
+        ))
+    {
+        return false;
+    }
+
     // Owned `String` Rust formals always allocate for literals — even with stale Borrowed
     // analyzer ownership (store-forced Owned emission).
     if param_is_owned_string_type(param_type)
@@ -758,7 +771,8 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     if matches!(
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
         crate::analyzer::OwnershipMode::Owned
-    ) {
+    ) && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx)
+    {
         return true;
     }
 
