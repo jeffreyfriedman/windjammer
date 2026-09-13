@@ -18,8 +18,10 @@
 //! while batch engines emit:
 //!   `graph_dense_csr_take_out_edges(csr.clone())` → owned move, not `&mut`.
 //!
-//! Gate A: multipass with demote + clone callers must cargo-check when emit is correct.
-//! Gate B: until fixed, demoted `&mut T` + owned `.clone()` call sites fail the emit assertion (RED).
+//! Tip contract:
+//! - If multipass demotes to `&mut T`, clone call sites must borrow (`&mut csr` / bare after mut).
+//! - If formal stays owned `DenseCsr`, `.clone()` / move at the call site is correct (WDB-110 class).
+//! Gate still fails the demoted+clone mismatch that rustc rejects.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -118,14 +120,17 @@ fn wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_
         );
         test.cargo_check()
             .expect("WDB-113: borrowed call sites must cargo-check");
-    } else if bad_clone_emit {
-        panic!(
-            "WDB-113 RED: explicit .clone() call sites must not mismatch callee formals. callee:\n{take_out}\ncaller:\n{clone_caller}"
-        );
     } else {
+        // Owned formal + explicit `.clone()` is correct (same contract as WDB-110/111).
         assert!(
             take_out.contains("csr: DenseCsr"),
             "WDB-113: owned DenseCsr formal is acceptable when multipass does not demote.\n{take_out}"
+        );
+        assert!(
+            bad_clone_emit
+                || clone_caller.contains("take_out_edges(csr)")
+                    && !clone_caller.contains("take_out_edges(&"),
+            "WDB-113: owned formal must receive move/clone, not bare borrow. Got:\n{clone_caller}"
         );
         test.cargo_check()
             .expect("WDB-113: owned struct formals must cargo-check");
