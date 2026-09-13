@@ -12,6 +12,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
+| P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.258) |
+| P0 | **Full `windjammer-game-core` library rebuild hang** — after “Compiler changed — re-transpiling all sources”, ownership converges (10 passes / 669 files) then codegen stalls mid-batch (`Codegen batch 385-448/664` for 10+ min, no further progress). Blocks `wj game build` for breach-protocol. Escape hatch: `WJ_SKIP_ENGINE_TRANSPILE=1` (cargo-only) until fixed. | Minimal repro TBD: `wj build windjammer-game-core/src/mod.wj --output gen --library --no-cargo --module-file` after touching compiler binary mtime; need hang repro test under `tests/` | ❌ OPEN (2026-09-13 dogfood) |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
 | P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ |
@@ -126,7 +128,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
 | P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ⚠️ product RED (P3.261); interim `digits_to_int("${v}")` |
-| P1 | **Cross-crate lib `from_toml(text)` → owned `parse(String)` without metadata guesses `&` (`wj-config`)** | `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ⚠️ RED if no `metadata.json`; ✅ with `--library --module-file` (P3.262) |
+| P1 | **Cross-crate lib `from_toml(text)` → owned `parse(String)` without metadata guesses `&` (`wj-config`)** | `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ✅ tip GREEN w/ metadata (P3.262); tip auth still RED on Owned→`&` |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
@@ -147,12 +149,23 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Ecosystem `wj-config::from_toml` → `wj-toml::parse` | ⚠️ RED when dep `metadata.json` missing (`parse(&text)`); ✅ GREEN with `--library --module-file` metadata auto-discovered |
-| Idiomatic `parse(text)` | ✅ keep (no empty-concat interim when metadata present) |
-| Gate `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | filed — must cargo-check with `--metadata` like product |
-| Related | WDB-170, P3.233; build packages with `--library --module-file` so path deps emit ownership |
+| Gate `bug_cross_crate_lib_demoted_str_into_owned_parse_test` | ✅ tip GREEN (with `--metadata`; 2026-09-13) |
+| Product without dep `metadata.json` | ⚠️ RED (`parse(&text)` guess) — build packages with `--library --module-file` |
+| Tip auth/notes dogfood (2026-09-13 tip binary) | ❌ RED — owned cross-crate formals still get `&` (e.g. `preflight(&origin)`) even when metadata says Owned |
+| Ecosystem verify | ✅ **20/20** auth on cargo-bin `wj` 0.50.0 (2026-08-27) |
 
-**Compiler agent:** (1) default `wj build` for library packages should always emit `metadata.json`; (2) without metadata, do not guess borrow into owned `String` formals.
+**Compiler agent:** (1) default library builds must emit `metadata.json`; (2) honor `param_ownership: Owned` at cross-crate call sites (no `&` into `String`); tip regression broke previously green notes/auth.
+
+
+## P3.258 (2026-09-13) — seed overlay int parse/format dogfood
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (same-file + hexagonal) |
+| Platform `domain/int_string` DRY + recon/signoff overlay dogfood | ✅ isolated tip `wj test` **5/5** |
+| Full platform `make test` / `api-check` | ⚠️ tip still has pre-existing ~42 E0308/ownership cluster (not introduced by this slice) |
+
+**Compiler agent:** keep int↔string format/parse without empty-concat; product recon overlays use domain helper.
 
 ## P3.261 (2026-09-13) — HashMap get binding into demoted `&str` + `.clone()`
 
@@ -343,19 +356,30 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent next:** residual sample REDs — loop counter i32/i64 unify (`loop_reused_graph_borrow`), FFI/build_system harness, explicit_string demotion, csv_while owned string.
 
-## P3.261 WindjammerDB CQ-C5 — coverage REDs WDB-172/173 for CatalogResolver + `&String` (2026-09-13)
+## P3.263 WindjammerDB CQ-C5 — tip-out sync + residual WDB-174/175 (2026-09-13)
 
 | Gate | Status |
 |------|--------|
-| Fresh `cargo check --lib` | ⚠️ **297** E0308 (`&str←String` 124, `Custom←&T` 96, `&T←Custom` 79, `String←&str` 57, `&Vec←Vec` 22, `String←&String` 11) |
-| Tip **WDB-167** product Caps | ❌ **product RED** (ran) |
-| Tip **WDB-169** product gen | ❌ **product RED** (`&empty_bakeoff_run()` still in gen; ran) |
-| Tip **WDB-170/171** product | ❌ **product RED** (ran) |
-| Tip **WDB-172** CatalogResolver owned/clone → demoted `&Resolver` | ❌ **product RED** (tip fixture GREEN; ran) |
-| Tip **WDB-173** `&worker_id.clone()` → owned `String` | ❌ **product RED** (tip fixture GREEN; ran) |
+| Pre-sync `cargo check --lib` | ⚠️ **297** E0308 |
+| Product gates vs `.agent-wip/{rel,obs}_tip_out` | ✅ **6/6** (WDB-167/169–173) |
+| Synced tip-out → `gen/{relational,observability,relational_module_file}` | ✅ (gitignored `gen/`; no dogfood transforms) |
+| Post-sync `cargo check --lib` | ⚠️ **127** errors (106 E0308) — **−170** from 297 |
+| Residual buckets | `Other←&T` 40, `Other←Other` 17, `&T←Other` 13, `&str←String` 12, `Vec←&Vec` 12, `&Vec←Vec` 8, `String←&str` 8 |
+| Tip **WDB-174** demoted `&Store` → owned Store | filed — product job_store / tip fixture |
+| Tip **WDB-175** demoted `&Vec` → owned Vec | filed — product pg_serve decode_startup |
+| Dogfood / tip-cluster | ❄️ still frozen |
+
+**Compiler agent priority:** WDB-174 (clone demoted Custom into owned), WDB-175 (clone demoted Vec into owned), residual field-clone→`&str` (WDB-166 class in cross_signal). No Phase 606+.
+
+## P3.261 WindjammerDB CQ-C5 — coverage REDs WDB-172/173 (superseded by tip-out / P3.262–263) (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Stale-gen product gates (pre tip-out) | ❌ were RED vs `gen/` |
+| Tip cold + `.agent-wip` product gates | ✅ superseded — see P3.262 / P3.263 |
 | `dogfood_gen_p153.py` / `sync_tip_cluster.sh` | ❄️ still frozen |
 
-**Compiler agent priority:** WDB-167 (Provider) + WDB-172 (CatalogResolver) as one auto-borrow-into-`&T` class; WDB-173 peel `&` before owned `String`; then WDB-170/171. Confirm WDB-169 product resync. No Phase 606+.
+**Note:** Numbering collision with ecosystem HashMap P3.261 above — WindjammerDB tip-out work continues as **P3.263**.
 
 ## P3.260 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
 
