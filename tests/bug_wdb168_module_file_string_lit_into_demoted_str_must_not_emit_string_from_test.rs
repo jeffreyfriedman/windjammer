@@ -86,9 +86,9 @@ fn wdb168_module_file_string_lit_into_demoted_str_must_not_emit_string_from() {
     let string_from_into_str = demoted_name
         && (opt_rs.contains("pg_wire_parse(session, String::from(\"s1\")")
             || opt_rs.contains("pg_wire_parse(session,String::from(\"s1\")")
-            || opt_rs.contains("String::from(\"s1\")")
+            || (opt_rs.contains("String::from(\"s1\")")
                 && opt_rs.contains("pg_wire_parse")
-                && !opt_rs.contains("pg_wire_parse(session, \"s1\""));
+                && !opt_rs.contains("pg_wire_parse(session, \"s1\"")));
 
     if string_from_into_str {
         panic!(
@@ -123,15 +123,15 @@ fn wdb168_product_wave1_opt_must_not_string_from_into_demoted_parse_name() {
     let wire_text = std::fs::read_to_string(&wire).expect("wire");
     let opt_text = std::fs::read_to_string(&opt).expect("opt");
     let demoted = wire_text.contains("pub fn pg_wire_parse(session: PgWireSession, name: &str");
-    let bad = demoted
-        && opt_text.contains("pg_wire_parse(session, String::from(\"s1\")");
+    let owned_ctor_into_demoted = demoted
+        && (opt_text.contains("pg_wire_parse(session, String::from(\"s1\")")
+            || opt_text.contains("pg_wire_parse(session, \"s1\".to_string()"));
     eprintln!(
-        "WDB-168 product demoted_name={} string_from_s1={}",
-        demoted,
-        opt_text.contains("pg_wire_parse(session, String::from(\"s1\")")
+        "WDB-168 product demoted_name={} owned_ctor_into_demoted={}",
+        demoted, owned_ctor_into_demoted
     );
     assert!(
-        !bad,
-        "WDB-168 RED: product wave1_opt still emits String::from(\"s1\") into demoted &str parse name."
+        !owned_ctor_into_demoted,
+        "WDB-168 RED: product wave1_opt still emits String::from/\"s1\".to_string() into demoted &str parse name."
     );
 }

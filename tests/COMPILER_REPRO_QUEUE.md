@@ -126,15 +126,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
-| P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ❌ tip RED (P3.254) — package green via `parse`+`map.get` / lit `get` |
+| P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
 
 ## P3.254 (2026-09-12) — single-use owned local into owned string formal emits `&`
 
 | Change | Status |
 |--------|--------|
 | Ecosystem `wj-toml` dotted keys + inline tables | ✅ **17/17** tip + wj 0.50.0 |
-| Gate shows tip emit `get(&text, …)` for single-use local | ❌ tip RED (confirmed) |
-| Package tests avoid brittle `let text; get(text)` shape | ✅ `parse`/`map.get` + literal `get(...)` |
+| Gate `single_use_owned_local_into_owned_string_formal_must_move` | ✅ tip GREEN |
+| Root cause | `is_collection_key_lookup` treated bare free-fn `get` as Map key lookup (unknown receiver → name consensus) |
+| Fix | Signature-shaped guard: bare free-fn (no `::`, no self, no receiver) is not a collection key; also harden stdlib-homonym auto-borrow early-return for empty `formal_param_types` |
 
 ## P3.253 (2026-09-12) — seed overlay apply BankLineView dogfood
 
@@ -291,6 +292,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Residual product empty-concat on query `vec![…]` / owned fields | ⚠️ still present — drop only when tip covers |
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
+
+## P3.258 WindjammerDB CQ-C5 — WDB-169 &empty_bakeoff into owned + tip-cluster guardrail (2026-09-12)
+
+| Gate | Status |
+|------|--------|
+| Tip-cluster `pg_wire`+`wave1_opt` | ⚠️ clears WDB-168 `String::from` (owned name) but invents `&empty_bakeoff_run()` → **+82** Bakeoff errors |
+| `cargo check --lib` after that cluster | ⚠️ **297** E0308 (was 277) |
+| Tip **WDB-167** `&Provider` ← owned | ❌ **product RED** (65 Caps) |
+| Tip **WDB-168** lit→demoted `&str` | ✅ product GREEN via tip-cluster owned name (full multipass still at risk) |
+| Tip **WDB-169** `&empty_bakeoff_run()` → owned BakeoffRun | ❌ tip **RED** (filed+ran) |
+
+**Compiler agent priority:** WDB-167 + WDB-169. Incomplete tip-clusters can regress; prefer tip greens over cluster patches. No Phase 606+.
 
 ## P3.257 WindjammerDB CQ-C5 — coverage REDs WDB-167/168 for ungated build buckets (2026-09-12)
 
