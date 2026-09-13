@@ -186,6 +186,7 @@ For every coercion rule or constraint change:
 - **Unified shared-ref helpers (2026-08-24):** `call_site_needs_shared_ref_at_emit` / `call_site_wants_shared_text_ref` in `signature_bridge`; dual-oracle `A || callee_emits` collapsed in `ir_call_site`. Parity gates: `tests/emission_contract_parity_gate_test.rs`.
 - **Legacy `should_borrow` deleted (2026-08-24):** production + test oracles migrated to `tests/ir_call_site_coercion_oracle_test.rs` (IR `compute_coercion` gates). `apply_call_site_borrow` / collection-key finalize remain for IR reconcile helpers.
 - **Codegen rewire (2026-08-24):** all `callee_emits_shared_rust_ref_param` call sites import `ir::emission_contract` directly. `set_ir_functions` syncs `ir_module.functions` when module retained.
+- **Bare free-fn ≠ collection key (2026-09-12 / P3.254):** `is_collection_key_lookup` no longer treats bare free-fns (`get(text, key)`, no `::`, no self, no receiver) as Map/Set key lookups via unknown-receiver name consensus. Stdlib-homonym auto-borrow early-return hardened for empty `formal_param_types` + layered user shadows. Gate: `bug_single_use_owned_local_into_owned_string_formal_must_move_test`.
 
 ## Related Documentation
 

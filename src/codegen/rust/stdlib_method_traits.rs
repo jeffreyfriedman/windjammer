@@ -1229,6 +1229,16 @@ pub fn is_collection_key_lookup(
     if arg_index != 0 {
         return false;
     }
+    // P3.254 / Phase 5: bare free-fns (`get(text, key)`) are not map/set lookups.
+    // Without a receiver or `Type::method` qualification, falling through to
+    // `method_is_map_key_qualified("get", None)` wrongly forces `&text` into owned
+    // user `string` formals. Signature shape decides — not the simple name.
+    if receiver_type.is_none()
+        && !sig.has_self_receiver
+        && !sig.name.contains("::")
+    {
+        return false;
+    }
     let method = sig.name.rsplit("::").next().unwrap_or(&sig.name);
     let registry = SignatureRegistry::stdlib();
     let receiver_base = receiver_type
@@ -1247,7 +1257,8 @@ pub fn is_collection_key_lookup(
             return method_is_map_key_qualified(method, receiver_type, registry);
         }
     }
-    // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus.
+    // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus —
+    // only for method-shaped / self-receiver sigs (guard above).
     method_is_map_key_qualified(method, receiver_type, registry)
 }
 
@@ -1679,6 +1690,30 @@ mod pattern_registry_tests {
         assert!(
             !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&stale_homonym), 0),
             "layered user owned get must beat call-site borrowed homonym + stdlib baseline"
+        );
+    }
+
+    #[test]
+    fn bare_user_get_free_fn_is_not_collection_key_lookup() {
+        use crate::parser::Type;
+        // Phase 5 / P3.254: free-fn `get(text: string, …)` must not inherit Map::get
+        // key-borrow via `is_collection_key_lookup` when receiver_type is None.
+        let mut sig = FunctionSignature::default();
+        sig.name = "get".into();
+        sig.has_self_receiver = false;
+        sig.param_types = vec![Type::String, Type::String];
+        sig.param_ownership = vec![OwnershipMode::Owned, OwnershipMode::Owned];
+        assert!(
+            !is_collection_key_lookup(&sig, 0, None),
+            "bare free-fn get must not be treated as map key lookup"
+        );
+        // Qualified / self methods still classify as collection keys.
+        let map_get = SignatureRegistry::stdlib()
+            .get_signature("HashMap::get")
+            .expect("HashMap::get");
+        assert!(
+            is_collection_key_lookup(map_get, 0, Some("HashMap")),
+            "HashMap::get remains a collection key lookup"
         );
     }
 
