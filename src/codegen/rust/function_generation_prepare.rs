@@ -254,7 +254,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
             match ownership {
                 crate::analyzer::OwnershipMode::Borrowed => {
-                    self.inferred_borrowed_params.insert(param_name);
+                    if func.parameters.iter().any(|p| {
+                        p.name == param_name && self.is_public_owned_non_copy_formal_api(p, func)
+                    }) {
+                        self.inferred_borrowed_params.remove(&param_name);
+                    } else {
+                        self.inferred_borrowed_params.insert(param_name);
+                    }
                 }
                 crate::analyzer::OwnershipMode::MutBorrowed => {
                     // Mutated+returned formals stay Owned (solver lattice).
@@ -449,7 +455,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .or_else(|| analyzed.inferred_ownership.get(&param.name).copied())
                 {
                     Some(crate::analyzer::OwnershipMode::Borrowed) => {
-                        if self.param_only_used_as_call_argument(
+                        if self.is_public_owned_non_copy_formal_api(param, func) {
+                            self.inferred_borrowed_params.remove(&param.name);
+                        } else if self.param_only_used_as_call_argument(
                             func.body.as_slice(),
                             &param.name,
                             func,
@@ -672,6 +680,9 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
                 if let Some(param) = func.parameters.iter().find(|p| p.name == *param_name) {
+                    if self.is_public_owned_non_copy_formal_api(param, func) {
+                        continue;
+                    }
                     if self.param_is_single_arg_call_only_delegate(param, func)
                         && self.param_passed_to_owned_non_copy_method_arg(
                             func.body.as_slice(),
@@ -954,6 +965,10 @@ impl<'ast> CodeGenerator<'ast> {
             if param.name == "self" {
                 continue;
             }
+            if self.is_public_owned_non_copy_formal_api(param, func) {
+                self.inferred_borrowed_params.remove(&param.name);
+                continue;
+            }
             // Copy scalars never demote; Copy aggregates may still borrow when used only
             // via field projection (`run_query(graph: Graph)` reading `graph.count`).
             if self.is_type_copy(&param.type_) {
@@ -1032,13 +1047,15 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(crate::analyzer::OwnershipMode::Owned)
             ) {
                 let vec_readonly = Self::param_type_is_vec_container(&param.type_)
+                    && !self.is_public_owned_non_copy_formal_api(param, func)
                     && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                     && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func);
                 let field_proj_readonly =
                     self.param_only_used_via_field_or_index_projection(
                         func.body.as_slice(),
                         &param.name,
-                    ) && !self.param_only_used_as_owned_custom_method_receiver(
+                    ) && !self.is_public_owned_non_copy_formal_api(param, func)
+                    && !self.param_only_used_as_owned_custom_method_receiver(
                         func.body.as_slice(),
                         &param.name,
                         func,
@@ -1120,6 +1137,7 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             if self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                && !self.is_public_owned_non_copy_formal_api(param, func)
                 && !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
                 && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
                 && !self.param_only_used_as_owned_custom_method_receiver(
@@ -1720,6 +1738,10 @@ impl<'ast> CodeGenerator<'ast> {
     fn promote_callee_forwarded_borrows(&mut self, func: &FunctionDecl<'ast>) {
         for param in &func.parameters {
             if param.name == "self" {
+                continue;
+            }
+            if self.is_public_owned_non_copy_formal_api(param, func) {
+                self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
             if type_analysis::is_copy_type(&param.type_) {

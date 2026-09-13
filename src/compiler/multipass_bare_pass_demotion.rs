@@ -31,6 +31,73 @@ pub fn promote_callees_from_bare_pass_callers(
     // Undo bare-pass MutBorrowed when the callee returns the whole binding (identity /
     // chain helpers like `col_string(row, name) -> (Row, string)`).
     restore_owned_returned_formals(registry, programs);
+    restore_pub_owned_non_copy_api_formals(registry, programs);
+}
+
+/// WDB-175/178: `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay
+/// owned in the global registry (product decode_startup / live_publishable).
+pub fn restore_pub_owned_non_copy_api_formals(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+) {
+    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
+    for key in keys {
+        let Some(sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let n = sig.param_ownership.len();
+        let mut changed = false;
+        let mut new_sig = sig.clone();
+        for idx in 0..n {
+            if !callee_pub_owned_formal_skip_bare_pass(&new_sig, programs, &key, idx) {
+                continue;
+            }
+            if matches!(
+                new_sig.param_ownership.get(idx),
+                Some(OwnershipMode::Owned)
+            ) && new_sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                != Some(true)
+            {
+                continue;
+            }
+            new_sig.param_ownership[idx] = OwnershipMode::Owned;
+            let bare = new_sig
+                .formal_param_types
+                .get(idx)
+                .cloned()
+                .or_else(|| new_sig.param_types.get(idx).cloned());
+            if let Some(bare) = bare {
+                let owned_ty = match bare {
+                    Type::Reference(inner) | Type::MutableReference(inner) => *inner,
+                    other => other,
+                };
+                if new_sig.param_types.len() > idx {
+                    new_sig.param_types[idx] = owned_ty.clone();
+                }
+                if new_sig.formal_param_types.len() > idx {
+                    new_sig.formal_param_types[idx] = owned_ty;
+                }
+            }
+            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
+                if flags.len() > idx {
+                    flags[idx] = false;
+                }
+            }
+            changed = true;
+        }
+        if changed {
+            registry.signatures.insert(key.clone(), new_sig.clone());
+            if let Some(bare) = key.rsplit("::").next() {
+                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                    registry.signatures.insert(bare.to_string(), new_sig);
+                }
+            }
+        }
+    }
 }
 
 /// When a formal was demoted to `MutBorrowed` but the body only forwards `param.field`
@@ -431,6 +498,41 @@ fn base_response(status: u16, body: string) -> int {
     }
 
     #[test]
+    fn bare_pass_skips_pub_vec_u8_owned_api_wdb175() {
+        let wire = parse_program(
+            r#"
+pub fn decode_startup(buf: Vec<u8>) -> int {
+    buf.len() as int
+}
+"#,
+        );
+        let serve = parse_program(
+            r#"
+use crate::wire::decode_startup
+pub fn on_startup(buf: Vec<u8>) -> int {
+    let _n = buf.len()
+    decode_startup(buf)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "decode_startup".to_string(),
+            owned_custom_sig("decode_startup", "Vec<u8>"),
+        );
+        let programs = vec![serve, wire];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let sig = registry.signatures.get("decode_startup").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "WDB-175: pub Vec<u8> decode_startup must skip bare-pass demotion, got {:?}",
+            sig.param_ownership
+        );
+    }
+
+    #[test]
     fn bare_pass_skips_row_col_chain_tuple_return_helper() {
         let domain = parse_program(
             r#"
@@ -786,8 +888,8 @@ fn bare_pass_hint_should_skip(
     {
         return true;
     }
-    if matches!(mode, OwnershipMode::Borrowed)
-        && callee_pub_owned_text_api(&sig, programs, callee_key, param_idx)
+    if matches!(mode, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        && callee_pub_owned_formal_skip_bare_pass(&sig, programs, callee_key, param_idx)
     {
         return true;
     }
@@ -1116,39 +1218,183 @@ fn callee_owned_text_builder_stores_payload(sig: &FunctionSignature, param_idx: 
         })
 }
 
-/// Public module APIs (`pub fn generate_page(path: string, …) -> string`) keep owned
-/// `String` formals even when cross-module callers pass bare bindings in pass 1.
-fn callee_pub_owned_text_api(
+/// Public module APIs keep owned `Vec` / selected non-Copy `Custom` formals even when
+/// cross-module callers pass bare bindings (WDB-175/178 product decode_startup / live_publishable).
+fn callee_pub_owned_formal_skip_bare_pass(
     sig: &FunctionSignature,
     programs: &[&Program],
     callee_key: &str,
     param_idx: usize,
 ) -> bool {
-    let owned_text = sig
+    let formal_ty = sig
         .formal_param_types
         .get(param_idx)
-        .or_else(|| sig.param_types.get(param_idx))
-        .is_some_and(|t| {
-            crate::codegen::rust::types::is_windjammer_text_type(t)
-                && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        });
-    if !owned_text {
+        .or_else(|| sig.param_types.get(param_idx));
+    let Some(formal_ty) = formal_ty else {
+        return false;
+    };
+    if matches!(formal_ty, Type::Reference(_) | Type::MutableReference(_)) {
         return false;
     }
     let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
-    for program in programs {
-        for item in &program.items {
-            if let Item::Function { decl, .. } = item {
+    let is_pub_free_fn = programs.iter().any(|program| {
+        program.items.iter().any(|item| {
+            matches!(item, Item::Function { decl, .. }
                 if (decl.name == simple || callee_key.ends_with(&format!("::{simple}")))
                     && decl.is_pub
-                    && decl.parent_type.is_none()
-                {
+                    && decl.parent_type.is_none())
+        })
+    });
+    if !is_pub_free_fn {
+        return false;
+    }
+    if is_vec_container_type(formal_ty) {
+        return true;
+    }
+    if matches!(formal_ty, Type::Custom(name) if {
+        !crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
+            && !is_copy_formal_name(name, &std::collections::HashSet::new())
+    }) {
+        return programs_have_multi_callee_bare_probe_for_target(programs, simple);
+    }
+    false
+}
+
+/// WDB-175/178: caller passes the same binding bare into this callee and at least one other
+/// (`on_startup`: `buf_len(buf)` + `decode_startup(buf)`; `claim_live`: probe + consumer).
+fn programs_have_multi_callee_bare_probe_for_target(
+    programs: &[&Program],
+    target_callee: &str,
+) -> bool {
+    for program in programs {
+        for item in &program.items {
+            let Item::Function { decl, .. } = item else {
+                continue;
+            };
+            for param in decl.parameters.iter().filter(|p| p.name != "self") {
+                let mut callees: std::collections::BTreeSet<String> =
+                    std::collections::BTreeSet::new();
+                collect_bare_callees_for_binding(
+                    decl.body.as_slice(),
+                    &param.name,
+                    &mut callees,
+                );
+                if callees.contains(target_callee) && callees.len() >= 2 {
                     return true;
                 }
             }
         }
     }
     false
+}
+
+fn collect_bare_callees_for_binding(
+    stmts: &[&Statement],
+    binding: &str,
+    callees: &mut std::collections::BTreeSet<String>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => visit_expr_bare_callees_for_binding(expr, binding, callees),
+            Statement::Let { value, else_block, .. } => {
+                visit_expr_bare_callees_for_binding(value, binding, callees);
+                if let Some(b) = else_block {
+                    collect_bare_callees_for_binding(b, binding, callees);
+                }
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                visit_expr_bare_callees_for_binding(condition, binding, callees);
+                collect_bare_callees_for_binding(then_block, binding, callees);
+                if let Some(b) = else_block {
+                    collect_bare_callees_for_binding(b, binding, callees);
+                }
+            }
+            Statement::While { body, condition, .. } => {
+                visit_expr_bare_callees_for_binding(condition, binding, callees);
+                collect_bare_callees_for_binding(body, binding, callees);
+            }
+            Statement::For { body, iterable, .. } => {
+                visit_expr_bare_callees_for_binding(iterable, binding, callees);
+                collect_bare_callees_for_binding(body, binding, callees);
+            }
+            Statement::Assignment { value, .. } => {
+                visit_expr_bare_callees_for_binding(value, binding, callees);
+            }
+            Statement::Match { value, arms, .. } => {
+                visit_expr_bare_callees_for_binding(value, binding, callees);
+                for arm in arms {
+                    visit_expr_bare_callees_for_binding(&arm.body, binding, callees);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn visit_expr_bare_callees_for_binding(
+    expr: &Expression,
+    binding: &str,
+    callees: &mut std::collections::BTreeSet<String>,
+) {
+    match expr {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            if arguments
+                .iter()
+                .any(|(_, arg)| matches!(arg, Expression::Identifier { name, .. } if name == binding))
+            {
+                if let Some(name) = callee_name_from_expr(function) {
+                    callees.insert(name.rsplit("::").next().unwrap_or(&name).to_string());
+                }
+            }
+            visit_expr_bare_callees_for_binding(function, binding, callees);
+            for (_, arg) in arguments {
+                visit_expr_bare_callees_for_binding(arg, binding, callees);
+            }
+        }
+        Expression::MethodCall {
+            object,
+            arguments,
+            ..
+        } => {
+            visit_expr_bare_callees_for_binding(object, binding, callees);
+            for (_, arg) in arguments {
+                visit_expr_bare_callees_for_binding(arg, binding, callees);
+            }
+        }
+        Expression::Block { statements, .. } => {
+            collect_bare_callees_for_binding(statements, binding, callees);
+        }
+        Expression::Binary { left, right, .. } => {
+            visit_expr_bare_callees_for_binding(left, binding, callees);
+            visit_expr_bare_callees_for_binding(right, binding, callees);
+        }
+        Expression::Unary { operand, .. }
+        | Expression::FieldAccess { object: operand, .. }
+        | Expression::Index { object: operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. }
+        | Expression::Cast { expr: operand, .. } => {
+            visit_expr_bare_callees_for_binding(operand, binding, callees);
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
+            for elem in elements {
+                visit_expr_bare_callees_for_binding(elem, binding, callees);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn find_function_body_for_registry_key<'a>(

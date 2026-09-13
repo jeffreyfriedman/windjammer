@@ -343,17 +343,43 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.271 WindjammerDB CQ-C5 — coverage REDs WDB-180/181 bakeoff `&str`→String + baseline borrow (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **127** (unchanged) |
+| Tip **WDB-174–179** | ❌ still open / filed |
+| Tip **WDB-180** demoted `&str` → owned `String` fill_record | filed — tip-out bakeoff |
+| Tip **WDB-181** owned baseline → demoted `&OptDatedBaseline` | filed — sysbench/tpch is_set |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** WDB-176/177 tip-out refresh, WDB-178/179 product gen sync, library_multipass residual (owned_string, for_in_vertices, f32 contains), WDB-180/181. No Phase 606+.
+
+## P3.271 WindjammerDB CQ-C5 — WDB-175 pub Vec owned + multi-callee Custom restore (2026-09-13 PM)
+
+| Gate | Status |
+|------|--------|
+| Module **WDB-175** `decode_startup(Vec)` + `buf.clone()` at demoted call | ✅ GREEN |
+| Product **WDB-175** pg_serve → pg_wire (`.agent-wip/rel_tip_out` refreshed) | ✅ GREEN |
+| Module **WDB-178** `live_publishable(DatedArtifact)` + artifact clone | ✅ GREEN |
+| Product **WDB-178** sysbench/quiet gen | ❌ RED — `windjammerdb/.../gen/` not re-transpiled (stale) |
+| `library_multipass` cluster | ⚠️ **103/108** — loop_reused_graph ✅; still RED: owned_string, for_in_vertices, borrowed_struct, f32 contains, csr_view |
+| `codegen_method_call_*` | ✅ GREEN (27) |
+| Tip **WDB-174/176/177** tip-out | ⏳ needs obs + relational tip-out re-transpile with local `wj` |
+
+**Fix:** pub `Vec` formals stay owned at emission; Custom pub owned only when multipass `restore_pub` + multi-callee bare-pass probe (`buf_len`+`decode_startup`); IR/registry borrow demotion blocked for those contracts; call-site clone for demoted→owned Vec.
+
 ## P3.270 WindjammerDB CQ-C5 — coverage REDs WDB-178/179 OptDated + samples Vec (2026-09-13)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **127** (OptDated×20, `&str`←String×12, Vec↔&Vec×20, FeedbackKey×8) |
-| Tip **WDB-174–177** tip-out/product | ❌ still RED (re-ran) |
-| Tip **WDB-178** demoted `&OptDatedArtifact` → owned publishable | filed — sysbench live_publishable |
+| Tip **WDB-174–177** tip-out/product | ⏳ partial — WDB-175 product green; 174/176/177 tip-out pending refresh |
+| Tip **WDB-178** demoted `&OptDatedArtifact` → owned publishable | ✅ module; ❌ product gen lag |
 | Tip **WDB-179** demoted `&Vec<u64>` samples A/B ownership | filed — median owned + claim `&Vec` |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** WDB-175, tip-out 174/176/177, then WDB-178/179. No Phase 606+.
+**Compiler agent priority:** tip-out refresh 174/176/177, WDB-179, product gen sync for 178. No Phase 606+.
 
 ## P3.269 WindjammerDB CQ-C5 — coverage REDs WDB-176/177 for loop-field `&str` + Custom key (2026-09-13)
 
