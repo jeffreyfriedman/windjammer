@@ -1430,6 +1430,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.library_source_root.is_none() {
             return false;
         }
+        if func.parameters.get(param_idx).is_some_and(|p| {
+            self.is_public_owned_non_copy_formal_api(p, func)
+        }) {
+            return false;
+        }
         let Some(sig) = self.global_signature_for_function(func) else {
             return false;
         };

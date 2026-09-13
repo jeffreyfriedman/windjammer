@@ -340,6 +340,10 @@ pub fn type_is_vec_container(ty: &crate::parser::ast::types::Type) -> bool {
     match ty {
         Type::Vec(_) => true,
         Type::Parameterized(name, _) => type_name_leaf(name) == "Vec",
+        Type::Custom(name) => {
+            let leaf = type_name_leaf(name);
+            leaf == "Vec" || name.starts_with("Vec<")
+        }
         Type::Reference(inner) | Type::MutableReference(inner) => type_is_vec_container(inner),
         _ => false,
     }

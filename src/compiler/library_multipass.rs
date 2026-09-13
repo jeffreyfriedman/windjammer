@@ -1054,6 +1054,10 @@ pub(crate) fn build_library_multipass(
             &program_refs,
             &global_copy_structs,
         );
+        crate::compiler::multipass_bare_pass_demotion::restore_pub_owned_non_copy_api_formals(
+            reg,
+            &program_refs,
+        );
         for sig in reg.signatures.values_mut() {
             wrap_converged_borrow_param_types(sig);
         }
@@ -1102,6 +1106,10 @@ pub(crate) fn build_library_multipass(
         let program_refs: Vec<&crate::parser::Program> = parsed_programs.iter().collect();
         let reg = std::sync::Arc::make_mut(&mut final_global_registry);
         crate::compiler::multipass_bare_pass_demotion::restore_owned_field_forward_formals(
+            reg,
+            &program_refs,
+        );
+        crate::compiler::multipass_bare_pass_demotion::restore_pub_owned_non_copy_api_formals(
             reg,
             &program_refs,
         );
@@ -1226,6 +1234,22 @@ pub(crate) fn build_library_multipass(
         // in the same library build (MemoryEngine::range_scan → LsmEngine call sites).
         for i in batch {
             let file = &sources[*i].0;
+            let file_progress = total_codegen > 50
+                || std::env::var_os("WJ_DEBUG_CODEGEN_FILE").is_some();
+            let file_start = Instant::now();
+            if file_progress {
+                let rel = file
+                    .strip_prefix(&src_base)
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| file.display().to_string());
+                eprintln!(
+                    "⚙️  Codegen file {}/{}: {} (registry≈{} sigs)",
+                    _codegen_done + 1,
+                    total_codegen,
+                    rel,
+                    final_global_registry.signatures.len()
+                );
+            }
             let analysis = step4b_analyses[*i]
                 .as_ref()
                 .expect("analysis must exist after phase 4B-a");
@@ -1233,28 +1257,23 @@ pub(crate) fn build_library_multipass(
                 .as_ref()
                 .unwrap_or(&parsed_programs[*i]);
 
-            let mut full_registry = analysis.registry.clone();
+            // Layered local registry: O(|local|) overlay + Arc global fallback.
+            // Never copy the full global map (~10k–20k+ keys) into each file.
+            let mut full_registry =
+                crate::analyzer::SignatureRegistry::layered(std::sync::Arc::clone(
+                    &final_global_registry,
+                ));
+            for (name, sig) in analysis.registry.signatures.iter() {
+                full_registry
+                    .signatures
+                    .insert(name.clone(), sig.clone());
+            }
             // Prefer post-bare-pass / field-forward restored ownership over stale
             // per-file analysis MutBorrowed so preregistered formals and call sites agree.
-            for (name, gsig) in final_global_registry.signatures.iter() {
-                match full_registry.signatures.get_mut(name) {
-                    Some(local)
-                        if crate::codegen::rust::signature_promotion::owned_custom_beats_stale_mut_borrow(
-                            gsig, local,
-                        ) || crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
-                            gsig, local,
-                        ) || crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
-                            gsig, local,
-                        ) =>
-                    {
-                        *local = gsig.clone();
-                    }
-                    None => {
-                        full_registry.signatures.insert(name.clone(), gsig.clone());
-                    }
-                    _ => {}
-                }
-            }
+            crate::codegen::rust::signature_promotion::promote_overlapping_global_signatures_into_local(
+                &mut full_registry,
+                final_global_registry.as_ref(),
+            );
             {
                 let mut tmp_analyzer = Analyzer::for_library_pass(
                     global_copy_structs.clone(),
@@ -1360,14 +1379,24 @@ pub(crate) fn build_library_multipass(
                     }
                 }
             }
+
+            if file_progress {
+                let ms = file_start.elapsed().as_millis();
+                if ms >= 2_000 {
+                    let rel = file
+                        .strip_prefix(&src_base)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| file.display().to_string());
+                    eprintln!("⚠️  Codegen slow: {} took {}ms", rel, ms);
+                }
+            }
+            _codegen_done += 1;
         }
 
         // Release per-file analysis data for completed files to reclaim memory.
         for idx in batch {
             step4b_analyses[*idx] = None;
         }
-
-        _codegen_done += batch.len();
     }
 
     profile_phase("Step 4B-b: Codegen (parallel)", step4b_codegen_start);
