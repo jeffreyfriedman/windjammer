@@ -1131,9 +1131,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 return format!("{}.clone()", obj_str.trim_end_matches(".clone()"));
             }
+            let with_clone = format!("{}.clone()", obj_str.trim_end_matches(".clone()"));
             return crate::codegen::rust::string_utilities::lower_explicit_clone_call(
                 object,
-                &obj_str,
+                &with_clone,
                 &self.emitted_rust_ref_formals,
                 &self.current_function_params,
             );
