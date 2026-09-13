@@ -343,6 +343,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
 
+## P3.270 WindjammerDB CQ-C5 — coverage REDs WDB-178/179 OptDated + samples Vec (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **127** (OptDated×20, `&str`←String×12, Vec↔&Vec×20, FeedbackKey×8) |
+| Tip **WDB-174–177** tip-out/product | ❌ still RED (re-ran) |
+| Tip **WDB-178** demoted `&OptDatedArtifact` → owned publishable | filed — sysbench live_publishable |
+| Tip **WDB-179** demoted `&Vec<u64>` samples A/B ownership | filed — median owned + claim `&Vec` |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** WDB-175, tip-out 174/176/177, then WDB-178/179. No Phase 606+.
+
 ## P3.269 WindjammerDB CQ-C5 — coverage REDs WDB-176/177 for loop-field `&str` + Custom key (2026-09-13)
 
 | Gate | Status |
