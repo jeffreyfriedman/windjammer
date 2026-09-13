@@ -3009,7 +3009,26 @@ impl<'ast> CodeGenerator<'ast> {
                     object,
                     Expression::Identifier { name, .. } if name == param_name
                 ) {
-                    if self.method_call_receiver_expects_owned_self(object, method, func) {
+                    let receiver_type = self.infer_type_name(object).or_else(|| {
+                        self.infer_local_binding_type_name(func.body.as_slice(), param_name)
+                    });
+                    let readonly_receiver = receiver_type.as_deref().is_some_and(|rt| {
+                        crate::codegen::rust::stdlib_method_traits::is_known_readonly_qualified(
+                            method,
+                            Some(rt),
+                            &self.signature_registry,
+                        ) || self
+                            .global_signature_registry
+                            .as_ref()
+                            .is_some_and(|g| {
+                                crate::codegen::rust::stdlib_method_traits::is_known_readonly_qualified(
+                                    method, Some(rt), g,
+                                )
+                            })
+                    });
+                    if !readonly_receiver
+                        && self.method_call_receiver_expects_owned_self(object, method, func)
+                    {
                         return true;
                     }
                 }
@@ -3052,6 +3071,11 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(sig) =
                             self.resolve_free_call_signature(function, Some(call_arg_count))
                         {
+                            // Runtime AsRef text helpers (`strings::len`, `is_empty`, …) are
+                            // readonly — must not block owned-formal retention (WDB-110/111).
+                            if self.callee_signature_is_asref_str_runtime(&sig) {
+                                continue;
+                            }
                             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &sig, i,
                             ) || crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
@@ -7228,8 +7252,186 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        self.param_only_forwarded_to_asref_str_runtime(body, param_name)
-            && !self.param_only_forwards_to_path_asref_callees(body, param_name, func)
+        if self.param_only_forwards_to_path_asref_callees(body, param_name, func) {
+            return false;
+        }
+        if self.param_only_forwarded_to_asref_str_runtime(body, param_name) {
+            return true;
+        }
+        // WDB-110/111: `strings::is_empty(path)` + `path.len()` (or `==` + `starts_with`)
+        // still keep owned `String` formals — mixed readonly use must not demote.
+        let mut has_asref_forward = false;
+        self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, _| {
+            if self.callee_signature_is_asref_str_runtime(sig) {
+                has_asref_forward = true;
+            }
+        });
+        if !has_asref_forward {
+            for stmt in body {
+                self.statement_has_runtime_std_forward_of_param(stmt, param_name, &mut has_asref_forward);
+                if has_asref_forward {
+                    break;
+                }
+            }
+        }
+        has_asref_forward && self.param_has_readonly_expression_use(body, param_name)
+    }
+
+    fn callee_signature_is_asref_str_runtime(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+    ) -> bool {
+        crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(sig.name.as_str())
+    }
+
+    fn statement_has_runtime_std_forward_of_param(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => {
+                self.expression_has_runtime_std_forward_of_param(expr, param_name, found);
+            }
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expression_has_runtime_std_forward_of_param(value, param_name, found);
+                if let Some(b) = else_block {
+                    for s in b {
+                        self.statement_has_runtime_std_forward_of_param(s, param_name, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                }
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_has_runtime_std_forward_of_param(condition, param_name, found);
+                for s in then_block {
+                    self.statement_has_runtime_std_forward_of_param(s, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+                if let Some(b) = else_block {
+                    for s in b {
+                        self.statement_has_runtime_std_forward_of_param(s, param_name, found);
+                        if *found {
+                            return;
+                        }
+                    }
+                }
+            }
+            Statement::While {
+                body, condition, ..
+            } => {
+                self.expression_has_runtime_std_forward_of_param(condition, param_name, found);
+                for s in body {
+                    self.statement_has_runtime_std_forward_of_param(s, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Statement::For { body, iterable, .. } => {
+                self.expression_has_runtime_std_forward_of_param(iterable, param_name, found);
+                for s in body {
+                    self.statement_has_runtime_std_forward_of_param(s, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_has_runtime_std_forward_of_param(value, param_name, found);
+                for arm in arms {
+                    self.expression_has_runtime_std_forward_of_param(&arm.body, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_has_runtime_std_forward_of_param(value, param_name, found);
+            }
+            _ => {}
+        }
+    }
+
+    fn expression_has_runtime_std_forward_of_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        found: &mut bool,
+    ) {
+        if *found {
+            return;
+        }
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let forwards_param = arguments.iter().any(|(_, arg)| {
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                        || Self::expr_is_field_or_index_of_param(arg, param_name)
+                });
+                if forwards_param && self.call_expr_is_runtime_std_forward(function) {
+                    *found = true;
+                    return;
+                }
+                self.expression_has_runtime_std_forward_of_param(function, param_name, found);
+                for (_, arg) in arguments {
+                    self.expression_has_runtime_std_forward_of_param(arg, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                self.expression_has_runtime_std_forward_of_param(object, param_name, found);
+                for (_, arg) in arguments {
+                    self.expression_has_runtime_std_forward_of_param(arg, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_has_runtime_std_forward_of_param(operand, param_name, found);
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_runtime_std_forward_of_param(left, param_name, found);
+                self.expression_has_runtime_std_forward_of_param(right, param_name, found);
+            }
+            Expression::Block { statements, .. } => {
+                for s in statements {
+                    self.statement_has_runtime_std_forward_of_param(s, param_name, found);
+                    if *found {
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Runtime WJ-owned / Rust-borrowed forwards (`from_chars(parts: Vec<char>)` → `&[char]`)
@@ -7831,21 +8033,31 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn call_function_is_asref_str_runtime(&self, function: &Expression<'ast>) -> bool {
+        self.call_expr_is_runtime_std_forward(function)
+    }
+
+    /// Call target is a scanned runtime std module API (`strings::is_empty`, `db::…`).
+    fn call_expr_is_runtime_std_forward(&self, function: &Expression<'ast>) -> bool {
         match function {
             Expression::FieldAccess { object, .. } => matches!(
                 &**object,
                 Expression::Identifier { name, .. }
                     if self.is_imported_runtime_std_module(name)
                         || self.param_type_is_asref_runtime_receiver(name)
+                        || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name)
             ),
             Expression::Identifier { name, .. } => {
                 crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(name)
                     || name.contains("::")
-                        && self.is_imported_runtime_std_module(
+                        && (self.is_imported_runtime_std_module(
                             crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                                 name,
                             ),
-                        )
+                        ) || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
+                            crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+                                name,
+                            ),
+                        ))
             }
             _ => false,
         }

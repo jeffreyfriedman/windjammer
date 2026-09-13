@@ -2281,6 +2281,21 @@ impl<'ast> CodeGenerator<'ast> {
             &self.current_function_params,
         );
 
+        // Borrowed for-loop elems into demoted `&str` callees: pass `item` (Rust
+        // autoref), not `&item` (double-borrow / E0308 on owned loop variables).
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.borrowed_iterator_vars.contains(name)
+                && self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                let base =
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced);
+                if base == name.as_str() {
+                    coerced = base.to_string();
+                }
+            }
+        }
 
         Some(coerced)
     }
@@ -3596,6 +3611,21 @@ impl<'ast> CodeGenerator<'ast> {
                 &sig,
                 param_idx,
             );
+        }
+
+        // Terminal: borrowed `for item in vec` elems into shared-text callees — pass
+        // bare `item` (Rust autoref), not `&item` (E0308 / wj-cli-args scan gate).
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.borrowed_iterator_vars.contains(name)
+                && self.ir_sig_arg_expects_shared_borrow(&sig, param_idx)
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                let base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced);
+                if base == name.as_str() {
+                    *coerced = base.to_string();
+                }
+            }
         }
 
 

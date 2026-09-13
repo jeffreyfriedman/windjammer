@@ -79,6 +79,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if param.name != "self"
                     && self.multipass_global_ref_formal_demoted(func, param_idx)
+                    && !self.function_return_is_text(func)
                     && !(self.pub_module_api_keeps_owned_string_formal(func)
                         && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
                     && !(analyzed.returned_parameters.contains(&param.name)
@@ -412,6 +413,21 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_borrowed_params.remove(&param.name);
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
+                // Runtime AsRef<str> forwards (`strings::is_empty` + `.len()`) keep owned
+                // `String` formals before blackboard-style demotion (WDB-110/111).
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && self.param_asref_runtime_forces_owned_formal(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    return format!("{}: String", param.name);
+                }
                 // Blackboard-style keys: forward only to readonly `&str` callees (`find_index`).
                 // Runtime AsRef<str> (`strings::`, `db::`) keep owned WJ `string` (CSV gates).
                 // Runtime AsRef<Path> (`fs::`) demote so write→load→remove can reuse paths.
@@ -420,6 +436,11 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.in_trait_impl
                     && !self.function_return_is_text(func)
                     && !self.pub_module_api_keeps_owned_string_formal(func)
+                    && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     && (self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
                         &param.name,
@@ -464,10 +485,6 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.in_trait_impl
                     && !self.pub_module_api_keeps_owned_string_formal(func)
                     && !payload_stored
-                    && !matches!(
-                        analyzed.inferred_ownership.get(&param.name),
-                        Some(OwnershipMode::Owned)
-                    )
                     && self.param_has_readonly_expression_use(
                         func.body.as_slice(),
                         &param.name,
@@ -484,6 +501,11 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
+                    && !self.param_used_as_call_argument(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     && !self.function_return_is_text(func)
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
@@ -491,33 +513,18 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_mut_borrowed_params.remove(&param.name);
                     return format!("{}: &str", param.name);
                 }
-                // User API: WJ `string` formals stay owned `String` when the function
-                // returns text (wj-url `join`) unless the body *only* forwards into
-                // borrowed-text / Path AsRef callees (those demote to `&str` above).
-                // Do not require "never a call argument" — `Ok(relative)` and
-                // `strings.contains(relative, …)` still need an owned formal when
-                // the same param is returned or mixed into constructed text.
+                // Text-returning APIs (`escape_html`, `join`) keep owned `String` formals
+                // even when analyzer marked str_ref_optimizable (`.replace` chains).
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
-                    && !analyzed.str_ref_optimizable_params.contains(&param.name)
-                    && !matches!(
-                        analyzed.inferred_ownership.get(&param.name),
-                        Some(OwnershipMode::Borrowed)
-                    )
-                    && !self.param_only_forwards_to_borrowed_text_callees(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    )
+                    && !payload_stored
+                    && self.function_return_is_text(func)
                     && !self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
                         &param.name,
                         func,
                     )
-                    && !self.is_collection_key_owned_param(param, func)
-                    && !payload_stored
-                    && self.function_return_is_text(func)
                 {
                     self.str_ref_optimized_params.remove(&param.name);
                     self.inferred_borrowed_params.remove(&param.name);
@@ -1062,6 +1069,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !payload_forces_owned
                             && !self.in_trait_impl
                             && !self.pub_module_api_keeps_owned_string_formal(func)
+                            && !self.function_return_is_text(func)
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
@@ -1330,6 +1338,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !payload_forces_owned
                                 && !self.in_trait_impl
                                 && !self.pub_module_api_keeps_owned_string_formal(func)
+                                && !self.function_return_is_text(func)
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(

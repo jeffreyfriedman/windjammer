@@ -88,6 +88,11 @@ fn callee_arg_expects_shared_vec_ref(sig: &FunctionSignature, arg_index: usize) 
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
         return false;
     }
+    // Codegen-confirmed `&Vec<T>` beats stale bare `Vec<T>` in formal_param_types
+    // (unused readonly params like `outs` vs used `deps` in the same signature).
+    if callee_emits_shared_rust_ref_param(sig, pidx) {
+        return true;
+    }
     // Bare `Vec<T>` formals are owned — never auto-borrow at the call site.
     if sig
         .formal_param_type(pidx)
@@ -95,9 +100,6 @@ fn callee_arg_expects_shared_vec_ref(sig: &FunctionSignature, arg_index: usize) 
         .is_some_and(type_is_vec_container)
     {
         return false;
-    }
-    if callee_emits_shared_rust_ref_param(sig, pidx) {
-        return true;
     }
     sig.param_types
         .get(pidx)

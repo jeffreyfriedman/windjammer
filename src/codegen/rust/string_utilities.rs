@@ -1145,6 +1145,18 @@ pub fn finalize_explicit_user_clone_call_site<'ast>(
     };
     let pidx = sig.arg_param_index(arg_index);
     if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
+        if let Some(name) =
+            crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg_expr)
+        {
+            let caller_param_owned = function_params.iter().any(|p| {
+                p.name == name
+                    && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    && !emitted_rust_ref_formals.contains(name)
+            });
+            if caller_param_owned {
+                return restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced);
+            }
+        }
         let base = coerced.trim_end_matches(".clone()");
         return if base.starts_with('&') && !base.starts_with("&mut ") {
             base.to_string()

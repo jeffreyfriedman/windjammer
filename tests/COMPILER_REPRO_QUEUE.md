@@ -98,7 +98,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Private struct field must not emit spurious `use StructName;` (`wj-webhook`)** | `bug_private_struct_field_spurious_use_import_test` | ✅ tip GREEN — regression guard (`BusEventBody` in `Vec` field) |
 | P1 | **`HashMap<i64, T>` field `.get(id)` must auto-borrow key (`wj-notes-api`)** | `bug_hashmap_field_get_i64_key_auto_borrow_test` | ✅ tip GREEN — fixture `note_store_hashmap_field_get.wj` |
 | P1 | **WDB-112: full `src` `--module-file` demotes owned `string` to `&str` but call sites emit `String.clone()`** | `wdb112_full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites` | ✅ tip GREEN |
-| P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()`** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ✅ tip GREEN |
+| P1 | **WDB-113: full `src` `--module-file` demotes owned struct to `&mut T` but call sites emit `.clone()`** | `wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site` | ✅ tip GREEN (owned+clone OK; demoted+clone still RED) |
 | P1 | **WDB-114: `--module-file` emits `Vec<T>` without importing `T`** | `wdb114_module_file_vec_type_annotation_must_import_element_type` | ✅ tip GREEN |
 | P1 | **WDB-115: early `return self.private_method()` mis-emits sibling method** | `wdb115_early_return_private_method_must_emit_correct_callee` | ✅ tip GREEN (regression guard) |
 | P1 | **`std::fs::DirEntry.name()` must wire to runtime `file_name()`** | `bug_std_fs_dir_entry_name_wiring_test`, `bug_std_fs_dir_entry_name_multipass_test` | ✅ tip GREEN — fixture `migrate_dir_entry_name.wj` |
@@ -347,6 +347,23 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 **Root cause:** analyzer `Borrowed` + IR `ToOwnedString` rewrote owned-place `.clone()` to `.to_string()` / borrowed call sites even when codegen still emitted `String` formals.
 
 **Fix:** coercion Identity for String→String; string clone helpers use codegen-confirmed `&str` emit set.
+
+## P3.264 (2026-09-13) — runtime-std readonly + text-return formals keep owned `String`
+
+| Gate | Status |
+|------|--------|
+| `for_loop_borrowed_item_clones_into_owned` | ✅ tip GREEN — `strings::` runtime forward + readonly `.len()` keeps owned formal; loop elem not `&item` into owned callee |
+| `auto_borrow_vec_new_at_call_site` | ✅ tip GREEN — `callee_emits_shared_rust_ref_param` before bare `Vec<T>` formal check |
+| `comparison_only_string_formal_demotes` | ✅ tip GREEN — comparison-only demotion skips params used as call arguments |
+| `wdb106_*` / `wdb142_*` explicit clone | ✅ tip GREEN — preserve user `.clone()` at demoted/borrow callees when formal is owned |
+| `struct_field_into_owned_string_formal` / `multi_use_struct_field_must_clone` | ✅ tip GREEN — text-returning helpers keep `String` formals; field multi-use auto-clone |
+| `wdb110_*` / `wdb111_*` | ✅ tip GREEN — `strings::is_empty` + `.len()` mixed readonly keeps owned `String` formals |
+| `wdb169_*` fixture | ✅ tip GREEN — owned helper temp into owned Custom formal (no `&empty_bakeoff_run()`) |
+| `wdb169` product gate | ✅ after `gen/relational/wave1_opt_hardware_port.rs` regen (stale Sep-12 artifact) |
+
+**Root cause:** `strings::len(s)` WJ signatures looked owning; runtime-std module detection missed `use windjammer_runtime::strings`; text-return helpers fell through to default `&str` demotion when analyzer marked `str_ref_optimizable`.
+
+**Fix:** signature-scanned runtime-std forward detection; early owned `String` for text-returning APIs; readonly receiver methods skip false owning-use; IR terminal peel for borrowed `for` elems into shared-text callees.
 
 ## P3.260 WindjammerDB CQ-C5 — freeze dogfood/tip-cluster; file WDB-170/171 coverage REDs (2026-09-13)
 
