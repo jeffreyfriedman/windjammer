@@ -304,8 +304,14 @@ fn test_library_multipass_for_in_vertices_reuse_borrow() {
         .get("graph/for_in_vertices_reuse.rs")
         .expect("for_in_vertices_reuse.rs generated");
 
+    let formal_borrowed = rs.contains("vertex_step_count(vertices: &Vec")
+        || rs.contains("fn vertex_step_count(vertices: &Vec");
     assert!(
-        rs.contains("vertex_lookup_len(&vertices") || rs.contains("vertex_lookup_len(& vertices"),
+        rs.contains("vertex_lookup_len(&vertices")
+            || rs.contains("vertex_lookup_len(& vertices")
+            || (formal_borrowed
+                && (rs.contains("vertex_lookup_len(vertices,")
+                    || rs.contains("vertex_lookup_len(vertices ,"))),
         "for-in loop must borrow vertices when reused in callee. Got:\n{rs}"
     );
     assert!(

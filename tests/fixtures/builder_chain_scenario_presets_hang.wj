@@ -1,0 +1,86 @@
+// Repro: long consuming builder chains like scenario_presets.wj (depth ~32).
+// Bug class: MethodCall type inference re-walked the receiver 3× per link → ~3^depth.
+// Must transpile in < 15s.
+
+struct Scenario {
+    pub name: string,
+    pub timeout_frames: u32,
+    pub player_x: f32,
+    pub player_y: f32,
+    pub player_z: f32,
+    pub look: f32,
+}
+
+impl Scenario {
+    pub fn new(name: string) -> Scenario {
+        Scenario {
+            name: name,
+            timeout_frames: 600,
+            player_x: 0.0,
+            player_y: 0.0,
+            player_z: 0.0,
+            look: 0.0,
+        }
+    }
+
+    pub fn with_timeout(self, frames: u32) -> Scenario {
+        self.timeout_frames = frames
+        self
+    }
+
+    pub fn spawn_player(self, x: f32, y: f32, z: f32) -> Scenario {
+        self.player_x = x
+        self.player_y = y
+        self.player_z = z
+        self
+    }
+
+    pub fn with_look(self, yaw: f32) -> Scenario {
+        self.look = yaw
+        self
+    }
+
+    pub fn add_step(self, _label: string) -> Scenario {
+        self
+    }
+}
+
+/// Depth mirrors the longest scenario_presets.wj chain (~32 method calls).
+pub fn scenario_deep_chain() -> Scenario {
+    Scenario::new("deep_chain")
+        .with_timeout(300)
+        .spawn_player(32.0, 2.5, 24.0)
+        .with_look(1.57)
+        .add_step("a01")
+        .add_step("a02")
+        .add_step("a03")
+        .add_step("a04")
+        .add_step("a05")
+        .add_step("a06")
+        .add_step("a07")
+        .add_step("a08")
+        .add_step("a09")
+        .add_step("a10")
+        .add_step("a11")
+        .add_step("a12")
+        .add_step("a13")
+        .add_step("a14")
+        .add_step("a15")
+        .add_step("a16")
+        .add_step("a17")
+        .add_step("a18")
+        .add_step("a19")
+        .add_step("a20")
+        .add_step("a21")
+        .add_step("a22")
+        .add_step("a23")
+        .add_step("a24")
+        .add_step("a25")
+        .add_step("a26")
+        .add_step("a27")
+        .add_step("a28")
+}
+
+fn main() {
+    let _ = scenario_deep_chain()
+}

@@ -13,7 +13,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
-| P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ❌ tip RED (P3.263) |
+| P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (2026-09-13) |
 | P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
@@ -380,6 +380,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** WDB-175, tip-out 174/176–179, then WDB-180/181. No Phase 606+.
+
+## P3.271 WindjammerDB CQ-C5 — owned-string / for-in borrow + WDB-174–181 tip greens (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| `test_library_multipass_owned_string_to_string_method_must_borrow` | ✅ tip GREEN — impl `strings::len` no longer forces owned `String` formal; IR strips stale `.to_string().clone()` |
+| `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ tip GREEN — readonly pub `Vec` formals demote; loop reuse borrows not clones |
+| Tip **WDB-174–181** module-file + product/tip-out gates (after tip refresh) | ✅ tip GREEN |
+| `loop_reused_graph_borrow` / `codegen_method_call_*` / `builder_chain_hang_gate` | ✅ tip GREEN |
+| `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN |
+
+**Fixes:** `param_asref_runtime_forces_owned_formal` skip impl methods; `is_public_owned_non_copy_formal_api` allow readonly Vec demotion; IR terminal multipass reconcile (demoted→owned clone / owned→`&` borrow) with shared-ref guard; tip-out + `gen/` refresh from full module-file transpile.
 
 ## P3.270 WindjammerDB CQ-C5 — coverage REDs WDB-178/179 OptDated + samples Vec (2026-09-13)
 

@@ -1,0 +1,45 @@
+// FAILING REPRO — thin trait-impl forwarder must keep owned Draft formal
+// matching the trait (LedgerKit env_channel_adapter / env_inventory_repository).
+//
+// Tip RED: trait keeps `draft: Draft`, impl emits `draft: &mut Draft` → E0053;
+// composition free fn may emit `deps: &Self` when Draft is demoted.
+
+pub struct Draft {
+    pub name: string,
+}
+
+pub struct View {
+    pub name: string,
+}
+
+trait DraftPort {
+    fn create(self, tenant_id: string, draft: Draft) -> Result<View, string>
+}
+
+pub struct SeedPort {}
+
+impl DraftPort for SeedPort {
+    fn create(self, tenant_id: string, draft: Draft) -> Result<View, string> {
+        let _ = tenant_id
+        Ok(View {
+            name: draft.name + "",
+        })
+    }
+}
+
+pub struct EnvPort {}
+
+impl DraftPort for EnvPort {
+    fn create(self, tenant_id: string, draft: Draft) -> Result<View, string> {
+        let port = SeedPort {}
+        port.create(tenant_id, draft)
+    }
+}
+
+pub struct AppDeps {
+    pub port: EnvPort,
+}
+
+pub fn create_item(deps: AppDeps, tenant_id: string, draft: Draft) -> Result<View, string> {
+    deps.port.create(tenant_id, draft)
+}
