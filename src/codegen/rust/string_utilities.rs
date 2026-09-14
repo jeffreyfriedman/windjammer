@@ -272,21 +272,24 @@ pub fn call_site_param_expects_owned_string(
             return true;
         }
     }
-    if sig
-        .param_types
-        .get(idx)
-        .is_some_and(param_is_owned_string_type)
-    {
-        return true;
-    }
-    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, idx) {
-        return true;
-    }
     if matches!(
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
         crate::analyzer::OwnershipMode::Borrowed
     ) {
         return false;
+    }
+    if sig
+        .param_types
+        .get(idx)
+        .is_some_and(param_is_owned_string_type)
+    {
+        return crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx)
+            || crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
+                sig, idx,
+            );
+    }
+    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, idx) {
+        return true;
     }
     if let Some(flags) = &sig.emitted_rust_ref_params {
         if flags.get(idx) == Some(&true) {

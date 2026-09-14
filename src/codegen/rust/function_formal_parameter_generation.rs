@@ -2216,6 +2216,8 @@ impl<'ast> CodeGenerator<'ast> {
                             // (`append_put` / `let _ = (key.len(), value.len())`).
                             // Field-projection tuple-discards keep owned; bare-id discards
                             // demote via early shared-borrow return (authz-reuse regression).
+                            let for_loop_iterable_must_borrow =
+                                self.for_loop_borrow_needed.contains(&param.name);
                             let discard_keep_owned = self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
                                 &param.name,
@@ -2233,8 +2235,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     func.body.as_slice(),
                                     &param.name,
                                     func,
-                                ))
-                                || self.for_loop_borrow_needed.contains(&param.name);
+                                ));
                             let keep_owned_facade = self.current_struct_name.as_ref().is_some_and(
                                 |sn| self.struct_is_owned_engine_key_facade(sn, param),
                             ) && !field_proj_readonly
@@ -2352,6 +2353,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 ownership_mode = OwnershipMode::Borrowed;
                                 self.inferred_borrowed_params.insert(param.name.clone());
                                 self.str_ref_optimized_params.remove(&param.name);
+                            } else if for_loop_iterable_must_borrow
+                                && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
+                                && !(analyzed.mutated_parameters.contains(&param.name)
+                                    && !analyzed.returned_parameters.contains(&param.name))
+                            {
+                                // `for v in vertices { f(vertices, v) }` — demote to `&Vec`
+                                // so the loop body can reuse the collection (E0382).
+                                ownership_mode = OwnershipMode::Borrowed;
+                                self.inferred_borrowed_params.insert(param.name.clone());
                             } else if keep_owned_contract {
                                 ownership_mode = OwnershipMode::Owned;
                             } else if self.in_trait_impl {
