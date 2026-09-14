@@ -1,0 +1,26 @@
+// FAILING REPRO — int literal / loop locals must stay one width with int arith (no i64 vs i32).
+// Product tip api-check (LedgerKit domain/recurring.wj):
+//   `year % 4 == 0`, `while remaining > 0`, `m > 12` → E0277 i64 Rem/PartialEq i32
+// after tip int_inference churn (HEAD tip binary). Pin/dogfood tip may still GREEN.
+
+pub fn days_in_feb(year: int) -> int {
+    if year % 400 == 0 {
+        return 29
+    }
+    if year % 100 == 0 {
+        return 28
+    }
+    if year % 4 == 0 {
+        return 29
+    }
+    28
+}
+
+pub fn bump_month(mut y: int, mut m: int) -> int {
+    m = m + 1
+    if m > 12 {
+        m = 1
+        y = y + 1
+    }
+    y * 100 + m
+}

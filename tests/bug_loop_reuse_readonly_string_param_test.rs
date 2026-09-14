@@ -50,7 +50,9 @@ pub fn filter(pattern: string, paths: Vec<string>) -> Vec<string> {
     assert!(
         generated.contains("is_match(&pattern")
             || generated.contains("is_match(pattern.as_str()")
-            || generated.contains("is_match(&*pattern"),
-        "filter loop must borrow pattern for is_match:\n{generated}"
+            || generated.contains("is_match(&*pattern")
+            || (generated.contains("pub fn filter(pattern: &str")
+                && generated.contains("is_match(pattern,")),
+        "filter loop must borrow pattern for is_match (or demote filter param to &str):\n{generated}"
     );
 }
