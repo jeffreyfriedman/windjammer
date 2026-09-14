@@ -390,13 +390,20 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Rust range iteration always binds `usize` (`for i in 0..n`), regardless of WJ
-        // registry typing for `.len()` (may be `int` while Rust emits `usize`).
+        // `for i in 0..vec.len()` → Rust `usize`; `for x in (cx - 16)..(cx + 16)` → bound width (e.g. i32).
         if let Some(var) = &loop_var {
-            if matches!(iterable, Expression::Range { .. }) {
-                self.usize_variables.insert(var.clone());
-                self.local_var_types
-                    .insert(var.clone(), Type::Custom("usize".to_string()));
+            if let Expression::Range { start, end, .. } = iterable {
+                if self.range_loop_should_bind_usize(start, end) {
+                    self.usize_variables.insert(var.clone());
+                    self.local_var_types
+                        .insert(var.clone(), Type::Custom("usize".to_string()));
+                } else if let Some(bound_ty) = self
+                    .infer_expression_type(start)
+                    .or_else(|| self.infer_expression_type(end))
+                    .filter(|t| Self::assignment_target_needs_int_codegen_context(t))
+                {
+                    self.local_var_types.insert(var.clone(), bound_ty);
+                }
             }
         }
 
@@ -481,5 +488,36 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         None
+    }
+
+    /// True when a WJ range should lower like `for i in 0..collection.len()` (usize index).
+    fn range_loop_should_bind_usize(
+        &self,
+        start: &Expression<'ast>,
+        end: &Expression<'ast>,
+    ) -> bool {
+        let end_returns_usize = |expr: &Expression<'ast>| match expr {
+            Expression::MethodCall {
+                object, method, ..
+            } => crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                method,
+                self.infer_expression_type(object)
+                    .as_ref()
+                    .and_then(Self::type_to_name)
+                    .as_deref(),
+                &self.signature_registry,
+            ),
+            _ => false,
+        };
+        if end_returns_usize(end) || end_returns_usize(start) {
+            return true;
+        }
+        let is_usize_ty = |expr: &Expression<'ast>| {
+            self.infer_expression_type(expr).is_some_and(|t| {
+                matches!(t, Type::Custom(ref n) if n == "usize")
+                    || matches!(t, Type::Reference(inner) if matches!(inner.as_ref(), Type::Custom(ref n) if n == "usize"))
+            })
+        };
+        is_usize_ty(start) || is_usize_ty(end)
     }
 }

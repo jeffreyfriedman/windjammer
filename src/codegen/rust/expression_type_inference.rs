@@ -103,6 +103,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(t) = self.local_var_types.get(name) {
                     return Some(t.clone());
                 }
+                if let Some(t) = self.module_const_types.get(name) {
+                    return Some(t.clone());
+                }
                 // Check function parameters
                 for param in &self.current_function_params {
                     if param.name == *name {

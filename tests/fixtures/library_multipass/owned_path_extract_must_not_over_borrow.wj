@@ -1,0 +1,15 @@
+// FAILING REPRO — owned `string` path extract must not receive `&String` at call site.
+// Product tip api-check (LedgerKit routes): `extract_mcp_tool_name(&invoke_path)`.
+
+pub fn extract_tool_name(path: string) -> string {
+    let p = path + ""
+    if p.len() < 5 {
+        return "" + ""
+    }
+    p
+}
+
+pub fn invoke_name(path: string) -> string {
+    let invoke_path = path + ""
+    extract_tool_name(invoke_path)
+}

@@ -180,6 +180,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) usize_variables: std::collections::HashSet<String>,
     /// Module-level `const NAME: string = "…"` identifiers (lower to `&'static str` in Rust).
     pub(crate) module_string_consts: std::collections::HashSet<String>,
+    /// Module-level `const` / `static` name → type (for identifier inference in expressions).
+    pub(crate) module_const_types: std::collections::HashMap<String, Type>,
     /// Nesting depth of loop bodies — explicit `.clone()` in loops must be preserved (WDB-105).
     pub(crate) loop_body_depth: u32,
     // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
@@ -626,6 +628,7 @@ impl<'ast> CodeGenerator<'ast> {
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
             module_string_consts: std::collections::HashSet::new(),
+            module_const_types: std::collections::HashMap::new(),
             loop_body_depth: 0,
             unused_let_bindings: std::collections::HashSet::new(),
             inferred_borrowed_params: std::collections::HashSet::new(),

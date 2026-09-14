@@ -1,0 +1,19 @@
+// FAILING REPRO — owned `Vec<string>` helper must not receive `&Vec` at call site.
+// Product tip api-check (LedgerKit http_json): `string_list_json(&controls)`.
+
+fn list_json(values: Vec<string>) -> string {
+    let mut body = "[" + ""
+    let mut first = true
+    for value in values {
+        if !first {
+            body = body + ", "
+        }
+        first = false
+        body = body + "\"" + value + "\""
+    }
+    body + "]"
+}
+
+pub fn controls_json(controls: Vec<string>) -> string {
+    "{\"controls\":" + list_json(controls) + "}"
+}

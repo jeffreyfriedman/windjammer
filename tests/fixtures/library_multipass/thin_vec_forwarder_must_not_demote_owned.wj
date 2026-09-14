@@ -1,0 +1,18 @@
+// FAILING REPRO — thin Vec forwarder must not demote to `&Vec` while callee stays owned.
+// Product tip api-check (LedgerKit request_context): `post_request` → `post_request_query`.
+
+pub struct Req {
+    pub headers: Vec<(string, string)>,
+    pub body: string,
+}
+
+pub fn post_query(headers: Vec<(string, string)>, body: string) -> Req {
+    Req {
+        headers: headers,
+        body: body,
+    }
+}
+
+pub fn post_simple(headers: Vec<(string, string)>, body: string) -> Req {
+    post_query(headers, body)
+}
