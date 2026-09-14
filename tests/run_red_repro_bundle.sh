@@ -7,7 +7,6 @@ cd "$ROOT"
 
 RED_FILTERS=(
   hashmap_string_key_insert_must_not_cast_usize
-  vec_custom_view_helper_must_not_over_borrow
 )
 
 GREEN_FILTERS=(
@@ -16,6 +15,7 @@ GREEN_FILTERS=(
   owned_path_extract_must_not_over_borrow
   vec_string_helper_must_not_over_borrow
   thin_vec_forwarder_must_not_demote_owned
+  vec_custom_view_helper_must_not_over_borrow
   while_idx_lt_vec_len_must_unify_int_uint
   seed_overlay_int_parse_format_must_cargo_check_without_plus_empty
   hexagonal_seed_overlay_int_parse_format_must_cargo_check_without_plus_empty
