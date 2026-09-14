@@ -2983,6 +2983,59 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `param` used as the owned lhs of string `+` (P3.264 concat2 / overlay_row).
+    pub(in crate::codegen::rust) fn param_used_as_owned_string_add_operand(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        fn expr_uses_owned_add_lhs<'ast>(
+            expr: &Expression<'ast>,
+            param_name: &str,
+        ) -> bool {
+            match expr {
+                Expression::Binary {
+                    op: crate::parser::BinaryOp::Add,
+                    left,
+                    right,
+                    ..
+                } => {
+                    matches!(
+                        &**left,
+                        Expression::Identifier { name, .. } if name == param_name
+                    ) || expr_uses_owned_add_lhs(left, param_name)
+                        || expr_uses_owned_add_lhs(right, param_name)
+                }
+                Expression::Binary { left, right, .. } => {
+                    expr_uses_owned_add_lhs(left, param_name)
+                        || expr_uses_owned_add_lhs(right, param_name)
+                }
+                Expression::Call { arguments, .. }
+                | Expression::MethodCall { arguments, .. } => arguments
+                    .iter()
+                    .any(|(_, a)| expr_uses_owned_add_lhs(a, param_name)),
+                Expression::Unary { operand, .. } => expr_uses_owned_add_lhs(operand, param_name),
+                Expression::FieldAccess { object, .. }
+                | Expression::Index { object, .. } => expr_uses_owned_add_lhs(object, param_name),
+                _ => false,
+            }
+        }
+        for stmt in body {
+            let expr = match stmt {
+                Statement::Return {
+                    value: Some(v), ..
+                } => Some(*v),
+                Statement::Expression { expr, .. } => Some(*expr),
+                Statement::Let { value, .. } => Some(*value),
+                _ => None,
+            };
+            if expr.is_some_and(|e| expr_uses_owned_add_lhs(e, param_name)) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub(in crate::codegen::rust) fn param_has_owning_method_use(
         &self,
         body: &[&'ast Statement<'ast>],
