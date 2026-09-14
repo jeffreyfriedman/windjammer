@@ -214,6 +214,18 @@ fn apply_owned_string_literal_coercion<'ast>(
         if gen.preregistered_free_call_arg_expects_borrow(func_name, i) {
             continue;
         }
+        if sig.as_ref().is_some_and(|s| {
+            let pidx = s.arg_param_index(i);
+            matches!(
+                s.param_ownership.get(pidx),
+                Some(crate::analyzer::OwnershipMode::Borrowed)
+            ) && s.formal_param_type(pidx).is_some_and(|t| {
+                crate::codegen::rust::types::is_windjammer_text_type(t)
+                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
+        }) {
+            continue;
+        }
         if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
             sig.as_ref(),
             i,

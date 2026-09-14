@@ -230,6 +230,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     }
     if matches!(expected.ownership, OwnedType::Ref(_))
         && matches!(kind, CoercionKind::Borrow)
+        && !allow_rust_auto_borrow
         && !coerced.starts_with('&')
         && !coerced.starts_with("&mut ")
         // Rust string literals are already `&str`; prefixing `&` yields `&&str`.

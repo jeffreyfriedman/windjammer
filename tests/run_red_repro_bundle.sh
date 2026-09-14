@@ -6,8 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  hexagonal_string_concat_nested_owned_must_not_over_borrow
-  string_concat_nested_owned_must_not_over_borrow
+  while_idx_lt_vec_len_must_unify_int_uint
 )
 
 GREEN_FILTERS=(
@@ -51,6 +50,8 @@ GREEN_FILTERS=(
   std_yaml_to_json_rejects_empty_input
   trait_owned_draft_forwarder_must_not_demote_mut
   hexagonal_trait_owned_draft_forwarder_must_not_demote_mut
+  string_concat_nested_owned_must_not_over_borrow
+  hexagonal_string_concat_nested_owned_must_not_over_borrow
 )
 
 echo "Running ${#GREEN_FILTERS[@]} GREEN regression gate(s)..."
