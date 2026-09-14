@@ -17,7 +17,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
-| P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ❌ tip RED hexagonal (P3.264) — `overlay_row2(&String::from…)` / `append_overlay_row(&a)` |
+| P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — hexagonal + same-file; pub `string` bare-pass skip + owned-local move reconcile |
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
 | P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (2026-09-13) |
 | P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
@@ -138,6 +138,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
+| P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ❌ tip RED (P3.278); notes uses single-map reader like auth |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
 | P1 | **Cross-crate module `touch_grid(grid)` must reborrow `&mut Grid`, not `grid.clone()`** | `bug_cross_crate_mut_borrow_module_fn_test` | ✅ tip GREEN (P3.274) — `sig_arg_confirms_owned_emission` must not strip `&mut T` |
 | P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.274) |
@@ -169,16 +170,28 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** cargo-bin 0.50.0 product hexagonal builds still E0308 on `method_label` → demoted `&str`; tip multipass gate is GREEN — verify pin/backport for ecosystem dogfood on cargo-bin.
 
+## P3.278 (2026-09-13) — wj-notes-api dotenv + mid-match HashMap defer-drop
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `config_from_dotenv` via `wj-dotenv` + `wj-config::merge` | ✅ **32/32** on cargo-bin `wj` 0.50.0 |
+| Single-map `notes_config_from_map` (auth shape) | ✅ avoids owned `.get` helper |
+| Gate `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ❌ tip RED — injects `spawn(move \|\| drop(map))` mid-`match` |
+
+**Compiler agent:** defer-drop after owned `HashMap` param must not splice into an open `match map.get(…)` (breaks rustc parse / E0382).
+
 ## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
 
 | Change | Status |
 |--------|--------|
-| Gate `bug_string_concat_nested_owned_must_not_over_borrow_test` | ❌ tip RED (hexagonal) — `overlay_row2(&String::from…)` / `append_overlay_row(&a)` |
-| Same-file transpile | ⚠️ may look GREEN while multipass dogfood over-borrows |
-| Product LedgerKit `domain/string_concat.wj` | ❌ tip api-check WJ0003 cluster (~17) |
+| Gate `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (same-file + hexagonal) — verified 2026-09-14 |
+| Same-file transpile | ✅ |
+| Product LedgerKit `domain/string_concat.wj` | ⏳ re-check tip api-check after pin |
 | Tip binary install | use `scripts/atomic_install_wj.sh` — sandbox `CARGO_TARGET_DIR` leaves `target/release/wj` stale |
 
-**Compiler agent:** owned `string` formals on `concat2` / `overlay_row*` must receive moved owned values at call sites (no `&String::from` / `&local`). Nested helper bodies that already bind `format!("{}{}", …, "")` temps must keep those moves into owned callees.
+**Root cause:** multipass bare-pass demotion treated pub owned `string` formals as Borrowed while codegen still emitted `String`, so call sites over-borrowed (`append_overlay_row(&a)`).
+
+**Fix:** skip bare-pass demotion for pub free-fn text formals; clear `str_ref_optimized` when locking public owned formals; terminal IR reconcile moves owned locals into owned text formals (clone only on reuse).
 
 ## P3.263 (2026-09-13) — tip api-check: owned Draft trait forwarder + product unblock
 
