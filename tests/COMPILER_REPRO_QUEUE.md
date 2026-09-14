@@ -17,6 +17,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
+| P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ❌ tip RED hexagonal (P3.264) — `overlay_row2(&String::from…)` / `append_overlay_row(&a)` |
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
 | P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (2026-09-13) |
 | P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
@@ -155,6 +156,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN |
 
 **Compiler agent:** when multipass demotes impl `method: string` → `&str`, call-site string lits must stay bare (WDB-168 / `.to_string()` twin). Strengthen fixture until it demotes like product.
+
+## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_string_concat_nested_owned_must_not_over_borrow_test` | ❌ tip RED (hexagonal) — `overlay_row2(&String::from…)` / `append_overlay_row(&a)` |
+| Same-file transpile | ⚠️ may look GREEN while multipass dogfood over-borrows |
+| Product LedgerKit `domain/string_concat.wj` | ❌ tip api-check WJ0003 cluster (~17) |
+| Tip binary install | use `scripts/atomic_install_wj.sh` — sandbox `CARGO_TARGET_DIR` leaves `target/release/wj` stale |
+
+**Compiler agent:** owned `string` formals on `concat2` / `overlay_row*` must receive moved owned values at call sites (no `&String::from` / `&local`). Nested helper bodies that already bind `format!("{}{}", …, "")` temps must keep those moves into owned callees.
 
 ## P3.263 (2026-09-13) — tip api-check: owned Draft trait forwarder + product unblock
 
