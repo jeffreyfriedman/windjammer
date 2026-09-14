@@ -46,6 +46,14 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
+            // Owned map/collection helpers that tail-match on `.get` borrow the param —
+            // defer-drop must not splice inside the match (wj-notes-api int_from_map).
+            if body.contains("match ")
+                && (body.contains(&format!("{}.get(", opt.variable))
+                    || body.contains(&format!("{}.get(&", opt.variable)))
+            {
+                continue;
+            }
             new_body.push_str(&self.indent());
             new_body.push_str(&format!(
                 "// DEFER DROP: Deallocate {} ({:?}) in background thread for faster return\n",
