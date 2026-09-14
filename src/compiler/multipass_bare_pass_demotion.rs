@@ -4,6 +4,7 @@
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::{Expression, Item, Program, Statement, Type};
+use std::collections::HashMap;
 
 /// Scan all library programs for bare-identifier call sites and promote callee
 /// `param_ownership` in the merged global registry before per-file codegen.
@@ -32,6 +33,267 @@ pub fn promote_callees_from_bare_pass_callers(
     // chain helpers like `col_string(row, name) -> (Row, string)`).
     restore_owned_returned_formals(registry, programs);
     restore_pub_owned_non_copy_api_formals(registry, programs);
+    restore_owned_formals_for_producer_only_call_sites(registry, programs);
+}
+
+/// WDB-190: when every call site passes an owned producer (`encode_startup(…)`), keep
+/// owned `Vec` formals even if the callee body only probes `.len()` — unlike bare-binding
+/// forwards (`finish_execute(response)`) which stay demotable via bare-pass hints.
+pub fn restore_owned_formals_for_producer_only_call_sites(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+) {
+    let mut kinds: HashMap<(String, usize), ProducerOnlyArgPassKinds> = HashMap::new();
+    for program in programs {
+        collect_producer_only_call_kinds(program, registry, &mut kinds);
+    }
+    for ((key, idx), pass) in kinds {
+        if pass.bare || !pass.producer {
+            continue;
+        }
+        let Some(sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let formal_ty = sig
+            .formal_param_types
+            .get(idx)
+            .or_else(|| sig.param_types.get(idx))
+            .cloned();
+        let Some(formal_ty) = formal_ty else {
+            continue;
+        };
+        if !is_vec_container_type(&formal_ty) {
+            continue;
+        }
+        if !programs_declare_pub_free_fn_vec_formal_at(programs, &key, idx) {
+            continue;
+        }
+        let mut new_sig = sig;
+        new_sig.param_ownership[idx] = OwnershipMode::Owned;
+        let bare = match &formal_ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        if new_sig.param_types.len() > idx {
+            new_sig.param_types[idx] = bare.clone();
+        }
+        if new_sig.formal_param_types.len() > idx {
+            new_sig.formal_param_types[idx] = bare.clone();
+        }
+        if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
+            if flags.len() > idx {
+                flags[idx] = false;
+            }
+        }
+        registry.signatures.insert(key.clone(), new_sig.clone());
+        if let Some(simple) = key.rsplit("::").next() {
+            if simple != key.as_str() && registry.signatures.contains_key(simple) {
+                registry.signatures.insert(simple.to_string(), new_sig);
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct ProducerOnlyArgPassKinds {
+    bare: bool,
+    producer: bool,
+}
+
+fn collect_producer_only_call_kinds(
+    program: &Program,
+    registry: &SignatureRegistry,
+    kinds: &mut HashMap<(String, usize), ProducerOnlyArgPassKinds>,
+) {
+    for item in &program.items {
+        let Item::Function { decl, .. } = item else {
+            continue;
+        };
+        walk_stmts_for_producer_only_kinds(&decl.body, registry, kinds);
+    }
+    for item in &program.items {
+        let Item::Impl { block, .. } = item else {
+            continue;
+        };
+        for method in &block.functions {
+            walk_stmts_for_producer_only_kinds(&method.body, registry, kinds);
+        }
+    }
+}
+
+fn walk_stmts_for_producer_only_kinds<'ast>(
+    stmts: &[&'ast Statement<'ast>],
+    registry: &SignatureRegistry,
+    kinds: &mut HashMap<(String, usize), ProducerOnlyArgPassKinds>,
+) {
+    for stmt in stmts {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => visit_expr_for_producer_only_kinds(expr, registry, kinds),
+            Statement::Let { value, else_block, .. } => {
+                visit_expr_for_producer_only_kinds(value, registry, kinds);
+                if let Some(b) = else_block {
+                    walk_stmts_for_producer_only_kinds(b, registry, kinds);
+                }
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                condition,
+                ..
+            } => {
+                visit_expr_for_producer_only_kinds(condition, registry, kinds);
+                walk_stmts_for_producer_only_kinds(then_block, registry, kinds);
+                if let Some(b) = else_block {
+                    walk_stmts_for_producer_only_kinds(b, registry, kinds);
+                }
+            }
+            Statement::While { body, condition, .. } => {
+                visit_expr_for_producer_only_kinds(condition, registry, kinds);
+                walk_stmts_for_producer_only_kinds(body, registry, kinds);
+            }
+            Statement::For { body, iterable, .. } => {
+                visit_expr_for_producer_only_kinds(iterable, registry, kinds);
+                walk_stmts_for_producer_only_kinds(body, registry, kinds);
+            }
+            Statement::Assignment { value, .. } => {
+                visit_expr_for_producer_only_kinds(value, registry, kinds);
+            }
+            Statement::Match { value, arms, .. } => {
+                visit_expr_for_producer_only_kinds(value, registry, kinds);
+                for arm in arms {
+                    visit_expr_for_producer_only_kinds(&arm.body, registry, kinds);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn visit_expr_for_producer_only_kinds(
+    expr: &Expression,
+    registry: &SignatureRegistry,
+    kinds: &mut HashMap<(String, usize), ProducerOnlyArgPassKinds>,
+) {
+    match expr {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            record_producer_only_call_kinds(function, arguments, registry, kinds);
+            visit_expr_for_producer_only_kinds(function, registry, kinds);
+            for (_, arg) in arguments {
+                visit_expr_for_producer_only_kinds(arg, registry, kinds);
+            }
+        }
+        Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } => {
+            if let Some(callee) = callee_name_from_method(object, method) {
+                record_producer_only_call_kinds_from_name(&callee, arguments, registry, kinds);
+            }
+            visit_expr_for_producer_only_kinds(object, registry, kinds);
+            for (_, arg) in arguments {
+                visit_expr_for_producer_only_kinds(arg, registry, kinds);
+            }
+        }
+        Expression::Block { statements, .. } => {
+            walk_stmts_for_producer_only_kinds(statements, registry, kinds);
+        }
+        Expression::Binary { left, right, .. } => {
+            visit_expr_for_producer_only_kinds(left, registry, kinds);
+            visit_expr_for_producer_only_kinds(right, registry, kinds);
+        }
+        Expression::Unary { operand, .. }
+        | Expression::FieldAccess { object: operand, .. }
+        | Expression::Index { object: operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. }
+        | Expression::Cast { expr: operand, .. } => {
+            visit_expr_for_producer_only_kinds(operand, registry, kinds);
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
+            for elem in elements {
+                visit_expr_for_producer_only_kinds(elem, registry, kinds);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn programs_declare_pub_free_fn_vec_formal_at(
+    programs: &[&Program],
+    callee_key: &str,
+    param_idx: usize,
+) -> bool {
+    let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    programs.iter().any(|program| {
+        program.items.iter().any(|item| {
+            let Item::Function { decl, .. } = item else {
+                return false;
+            };
+            if !(decl.name == simple
+                || callee_key.ends_with(&format!("::{simple}"))
+                || callee_key == decl.name)
+            {
+                return false;
+            }
+            if !decl.is_pub || decl.parent_type.is_some() {
+                return false;
+            }
+            let user_params: Vec<_> = decl.parameters.iter().filter(|p| p.name != "self").collect();
+            user_params
+                .get(param_idx)
+                .is_some_and(|p| is_vec_container_type(&p.type_))
+        })
+    })
+}
+
+fn callee_name_from_method(object: &Expression, method: &str) -> Option<String> {
+    match object {
+        Expression::Identifier { name, .. } => Some(format!("{name}::{method}")),
+        _ => callee_name_from_expr(object).map(|base| format!("{base}::{method}")),
+    }
+}
+
+fn record_producer_only_call_kinds(
+    function: &Expression,
+    arguments: &[(Option<String>, &Expression)],
+    registry: &SignatureRegistry,
+    kinds: &mut HashMap<(String, usize), ProducerOnlyArgPassKinds>,
+) {
+    let Some(callee_name) = callee_name_from_expr(function) else {
+        return;
+    };
+    record_producer_only_call_kinds_from_name(&callee_name, arguments, registry, kinds);
+}
+
+fn record_producer_only_call_kinds_from_name(
+    callee_name: &str,
+    arguments: &[(Option<String>, &Expression)],
+    registry: &SignatureRegistry,
+    kinds: &mut HashMap<(String, usize), ProducerOnlyArgPassKinds>,
+) {
+    for key in callee_registry_keys(callee_name, registry) {
+        for (i, (_, arg)) in arguments.iter().enumerate() {
+            let entry = kinds.entry((key.clone(), i)).or_default();
+            if is_bare_binding_pass(arg) {
+                entry.bare = true;
+            }
+            if matches!(
+                arg,
+                Expression::Call { .. } | Expression::MethodCall { .. }
+            ) {
+                entry.producer = true;
+            }
+        }
+    }
 }
 
 /// WDB-175/178: `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay

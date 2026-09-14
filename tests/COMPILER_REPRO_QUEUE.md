@@ -521,7 +521,11 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | Gate `bug_wdb190_module_file_feed_unified_owned_startup_must_not_borrow_test` (fixture) | ✅ tip GREEN |
 | Fix | `is_public_owned_non_copy_formal_api`: when multipass `restore_pub_owned_non_copy_api_formals` locked registry `Owned` for pub `Vec`, emit owned formal (not readonly-only demotion) |
+| Fix (2026-09-14) | `restore_owned_formals_for_producer_only_call_sites`: when every call site passes an owned producer (`encode_startup(…)`) and none bare-pass a binding, keep pub `Vec` Owned so callers do not emit `&encode_startup(…)` |
+| Analyzer | Module-qualified free calls parsed as `MethodCall` (`station_builder.set_if`) detect MutBorrowed args like `::` Call form |
 | WDB-171 `finish_execute` demoted `&Vec` | ✅ unchanged — registry converged Borrowed from bare-pass callers |
+| Gate `bug_cross_crate_set_if_mut_borrow_test` | ✅ tip GREEN |
+| Gate `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN — readonly early `&str` demotion still skips analyzer-Owned + keeps_owned formals |
 
 ## P3.273 WindjammerDB CQ-C5 — WDB-182/183/184 tip greens + tip-out regen (2026-09-13)
 

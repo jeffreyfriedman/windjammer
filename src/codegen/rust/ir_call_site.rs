@@ -31,8 +31,12 @@ impl<'ast> CodeGenerator<'ast> {
                 if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
                     return false;
                 }
+                if crate::codegen::rust::types::is_windjammer_text_type(t) {
+                    return !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        sig, pidx,
+                    );
+                }
                 matches!(t, Type::Custom(_))
-                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
                     && !crate::codegen::rust::stdlib_method_traits::is_map_type(t)
                     && !crate::codegen::rust::stdlib_method_traits::is_set_type(t)
             })
@@ -5118,10 +5122,59 @@ impl<'ast> CodeGenerator<'ast> {
             self.finalize_owned_outer_formal_call_arg(coerced, arg_expr, wants_ref, wants_owned);
         }
 
-        if wants_owned && !wants_ref && !coerced.ends_with(".clone()") && !coerced.starts_with('&')
+        let callee_owned_text_slot =
+            self.callee_arg_emits_owned_contract(callee_name, arg_index);
+
+        if !wants_ref {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.caller_demoted_non_copy_formal_into_owned_callee(name)
+                    && self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    })
+                    && callee_owned_text_slot
+                    && !coerced.ends_with(".to_string()")
+                {
+                    *coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced),
+                    );
+                }
+            } else if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                && callee_owned_text_slot
+                && !coerced.ends_with(".to_string()")
+            {
+                *coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced),
+                );
+            }
+        }
+
+        if wants_owned
+            && !wants_ref
+            && crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+            && callee_owned_text_slot
+            && !coerced.ends_with(".to_string()")
+        {
+            *coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                crate::codegen::rust::expression_utilities::borrow_base_expr(coerced),
+            );
+        }
+
+        if wants_owned && !wants_ref && !coerced.ends_with(".clone()")
         {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if self.for_loop_borrow_needed.contains(name) {
+                if self.caller_demoted_non_copy_formal_into_owned_callee(name)
+                    && self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    })
+                    && !coerced.ends_with(".to_string()")
+                    && callee_owned_text_slot
+                {
+                    *coerced = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced),
+                    );
+                } else if self.for_loop_borrow_needed.contains(name) {
                     let base =
                         crate::codegen::rust::expression_utilities::borrow_base_expr(coerced);
                     if !base.starts_with('&') {

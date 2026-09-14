@@ -495,6 +495,50 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    fn is_lowercase_module_identifier(expr: &Expression) -> bool {
+        matches!(
+            expr,
+            Expression::Identifier { name, .. }
+                if name.chars().next().is_some_and(|c| c.is_lowercase())
+        )
+    }
+
+    /// `station_builder.set_if` / `module::func` style callees from a MethodCall receiver.
+    fn method_call_module_qualified_name(object: &Expression, method: &str) -> Option<String> {
+        if Self::is_lowercase_module_identifier(object) {
+            if let Expression::Identifier { name, .. } = object {
+                return Some(format!("{name}::{method}"));
+            }
+        }
+        Self::call_expr_qualified_name(object).map(|prefix| format!("{prefix}::{method}"))
+    }
+
+    fn arg_passed_to_mut_borrowed_callee(
+        &self,
+        _name: &str,
+        func_name: &str,
+        function: &Expression,
+        arg_index: usize,
+        registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
+    ) -> bool {
+        if let Some(sig) = Self::lookup_call_signature(registry, func_name) {
+            if sig
+                .param_ownership_for_arg(arg_index)
+                .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
+            {
+                return true;
+            }
+        } else if (Self::is_external_module_call(function)
+            || Self::is_lowercase_module_identifier(function))
+            && arg_index == 0
+            && param_type_hint.is_some_and(|ty| !self.is_copy_type(ty))
+        {
+            return true;
+        }
+        false
+    }
+
     /// True when `name` is passed to a call whose callee expects `&mut` at that argument index.
     fn param_passed_to_mut_borrowed_call_arg(
         &self,
@@ -513,20 +557,14 @@ impl<'ast> Analyzer<'ast> {
             let Some(func_name) = func_name else {
                 continue;
             };
-            if let Some(sig) = Self::lookup_call_signature(registry, &func_name) {
-                if sig
-                    .param_ownership_for_arg(i)
-                    .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
-                {
-                    return true;
-                }
-            } else if Self::is_external_module_call(function)
-                && i == 0
-                && param_type_hint.is_some_and(|ty| !self.is_copy_type(ty))
-            {
-                // Cross-crate module calls often mutate the first non-Copy argument (e.g.
-                // `station_builder::set_if(grid, ...)`). When engine metadata omits the callee,
-                // infer mutation from the call pattern instead of cloning at every callsite.
+            if self.arg_passed_to_mut_borrowed_callee(
+                name,
+                &func_name,
+                function,
+                i,
+                registry,
+                param_type_hint,
+            ) {
                 return true;
             }
         }
@@ -559,7 +597,12 @@ impl<'ast> Analyzer<'ast> {
         param_type_hint: Option<&Type>,
     ) -> bool {
         match expr {
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 if self.is_in_receiver_chain(name, object) {
                     let receiver_base = self.receiver_type_base_for_param_method_call(
                         name,
@@ -582,19 +625,37 @@ impl<'ast> Analyzer<'ast> {
                     return false;
                 }
 
+                // Module-qualified free calls parse as MethodCall (`station_builder.set_if`).
+                if let Some(func_name) =
+                    Self::method_call_module_qualified_name(object, method)
+                {
+                    for (i, (_, arg)) in arguments.iter().enumerate() {
+                        if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
+                            && self.arg_passed_to_mut_borrowed_callee(
+                                name,
+                                &func_name,
+                                object,
+                                i,
+                                registry,
+                                param_type_hint,
+                            )
+                        {
+                            return true;
+                        }
+                    }
+                }
+
                 // HashMap/HashSet key args are Borrowed (`&Q`), never MutBorrowed.
                 // Signature loop below decides MutBorrowed from param_ownership — do not
                 // short-circuit on method-name lists (Vec::remove shares "remove").
-                if let Expression::MethodCall { arguments, .. } = expr {
-                    for (i, (_, arg)) in arguments.iter().enumerate() {
-                        if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
-                            if let Some(sig) = registry.lookup_method(method) {
-                                if sig
-                                    .param_ownership_for_arg(i)
-                                    .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
-                                {
-                                    return true;
-                                }
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                        if let Some(sig) = registry.lookup_method(method) {
+                            if sig
+                                .param_ownership_for_arg(i)
+                                .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
+                            {
+                                return true;
                             }
                         }
                     }
