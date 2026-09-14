@@ -289,6 +289,16 @@ impl<'ast> CodeGenerator<'ast> {
             } else if narrow_unsigned(right) && left_is_usize {
                 right_str = format!("{right_str} as usize");
                 skip_mixed_int_promotion = true;
+            } else if right_is_usize && !left_is_usize {
+                if let Some(width) = self.expression_unsigned_width_for_len_cast(left) {
+                    right_str = format!("({right_str} as {width})");
+                    skip_mixed_int_promotion = true;
+                }
+            } else if left_is_usize && !right_is_usize {
+                if let Some(width) = self.expression_unsigned_width_for_len_cast(right) {
+                    left_str = format!("({left_str} as {width})");
+                    skip_mixed_int_promotion = true;
+                }
             }
         }
 

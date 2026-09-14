@@ -424,6 +424,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         };
                         crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+                            Some(self),
                             arg,
                             &mut arg_str,
                             formal,

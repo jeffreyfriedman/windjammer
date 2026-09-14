@@ -235,6 +235,9 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         if let Some(t) = self.infer_expression_type(expr) {
+            if Self::unsigned_int_width_for_len_cast(&t).is_some() {
+                return false;
+            }
             if Self::type_is_signed_int_for_len_usize_comparison(&t) {
                 return true;
             }
@@ -264,6 +267,43 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
+    }
+
+    /// When comparing `u64` (etc.) against `.len()`, cast the **len** side to that width — not `i64`.
+    pub(in crate::codegen::rust) fn unsigned_int_width_for_len_cast(ty: &Type) -> Option<&'static str> {
+        match ty {
+            Type::Uint => Some("u32"),
+            Type::Custom(name) => match name.as_str() {
+                "u8" => Some("u8"),
+                "u16" => Some("u16"),
+                "u32" => Some("u32"),
+                "u64" => Some("u64"),
+                "u128" => Some("u128"),
+                _ => None,
+            },
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::unsigned_int_width_for_len_cast(inner.as_ref())
+            }
+            _ => None,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn expression_unsigned_width_for_len_cast(
+        &self,
+        expr: &Expression,
+    ) -> Option<&'static str> {
+        self.infer_expression_type(expr)
+            .as_ref()
+            .and_then(Self::unsigned_int_width_for_len_cast)
+            .or_else(|| {
+                if let Expression::Identifier { name, .. } = expr {
+                    self.local_var_types
+                        .get(name)
+                        .and_then(Self::unsigned_int_width_for_len_cast)
+                } else {
+                    None
+                }
+            })
     }
 
     /// Cast a `usize`-producing expression to the target int type when needed.

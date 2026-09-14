@@ -412,9 +412,10 @@ impl<'ast> CodeGenerator<'ast> {
                     None
                 }
             }
-            // Literal expressions: directly known types
+            // Literal expressions: unsuffixed ints default to i32 (Rust); WJ `int`/`i64`
+            // only when an explicit context demands it (assignment_int_target / return).
             Expression::Literal { value, .. } => match value {
-                Literal::Int(_) => Some(Type::Int),
+                Literal::Int(_) => Some(Type::Int32),
                 // `0_usize`, `256_i64`, etc. — map suffix to Rust primitive name for comparisons/codegen.
                 Literal::IntSuffixed(_, suffix) => Some(Type::Custom(suffix.clone())),
                 Literal::Float(_) => Some(Type::Float),

@@ -5840,8 +5840,19 @@ impl<'ast> CodeGenerator<'ast> {
                 // Arithmetic / deref on a param is not an owned payload store.
                 false
             }
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Add,
+                left,
+                ..
+            } => {
+                // `ItemView { name: name + "" }` stores through owned string concat (make_view).
+                matches!(
+                    &**left,
+                    Expression::Identifier { name, .. } if name == param_name
+                )
+            }
             Expression::Binary { .. } => {
-                // `x = x + 1` / comparisons only read the param — not a struct/enum/tuple store.
+                // Other binary ops only read the param — not a struct/enum/tuple store.
                 false
             }
             Expression::MacroInvocation { name, args, .. } => {

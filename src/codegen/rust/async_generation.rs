@@ -5,7 +5,7 @@
 //! - Channel operations (send/recv)
 //! - Range expressions (start..end, start..=end)
 
-use crate::parser::Expression;
+use crate::parser::{Expression, Type};
 
 use super::CodeGenerator;
 
@@ -78,17 +78,62 @@ impl<'ast> CodeGenerator<'ast> {
 
         // P3.280: peer-drive int literal suffixes from the other bound's type
         // (`(cx - 16)..(cx + 16)` with cx:i32 → `16_i32`, not default `_i64`).
+        // Prefer specific widths over WJ-default `int` when one bound is a typed
+        // const/local (`0..LOGICAL_SIZE` with LOGICAL_SIZE:i32). Pure-literal
+        // ranges (`0..2`) default to i32 (Rust unsuffixed).
         let prev_range_int = self.assignment_int_target_type.clone();
         if self.assignment_int_target_type.is_none() {
-            let bound_ty = self
-                .infer_expression_type(start)
-                .or_else(|| self.infer_expression_type(end))
-                .filter(|t| {
-                    Self::assignment_target_needs_int_codegen_context(t)
-                        && Self::int_type_from_assignment_target(t).is_some()
-                });
-            if let Some(t) = bound_ty {
-                self.assignment_int_target_type = Some(t);
+            let start_ty = self.infer_expression_type(start);
+            let end_ty = self.infer_expression_type(end);
+            let bound_ty = match (start_ty, end_ty) {
+                (Some(a), Some(b)) if a != b => {
+                    if matches!(a, Type::Int)
+                        && Self::assignment_target_needs_int_codegen_context(&b)
+                        && !matches!(b, Type::Int)
+                    {
+                        Some(b)
+                    } else if matches!(b, Type::Int)
+                        && Self::assignment_target_needs_int_codegen_context(&a)
+                        && !matches!(a, Type::Int)
+                    {
+                        Some(a)
+                    } else if Self::assignment_target_needs_int_codegen_context(&a) {
+                        Some(a)
+                    } else if Self::assignment_target_needs_int_codegen_context(&b) {
+                        Some(b)
+                    } else {
+                        None
+                    }
+                }
+                (Some(t), _) | (_, Some(t))
+                    if Self::assignment_target_needs_int_codegen_context(&t)
+                        && Self::int_type_from_assignment_target(&t).is_some() =>
+                {
+                    Some(t)
+                }
+                _ => None,
+            };
+            let both_literal_ints = matches!(
+                start,
+                Expression::Literal {
+                    value: crate::parser::Literal::Int(_),
+                    ..
+                }
+            ) && matches!(
+                end,
+                Expression::Literal {
+                    value: crate::parser::Literal::Int(_),
+                    ..
+                }
+            );
+            if both_literal_ints {
+                self.assignment_int_target_type = Some(Type::Int32);
+            } else if let Some(t) = bound_ty {
+                self.assignment_int_target_type = if matches!(t, Type::Int) {
+                    Some(Type::Int32)
+                } else {
+                    Some(t)
+                };
             }
         }
 

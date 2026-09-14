@@ -60,6 +60,16 @@ pub fn build_ring_band() -> i32 {
     }
     count
 }
+
+pub fn literal_range_band() -> i32 {
+    // Pure-literal ranges must not default to WJ `int`/`_i64` (voxel loops).
+    let mut count = 0
+    for dy in (-1)..3 {
+        count = count + 1
+        let _ = dy
+    }
+    count
+}
 "#;
 
 fn fixture() -> MultiFileTest {

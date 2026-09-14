@@ -414,26 +414,41 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         coerced = gen.maybe_auto_clone_expr_path(arg, &coerced, Some(func_name), Some(i));
                     }
                     if let Expression::Identifier { name, .. } = arg {
-                        if let Some(sig) = peel_sig.as_ref() {
+                        let sig_for_str_borrow = peel_sig.clone().or_else(|| {
+                            gen.get_signature_with_global(func_name)
+                                .cloned()
+                                .or_else(|| signature.clone())
+                        });
+                        if let Some(sig) = sig_for_str_borrow.as_ref() {
                             let pidx = sig.arg_param_index(i);
                             let callee_wants_str = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 sig, pidx,
                             ) || sig.param_types.get(pidx).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            });
-                            if callee_wants_str
-                                && gen.current_function_params.iter().any(|p| {
+                            })
+                                || sig.formal_param_type(pidx).is_some_and(|t| {
+                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                                });
+                            let caller_owned_text_formal = gen.current_function_params.iter().any(
+                                |p| {
                                     p.name == *name
                                         && crate::codegen::rust::types::is_windjammer_text_type(
                                             &p.type_,
                                         )
-                                })
-                                && !gen.emitted_rust_ref_formals.contains(name)
-                                && !gen.str_ref_optimized_params.contains(name)
+                                },
+                            ) && !gen.emitted_rust_ref_formals.contains(name)
+                                && !gen.str_ref_optimized_params.contains(name);
+                            if callee_wants_str
+                                && caller_owned_text_formal
                                 && !coerced.starts_with('&')
                                 && !coerced.starts_with("&mut ")
                             {
-                                coerced = format!("&{coerced}");
+                                coerced = format!(
+                                    "&{}",
+                                    crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                        &coerced,
+                                    )
+                                );
                             }
                         }
                         let callee_mut = gen.callee_slot_emits_mut_borrow(func_name, i)
