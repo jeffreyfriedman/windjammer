@@ -157,6 +157,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** when multipass demotes impl `method: string` → `&str`, call-site string lits must stay bare (WDB-168 / `.to_string()` twin). Strengthen fixture until it demotes like product.
 
+## P3.275 (2026-09-13) — wj-notes-api validate + mime dogfood
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-validate` title/body + `wj-mime` `Content-Type` on notes | ✅ **29/29** on cargo-bin `wj` 0.50.0 |
+| Adapter uses `handle_http(HttpMethod)` (same as auth) | ✅ cargo-bin still E0308 on `method_label` → demoted `method: &str` |
+| Gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin product residual |
+
+**Compiler agent:** strengthen multipass/module-file fixture so owned helper returns into demoted `&str` formals auto-borrow under hexagonal `domain/` + `adapters/` (cargo-bin 0.50.0 still RED without `handle_http`).
+
 ## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
 
 | Change | Status |

@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
+  hexagonal_string_concat_nested_owned_must_not_over_borrow
+  string_concat_nested_owned_must_not_over_borrow
 )
 
 GREEN_FILTERS=(
