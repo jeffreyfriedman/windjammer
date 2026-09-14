@@ -846,6 +846,9 @@ pub fn call_site_expects_owned_pass(sig: &FunctionSignature, param_idx: usize) -
 /// at call sites. The two sources can diverge on edge cases (documented in parity gates);
 /// this helper preserves the conservative union both previously encoded.
 pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: usize) -> bool {
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return false;
+    }
     if sig
         .forwarding_borrow_params
         .as_ref()

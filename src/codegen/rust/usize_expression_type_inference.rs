@@ -170,17 +170,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Field access: self.field_name or obj.field_name (including nested)
             Expression::FieldAccess { object, field, .. } => {
-                if field == "0" {
-                    if let Expression::Identifier { name, .. } = &**object {
-                        if self.usize_variables.contains(name)
-                            || self
-                                .local_var_types
-                                .get(name.as_str())
-                                .is_some_and(|t| matches!(t, Type::Tuple(_)))
-                        {
-                            return true;
-                        }
-                    }
+                // Numeric tuple index: only usize when that element is usize (not `(u64, bool).0`).
+                if field.chars().all(|c| c.is_ascii_digit()) {
+                    return self.infer_expression_type_is_usize(expr);
                 }
                 // Check if accessing a usize field on self (fast path)
                 if let Expression::Identifier { name: obj_name, .. } = &**object {
