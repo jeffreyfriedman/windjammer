@@ -1,0 +1,50 @@
+// FAILING REPRO — nested concat2 / overlay_row helpers must not over-borrow
+// owned string formals (LedgerKit domain/string_concat.wj tip api-check).
+//
+// Tip RED: concat2(left: string, right: string) call sites emit &String into
+// owned String formals → WJ0003 "arguments to this function are incorrect".
+
+/// Owned concat of two strings (single + in emitted Rust per call).
+pub fn concat2(left: string, right: string) -> string {
+    (left + "") + (right + "")
+}
+
+/// Append row and newline to overlay body.
+pub fn append_overlay_row(body: string, row: string) -> string {
+    concat2(body + "", concat2(row + "", "\n" + ""))
+}
+
+/// Two pipe-separated fields with trailing newline.
+pub fn overlay_row2(field_a: string, field_b: string) -> string {
+    concat2(concat2(field_a + "", "|" + ""), concat2(field_b + "", "\n" + ""))
+}
+
+/// Three pipe-separated fields with trailing newline.
+pub fn overlay_row3(field_a: string, field_b: string, field_c: string) -> string {
+    concat2(
+        concat2(field_a + "", "|" + ""),
+        concat2(concat2(field_b + "", "|" + ""), concat2(field_c + "", "\n" + "")),
+    )
+}
+
+/// Four pipe-separated fields with trailing newline.
+pub fn overlay_row4(
+    field_a: string,
+    field_b: string,
+    field_c: string,
+    field_d: string,
+) -> string {
+    concat2(
+        concat2(field_a + "", "|" + ""),
+        concat2(
+            concat2(field_b + "", "|" + ""),
+            concat2(concat2(field_c + "", "|" + ""), concat2(field_d + "", "\n" + "")),
+        ),
+    )
+}
+
+pub fn dogfood() -> string {
+    let a = overlay_row2("line-1", "je-9")
+    let b = append_overlay_row(a, overlay_row3("x", "y", "z"))
+    append_overlay_row(b, overlay_row4("1", "2", "3", "4"))
+}
