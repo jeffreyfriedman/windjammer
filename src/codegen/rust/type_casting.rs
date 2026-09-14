@@ -167,6 +167,7 @@ pub fn coerce_arg_str_for_usize_formal(
             | Expression::Tuple { .. }
     ) || arg_str.contains(".to_string()")
         || arg_str.contains("String::")
+        || arg_str.contains("format!(")
     {
         return;
     }

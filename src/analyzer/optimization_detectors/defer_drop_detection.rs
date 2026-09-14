@@ -46,9 +46,16 @@ impl<'ast> Analyzer<'ast> {
                                 .body
                                 .last()
                                 .is_some_and(|stmt| self.statement_uses_identifier(&param.name, stmt));
+                            let borrowed_in_tail_match = func.body.last().is_some_and(|stmt| {
+                                matches!(stmt, Statement::Match { value, .. }
+                                    if self.expression_uses_identifier(&param.name, value))
+                            });
                             let consumed_before_return =
                                 self.param_consumed_before_return(&param.name, func.body.as_slice());
-                            if !still_live_at_return && !consumed_before_return {
+                            if !still_live_at_return
+                                && !borrowed_in_tail_match
+                                && !consumed_before_return
+                            {
                                 optimizations.push(DeferDropOptimization {
                                     variable: param.name.clone(),
                                     estimated_size: param_size,

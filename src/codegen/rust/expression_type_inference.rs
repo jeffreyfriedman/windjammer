@@ -422,10 +422,33 @@ impl<'ast> CodeGenerator<'ast> {
                 Literal::String(_) => Some(Type::String),
                 _ => None,
             },
-            // Binary operations: infer from operands (result usually matches operand type)
-            Expression::Binary { left, right, .. } => self
-                .infer_expression_type(left)
-                .or_else(|| self.infer_expression_type(right)),
+            // Binary operations: infer from operands (result usually matches operand type).
+            // P3.280: when one side is default WJ `int` (i64) and the other is a specific
+            // width (i32 const/param), prefer the specific width so `let cx = CONST / 2`
+            // records i32 and range literals emit `_i32` not `_i64`.
+            Expression::Binary { left, right, .. } => {
+                let l = self.infer_expression_type(left);
+                let r = self.infer_expression_type(right);
+                match (l, r) {
+                    (Some(a), Some(b)) if a != b => {
+                        if matches!(a, Type::Int)
+                            && Self::assignment_target_needs_int_codegen_context(&b)
+                            && !matches!(b, Type::Int)
+                        {
+                            Some(b)
+                        } else if matches!(b, Type::Int)
+                            && Self::assignment_target_needs_int_codegen_context(&a)
+                            && !matches!(a, Type::Int)
+                        {
+                            Some(a)
+                        } else {
+                            Some(a)
+                        }
+                    }
+                    (Some(t), _) | (_, Some(t)) => Some(t),
+                    (None, None) => None,
+                }
+            }
             // Cast expressions: the target type is explicit
             Expression::Cast { type_, .. } => Some(type_.clone()),
             // Call expressions: Type::method(args) → look up return type from signature registry
