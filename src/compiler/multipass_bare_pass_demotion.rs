@@ -228,6 +228,37 @@ fn visit_expr_for_producer_only_kinds(
     }
 }
 
+fn programs_declare_pub_free_fn_owned_custom_formal_at(
+    programs: &[&Program],
+    callee_key: &str,
+    param_idx: usize,
+    copy_types: &std::collections::HashSet<String>,
+) -> bool {
+    let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    programs.iter().any(|program| {
+        program.items.iter().any(|item| {
+            let Item::Function { decl, .. } = item else {
+                return false;
+            };
+            if !(decl.name == simple
+                || callee_key.ends_with(&format!("::{simple}"))
+                || callee_key == decl.name)
+            {
+                return false;
+            }
+            if !decl.is_pub || decl.parent_type.is_some() {
+                return false;
+            }
+            let user_params: Vec<_> = decl.parameters.iter().filter(|p| p.name != "self").collect();
+            user_params.get(param_idx).is_some_and(|p| {
+                matches!(&p.type_, Type::Custom(name)
+                    if !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        && !is_copy_formal_name(name, copy_types))
+            })
+        })
+    })
+}
+
 fn programs_declare_pub_free_fn_vec_formal_at(
     programs: &[&Program],
     callee_key: &str,
@@ -1677,6 +1708,16 @@ fn callee_pub_owned_formal_skip_bare_pass(
         !crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
             && !is_copy_formal_name(name, &std::collections::HashSet::new())
     }) {
+        // WDB-192/174: pub APIs declare owned Custom formals in source — keep owned
+        // even when a single caller bare-passes (`job_store_load_jobs(store, …)`).
+        if programs_declare_pub_free_fn_owned_custom_formal_at(
+            programs,
+            callee_key,
+            param_idx,
+            &std::collections::HashSet::new(),
+        ) {
+            return true;
+        }
         return programs_have_multi_callee_bare_probe_for_target(programs, simple);
     }
     false

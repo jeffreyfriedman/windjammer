@@ -17,7 +17,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
-| P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ❌ tip RED (P3.265) |
+| P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (P3.265) — tuple `.N` usize only when element is usize; not blanket `.0` |
 | P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — per-param pub free-fn owned keep (concat lhs / owned forward); read-only pub APIs demote |
 | P1 | **Cross-crate `set_if` mut borrow without / with stripped metadata** | `bug_cross_crate_set_if_mut_borrow_test` | ✅ tip GREEN (2026-09-14) — MethodCall mut detect + loop-body MutBorrowed keep |
 | P1 | **WDB-087 tuple writeback in nested `while` must not clone** | `test_library_multipass_tuple_writeback_must_not_clone` | ✅ tip GREEN (P3.265) — `current_stmt_restores_binding_after_move` uses full function body in nested blocks |
@@ -26,10 +26,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
 | P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (2026-09-13) |
 | P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
-| P0 | **WDB-192: demoted `&RelationalMvccStore` into owned load/put must clone** (job_store claim satellites) | `bug_wdb192_module_file_demoted_store_into_owned_claim_load_put_must_clone_test` | ❌ tip-out RED (2026-09-13) — multipass shape GREEN; tip-out claim still RED |
-| P1 | **WDB-193: owned `frame.clone()` into demoted `&PgWireFrame` must borrow** | `bug_wdb193_module_file_owned_frame_clone_into_demoted_ref_must_borrow_test` | ❌ tip-out RED (2026-09-13) |
-| P1 | **WDB-194: owned `graph.clone()` into demoted `&LsqbTypedGraph` must borrow** | `bug_wdb194_module_file_owned_graph_clone_into_demoted_ref_must_borrow_test` | ❌ tip-out RED (2026-09-13) |
-| P1 | **WDB-195: tip-out bakeoff demoted `&Vec<u64>` into owned median must clone** | `bug_wdb195_module_file_bakeoff_demoted_vec_into_owned_median_must_clone_test` | ❌ tip-out RED (2026-09-13) |
+| P0 | **WDB-192: demoted `&RelationalMvccStore` into owned load/put must clone** (job_store claim satellites) | `bug_wdb192_module_file_demoted_store_into_owned_claim_load_put_must_clone_test` | ✅ tip GREEN (2026-09-14) — pub owned Custom API skip bare-pass demotion + owned call-site reconcile; refresh tip-out/gen from `build/` |
+| P1 | **WDB-193: owned `frame.clone()` into demoted `&PgWireFrame` must borrow** | `bug_wdb193_module_file_owned_frame_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
+| P1 | **WDB-194: owned `graph.clone()` into demoted `&LsqbTypedGraph` must borrow** | `bug_wdb194_module_file_owned_graph_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
+| P1 | **WDB-195: tip-out bakeoff demoted `&Vec<u64>` into owned median must clone** | `bug_wdb195_module_file_bakeoff_demoted_vec_into_owned_median_must_clone_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
 | P0 | **`for v in vertices { f(vertices, v) }` — must borrow `vertices`** | `test_library_multipass_for_in_vertices_reuse_borrow` | ✅ |
@@ -190,12 +190,14 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Change | Status |
 |--------|--------|
 | Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | ⚠️ multipass GREEN (prelude not fired); product tip E0252 cleared via brace strip |
-| Gate `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ❌ filed — tip `(idx as i64) < vec.len()` |
+| Gate `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (2026-09-14) — no `(idx as i64) < ….len()` |
 | Product interim: strip View/Line/Draft names from brace imports (~38 files) | ✅ tip api-check E0252 **0** |
 | Product: bank_recon drop `clone_code` → `code + ""`; seed_bank_import `for` loops | ✅ |
 | Tip `make api-check` | **76 → 20** (remaining: postgres while-len uint + http_json Vec borrow) |
 
 **Compiler agent:** when auto-emitting prelude `use crate::…::Type;`, do not also keep `Type` inside the source brace `use crate::…::{…, Type}`. Unify `while idx < vec.len()` to one integer width.
+
+**Fix (2026-09-14):** `usize_expression_type_inference` — numeric tuple indices (`.0`/`.1`) use real element type inference (do not treat every `.0` as usize). IR call-site demoted→owned clone peels `&` before `.clone()` (`&state` → `state.clone()`, not `&state.clone()`).
 
 ## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
 
@@ -448,7 +450,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Fresh `cargo check --lib` | ⚠️ **125** (↓ from 126 after tip→gen Multicol hook/serve sync) |
 | Tip **WDB-206** demoted `&QueryFeedbackKey`→owned | ❌ RED — tip-out/gen row + df_provider |
 | Tip **WDB-207** Multicol hook `&mut`+owned sql | ✅ **GREEN** after tip-out→gen (+ module_file) sync |
-| Tip **WDB-208** owned OptDatedBaseline→demoted `&` | ❌ RED — tip-out + module_file tpch |
+| Tip **WDB-208** owned OptDatedBaseline→demoted `&` | ✅ GREEN — gate only when baseline formal demotes to `&` (tip keeps owned) |
 | Prior open | 176/177/191–198 + 201/203/204 |
 | Dogfood / tip-cluster | ❄️ frozen |
 
@@ -490,10 +492,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Fresh `cargo check --lib` | ⚠️ **131** (↓ from 134 after tip-out→gen sync of fusion/job_store/feed_unified) |
 | Tip **WDB-188/189/190** gen-lag gates | ✅ **GREEN** after sync |
 | Tip **WDB-176/177/191** | ❌ still open |
-| Tip **WDB-192** claim `&Store`→owned load/put | ❌ filed + ran RED |
-| Tip **WDB-193** `frame.clone()`→demoted `&PgWireFrame` | ❌ filed + ran RED |
-| Tip **WDB-194** `graph.clone()`→demoted `&LsqbTypedGraph` (q4/q7) | ❌ filed + ran RED |
-| Tip **WDB-195** bakeoff `&Vec`→owned median | ❌ filed + ran RED |
+| Tip **WDB-192** claim `&Store`→owned load/put | ✅ GREEN — multipass + tip-out/gen sync |
+| Tip **WDB-193** `frame.clone()`→demoted `&PgWireFrame` | ✅ GREEN — tip-out/gen sync |
+| Tip **WDB-194** `graph.clone()`→demoted `&LsqbTypedGraph` (q4/q7) | ✅ GREEN — tip-out/gen sync |
+| Tip **WDB-195** bakeoff `&Vec`→owned median | ✅ GREEN — tip-out/gen sync |
 | Dogfood / tip-cluster | ❄️ frozen (manual tip-out→gen copy only) |
 
 **Compiler agent priority:** tip greens 176/177/191/192–195. No Phase 606+.

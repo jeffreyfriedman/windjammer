@@ -3132,7 +3132,6 @@ impl<'ast> CodeGenerator<'ast> {
             if self.caller_demoted_non_copy_formal_into_owned_callee(name)
                 && !arg_str.ends_with(".clone()")
                 && !arg_str.ends_with(".to_string()")
-                && !arg_str.starts_with('&')
                 && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                     sig, param_idx,
                 )
@@ -3152,7 +3151,9 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str),
                     )
                 } else {
-                    format!("{arg_str}.clone()")
+                    let base =
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str);
+                    format!("{base}.clone()")
                 }
             } else {
                 arg_str.to_string()
@@ -3284,10 +3285,30 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     .flatten()
                     .any(|gs| {
-                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             gs, pidx,
                         )
+                            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                gs, pidx,
+                            )
                     })
+            })
+        };
+        let global_or_local_confirms_owned_emission = || {
+            self.ir_callee_arg_emits_owned_contract(
+                registry,
+                callee_name,
+                arg_index,
+                user_arg_count,
+                Some(&sig),
+            ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+                self.ir_callee_arg_emits_owned_contract(
+                    g,
+                    callee_name,
+                    arg_index,
+                    user_arg_count,
+                    Some(&sig),
+                )
             })
         };
 
@@ -3771,10 +3792,10 @@ impl<'ast> CodeGenerator<'ast> {
         // (ReBAC `contains_string(&out)` into `items: Vec<String>`).
         {
             let owned_pidx = text_sig.arg_param_index(arg_index);
-            let callee_emits_shared =
-                crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+            let callee_emits_shared = !global_or_local_confirms_owned_emission()
+                && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                     &text_sig, owned_pidx,
-                ) || global_confirms_shared_ref(owned_pidx);
+                ) || global_confirms_shared_ref(owned_pidx));
             let bare_is_vec = text_sig
                 .formal_param_type(owned_pidx)
                 .or_else(|| text_sig.param_types.get(owned_pidx))
@@ -3794,7 +3815,8 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             );
             let owned_slot = !callee_emits_shared
-                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                && (global_or_local_confirms_owned_emission()
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 &text_sig, owned_pidx,
             ) || (crate::ir::signature_bridge::call_site_expects_owned_pass(
                 &text_sig, owned_pidx,
@@ -4231,7 +4253,6 @@ impl<'ast> CodeGenerator<'ast> {
                 && !coerced.ends_with(".clone()")
                 && !coerced.ends_with(".to_string()")
                 && !coerced.ends_with(".to_owned()")
-                && !coerced.starts_with('&')
             {
                 let callee_wants_shared = global_confirms_shared_ref(param_idx)
                     || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
@@ -4280,11 +4301,42 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                         }
                     } else {
-                        *coerced = format!("{coerced}.clone()");
+                        let base =
+                            crate::codegen::rust::expression_utilities::borrow_base_expr(coerced);
+                        *coerced = format!("{base}.clone()");
                     }
                     return;
                 }
             }
+        }
+
+        let callee_emits_owned = !global_confirms_shared_ref(param_idx)
+            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+                || Self::sig_arg_confirms_owned_emission(sig, arg_index)
+                || self.ir_callee_arg_emits_owned_contract(
+                    registry,
+                    callee_name,
+                    arg_index,
+                    user_arg_count,
+                    Some(sig),
+                )
+                || self.global_signature_registry.as_ref().is_some_and(|g| {
+                    self.ir_callee_arg_emits_owned_contract(
+                        g,
+                        callee_name,
+                        arg_index,
+                        user_arg_count,
+                        Some(sig),
+                    )
+                }));
+        if callee_emits_owned {
+            if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                *coerced =
+                    crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                        coerced,
+                    );
+            }
+            return;
         }
 
         let wants_shared = global_confirms_shared_ref(param_idx)
@@ -5227,7 +5279,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 crate::codegen::rust::expression_utilities::borrow_base_expr(coerced),
                             );
                         } else {
-                            *coerced = format!("{coerced}.clone()");
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(coerced);
+                            *coerced = format!("{base}.clone()");
                         }
                     }
                 }

@@ -31,6 +31,12 @@ fn wdb208_tip_out_tpch_baseline_must_borrow_into_demoted_is_set() {
         gen.join("relational/tpch_opt_port.rs"),
         gen.join("relational_module_file/tpch_opt_port.rs"),
     ];
+    let baseline_port = gen.join("stats/opt_dated_baseline_port.rs");
+    let baseline_demoted = baseline_port.exists()
+        && std::fs::read_to_string(&baseline_port)
+            .expect("baseline port")
+            .contains("fn opt_dated_baseline_is_set(baseline: &OptDatedBaseline");
+
     let mut saw = false;
     for path in &paths {
         if !path.exists() {
@@ -38,20 +44,22 @@ fn wdb208_tip_out_tpch_baseline_must_borrow_into_demoted_is_set() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("tpch");
-        // Bad: bare owned call without &
-        let bad_b = text.contains("opt_dated_baseline_is_set(b)")
+        // Only RED when callee formal is demoted `&OptDatedBaseline` (WDB-181 pattern).
+        let bad_b = baseline_demoted
+            && text.contains("opt_dated_baseline_is_set(b)")
             && !text.contains("opt_dated_baseline_is_set(&b)");
-        let bad_fn = text.contains("opt_dated_baseline_is_set(tpch_sf1_dated_baseline())")
+        let bad_fn = baseline_demoted
+            && text.contains("opt_dated_baseline_is_set(tpch_sf1_dated_baseline())")
             && !text.contains("opt_dated_baseline_is_set(&tpch_sf1_dated_baseline())");
         let bad = bad_b || bad_fn;
         eprintln!(
-            "WDB-208 bad_b={} bad_fn={} bad={} path={}",
+            "WDB-208 demoted={} bad_b={} bad_fn={} bad={} path={}",
+            baseline_demoted,
             bad_b,
             bad_fn,
             bad,
             path.display()
         );
-        // Enforce on tip-out (source of truth) and module_file lag
         if path.to_string_lossy().contains("rel_tip_out")
             || path.to_string_lossy().contains("module_file")
         {

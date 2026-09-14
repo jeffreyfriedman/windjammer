@@ -64,12 +64,92 @@ pub fn claim_next(store: MvccStore, snapshot: int) -> MvccStore {
 }
 "#;
 
+const CLAIM_OWNED_MOVE: &str = r#"
+use crate::store::MvccStore
+use crate::store::load_jobs
+
+/// Owned outer formal, single use — move into owned callee (product claim port line 23).
+pub fn claim_move_store(store: MvccStore, snapshot: int) -> MvccStore {
+    let loaded = load_jobs(store, snapshot)
+    loaded
+}
+"#;
+
 fn wdb192_fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("store.wj", STORE);
     test.add_file("claim.wj", CLAIM);
     test
+}
+
+#[test]
+fn wdb192_product_claim_port_must_move_store_into_owned_load_jobs() {
+    let mut test = MultiFileTest::new();
+    test.add_file(
+        "mod.wj",
+        r#"
+pub mod observability
+"#,
+    );
+    test.add_file(
+        "observability/observability_job_store_port.wj",
+        r#"
+pub struct JobRecord {
+    pub id: string,
+}
+
+pub fn job_store_load_jobs(store: MvccStore, snapshot: u64) -> (MvccStore, Vec<JobRecord>) {
+    (store, Vec::new())
+}
+
+pub struct MvccStore {
+    pub n: int,
+}
+"#,
+    );
+    test.add_file(
+        "observability/observability_job_store_claim_port.wj",
+        r#"
+use crate::observability::observability_job_store_port::job_store_load_jobs
+use crate::observability::observability_job_store_port::MvccStore
+
+pub fn job_store_claim_next(store: MvccStore, snapshot: u64) -> MvccStore {
+    let loaded = job_store_load_jobs(store, snapshot)
+    loaded.0
+}
+"#,
+    );
+    let map = test
+        .compile()
+        .expect("WDB-192 claim port multipass compile should succeed");
+    let claim_rs = map
+        .get("observability/observability_job_store_claim_port.rs")
+        .expect("claim rs");
+    assert!(
+        !claim_rs.contains("job_store_load_jobs(&store,"),
+        "WDB-192 RED: claim port must not borrow into owned load_jobs. Got:\n{claim_rs}"
+    );
+}
+
+#[test]
+fn wdb192_module_file_owned_store_into_owned_load_must_move_not_borrow() {
+    let mut test = MultiFileTest::new();
+    test.add_file("mod.wj", MOD);
+    test.add_file("store.wj", STORE);
+    test.add_file("claim.wj", CLAIM_OWNED_MOVE);
+    let map = test
+        .compile()
+        .expect("WDB-192 owned-move multipass compile should succeed");
+    let claim_rs = map.get("claim.rs").expect("claim.rs");
+    assert!(
+        !claim_rs.contains("load_jobs(&store,"),
+        "WDB-192 RED: owned store must move into owned load_jobs, not borrow. Got:\n{claim_rs}"
+    );
+    assert!(
+        claim_rs.contains("load_jobs(store,") || claim_rs.contains("load_jobs(store.clone(),"),
+        "WDB-192: expected move or clone into owned load_jobs. Got:\n{claim_rs}"
+    );
 }
 
 #[test]
