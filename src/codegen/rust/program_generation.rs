@@ -105,25 +105,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.module_string_consts.insert(name);
         }
         for item in &program.items {
-            if let Item::Const {
-                name,
-                type_,
-                value,
-                ..
-            } = item
-            {
-                if crate::codegen::rust::types::is_windjammer_text_type(type_)
-                    && matches!(
-                        value,
-                        Expression::Literal {
-                            value: Literal::String(_),
-                            ..
-                        }
-                    )
-                {
-                    self.module_string_consts.insert(name.clone());
-                }
-            }
+            self.register_module_const_metadata(item);
         }
 
         // PRE-PASS: Collect types that implement Drop (cannot derive Copy, Rust E0184)
@@ -1209,6 +1191,43 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         for ty in types {
             self.copy_types_registry.remove(&ty);
             self.non_copy_types_registry.insert(ty);
+        }
+    }
+
+    fn register_module_const_metadata(&mut self, item: &Item<'ast>) {
+        match item {
+            Item::Const {
+                name,
+                type_,
+                value,
+                ..
+            }
+            | Item::Static {
+                name,
+                type_,
+                value,
+                ..
+            } => {
+                self.module_const_types
+                    .insert(name.clone(), type_.clone());
+                if crate::codegen::rust::types::is_windjammer_text_type(type_)
+                    && matches!(
+                        value,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    )
+                {
+                    self.module_string_consts.insert(name.clone());
+                }
+            }
+            Item::Mod { items, .. } => {
+                for sub in items {
+                    self.register_module_const_metadata(sub);
+                }
+            }
+            _ => {}
         }
     }
 }
