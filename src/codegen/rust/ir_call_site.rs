@@ -186,6 +186,21 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         };
         let mut prepared_arg = match arg_expr {
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Deref,
+                operand,
+                ..
+            } if self.expression_is_copy(operand)
+                || self.infer_expression_type(operand).is_some_and(|t| {
+                    matches!(
+                        t,
+                        Type::Reference(inner) | Type::MutableReference(inner)
+                            if self.is_type_copy(inner.as_ref())
+                    )
+                }) =>
+            {
+                arg_str.to_string()
+            }
             Expression::Identifier { .. }
                 if (!skip_auto_clone_for_borrow || auto_clone_wants)
                     && !skip_auto_clone_for_field_extract
@@ -1213,6 +1228,23 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.is_type_copy(pointee) {
                     kind = CoercionKind::Identity;
                 }
+            } else if let Expression::Unary {
+                op: crate::parser::UnaryOp::Deref,
+                operand,
+                ..
+            } = arg_expr
+            {
+                if self.expression_is_copy(operand)
+                    || self.infer_expression_type(operand).is_some_and(|t| {
+                        matches!(
+                            t,
+                            Type::Reference(inner) | Type::MutableReference(inner)
+                                if self.is_type_copy(inner.as_ref())
+                        )
+                    })
+                {
+                    kind = CoercionKind::Identity;
+                }
             }
         }
         if matches!(kind, CoercionKind::Deref | CoercionKind::StripBorrow) {
@@ -2012,6 +2044,20 @@ impl<'ast> CodeGenerator<'ast> {
                         || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             borrow_sig, borrow_idx,
                         )))
+            {
+                coerced = format!("&{coerced}");
+            }
+            if local_reuse_after
+                && binding_is_text_param
+                && !coerced.starts_with('&')
+                && !callee_emits_owned
+                && (self.ir_sig_arg_expects_shared_borrow(borrow_sig, arg_index)
+                    || borrow_sig
+                        .formal_param_type(borrow_idx)
+                        .or_else(|| borrow_sig.param_types.get(borrow_idx))
+                        .is_some_and(
+                            crate::codegen::rust::string_utilities::param_is_rust_str_ref,
+                        ))
             {
                 coerced = format!("&{coerced}");
             }
@@ -6534,9 +6580,28 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                     if analysis_wants_clone {
                         if !self.callee_arg_emits_owned_contract(callee, idx)
-                            && self.callee_arg_expects_borrow_at_call(callee, idx)
+                            && (self.callee_arg_expects_borrow_at_call(callee, idx)
+                                || self.ir_callee_arg_expects_shared_borrow(
+                                    &self.signature_registry,
+                                    callee,
+                                    idx,
+                                    None,
+                                    None,
+                                )
+                                || self.global_signature_registry.as_ref().is_some_and(|g| {
+                                    self.ir_callee_arg_expects_shared_borrow(
+                                        g, callee, idx, None, None,
+                                    )
+                                }))
                         {
-                            return arg_str.to_string();
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    arg_str,
+                                );
+                            if base.starts_with('&') {
+                                return base.to_string();
+                            }
+                            return format!("&{base}");
                         }
                         return self.maybe_auto_clone(name, arg_str);
                     }
@@ -6560,6 +6625,18 @@ impl<'ast> CodeGenerator<'ast> {
                             self.ir_callee_arg_expects_shared_borrow(g, callee, idx, None, None)
                         }))
                     {
+                        let reuse_after =
+                            self.local_binding_reused_after_current_statement(name);
+                        if reuse_after {
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    arg_str,
+                                );
+                            if base.starts_with('&') {
+                                return base.to_string();
+                            }
+                            return format!("&{base}");
+                        }
                         return arg_str.to_string();
                     }
                 }
@@ -6567,6 +6644,16 @@ impl<'ast> CodeGenerator<'ast> {
                     if !self.callee_arg_emits_owned_contract(callee, idx)
                         && self.callee_arg_expects_borrow_at_call(callee, idx)
                     {
+                        if self.local_binding_reused_after_current_statement(name) {
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    arg_str,
+                                );
+                            if base.starts_with('&') {
+                                return base.to_string();
+                            }
+                            return format!("&{base}");
+                        }
                         return arg_str.to_string();
                     }
                 }

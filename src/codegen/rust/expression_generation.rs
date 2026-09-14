@@ -101,19 +101,25 @@ impl<'ast> CodeGenerator<'ast> {
                 // then user-written `Some(*v)` — same policy as `generate_unary`).
                 if matches!(op, UnaryOp::Deref) {
                     if let Expression::Identifier { name, .. } = &**operand {
+                        let pointee_is_copy = self
+                            .infer_expression_type(operand)
+                            .as_ref()
+                            .is_some_and(|t| match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    self.is_type_copy(inner.as_ref())
+                                }
+                                other => self.is_type_copy(other),
+                            });
                         let is_borrowed = self.inferred_borrowed_params.contains(name.as_str())
                             || self.borrowed_iterator_vars.contains(name);
                         let is_local_ref = self.local_var_types.get(name.as_str()).is_some_and(|t| {
                             matches!(t, Type::Reference(_) | Type::MutableReference(_))
                         });
-                        if !is_borrowed && !is_local_ref {
-                            let is_copy = self
-                                .infer_expression_type(operand)
-                                .as_ref()
-                                .is_some_and(|t| self.is_type_copy(t));
-                            if is_copy {
-                                return self.generate_expression_immut(operand);
-                            }
+                        if pointee_is_copy && (is_borrowed || is_local_ref) {
+                            return format!("*{name}");
+                        }
+                        if !is_borrowed && !is_local_ref && pointee_is_copy {
+                            return self.generate_expression_immut(operand);
                         }
                     }
                 }
