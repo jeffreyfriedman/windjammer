@@ -453,6 +453,21 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.281 WindjammerDB CQ-C5 — coverage REDs WDB-209–213 binder/Session/Fill/Timeseries/OptEcon (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~523** (tip-out regen churn; was ~125 earlier this session — binder/pg_wire tip regression) |
+| Tip **WDB-209** `catalog_push_column` `&mut CatalogColumnBinding` | ❌ RED — tip-out/gen demote owned col |
+| Tip **WDB-210** `&mut Wave1Sf1Session`→owned clock | ✅ **GREEN** — tip uses `sess.clone()`; tip→gen sync |
+| Tip **WDB-211** `fill_bundle_from_six` `&mut OptOperatorFill` | ✅ **GREEN** after tip→gen (+ module_file) sync |
+| Tip **WDB-212** owned Timeseries batch→demoted `&` | ❌ RED — ops_full_host tip-out/gen |
+| Tip **WDB-213** demoted/`&mut` OptEconLedger→owned | ✅ **GREEN** after tip tpch owned formal sync |
+| Prior open | 176/177/191–198 + 201/203/204/206/208 |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **209/212** (binder mut demotion + Timeseries borrow) + prior open REDs. Tip churn flipped binder owned→`&mut`. No Phase 606+.
+
 ## P3.280 WindjammerDB CQ-C5 — coverage REDs WDB-206–208 FeedbackKey / Multicol hook / OptDatedBaseline (2026-09-14)
 
 | Gate | Status |
