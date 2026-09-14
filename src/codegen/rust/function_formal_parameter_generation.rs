@@ -2497,8 +2497,29 @@ impl<'ast> CodeGenerator<'ast> {
                                 &param.name,
                                 func,
                             );
+                            let format_only_string =
+                                crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                    && self.param_used_as_read_operand(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                    )
+                                    && !self.param_passed_as_call_argument(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    )
+                                    && !self.param_stored_in_owned_payload(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                    )
+                                    && !self.param_has_owning_method_use(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    );
                             let str_ref_ok = (self.str_ref_optimized_params.contains(&param.name)
                                 || analyzed.str_ref_optimizable_params.contains(&param.name)
+                                || format_only_string
                                 || self.param_only_forwards_to_borrowed_text_callees(
                                     func.body.as_slice(),
                                     &param.name,
@@ -2510,6 +2531,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     func,
                                 )
                                 && !asref_fwd;
+                            if format_only_string {
+                                self.str_ref_optimized_params.insert(param.name.clone());
+                            }
                             if asref_fwd {
                                 if _debug_formal {
                                     eprintln!("[FORMAL-ASREF-FWD] fn={} param={} asref_fwd=true → Owned", func.name, param.name);
@@ -2909,8 +2933,11 @@ impl<'ast> CodeGenerator<'ast> {
                                         // contract). Readonly `.get()` must not flip to `&HashMap`
                                         // while call sites still pass owned maps.
                                         self.type_to_rust(formal_type)
-                                    } else if self.is_public_owned_non_copy_formal_api(param, func) {
+                                    } else if self.is_public_owned_non_copy_formal_api(param, func)
+                                        && !self.for_loop_borrow_needed.contains(&param.name)
+                                    {
                                         // WDB-175/178: pub module APIs keep owned Vec/Custom formals.
+                                        // Exception: `for v in vertices { f(vertices, v) }` demotes to `&Vec`.
                                         self.inferred_borrowed_params.remove(&param.name);
                                         self.emitted_rust_ref_formals.remove(&param.name);
                                         self.type_to_rust(&param.type_)

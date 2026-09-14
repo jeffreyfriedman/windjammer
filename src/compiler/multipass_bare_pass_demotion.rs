@@ -768,7 +768,14 @@ fn callee_registry_keys(callee_name: &str, registry: &SignatureRegistry) -> Vec<
 }
 
 fn is_bare_binding_pass(expr: &Expression) -> bool {
-    matches!(expr, Expression::Identifier { .. })
+    matches!(
+        expr,
+        Expression::Identifier { .. }
+            | Expression::Literal {
+                value: crate::parser::Literal::String(_),
+                ..
+            }
+    )
 }
 
 fn bare_pass_target_ownership(
@@ -1249,7 +1256,10 @@ fn callee_pub_owned_formal_skip_bare_pass(
         return false;
     }
     if is_vec_container_type(formal_ty) {
-        return true;
+        // WDB-175/190: lock owned pub `Vec` only when callers bare-pass the same binding
+        // into this callee and at least one other (product `buf_len` + `decode_startup`).
+        // Readonly pub helpers (`vertex_lookup_len`) stay demotable for for-in reuse.
+        return programs_have_multi_callee_bare_probe_for_target(programs, simple);
     }
     if matches!(formal_ty, Type::Custom(name) if {
         !crate::codegen::rust::types::is_windjammer_text_type(formal_ty)

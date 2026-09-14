@@ -404,7 +404,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-196** feed_unified lit/`&str`→owned String | filed — tip-out encode + unified sql |
 | Tip **WDB-197** live_row `&artifact`→owned quiet | filed — tip-out live_port |
 | Tip **WDB-198** search_host `distance: 0.1_f32` | filed — tip-out search_host |
-| Tip **WDB-199** `&mut Value`→owned secondary_key | filed — product secondary_index |
+| Tip **WDB-199** `&mut Value`→owned secondary_key | ✅ **GREEN** after tip-out→gen sync |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 176/177/191–199. No Phase 606+.

@@ -1708,7 +1708,22 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.ir_sig_arg_expects_shared_borrow(&callee_sig, arg_index)
                     || self.ir_sig_arg_expects_mut_borrow(&callee_sig, arg_index);
                 if !formal_is_copy && !callee_accepts_ref_reborrow {
-                    coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
+                    if matches!(
+                        arg_expr,
+                        Expression::Identifier { name, .. }
+                            if self.for_loop_borrow_needed.contains(name)
+                    ) {
+                        let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                            &coerced,
+                        );
+                        coerced = if base.starts_with('&') {
+                            base.to_string()
+                        } else {
+                            format!("&{base}")
+                        };
+                    } else {
+                        coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
+                    }
                 }
             } else if !coerced.ends_with(".clone()") {
                 let skip_user_closure_param = matches!(
@@ -1757,7 +1772,22 @@ impl<'ast> CodeGenerator<'ast> {
                             }),
                         }
                     {
-                        coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
+                        if matches!(
+                            arg_expr,
+                            Expression::Identifier { name, .. }
+                                if self.for_loop_borrow_needed.contains(name)
+                        ) {
+                            let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &coerced,
+                            );
+                            if !base.starts_with('&') {
+                                coerced = format!("&{base}");
+                            } else {
+                                coerced = base.to_string();
+                            }
+                        } else {
+                            coerced = format!("{}.clone()", coerced.trim_start_matches('&'));
+                        }
                     }
                 }
                 }
@@ -1933,6 +1963,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && borrow_sig.emitted_rust_ref_params.as_ref().and_then(|flags| {
                         flags.get(borrow_idx).copied()
                     }) == Some(false));
+            let local_reuse_after = self.local_binding_reused_after_current_statement(name);
             if !collision_blocks_autoborrow
                 && !local_shadows_owned_formal
                 && !coerced.starts_with('&')
@@ -1943,6 +1974,15 @@ impl<'ast> CodeGenerator<'ast> {
                 && callee_wants_shared
                 && !callee_emits_owned
                 && !callee_owned_text_formal
+                && !(local_reuse_after
+                    && (callee_owned_text_formal
+                        || self.preregistered_free_call_arg_emits_owned(
+                            callee_name,
+                            arg_index,
+                        )
+                        || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            borrow_sig, borrow_idx,
+                        )))
             {
                 coerced = format!("&{coerced}");
             }
@@ -2502,6 +2542,56 @@ impl<'ast> CodeGenerator<'ast> {
             coerced = coerced[1..].to_string();
         }
 
+        // Terminal reconcile: for-loop iterable reuse and local owned-string moves.
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.for_loop_borrow_needed.contains(name) {
+                if self.inferred_borrowed_params.contains(name) {
+                    coerced = name.clone();
+                } else if coerced.ends_with(".clone()") {
+                    let base = coerced
+                        .trim_end_matches(".clone()")
+                        .trim()
+                        .trim_start_matches('&');
+                    coerced = format!("&{base}");
+                } else if !coerced.starts_with('&') {
+                    coerced = format!(
+                        "&{}",
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                    );
+                }
+            } else {
+                let local_owned_text = self.local_var_types.get(name).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::codegen::rust::types::is_windjammer_text_type(t)
+                }) || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::codegen::rust::types::is_windjammer_text_type(&t)
+                });
+                let reuse_after_move = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                    a.needs_clone(name, self.current_statement_idx).is_some()
+                }) || {
+                    let later: Vec<&Statement<'ast>> = self
+                        .current_function_body
+                        .iter()
+                        .skip(self.current_statement_idx + 1)
+                        .copied()
+                        .collect();
+                    !later.is_empty() && Self::variable_used_in_statements(&later, name)
+                };
+                if local_owned_text && reuse_after_move {
+                    let base = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                        .trim_end_matches(".clone()")
+                        .trim()
+                        .to_string();
+                    if !base.ends_with(".clone()") {
+                        coerced = format!("{base}.clone()");
+                    } else {
+                        coerced = base;
+                    }
+                }
+            }
+        }
+
         Some(coerced)
     }
 
@@ -2756,6 +2846,48 @@ impl<'ast> CodeGenerator<'ast> {
         // When reuse requires clone but a stale shared-borrow prefix was applied
         // (`&value` into owned `value: Value`), strip `&` and clone (regression-063).
         if arg_str.starts_with('&') {
+            let callee_owned_emission = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                sig, param_idx,
+            ) || self.preregistered_free_call_arg_emits_owned(
+                &sig.name,
+                param_idx.saturating_sub(usize::from(sig.has_self_receiver_slot())),
+            );
+            let needs = match arg_expr {
+                Expression::Identifier { name, .. } => {
+                    self.local_binding_reused_after_current_statement(name)
+                }
+                Expression::FieldAccess { .. } | Expression::Index { .. } => {
+                    self.auto_clone_analysis.as_ref().is_some_and(|analysis| {
+                        Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                            analysis
+                                .needs_clone(&path, self.current_statement_idx)
+                                .is_some()
+                        })
+                    })
+                }
+                _ => false,
+            };
+            if needs
+                && callee_owned_emission
+                && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &self.signature_registry,
+                    &sig.name,
+                    Some(sig),
+                    param_idx.saturating_sub(usize::from(sig.has_self_receiver_slot())),
+                )
+            {
+                let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
+                let skip = match arg_expr {
+                    Expression::Identifier { name, .. } => {
+                        self.binding_is_copy_pass_by_value_scalar(name)
+                    }
+                    _ => false,
+                };
+                if !skip {
+                    return format!("{base}.clone()");
+                }
+                return base.to_string();
+            }
             let Some(ref analysis) = self.auto_clone_analysis else {
                 return arg_str.to_string();
             };
@@ -2775,9 +2907,7 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => false,
             };
             if needs
-                && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    sig, param_idx,
-                )
+                && callee_owned_emission
                 && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                     &self.signature_registry,
                     &sig.name,
@@ -3252,6 +3382,15 @@ impl<'ast> CodeGenerator<'ast> {
                     // a homonym stub (`NoteStore::get`).
                     if is_ck && coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                         // keep existing borrow
+                    } else if matches!(
+                        arg_expr,
+                        Expression::Call { .. } | Expression::MethodCall { .. }
+                    ) && (self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
+                        || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            &sig, param_idx,
+                        ))
+                    {
+                        // WDB-169/WDB-190: owned call temps move — no shared-ref reapply.
                     } else {
                     let mut expected =
                         crate::ir::signature_bridge::safety_type_from_signature_param(
@@ -3327,6 +3466,7 @@ impl<'ast> CodeGenerator<'ast> {
         // stale Borrowed stub — dogfood `policy: Policy`).
         self.peel_stale_borrow_for_multi_candidate_owned_formal(
             coerced,
+            arg_expr,
             callee_name,
             arg_index,
             &sig,
@@ -4372,9 +4512,29 @@ impl<'ast> CodeGenerator<'ast> {
     /// Multi-candidate owned-formal peel: any defining-module / global / local
     /// signature that confirms owned emission wins over stale Borrowed stubs.
     /// Signature-driven only — no method-name ownership heuristics.
+    fn peel_owned_borrow_to_move_or_clone(
+        &self,
+        coerced: &mut String,
+        arg_expr: &Expression<'ast>,
+    ) {
+        let base =
+            crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.local_binding_reused_after_current_statement(name)
+                && !self.binding_is_copy_pass_by_value_scalar(name)
+                && !base.ends_with(".clone()")
+            {
+                *coerced = format!("{base}.clone()");
+                return;
+            }
+        }
+        *coerced = base;
+    }
+
     pub(crate) fn peel_stale_borrow_for_multi_candidate_owned_formal(
         &self,
         coerced: &mut String,
+        arg_expr: &Expression<'ast>,
         callee_name: &str,
         arg_index: usize,
         primary_sig: &crate::analyzer::FunctionSignature,
@@ -4455,8 +4615,7 @@ impl<'ast> CodeGenerator<'ast> {
             && (coerced.starts_with('&') || coerced.starts_with("&mut "))
             && !self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
         {
-            *coerced =
-                crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+            self.peel_owned_borrow_to_move_or_clone(coerced, arg_expr);
             return;
         }
         let mut_arg_emitted = self
@@ -4520,15 +4679,13 @@ impl<'ast> CodeGenerator<'ast> {
                 && (any_emitted_owned || any_expects_owned)
                 && !mut_arg_emitted
             {
-                *coerced =
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+                self.peel_owned_borrow_to_move_or_clone(coerced, arg_expr);
             } else if !any_expects_mut
                 && coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && (any_emitted_owned || any_expects_owned)
             {
-                *coerced =
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).to_string();
+                self.peel_owned_borrow_to_move_or_clone(coerced, arg_expr);
             }
         }
     }
@@ -5133,7 +5290,12 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) {
-        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index) {
+        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+            && !self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
+            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                sig, param_idx,
+            )
+        {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if self.current_function_params.iter().any(|p| p.name == *name)
                     && !coerced.starts_with('&')
@@ -5146,7 +5308,12 @@ impl<'ast> CodeGenerator<'ast> {
                     return;
                 }
             }
-            if !coerced.starts_with('&')
+            // WDB-169/WDB-190: Call/MethodCall temps into owned formals must move, not `&call()`.
+            if !matches!(
+                arg_expr,
+                Expression::Call { .. } | Expression::MethodCall { .. }
+            )
+                && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
             {

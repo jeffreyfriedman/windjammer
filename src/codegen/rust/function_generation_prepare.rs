@@ -3608,6 +3608,33 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Block { statements, .. } => {
                 self.param_passed_as_call_argument(statements.as_slice(), param_name, func)
             }
+            Expression::MacroInvocation { name, args, .. } => {
+                // Formatting macros only borrow — not owned callee forwards (regression-048).
+                let borrows_only = matches!(
+                    name.as_str(),
+                    "format"
+                        | "println"
+                        | "print"
+                        | "eprintln"
+                        | "eprint"
+                        | "write"
+                        | "writeln"
+                        | "panic"
+                        | "debug"
+                        | "info"
+                        | "warn"
+                        | "error"
+                        | "trace"
+                        | "log"
+                );
+                if borrows_only {
+                    false
+                } else {
+                    args.iter().any(|arg| {
+                        self.expression_passes_param_as_call_argument(arg, param_name, func)
+                    })
+                }
+            }
             _ => false,
         }
     }

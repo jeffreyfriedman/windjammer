@@ -220,6 +220,16 @@ fn apply_owned_string_literal_coercion<'ast>(
         ) {
             continue;
         }
+        if sig.as_ref().is_some_and(|s| {
+            let idx = s.arg_param_index(i);
+            crate::ir::signature_bridge::call_site_expects_shared_borrow(s, idx)
+                || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx)
+                || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                    s, i,
+                )
+        }) {
+            continue;
+        }
         // `@string_ref` / `&String`: `"lit"` → `&"lit".to_string()`.
         let is_string_ref_formal = sig.as_ref().is_some_and(|s| {
             s.string_ref_string_formal_for_arg(i)
