@@ -365,9 +365,10 @@ pub fn rust_use_path_from_module_to_type(
     let lcp = longest_common_prefix_len(current_module, defining_module);
     let ups = current_module.len().saturating_sub(lcp);
     let down = &defining_module[lcp..];
-    // Crate-root files (e.g. `main.wj` → module `["main"]`) import siblings via `crate::`,
-    // not `super::math::…` (which would escape the crate root incorrectly).
-    if lcp == 0 && ups == current_module.len() && !down.is_empty() {
+    // Crate-root files importing nested modules (e.g. `main.wj` → `math::vec2::Vec2`) use
+    // `crate::…`. Flat siblings at the same depth (`manager.wj` → `user::User`) use `super::…`
+    // so auto-imports match library module layout when a user glob suppresses `use super::*`.
+    if lcp == 0 && ups == current_module.len() && down.len() > 1 {
         let mut path = String::from("crate::");
         path.push_str(&down.join("::"));
         path.push_str("::");
@@ -551,7 +552,7 @@ pub struct Manager {
         let def = vec!["user".into()];
         assert_eq!(
             rust_use_path_from_module_to_type(&cur, &def, "User").as_deref(),
-            Some("crate::user::User")
+            Some("super::user::User")
         );
     }
 

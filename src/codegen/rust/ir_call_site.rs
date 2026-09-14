@@ -1310,11 +1310,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         // IR contract pass: when Identity was forced above but `expected` is still Ref,
         // re-apply borrow from SafetyType (not the legacy should_borrow decision tree).
-        crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
-            &mut coerced,
-            &actual,
-            &expected,
-        );
+        let user_explicit_deref =
+            crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr);
+        if !user_explicit_deref {
+            crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
+                &mut coerced,
+                &actual,
+                &expected,
+            );
+        }
         let arg_binding_already_rust_ref = matches!(
             arg_expr,
             Expression::Identifier { name, .. }
@@ -1919,7 +1923,9 @@ impl<'ast> CodeGenerator<'ast> {
                     Some(&sig),
                 )
             });
+            let local_shadows_owned_formal = self.local_owned_binding_shadows_formal(name);
             if !collision_blocks_autoborrow
+                && !local_shadows_owned_formal
                 && !coerced.starts_with('&')
                 && !coerced.ends_with(".clone()")
                 && !self.emitted_rust_ref_formals.contains(name)
@@ -2460,6 +2466,28 @@ impl<'ast> CodeGenerator<'ast> {
                     coerced = name.clone();
                 }
             }
+            if self.local_owned_binding_shadows_formal(name)
+                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, param_idx,
+                ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                    &sig, arg_index,
+                ))
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                coerced = coerced.trim_start_matches('&').to_string();
+            }
+        }
+        if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
+            && coerced.starts_with("&*")
+        {
+            coerced = coerced[1..].to_string();
+        } else if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
+            && matches!(arg_expr, Expression::FieldAccess { .. })
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            coerced = coerced[1..].to_string();
         }
 
         Some(coerced)
@@ -3137,6 +3165,7 @@ impl<'ast> CodeGenerator<'ast> {
             || global_confirms_shared_ref(param_idx);
         if allow_shared
             && !skip_stale_borrow
+            && !crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
             && !crate::codegen::rust::expression_helpers::is_reference_expression(arg_expr)
         {
             let skip_recursive_owned = matches!(
@@ -3951,6 +3980,26 @@ impl<'ast> CodeGenerator<'ast> {
             user_arg_count,
             &global_confirms_shared_ref,
         );
+
+        if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            *coerced = coerced[1..].to_string();
+        }
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.local_owned_binding_shadows_formal(name)
+                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &sig, param_idx,
+                ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                    &sig, arg_index,
+                ))
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                *coerced = coerced.trim_start_matches('&').to_string();
+            }
+        }
     }
 
     /// Terminal multipass ownership fixes when importer registry stubs disagree with

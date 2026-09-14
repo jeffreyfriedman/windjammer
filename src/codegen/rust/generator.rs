@@ -2358,7 +2358,18 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Narrower than [`Self::identifier_already_ref`]: match/`let` bindings may appear in
     /// `inferred_borrowed_params` for callee-flow analysis without being emitted as `&` in Rust.
+    /// `let x = …` rebinds the same name as an outer formal with an owned local type.
+    pub(crate) fn local_owned_binding_shadows_formal(&self, name: &str) -> bool {
+        self.local_var_types.get(name).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        }) && self.current_function_params.iter().any(|p| p.name == name)
+    }
+
     pub(crate) fn binding_emits_as_rust_shared_ref(&self, name: &str) -> bool {
+        // `let password = own(password)` shadows an outer formal — the local is owned.
+        if self.local_owned_binding_shadows_formal(name) {
+            return false;
+        }
         if self.emitted_rust_ref_formals.contains(name) {
             return true;
         }
