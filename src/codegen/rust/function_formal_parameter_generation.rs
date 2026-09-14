@@ -649,6 +649,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
+                    && !analyzed.returned_parameters.contains(&param.name)
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());

@@ -1598,17 +1598,33 @@ pub fn restore_owned_returned_formals(
             let Some(formal_ty) = formal_ty else {
                 continue;
             };
-            let bare = match formal_ty {
-                Type::Custom(name) => name.clone(),
-                Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+            let wj_string_formal = new_sig
+                .formal_param_types
+                .get(idx)
+                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                || new_sig
+                    .param_types
+                    .get(idx)
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+            let demoted_str_formal = new_sig.param_types.get(idx).is_some_and(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            });
+            let owned_ty = if wj_string_formal || demoted_str_formal {
+                Type::String
+            } else {
+                let bare = match formal_ty {
                     Type::Custom(name) => name.clone(),
+                    Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                        Type::Custom(name) => name.clone(),
+                        _ => continue,
+                    },
                     _ => continue,
-                },
-                _ => continue,
+                };
+                if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
+                    continue;
+                }
+                Type::Custom(bare)
             };
-            if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
-                continue;
-            }
             let Some((param_name, body)) =
                 find_function_body_for_registry_key(programs, &key, idx)
             else {
@@ -1620,7 +1636,6 @@ pub fn restore_owned_returned_formals(
                 continue;
             }
             new_sig.param_ownership[idx] = OwnershipMode::Owned;
-            let owned_ty = Type::Custom(bare);
             if new_sig.param_types.len() > idx {
                 new_sig.param_types[idx] = owned_ty.clone();
             }

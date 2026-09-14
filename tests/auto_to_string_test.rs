@@ -178,7 +178,9 @@ fn test_mixed_str_and_string_params() {
     // Both params used in string concatenation → both may be String (owned) or one may be &str
     let has_valid = generated.contains("process(\"test\".to_string(), \".txt\")")
         || generated.contains("process(\"test\".to_string(), &\".txt\")")
-        || generated.contains("process(\"test\".to_string(), \".txt\".to_string())");
+        || generated.contains("process(\"test\".to_string(), \".txt\".to_string())")
+        || generated.contains("process(String::from(\"test\"), \".txt\")")
+        || generated.contains("process(String::from(\"test\"), \".txt\".to_string())");
     assert!(
         has_valid,
         "Should convert String params correctly. Generated:\n{}",
