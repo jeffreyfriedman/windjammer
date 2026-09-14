@@ -2977,6 +2977,25 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Param bound into a returned struct field (e.g. `ItemView { name: name + "" }`).
+    pub(in crate::codegen::rust) fn param_used_in_return_struct_string_field(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            matches!(
+                stmt,
+                Statement::Return {
+                    value: Some(Expression::StructLiteral { fields, .. }),
+                    ..
+                } if fields.iter().any(|(_, field_expr)| {
+                    self.expression_uses_param_as_read_operand(field_expr, param_name)
+                })
+            )
+        })
+    }
+
     /// `param` used as the owned lhs of string `+` (P3.264 concat2 / overlay_row).
     pub(in crate::codegen::rust) fn param_used_as_owned_string_add_operand(
         &self,
@@ -2994,10 +3013,22 @@ impl<'ast> CodeGenerator<'ast> {
                     right,
                     ..
                 } => {
-                    matches!(
+                    let readonly_empty_append = matches!(
                         &**left,
                         Expression::Identifier { name, .. } if name == param_name
-                    ) || expr_uses_owned_add_lhs(left, param_name)
+                    ) && matches!(
+                        &**right,
+                        Expression::Literal {
+                            value: crate::parser::Literal::String(s),
+                            ..
+                        } if s.is_empty()
+                    );
+                    (!readonly_empty_append
+                        && matches!(
+                            &**left,
+                            Expression::Identifier { name, .. } if name == param_name
+                        ))
+                        || expr_uses_owned_add_lhs(left, param_name)
                         || expr_uses_owned_add_lhs(right, param_name)
                 }
                 Expression::Binary { left, right, .. } => {

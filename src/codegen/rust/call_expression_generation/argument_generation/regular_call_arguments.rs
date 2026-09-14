@@ -385,6 +385,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 )
                         });
                         if callee_owned
+                            && !gen.callee_arg_expects_borrow_at_call(func_name, i)
                             && gen.local_binding_reused_after_current_statement(name)
                             && !coerced.ends_with(".clone()")
                         {
@@ -411,6 +412,49 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         })
                     {
                         coerced = gen.maybe_auto_clone_expr_path(arg, &coerced, Some(func_name), Some(i));
+                    }
+                    if let Expression::Identifier { name, .. } = arg {
+                        if let Some(sig) = peel_sig.as_ref() {
+                            let pidx = sig.arg_param_index(i);
+                            let callee_wants_str = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                sig, pidx,
+                            ) || sig.param_types.get(pidx).is_some_and(|t| {
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            });
+                            if callee_wants_str
+                                && gen.current_function_params.iter().any(|p| {
+                                    p.name == *name
+                                        && crate::codegen::rust::types::is_windjammer_text_type(
+                                            &p.type_,
+                                        )
+                                })
+                                && !gen.emitted_rust_ref_formals.contains(name)
+                                && !gen.str_ref_optimized_params.contains(name)
+                                && !coerced.starts_with('&')
+                                && !coerced.starts_with("&mut ")
+                            {
+                                coerced = format!("&{coerced}");
+                            }
+                        }
+                        let callee_mut = gen.callee_slot_emits_mut_borrow(func_name, i)
+                            || peel_sig.as_ref().is_some_and(|sig| {
+                                let pidx = sig.arg_param_index(i);
+                                matches!(
+                                    sig.param_ownership.get(pidx),
+                                    Some(crate::analyzer::OwnershipMode::MutBorrowed),
+                                ) || sig.param_types.get(pidx).is_some_and(|t| {
+                                    matches!(t, crate::parser::Type::MutableReference(_))
+                                })
+                            });
+                        if gen.caller_emits_mut_ref_formal(name) && callee_mut {
+                            coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &coerced,
+                            )
+                            .to_string();
+                            crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                                &mut coerced,
+                            );
+                        }
                     }
                     return vec![coerced];
                 }

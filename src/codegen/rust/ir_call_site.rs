@@ -1219,7 +1219,10 @@ impl<'ast> CodeGenerator<'ast> {
         // Never strip explicit user `.clone()` — WDB-106/108.
         if prepared_arg.ends_with(".clone()")
             && matches!(kind, CoercionKind::Borrow)
-            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
+            && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
+                || sig.param_types.get(param_idx).is_some_and(|t| {
+                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                }))
             && !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr)
         {
             prepared_arg = prepared_arg.trim_end_matches(".clone()").to_string();
@@ -1901,6 +1904,33 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
             }
         }
+        if coerced.ends_with(".clone()") {
+            let callee_wants_mut = self.ir_sig_arg_expects_mut_borrow(&callee_sig, arg_index)
+                || self.ir_callee_arg_expects_mut_borrow(
+                    registry,
+                    callee_name,
+                    arg_index,
+                    user_arg_count,
+                    Some(&callee_sig),
+                );
+            if callee_wants_mut {
+                if let Expression::Identifier { name, .. } = arg_expr {
+                    let arg_is_fn_param =
+                        self.current_function_params.iter().any(|p| p.name == *name);
+                    if arg_is_fn_param
+                        && (self.emitted_rust_ref_formals.contains(name)
+                            || self.identifier_binding_already_rust_ref(name))
+                        && !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(
+                            arg_expr,
+                        )
+                    {
+                        crate::codegen::rust::expression_utilities::strip_trailing_clone(
+                            &mut coerced,
+                        );
+                    }
+                }
+            }
+        }
         if matches!(
             arg_expr,
             Expression::Literal {
@@ -2256,7 +2286,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // After borrow stripping / collision clone-stripping: restore `.clone()` when
         // auto-clone analysis says this binding/path is moved and reused (regression-059).
-        coerced = self.ensure_owned_move_clone_for_reuse(arg_expr, &coerced, &sig, param_idx);
+        coerced =
+            self.ensure_owned_move_clone_for_reuse(arg_expr, &coerced, &sig, param_idx, callee_name, arg_index);
         crate::codegen::rust::expression_utilities::collapse_redundant_clones(&mut coerced);
         let callee_accepts_str_ref = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             &sig, param_idx,
@@ -2822,7 +2853,16 @@ impl<'ast> CodeGenerator<'ast> {
         arg_str: &str,
         sig: &crate::analyzer::FunctionSignature,
         param_idx: usize,
+        callee_name: &str,
+        arg_index: usize,
     ) -> String {
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.caller_emits_mut_ref_formal(name)
+                && self.callee_slot_emits_mut_borrow(callee_name, arg_index)
+            {
+                return arg_str.to_string();
+            }
+        }
         if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
             || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
         {
@@ -4209,6 +4249,8 @@ impl<'ast> CodeGenerator<'ast> {
                 coerced,
                 &sig,
                 param_idx,
+                callee_name,
+                arg_index,
             );
         }
 
@@ -6627,6 +6669,11 @@ impl<'ast> CodeGenerator<'ast> {
                         a.needs_clone(name, self.current_statement_idx).is_some()
                     });
                     if analysis_wants_clone {
+                        if self.caller_emits_mut_ref_formal(name)
+                            && self.callee_slot_emits_mut_borrow(callee, idx)
+                        {
+                            return arg_str.to_string();
+                        }
                         if !self.callee_arg_emits_owned_contract(callee, idx)
                             && (self.callee_arg_expects_borrow_at_call(callee, idx)
                                 || self.ir_callee_arg_expects_shared_borrow(

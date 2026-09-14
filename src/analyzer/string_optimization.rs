@@ -22,7 +22,7 @@
 /// 2. AST traversal to find method calls
 /// 3. Parameter flow analysis (which params are passed where)
 use crate::analyzer::Analyzer;
-use crate::parser::{Expression, FunctionDecl, Statement, Type};
+use crate::parser::{Expression, FunctionDecl, Literal, Statement, Type};
 use std::collections::HashSet;
 
 impl<'ast> Analyzer<'ast> {
@@ -81,7 +81,8 @@ impl<'ast> Analyzer<'ast> {
                 // Stored/Into builders are blocked later via is_stored / consumed checks.
                 // Unused formals stay Owned (WDB-152) — no body evidence for `&str`.
                 if func.parent_type.is_none() && func.is_pub {
-                    if self.param_used_bare_in_string_concat_expression(&param.name, &func.body) {
+                    if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body)
+                    {
                         continue;
                     }
                 }
@@ -161,6 +162,9 @@ impl<'ast> Analyzer<'ast> {
                 }
 
                 if !needs_string_ref {
+                    if self.string_param_consumed_owned(&param.name, &func.body, registry) {
+                        continue;
+                    }
                     optimizable.insert(param.name.clone());
                 }
             }
@@ -209,7 +213,7 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 if matches!(op, crate::parser::BinaryOp::Add) {
                     if let Expression::Identifier { name, .. } = &**left {
-                        if name == param_name {
+                        if name == param_name && !Self::expr_is_empty_string_literal(right) {
                             return true;
                         }
                     }
@@ -239,6 +243,106 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         body.iter()
             .any(|stmt| self.stmt_uses_param_bare_in_string_concat(param_name, stmt))
+    }
+
+    /// `param + ""` / empty-append concat — codegen borrows for `format!`, does not consume.
+    pub(crate) fn param_used_in_consuming_string_concat_expression(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.stmt_uses_param_in_consuming_string_concat(param_name, stmt)
+        })
+    }
+
+    fn expr_is_empty_string_literal(expr: &Expression) -> bool {
+        matches!(
+            expr,
+            Expression::Literal {
+                value: Literal::String(s),
+                ..
+            } if s.is_empty()
+        ) || matches!(
+            expr,
+            Expression::Binary {
+                left,
+                right,
+                op,
+                ..
+            } if matches!(op, crate::parser::BinaryOp::Add)
+                && (Self::expr_is_empty_string_literal(left)
+                    || Self::expr_is_empty_string_literal(right))
+        )
+    }
+
+    fn stmt_uses_param_in_consuming_string_concat(
+        &self,
+        param_name: &str,
+        stmt: &Statement,
+    ) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. }
+            | Statement::Let { value: expr, .. } => {
+                self.expr_uses_param_in_consuming_string_concat(param_name, expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block.iter().any(|s| {
+                    self.stmt_uses_param_in_consuming_string_concat(param_name, s)
+                }) || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| self.stmt_uses_param_in_consuming_string_concat(param_name, s))
+                })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_uses_param_in_consuming_string_concat(
+        &self,
+        param_name: &str,
+        expr: &Expression,
+    ) -> bool {
+        match expr {
+            Expression::Binary {
+                left,
+                right,
+                op,
+                ..
+            } if matches!(op, crate::parser::BinaryOp::Add) => {
+                let readonly_append = (self.expr_is_bare_param(param_name, left)
+                    && Self::expr_is_empty_string_literal(right))
+                    || (self.expr_is_bare_param(param_name, right)
+                        && Self::expr_is_empty_string_literal(left));
+                if readonly_append {
+                    false
+                } else {
+                    self.expr_is_bare_param(param_name, left)
+                        || self.expr_is_bare_param(param_name, right)
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_uses_param_in_consuming_string_concat(param_name, left)
+                    || self.expr_uses_param_in_consuming_string_concat(param_name, right)
+            }
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
+                self.expr_uses_param_in_consuming_string_concat(param_name, arg)
+            }),
+            Expression::MethodCall { object, arguments, .. } => {
+                self.expr_uses_param_in_consuming_string_concat(param_name, object)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expr_uses_param_in_consuming_string_concat(param_name, arg)
+                    })
+            }
+            _ => false,
+        }
     }
 
     fn stmt_uses_param_bare_in_string_concat(&self, param_name: &str, stmt: &Statement) -> bool {

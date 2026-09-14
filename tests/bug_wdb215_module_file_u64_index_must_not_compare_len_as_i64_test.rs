@@ -8,6 +8,7 @@
         feature = "integration_tests",
     )),
     feature = "integration_tests",
+    feature = "codegen_tests",
 ))]
 
 //! WDB-215: `u64` loop index must not compare against `len() as i64`.
@@ -15,6 +16,23 @@
 //! Product residual (~22× in lsqb_query_engine; census u64←i64 dominant):
 //!   `let mut pi = 0_u64; while pi < ((persons.len() as i64))`
 //! → expected `u64`, found `i64`. Cast must be `as u64` (or index typed i64).
+
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+const FIXTURE: &str =
+    include_str!("fixtures/library_multipass/wdb215_u64_index_len_compare.wj");
+
+#[test]
+fn wdb215_codegen_u64_index_must_not_compare_len_as_i64() {
+    let (rs, ok) = test_utils::compile_single_check(FIXTURE);
+    let bad = rs.contains("len() as i64)") && rs.contains("while pi <");
+    assert!(
+        !bad,
+        "WDB-215: u64 index vs len must not cast len to i64. Generated:\n{rs}"
+    );
+    assert!(ok, "WDB-215 fixture must cargo-check. Generated:\n{rs}");
+}
 
 use std::path::PathBuf;
 

@@ -3589,6 +3589,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.param_stored_in_owned_payload(body, &param.name)
             || self.param_has_owning_method_use(body, &param.name, func)
             || self.param_used_as_owned_string_add_operand(body, &param.name)
+            || self.param_used_in_return_struct_string_field(body, &param.name)
             || (self.param_passed_as_call_argument(body, &param.name, func)
                 && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func))
     }

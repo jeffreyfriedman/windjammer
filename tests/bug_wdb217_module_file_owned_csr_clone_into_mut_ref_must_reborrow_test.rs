@@ -8,6 +8,7 @@
         feature = "integration_tests",
     )),
     feature = "integration_tests",
+    feature = "codegen_tests",
 ))]
 
 //! WDB-217: owned `csr.clone()` into demoted `&mut DenseCsr` must reborrow.
@@ -16,6 +17,27 @@
 //!   `graph_pagerank_run_dense_pull_fused_gated(csr: &mut DenseCsr, …)`
 //!   call `…_gated(csr.clone(), …)` → expected `&mut DenseCsr`, found `DenseCsr`.
 //! Prefer pass `csr` (already `&mut`) or owned formal + move.
+
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+const FIXTURE: &str =
+    include_str!("fixtures/library_multipass/wdb217_mut_ref_csr_reborrow.wj");
+
+#[test]
+fn wdb217_codegen_mut_ref_formal_must_reborrow_not_clone() {
+    let (rs, ok) = test_utils::compile_single_check(FIXTURE);
+    let bad = rs.contains("touch(csr.clone())") || rs.contains("touch(&csr)");
+    assert!(
+        !bad,
+        "WDB-217: &mut formal into &mut callee must reborrow bare csr. Generated:\n{rs}"
+    );
+    assert!(
+        rs.contains("touch(csr)"),
+        "WDB-217: expected bare reborrow call. Generated:\n{rs}"
+    );
+    assert!(ok, "WDB-217 fixture must cargo-check. Generated:\n{rs}");
+}
 
 use std::path::PathBuf;
 

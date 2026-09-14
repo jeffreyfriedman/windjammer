@@ -1,0 +1,20 @@
+// FAILING REPRO — strings.len() usize must unify with int index arithmetic.
+// Product: domain/string_contains.wj while i + n_len <= h_len.
+
+use std::strings
+
+pub fn scan(h: string, n: string) -> bool {
+    let h_len = strings.len(h)
+    let n_len = strings.len(n)
+    if n_len == 0 {
+        return false
+    }
+    if n_len > h_len {
+        return false
+    }
+    let mut i = 0
+    while i + n_len <= h_len {
+        i = i + 1
+    }
+    true
+}

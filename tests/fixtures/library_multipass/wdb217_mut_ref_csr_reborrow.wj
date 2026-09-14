@@ -1,0 +1,11 @@
+pub struct DenseCsr {
+    pub offsets: Vec<int>,
+}
+
+pub fn touch(csr: DenseCsr) -> int {
+    csr.offsets.len() as int
+}
+
+pub fn run(csr: DenseCsr) -> int {
+    touch(csr)
+}

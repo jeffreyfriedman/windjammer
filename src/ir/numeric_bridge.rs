@@ -212,6 +212,11 @@ impl UnifiedNumericInference {
     pub fn export_var_types(&self) -> HashMap<String, String> {
         self.int_collector.export_var_types()
     }
+
+    /// Library-wide const/static types from the int collector (for codegen peer suffixes).
+    pub fn export_const_types(&self) -> HashMap<String, Type> {
+        self.int_collector.export_const_types()
+    }
 }
 
 #[cfg(test)]

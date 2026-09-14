@@ -1,0 +1,11 @@
+extern fn graph_simd_u32_sorted_intersection_count_ffi(a: Vec<u32>, b: Vec<u32>) -> int
+
+pub fn count_intersection_owned(a: Vec<u32>, b: Vec<u32>) -> int {
+    graph_simd_u32_sorted_intersection_count_ffi(a, b)
+}
+
+pub fn count_intersection_readonly(a: Vec<u32>, b: Vec<u32>) -> int {
+    let _ = a.len()
+    let _ = b.len()
+    count_intersection_owned(a, b)
+}

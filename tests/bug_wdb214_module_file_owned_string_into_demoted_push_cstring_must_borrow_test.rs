@@ -8,6 +8,7 @@
         feature = "integration_tests",
     )),
     feature = "integration_tests",
+    feature = "codegen_tests",
 ))]
 
 //! WDB-214: owned `String` / `String::from` into demoted `&str` `push_cstring` must borrow.
@@ -15,6 +16,24 @@
 //! Product residual (~12× in pg_wire; dominant census `&str`←String bucket):
 //!   `push_cstring(s: &str, …)` called with `f.name.clone()`, `String::from("user")`, etc.
 //! Twin of WDB-203/212. Signature-driven.
+
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+const FIXTURE: &str =
+    include_str!("fixtures/library_multipass/wdb214_push_cstring_must_borrow.wj");
+
+#[test]
+fn wdb214_codegen_push_cstring_must_borrow_owned_string_field() {
+    let (rs, ok) = test_utils::compile_single_check(FIXTURE);
+    let bad = rs.contains("push_cstring(f.name.clone()")
+        || rs.contains("push_cstring(String::from(");
+    assert!(
+        !bad,
+        "WDB-214: demoted &str push_cstring must borrow, not clone. Generated:\n{rs}"
+    );
+    assert!(ok, "WDB-214 fixture must cargo-check. Generated:\n{rs}");
+}
 
 use std::path::PathBuf;
 

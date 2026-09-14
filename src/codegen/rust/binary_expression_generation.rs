@@ -280,7 +280,7 @@ impl<'ast> CodeGenerator<'ast> {
             let narrow_unsigned = |expr: &Expression<'ast>| {
                 self.infer_expression_type(expr).is_some_and(|t| {
                     matches!(t, Type::Int32)
-                        || matches!(t, Type::Custom(n) if n == "u32" || n == "i32")
+                        || matches!(t, Type::Custom(n) if n == "u32" || n == "i32" || n == "u64")
                 })
             };
             if narrow_unsigned(left) && right_is_usize {

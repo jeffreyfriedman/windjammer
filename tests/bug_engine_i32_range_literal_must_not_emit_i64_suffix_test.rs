@@ -12,11 +12,12 @@
 
 //! Engine tip blocker (windjammer-game-core `component_viewer_controls.wj`):
 //!
-//!   `for x in cx - 16_i64..cx + 16_i64` with `cx: i32` → E0277 / E0308
-//!   (`i32 ± i64` / mismatched range bounds)
+//!   `use crate::scene::component_viewer_state::VIEWER_GRID`
+//!   `let cx = VIEWER_GRID / 2`
+//!   `for x in (cx - 16)..(cx + 16)` → was `16_i64` (E0277 / E0308)
 //!
-//! Integer literals in an `i32` arithmetic / range context must emit as `i32`
-//! (bare `16` or `16_i32`), never default WJ `16_i64`.
+//! Cross-module imported `i32` consts must peer-drive range literals like
+//! same-module consts (`16_i32`, not default WJ `16_i64`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -24,14 +25,19 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 const MOD: &str = r#"
+pub mod state
 pub mod pedestal
 "#;
 
+const STATE: &str = r#"
+pub const VIEWER_GRID: i32 = 64
+"#;
+
 const PEDESTAL: &str = r#"
-const VIEWER_GRID: i32 = 64
+use crate::state::VIEWER_GRID
 
 pub fn build_pedestal() -> i32 {
-    // Product shape: cx from const / 2, then range + edge compares with literals.
+    // Product shape: imported i32 const / 2, parenthesized range + edge compares.
     let cx = VIEWER_GRID / 2
     let mut count = 0
     for x in (cx - 16)..(cx + 16) {
@@ -42,11 +48,24 @@ pub fn build_pedestal() -> i32 {
     }
     count
 }
+
+// Product residual: `let cy = 10` in a non-int-returning builder must not force
+// `cy + 16_i64` (component_viewer_controls ring / wall loops).
+pub fn build_ring_band() -> i32 {
+    let cy = 10
+    let mut count = 0
+    for y in (cy + 4)..(cy + 16) {
+        count = count + 1
+        let _ = y
+    }
+    count
+}
 "#;
 
 fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
+    test.add_file("state.wj", STATE);
     test.add_file("pedestal.wj", PEDESTAL);
     test
 }
@@ -58,12 +77,12 @@ fn engine_i32_range_literal_must_not_emit_i64_suffix() {
         .compile()
         .expect("engine i32 range multipass compile should succeed");
     let rs = map.get("pedestal.rs").expect("pedestal.rs");
-    eprintln!("engine pedestal.rs:\n{rs}");
+    eprintln!("engine pedestal.rs (cross-module VIEWER_GRID):\n{rs}");
 
     assert!(
         !rs.contains("16_i64") && !rs.contains("15_i64"),
-        "i32 range/peer arithmetic must not emit _i64 literals. Product: \
-         for x in cx - 16_i64..cx + 16_i64. Got:\n{rs}"
+        "imported i32 const range/peer arithmetic must not emit _i64. Product: \
+         component_viewer_controls for x in cx - 16_i64..cx + 16_i64. Got:\n{rs}"
     );
     assert!(
         rs.contains("cx - 16") || rs.contains("cx - 16_i32") || rs.contains("(cx - 16)"),

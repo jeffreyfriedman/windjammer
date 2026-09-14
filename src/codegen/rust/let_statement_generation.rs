@@ -167,45 +167,31 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         Some(Type::Custom(name.to_string()))
                     }
-                    // Literal types: let x = 25 → i32, let y = 3.14 → f32, let b = true → bool
+                    // Literal types: untyped `let x = 25` → i32 (Rust default), unless the
+                    // enclosing function return width seeds i64/u32/… (WDB-081 / P3.280).
                     Expression::Literal {
-                        value: crate::parser::Literal::Int(n),
+                        value: crate::parser::Literal::Int(_),
                         ..
                     } => {
-                        // Seed untyped `let mut total = 0` from function return width (WDB-081).
-                        if *n == 0 && mutable {
-                            if let Some(ret_ty) = &self.current_function_return_type {
-                                match ret_ty {
-                                    Type::Int32 => Some(Type::Int32),
-                                    Type::Uint => Some(Type::Uint),
-                                    Type::Custom(name)
-                                        if matches!(name.as_str(), "u32" | "i32") =>
-                                    {
-                                        Some(ret_ty.clone())
-                                    }
-                                    _ => Some(Type::Int),
+                        if let Some(ret_ty) = &self.current_function_return_type {
+                            match ret_ty {
+                                Type::Int32 => Some(Type::Int32),
+                                Type::Int => Some(Type::Int),
+                                Type::Uint => Some(Type::Uint),
+                                Type::Custom(name)
+                                    if matches!(
+                                        name.as_str(),
+                                        "u32" | "i32" | "i64" | "int" | "u64" | "usize"
+                                    ) =>
+                                {
+                                    Some(ret_ty.clone())
                                 }
-                            } else {
-                                Some(Type::Int)
-                            }
-                        } else if mutable {
-                            // `let mut q = 1` under `-> i32`/`u32` must track width, not default i64.
-                            if let Some(ret_ty) = &self.current_function_return_type {
-                                match ret_ty {
-                                    Type::Int32 => Some(Type::Int32),
-                                    Type::Uint => Some(Type::Uint),
-                                    Type::Custom(name)
-                                        if matches!(name.as_str(), "u32" | "i32") =>
-                                    {
-                                        Some(ret_ty.clone())
-                                    }
-                                    _ => Some(Type::Int),
-                                }
-                            } else {
-                                Some(Type::Int)
+                                // Non-int return (e.g. VoxelGrid): prefer i32 for coordinate
+                                // locals like `let cy = 10` so range peers stay i32 (P3.280).
+                                _ => Some(Type::Int32),
                             }
                         } else {
-                            Some(Type::Int)
+                            Some(Type::Int32)
                         }
                     }
                     Expression::Literal {
