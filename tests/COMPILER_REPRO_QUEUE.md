@@ -19,10 +19,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |----------|-----|---------------|--------|
 | P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ❌ tip RED (P3.265) |
 | P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — per-param pub free-fn owned keep (concat lhs / owned forward); read-only pub APIs demote |
-| P1 | **Cross-crate `set_if` mut borrow without / with stripped metadata** | `bug_cross_crate_set_if_mut_borrow_test` | ❌ tip RED — `fill_hull` still `&VoxelGrid`; boundary sig + mut promotion follow-up |
+| P1 | **Cross-crate `set_if` mut borrow without / with stripped metadata** | `bug_cross_crate_set_if_mut_borrow_test` | ✅ tip GREEN (2026-09-14) — MethodCall mut detect + loop-body MutBorrowed keep |
 | P1 | **WDB-087 tuple writeback in nested `while` must not clone** | `test_library_multipass_tuple_writeback_must_not_clone` | ✅ tip GREEN (P3.265) — `current_stmt_restores_binding_after_move` uses full function body in nested blocks |
 | P1 | **WAL replay `replay_to_lsn` / path borrow cluster** | `cross_crate_dogfooding_ownership_test::dogfood_wal_replay_*` | ✅ tip GREEN (P3.265) — pub free-fn read-only `string` demotion restored |
-| P1 | **`temp_path("recover")` cross-crate literal must stay `&str`** | `dogfood_temp_path_string_literal_no_to_string` | ❌ tip RED — metadata/call-site still `.to_string()` for owned cross-crate sig |
+| P1 | **`temp_path("recover")` cross-crate literal must stay `&str`** | `dogfood_temp_path_string_literal_no_to_string` | ✅ tip GREEN (2026-09-14) — readonly text-return demotion; stale analyzer Owned gate narrowed |
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
 | P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (2026-09-13) |
 | P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
@@ -508,9 +508,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Tip **WDB-188** gen `graph_score: 0.0_f32` lag | ❌ filed + ran RED |
 | Tip **WDB-189** gen `&String`→owned parse lag | ❌ filed + ran RED |
 | Tip **WDB-190** module-file `on_startup` owned `Vec` + no `&encode` | ✅ tip GREEN (P3.275) — registry-owned pub `Vec` formal emission |
-| Tip **WDB-190** gen feed_unified borrow→owned startup | ❌ gen lag (tip-out clean; regen needed) |
+| Tip **WDB-190** gen feed_unified borrow→owned startup | ✅ tip GREEN (2026-09-14) — producer-only owned Vec restore |
 | Tip **WDB-191** module-file demoted `&str`→owned `wire_parse` | ✅ tip GREEN (P3.271 class) |
-| Tip **WDB-191** product gen demoted `&str`→owned `pg_wire_parse` | ❌ gen lag |
+| Tip **WDB-191** product gen demoted `&str`→owned `pg_wire_parse` | ✅ tip-out GREEN (2026-09-14) — bare-pass restore owned string payload + pub registry-owned emission |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip-out→gen sync (188/189/190 gen); tip greens 176/177. No Phase 606+.

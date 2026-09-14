@@ -124,6 +124,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.multipass_global_ref_formal_demoted(func, param_idx)
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.function_return_is_text(func)
+                    && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                     && !(self.pub_module_api_keeps_owned_string_formal(func, param)
                         && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
                     && !(analyzed.returned_parameters.contains(&param.name)
@@ -611,16 +612,23 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Readonly text-returning helpers (`temp_path`) demote to `&str` so cross-
                 // module literal call sites stay bare (`temp_path("recover")`).
-                // Skip analyzer-Owned formals and P3.264 pub concat/owned-forward params.
+                // Stale analyzer Owned must not block when the body only formats/reads the param.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
                     && !payload_stored
                     && self.function_return_is_text(func)
-                    && !matches!(
+                    && !(matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Owned)
-                    )
+                    ) && (self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) || self.param_stored_in_owned_payload(
+                        func.body.as_slice(),
+                        &param.name,
+                    )))
                     && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && !self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
@@ -3599,6 +3607,30 @@ impl<'ast> CodeGenerator<'ast> {
                         .or_else(|| sig.param_types.get(param_idx))
                         .is_some_and(|t| {
                             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        })
+                });
+        }
+        // WDB-191: multipass restore keeps pub `string` owned when stored in payload
+        // (`pg_wire_parse` name/sql) even if per-file payload walk misses loop assignments.
+        if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+            let param_idx = func
+                .parameters
+                .iter()
+                .position(|p| p.name == param.name)
+                .unwrap_or(0);
+            return self
+                .global_signature_for_function(func)
+                .is_some_and(|sig| {
+                    matches!(
+                        sig.param_ownership.get(param_idx),
+                        Some(OwnershipMode::Owned)
+                    ) && sig
+                        .formal_param_types
+                        .get(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx))
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && crate::codegen::rust::types::is_windjammer_text_type(t)
                         })
                 });
         }

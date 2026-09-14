@@ -29,6 +29,7 @@ pub fn promote_callees_from_bare_pass_callers(
     // (`to_response(reply) { base_response(reply.status, reply.body) }`). Those must
     // stay owned moves — `&mut HttpReply` cannot move `reply.body`.
     restore_owned_field_forward_formals(registry, programs);
+    restore_owned_string_formals_stored_in_payload(registry, programs);
     // Undo bare-pass MutBorrowed when the callee returns the whole binding (identity /
     // chain helpers like `col_string(row, name) -> (Row, string)`).
     restore_owned_returned_formals(registry, programs);
@@ -362,6 +363,75 @@ pub fn restore_pub_owned_non_copy_api_formals(
     }
 }
 
+/// Bare-pass demotes WJ `string` formals to Borrowed when callers pass bare ids; restore
+/// Owned when the defining body stores the param in struct/enum payload (`pg_wire_parse`).
+pub fn restore_owned_string_formals_stored_in_payload(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+) {
+    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
+    for key in keys {
+        let Some(sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let n = sig.param_ownership.len();
+        let mut changed = false;
+        let mut new_sig = sig.clone();
+        for idx in 0..n {
+            if !matches!(
+                new_sig.param_ownership.get(idx),
+                Some(OwnershipMode::Borrowed)
+            ) {
+                continue;
+            }
+            let wj_string_formal = new_sig
+                .formal_param_types
+                .get(idx)
+                .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                || new_sig
+                    .param_types
+                    .get(idx)
+                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
+            let demoted_str_formal = new_sig.param_types.get(idx).is_some_and(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            });
+            if !wj_string_formal && !demoted_str_formal {
+                continue;
+            }
+            let Some((param_name, body)) =
+                find_function_body_for_registry_key(programs, &key, idx)
+            else {
+                continue;
+            };
+            if !param_stored_in_struct_literal(body, param_name) {
+                continue;
+            }
+            new_sig.param_ownership[idx] = OwnershipMode::Owned;
+            let owned_ty = Type::String;
+            if new_sig.param_types.len() > idx {
+                new_sig.param_types[idx] = owned_ty.clone();
+            }
+            if new_sig.formal_param_types.len() > idx {
+                new_sig.formal_param_types[idx] = owned_ty;
+            }
+            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
+                if flags.len() > idx {
+                    flags[idx] = false;
+                }
+            }
+            changed = true;
+        }
+        if changed {
+            registry.signatures.insert(key.clone(), new_sig.clone());
+            if let Some(bare) = key.rsplit("::").next() {
+                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                    registry.signatures.insert(bare.to_string(), new_sig);
+                }
+            }
+        }
+    }
+}
+
 /// When a formal was demoted to `MutBorrowed` but the body only forwards `param.field`
 /// into call arguments, restore owned `T` (HTTP adapter / consume-via-fields pattern).
 pub fn restore_owned_field_forward_formals(
@@ -474,6 +544,85 @@ mod tests {
             field_extract_params: None,
             forwarding_borrow_params: None,
         }
+    }
+
+    #[test]
+    fn bare_pass_restores_owned_string_stored_in_struct_literal() {
+        let wire = parse_program(
+            r#"
+struct Prep { pub name: string, pub sql: string }
+struct Session { pub n: int, pub prepared: Vec<Prep> }
+fn pg_wire_parse(session: Session, name: string, sql: string) -> Session {
+    let mut out = session
+    out.prepared.push(Prep { name: name, sql: sql })
+    out
+}
+"#,
+        );
+        let serve = parse_program(
+            r#"
+struct Session { pub n: int }
+fn pg_wire_serve_on_simple_query(session: Session, sql: string) -> Session {
+    pg_wire_parse(session, "", sql)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "pg_wire_parse".to_string(),
+            FunctionSignature {
+                name: "pg_wire_parse".to_string(),
+                param_types: vec![
+                    Type::Custom("Session".into()),
+                    Type::String,
+                    Type::String,
+                ],
+                formal_param_types: vec![
+                    Type::Custom("Session".into()),
+                    Type::String,
+                    Type::String,
+                ],
+                param_ownership: vec![OwnershipMode::Owned; 3],
+                return_type: Some(Type::Custom("Session".into())),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        registry.signatures.insert(
+            "pg_wire_serve_on_simple_query".to_string(),
+            FunctionSignature {
+                name: "pg_wire_serve_on_simple_query".to_string(),
+                param_types: vec![Type::Custom("Session".into()), Type::String],
+                formal_param_types: vec![Type::Custom("Session".into()), Type::String],
+                param_ownership: vec![OwnershipMode::Owned; 2],
+                return_type: Some(Type::Custom("Session".into())),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let programs = vec![wire, serve];
+        promote_callees_from_bare_pass_callers(
+            &mut registry,
+            &programs,
+            &std::collections::HashSet::new(),
+        );
+        let sig = registry.signatures.get("pg_wire_parse").unwrap();
+        assert_eq!(
+            sig.param_ownership[2],
+            OwnershipMode::Owned,
+            "sql stored in Prep must restore owned String, got {:?}",
+            sig.param_ownership
+        );
     }
 
     #[test]
