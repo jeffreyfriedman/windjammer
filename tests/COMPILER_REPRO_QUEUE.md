@@ -149,8 +149,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 RED / filed (P3.282); notes uses `encode_text` |
 | P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 RED / filed (P3.283); notes aliases `get as qs_get` |
+| P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | 🆕 RED / filed (P3.284); notes inlines `?q=` filter loop |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
-| P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ❌ tip RED (P3.278); notes uses single-map reader like auth |
+| P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — defer-drop at fn scope; skip when body has `match` + `.get(` |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
 | P1 | **Cross-crate module `touch_grid(grid)` must reborrow `&mut Grid`, not `grid.clone()`** | `bug_cross_crate_mut_borrow_module_fn_test` | ✅ tip GREEN (P3.274) — `sig_arg_confirms_owned_emission` must not strip `&mut T` |
 | P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.274) |
@@ -222,6 +223,27 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** resolve call-site ownership by the *imported* function identity (crate + original name), not by the local alias string colliding with another crate's free-fn metadata.
 
+## P3.267 (2026-09-14) — wj-url homonym + hexagonal import gate
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_owned_string_local_call_site_test` | ✅ tip GREEN — preregistered owned `String` formals peel stale `&` after IR reconcile |
+| Gate `bug_user_join_name_clash_strings_join_test` | ✅ tip GREEN — local user `join` beats `strings::join` borrow baseline |
+| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | ✅ tip GREEN — `cargo check` on hexagonal ItemView fixture |
+| Gate `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN |
+
+**Compiler agent:** same-file preregistered emission strings are authoritative for bare free-fn call sites; do not inherit runtime-std homonym `&str` when the defining module emitted owned `String` formals.
+
+## P3.284 (2026-09-14) — wj-notes-api regex `?q=` + Vec\<Custom\> helper demote/clone
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-regex` `GET /notes?q=` title/body filter | ✅ **62/62** on cargo-bin `wj` 0.50.0 |
+| Gate `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | 🆕 filed — `filter_notes(notes: Vec<Note>)` demotes to `&Vec` while call emits `notes.clone()` |
+| Product workaround | ✅ inline filter loop in `list_notes_for_query` |
+
+**Compiler agent:** owned `Vec<T>` filter helpers that push/consume elements must keep Owned formals (or call sites must borrow consistently — never `clone()` into `&Vec`).
+
 ## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + HashMap string key
 
 | Change | Status |
@@ -229,10 +251,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_owned_path_extract_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
 | Gate `bug_vec_string_helper_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
 | Gate `bug_thin_vec_forwarder_must_not_demote_owned_test` | ✅ tip GREEN (2026-09-14) |
-| Gate `bug_hashmap_string_key_insert_must_not_cast_usize_test` | ❌ tip RED — untyped `HashMap::new()` → `insert(key as usize, …)` |
+| Gate `bug_hashmap_string_key_insert_must_not_cast_usize_test` | ✅ tip GREEN (2026-09-14) — untyped `HashMap::new()` keeps String insert keys |
 | Gate `bug_vec_custom_view_helper_must_not_over_borrow_test` | ✅ tip GREEN (isolate); product used `lines.clone()` interim |
 | Gate `bug_engine_i32_range_literal_must_not_emit_i64_suffix_test` | ✅ tip GREEN (2026-09-14) — `module_const_types` + non-usize range loop binding |
-| Product interim: typed `HashMap<string,string>` locals; `lines.clone()` into view helpers; append_string_list owned prefix; bearer/post_request inlines; `path + ""` | ✅ tip `make api-check` **GREEN** (2026-09-14) |
+| Product interim: typed `HashMap<string,string>` locals; `lines.clone()` into view helpers; append_string_list owned prefix; bearer/post_request inlines; `path + ""` | ✅ tip `make api-check` **GREEN**; typed HashMap interim **dropped** (P3.267) after gate GREEN |
 
 **Compiler agent:** `HashMap<string,string>::insert` must keep `String` keys (no `as usize`) even when the map local lacks an explicit type annotation. Owned `Vec<T>` formals must receive moves at multipass call sites (`*_view_from_row(row, lines)` not `&lines`).
 
@@ -240,7 +262,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | ⚠️ multipass GREEN (prelude not fired); product tip E0252 cleared via brace strip |
+| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | ✅ tip GREEN (P3.267) — import dedupe + hexagonal `make_view(String)` cargo-check |
 | Gate `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (2026-09-14) — no `(idx as i64) < ….len()` |
 | Product interim: strip View/Line/Draft names from brace imports (~38 files) | ✅ tip api-check E0252 **0** |
 | Product: bank_recon drop `clone_code` → `code + ""`; seed_bank_import `for` loops | ✅ |

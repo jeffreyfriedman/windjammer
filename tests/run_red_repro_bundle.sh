@@ -6,10 +6,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  hashmap_string_key_insert_must_not_cast_usize
 )
 
 GREEN_FILTERS=(
+  hashmap_string_key_insert_must_not_cast_usize
+  hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop
+  explicit_type_import_must_not_duplicate_prelude
+  owned_string_locals_move_into_owned_string_formals
+  user_join_two_strings_moves_owned_locals
   engine_i32_formal_into_owned_copy_set_must_not_star_deref_clone
   engine_i32_range_literal_must_not_emit_i64_suffix
   owned_path_extract_must_not_over_borrow

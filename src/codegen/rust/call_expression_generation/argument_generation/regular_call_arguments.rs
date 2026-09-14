@@ -343,6 +343,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &mut coerced,
                         );
                     }
+                    if !func_name.contains("::")
+                        && gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                        && coerced.starts_with('&')
+                        && !coerced.starts_with("&mut ")
+                    {
+                        coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                            &coerced,
+                        )
+                        .to_string();
+                    }
                     // Terminal guard when reconcile was skipped (missing peel_sig).
                     gen.peel_stacked_amp_on_emitted_ref_binding(
                         &mut coerced,

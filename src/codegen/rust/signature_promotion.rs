@@ -1449,6 +1449,50 @@ pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx:
         || sig.param_types.get(param_idx).is_some_and(is_bare_custom)
 }
 
+/// Local bare user free-fn with owned WJ `string` formals beats a borrowed stdlib/runtime
+/// homonym at call sites (`join` vs `strings::join`).
+fn local_owned_wj_string_api_beats_borrowed_homonym(
+    local: &FunctionSignature,
+    resolved: &FunctionSignature,
+) -> bool {
+    if signature_is_wj_std_stub_or_runtime_qualified(local) {
+        return false;
+    }
+    let resolved_borrowed = (0..resolved.param_ownership.len()).any(|idx| {
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(resolved, idx)
+    });
+    if !resolved_borrowed {
+        return false;
+    }
+    (0..local.param_ownership.len()).any(|idx| {
+        if local.has_self_receiver && idx == 0 {
+            return false;
+        }
+        let plain = crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+            local, idx,
+        ) || local.param_types.get(idx).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::codegen::rust::types::is_windjammer_text_type(t)
+        });
+        if !plain {
+            return false;
+        }
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(local, idx) {
+            return false;
+        }
+        matches!(
+            local.param_ownership.get(idx),
+            Some(OwnershipMode::Owned)
+        ) || emitted_owned_arg_contract(local, idx)
+            || local
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                == Some(false)
+    })
+}
+
 /// Bare same-module user API beats runtime-std homonym at call sites
 /// (`join_path` vs `path::join_path`, `join` vs `strings::join`).
 pub(crate) fn local_user_fn_beats_runtime_std_homonym(
@@ -1467,6 +1511,9 @@ pub(crate) fn local_user_fn_beats_runtime_std_homonym(
     }
     if signature_is_wj_std_stub_or_runtime_qualified(local_sig) {
         return resolved;
+    }
+    if local_owned_wj_string_api_beats_borrowed_homonym(local_sig, &resolved) {
+        return local_sig.clone();
     }
     let resolved_shared = (0..resolved.param_ownership.len()).any(|idx| {
         crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&resolved, idx)
