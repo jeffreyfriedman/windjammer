@@ -124,7 +124,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.multipass_global_ref_formal_demoted(func, param_idx)
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.function_return_is_text(func)
-                    && !(self.pub_module_api_keeps_owned_string_formal(func)
+                    && !(self.pub_module_api_keeps_owned_string_formal(func, param)
                         && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
                     && !(analyzed.returned_parameters.contains(&param.name)
                         && !self.is_type_copy(&param.type_))
@@ -512,7 +512,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
                     && !self.function_return_is_text(func)
-                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && !self.param_has_owning_method_use(
                         func.body.as_slice(),
                         &param.name,
@@ -546,7 +546,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
-                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && self.associated_text_identity_return_may_borrow(func, param, analyzed)
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
@@ -560,7 +560,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
-                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && !payload_stored
                     && self.param_has_readonly_expression_use(
                         func.body.as_slice(),
@@ -734,7 +734,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.in_trait_impl
                     // Pub crate API: keep WJ `string` owned even when unused / analyzer Borrowed
                     // so cross-module callers can pass `req.path` without racing `&str` demotion.
-                    && !(self.pub_module_api_keeps_owned_string_formal(func)
+                    && !(self.pub_module_api_keeps_owned_string_formal(func, param)
                         && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
                     && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                     && !analyzed.field_extract_parameters.contains(&param.name)
@@ -1192,7 +1192,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
-                            && !self.pub_module_api_keeps_owned_string_formal(func)
+                            && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
                                 &param.name,
@@ -1225,7 +1225,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !payload_forces_owned
                             && !self.in_trait_impl
-                            && !self.pub_module_api_keeps_owned_string_formal(func)
+                            && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && (!self.function_return_is_text(func)
                                 || analyzed
                                     .str_ref_optimizable_params
@@ -1279,7 +1279,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         // Public API keeps owned `string` despite Ref / analyzer demotion.
                         if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                            && self.pub_module_api_keeps_owned_string_formal(func)
+                            && self.pub_module_api_keeps_owned_string_formal(func, param)
                         {
                             return self.type_to_rust(&param.type_);
                         }
@@ -1306,7 +1306,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.type_to_rust(formal_type)
                             } else if crate::codegen::rust::types::is_windjammer_text_type(
                                 &param.type_,
-                            ) && self.pub_module_api_keeps_owned_string_formal(func)
+                            ) && self.pub_module_api_keeps_owned_string_formal(func, param)
                             {
                                 self.type_to_rust(&param.type_)
                             } else {
@@ -1497,7 +1497,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !asref_runtime_keep_owned
                                 && !payload_forces_owned
                                 && !self.in_trait_impl
-                                && !self.pub_module_api_keeps_owned_string_formal(func)
+                                && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && (!self.function_return_is_text(func)
                                     || analyzed
                                         .str_ref_optimizable_params
@@ -1534,7 +1534,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
-                            && !self.pub_module_api_keeps_owned_string_formal(func)
+                            && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
                             && !analyzed.returned_parameters.contains(&param.name)
@@ -2501,7 +2501,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // concat2/overlay_row): call sites must pass owned String.
                             let format_only_string =
                                 crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                     && !self.is_public_owned_non_copy_formal_api(param, func)
                                     && self.param_used_as_read_operand(
                                         func.body.as_slice(),
@@ -2553,7 +2553,7 @@ impl<'ast> CodeGenerator<'ast> {
                             );
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
-                                && !self.pub_module_api_keeps_owned_string_formal(func)
+                                && !self.pub_module_api_keeps_owned_string_formal(func, param)
                                 && !analyzed.returned_parameters.contains(&param.name)
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && !self.param_only_forwards_to_emitted_owned_callees(
@@ -2563,7 +2563,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                                 && ((unused_params.contains(&param.name)
                                     && (!analyzer_keeps_owned_string
-                                        || (!self.pub_module_api_keeps_owned_string_formal(func)
+                                        || (!self.pub_module_api_keeps_owned_string_formal(func, param)
                                             && !analyzed.returned_parameters.contains(&param.name)
                                             && !self.param_has_owning_method_use(
                                                 func.body.as_slice(),
@@ -2811,7 +2811,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         || matches!(formal_type, Type::Custom(ref name) if name == "string");
                                     if is_string
                                         && !trait_impl_owned_string
-                                        && self.pub_module_api_keeps_owned_string_formal(func)
+                                        && self.pub_module_api_keeps_owned_string_formal(func, param)
                                     {
                                         // Public API keeps owned `string` even when body analysis
                                         // / IR marked Borrowed (unused path → &str races callers).
@@ -3002,7 +3002,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && type_str.starts_with('&')
                     && !type_str.starts_with("&mut ")
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
-                    && self.pub_module_api_keeps_owned_string_formal(func)
+                    && self.pub_module_api_keeps_owned_string_formal(func, param)
                 {
                     type_str = self.type_to_rust(&param.type_);
                     self.str_ref_optimized_params.remove(&param.name);
@@ -3015,7 +3015,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Skip when pub free-fn APIs must keep concrete owned `String` (P3.264).
                 if param.name != "self"
                     && type_str == "String"
-                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && (self.param_should_emit_into_string_formal(func, param, payload_stored)
                         || self.param_pub_free_string_builder_forward(func, param))
                 {
@@ -3509,15 +3509,27 @@ impl<'ast> CodeGenerator<'ast> {
         body.iter().any(|s| stmt_compares(param, s))
     }
 
-    /// Whether pub free-fn APIs must refuse `&str` demotion for WJ `string` formals.
+    /// Whether this pub free-fn `string` formal must stay owned `String` (P3.264).
     ///
-    /// Pub free functions keep owned `String` (P3.264 concat2/overlay_row / hexagonal
-    /// adapters). Method/`impl` formals stay body-/signature-driven so read-only demotion
-    /// (`HashSet::contains`, unused handlers) is unchanged. Cross-module callers sync via
-    /// the signature registry (WDB-112).
-    fn pub_module_api_keeps_owned_string_formal(&self, func: &FunctionDecl<'_>) -> bool {
-        // P3.264: pub free-fn `string` formals stay owned so call sites move (no `&local`).
-        func.is_pub && func.parent_type.is_none()
+    /// Read-only pub APIs (`replay_to_lsn(path)`) still demote to `&str`. Only params
+    /// consumed (concat lhs, payload store, owned callee forward) keep owned formals.
+    fn pub_module_api_keeps_owned_string_formal(
+        &self,
+        func: &FunctionDecl<'_>,
+        param: &Parameter,
+    ) -> bool {
+        if !(func.is_pub && func.parent_type.is_none()) {
+            return false;
+        }
+        if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
+            return false;
+        }
+        let body = func.body.as_slice();
+        self.param_stored_in_owned_payload(body, &param.name)
+            || self.param_has_owning_method_use(body, &param.name, func)
+            || self.param_used_as_owned_string_add_operand(body, &param.name)
+            || (self.param_passed_as_call_argument(body, &param.name, func)
+                && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func))
     }
 
     /// `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay owned at
