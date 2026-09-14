@@ -81,7 +81,7 @@ impl<'ast> Analyzer<'ast> {
                 // Stored/Into builders are blocked later via is_stored / consumed checks.
                 // Unused formals stay Owned (WDB-152) — no body evidence for `&str`.
                 if func.parent_type.is_none() && func.is_pub {
-                    if self.param_used_in_string_concat_expression(&param.name, &func.body) {
+                    if self.param_used_bare_in_string_concat_expression(&param.name, &func.body) {
                         continue;
                     }
                 }
@@ -229,6 +229,61 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         body.iter()
             .any(|stmt| self.stmt_uses_param_in_string_concat(param_name, stmt))
+    }
+
+    /// Param used as a bare identifier in string `+` (consumed), not only via `&param`.
+    pub(crate) fn param_used_bare_in_string_concat_expression(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        body.iter()
+            .any(|stmt| self.stmt_uses_param_bare_in_string_concat(param_name, stmt))
+    }
+
+    fn stmt_uses_param_bare_in_string_concat(&self, param_name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. }
+            | Statement::Let { value: expr, .. } => {
+                self.expr_uses_param_bare_in_string_concat(param_name, expr)
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_uses_param_bare_in_string_concat(param_name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_uses_param_bare_in_string_concat(param_name, s))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_uses_param_bare_in_string_concat(&self, param_name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Binary {
+                left,
+                right,
+                op,
+                ..
+            } if matches!(op, crate::parser::BinaryOp::Add) => {
+                self.expr_is_bare_param(param_name, left)
+                    || self.expr_is_bare_param(param_name, right)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_uses_param_bare_in_string_concat(param_name, left)
+                    || self.expr_uses_param_bare_in_string_concat(param_name, right)
+            }
+            _ => false,
+        }
     }
 
     fn stmt_uses_param_in_string_concat(&self, param_name: &str, stmt: &Statement) -> bool {

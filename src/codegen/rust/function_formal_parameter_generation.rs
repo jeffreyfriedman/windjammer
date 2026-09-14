@@ -1226,7 +1226,10 @@ impl<'ast> CodeGenerator<'ast> {
                             && !payload_forces_owned
                             && !self.in_trait_impl
                             && !self.pub_module_api_keeps_owned_string_formal(func)
-                            && !self.function_return_is_text(func)
+                            && (!self.function_return_is_text(func)
+                                || analyzed
+                                    .str_ref_optimizable_params
+                                    .contains(&param.name))
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                             && !matches!(
@@ -1495,7 +1498,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !payload_forces_owned
                                 && !self.in_trait_impl
                                 && !self.pub_module_api_keeps_owned_string_formal(func)
-                                && !self.function_return_is_text(func)
+                                && (!self.function_return_is_text(func)
+                                    || analyzed
+                                        .str_ref_optimizable_params
+                                        .contains(&param.name))
                                 && !param.decorators.iter().any(|d| d.name == "string_ref")
                                 && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                                 && !matches!(

@@ -6,7 +6,12 @@ codegen gates as source of truth; fixtures alone can pass while multipass still
 mis-emits.
 
 **Verified green on tip** (`cargo test --release --test all` filter below,
-2026-08-26): method-index consensus (finance-screens hang), demoted `&str`
+2026-09-13): bare-vs-ref string concat demotion (`a + &b`), flat-sibling
+`use super::mod::Type` when user glob blocks `use super::*`, explicit `*copy`
+call-site no extra `&`, shadowed owned local → owned callee move, compound
+`let mut` typed emission.
+
+**Earlier tip (2026-08-26):** method-index consensus (finance-screens hang), demoted `&str`
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 

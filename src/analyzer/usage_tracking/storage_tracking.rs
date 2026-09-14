@@ -539,7 +539,7 @@ impl<'ast> Analyzer<'ast> {
             // `status + ""` / string `+` consumes the LHS as owned (codegen may lower to
             // `format!`, which accepts `&str` — demotion must still be blocked).
             || self.param_is_string_concat_lhs(name, statements)
-            || self.param_used_in_string_concat_expression(name, statements)
+            || self.param_used_bare_in_string_concat_expression(name, statements)
     }
 
     fn is_only_stored_via_bare_struct_literal_field(

@@ -391,6 +391,29 @@ pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
     )
 }
 
+/// User wrote explicit `*expr` (or `(*expr).field`) — do not prefix `&` at the call site.
+pub fn user_wrote_explicit_deref(arg_expr: &Expression) -> bool {
+    match arg_expr {
+        Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            ..
+        } => true,
+        Expression::FieldAccess { object, .. } => {
+            matches!(
+                &**object,
+                Expression::Unary {
+                    op: crate::parser::UnaryOp::Deref,
+                    ..
+                }
+            )
+        }
+        Expression::Binary { left, right, .. } => {
+            user_wrote_explicit_deref(left) || user_wrote_explicit_deref(right)
+        }
+        _ => false,
+    }
+}
+
 /// Identifier (or `&ident`) at the root of a call argument expression.
 pub fn borrow_target_identifier_name(arg_expr: &Expression) -> Option<String> {
     match arg_expr {

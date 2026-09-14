@@ -90,7 +90,9 @@ fn main() {
 
     // The generated code should have `let mut total` with integer suffix (from int inference)
     assert!(
-        rust_code.contains("let mut total = 0_i32;") || rust_code.contains("let mut total = 0;"),
+        rust_code.contains("let mut total = 0_i32;")
+            || rust_code.contains("let mut total = 0;")
+            || rust_code.contains("let mut total: i32 = 0_i32;"),
         "Expected `let mut` to generate `let mut` in Rust output.\nGenerated code:\n{}",
         rust_code
     );
