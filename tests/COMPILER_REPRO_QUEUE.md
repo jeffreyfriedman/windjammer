@@ -185,6 +185,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** defer-drop after owned `HashMap` param must not splice into an open `match map.get(…)` (breaks rustc parse / E0382).
 
+## P3.280 (2026-09-14) — wj-notes-api sha ETag + cargo-bin owned→demoted `&str`
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sha` ETag on `GET /notes/:id` + `If-None-Match` → 304 | ✅ **56/56** on cargo-bin `wj` 0.50.0 |
+| Gate `bug_demoted_str_formal_owned_local_auto_borrow_test` | ✅ tip GREEN |
+| cargo-bin 0.50.0 product residual | ⚠️ `note_get_reply(note, if_none_match)` E0308 expected `&str`, found `String` when formal demotes; notes pushes match string into `Vec` so formal stays owned |
+
+**Compiler agent:** backport tip auto-borrow for owned locals into demoted `&str` formals so cargo-bin hexagonal apps do not need `Vec` hold workarounds.
+
 ## P3.265 (2026-09-13) — tip E0252 duplicate type imports + bank_recon owned moves
 
 | Change | Status |
