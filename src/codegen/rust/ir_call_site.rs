@@ -868,6 +868,7 @@ impl<'ast> CodeGenerator<'ast> {
                 callee_name,
                 sig,
             );
+            self.sync_call_sig_from_preregistered_free_fn_emission(callee_name, &mut sig);
         }
 
         let mut param_idx = sig.arg_param_index(arg_index);
@@ -7189,6 +7190,72 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// Same-file preregistered Rust formals beat stale homonym borrow metadata on `sig`
+    /// (`join(base, relative)` vs `strings::join` scanner baseline).
+    fn sync_call_sig_from_preregistered_free_fn_emission(
+        &self,
+        callee_name: &str,
+        sig: &mut crate::analyzer::FunctionSignature,
+    ) {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let Some(formals) = [callee_name, simple]
+            .iter()
+            .find_map(|key| self.preregistered_free_function_emitted_params.get(*key))
+        else {
+            return;
+        };
+        let mut emitted_flags = sig
+            .emitted_rust_ref_params
+            .clone()
+            .unwrap_or_else(|| vec![false; sig.param_ownership.len()]);
+        while emitted_flags.len() < sig.param_ownership.len() {
+            emitted_flags.push(false);
+        }
+        for (arg_index, formal) in formals.iter().enumerate() {
+            let pidx = sig.arg_param_index(arg_index);
+            if pidx >= sig.param_ownership.len() {
+                continue;
+            }
+            let shared = (formal.contains(": &") || formal.contains(": &'a "))
+                && !formal.contains(": &mut ")
+                && !formal.contains(": &'a mut ");
+            emitted_flags[pidx] = shared;
+            if shared {
+                sig.param_ownership[pidx] = crate::analyzer::OwnershipMode::Borrowed;
+                if crate::codegen::rust::types::is_windjammer_text_type(
+                    sig.formal_param_type(pidx)
+                        .or_else(|| sig.param_types.get(pidx))
+                        .unwrap_or(&crate::parser::Type::String),
+                ) && (formal.contains(": &str") || formal.ends_with(": &str"))
+                {
+                    sig.param_types[pidx] =
+                        crate::parser::Type::Reference(Box::new(crate::parser::Type::Custom(
+                            "str".into(),
+                        )));
+                }
+            } else {
+                sig.param_ownership[pidx] = crate::analyzer::OwnershipMode::Owned;
+                if let Some(ty) = sig
+                    .formal_param_type(pidx)
+                    .or_else(|| sig.param_types.get(pidx))
+                    .cloned()
+                {
+                    let bare = match &ty {
+                        crate::parser::Type::Reference(inner)
+                        | crate::parser::Type::MutableReference(inner) => inner.as_ref().clone(),
+                        other => other.clone(),
+                    };
+                    sig.param_types[pidx] = bare.clone();
+                    while sig.formal_param_types.len() <= pidx {
+                        sig.formal_param_types.push(bare.clone());
+                    }
+                    sig.formal_param_types[pidx] = bare;
+                }
+            }
+        }
+        sig.emitted_rust_ref_params = Some(emitted_flags);
     }
 }
 
