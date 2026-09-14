@@ -3127,6 +3127,48 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    fn stdlib_vec_push_value_arg_is_owned(&self) -> bool {
+        let sig = self
+            .signature_registry
+            .get_signature("Vec::push")
+            .cloned()
+            .or_else(|| {
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature("Vec::push").cloned())
+            });
+        let Some(sig) = sig else {
+            return false;
+        };
+        let pidx = sig.arg_param_index(0);
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
+            return false;
+        }
+        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
+            || matches!(
+                sig.param_ownership.get(pidx),
+                Some(crate::analyzer::OwnershipMode::Owned)
+            )
+    }
+
+    fn expr_is_vec_like_receiver(
+        &self,
+        object: &Expression<'ast>,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        if self
+            .infer_expression_type(object)
+            .is_some_and(|t| crate::type_classification::type_is_vec_container(&t))
+        {
+            return true;
+        }
+        self.mc_infer_method_receiver_type_name(object)
+            .is_some_and(|name| {
+                crate::type_classification::is_collect_turbofish_target_base(&name)
+                    || name.starts_with("Vec<")
+            })
+    }
+
     fn expression_has_owning_method_use(
         &self,
         expr: &Expression<'ast>,
@@ -3185,6 +3227,17 @@ impl<'ast> CodeGenerator<'ast> {
                             return true;
                         }
                     }
+                }
+                // WDB-209: `out.columns.push(col)` — registry `Vec::push(T)` owns `T` even
+                // when field-receiver signature lookup misses during formal emission.
+                if *method == "push"
+                    && self.expr_is_vec_like_receiver(object, func)
+                    && self.stdlib_vec_push_value_arg_is_owned()
+                    && arguments.iter().any(|(_, arg)| {
+                        matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    })
+                {
+                    return true;
                 }
                 self.expression_has_owning_method_use(object, param_name, func)
                     || arguments.iter().any(|(_, arg)| {
@@ -7161,7 +7214,10 @@ impl<'ast> CodeGenerator<'ast> {
                 func.body.as_slice(),
                 &param.name,
                 func,
-            );
+            )
+            // WDB-209: `out.columns.push(col)` consumes owned `col` — do not demote the
+            // pub formal to `&mut T` + `.clone()` at the push site (catalog_push_column).
+            && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func);
         let result = param.name != "self"
             // Registry-aware Copy (Vec3, etc.) — not the primitive-only `type_analysis` helper.
             && !self.is_type_copy(&param.type_)
@@ -10231,6 +10287,21 @@ impl<'ast> CodeGenerator<'ast> {
                             });
                         if let Some(sig) = sig {
                             visit(&sig, i);
+                        } else if i == 0 && *method == "push" && self.stdlib_vec_push_value_arg_is_owned()
+                        {
+                            // WDB-209: field-receiver `out.columns.push(col)` before local
+                            // type inference converges — use registry `Vec::push(T)`.
+                            if let Some(push_sig) = self
+                                .signature_registry
+                                .get_signature("Vec::push")
+                                .or_else(|| {
+                                    self.global_signature_registry
+                                        .as_ref()
+                                        .and_then(|g| g.get_signature("Vec::push"))
+                                })
+                            {
+                                visit(push_sig, 0);
+                            }
                         }
                     }
                 }

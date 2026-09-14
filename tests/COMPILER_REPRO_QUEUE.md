@@ -17,6 +17,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
+| P0 | **Owned path extract call site must not `&String` into owned `string` formal** | `bug_owned_path_extract_must_not_over_borrow_test` | ❌ tip RED (P3.266) |
+| P0 | **Owned `Vec<string>` helper must not receive `&Vec` at call site** | `bug_vec_string_helper_must_not_over_borrow_test` | ❌ tip RED (P3.266) |
+| P0 | **Thin Vec forwarder must not demote to `&Vec` while callee stays owned** | `bug_thin_vec_forwarder_must_not_demote_owned_test` | ❌ tip RED (P3.266) |
 | P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (P3.265) — tuple `.N` usize only when element is usize; not blanket `.0` |
 | P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — per-param pub free-fn owned keep (concat lhs / owned forward); read-only pub APIs demote |
 | P1 | **Cross-crate `set_if` mut borrow without / with stripped metadata** | `bug_cross_crate_set_if_mut_borrow_test` | ✅ tip GREEN (2026-09-14) — MethodCall mut detect + loop-body MutBorrowed keep |
@@ -194,6 +197,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | cargo-bin 0.50.0 product residual | ⚠️ `note_get_reply(note, if_none_match)` E0308 expected `&str`, found `String` when formal demotes; notes pushes match string into `Vec` so formal stays owned |
 
 **Compiler agent:** backport tip auto-borrow for owned locals into demoted `&str` formals so cargo-bin hexagonal apps do not need `Vec` hold workarounds.
+
+## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + thin Vec forwarder
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_owned_path_extract_must_not_over_borrow_test` | ❌ tip RED — `extract_tool_name(&invoke_path)` |
+| Gate `bug_vec_string_helper_must_not_over_borrow_test` | ❌ tip RED — `list_json(&controls)` |
+| Gate `bug_thin_vec_forwarder_must_not_demote_owned_test` | ❌ tip RED — `post_simple(headers: &Vec)` → owned callee |
+| Product interim: inline string-list body; inline bearer lookup; inline `post_request`; `path + ""` into extractors | ✅ clears prior 8-error tip api-check cluster (verify) |
+
+**Compiler agent:** owned `string`/`Vec<string>` formals must receive moves (not `&`) when call-site analysis demotes read-only uses inconsistently with codegen. Thin Vec forwarders must not demote to `&Vec` while the callee keeps owned `Vec`.
 
 ## P3.265 (2026-09-13) — tip E0252 duplicate type imports + bank_recon owned moves
 
@@ -458,10 +472,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **~523** (tip-out regen churn; was ~125 earlier this session — binder/pg_wire tip regression) |
-| Tip **WDB-209** `catalog_push_column` `&mut CatalogColumnBinding` | ❌ RED — tip-out/gen demote owned col |
+| Tip **WDB-209** `catalog_push_column` `&mut CatalogColumnBinding` | ✅ **GREEN** — multipass + Vec::push registry; regen gen/tip-out |
 | Tip **WDB-210** `&mut Wave1Sf1Session`→owned clock | ✅ **GREEN** — tip uses `sess.clone()`; tip→gen sync |
 | Tip **WDB-211** `fill_bundle_from_six` `&mut OptOperatorFill` | ✅ **GREEN** after tip→gen (+ module_file) sync |
-| Tip **WDB-212** owned Timeseries batch→demoted `&` | ❌ RED — ops_full_host tip-out/gen |
+| Tip **WDB-212** owned Timeseries batch→demoted `&` | ✅ **GREEN** — `sig_arg_confirms_owned_emission` respects emission; multipass borrow gate |
 | Tip **WDB-213** demoted/`&mut` OptEconLedger→owned | ✅ **GREEN** after tip tpch owned formal sync |
 | Prior open | 176/177/191–198 + 201/203/204/206/208 |
 | Dogfood / tip-cluster | ❄️ frozen |

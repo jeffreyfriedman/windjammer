@@ -36,9 +36,20 @@ impl<'ast> CodeGenerator<'ast> {
                         sig, pidx,
                     );
                 }
+                // WDB-212: bare Custom in WJ AST is not owned emission when codegen demoted
+                // to `&T` (`timeseries_ingest_batch_point_count(batch: &Batch)`).
                 matches!(t, Type::Custom(_))
                     && !crate::codegen::rust::stdlib_method_traits::is_map_type(t)
                     && !crate::codegen::rust::stdlib_method_traits::is_set_type(t)
+                    && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        sig, pidx,
+                    )
+                    && sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(pidx))
+                        .copied()
+                        != Some(true)
             })
     }
 
