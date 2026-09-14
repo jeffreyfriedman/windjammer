@@ -336,6 +336,12 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if param.name != "self"
                     && self.inferred_borrowed_params.contains(&param.name)
+                    && !self.inferred_mut_borrowed_params.contains(&param.name)
+                    && !matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::MutBorrowed)
+                    )
+                    && !analyzed.mutated_parameters.contains(&param.name)
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && Self::param_is_used_inside_loop_body(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
@@ -605,6 +611,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Readonly text-returning helpers (`temp_path`) demote to `&str` so cross-
                 // module literal call sites stay bare (`temp_path("recover")`).
+                // Skip analyzer-Owned formals and P3.264 pub concat/owned-forward params.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
@@ -614,6 +621,7 @@ impl<'ast> CodeGenerator<'ast> {
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Owned)
                     )
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && !self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
                         &param.name,

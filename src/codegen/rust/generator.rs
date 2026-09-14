@@ -2611,7 +2611,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Demoted `&T` outer formal (multipass readonly reuse) passed into an owned callee.
     pub(crate) fn caller_demoted_non_copy_formal_into_owned_callee(&self, name: &str) -> bool {
-        self.emitted_rust_ref_formals.contains(name)
+        (self.emitted_rust_ref_formals.contains(name)
+            || self.inferred_borrowed_params.contains(name)
+            || self.str_ref_optimized_params.contains(name))
             && self.current_function_params.iter().any(|p| {
                 p.name == name && !self.is_type_copy(&p.type_)
             })
