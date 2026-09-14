@@ -491,7 +491,8 @@ impl<'ast> Analyzer<'ast> {
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
             for param in &func.parameters {
-                if self.param_used_bare_in_string_concat_expression(&param.name, &func.body) {
+                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body)
+                {
                     str_ref_optimizable_params.remove(&param.name);
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                 }
@@ -583,7 +584,8 @@ impl<'ast> Analyzer<'ast> {
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
             for param in &func.parameters {
-                if self.param_used_bare_in_string_concat_expression(&param.name, &func.body) {
+                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body)
+                {
                     str_ref_optimizable_params.remove(&param.name);
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
                 }
@@ -663,7 +665,7 @@ impl<'ast> Analyzer<'ast> {
                 if Self::trait_param_is_owned_string(&param.type_)
                     && (!str_ref_optimizable_params.contains(&param.name)
                         || (func.is_pub
-                            && self.param_used_bare_in_string_concat_expression(
+                            && self.param_used_in_consuming_string_concat_expression(
                                 &param.name,
                                 &func.body,
                             )))
@@ -675,7 +677,7 @@ impl<'ast> Analyzer<'ast> {
                     }
                     if self.param_needs_string_ref(&param.name, &func.body, registry) {
                         if func.is_pub
-                            && self.param_used_bare_in_string_concat_expression(
+                            && self.param_used_in_consuming_string_concat_expression(
                                 &param.name,
                                 &func.body,
                             )

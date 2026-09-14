@@ -322,6 +322,13 @@ impl IntInference {
             .collect()
     }
 
+    /// Library-wide `const` / `static` name → type (merged across multipass files).
+    /// Codegen imports these into `module_const_types` so `use crate::m::VIEWER_GRID`
+    /// peers range literals correctly (P3.280).
+    pub fn export_const_types(&self) -> HashMap<String, Type> {
+        self.const_types.clone()
+    }
+
     /// TDD FIX: Substitute generic type parameters with concrete types
     /// E.g., for HashMap<u32, String>::insert, parameter type K becomes u32
     /// Takes parsed Type enums, not strings

@@ -539,7 +539,26 @@ impl<'ast> Analyzer<'ast> {
             // `status + ""` / string `+` consumes the LHS as owned (codegen may lower to
             // `format!`, which accepts `&str` — demotion must still be blocked).
             || self.param_is_string_concat_lhs(name, statements)
-            || self.param_used_bare_in_string_concat_expression(name, statements)
+            || self.param_used_in_consuming_string_concat_expression(name, statements)
+            || self.param_appears_in_return_struct_literal_field(name, statements)
+    }
+
+    fn param_appears_in_return_struct_literal_field(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+    ) -> bool {
+        statements.iter().any(|stmt| {
+            matches!(
+                stmt,
+                Statement::Return {
+                    value: Some(Expression::StructLiteral { fields, .. }),
+                    ..
+                } if fields.iter().any(|(_, field_expr)| {
+                    self.expression_uses_identifier(name, field_expr)
+                })
+            )
+        })
     }
 
     fn is_only_stored_via_bare_struct_literal_field(

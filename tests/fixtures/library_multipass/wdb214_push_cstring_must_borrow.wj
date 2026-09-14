@@ -1,0 +1,12 @@
+pub struct Field {
+    pub name: string,
+}
+
+pub fn push_cstring(s: string) -> int {
+    let _ = s
+    0
+}
+
+pub fn write_field(f: Field) -> int {
+    push_cstring(f.name)
+}

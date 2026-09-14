@@ -1,0 +1,7 @@
+pub fn count_items(items: Vec<int>) -> int {
+    let mut pi = 0_u64
+    while pi < items.len() {
+        pi = pi + 1_u64
+    }
+    pi as int
+}

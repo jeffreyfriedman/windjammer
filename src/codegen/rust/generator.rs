@@ -1129,6 +1129,7 @@ impl<'ast> CodeGenerator<'ast> {
         &mut self,
         inference: crate::ir::numeric_bridge::UnifiedNumericInference,
     ) {
+        self.merge_numeric_inference_const_types(&inference);
         self.numeric_inference = Some(std::sync::Arc::new(inference));
     }
 
@@ -1137,7 +1138,19 @@ impl<'ast> CodeGenerator<'ast> {
         &mut self,
         inference: std::sync::Arc<crate::ir::numeric_bridge::UnifiedNumericInference>,
     ) {
+        self.merge_numeric_inference_const_types(inference.as_ref());
         self.numeric_inference = Some(inference);
+    }
+
+    /// P3.280: fold library-wide int-collector const types into `module_const_types`
+    /// so imported consts (`use crate::m::VIEWER_GRID`) peer-drive i32 range literals.
+    fn merge_numeric_inference_const_types(
+        &mut self,
+        inference: &crate::ir::numeric_bridge::UnifiedNumericInference,
+    ) {
+        for (name, ty) in inference.export_const_types() {
+            self.module_const_types.entry(name).or_insert(ty);
+        }
     }
 
     /// Backwards-compatible: wrap a FloatInference into UnifiedNumericInference.
@@ -1150,6 +1163,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Backwards-compatible: wrap an IntInference into UnifiedNumericInference.
     pub fn set_int_inference(&mut self, int_inf: crate::type_inference::IntInference) {
         let unified = crate::ir::numeric_bridge::UnifiedNumericInference::from_int_only(int_inf);
+        self.merge_numeric_inference_const_types(&unified);
         self.numeric_inference = Some(std::sync::Arc::new(unified));
     }
 
@@ -2690,6 +2704,49 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
+    pub(in crate::codegen::rust) fn caller_emits_mut_ref_formal(&self, param_name: &str) -> bool {
+        self.emitted_rust_ref_formals.contains(param_name)
+            && self.current_function_params.iter().any(|p| p.name == param_name)
+            && !self.str_ref_optimized_params.contains(param_name)
+            && !self
+                .current_function_params
+                .iter()
+                .find(|p| p.name == param_name)
+                .is_some_and(|p| crate::codegen::rust::types::is_windjammer_text_type(&p.type_))
+    }
+
+    pub(in crate::codegen::rust) fn callee_slot_emits_mut_borrow(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        for key in [callee_name, simple] {
+            if let Some(sig) = self
+                .signature_registry
+                .get_signature(key)
+                .or_else(|| {
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(key))
+                })
+            {
+                let pidx = sig.arg_param_index(arg_index);
+                if matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                ) || sig
+                    .param_types
+                    .get(pidx)
+                    .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// True when an owned caller param is passed to an owned callee formal and used again later.
     pub(in crate::codegen::rust) fn should_auto_clone_reused_owned_param_at_call(
         &self,
@@ -2698,6 +2755,12 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         if self.callee_arg_expects_borrow_at_call(callee_name, arg_index) {
+            return false;
+        }
+        // Reused `&mut T` formals into `&mut T` callees reborrow — never `.clone()`.
+        if self.caller_emits_mut_ref_formal(param_name)
+            && self.callee_slot_emits_mut_borrow(callee_name, arg_index)
+        {
             return false;
         }
         if self.binding_is_copy_pass_by_value_scalar(param_name)

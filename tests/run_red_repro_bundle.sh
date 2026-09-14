@@ -10,6 +10,8 @@ RED_FILTERS=(
 
 GREEN_FILTERS=(
   hashmap_string_key_insert_must_not_cast_usize
+  trait_owned_string_call_must_not_over_borrow
+  strings_len_must_unify_int_index_arith
   hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop
   explicit_type_import_must_not_duplicate_prelude
   owned_string_locals_move_into_owned_string_formals
@@ -20,6 +22,12 @@ GREEN_FILTERS=(
   vec_string_helper_must_not_over_borrow
   thin_vec_forwarder_must_not_demote_owned
   vec_custom_view_helper_must_not_over_borrow
+  mut_param_passthrough_must_not_prefix_shared_amp
+  cross_module_match_arm_readonly_concat_demotes_to_str
+  wdb214_codegen_push_cstring_must_borrow_owned_string_field
+  wdb215_codegen_u64_index_must_not_compare_len_as_i64
+  wdb216_codegen_demoted_vec_into_owned_ffi_must_clone
+  wdb217_codegen_mut_ref_formal_must_reborrow_not_clone
   while_idx_lt_vec_len_must_unify_int_uint
   seed_overlay_int_parse_format_must_cargo_check_without_plus_empty
   hexagonal_seed_overlay_int_parse_format_must_cargo_check_without_plus_empty
