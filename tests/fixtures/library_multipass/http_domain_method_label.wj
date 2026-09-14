@@ -1,0 +1,22 @@
+pub struct HttpReply {
+    pub status: u16,
+    pub body: string,
+}
+
+pub struct App {}
+
+impl App {
+    /// First formal is only compared — tip/cargo-bin often demote to `&str`.
+    pub fn handle(self, method: string, path: string, body: string) -> HttpReply {
+        if method == "GET" {
+            return HttpReply {
+                status: 200,
+                body: path,
+            }
+        }
+        HttpReply {
+            status: 405,
+            body: body,
+        }
+    }
+}

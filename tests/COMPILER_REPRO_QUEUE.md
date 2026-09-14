@@ -137,6 +137,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
+| P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
 | P1 | **Cross-crate module `touch_grid(grid)` must reborrow `&mut Grid`, not `grid.clone()`** | `bug_cross_crate_mut_borrow_module_fn_test` | ✅ tip GREEN (P3.274) — `sig_arg_confirms_owned_emission` must not strip `&mut T` |
 | P1 | **HashMap::get binding → demoted `&str` formal must not `.clone()` (`wj-auth-api` config)** | `bug_hashmap_get_binding_into_demoted_str_must_not_clone_test` | ✅ tip GREEN (P3.274) |
@@ -163,9 +164,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | Ecosystem: `wj-validate` title/body + `wj-mime` `Content-Type` on notes | ✅ **29/29** on cargo-bin `wj` 0.50.0 |
 | Adapter uses `handle_http(HttpMethod)` (same as auth) | ✅ cargo-bin still E0308 on `method_label` → demoted `method: &str` |
-| Gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin product residual |
+| Gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN |
+| Gate `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual |
 
-**Compiler agent:** strengthen multipass/module-file fixture so owned helper returns into demoted `&str` formals auto-borrow under hexagonal `domain/` + `adapters/` (cargo-bin 0.50.0 still RED without `handle_http`).
+**Compiler agent:** cargo-bin 0.50.0 product hexagonal builds still E0308 on `method_label` → demoted `&str`; tip multipass gate is GREEN — verify pin/backport for ecosystem dogfood on cargo-bin.
 
 ## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
 
@@ -392,6 +394,20 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Residual product empty-concat on query `vec![…]` / owned fields | ⚠️ still present — drop only when tip covers |
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
+
+## P3.277 WindjammerDB CQ-C5 — coverage REDs WDB-196–199 feed String / live OptDated / search f32 / &mut Value (2026-09-13)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **131** |
+| Tip **WDB-176/177/191–195** | ❌ still open (recheck) |
+| Tip **WDB-196** feed_unified lit/`&str`→owned String | filed — tip-out encode + unified sql |
+| Tip **WDB-197** live_row `&artifact`→owned quiet | filed — tip-out live_port |
+| Tip **WDB-198** search_host `distance: 0.1_f32` | filed — tip-out search_host |
+| Tip **WDB-199** `&mut Value`→owned secondary_key | filed — product secondary_index |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens 176/177/191–199. No Phase 606+.
 
 ## P3.276 WindjammerDB CQ-C5 — tip-out→gen sync + WDB-192–195 claim/frame/lsqb/bakeoff (2026-09-13)
 
