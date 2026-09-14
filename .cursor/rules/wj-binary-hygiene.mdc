@@ -1,0 +1,45 @@
+---
+description: Atomic wj installs, isolated tip paths, never kill other agents' compiler jobs
+alwaysApply: true
+---
+
+# wj binary hygiene (multi-agent / dogfood)
+
+## Never truncate a live `wj` binary
+
+On macOS, `cp` onto an existing `target/release/wj` **rewrites the same inode**. Processes still executing that binary wedge (`UE`, ~0 RSS) — including unrelated `wj --version` and other agents' builds.
+
+**Always install with write-temp + rename:**
+
+```bash
+# Preferred helper
+wj-game install-wj --from /path/to/tip/wj --to /path/to/windjammer/target/release/wj
+# or
+windjammer/scripts/atomic_install_wj.sh <src> <dest>
+```
+
+If the destination is still executing, the helpers **refuse** unless `--allow-busy` (rename still keeps the old inode for those PIDs).
+
+## Prefer isolated tip paths — do not stomp shared dogfood
+
+While other agents use `windjammer/target/release/wj`:
+
+```bash
+export WJ_COMPILER=/Users/jeffreyfriedman/src/wj/windjammer-game/.cargo-target-wj/release/wj
+# then: wj game build / tip wj build …
+```
+
+`wj-game` resolves compilers in this order: `WJ_COMPILER` → `.cargo-target-wj` tip → dogfood `windjammer/target/release/wj` → `$PATH`.
+
+## Never kill other agents' `wj` jobs
+
+- Do **not** `pkill`/`kill` `wj build --check` (or any `wj`) just because it looks stuck.
+- First classify: real hang (CPU > 0, growing RSS, typed stacks) vs **UE wedge** after binary clobber (0 CPU, ~32 KB RSS).
+- UE wedges are an install bug — fix install hygiene; do not treat foreign PIDs as yours to reap.
+- Coordinate or use `WJ_COMPILER` / tip target dirs so agents do not share one mutable dogfood path.
+
+## FMP / other product `--check` hangs
+
+`make api-check` → `wj build src/mod.wj --check --module-file` in product repos is a **separate** investigation from game-engine hangs. Reproduce with a healthy tip binary (`WJ_COMPILER=…tip…`); do not conflate with UE wedges from inode clobber.
+
+**Verified 2026-09-13:** FMP backend `--check` on tip `wj` (**not** dogfood) finished in ~61s — transpile succeeded; failure was **52 rustc errors**, not a hang. Slow/`UE` jobs on shared dogfood were clobber wedges.
