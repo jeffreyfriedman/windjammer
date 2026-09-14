@@ -3011,6 +3011,14 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Unary { operand, .. } => expr_uses_owned_add_lhs(operand, param_name),
                 Expression::FieldAccess { object, .. }
                 | Expression::Index { object, .. } => expr_uses_owned_add_lhs(object, param_name),
+                Expression::StructLiteral { fields, .. } => fields
+                    .iter()
+                    .any(|(_, v)| expr_uses_owned_add_lhs(v, param_name)),
+                Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                    elements
+                        .iter()
+                        .any(|el| expr_uses_owned_add_lhs(el, param_name))
+                }
                 _ => false,
             }
         }
