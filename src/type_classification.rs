@@ -395,18 +395,40 @@ pub fn has_significant_drop(name: &str) -> bool {
     )
 }
 
-/// Std / runtime-facing types that do not implement `Debug` or `Clone` in Rust.
+/// Std / runtime-facing types that must not get combined `#[derive(Debug, Clone)]`
+/// when used as a **field type leaf** (rustc E0277).
 ///
-/// Used by codegen auto-derive: wrapping these in a WJ struct must not emit
-/// `#[derive(Debug, Clone)]` (rustc E0277). Matches on the type leaf so
-/// `mpsc::Receiver<T>` and `Receiver<T>` are treated the same.
+/// Important distinctions from `has_significant_drop`:
+/// - `Sender` **is** `Clone` — do not list it here.
+/// - `Mutex` / `RwLock` are **not** `Clone`, but `Arc<Mutex<T>>` **is** — callers must
+///   special-case `Arc`/`Rc` wrappers so they do not treat the inner mutex as fatal.
+///
+/// Matches on the type leaf so `mpsc::Receiver<T>` and `Receiver<T>` are the same.
 pub fn is_std_non_auto_debug_clone_type(name: &str) -> bool {
     let leaf = type_name_leaf(name);
-    has_significant_drop(leaf)
-        || matches!(
-            leaf,
-            "SyncSender" | "UnboundedSender" | "UnboundedReceiver" | "Child" | "Process"
-        )
+    matches!(
+        leaf,
+        "Receiver"
+            | "UnboundedReceiver"
+            | "Mutex"
+            | "RwLock"
+            | "MutexGuard"
+            | "RwLockReadGuard"
+            | "RwLockWriteGuard"
+            | "JoinHandle"
+            | "File"
+            | "TcpStream"
+            | "UdpSocket"
+            | "Child"
+            | "Process"
+            | "Channel"
+    )
+}
+
+/// Shared-ownership wrappers that are always `Clone` (and `Debug` when the
+/// payload is). Inner `Mutex`/`RwLock` must not block auto-derive.
+pub fn is_shared_ownership_wrapper(name: &str) -> bool {
+    matches!(type_name_leaf(name), "Arc" | "Rc" | "Weak")
 }
 
 /// Language-level owned-text conversion methods (WJ `.string()` / Rust `.to_string()`).

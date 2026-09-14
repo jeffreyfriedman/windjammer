@@ -135,10 +135,30 @@ impl CodeGenerator<'_> {
             | Type::Reference(inner)
             | Type::MutableReference(inner) => self.type_precludes_auto_debug_clone(inner),
             Type::Parameterized(base, args) => {
-                crate::type_classification::is_std_non_auto_debug_clone_type(base)
-                    || args
-                        .iter()
-                        .any(|a| self.type_precludes_auto_debug_clone(a))
+                if crate::type_classification::is_shared_ownership_wrapper(base) {
+                    // `Arc<Mutex<T>>` / `Arc<T>` are Clone; only the *payload* can block
+                    // Debug (e.g. nested Receiver). Skip the Mutex/RwLock leaf itself.
+                    args.iter().any(|a| match a {
+                        Type::Parameterized(inner_base, inner_args)
+                            if crate::type_classification::is_std_non_auto_debug_clone_type(
+                                inner_base,
+                            ) && matches!(
+                                crate::type_classification::type_name_leaf(inner_base),
+                                "Mutex" | "RwLock"
+                            ) =>
+                        {
+                            inner_args
+                                .iter()
+                                .any(|t| self.type_precludes_auto_debug_clone(t))
+                        }
+                        _ => self.type_precludes_auto_debug_clone(a),
+                    })
+                } else {
+                    crate::type_classification::is_std_non_auto_debug_clone_type(base)
+                        || args
+                            .iter()
+                            .any(|a| self.type_precludes_auto_debug_clone(a))
+                }
             }
             Type::Result(ok, err) => {
                 self.type_precludes_auto_debug_clone(ok) || self.type_precludes_auto_debug_clone(err)

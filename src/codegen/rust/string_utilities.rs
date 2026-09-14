@@ -525,6 +525,21 @@ pub fn normalize_owned_string_producer_for_str_ref_param(
             return;
         }
     }
+    if matches!(
+        arg_expr,
+        Expression::FieldAccess { .. }
+            | Expression::Index { .. }
+            | Expression::Call { .. }
+            | Expression::MethodCall { .. }
+    ) {
+        let mut s = arg_str.trim().to_string();
+        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);
+        if !s.starts_with('&') {
+            s = format!("&{s}");
+        }
+        *arg_str = s;
+        return;
+    }
     // Non-literals that already produce owned String need `&` for `&str` formals.
     if arg_str.starts_with('&') {
         return;
