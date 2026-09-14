@@ -216,7 +216,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-url` `join_url` → `Location` on `POST /notes` + `public_base_url` config | 🔄 in progress |
+| Ecosystem: `wj-url` `join_url` → `Location` on `POST /notes` + `public_base_url` config | ✅ **60/60** on cargo-bin `wj` 0.50.0 |
 | Gate `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 filed — `use owned::get as query_get` + dep exporting Borrowed `query_get` emits `query_get(&query)` into Owned `get(String, …)` |
 | Product workaround | ✅ alias as `qs_get` (not `query_get`) |
 
