@@ -1177,16 +1177,27 @@ impl<'ast> CodeGenerator<'ast> {
                         // mutated through method call — caller wants mutation visible).
                         // Skip in trait impls: trait signature must match exactly.
                         if !self.in_trait_impl {
+                            let vec_push_keeps_owned = self.param_has_owning_method_use(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) || self.param_only_forwards_to_emitted_owned_callees(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            );
                             if !param.is_mutable {
                                 if let Some(OwnershipMode::MutBorrowed) =
                                     self.get_param_ownership(&param.name, analyzed)
                                 {
-                                    self.inferred_mut_borrowed_params
-                                        .insert(param.name.clone());
-                                    return format!(
-                                        "&mut {}",
-                                        self.type_to_rust(formal_type)
-                                    );
+                                    if !vec_push_keeps_owned {
+                                        self.inferred_mut_borrowed_params
+                                            .insert(param.name.clone());
+                                        return format!(
+                                            "&mut {}",
+                                            self.type_to_rust(formal_type)
+                                        );
+                                    }
                                 }
                             }
                             if !analyzed.returned_parameters.contains(&param.name)
@@ -1196,6 +1207,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         .contains(&param.name))
                                 && analyzed.mutated_parameters.contains(&param.name)
                                 && !self.is_type_copy(formal_type)
+                                && !vec_push_keeps_owned
                             {
                                 self.inferred_mut_borrowed_params
                                     .insert(param.name.clone());
@@ -1218,6 +1230,11 @@ impl<'ast> CodeGenerator<'ast> {
                             && !self.param_single_arg_owned_self_or_field_forward(param, func)
                             && self.param_should_emit_borrowed_delegation_formal(param, func)
                             && !self.is_collection_key_owned_param(param, func)
+                            && !self.param_has_owning_method_use(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            )
                         {
                             let type_str =
                                 self.borrowed_formal_rust_type_for_param(param, func, param_idx);
