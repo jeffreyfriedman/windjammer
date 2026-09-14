@@ -211,17 +211,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** ownership/coercion for cross-crate free fns must follow signature registry — do not special-case method/fn name `encode` into a borrow.
 
-## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + thin Vec forwarder
+## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + HashMap string key
 
 | Change | Status |
 |--------|--------|
 | Gate `bug_owned_path_extract_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
 | Gate `bug_vec_string_helper_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
 | Gate `bug_thin_vec_forwarder_must_not_demote_owned_test` | ✅ tip GREEN (2026-09-14) |
+| Gate `bug_hashmap_string_key_insert_must_not_cast_usize_test` | ❌ tip RED — untyped `HashMap::new()` → `insert(key as usize, …)` |
+| Gate `bug_vec_custom_view_helper_must_not_over_borrow_test` | ✅ tip GREEN (isolate); product used `lines.clone()` interim |
 | Gate `bug_engine_i32_range_literal_must_not_emit_i64_suffix_test` | ✅ tip GREEN (2026-09-14) — `module_const_types` + non-usize range loop binding |
-| Product interim: inline string-list body; inline bearer lookup; inline `post_request`; `path + ""` into extractors | ✅ clears prior 8-error tip api-check cluster (verify) |
+| Product interim: typed `HashMap<string,string>` locals; `lines.clone()` into view helpers; append_string_list owned prefix; bearer/post_request inlines; `path + ""` | ✅ tip `make api-check` **GREEN** (2026-09-14) |
 
-**Compiler agent:** owned `string`/`Vec<string>` formals must receive moves (not `&`) when call-site analysis demotes read-only uses inconsistently with codegen. Thin Vec forwarders must not demote to `&Vec` while the callee keeps owned `Vec`. i32 consts must register for identifier inference so range/arithmetic literals match bound width.
+**Compiler agent:** `HashMap<string,string>::insert` must keep `String` keys (no `as usize`) even when the map local lacks an explicit type annotation. Owned `Vec<T>` formals must receive moves at multipass call sites (`*_view_from_row(row, lines)` not `&lines`).
 
 ## P3.265 (2026-09-13) — tip E0252 duplicate type imports + bank_recon owned moves
 
@@ -231,7 +233,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (2026-09-14) — no `(idx as i64) < ….len()` |
 | Product interim: strip View/Line/Draft names from brace imports (~38 files) | ✅ tip api-check E0252 **0** |
 | Product: bank_recon drop `clone_code` → `code + ""`; seed_bank_import `for` loops | ✅ |
-| Tip `make api-check` | **76 → 20** (remaining: postgres while-len uint + http_json Vec borrow) |
+| Tip `make api-check` | **76 → 20 → 0** (P3.266 product interims; verified 2026-09-14) |
 
 **Compiler agent:** when auto-emitting prelude `use crate::…::Type;`, do not also keep `Type` inside the source brace `use crate::…::{…, Type}`. Unify `while idx < vec.len()` to one integer width.
 

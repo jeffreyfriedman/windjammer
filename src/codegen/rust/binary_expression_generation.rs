@@ -170,32 +170,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Drive int literal suffixes from a peer operand (WDB-121 usize, WDB-081 u32).
+        // P3.280: use full `infer_expression_type` so i32 locals from `CONST / 2` and
+        // module consts peer-drive range/edge literals (`cx - 16` → `16_i32`, not `_i64`).
         let prev_bin_int = self.assignment_int_target_type.clone();
         if (is_comparison || is_arithmetic) && self.assignment_int_target_type.is_none() {
-            let peer_int_type = |expr: &Expression<'ast>| -> Option<Type> {
-                let Expression::Identifier { name, .. } = expr else {
-                    return None;
-                };
-                self.local_var_types
-                    .get(name)
-                    .cloned()
-                    .or_else(|| {
-                        self.current_function_params
-                            .iter()
-                            .find(|p| p.name == *name)
-                            .map(|p| p.type_.clone())
-                    })
-                    .filter(|t| {
-                        Self::assignment_target_needs_int_codegen_context(t)
-                            && Self::int_type_from_assignment_target(t).is_some()
-                    })
+            let peer_int_type = |this: &Self, expr: &Expression<'ast>| -> Option<Type> {
+                this.infer_expression_type(expr).filter(|t| {
+                    Self::assignment_target_needs_int_codegen_context(t)
+                        && Self::int_type_from_assignment_target(t).is_some()
+                })
             };
             if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal)
             {
                 let peer = if right_is_int_literal {
-                    peer_int_type(left)
+                    peer_int_type(self, left)
                 } else {
-                    peer_int_type(right)
+                    peer_int_type(self, right)
                 };
                 if peer.as_ref().is_some_and(|t| {
                     matches!(t, Type::Int32)
@@ -206,11 +196,11 @@ impl<'ast> CodeGenerator<'ast> {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }
             } else if right_is_int_literal {
-                if let Some(t) = peer_int_type(left) {
+                if let Some(t) = peer_int_type(self, left) {
                     self.assignment_int_target_type = Some(t);
                 }
             } else if left_is_int_literal {
-                if let Some(t) = peer_int_type(right) {
+                if let Some(t) = peer_int_type(self, right) {
                     self.assignment_int_target_type = Some(t);
                 }
             }
