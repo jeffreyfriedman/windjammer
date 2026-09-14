@@ -623,7 +623,7 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                     )
-                    && !self.param_used_as_call_argument(
+                    && !self.param_passed_as_call_argument(
                         func.body.as_slice(),
                         &param.name,
                         func,
@@ -2497,8 +2497,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 &param.name,
                                 func,
                             );
+                            // Do not demote pub owned `string` module APIs (P3.264
+                            // concat2/overlay_row): call sites must pass owned String.
                             let format_only_string =
                                 crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                    && !self.pub_module_api_keeps_owned_string_formal(func)
+                                    && !self.is_public_owned_non_copy_formal_api(param, func)
                                     && self.param_used_as_read_operand(
                                         func.body.as_slice(),
                                         &param.name,
@@ -2938,8 +2942,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     {
                                         // WDB-175/178: pub module APIs keep owned Vec/Custom formals.
                                         // Exception: `for v in vertices { f(vertices, v) }` demotes to `&Vec`.
+                                        // Clear str_ref so call sites do not over-borrow into String.
                                         self.inferred_borrowed_params.remove(&param.name);
                                         self.emitted_rust_ref_formals.remove(&param.name);
+                                        self.str_ref_optimized_params.remove(&param.name);
                                         self.type_to_rust(&param.type_)
                                     } else {
                                         format!("&{}", self.type_to_rust(formal_type))
@@ -3006,8 +3012,10 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // windjammer-ui / Rust interop: pub builder formals that store owned `string`
                 // into payload fields accept `&str` via `impl Into<String>`.
+                // Skip when pub free-fn APIs must keep concrete owned `String` (P3.264).
                 if param.name != "self"
                     && type_str == "String"
+                    && !self.pub_module_api_keeps_owned_string_formal(func)
                     && (self.param_should_emit_into_string_formal(func, param, payload_stored)
                         || self.param_pub_free_string_builder_forward(func, param))
                 {
@@ -3501,15 +3509,15 @@ impl<'ast> CodeGenerator<'ast> {
         body.iter().any(|s| stmt_compares(param, s))
     }
 
-    /// Whether pub crate APIs must refuse `&str` demotion for WJ `string` formals.
+    /// Whether pub free-fn APIs must refuse `&str` demotion for WJ `string` formals.
     ///
-    /// Always false: ownership is body-/signature-driven (Phase 2, IR, payload store,
-    /// owning callees). A blanket `is_pub → Owned` race-guard blocked read-only demotion
-    /// (`concatenate` `&b`/`&c`, `HashSet::contains`, unused `on_click` handlers) and
-    /// forced call-site `.clone()`. Cross-module callers sync via the signature registry
-    /// (WDB-112); payload stores use owned/`impl Into<String>`, not pub-ness.
-    fn pub_module_api_keeps_owned_string_formal(&self, _func: &FunctionDecl<'_>) -> bool {
-        false
+    /// Pub free functions keep owned `String` (P3.264 concat2/overlay_row / hexagonal
+    /// adapters). Method/`impl` formals stay body-/signature-driven so read-only demotion
+    /// (`HashSet::contains`, unused handlers) is unchanged. Cross-module callers sync via
+    /// the signature registry (WDB-112).
+    fn pub_module_api_keeps_owned_string_formal(&self, func: &FunctionDecl<'_>) -> bool {
+        // P3.264: pub free-fn `string` formals stay owned so call sites move (no `&local`).
+        func.is_pub && func.parent_type.is_none()
     }
 
     /// `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay owned at

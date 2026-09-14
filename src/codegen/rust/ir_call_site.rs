@@ -237,7 +237,21 @@ impl<'ast> CodeGenerator<'ast> {
                         .as_ref()
                         .is_some_and(|g| g.get_signature(method_simple).is_some())
                     || local_sig.is_some());
-            if !has_exact_module_sig && !has_inline_simple_sig {
+            // Cross-crate `mod::fn` from dependency metadata.json (keys are often bare `fn`).
+            let has_dependency_simple_sig = self
+                .global_signature_registry
+                .as_ref()
+                .is_some_and(|g| g.get_signature(method_simple).is_some());
+            // Fail closed only when dependency metadata exposes a bare homonym we must not
+            // mis-apply to a qualified path. With no registry entry at all, continue so
+            // call-site / IR inference can still promote `&mut` (scene_builder set_if).
+            if has_exact_module_sig || has_inline_simple_sig || has_dependency_simple_sig {
+                // resolved below via pick_codegen_refreshed_signature
+            } else if self
+                .global_signature_registry
+                .as_ref()
+                .is_some_and(|g| g.find_signature_ending_with(method_simple).is_some())
+            {
                 self.report_missing_boundary_signature(callee_name);
                 return Some(prepared_arg);
             }
@@ -1304,7 +1318,15 @@ impl<'ast> CodeGenerator<'ast> {
                 kind = CoercionKind::Identity;
             }
         }
-        let resolved_kind = kind;
+        let mut resolved_kind = kind;
+        // WDB-169/WDB-190: callee temps autoborrow into `&T` / `&Vec<T>` — never `&callee()`.
+        let call_temp_autoborrow = matches!(
+            arg_expr,
+            Expression::Call { .. } | Expression::MethodCall { .. }
+        );
+        if call_temp_autoborrow && matches!(resolved_kind, CoercionKind::Borrow) {
+            resolved_kind = CoercionKind::Identity;
+        }
         let coerced = apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust);
         let mut coerced = self.finalize_ir_call_arg(arg_expr, prepared_arg.as_str(), &coerced);
 
@@ -1313,10 +1335,13 @@ impl<'ast> CodeGenerator<'ast> {
         let user_explicit_deref =
             crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr);
         if !user_explicit_deref {
-            crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
+            crate::ir::coercion::enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 &mut coerced,
                 &actual,
                 &expected,
+                false,
+                call_temp_autoborrow,
+                false,
             );
         }
         let arg_binding_already_rust_ref = matches!(
@@ -2567,26 +2592,49 @@ impl<'ast> CodeGenerator<'ast> {
                     !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                         && crate::codegen::rust::types::is_windjammer_text_type(&t)
                 });
-                let reuse_after_move = self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                    a.needs_clone(name, self.current_statement_idx).is_some()
-                }) || {
-                    let later: Vec<&Statement<'ast>> = self
-                        .current_function_body
-                        .iter()
-                        .skip(self.current_statement_idx + 1)
-                        .copied()
-                        .collect();
-                    !later.is_empty() && Self::variable_used_in_statements(&later, name)
-                };
-                if local_owned_text && reuse_after_move {
-                    let base = crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
-                        .trim_end_matches(".clone()")
-                        .trim()
+                let reuse_after_move = !self.current_stmt_restores_binding_after_move(name)
+                    && (self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                        a.needs_clone(name, self.current_statement_idx).is_some()
+                    }) || {
+                        let later: Vec<&Statement<'ast>> = self
+                            .current_function_body
+                            .iter()
+                            .skip(self.current_statement_idx + 1)
+                            .copied()
+                            .collect();
+                        !later.is_empty() && Self::variable_used_in_statements(&later, name)
+                    });
+                let callee_wants_owned_text =
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &sig, param_idx,
+                    ) || (sig.formal_param_type(param_idx).is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && crate::codegen::rust::types::is_windjammer_text_type(t)
+                    }) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        &sig, param_idx,
+                    ) && sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(param_idx).copied())
+                        != Some(true));
+                if local_owned_text && callee_wants_owned_text {
+                    if reuse_after_move {
+                        let base =
+                            crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                                .trim_end_matches(".clone()")
+                                .trim()
+                                .to_string();
+                        if !base.ends_with(".clone()") {
+                            coerced = format!("{base}.clone()");
+                        } else {
+                            coerced = base;
+                        }
+                    } else if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                        // P3.264: owned local into owned String formal — move, do not over-borrow.
+                        coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                            &coerced,
+                        )
                         .to_string();
-                    if !base.ends_with(".clone()") {
-                        coerced = format!("{base}.clone()");
-                    } else {
-                        coerced = base;
                     }
                 }
             }
@@ -3385,12 +3433,8 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if matches!(
                         arg_expr,
                         Expression::Call { .. } | Expression::MethodCall { .. }
-                    ) && (self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
-                        || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                            &sig, param_idx,
-                        ))
-                    {
-                        // WDB-169/WDB-190: owned call temps move — no shared-ref reapply.
+                    ) {
+                        // WDB-169/WDB-190: call temps autoborrow — never `&callee()`.
                     } else {
                     let mut expected =
                         crate::ir::signature_bridge::safety_type_from_signature_param(
@@ -4249,6 +4293,10 @@ impl<'ast> CodeGenerator<'ast> {
             && !coerced.ends_with(".to_string()")
             && !coerced.ends_with(".to_owned()")
             && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+            && !matches!(
+                arg_expr,
+                Expression::Call { .. } | Expression::MethodCall { .. }
+            )
         {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if self.emitted_rust_ref_formals.contains(name)
@@ -5308,7 +5356,8 @@ impl<'ast> CodeGenerator<'ast> {
                     return;
                 }
             }
-            // WDB-169/WDB-190: Call/MethodCall temps into owned formals must move, not `&call()`.
+            // WDB-169/WDB-190: Call/MethodCall temps must fall through to owned peel — never
+            // prefix `&callee()` here and never return early (blocks force_owned strip).
             if !matches!(
                 arg_expr,
                 Expression::Call { .. } | Expression::MethodCall { .. }
@@ -5318,8 +5367,14 @@ impl<'ast> CodeGenerator<'ast> {
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
             {
                 *coerced = format!("&{coerced}");
+                return;
             }
-            return;
+            if !matches!(
+                arg_expr,
+                Expression::Call { .. } | Expression::MethodCall { .. }
+            ) {
+                return;
+            }
         }
         if let Expression::Identifier { name, .. } = arg_expr {
             if (self.borrowed_iterator_vars.contains(name)
@@ -5553,19 +5608,22 @@ impl<'ast> CodeGenerator<'ast> {
                         .to_string();
                 return;
             }
+            // WDB-169/WDB-190: Call/MethodCall temps coerce to `&T` via Rust autoborrow —
+            // never emit `&empty_bakeoff_run()` / `&encode_startup(…)` (E0308 / product gates).
             if !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                && !matches!(
+                    arg_expr,
+                    Expression::Call { .. } | Expression::MethodCall { .. }
+                )
             {
                 *coerced = format!("&{coerced}");
             }
-            // Vec literals / helper returns at `append_put(&vec![…], &enc)` sites.
+            // Vec literals at `append_put(&vec![…], …)` sites still need explicit `&`.
             if !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
-                && matches!(
-                    arg_expr,
-                    Expression::Array { .. } | Expression::Call { .. }
-                )
+                && matches!(arg_expr, Expression::Array { .. })
             {
                 *coerced = format!("&{coerced}");
             }
@@ -5596,9 +5654,7 @@ impl<'ast> CodeGenerator<'ast> {
         if coerced.starts_with('&') || coerced.starts_with("&mut ") {
             return;
         }
-        if !crate::codegen::rust::call_site_borrow::expression_is_vec_literal_producer(arg_expr)
-            && !matches!(arg_expr, Expression::Call { .. })
-        {
+        if !crate::codegen::rust::call_site_borrow::expression_is_vec_literal_producer(arg_expr) {
             return;
         }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);

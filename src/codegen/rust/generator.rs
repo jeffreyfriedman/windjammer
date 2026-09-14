@@ -2762,6 +2762,10 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         name: &str,
     ) -> bool {
+        // WDB-084/087: `map = f(map)` / tuple writeback moves then rebinds — not multi-use.
+        if self.current_stmt_restores_binding_after_move(name) {
+            return false;
+        }
         if self.auto_clone_analysis.as_ref().is_some_and(|a| {
             a.needs_clone(name, self.current_statement_idx).is_some()
         }) {
@@ -2800,8 +2804,15 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         binding: &str,
     ) -> bool {
-        let body: Vec<&crate::parser::Statement> =
-            self.current_function_body.iter().copied().collect();
+        // Nested blocks swap `current_function_body` to a slice; auto-clone indices stay
+        // function-wide (`auto_clone_counter`). WDB-087 tuple writeback must scan the full body.
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty()
+            && self.current_function_body.len() != self.full_function_body_snapshot.len()
+        {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
         crate::auto_clone::AutoCloneAnalysis::stmt_restores_binding_after_move(
             &body,
             binding,

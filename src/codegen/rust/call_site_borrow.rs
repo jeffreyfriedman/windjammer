@@ -131,6 +131,14 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
     if coerced.starts_with('&') {
         return coerced;
     }
+    // WDB-169/WDB-190: helper/callee temps (`encode_startup()`, `empty_bakeoff_run()`)
+    // coerce to `&Vec<T>` / `&T` via Rust autoborrow — never prefix `&`.
+    if matches!(
+        arg_expr,
+        Expression::Call { .. } | Expression::MethodCall { .. }
+    ) {
+        return coerced;
+    }
     // AST/type-driven only — never string-prefix `Vec::new()` heuristics.
     if !expression_is_owned_vec_at_call_site(gen, arg_expr) {
         return coerced;

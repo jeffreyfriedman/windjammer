@@ -1,0 +1,16 @@
+// FAILING REPRO — while idx < vec.len() must unify int index with len (LedgerKit).
+// Tip RED: `(idx as i64) < validated.lines.len()` → WJ0003 expected int found uint.
+
+pub struct Line {
+    pub id: string,
+}
+
+pub fn count_lines(lines: Vec<Line>) -> int {
+    let mut idx = 0
+    let mut n = 0
+    while idx < lines.len() {
+        n = n + 1
+        idx = idx + 1
+    }
+    n
+}

@@ -362,23 +362,29 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.current_function_params,
                         );
                     if let Expression::Identifier { name, .. } = arg {
-                        if peel_sig.as_ref().is_some_and(|sig| {
+                        let callee_owned = peel_sig.as_ref().is_some_and(|sig| {
                             let pidx = sig.arg_param_index(i);
-                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 sig, pidx,
-                            ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                                sig, pidx,
-                            ) && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-                                &gen.signature_registry,
-                                func_name,
-                                Some(sig),
-                                i,
-                            )
-                        }) && gen.auto_clone_analysis.as_ref().is_some_and(|a| {
-                            a.needs_clone(name, gen.current_statement_idx).is_some()
-                        }) && !coerced.ends_with(".clone()")
+                            ) || gen.preregistered_free_call_arg_emits_owned(func_name, i))
+                                && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                    &gen.signature_registry,
+                                    func_name,
+                                    Some(sig),
+                                    i,
+                                )
+                        });
+                        if callee_owned
+                            && gen.local_binding_reused_after_current_statement(name)
+                            && !coerced.ends_with(".clone()")
                         {
-                            coerced = gen.append_clone_for_owned_non_copy_binding(name, &coerced);
+                            let base = if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                                coerced.trim_start_matches('&')
+                            } else {
+                                coerced.as_str()
+                            };
+                            coerced =
+                                gen.append_clone_for_owned_non_copy_binding(name, base);
                         }
                     } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
                         && !coerced.ends_with(".clone()")

@@ -17,6 +17,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
+| P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ❌ tip RED (P3.265) |
 | P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — hexagonal + same-file; pub `string` bare-pass skip + owned-local move reconcile |
 | P1 | **Seed overlay `int_to_string`/`parse_int_string` without empty-concat** | `bug_seed_overlay_int_parse_format_no_plus_empty_test` | ✅ tip GREEN (P3.262) |
 | P0 | **Thin trait-impl Draft forwarder must not demote to `&mut Draft` (E0053) / free fn `&Self`** | `bug_trait_owned_draft_forwarder_must_not_demote_mut_test` | ✅ tip GREEN (2026-09-13) |
@@ -184,12 +185,13 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | 🔧 filed (minimal may GREEN; product tip emits prelude+brace) |
-| Product interim: strip View/Line/Draft names from brace imports (~38 files) | 🔧 in progress |
-| Product: bank_recon drop `clone_code` → `code + ""` owned moves | 🔧 in progress |
-| Tip `make api-check` | was **76** after tip sync (string_concat cleared); targeting E0252 + `&string` |
+| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | ⚠️ multipass GREEN (prelude not fired); product tip E0252 cleared via brace strip |
+| Gate `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ❌ filed — tip `(idx as i64) < vec.len()` |
+| Product interim: strip View/Line/Draft names from brace imports (~38 files) | ✅ tip api-check E0252 **0** |
+| Product: bank_recon drop `clone_code` → `code + ""`; seed_bank_import `for` loops | ✅ |
+| Tip `make api-check` | **76 → 20** (remaining: postgres while-len uint + http_json Vec borrow) |
 
-**Compiler agent:** when auto-emitting prelude `use crate::…::Type;`, do not also keep `Type` inside the source brace `use crate::…::{…, Type}`.
+**Compiler agent:** when auto-emitting prelude `use crate::…::Type;`, do not also keep `Type` inside the source brace `use crate::…::{…, Type}`. Unify `while idx < vec.len()` to one integer width.
 
 ## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
 

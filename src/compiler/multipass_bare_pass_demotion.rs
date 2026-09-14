@@ -768,14 +768,9 @@ fn callee_registry_keys(callee_name: &str, registry: &SignatureRegistry) -> Vec<
 }
 
 fn is_bare_binding_pass(expr: &Expression) -> bool {
-    matches!(
-        expr,
-        Expression::Identifier { .. }
-            | Expression::Literal {
-                value: crate::parser::Literal::String(_),
-                ..
-            }
-    )
+    // Literals are not bindings — treating `"lit"` as a bare pass wrongly demotes
+    // owned pub `string` formals (P3.264 overlay_row / append_overlay_row).
+    matches!(expr, Expression::Identifier { .. })
 }
 
 fn bare_pass_target_ownership(
@@ -1254,6 +1249,12 @@ fn callee_pub_owned_formal_skip_bare_pass(
     });
     if !is_pub_free_fn {
         return false;
+    }
+    // P3.264: pub owned `string` formals (concat2/overlay_row/append_overlay_row)
+    // must not bare-pass-demote to Borrowed while codegen still emits `String` —
+    // that mismatch produces `&local` into owned formals at call sites.
+    if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
+        return true;
     }
     if is_vec_container_type(formal_ty) {
         // WDB-175/190: lock owned pub `Vec` only when callers bare-pass the same binding

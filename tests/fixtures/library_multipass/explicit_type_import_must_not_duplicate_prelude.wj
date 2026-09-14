@@ -1,0 +1,15 @@
+// FAILING REPRO — tip must not emit both prelude `use Type` and explicit
+// `use crate::…::{Type}` (LedgerKit E0252 on View/Line types).
+//
+// Product cold gen: `use crate::domain::inventory::InventoryItemView;` plus
+// `use crate::domain::inventory::{…, InventoryItemView, …}` → E0252.
+
+pub struct ItemView {
+    pub name: string,
+}
+
+pub fn make_view(name: string) -> ItemView {
+    ItemView {
+        name: name + "",
+    }
+}
