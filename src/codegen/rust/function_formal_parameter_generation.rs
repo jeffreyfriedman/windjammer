@@ -89,6 +89,16 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.remove(&param.name);
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
+                if self.in_trait_impl
+                    && param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                {
+                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                }
                 // Same-file borrow passthrough wrappers (`wrapper` → `process`) must emit
                 // `&T` once the callee's preregistered/emitted formal converged to shared borrow.
                 if param.name != "self"
@@ -1746,11 +1756,19 @@ impl<'ast> CodeGenerator<'ast> {
                             // (cross-module Copy passthrough: update_direction → normalize).
                             // Never let stale engine Owned win over body Borrowed (QuestId keys).
                             if let Some(reg) = registry_ownership {
+                                let trait_impl_owned_string_formal = self.in_trait_impl
+                                    && param.name != "self"
+                                    && (matches!(&param.type_, Type::String)
+                                        || matches!(
+                                            &param.type_,
+                                            Type::Custom(name) if name == "string"
+                                        ));
                                 if matches!(
                                     reg,
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                 ) && matches!(ownership_mode, OwnershipMode::Owned)
                                     && !self.is_public_owned_non_copy_formal_api(param, func)
+                                    && !trait_impl_owned_string_formal
                                 {
                                     ownership_mode = reg;
                                 } else if matches!(reg, OwnershipMode::Owned)
@@ -2741,6 +2759,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                                 self.emitted_rust_ref_formals.remove(&param.name);
+                            }
+                            if self.in_trait_impl
+                                && param.name != "self"
+                                && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                && !matches!(
+                                    &param.type_,
+                                    Type::Reference(_) | Type::MutableReference(_)
+                                )
+                            {
+                                return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                             }
                             copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {
                                 OwnershipMode::Owned => {

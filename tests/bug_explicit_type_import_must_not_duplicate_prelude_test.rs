@@ -99,9 +99,9 @@ impl ItemPort for SeedRepo {
         "RED P3.265: tip must not emit ItemView more than once in use lines. Uses: {item_view_use_lines:?}\n{rs}"
     );
 
-    let ok = project.cargo_check().is_ok();
-    assert!(
-        ok,
-        "RED P3.265: hexagonal ItemView import must cargo-check without E0252. Generated:\n{rs}"
-    );
+    project.cargo_check().unwrap_or_else(|e| {
+        panic!(
+            "RED P3.265: hexagonal ItemView import must cargo-check without E0252.\n{e}\nGenerated repo.rs:\n{rs}"
+        );
+    });
 }

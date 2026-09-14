@@ -1462,9 +1462,10 @@ pub(crate) fn local_user_fn_beats_runtime_std_homonym(
     let Some(local_sig) = local.get_signature(callee_name) else {
         return resolved;
     };
-    if local_sig.formal_param_types.is_empty()
-        || signature_is_wj_std_stub_or_runtime_qualified(local_sig)
-    {
+    if local_sig.formal_param_types.is_empty() && local_sig.param_types.is_empty() {
+        return resolved;
+    }
+    if signature_is_wj_std_stub_or_runtime_qualified(local_sig) {
         return resolved;
     }
     let resolved_shared = (0..resolved.param_ownership.len()).any(|idx| {
@@ -1514,7 +1515,7 @@ pub(crate) fn skip_runtime_std_fallback_for_local_homonym(
         return false;
     }
     local.get_signature(callee_name).is_some_and(|local_sig| {
-        !local_sig.formal_param_types.is_empty()
+        (!local_sig.formal_param_types.is_empty() || !local_sig.param_types.is_empty())
             && !signature_is_wj_std_stub_or_runtime_qualified(local_sig)
     })
 }
@@ -1523,6 +1524,13 @@ pub(crate) fn skip_runtime_std_fallback_for_local_homonym(
 /// stale call-site stub lacking `emitted_rust_ref_params` confirmation (regression-049).
 pub(crate) fn signature_is_wj_std_stub_or_runtime_qualified(sig: &FunctionSignature) -> bool {
     if sig.formal_param_types.is_empty() {
+        // Live same-file user free fns often fill `param_types` before `formal_param_types`
+        // (wj-url `join` vs `strings::join` homonym). Non-empty bare user shape is not a stub.
+        if !sig.param_types.is_empty()
+            && !crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(&sig.name)
+        {
+            return false;
+        }
         return true;
     }
     crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(&sig.name)
