@@ -441,6 +441,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.280 WindjammerDB CQ-C5 — coverage REDs WDB-206–208 FeedbackKey / Multicol hook / OptDatedBaseline (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **125** (↓ from 126 after tip→gen Multicol hook/serve sync) |
+| Tip **WDB-206** demoted `&QueryFeedbackKey`→owned | ❌ RED — tip-out/gen row + df_provider |
+| Tip **WDB-207** Multicol hook `&mut`+owned sql | ✅ **GREEN** after tip-out→gen (+ module_file) sync |
+| Tip **WDB-208** owned OptDatedBaseline→demoted `&` | ❌ RED — tip-out + module_file tpch |
+| Prior open | 176/177/191–198 + 201/203/204 |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **206/208** + prior open REDs. No Phase 606+.
+
 ## P3.279 WindjammerDB CQ-C5 — coverage REDs WDB-200–205 counters / Key / Multicol / sql / usize / inbound (2026-09-14)
 
 | Gate | Status |
