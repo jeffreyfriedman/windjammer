@@ -76,6 +76,22 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         };
 
+        // P3.280: peer-drive int literal suffixes from the other bound's type
+        // (`(cx - 16)..(cx + 16)` with cx:i32 → `16_i32`, not default `_i64`).
+        let prev_range_int = self.assignment_int_target_type.clone();
+        if self.assignment_int_target_type.is_none() {
+            let bound_ty = self
+                .infer_expression_type(start)
+                .or_else(|| self.infer_expression_type(end))
+                .filter(|t| {
+                    Self::assignment_target_needs_int_codegen_context(t)
+                        && Self::int_type_from_assignment_target(t).is_some()
+                });
+            if let Some(t) = bound_ty {
+                self.assignment_int_target_type = Some(t);
+            }
+        }
+
         let mut start_str = self.generate_expression(start);
 
         // If end is usize and start has _i32 suffix, replace with _usize or add cast
@@ -98,6 +114,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let end_str = self.generate_expression(end);
+        self.assignment_int_target_type = prev_range_int;
         if inclusive {
             format!("{}..={}", start_str, end_str)
         } else {

@@ -1723,6 +1723,19 @@ impl<'ast> CodeGenerator<'ast> {
                                     .or(registry_ownership)
                                     .unwrap_or(OwnershipMode::Owned)
                             };
+                            if self.in_trait_impl
+                                && param.name != "self"
+                                && (matches!(&param.type_, Type::String)
+                                    || matches!(
+                                        &param.type_,
+                                        Type::Custom(name) if name == "string"
+                                    ))
+                            {
+                                ownership_mode = OwnershipMode::Owned;
+                                self.str_ref_optimized_params.remove(&param.name);
+                                self.inferred_borrowed_params.remove(&param.name);
+                                self.inferred_mut_borrowed_params.remove(&param.name);
+                            }
                             if self.is_public_owned_non_copy_formal_api(param, func) {
                                 self.inferred_borrowed_params.remove(&param.name);
                                 self.inferred_mut_borrowed_params.remove(&param.name);
@@ -2581,10 +2594,6 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_borrowed_params.remove(&param.name);
                                 ownership_mode = OwnershipMode::Owned;
                             }
-                            let analyzer_keeps_owned_string = matches!(
-                                analyzed.inferred_ownership.get(&param.name),
-                                Some(OwnershipMode::Owned)
-                            );
                             if !self.in_trait_impl
                                 && !trait_impl_owned_string
                                 && !self.pub_module_api_keeps_owned_string_formal(func, param)

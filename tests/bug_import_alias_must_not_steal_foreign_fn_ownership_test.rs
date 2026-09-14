@@ -69,9 +69,8 @@ pub fn get(query: string, key: string) -> Option<string> {
         borrowed_src.join("borrowed_pkg.wj"),
         r#"
 pub fn query_get(query: string, key: string) -> Option<string> {
-    // Read-only body tends to demote formals to Borrowed in library metadata.
-    let _ = key
-    if strings.len(query) == 0 {
+    // Read-only compares demote formals to Borrowed in library metadata.
+    if query == key {
         None
     } else {
         None
@@ -120,13 +119,14 @@ pub fn query_get(query: string, key: string) -> Option<string> {
         app_src.join("domain").join("lookup.wj"),
         r#"
 use owned_pkg::get as query_get
-use borrowed_pkg::query_get as unused_borrowed_get
+use borrowed_pkg::query_get as borrowed_query_get
 
 pub fn wrap(query: string) -> Option<string> {
     let query = query
+    // Touch borrowed export so its metadata stays live alongside the alias.
+    let _probe = borrowed_query_get("", "")
     // Must move into Owned formal of owned_pkg::get — not borrow from alias name
     // colliding with borrowed_pkg::query_get metadata.
-    let _ = unused_borrowed_get
     query_get(query, "x")
 }
 "#,

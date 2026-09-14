@@ -367,7 +367,11 @@ impl Parser {
 
                     let inclusive = self.current_token() == &Token::DotDotEq;
                     self.advance();
-                    let end = self.parse_primary_expression()?;
+                    // P3.280: range end must be a full expression so
+                    // `(cx - 16)..(cx + 16)` and `a..b + c` parse correctly.
+                    // Previously only `parse_primary_expression` ran, dropping
+                    // binary ops on the end bound unless parenthesized.
+                    let end = self.parse_binary_expression(0)?;
                     self.alloc_expr(Expression::Range {
                         start: expr,
                         end,
