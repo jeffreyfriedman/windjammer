@@ -1043,7 +1043,7 @@ Remaining RED rows above are **compiler-only** — no further product shim drops
 
 | Change | Status |
 |--------|--------|
-| `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` multipass + `cargo_check` | ⚠️ RED — `own()` + `join_path` emits `&local` |
+| `bug_app_multipass_cross_crate_owned_forwarder_module_file_test` multipass + `cargo_check` | ✅ tip GREEN (2026-09-14) — returned `string` formals keep owned; call-site move + explicit-deref/reuse borrow |
 | COMPILER_REPRO_QUEUE P3.205 repro bundle (`cargo test` filter list) | ✅ shipped |
 | Deduped duplicate `pub mod` EOF queue row | ✅ shipped |
 
