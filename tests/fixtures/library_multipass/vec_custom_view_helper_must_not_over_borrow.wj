@@ -1,0 +1,31 @@
+// FAILING REPRO — owned Vec<Custom> into view helper must not receive `&Vec` (multipass).
+// Product tip api-check (LedgerKit postgres_*_repository):
+//   invoice_view_from_row(header, &lines)
+
+pub struct Line {
+    pub id: string,
+}
+
+pub struct View {
+    pub lines: Vec<Line>,
+}
+
+fn view_from(lines: Vec<Line>) -> View {
+    View { lines: lines }
+}
+
+pub fn list_views() -> Vec<View> {
+    let mut result: Vec<View> = vec![]
+    let mut outer = 0
+    while outer < 2 {
+        let mut lines: Vec<Line> = vec![]
+        let mut inner = 0
+        while inner < 2 {
+            lines.push(Line { id: "a" + "" })
+            inner = inner + 1
+        }
+        result.push(view_from(lines))
+        outer = outer + 1
+    }
+    result
+}

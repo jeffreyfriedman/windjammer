@@ -1,0 +1,9 @@
+// FAILING REPRO — HashMap<string,string>::insert must not cast key to usize.
+// Product tip api-check (LedgerKit request_context query_with*):
+//   query.insert((format!(...) as usize, value))
+
+pub fn query_untyped(key: string, value: string) -> std::collections::HashMap<string, string> {
+    let mut query = std::collections::HashMap::new()
+    query.insert(key + "", value + "")
+    query
+}
