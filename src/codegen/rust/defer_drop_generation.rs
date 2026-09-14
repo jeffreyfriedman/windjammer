@@ -76,10 +76,14 @@ impl<'ast> CodeGenerator<'ast> {
         new_body
     }
 
-    /// Line index of the function body's closing `}` (insert defer-drop immediately before it).
+    /// Insertion point for defer-drop lines inside a generated function body.
+    ///
+    /// `body` is the inner block (no surrounding `fn { … }`). Treat depth as starting
+    /// inside the function so a tail `match { … }` is not mistaken for the function
+    /// tail (wj-notes-api `int_from_map` mid-match spawn).
     fn function_level_tail_line_index(lines: &[&str]) -> usize {
-        let mut depth = 0i32;
-        let mut insert = lines.len().saturating_sub(1);
+        let mut depth = 1i32;
+        let mut insert = lines.len();
         for (i, line) in lines.iter().enumerate() {
             let before = depth;
             for ch in line.chars() {
@@ -92,6 +96,12 @@ impl<'ast> CodeGenerator<'ast> {
             if before == 1 && depth == 0 {
                 insert = i;
                 break;
+            }
+        }
+        if insert == lines.len() && lines.len() >= 2 {
+            let last = lines.last().map(|s| s.trim()).unwrap_or("");
+            if !last.starts_with('}') && !last.ends_with('{') {
+                insert = lines.len().saturating_sub(1);
             }
         }
         insert

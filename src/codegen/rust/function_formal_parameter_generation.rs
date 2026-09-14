@@ -680,6 +680,30 @@ impl<'ast> CodeGenerator<'ast> {
                         func,
                     )
                 {
+                    if self.param_has_readonly_expression_use(
+                        func.body.as_slice(),
+                        &param.name,
+                    ) && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) && !self.param_stored_in_owned_payload(
+                        func.body.as_slice(),
+                        &param.name,
+                    ) && !self.param_used_as_owned_string_add_operand(
+                        func.body.as_slice(),
+                        &param.name,
+                    ) && !self.param_used_in_return_struct_string_field(
+                        func.body.as_slice(),
+                        &param.name,
+                    ) && !self.pub_module_api_keeps_owned_string_formal(func, param)
+                    {
+                        self.str_ref_optimized_params.insert(param.name.clone());
+                        self.inferred_borrowed_params.insert(param.name.clone());
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                        self.emitted_rust_ref_formals.insert(param.name.clone());
+                        return format!("{}: &str", param.name);
+                    }
                     self.str_ref_optimized_params.remove(&param.name);
                     self.inferred_borrowed_params.remove(&param.name);
                     if self.param_pub_free_string_builder_forward(func, param) {
@@ -3585,7 +3609,21 @@ impl<'ast> CodeGenerator<'ast> {
         if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
             return false;
         }
+        // Pub helpers that return `string` (`join`, `escape_html`) keep owned `String`
+        // formals so call sites move locals — format! accepts `String` without demoting
+        // the API surface to `&str` (wj-url / owned_string_locals).
+        if self.function_return_is_text(func) {
+            return true;
+        }
         let body = func.body.as_slice();
+        if self.param_has_readonly_expression_use(body, &param.name)
+            && !self.param_has_owning_method_use(body, &param.name, func)
+            && !self.param_stored_in_owned_payload(body, &param.name)
+            && !self.param_used_as_owned_string_add_operand(body, &param.name)
+            && !self.param_used_in_return_struct_string_field(body, &param.name)
+        {
+            return false;
+        }
         self.param_stored_in_owned_payload(body, &param.name)
             || self.param_has_owning_method_use(body, &param.name, func)
             || self.param_used_as_owned_string_add_operand(body, &param.name)

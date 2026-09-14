@@ -20,7 +20,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **Owned path extract call site must not `&String` into owned `string` formal** | `bug_owned_path_extract_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) — owned move at call site; guard retained |
 | P0 | **Owned `Vec<string>` helper must not receive `&Vec` at call site** | `bug_vec_string_helper_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
 | P0 | **Thin Vec forwarder must not demote to `&Vec` while callee stays owned** | `bug_thin_vec_forwarder_must_not_demote_owned_test` | ✅ tip GREEN (2026-09-14) |
-| P0 | **Engine `i32` range literals must not emit `_i64` (`component_viewer_controls`)** | `bug_engine_i32_range_literal_must_not_emit_i64_suffix_test` | ❌ tip RED (P3.280b) — same-module GREEN; **cross-module** `use …::VIEWER_GRID` still `16_i64` until imported consts merge into `module_const_types` |
+| P0 | **Engine `i32` range literals must not emit `_i64` (`component_viewer_controls`)** | `bug_engine_i32_range_literal_must_not_emit_i64_suffix_test` | ✅ tip GREEN (P3.280b) — cross-module const merge into `module_const_types`; untyped `let cy = 10` defaults i32 when return is non-int |
 | P0 | **Owned Copy `i32` formals must not `*x.clone()` at call site** | `bug_engine_i32_formal_must_not_star_deref_clone_test` | ✅ tip GREEN (2026-09-14) — guard retained |
 | P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (P3.265) — tuple `.N` usize only when element is usize; not blanket `.0` |
 | P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — per-param pub free-fn owned keep (concat lhs / owned forward); read-only pub APIs demote |
@@ -222,6 +222,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Product workaround | ✅ alias as `qs_get` (not `query_get`) |
 
 **Compiler agent:** resolve call-site ownership by the *imported* function identity (crate + original name), not by the local alias string colliding with another crate's free-fn metadata.
+
+## P3.268 (2026-09-14) — u64/len, text→usize guard, defer-drop tail, make_view payload
+
+| Change | Status |
+|--------|--------|
+| Gates `wdb215` / `hashmap_string_key_insert` / `wdb214`–`wdb217` / `vec_custom_view_helper` / `mut_param_passthrough` / `hashmap_owned_get_helper` | ✅ tip GREEN — signature-driven borrow/clone/len casts; no mid-match defer-drop |
+| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | ✅ tip GREEN — `make_view` keeps owned `String` when body stores `name + ""` in struct field |
+| Fix | `unsigned_int_width_for_len_cast` (`u64` vs `.len()`); `expression_must_not_usize_coerce` for text/concat; defer-drop fn tail depth; `param + ""` in struct field = owned payload |
+
+**Compiler agent:** never cast string keys/concat to `usize` for non-`usize` formals; compare `u64` indices to `(len as u64)` not `len as i64`.
 
 ## P3.267 (2026-09-14) — wj-url homonym + hexagonal import gate
 

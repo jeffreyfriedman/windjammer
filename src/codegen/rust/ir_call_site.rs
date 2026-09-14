@@ -2742,11 +2742,21 @@ impl<'ast> CodeGenerator<'ast> {
                 .formal_param_type(param_idx)
                 .or_else(|| sig.param_types.get(param_idx))
                 .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
-            if self.local_binding_reused_after_current_statement(name)
+            let caller_owned_string_formal = self.current_function_params.iter().any(|p| {
+                p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+            }) && !self.emitted_rust_ref_formals.contains(name)
+                && !self.str_ref_optimized_params.contains(name.as_str());
+            if callee_shared
                 && !coerced.starts_with('&')
-                && callee_shared
+                && !coerced.starts_with("&mut ")
+                && !self.identifier_binding_already_rust_ref(name)
+                && (caller_owned_string_formal
+                    || self.local_binding_reused_after_current_statement(name))
             {
-                coerced = format!("&{coerced}");
+                coerced = format!(
+                    "&{}",
+                    crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+                );
             }
         }
         coerced = crate::codegen::rust::call_site_borrow::normalize_explicit_deref_copy_operand(
@@ -4693,6 +4703,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.arg_expression_already_usize(arg_expr)
         };
         crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
+            Some(self),
             arg_expr,
             coerced,
             formal_for_usize,
@@ -4710,6 +4721,7 @@ impl<'ast> CodeGenerator<'ast> {
         // suffix match; undo when the *effective* formal is not usize (after
         // specialization / collection-element recovery — not raw `T`).
         crate::codegen::rust::type_casting::strip_erroneous_usize_suffix_for_non_usize_formal(
+            Some(self),
             arg_expr,
             coerced,
             formal_for_usize.or(formal),

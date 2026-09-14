@@ -57,9 +57,11 @@ impl CodeGenerator<'_> {
             struct_.fields.iter().map(|f| &f.field_type).collect()
         };
 
-        let has_trait_object_field = all_types.iter().any(|t| self.type_contains_trait_object(t));
+        let has_non_auto_debug_clone_field = all_types
+            .iter()
+            .any(|t| self.type_precludes_auto_debug_clone(t));
 
-        let mut traits = if has_trait_object_field {
+        let mut traits = if has_non_auto_debug_clone_field {
             vec![]
         } else {
             vec!["Debug".to_string(), "Clone".to_string()]
@@ -67,7 +69,7 @@ impl CodeGenerator<'_> {
 
         let has_drop = self.types_with_drop.contains(&struct_.name);
         let all_copy = all_types.iter().all(|t| self.is_copy_type_with_registry(t));
-        if !has_trait_object_field && all_copy && !has_drop {
+        if !has_non_auto_debug_clone_field && all_copy && !has_drop {
             traits.push("Copy".to_string());
         }
 
@@ -112,7 +114,7 @@ impl CodeGenerator<'_> {
 
         // Auto-derive Serialize/Deserialize when serde is available (project uses std::json
         // or is compiled as part of a multi-file project with windjammer-runtime).
-        if !has_trait_object_field && (self.serde_available || self.needs_serde_imports) {
+        if !has_non_auto_debug_clone_field && (self.serde_available || self.needs_serde_imports) {
             traits.push("Serialize".to_string());
             traits.push("Deserialize".to_string());
         }
@@ -120,37 +122,50 @@ impl CodeGenerator<'_> {
         traits
     }
 
-    /// Check if a type contains a trait object (dyn Trait) anywhere in its structure.
-    /// Used to prevent auto-deriving Debug/Clone on structs containing Box<dyn Trait>.
-    /// Also checks for ImplTrait because `trait X` in struct fields becomes Box<dyn X>.
+    /// Types that prevent auto-deriving `Debug`/`Clone` on a struct (trait objects, `mpsc::Receiver`, …).
     ///
     /// User-defined struct names use `trait_object_types` (filled by `collect_trait_object_types`)
     /// so an outer struct is treated as containing a trait object when a field's type is a struct
-    /// that (transitively) holds `dyn` / `trait X`.
-    pub(super) fn type_contains_trait_object(&self, type_: &Type) -> bool {
+    /// that (transitively) holds `dyn` / `trait X` or other non-derivable std types.
+    pub(super) fn type_precludes_auto_debug_clone(&self, type_: &Type) -> bool {
         match type_ {
             Type::TraitObject(_) | Type::ImplTrait(_) => true,
             Type::Vec(inner)
             | Type::Option(inner)
             | Type::Reference(inner)
-            | Type::MutableReference(inner) => self.type_contains_trait_object(inner),
-            Type::Parameterized(_, args) => args.iter().any(|a| self.type_contains_trait_object(a)),
-            Type::Result(ok, err) => {
-                self.type_contains_trait_object(ok) || self.type_contains_trait_object(err)
+            | Type::MutableReference(inner) => self.type_precludes_auto_debug_clone(inner),
+            Type::Parameterized(base, args) => {
+                crate::type_classification::is_std_non_auto_debug_clone_type(base)
+                    || args
+                        .iter()
+                        .any(|a| self.type_precludes_auto_debug_clone(a))
             }
-            Type::Array(inner, _) => self.type_contains_trait_object(inner),
-            Type::Tuple(types) => types.iter().any(|t| self.type_contains_trait_object(t)),
+            Type::Result(ok, err) => {
+                self.type_precludes_auto_debug_clone(ok) || self.type_precludes_auto_debug_clone(err)
+            }
+            Type::Array(inner, _) => self.type_precludes_auto_debug_clone(inner),
+            Type::Tuple(types) => types
+                .iter()
+                .any(|t| self.type_precludes_auto_debug_clone(t)),
             Type::Custom(name)
                 if name == "String" || crate::type_classification::is_copy_primitive(name) =>
             {
                 false
             }
-            Type::Custom(name) => self.trait_object_types.contains(name),
+            Type::Custom(name) => {
+                crate::type_classification::is_std_non_auto_debug_clone_type(name)
+                    || self.trait_object_types.contains(name)
+            }
             _ => false,
         }
     }
 
-    /// Fixpoint pass: record every struct in this program that transitively contains a trait object.
+    /// Backward-compatible alias for call sites that only care about trait objects.
+    pub(super) fn type_contains_trait_object(&self, type_: &Type) -> bool {
+        self.type_precludes_auto_debug_clone(type_)
+    }
+
+    /// Fixpoint pass: record every struct that transitively contains a type that blocks Debug/Clone derive.
     pub(super) fn collect_trait_object_types(&mut self, program: &Program) {
         loop {
             let sz = self.trait_object_types.len();
@@ -160,9 +175,14 @@ impl CodeGenerator<'_> {
                     if self.trait_object_types.contains(&s.name) {
                         continue;
                     }
-                    if s.fields
+                    let field_types: Vec<&Type> = if let Some(ref tf) = s.tuple_fields {
+                        tf.iter().collect()
+                    } else {
+                        s.fields.iter().map(|f| &f.field_type).collect()
+                    };
+                    if field_types
                         .iter()
-                        .any(|f| self.type_contains_trait_object(&f.field_type))
+                        .any(|t| self.type_precludes_auto_debug_clone(t))
                     {
                         self.trait_object_types.insert(s.name.clone());
                     }

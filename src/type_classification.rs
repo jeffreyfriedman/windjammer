@@ -395,6 +395,20 @@ pub fn has_significant_drop(name: &str) -> bool {
     )
 }
 
+/// Std / runtime-facing types that do not implement `Debug` or `Clone` in Rust.
+///
+/// Used by codegen auto-derive: wrapping these in a WJ struct must not emit
+/// `#[derive(Debug, Clone)]` (rustc E0277). Matches on the type leaf so
+/// `mpsc::Receiver<T>` and `Receiver<T>` are treated the same.
+pub fn is_std_non_auto_debug_clone_type(name: &str) -> bool {
+    let leaf = type_name_leaf(name);
+    has_significant_drop(leaf)
+        || matches!(
+            leaf,
+            "SyncSender" | "UnboundedSender" | "UnboundedReceiver" | "Child" | "Process"
+        )
+}
+
 /// Language-level owned-text conversion methods (WJ `.string()` / Rust `.to_string()`).
 ///
 /// These are syntax sugar for owned `String`, not ownership oracles for arbitrary APIs.

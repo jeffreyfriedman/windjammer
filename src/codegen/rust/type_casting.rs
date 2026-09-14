@@ -86,12 +86,69 @@ pub fn coerce_arg_str_for_i32_formal(
 /// argument is already usize-typed or already lowered with `as usize` / `_usize`.
 /// Undo a spurious `1_usize` / `n as usize` when the resolved formal is not `usize`
 /// (e.g. numeric inference applied Vec::insert to a HashMap key before codegen).
+fn expression_must_not_usize_coerce(
+    gen: Option<&crate::codegen::rust::CodeGenerator<'_>>,
+    arg: &Expression,
+    arg_str: &str,
+) -> bool {
+    if arg_str.contains(".to_string()")
+        || arg_str.contains("String::")
+        || arg_str.contains("format!(")
+    {
+        return true;
+    }
+    if matches!(
+        arg,
+        Expression::Literal {
+            value: Literal::String(_),
+            ..
+        } | Expression::StructLiteral { .. }
+            | Expression::Tuple { .. }
+    ) {
+        return true;
+    }
+    let Some(gen) = gen else {
+        return false;
+    };
+    if gen
+        .infer_expression_type(arg)
+        .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(&t))
+    {
+        return true;
+    }
+    if let Expression::Binary {
+        op: crate::parser::BinaryOp::Add,
+        left,
+        right,
+        ..
+    } = arg
+    {
+        return [left, right].iter().any(|e| {
+            gen.infer_expression_type(e)
+                .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(&t))
+        });
+    }
+    false
+}
+
 pub fn strip_erroneous_usize_suffix_for_non_usize_formal(
+    gen: Option<&crate::codegen::rust::CodeGenerator<'_>>,
     arg: &Expression,
     arg_str: &mut String,
     formal: Option<&Type>,
 ) {
     if formal.is_some_and(type_is_usize) {
+        return;
+    }
+    if expression_must_not_usize_coerce(gen, arg, arg_str) {
+        if let Some(base) = arg_str.strip_suffix(" as usize") {
+            *arg_str = base.to_string();
+        } else if let Some(base) = arg_str
+            .strip_prefix('(')
+            .and_then(|s| s.strip_suffix(" as usize)"))
+        {
+            *arg_str = base.to_string();
+        }
         return;
     }
     match arg {
@@ -123,6 +180,7 @@ pub fn strip_erroneous_usize_suffix_for_non_usize_formal(
 }
 
 pub fn coerce_arg_str_for_usize_formal(
+    gen: Option<&crate::codegen::rust::CodeGenerator<'_>>,
     arg: &Expression,
     arg_str: &mut String,
     formal: Option<&Type>,
@@ -132,6 +190,9 @@ pub fn coerce_arg_str_for_usize_formal(
         return;
     }
     if arg_already_usize {
+        return;
+    }
+    if expression_must_not_usize_coerce(gen, arg, arg_str) {
         return;
     }
     // Whole-expression casts are done. Do **not** treat `i + j + 1_usize` as already
@@ -307,6 +368,7 @@ mod tests {
         };
         let mut s = "i + j + 1_usize".to_string();
         coerce_arg_str_for_usize_formal(
+            None,
             &arg,
             &mut s,
             Some(&Type::Custom("usize".into())),

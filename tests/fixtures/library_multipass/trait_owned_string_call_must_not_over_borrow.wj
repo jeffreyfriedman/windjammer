@@ -1,6 +1,7 @@
 // FAILING REPRO — trait-impl owned string formal must not receive `&String` after format/+ "".
 // Product tip api-check (LedgerKit env_* / postgres self.get / routes period_lock):
 //   `self.get(&_temp0, _temp1)` while formal is String.
+// Isolate must mirror multipass: interpolation temps + self.get inside impl.
 
 pub trait Repo {
     fn get(self, tenant_id: string, id: string) -> string
@@ -12,9 +13,13 @@ impl Repo for Pg {
     fn get(self, tenant_id: string, id: string) -> string {
         tenant_id + ":" + id
     }
+
+    // Product shape: owned concat/interp then self.get on trait-owned formals.
+    fn lookup(self, tenant_id: string, id: string) -> string {
+        self.get("${tenant_id}", "${id}")
+    }
 }
 
 pub fn bump(r: Pg, tenant_id: string, id: string) -> string {
-    // Multipass product shape: concat then call owned trait formal.
-    r.get(tenant_id + "", id + "")
+    r.lookup(tenant_id + "", id + "")
 }
