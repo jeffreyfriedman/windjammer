@@ -199,7 +199,9 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 }) =>
             {
-                arg_str.to_string()
+                crate::codegen::rust::call_site_borrow::normalize_explicit_deref_copy_operand(
+                    arg_expr, arg_str,
+                )
             }
             Expression::Identifier { .. }
                 if (!skip_auto_clone_for_borrow || auto_clone_wants)
@@ -2689,6 +2691,24 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+
+        if let Expression::Identifier { name, .. } = arg_expr {
+            let callee_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                &sig, param_idx,
+            ) || sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx))
+                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
+            if self.local_binding_reused_after_current_statement(name)
+                && !coerced.starts_with('&')
+                && callee_shared
+            {
+                coerced = format!("&{coerced}");
+            }
+        }
+        coerced = crate::codegen::rust::call_site_borrow::normalize_explicit_deref_copy_operand(
+            arg_expr, &coerced,
+        );
 
         Some(coerced)
     }

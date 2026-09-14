@@ -538,6 +538,59 @@ impl<'ast> CodeGenerator<'ast> {
                             &self.emitted_rust_ref_formals,
                             &self.current_function_params,
                         );
+                        coerced = crate::codegen::rust::call_site_borrow::normalize_explicit_deref_copy_operand(
+                            arg_to_generate,
+                            &coerced,
+                        );
+                        if let Expression::Identifier { name, .. } = arg_to_generate {
+                            let pidx = contract_sig.arg_param_index(i);
+                            let callee_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                &contract_sig, pidx,
+                            ) || contract_sig
+                                .formal_param_type(pidx)
+                                .or_else(|| contract_sig.param_types.get(pidx))
+                                .is_some_and(
+                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref,
+                                );
+                            let later: Vec<&crate::parser::Statement> = self
+                                .current_function_body
+                                .iter()
+                                .skip(self.current_statement_idx + 1)
+                                .copied()
+                                .collect();
+                            let reuse_after = !later.is_empty()
+                                && Self::variable_used_in_statements(&later, name);
+                            if reuse_after && callee_shared {
+                                let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &coerced,
+                                )
+                                .trim_end_matches(".clone()")
+                                .trim()
+                                .to_string();
+                                if !base.starts_with('&') {
+                                    coerced = format!("&{base}");
+                                } else {
+                                    coerced = base;
+                                }
+                            }
+                        }
+                        let pidx = contract_sig.arg_param_index(i);
+                        let formal_copy = contract_sig
+                            .formal_param_type(pidx)
+                            .or_else(|| contract_sig.param_types.get(pidx))
+                            .is_some_and(|t| {
+                                let bare = match t {
+                                    crate::parser::Type::Reference(inner)
+                                    | crate::parser::Type::MutableReference(inner) => {
+                                        inner.as_ref()
+                                    }
+                                    other => other,
+                                };
+                                self.is_type_copy(bare)
+                            });
+                        if formal_copy && coerced.ends_with(".clone()") {
+                            coerced = coerced.trim_end_matches(".clone()").to_string();
+                        }
                         return coerced;
                     }
                     debug_assert!(

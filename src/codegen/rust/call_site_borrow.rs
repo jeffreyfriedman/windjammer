@@ -399,6 +399,27 @@ pub fn expression_is_string_literal(arg_expr: &Expression) -> bool {
     )
 }
 
+/// User wrote `*binding` on a Copy pointee — strip spurious `.clone()` on the binding
+/// (`*entity.clone()` → `*entity`) from owned-value-context auto-clone.
+pub fn normalize_explicit_deref_copy_operand(arg_expr: &Expression, s: &str) -> String {
+    match arg_expr {
+        Expression::Unary {
+            op: crate::parser::UnaryOp::Deref,
+            operand,
+            ..
+        } => {
+            if let Expression::Identifier { name, .. } = &**operand {
+                if s.contains(&format!("{name}.clone()")) || s.contains(&format!("*{name}.clone()"))
+                {
+                    return format!("*{name}");
+                }
+            }
+        }
+        _ => {}
+    }
+    s.to_string()
+}
+
 /// User wrote explicit `*expr` (or `(*expr).field`) — do not prefix `&` at the call site.
 pub fn user_wrote_explicit_deref(arg_expr: &Expression) -> bool {
     match arg_expr {
