@@ -2595,17 +2595,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     &param.name,
                                     func,
                                 )
-                                && ((unused_params.contains(&param.name)
-                                    && (!analyzer_keeps_owned_string
-                                        || (!self.pub_module_api_keeps_owned_string_formal(func, param)
-                                            && !analyzed.returned_parameters.contains(&param.name)
-                                            && !self.param_has_owning_method_use(
-                                                func.body.as_slice(),
-                                                &param.name,
-                                                func,
-                                            )
-                                            && !payload_stored)))
-                                    || self.param_only_used_in_simple_or_tuple_discard(
+                                && (self.param_only_used_in_simple_or_tuple_discard(
                                         func.body.as_slice(),
                                         &param.name,
                                     )

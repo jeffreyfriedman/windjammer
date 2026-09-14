@@ -2490,10 +2490,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let discard_or_unused = self.param_only_used_in_simple_or_tuple_discard(
                         func.body.as_slice(),
                         &param.name,
-                    ) || self
-                        .compute_unused_formal_parameter_names(func)
-                        .contains(&param.name)
-                        || self.str_ref_optimized_params.contains(&param.name)
+                    ) || self.str_ref_optimized_params.contains(&param.name)
                         || self.inferred_borrowed_params.contains(&param.name);
                     if !discard_or_unused {
                         p_type = param.type_.clone();
@@ -2512,10 +2509,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.param_only_used_in_simple_or_tuple_discard(
                                     func.body.as_slice(),
                                     &param.name,
-                                ) || self
-                                    .compute_unused_formal_parameter_names(func)
-                                    .contains(&param.name)
-                                    || self.str_ref_optimized_params.contains(&param.name)
+                                ) || self.str_ref_optimized_params.contains(&param.name)
                                     || self.inferred_borrowed_params.contains(&param.name);
                             if !discard_or_unused {
                                 p_type = formal.clone();

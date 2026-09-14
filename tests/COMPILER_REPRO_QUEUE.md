@@ -148,6 +148,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 RED / filed (P3.282); notes uses `encode_text` |
+| P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 RED / filed (P3.283); notes aliases `get as qs_get` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ❌ tip RED (P3.278); notes uses single-map reader like auth |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -210,6 +211,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 filed — bare `encode(text)` emits `encode(&text)` despite Owned metadata (same shape as working `hex`) |
 
 **Compiler agent:** ownership/coercion for cross-crate free fns must follow signature registry — do not special-case method/fn name `encode` into a borrow.
+
+## P3.283 (2026-09-14) — wj-notes-api url Location + import-alias ownership steal
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-url` `join_url` → `Location` on `POST /notes` + `public_base_url` config | 🔄 in progress |
+| Gate `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 filed — `use owned::get as query_get` + dep exporting Borrowed `query_get` emits `query_get(&query)` into Owned `get(String, …)` |
+| Product workaround | ✅ alias as `qs_get` (not `query_get`) |
+
+**Compiler agent:** resolve call-site ownership by the *imported* function identity (crate + original name), not by the local alias string colliding with another crate's free-fn metadata.
 
 ## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + HashMap string key
 

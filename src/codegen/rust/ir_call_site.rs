@@ -4578,6 +4578,20 @@ impl<'ast> CodeGenerator<'ast> {
             .and_then(|rty| Self::peeled_collection_element_type(rty))
             .filter(|elem| crate::codegen::rust::type_casting::type_is_usize(elem))
             .cloned();
+        let receiver_is_map = inferred_recv.as_ref().is_some_and(|rty| match rty {
+            Type::Parameterized(name, _) | Type::Custom(name) => {
+                crate::type_classification::is_map_type_name(name)
+            }
+            _ => false,
+        }) || receiver_type_name
+            .is_some_and(crate::type_classification::is_map_type_name);
+        let map_insert_key_slot = simple == "insert"
+            && arg_index == 0
+            && receiver_is_map
+            && formal.is_some_and(|t| {
+                matches!(t, Type::Generic(n) if n == "K" || n == "V")
+                    || crate::codegen::rust::types::is_windjammer_text_type(t)
+            });
         let formal_for_usize = if formal.is_some_and(crate::codegen::rust::type_casting::type_is_usize)
         {
             formal
@@ -4598,12 +4612,14 @@ impl<'ast> CodeGenerator<'ast> {
                     Type::Custom(n) | Type::Generic(n)
                         if n == "T" || n == "E" || n == "K" || n == "V" || n == "int"
                 )
-        }) && self.fallback_signature_param_is_usize(callee_name, simple, pidx)
+        }) && !map_insert_key_slot
+            && self.fallback_signature_param_is_usize(callee_name, simple, pidx)
         {
             fallback_usize_formal = Some(Type::Custom("usize".to_string()));
             fallback_usize_formal.as_ref()
         } else if formal
             .is_some_and(crate::codegen::rust::type_casting::type_is_wj_int_formal)
+            && !map_insert_key_slot
             && self.fallback_signature_param_is_usize(callee_name, simple, pidx)
         {
             fallback_usize_formal = Some(Type::Custom("usize".to_string()));

@@ -13,6 +13,10 @@ impl<'ast> CodeGenerator<'ast> {
     fn dedupe_rust_import_lines(block: &str) -> String {
         let mut seen_private: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut seen_pub: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_type_symbols_private: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        let mut seen_type_symbols_pub: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let mut out_lines: Vec<String> = Vec::new();
         for line in block.lines() {
             let trimmed = line.trim();
@@ -37,6 +41,11 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 &mut seen_private
             };
+            let seen_types = if is_pub {
+                &mut seen_type_symbols_pub
+            } else {
+                &mut seen_type_symbols_private
+            };
             let rest = after_use.trim().trim_end_matches(';').trim();
             if rest.contains("::*") {
                 out_lines.push(line.to_string());
@@ -56,7 +65,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if name.is_empty() {
                             continue;
                         }
-                        if seen.insert(name.to_string()) {
+                        if seen_types.insert(name.to_string()) {
                             kept.push(p.to_string());
                         }
                     }
@@ -73,13 +82,19 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
             }
+            // Dedupe PascalCase type symbols across single-path and braced imports (E0252).
+            if let Some(last) = rest.rsplit("::").next() {
+                if last.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                    && !seen_types.insert(last.to_string())
+                {
+                    continue;
+                }
+            }
             // Dedupe by full import path — not the last segment alone. Otherwise
             // `use windjammer_runtime::ffi` drops `use crate::ffi` (same trailing `ffi`).
             if seen.insert(rest.to_string()) {
                 out_lines.push(line.to_string());
             }
-            continue;
-            out_lines.push(line.to_string());
         }
         out_lines.join("\n")
     }

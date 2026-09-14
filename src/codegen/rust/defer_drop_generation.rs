@@ -28,33 +28,24 @@ impl<'ast> CodeGenerator<'ast> {
             return body;
         }
 
+        let insert_before = Self::function_level_tail_line_index(&lines);
+
         let mut new_body = String::new();
 
-        // Find the last non-empty, non-comment line (likely the return expression or last statement)
-        let mut last_line_idx = lines.len() - 1;
-        while last_line_idx > 0 {
-            let trimmed = lines[last_line_idx].trim();
-            if !trimmed.is_empty() && !trimmed.starts_with("//") {
-                break;
-            }
-            last_line_idx -= 1;
-        }
-
-        // Copy all lines except the last one
         for (i, line) in lines.iter().enumerate() {
-            if i < last_line_idx {
+            if i < insert_before {
                 new_body.push_str(line);
                 new_body.push('\n');
             }
         }
 
-        // Insert defer drop statements before the final return/expression
         for opt in optimizations {
-            // Defensive: never move a binding that still appears in the return line.
-            if lines[last_line_idx].contains(&opt.variable) {
+            if lines[insert_before..]
+                .iter()
+                .any(|line| line.contains(&opt.variable))
+            {
                 continue;
             }
-            // Generate the defer drop code
             new_body.push_str(&self.indent());
             new_body.push_str(&format!(
                 "// DEFER DROP: Deallocate {} ({:?}) in background thread for faster return\n",
@@ -67,15 +58,34 @@ impl<'ast> CodeGenerator<'ast> {
             ));
         }
 
-        // Add the final line (return expression or last statement)
-        new_body.push_str(lines[last_line_idx]);
-
-        // Add any trailing lines (closing braces, etc.)
-        for line in &lines[last_line_idx + 1..] {
-            new_body.push('\n');
+        for line in &lines[insert_before..] {
             new_body.push_str(line);
+            if *line != lines[lines.len() - 1] {
+                new_body.push('\n');
+            }
         }
 
         new_body
+    }
+
+    /// Line index of the function body's closing `}` (insert defer-drop immediately before it).
+    fn function_level_tail_line_index(lines: &[&str]) -> usize {
+        let mut depth = 0i32;
+        let mut insert = lines.len().saturating_sub(1);
+        for (i, line) in lines.iter().enumerate() {
+            let before = depth;
+            for ch in line.chars() {
+                match ch {
+                    '{' => depth += 1,
+                    '}' => depth -= 1,
+                    _ => {}
+                }
+            }
+            if before == 1 && depth == 0 {
+                insert = i;
+                break;
+            }
+        }
+        insert
     }
 }

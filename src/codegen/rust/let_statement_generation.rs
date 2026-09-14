@@ -230,6 +230,46 @@ impl<'ast> CodeGenerator<'ast> {
                         // WDB-091). Refine empty Vec/HashSet element types from usage.
                         self.infer_let_value_type(value, var_name)
                     }
+                    // P3.280: `let cx = VIEWER_GRID / 2` — Binary must prefer module-const /
+                    // param width (i32) over default WJ `int` from a Literal sibling.
+                    Expression::Binary { left, right, op, .. }
+                        if matches!(
+                            op,
+                            crate::parser::BinaryOp::Add
+                                | crate::parser::BinaryOp::Sub
+                                | crate::parser::BinaryOp::Mul
+                                | crate::parser::BinaryOp::Div
+                                | crate::parser::BinaryOp::Mod
+                                | crate::parser::BinaryOp::BitAnd
+                                | crate::parser::BinaryOp::BitOr
+                                | crate::parser::BinaryOp::BitXor
+                                | crate::parser::BinaryOp::Shl
+                                | crate::parser::BinaryOp::Shr
+                        ) =>
+                    {
+                        let l = self.infer_expression_type(left);
+                        let r = self.infer_expression_type(right);
+                        match (l, r) {
+                            (Some(a), Some(b)) if a != b => {
+                                // Prefer specific int widths over default WJ `int` (i64).
+                                if matches!(a, Type::Int)
+                                    && Self::assignment_target_needs_int_codegen_context(&b)
+                                    && !matches!(b, Type::Int)
+                                {
+                                    Some(b)
+                                } else if matches!(b, Type::Int)
+                                    && Self::assignment_target_needs_int_codegen_context(&a)
+                                    && !matches!(a, Type::Int)
+                                {
+                                    Some(a)
+                                } else {
+                                    Some(a)
+                                }
+                            }
+                            (Some(t), _) | (_, Some(t)) => Some(t),
+                            (None, None) => None,
+                        }
+                    }
                     _ => {
                         // Fall back to general expression type inference
                         // Handles if/else, binary ops, method calls, etc.
