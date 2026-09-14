@@ -29,13 +29,17 @@ const SOURCE: &str =
     include_str!("fixtures/library_multipass/string_concat_nested_owned_must_not_over_borrow.wj");
 
 fn assert_no_over_borrow_into_concat2(rs: &str) {
-    // Tip must not pass &String / &str into owned concat2 formals.
+    // Tip must not pass &String / &str into owned concat/overlay formals (call sites).
+    let over_borrow = rs.contains("concat2(&")
+        || rs.contains("append_overlay_row(&")
+        || rs.contains("overlay_row2(&")
+        || rs.contains("overlay_row3(&")
+        || rs.contains("overlay_row4(&")
+        || rs.contains("overlay_row2(&String::from")
+        || rs.contains("append_overlay_row(&a")
+        || rs.contains("append_overlay_row(&b");
     assert!(
-        !rs.contains("concat2(&")
-            && !rs.contains("append_overlay_row(&")
-            && !rs.contains("overlay_row2(&")
-            && !rs.contains("overlay_row3(&")
-            && !rs.contains("overlay_row4(&"),
+        !over_borrow,
         "RED P3.264: nested concat/overlay helpers must not over-borrow owned formals. Generated:\n{rs}"
     );
 }
