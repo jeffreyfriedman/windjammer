@@ -2757,6 +2757,28 @@ impl<'ast> CodeGenerator<'ast> {
             && self.param_has_later_owned_formal_pass(param_name, self.current_statement_idx)
     }
 
+    /// True when a local binding is used again after the current statement (auto-clone or scan).
+    pub(in crate::codegen::rust) fn local_binding_reused_after_current_statement(
+        &self,
+        name: &str,
+    ) -> bool {
+        if self.auto_clone_analysis.as_ref().is_some_and(|a| {
+            a.needs_clone(name, self.current_statement_idx).is_some()
+        }) {
+            return true;
+        }
+        // `current_block_local_idx` is the index within `current_function_body`;
+        // `current_statement_idx` / auto_clone_counter can drift across nested blocks.
+        let start = self.current_block_local_idx.saturating_add(1);
+        let later: Vec<&crate::parser::Statement> = self
+            .current_function_body
+            .iter()
+            .skip(start)
+            .copied()
+            .collect();
+        !later.is_empty() && Self::variable_used_in_statements(&later, name)
+    }
+
     /// Auto-clone / signature-driven reuse must survive post-IR borrow reapply and peel passes.
     pub(in crate::codegen::rust) fn must_preserve_auto_clone_for_reuse(
         &self,
@@ -2764,9 +2786,8 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         match arg_expr {
             Expression::Identifier { name, .. } => {
-                self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                    a.needs_clone(name, self.current_statement_idx).is_some()
-                }) || self.caller_param_has_later_owned_formal_pass(name)
+                self.local_binding_reused_after_current_statement(name)
+                    || self.caller_param_has_later_owned_formal_pass(name)
             }
             _ => false,
         }
