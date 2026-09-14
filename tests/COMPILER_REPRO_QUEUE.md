@@ -17,9 +17,11 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
-| P0 | **Owned path extract call site must not `&String` into owned `string` formal** | `bug_owned_path_extract_must_not_over_borrow_test` | ❌ tip RED (P3.266) |
-| P0 | **Owned `Vec<string>` helper must not receive `&Vec` at call site** | `bug_vec_string_helper_must_not_over_borrow_test` | ❌ tip RED (P3.266) |
-| P0 | **Thin Vec forwarder must not demote to `&Vec` while callee stays owned** | `bug_thin_vec_forwarder_must_not_demote_owned_test` | ❌ tip RED (P3.266) |
+| P0 | **Owned path extract call site must not `&String` into owned `string` formal** | `bug_owned_path_extract_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) — owned move at call site; guard retained |
+| P0 | **Owned `Vec<string>` helper must not receive `&Vec` at call site** | `bug_vec_string_helper_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
+| P0 | **Thin Vec forwarder must not demote to `&Vec` while callee stays owned** | `bug_thin_vec_forwarder_must_not_demote_owned_test` | ✅ tip GREEN (2026-09-14) |
+| P0 | **Engine `i32` range literals must not emit `_i64` (`component_viewer_controls`)** | `bug_engine_i32_range_literal_must_not_emit_i64_suffix_test` | ✅ tip GREEN (2026-09-14) — `module_const_types` + i32 range loop var (not forced usize) |
+| P0 | **Owned Copy `i32` formals must not `*x.clone()` at call site** | `bug_engine_i32_formal_must_not_star_deref_clone_test` | ✅ tip GREEN (2026-09-14) — guard retained |
 | P0 | **`while idx < vec.len()` int vs usize (expected int, found uint)** | `bug_while_idx_lt_vec_len_must_unify_int_uint_test` | ✅ tip GREEN (P3.265) — tuple `.N` usize only when element is usize; not blanket `.0` |
 | P0 | **Nested `concat2`/overlay_row owned formals over-borrowed at call sites** | `bug_string_concat_nested_owned_must_not_over_borrow_test` | ✅ tip GREEN (P3.264) — per-param pub free-fn owned keep (concat lhs / owned forward); read-only pub APIs demote |
 | P1 | **Cross-crate `set_if` mut borrow without / with stripped metadata** | `bug_cross_crate_set_if_mut_borrow_test` | ✅ tip GREEN (2026-09-14) — MethodCall mut detect + loop-body MutBorrowed keep |
@@ -145,6 +147,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
+| P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 RED / filed (P3.282); notes uses `encode_text` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ❌ tip RED (P3.278); notes uses single-map reader like auth |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -198,16 +201,27 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** backport tip auto-borrow for owned locals into demoted `&str` formals so cargo-bin hexagonal apps do not need `Vec` hold workarounds.
 
+## P3.282 (2026-09-14) — wj-notes-api base64 + cross-crate `encode` over-borrow
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-base64` `GET /notes/:id?encoding=base64` | ✅ **58/58** on cargo-bin `wj` 0.50.0 |
+| Package adds `encode_text` / `decode_text` aliases | ✅ unblocks call sites |
+| Gate `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 filed — bare `encode(text)` emits `encode(&text)` despite Owned metadata (same shape as working `hex`) |
+
+**Compiler agent:** ownership/coercion for cross-crate free fns must follow signature registry — do not special-case method/fn name `encode` into a borrow.
+
 ## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + thin Vec forwarder
 
 | Change | Status |
 |--------|--------|
-| Gate `bug_owned_path_extract_must_not_over_borrow_test` | ❌ tip RED — `extract_tool_name(&invoke_path)` |
-| Gate `bug_vec_string_helper_must_not_over_borrow_test` | ❌ tip RED — `list_json(&controls)` |
-| Gate `bug_thin_vec_forwarder_must_not_demote_owned_test` | ❌ tip RED — `post_simple(headers: &Vec)` → owned callee |
+| Gate `bug_owned_path_extract_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
+| Gate `bug_vec_string_helper_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) |
+| Gate `bug_thin_vec_forwarder_must_not_demote_owned_test` | ✅ tip GREEN (2026-09-14) |
+| Gate `bug_engine_i32_range_literal_must_not_emit_i64_suffix_test` | ✅ tip GREEN (2026-09-14) — `module_const_types` + non-usize range loop binding |
 | Product interim: inline string-list body; inline bearer lookup; inline `post_request`; `path + ""` into extractors | ✅ clears prior 8-error tip api-check cluster (verify) |
 
-**Compiler agent:** owned `string`/`Vec<string>` formals must receive moves (not `&`) when call-site analysis demotes read-only uses inconsistently with codegen. Thin Vec forwarders must not demote to `&Vec` while the callee keeps owned `Vec`.
+**Compiler agent:** owned `string`/`Vec<string>` formals must receive moves (not `&`) when call-site analysis demotes read-only uses inconsistently with codegen. Thin Vec forwarders must not demote to `&Vec` while the callee keeps owned `Vec`. i32 consts must register for identifier inference so range/arithmetic literals match bound width.
 
 ## P3.265 (2026-09-13) — tip E0252 duplicate type imports + bank_recon owned moves
 
