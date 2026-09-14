@@ -542,6 +542,20 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.285 WindjammerDB CQ-C5 — coverage REDs WDB-214–217 String/lsqb/simd/DenseCsr (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` (last) | ⚠️ **523** |
+| Tip recheck prior open set (earlier) | ✅ **24 GREEN** / residual **177** (+ product 209/212 later greened on tip) |
+| Tip **WDB-214** owned String→demoted `&str` `push_cstring` | ❌ RED — tip-out/gen pg_wire |
+| Tip **WDB-215** `u64` index vs `len() as i64` (lsqb) | ❌ RED — tip-out/gen |
+| Tip **WDB-216** demoted `&Vec`→owned SIMD FFI | ❌ RED — tip-out/gen graph_simd |
+| Tip **WDB-217** `csr.clone()`→`&mut DenseCsr` | ❌ RED — tip-out/gen pagerank |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/214–217**. Dominant residual: `&str`←String. No Phase 606+.
+
 ## P3.281 WindjammerDB CQ-C5 — coverage REDs WDB-209–213 binder/Session/Fill/Timeseries/OptEcon (2026-09-14)
 
 | Gate | Status |
