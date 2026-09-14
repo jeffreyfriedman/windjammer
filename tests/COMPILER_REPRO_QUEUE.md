@@ -180,6 +180,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** defer-drop after owned `HashMap` param must not splice into an open `match map.get(…)` (breaks rustc parse / E0382).
 
+## P3.265 (2026-09-13) — tip E0252 duplicate type imports + bank_recon owned moves
+
+| Change | Status |
+|--------|--------|
+| Gate `bug_explicit_type_import_must_not_duplicate_prelude_test` | 🔧 filed (minimal may GREEN; product tip emits prelude+brace) |
+| Product interim: strip View/Line/Draft names from brace imports (~38 files) | 🔧 in progress |
+| Product: bank_recon drop `clone_code` → `code + ""` owned moves | 🔧 in progress |
+| Tip `make api-check` | was **76** after tip sync (string_concat cleared); targeting E0252 + `&string` |
+
+**Compiler agent:** when auto-emitting prelude `use crate::…::Type;`, do not also keep `Type` inside the source brace `use crate::…::{…, Type}`.
+
 ## P3.264 (2026-09-13) — nested concat2/overlay_row owned formal over-borrow
 
 | Change | Status |
@@ -407,6 +418,37 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Residual product empty-concat on query `vec![…]` / owned fields | ⚠️ still present — drop only when tip covers |
 
 **Compiler agent priority:** see P3.242 substring int unify; then residual empty-concat outside row helpers.
+
+## P3.279 WindjammerDB CQ-C5 — coverage REDs WDB-200–205 u32/Key/Multicol/sql/usize/inbound (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~123** (↓ after module_file + df_provider tip→gen sync; re-census after docs) |
+| Tip **WDB-200** u32 counter `1_i64` (df_provider) | ✅ **GREEN** after tip-out→gen sync |
+| Tip **WDB-201** `&mut Key` → owned `entries.push` | ❌ RED — tip-out/gen `push((key, …))` |
+| Tip **WDB-202** `&mut MulticolState` → owned return | ✅ **GREEN** — tip-out/gen owned `state:` (no demoted `&mut`) |
+| Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ❌ RED — unified bare `sql` |
+| Tip **WDB-204** `u64 == 0_usize` (sysbench) | ❌ RED — tip-out/gen |
+| Tip **WDB-205** `inbound.clone()` → demoted `&Vec<u8>` | ✅ tip GREEN (no bare owned into demoted decode) |
+| Tip-out→gen sync | ✅ multicol serve + prior df_provider/module_file |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.279 WindjammerDB CQ-C5 — coverage REDs WDB-200–205 counters / Key / Multicol / sql / usize / inbound (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` (last) | ⚠️ **~123** after module_file + df_provider tip→gen sync |
+| Tip **WDB-200** `u32` / `1_i64` df_provider | ✅ **GREEN** after tip→gen sync (`i += 1`) |
+| Tip **WDB-201** `&mut Key` push into owned Key | ❌ RED — `out.entries.push((key, …))` |
+| Tip **WDB-202** `&mut MulticolState` return as owned | ✅ **GREEN** — tip-out/gen now owned `state:` formal |
+| Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ❌ RED — unified bare `sql` |
+| Tip **WDB-204** `u64 == 0_usize` (sysbench) | ❌ RED — tip-out `median == 0_usize` |
+| Tip **WDB-205** `inbound.clone()` → demoted `&Vec` decode | ✅ **GREEN** (tip-out/product) |
+| Dogfood / tip-cluster | ❄️ frozen (manual tip-out→gen only) |
+
+**Compiler agent priority:** tip greens 176/177/191–198 + **201/203/204**. No Phase 606+.
 
 ## P3.277 WindjammerDB CQ-C5 — coverage REDs WDB-196–199 feed String / live OptDated / search f32 / &mut Value (2026-09-13)
 
