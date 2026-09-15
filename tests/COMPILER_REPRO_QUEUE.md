@@ -26,14 +26,14 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Fix:** Per-file `register_traits_from_program` + `infer_trait_signatures_from_impls` on a shared `Analyzer` (no mega merge). Cross-file `analyzed_trait_methods` still accumulates.
 
-**Handoff:** Tip library transpile now reaches codegen; unblock with P3.291, then `wj game build --release` for breach-protocol.
+**Handoff:** Tip library transpile past Step 4B-pre + full codegen (P3.291). Next: engine `cargo check` / `wj game build` (P3.302+ mass rustc).
 
 ## P3.291 — mutual-recursion free-fn codegen stack overflow (2026-09-15)
 
 | Gate | Status |
 |------|--------|
-| `mutual_recursion_free_fns_codegen_must_not_stack_overflow` | ⏳ tip rebuild + GREEN pending — `bug_mutual_recursion_free_fns_codegen_must_not_stack_overflow_test` |
-| Full `windjammer-game-core` tip `--library` file `behavior_tree/executor.wj` (~15k registry sigs) | ⏳ was **stack overflow** during formal param emission after Step 4B-pre OOM fix |
+| `mutual_recursion_free_fns_codegen_must_not_stack_overflow` | ✅ tip GREEN (2026-09-15) — memo + reentrancy guard; ~1.6s test |
+| Full `windjammer-game-core` tip `--library` (~669 files) incl. `behavior_tree/executor.wj` | ✅ tip GREEN (2026-09-15) — EXIT=0 ~200s, RAYON_NUM_THREADS=1 |
 
 **Root cause:** `collect_additional_formal_parameter_strings` called `param_should_emit_borrowed_delegation_formal` many times per param; `param_keeps_owned_engine_key_facade` re-entered the same predicate → infinite recursion / stack blowup on BT executor–shaped mutual recursion (owned `Vec` forwards + `match`).
 
@@ -51,6 +51,18 @@ export RAYON_NUM_THREADS=1
 cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 "$WJ_COMPILER" build src --library -o gen --no-cargo --no-generate-cargo-toml
 ```
+
+## P3.302 — engine library `cargo check` after tip transpile (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| `windjammer-game-core` tip `--library` EXIT=0 (~664 files) | ✅ tip GREEN (2026-09-15 cloud verify) |
+| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ❌ **916 rustc errors** (2026-09-15) — blocks breach binary |
+
+**Sample root cause (E0053):** `RenderPort` trait emits owned formals (`Vec<MaterialData>`) but `impl RenderPort for GameRenderer` emits `&Vec<MaterialData>` when body forwards to borrowing callee — trait impl signature must match trait definition.
+
+**Handoff:** Add codegen-shape repro for trait-impl formal alignment; then re-run `wj game build --release` + headless playtest.
+
 ## P3.281 — bare-pass demotion O(registry) hang (2026-09-15)
 
 | Gate | Status |
@@ -209,6 +221,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | 🆕 RED / filed (P3.299); blocks wj-timefmt |
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | 🆕 RED / filed (P3.300); blocks duration/toml/semver/cli-args |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
+| P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | 🆕 RED / filed (P3.301); blocks wj-sync SharedMap get |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
@@ -225,6 +238,17 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 
 
+
+
+## P3.301 (2026-09-15) — multipass SharedMap get/has re-emits key.to_string()
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` SharedMap get/has | ⏸ parked (product `wj test` E0308) |
+| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN via isolate `compile_single` |
+| Gate `bug_module_file_shared_map_get_must_borrow_key_test` | ❌ tip RED (2026-09-15) — `--library --module-file` emits `key.to_string()` |
+
+**Compiler agent:** library multipass must keep MutexGuard map-key borrow (same as isolate P3.288) — do not reintroduce `key.to_string()` when insert/len live in the same module.
 
 ## P3.300 (2026-09-15) — substring end `i+1` emits `1_i32` into usize cast
 
@@ -320,8 +344,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` `SharedMap` insert/has/len; get parked | ⏸ get blocked |
-| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — regression restored |
+| Ecosystem: `wj-sync` `SharedMap` insert/len; get/has parked | ⏸ product multipass residual → P3.301 |
+| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN isolate `compile_single`; multipass product still RED → P3.301 |
 | Note | Owned `HashMap.get(key)` (no mutex) already cargo-checks |
 
 **Root cause layer:** constraint/type — `Some(x)`/`Ok(x)` infer `Option`/`Result` for match bindings; signature — owned `get` homonym/`bare_formal` must not defeat map-key consensus for `g.data.get`.
