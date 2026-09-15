@@ -73,6 +73,11 @@ fn is_str_reference(ty: &Type) -> bool {
 }
 
 fn is_closure_type(ty: &Type) -> bool {
+    formal_is_rust_closure_trait(ty)
+}
+
+/// `FnOnce` / `FnMut` / `Fn` / fn-pointer formals (e.g. `thread::spawn`) — pass by value at Rust call sites.
+pub(crate) fn formal_is_rust_closure_trait(ty: &Type) -> bool {
     matches!(ty, Type::Custom(n) if n == "Fn" || n == "FnMut" || n == "FnOnce")
         || matches!(ty, Type::FunctionPointer { .. })
 }
@@ -1113,6 +1118,24 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     signature: Option<&crate::analyzer::FunctionSignature>,
     arg_index: usize,
 ) -> bool {
+    if let Some(sig) = signature {
+        let pidx = sig.arg_param_index(arg_index);
+        if sig
+            .formal_param_type(pidx)
+            .or_else(|| sig.param_types.get(pidx))
+            .is_some_and(formal_is_rust_closure_trait)
+            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+                || sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(pidx))
+                    .copied()
+                    == Some(false)
+                || matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Owned)))
+        {
+            return false;
+        }
+    }
     // P3.254: bare user free-fns with owned `string` formals must not inherit stdlib
     // homonym borrow (`get(text, key)` vs `json::get` / `Map::get` / `env::get`).
     // Qualified runtime callees (`json::get`) still honor the baseline below.

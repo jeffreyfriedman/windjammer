@@ -234,16 +234,23 @@ fn rust_mut_borrow(expr: &str) -> String {
 }
 
 fn needs_borrow_parentheses(expr: &str) -> bool {
-    expr.contains(" as ")
-        || expr.contains(" + ")
-        || expr.contains(" - ")
-        || expr.contains(" * ")
-        || expr.contains(" / ")
-        || expr.contains(" % ")
-        || expr.contains(" << ")
-        || expr.contains(" >> ")
-        || expr.contains(" && ")
-        || expr.contains(" || ")
+    let t = expr.trim();
+    if t.starts_with("move ||")
+        || t.starts_with("||")
+        || (t.starts_with('|') && t.contains('|'))
+    {
+        return true;
+    }
+    t.contains(" as ")
+        || t.contains(" + ")
+        || t.contains(" - ")
+        || t.contains(" * ")
+        || t.contains(" / ")
+        || t.contains(" % ")
+        || t.contains(" << ")
+        || t.contains(" >> ")
+        || t.contains(" && ")
+        || t.contains(" || ")
 }
 
 /// Apply a target-agnostic coercion to a generated expression string.

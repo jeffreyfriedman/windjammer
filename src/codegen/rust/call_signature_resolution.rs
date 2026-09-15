@@ -1178,6 +1178,10 @@ pub(crate) fn qualified_callee_skips_bare_homonym_lookup(callee_name: &str) -> b
     if is_type_qualified_associated_call(callee_name) {
         return true;
     }
+    // `subprocess::spawn` vs `std::thread::spawn` share bare `spawn` in the method index.
+    if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
+        return true;
+    }
     callee_name.rsplit_once("::").is_some_and(|(module, _)| {
         module
             .chars()
