@@ -1200,6 +1200,10 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
             return false;
         }
     }
+    // `subprocess::spawn` homonyms must not force `&(move || …)` on `thread::spawn`.
+    if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
+        return false;
+    }
     if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index)) {
         return true;
     }
@@ -1223,7 +1227,7 @@ pub fn collection_key_receiver_type(
     receiver_type_name: Option<&str>,
     sig: &FunctionSignature,
 ) -> Option<String> {
-    receiver_type_name.map(|rt| rt.split('<').next().unwrap_or(rt).to_string()).or_else(|| {
+    let from_qualified_callee = || {
         if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
             callee_name,
         ) {
@@ -1239,7 +1243,20 @@ pub fn collection_key_receiver_type(
         } else {
             receiver_type_from_qualified_sig(sig).map(|s| s.to_string())
         }
-    })
+    };
+
+    if let Some(rt) = receiver_type_name {
+        let base = rt.split('<').next().unwrap_or(rt);
+        if is_map_type_name(base) || is_set_type_name(base) {
+            return Some(base.to_string());
+        }
+    }
+
+    from_qualified_callee()
+        .filter(|base| is_map_type_name(base) || is_set_type_name(base))
+        .or_else(|| {
+            receiver_type_name.map(|rt| rt.split('<').next().unwrap_or(rt).to_string())
+        })
 }
 
 /// Map/set key lookup: first arg must be borrowed when the receiver is a map/set type.

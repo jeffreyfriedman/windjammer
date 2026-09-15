@@ -10567,6 +10567,9 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> bool {
+        if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
+            return false;
+        }
         let import_alias = self.import_fn_alias_map.contains_key(callee_name);
         let lookup = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup.as_ref();

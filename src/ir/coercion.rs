@@ -35,6 +35,14 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
     let expected_own = normalize_ownership(&expected.ownership);
 
     // `FnOnce` / closure values are always passed by value — never `&closure` (E0716 / E0525).
+    if is_fn_trait_base(&actual.base)
+        && matches!(
+            actual_own,
+            OwnedType::Owned | OwnedType::Copy | OwnedType::Inferred
+        )
+    {
+        return CoercionKind::Identity;
+    }
     if is_fn_trait_base(&expected.base)
         && matches!(
             expected_own,
@@ -468,6 +476,13 @@ mod tests {
 
     fn copy(base: BaseType) -> SafetyType {
         SafetyType::copy(base)
+    }
+
+    #[test]
+    fn closure_actual_never_borrows_even_when_formal_is_stale_ref() {
+        let actual = owned(BaseType::Custom("FnOnce".into()));
+        let expected = borrowed(BaseType::Custom("FnOnce".into()));
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
     }
 
     #[test]

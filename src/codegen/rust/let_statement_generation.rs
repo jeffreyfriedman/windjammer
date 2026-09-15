@@ -167,8 +167,10 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         Some(Type::Custom(name.to_string()))
                     }
-                    // Literal types: untyped `let x = 25` → i32 (Rust default), unless the
-                    // enclosing function return width seeds i64/u32/… (WDB-081 / P3.280).
+                    // Literal types: untyped `let x = 25` follows enclosing return width
+                    // (WDB-081 / P3.280). Bool/string returns keep WJ `int` so loop counters
+                    // `i = i + 1` stay i64 (not `+= 1 as i32`). Custom/struct returns still
+                    // prefer i32 for coordinate locals (`let cy = 10` in builders).
                     Expression::Literal {
                         value: crate::parser::Literal::Int(_),
                         ..
@@ -178,6 +180,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 Type::Int32 => Some(Type::Int32),
                                 Type::Int => Some(Type::Int),
                                 Type::Uint => Some(Type::Uint),
+                                Type::Bool | Type::String => Some(Type::Int),
                                 Type::Custom(name)
                                     if matches!(
                                         name.as_str(),
@@ -191,7 +194,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 _ => Some(Type::Int32),
                             }
                         } else {
-                            Some(Type::Int32)
+                            Some(Type::Int)
                         }
                     }
                     Expression::Literal {

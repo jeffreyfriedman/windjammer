@@ -1,0 +1,7 @@
+pub fn needs_owned(kind: string) -> int {
+    kind.len() as int
+}
+
+pub fn call_with_lit() -> int {
+    needs_owned("Person_likes_Post")
+}
