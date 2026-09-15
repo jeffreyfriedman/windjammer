@@ -15,6 +15,19 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| `library_multipass_infers_cross_file_trait_mut_self_without_merging_all_asts` | ⏳ tip rebuild + GREEN pending |
+| Full `windjammer-game-core` tip `--library` (~669 files) after ownership pass 10 | ⏳ was **SIGKILL/jetsam** (no EXIT) when Step 4B-pre cloned all items into one `Program` |
+
+**Root cause:** After ownership convergence, Step 4B-pre doubled peak RSS by merging every AST into one mega-`Program` solely for `register_traits` + `infer_trait_signatures_from_impls`.
+
+**Fix:** Per-file `register_traits_from_program` + `infer_trait_signatures_from_impls` on a shared `Analyzer` (no mega merge). Cross-file `analyzed_trait_methods` still accumulates.
+
+**Handoff:** Rebuild tip `wj` → atomic install to `.cargo-target-wj` → `RAYON_NUM_THREADS=1` tip library transpile of game-core → `wj game build --release` for breach-protocol.
+
 ## P3.281 — bare-pass demotion O(registry) hang (2026-09-15)
 
 | Gate | Status |
@@ -166,7 +179,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
-| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (P3.288) — collection-key borrow + match `.copied()` on map get in block-expr path |
+| P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | 🆕 RED / filed (P3.295); blocks shared-inbox Pool |
+| P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | 🆕 RED / filed (P3.295); blocks shared-inbox Pool |
+| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ⚠️ tip REGRESSION (2026-09-15) — SharedMap get re-emits key.to_string(); was GREEN (P3.288)
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
@@ -180,6 +195,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
 
 
+
+
+## P3.295 (2026-09-15) — `spawn(move ||)` strips `move` in library multipass
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` shared-inbox Pool | ⏸ tip emits `spawn(\|\| …)` without `move` → E0373 |
+| Gate `bug_module_file_spawn_move_keyword_must_be_preserved_test` | 🆕 filed |
+| Gate `bug_thread_spawn_move_keyword_must_be_preserved_test` | ⚠️ isolate may GREEN; multipass is the RED path |
+| Note | P3.294 cleared `&(move \|\|…)`; preserving `move` is still required for Arc capture |
+
+**Compiler agent:** when source has `std::thread::spawn(move \|\| …)`, emit `spawn(move \|\| …)` by value — do not drop `move`.
 
 ## P3.294 (2026-09-15) — Pool shared-inbox `spawn(move ||)` with Arc still by-ref
 
@@ -637,6 +664,18 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.296 WindjammerDB CQ-C5 — coverage RED WDB-222 GraphVertexI64Map (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-214–217** | ✅ GREEN |
+| Tip **WDB-177/218–221** | ❌ RED |
+| Tip **WDB-222** owned `GraphVertexI64Map.clone()`→demoted `&Map` | ❌ RED — tip-out/gen bfs (~18×) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–222**. Dominant residual: `&str`←String / String←&str / LsqbTypedGraph. No Phase 606+.
 
 ## P3.292 WindjammerDB CQ-C5 — tip→gen string-lit sync + WDB-220/221 (2026-09-14)
 
