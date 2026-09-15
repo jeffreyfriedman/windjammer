@@ -366,6 +366,9 @@ fn register_rust_std_boundary_signatures(registry: &mut SignatureRegistry) {
             registry.add_function(name.to_string(), thread_spawn_boundary_signature(name));
         }
     }
+    // So `thread::spawn` qualifies as a runtime-std path for bare-homonym skip
+    // (without hardcoding the leaf name at call sites).
+    registry.register_runtime_std_module("thread");
 }
 
 fn register_boundary_signature_alias(
