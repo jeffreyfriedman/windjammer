@@ -572,9 +572,7 @@ pub fn method_is_map_key_qualified(
 ) -> bool {
     let borrowed_key_on_type = |base: &str| -> bool {
         lookup_sig(method, Some(base), registry).is_some_and(|s| {
-            s.has_self_receiver
-                && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
-                && first_arg_type(s).is_some_and(is_reference_type)
+            s.has_self_receiver && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
         })
     };
 
@@ -1294,7 +1292,7 @@ pub fn is_collection_key_lookup(
     let registry = SignatureRegistry::stdlib();
     let method = sig.name.rsplit("::").next().unwrap_or(&sig.name);
     if let Some((type_prefix, meth)) = sig.name.rsplit_once("::") {
-        if matches!(meth, "get" | "contains_key" | "get_key_value") {
+        if matches!(meth, "get" | "contains_key" | "get_key_value" | "remove") {
             let base = type_prefix
                 .rsplit("::")
                 .next()
@@ -1328,7 +1326,7 @@ pub fn is_collection_key_lookup(
     // inferred receiver name is `MapCell` / `MutexGuard<…>` — still a map key lookup.
     // Do not require `has_self_receiver`: multipass stubs sometimes omit it on
     // `HashMap::get` even when the method is map-qualified in `sig.name`.
-    if arg_index == 0 && matches!(method, "get" | "contains_key" | "get_key_value") {
+    if arg_index == 0 && matches!(method, "get" | "contains_key" | "get_key_value" | "remove") {
         let from_callee = sig.name.rsplit_once("::").map(|(ty, _)| {
             ty.rsplit("::")
                 .next()
@@ -1792,6 +1790,10 @@ mod pattern_registry_tests {
         assert!(
             !method_is_map_key_qualified("remove", Some("Vec"), &reg),
             "Vec::remove(usize) must not inherit HashMap::remove borrowed-key homonym"
+        );
+        assert!(
+            method_is_map_key_qualified("remove", Some("HashMap"), &reg),
+            "HashMap::remove must classify as borrowed-key lookup"
         );
     }
 
