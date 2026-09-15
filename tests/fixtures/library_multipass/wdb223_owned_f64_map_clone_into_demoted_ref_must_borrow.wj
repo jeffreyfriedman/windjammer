@@ -1,0 +1,12 @@
+pub struct GraphVertexF64Map {
+    pub n: float,
+}
+
+pub fn get(map: GraphVertexF64Map, vertex: int) -> float {
+    let _ = map.n
+    vertex as float
+}
+
+pub fn read(map: GraphVertexF64Map, vertex: int) -> float {
+    get(map, vertex)
+}
