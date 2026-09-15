@@ -132,29 +132,21 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                } else if let Expression::Identifier { name, .. } = target {
-                    let tgt_int = self
-                        .local_var_types
-                        .get(name)
-                        .cloned()
-                        .or(tgt_ty.clone());
-                    if let Some(tgt) = tgt_int.as_ref() {
-                        if let Some(cast) = Self::int_rust_type_name(tgt) {
-                            let val_width = val_ty
-                                .as_ref()
-                                .and_then(Self::int_rust_type_name)
-                                .unwrap_or("i64");
-                            let already_target_cast = value_str.ends_with(&format!(" as {cast}"))
-                                || value_str.ends_with(&format!(") as {cast}"));
-                            if val_width != cast && !already_target_cast {
-                                if matches!(value, Expression::Binary { .. })
-                                    || matches!(value, Expression::Call { .. })
-                                {
-                                    value_str = format!("({value_str}) as {cast}");
-                                } else {
-                                    value_str = format!("{value_str} as {cast}");
-                                }
-                            }
+                } else if let Some(cast) = self.resolve_compound_assign_int_rust_type_name(target)
+                {
+                    let val_width = val_ty
+                        .as_ref()
+                        .and_then(Self::int_rust_type_name)
+                        .unwrap_or("i64");
+                    let already_target_cast = value_str.ends_with(&format!(" as {cast}"))
+                        || value_str.ends_with(&format!(") as {cast}"));
+                    if val_width != cast && !already_target_cast {
+                        if matches!(value, Expression::Binary { .. })
+                            || matches!(value, Expression::Call { .. })
+                        {
+                            value_str = format!("({value_str}) as {cast}");
+                        } else {
+                            value_str = format!("{value_str} as {cast}");
                         }
                     }
                 }
@@ -351,31 +343,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
-                    } else if let Expression::Identifier { name, .. } = target {
-                        let tgt_int = self
-                            .local_var_types
-                            .get(name)
-                            .cloned()
-                            .or(tgt_ty.clone());
-                        if let Some(tgt) = tgt_int.as_ref() {
-                            if let Some(cast) = Self::int_rust_type_name(tgt) {
-                                let val_width = self
-                                    .infer_expression_type(right)
-                                    .as_ref()
-                                    .and_then(Self::int_rust_type_name)
-                                    .unwrap_or("i64");
-                                let already_target_cast = right_str
-                                    .ends_with(&format!(" as {cast}"))
-                                    || right_str.ends_with(&format!(") as {cast}"));
-                                if val_width != cast && !already_target_cast {
-                                    if matches!(right, Expression::Binary { .. })
-                                        || matches!(right, Expression::Call { .. })
-                                    {
-                                        right_str = format!("({right_str}) as {cast}");
-                                    } else {
-                                        right_str = format!("{right_str} as {cast}");
-                                    }
-                                }
+                    } else if let Some(cast) =
+                        self.resolve_compound_assign_int_rust_type_name(target)
+                    {
+                        let val_width = self
+                            .infer_expression_type(right)
+                            .as_ref()
+                            .and_then(Self::int_rust_type_name)
+                            .unwrap_or("i64");
+                        let already_target_cast = right_str
+                            .ends_with(&format!(" as {cast}"))
+                            || right_str.ends_with(&format!(") as {cast}"));
+                        if val_width != cast && !already_target_cast {
+                            if matches!(right, Expression::Binary { .. })
+                                || matches!(right, Expression::Call { .. })
+                            {
+                                right_str = format!("({right_str}) as {cast}");
+                            } else {
+                                right_str = format!("{right_str} as {cast}");
                             }
                         }
                     }
