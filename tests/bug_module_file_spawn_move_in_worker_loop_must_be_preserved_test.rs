@@ -11,56 +11,95 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — `spawn(move ||)` inside worker loop after `inbox.clone()` strips `move`.
+//! FAILING REPRO — library multipass strips `move` from `spawn(move \|\| …)`
+//! when the closure body starts with `while` (wj-sync shared-inbox Pool).
 //!
-//! P3.295 simple top-level Arc spawn is tip GREEN; wj-sync Pool shape still RED:
-//! ```ignore
-//! while true {
-//!     let inbox = shared.clone()
-//!     std::thread::spawn(move || { … inbox.lock() … })
-//! }
-//! ```
-//! Tip may log `Unexpected token … While` with prior token `Or` at `move ||`.
+//! P3.295 simple Arc `spawn(move \|\| { match … })` is tip GREEN.
+//! The Pool shape below emits bare `spawn(\|\| …)` → E0373.
+//! Tip may log `Unexpected token … While` with prior token `Or` at `move \|\|`.
 
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-const SOURCE: &str = r#"
+/// Exact shape of `wj-sync` shared-inbox `pool_run_double` workers.
+const POOL_WORKER_LOOP: &str = r#"
 use std::sync::mpsc
 use std::sync::{Arc, Mutex}
 
-struct Cell {
-    n: int,
+struct JobInbox {
+    rx: mpsc::Receiver<int>,
 }
 
-pub fn spawn_workers(n: int) -> int {
-    let pair = mpsc::channel()
-    let tx = pair.0
-    let rx = pair.1
-    let shared = Arc::new(Mutex::new(Cell { n: 0 }))
-    let mut i = 0
-    while i < n {
-        let inbox = shared.clone()
-        let out = tx.clone()
+pub fn pool_run(n: int) -> int {
+    let jobs = mpsc::channel()
+    let results = mpsc::channel()
+    let job_tx = jobs.0
+    let inbox = Arc::new(Mutex::new(JobInbox { rx: jobs.1 }))
+    let res_tx = results.0
+    let res_rx = results.1
+
+    let mut started: int = 0
+    while started < 2 {
+        let inbox = inbox.clone()
+        let tx = res_tx.clone()
         std::thread::spawn(move || {
-            match inbox.lock() {
-                Ok(mut g) => {
-                    g.n = g.n + 1
-                    match out.send(g.n) {
-                        Ok(_) => {}
-                        Err(_) => {}
+            while true {
+                let msg = match inbox.lock() {
+                    Ok(g) => g.rx.recv(),
+                    Err(_) => {
+                        return
+                    },
+                }
+                match msg {
+                    Ok(v) => {
+                        if v < 0 {
+                            break
+                        }
+                        match tx.send(v * 2) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+                    }
+                    Err(_) => {
+                        break
                     }
                 }
-                Err(_) => {}
             }
         })
+        started = started + 1
+    }
+
+    let mut i: int = 0
+    while i < n {
+        match job_tx.send(i) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
         i = i + 1
     }
-    match rx.recv() {
-        Ok(v) => v,
-        Err(_) => 0,
+    let mut s: int = 0
+    while s < 2 {
+        match job_tx.send(-1) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+        s = s + 1
     }
+    let mut sum: int = 0
+    let mut got: int = 0
+    while got < n {
+        match res_rx.recv() {
+            Ok(v) => {
+                sum = sum + v
+                got = got + 1
+            }
+            Err(_) => {
+                break
+            }
+        }
+    }
+    sum
 }
 "#;
 
@@ -69,9 +108,9 @@ fn module_file_spawn_move_in_worker_loop_must_be_preserved() {
     let tmp = TempDir::new().expect("tempdir");
     let src = tmp.path().join("src");
     fs::create_dir_all(&src).unwrap();
-    fs::write(src.join("lib.wj"), SOURCE).unwrap();
-    let out = tmp.path().join("gen");
+    fs::write(src.join("lib.wj"), POOL_WORKER_LOOP).unwrap();
 
+    let out = tmp.path().join("gen");
     let build = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
@@ -97,6 +136,6 @@ fn module_file_spawn_move_in_worker_loop_must_be_preserved() {
         || generated.contains("spawn(move |");
     assert!(
         has_move && !generated.contains("spawn(&(move"),
-        "RED P3.297: worker-loop spawn(move ||) must preserve move:\n{generated}"
+        "RED P3.297: Pool worker-loop spawn(move ||) must preserve move (not bare spawn(||)):\n{generated}"
     );
 }
