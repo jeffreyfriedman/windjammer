@@ -1,0 +1,13 @@
+pub fn join_path(root: string, name: string) -> string {
+    let mut out = String::new()
+    out.push_str(root)
+    out.push_str("/")
+    out.push_str(name)
+    out
+}
+
+pub fn bfs_path(root: string) -> string {
+    // Product graph_ldbc_validation_port: join_path(root, String::from("BFS"))
+    // while name demotes to &str → E0308.
+    join_path(root, "BFS")
+}
