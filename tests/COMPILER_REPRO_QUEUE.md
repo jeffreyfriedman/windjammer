@@ -15,6 +15,18 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.281 — bare-pass demotion O(registry) hang (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| `callee_registry_keys_scales_with_method_index_not_registry_size` (50k noise keys) | ✅ **<1s** — `SignatureRegistry::callee_lookup_keys` via `method_keys_for` / `signatures_matching_suffix` |
+| `bug_wdb164_module_file_store_consume_rebind_must_stay_owned_test` | ✅ tip GREEN (~4s) |
+| Full `wdb-layers` module-file multipass (~1029 files) | ⚠️ **re-run** with tip `wj` — was ~52min @ 98% CPU in `callee_registry_keys` full-key scan (pre-`1dd24c74`) |
+
+**Root cause:** `promote_callees_from_bare_pass_callers` called `callee_registry_keys`, which filtered **every** registry key per call site.
+
+**Handoff:** Install tip `wj` (`1dd24c74`+); regen gitignored `wdb-layers` `gen/` with `WJ_COMPILER=…/release/wj`. Do not kill foreign dogfood `wj` PIDs — use isolated tip path. Known flaky unit: `bare_pass_skips_pub_vec_u8_owned_api_wdb175` (pre-existing on `7d073e6f`, not introduced by index fix).
+
 | Priority | Bug | Repro test(s) | Status |
 |----------|-----|---------------|--------|
 | P0 | **Owned path extract call site must not `&String` into owned `string` formal** | `bug_owned_path_extract_must_not_over_borrow_test` | ✅ tip GREEN (2026-09-14) — owned move at call site; guard retained |
