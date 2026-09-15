@@ -594,6 +594,16 @@ pub fn method_is_map_key_qualified(
     }
 
     if !is_map_receiver(receiver_type) {
+        // Resolved user types (`MemoryEngine::get(key: Key)`) beat HashMap homonym consensus —
+        // do not force `&key` into owned Custom formals at delegation sites (dogfood txn).
+        if let Some(rt) = receiver_type {
+            let base = rt.split('<').next().unwrap_or(rt);
+            if let Some(sig) = lookup_sig(method, Some(base), registry) {
+                if sig.has_self_receiver {
+                    return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
+                }
+            }
+        }
         // Non-map receiver names (`MapCell`, `MutexGuard<…>`, …): still classify via
         // stdlib map/set consensus — `g.data.get(key)` must borrow `&K`, not `.to_string()`.
         for map_ty in crate::type_classification::MAP_TYPE_NAMES {
