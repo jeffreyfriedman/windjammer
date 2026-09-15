@@ -151,6 +151,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 RED / filed (P3.283); notes aliases `get as qs_get` |
 | P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | 🆕 RED / filed (P3.284); notes inlines `?q=` filter loop |
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
+| P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 RED / filed (P3.287); blocks `wj-sync` bounded channels |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — defer-drop at fn scope; skip when body has `match` + `.get(` |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -160,6 +161,15 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
+
+## P3.287 (2026-09-14) — wj-sync bounded channel / `mpsc::sync_channel` signature
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` `bounded_int` via `mpsc::sync_channel` | ⏸ blocked on tip |
+| Gate `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 filed — `compile_error!("missing boundary signature for mpsc::sync_channel")` |
+
+**Compiler agent:** register boundary signature for `std::sync::mpsc::sync_channel` (runtime already has `sync::sync_channel`). Unblocks Go-style bounded channels in `wj-sync`.
 
 ## P3.286 (2026-09-14) — wj-sync `parallel` / `std::thread::spawn` closure by-ref
 
