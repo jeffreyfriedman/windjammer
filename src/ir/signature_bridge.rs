@@ -606,6 +606,9 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         ) && param_is_rust_str_ref(ty)
+            && !crate::codegen::rust::call_signature_resolution::plain_string_owned_consumer_at_call_site(
+                sig, param_idx,
+            )
         {
             return SafetyType {
                 base: BaseType::String,
@@ -645,10 +648,16 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         if let Some(ty) = sig.param_types.get(param_idx) {
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, param_idx,
+            ) && !crate::codegen::rust::call_signature_resolution::plain_string_owned_consumer_at_call_site(
+                sig, param_idx,
             ) {
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
             }
-            if param_is_rust_str_ref(ty) {
+            if param_is_rust_str_ref(ty)
+                && !crate::codegen::rust::call_signature_resolution::plain_string_owned_consumer_at_call_site(
+                    sig, param_idx,
+                )
+            {
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
             }
         }

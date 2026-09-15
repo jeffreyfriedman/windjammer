@@ -11363,6 +11363,22 @@ impl<'ast> CodeGenerator<'ast> {
                 &mut updated,
                 emitted_param_strings,
             );
+            let forwarding_borrow_params: Vec<bool> = func
+                .parameters
+                .iter()
+                .filter(|p| p.name != "self")
+                .map(|p| {
+                    self.param_only_used_as_call_argument(func.body.as_slice(), &p.name, func)
+                        && self.param_passed_to_borrowing_callee(
+                            func.body.as_slice(),
+                            &p.name,
+                            func,
+                        )
+                })
+                .collect();
+            if forwarding_borrow_params.iter().any(|&b| b) {
+                updated.forwarding_borrow_params = Some(forwarding_borrow_params);
+            }
             self.signature_registry.add_function(key.clone(), updated);
             // Rebuild mut-arg indices from this emission only — do not retain stale
             // `&mut` slots from a prior multipass when the formal is now owned.
@@ -11391,8 +11407,12 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
-            self.function_emitted_mut_arg_indices
-                .insert(key.clone(), mut_arg_indices);
+            if mut_arg_indices.is_empty() {
+                self.function_emitted_mut_arg_indices.remove(&key);
+            } else {
+                self.function_emitted_mut_arg_indices
+                    .insert(key.clone(), mut_arg_indices);
+            }
         }
     }
 
