@@ -613,13 +613,15 @@ pub fn method_is_map_key_qualified_with_project(
             {
                 if let Some(sig) = lookup_sig(method, Some(base), reg) {
                     if sig.has_self_receiver {
+                        // User/project self-method wins (Owned Key → not map-key; Borrowed → is).
                         return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
                     }
                 }
             }
-            if !is_map_type_name(base) && !is_set_type_name(base) {
-                return false;
-            }
+            // No typed self-method for this receiver: do NOT early-return false for
+            // non-map names. Wrappers (`MapCell`, `MutexGuard<…>`) must fall through to
+            // map consensus so `g.data.get(key)` keeps `&K` (P3.288). User types without
+            // a registered `Type::method` also miss consensus unless a map/set defines it.
         }
         // Non-map receiver names (`MapCell`, `MutexGuard<…>`, …): still classify via
         // stdlib map/set consensus — `g.data.get(key)` must borrow `&K`, not `.to_string()`.

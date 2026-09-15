@@ -204,6 +204,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
 | P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — emit `spawn(move \|\| …)`; cargo-check GREEN |
 | P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — library `--module-file` preserves `move` |
+| P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | 🆕 RED / filed (P3.297); blocks wj-sync shared-inbox Pool |
 | P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.298); blocks wj-uuid |
 | P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | 🆕 RED / filed (P3.299); blocks wj-timefmt |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ⚠️ tip REGRESSION (2026-09-15) — SharedMap get re-emits key.to_string(); was GREEN (P3.288)
@@ -246,11 +247,11 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` shared-inbox Pool | ✅ worker-loop `spawn(move \|\|)` tip GREEN (2026-09-15 TDD) |
-| Gate `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN — library `--module-file` preserves `move` after `inbox.clone()` in while |
-| Note | Simple top-level Arc spawn remains GREEN (P3.295) |
+| Ecosystem: `wj-sync` shared-inbox Pool | ⏸ tip RED — Pool `while` inside `spawn(move \|\|)` emits bare `spawn(\|\| …)` → E0373 |
+| Gate `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ❌ tip RED (2026-09-15 sharpened) — exact Pool shape; simple Arc spawn stays GREEN (P3.295) |
+| Note | Shallow `inbox.clone()` + outer while was tip-GREEN; closure body starting with `while` strips `move` |
 
-**Compiler agent:** multipass must preserve `move` on closures inside `while` / after Arc clone rebinds — same emit as simple P3.295 case.
+**Compiler agent:** multipass must preserve `move` on closures whose body starts with `while` / after Arc clone rebinds — same emit as simple P3.295 case.
 
 ## P3.295 (2026-09-15) — `spawn(move ||)` strips `move` in library multipass
 
