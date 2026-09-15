@@ -266,6 +266,18 @@ impl<'ast> CodeGenerator<'ast> {
                     // Mutated+returned formals stay Owned (solver lattice).
                     if analyzed.returned_parameters.contains(&param_name) {
                         self.inferred_mut_borrowed_params.remove(&param_name);
+                    } else if self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param_name,
+                        func,
+                    ) || self.param_only_forwards_to_emitted_owned_callees(
+                        func.body.as_slice(),
+                        &param_name,
+                        func,
+                    ) {
+                        // Stale solver MutBorrowed on map-homonym methods must not
+                        // demote owned forwards (`has_key` → `get`, store patch paths).
+                        self.inferred_mut_borrowed_params.remove(&param_name);
                     } else {
                         self.inferred_mut_borrowed_params.insert(param_name);
                     }
@@ -10935,11 +10947,24 @@ impl<'ast> CodeGenerator<'ast> {
                 .param_types
                 .get(pidx)
                 .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-                || matches!(
-                    sig.param_ownership.get(pidx),
-                    Some(OwnershipMode::MutBorrowed)
-                )
             {
+                return false;
+            }
+            if matches!(
+                sig.param_ownership.get(pidx),
+                Some(OwnershipMode::MutBorrowed)
+            ) {
+                if crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    &sig, pidx,
+                ) {
+                    return true;
+                }
+                if sig.formal_param_type(pidx).is_some_and(|t| {
+                    matches!(t, Type::Custom(_))
+                        && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                }) {
+                    return true;
+                }
                 return false;
             }
             let stale_shared_ref_only = sig
