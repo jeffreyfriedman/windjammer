@@ -28,6 +28,29 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Handoff:** Rebuild tip `wj` → atomic install to `.cargo-target-wj` → `RAYON_NUM_THREADS=1` tip library transpile of game-core → `wj game build --release` for breach-protocol.
 
+## P3.290 — mutual-recursion free-fn codegen stack overflow (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| `mutual_recursion_free_fns_codegen_must_not_stack_overflow` | ⏳ tip — `bug_mutual_recursion_free_fns_codegen_must_not_stack_overflow_test` |
+| Full `windjammer-game-core` tip `--library` file `behavior_tree/executor.wj` (~15k registry sigs) | ⏳ was **stack overflow** during formal param emission after Step 4B-pre OOM fix |
+
+**Root cause:** `collect_additional_formal_parameter_strings` called `param_should_emit_borrowed_delegation_formal` many times per param; `param_keeps_owned_engine_key_facade` re-entered the same predicate → infinite recursion / stack blowup on BT executor–shaped mutual recursion (owned `Vec` forwards + `match`).
+
+**Fix:** Per-function memo + reentrancy guard on borrow-delegation formal queries (`borrow_delegation_formal_cache` / `borrow_delegation_formal_in_progress` on `CodeGenerator`).
+
+**Verify:**
+
+```bash
+export CARGO_TARGET_DIR="$(wj cache path)"
+cargo test --release --test bug_mutual_recursion_free_fns_codegen_must_not_stack_overflow_test -- \
+  mutual_recursion_free_fns_codegen_must_not_stack_overflow -- --test-threads=1
+export WJ_COMPILER=/Users/jeffreyfriedman/src/wj/windjammer-game/.cargo-target-wj/release/wj
+export RAYON_NUM_THREADS=1
+cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
+"$WJ_COMPILER" build src --library -o gen --no-cargo --no-generate-cargo-toml
+```
+
 ## P3.281 — bare-pass demotion O(registry) hang (2026-09-15)
 
 | Gate | Status |
@@ -197,16 +220,26 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 
 
+## P3.297 (2026-09-15) — `spawn(move ||)` strips `move` in Arc-clone worker loop
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` shared-inbox Pool | ✅ worker-loop `spawn(move \|\|)` tip GREEN (2026-09-15 TDD) |
+| Gate `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN — library `--module-file` preserves `move` after `inbox.clone()` in while |
+| Note | Simple top-level Arc spawn remains GREEN (P3.295) |
+
+**Compiler agent:** multipass must preserve `move` on closures inside `while` / after Arc clone rebinds — same emit as simple P3.295 case.
+
 ## P3.295 (2026-09-15) — `spawn(move ||)` strips `move` in library multipass
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` shared-inbox Pool | ✅ tip preserves `move` (isolate + library multipass) |
+| Ecosystem: simple Arc spawn | ✅ unblocked |
 | Gate `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (2026-09-15) |
-| Gate `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (2026-09-15) — TDD re-run ok |
-| Note | P3.294 cleared `&(move \|\|…)`; P3.295 keeps `move` for Arc capture |
+| Gate `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (simple case) |
+| Residual | Worker-loop shape still RED → **P3.297** |
 
-**Compiler agent:** library multipass must emit `spawn(move \|\| …)` by value — do not drop `move` after ownership passes.
+**Fix layer:** library multipass must emit `spawn(move \|\| …)` by value — do not drop `move` after ownership passes.
 
 ## P3.294 (2026-09-15) — Pool shared-inbox `spawn(move ||)` with Arc still by-ref
 
@@ -664,6 +697,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.297 WindjammerDB CQ-C5 — coverage REDs WDB-223/224 F64Map + Vec←&Vec (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-214–217** | ✅ GREEN |
+| Tip **WDB-177/218–222** | ❌ RED |
+| Tip **WDB-223** owned `GraphVertexF64Map.clone()`→demoted `&Map` | ❌ RED — tip-out/gen pagerank (~10×) |
+| Tip **WDB-224** demoted `&Vec<T>`→owned `Vec<T>` (struct elem) | ❌ RED — tip-out/gen dremel (~54×) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–224**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph. No Phase 606+.
 
 ## P3.296 WindjammerDB CQ-C5 — coverage RED WDB-222 GraphVertexI64Map (2026-09-15)
 

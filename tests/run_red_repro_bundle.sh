@@ -7,11 +7,13 @@ cd "$ROOT"
 
 RED_FILTERS=(
   int_while_len_as_int_must_not_emit_usize_arith
+  wdb223_tip_out_pagerank_must_borrow_owned_f64_map
 )
 
 GREEN_FILTERS=(
   thread_spawn_move_keyword_must_be_preserved
   module_file_spawn_move_keyword_must_be_preserved
+  module_file_spawn_move_in_worker_loop_must_be_preserved
   int_increment_literal_must_match_lhs_width
   int_arith_must_not_split_i64_i32
   int_zero_minus_must_keep_lhs_width
