@@ -3808,6 +3808,21 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
             && !self.is_type_copy(&param.type_)
         {
+            // Readonly field-projection helpers (`keys_equal(a, b) { a.bytes == b.bytes }`)
+            // demote to `&Key` even when multipass locked pub Custom formals to Owned.
+            if self.param_only_used_via_field_or_index_projection(
+                func.body.as_slice(),
+                &param.name,
+            ) && !self.param_has_field_or_index_move_binding(
+                func.body.as_slice(),
+                &param.name,
+            ) && !self.param_passed_as_call_argument(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
+                return false;
+            }
             let param_idx = func
                 .parameters
                 .iter()

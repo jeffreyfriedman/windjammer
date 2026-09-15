@@ -1760,6 +1760,13 @@ fn callee_pub_owned_formal_skip_bare_pass(
         !crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
             && !is_copy_formal_name(name, &std::collections::HashSet::new())
     }) {
+        if let Some((param_name, body)) =
+            find_function_body_for_registry_key(programs, callee_key, param_idx)
+        {
+            if param_readonly_field_projection_only(body, param_name) {
+                return false;
+            }
+        }
         // WDB-192/174: pub APIs declare owned Custom formals in source — keep owned
         // even when a single caller bare-passes (`job_store_load_jobs(store, …)`).
         if programs_declare_pub_free_fn_owned_custom_formal_at(
@@ -1961,6 +1968,59 @@ pub fn param_forwards_fields_in_call_args_only(body: &[&Statement], param_name: 
         }
     }
     saw
+}
+
+/// Readonly compare helpers (`keys_equal`: `a.bytes == b.bytes`) — not field moves
+/// (`let bytes = key.bytes` in `MemoryEngine::get`).
+fn param_readonly_field_projection_only(body: &[&Statement], param_name: &str) -> bool {
+    param_forwards_fields_in_call_args_only(body, param_name)
+        && !param_has_field_or_index_move_binding(body, param_name)
+}
+
+fn param_has_field_or_index_move_binding(body: &[&Statement], param_name: &str) -> bool {
+    body.iter()
+        .any(|stmt| stmt_has_field_move_binding(stmt, param_name))
+}
+
+fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
+    match stmt {
+        Statement::Let { value, else_block, .. } => {
+            expr_is_field_move_from_param(param_name, value)
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| stmt_has_field_move_binding(s, param_name))
+                })
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| stmt_has_field_move_binding(s, param_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| stmt_has_field_move_binding(s, param_name))
+                })
+        }
+        Statement::While { body, .. } | Statement::For { body, .. } => body
+            .iter()
+            .any(|s| stmt_has_field_move_binding(s, param_name)),
+        _ => false,
+    }
+}
+
+fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
+    match expr {
+        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+            matches!(
+                object,
+                Expression::Identifier { name, .. } if name == param_name
+            ) || expr_is_field_move_from_param(param_name, object)
+        }
+        _ => false,
+    }
 }
 
 fn param_stored_in_struct_literal(body: &[&Statement], param_name: &str) -> bool {
