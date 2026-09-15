@@ -47,9 +47,9 @@ pub fn callee_emits_shared_rust_ref_param(
     sig: &FunctionSignature,
     param_idx: usize,
 ) -> bool {
-    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
-        return false;
-    }
+    // Check emission flags before `emitted_owned_arg_contract` — that helper can call
+    // back into this function via `bare_formal_is_owned_user_type` (stack overflow on
+    // MutBorrowed collision stubs with no `emitted_rust_ref_params`).
     if let Some(ref flags) = sig.emitted_rust_ref_params {
         if flags.get(param_idx).copied().unwrap_or(false) {
             return true;
@@ -58,6 +58,9 @@ pub fn callee_emits_shared_rust_ref_param(
             // Codegen recorded an owned Rust formal; stale analyzer Reference(T) must not force `&`.
             return false;
         }
+    }
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return false;
     }
     // Plain WJ `string` formals require `emitted_rust_ref_params` for free functions —
     // stale analyzer `Reference(str)` + Borrowed alone must not force call-site `&`

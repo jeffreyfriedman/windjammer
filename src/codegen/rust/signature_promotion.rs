@@ -1465,9 +1465,13 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
 
 /// Bare WJ user `Custom` formals that emit owned Rust params (not `&T` / `&str`).
 pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx: usize) -> bool {
-    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
-    {
-        return false;
+    // Do NOT call `callee_emits_shared_rust_ref_param` here — it calls
+    // `emitted_owned_arg_contract`, which calls this helper (infinite recursion on
+    // MutBorrowed collision stubs without `emitted_rust_ref_params`).
+    if let Some(ref flags) = sig.emitted_rust_ref_params {
+        if flags.get(param_idx).copied().unwrap_or(false) {
+            return false;
+        }
     }
     if sig.param_types.get(param_idx).is_some_and(|t| {
         matches!(t, Type::Reference(_) | Type::MutableReference(_))
