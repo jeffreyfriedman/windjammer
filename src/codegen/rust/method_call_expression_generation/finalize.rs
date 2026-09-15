@@ -219,7 +219,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                     });
                     let is_collection_key =
-                        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                        self.is_collection_key_lookup_at_site(
                             sig,
                             i,
                             receiver_type_name.as_deref(),
@@ -1249,7 +1249,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .as_ref()
                     .or(method_signature.as_ref())
                     .is_some_and(|sig| {
-                        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                        self.is_collection_key_lookup_at_site(
                             sig,
                             i,
                             receiver_type_name.as_deref(),

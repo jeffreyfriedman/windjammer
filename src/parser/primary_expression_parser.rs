@@ -193,6 +193,25 @@ impl Parser {
                 })
             }
             Token::Ident(name) => {
+                // Rust-style explicit `move` before closures (`move || …`, `move |x| …`).
+                // Without this, `move || expr` parses as logical-or on identifier `move`.
+                if name == "move" {
+                    if self.position + 1 < self.tokens.len() {
+                        match &self.tokens[self.position + 1].token {
+                            Token::Or => {
+                                self.advance(); // consume `move`
+                                let closure = self.parse_primary_closure_or()?;
+                                return self.parse_postfix_expression(closure);
+                            }
+                            Token::Pipe => {
+                                self.advance(); // consume `move`
+                                let closure = self.parse_primary_closure_pipe()?;
+                                return self.parse_postfix_expression(closure);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 let mut qualified_name = name.clone();
                 self.advance();
 
