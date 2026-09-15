@@ -180,7 +180,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
 | P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — emit `spawn(move \|\| …)`; cargo-check GREEN |
-| P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | 🆕 RED / filed (P3.295); blocks shared-inbox Pool |
+| P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — library `--module-file` preserves `move` |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ⚠️ tip REGRESSION (2026-09-15) — SharedMap get re-emits key.to_string(); was GREEN (P3.288)
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
@@ -201,12 +201,12 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` shared-inbox Pool | ⏸ tip emits `spawn(\|\| …)` without `move` → E0373 |
-| Gate `bug_module_file_spawn_move_keyword_must_be_preserved_test` | 🆕 filed |
-| Gate `bug_thread_spawn_move_keyword_must_be_preserved_test` | ⚠️ isolate may GREEN; multipass is the RED path |
-| Note | P3.294 cleared `&(move \|\|…)`; preserving `move` is still required for Arc capture |
+| Ecosystem: `wj-sync` shared-inbox Pool | ✅ tip preserves `move` (isolate + library multipass) |
+| Gate `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (2026-09-15) |
+| Gate `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (2026-09-15) — TDD re-run ok |
+| Note | P3.294 cleared `&(move \|\|…)`; P3.295 keeps `move` for Arc capture |
 
-**Compiler agent:** when source has `std::thread::spawn(move \|\| …)`, emit `spawn(move \|\| …)` by value — do not drop `move`.
+**Compiler agent:** library multipass must emit `spawn(move \|\| …)` by value — do not drop `move` after ownership passes.
 
 ## P3.294 (2026-09-15) — Pool shared-inbox `spawn(move ||)` with Arc still by-ref
 
