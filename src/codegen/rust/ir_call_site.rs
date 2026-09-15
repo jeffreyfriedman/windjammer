@@ -1057,6 +1057,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
+        if matches!(arg_expr, Expression::Closure { .. })
+            && matches!(expected.ownership, OwnedType::Owned)
+            && sig.param_types.get(param_idx).is_some_and(|t| {
+                matches!(
+                    t,
+                    Type::Custom(n)
+                        if n == "FnOnce" || n == "FnMut" || n == "Fn"
+                ) || matches!(t, Type::FunctionPointer { .. })
+            })
+        {
+            kind = CoercionKind::Identity;
+        }
         // `rows[i]` / `self.field` into owned non-Copy formals: clone when the root cannot
         // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Always cloning
         // `self.field` into Owned is correct for `&self` (E0507) and harmless for owned-self.

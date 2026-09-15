@@ -1,0 +1,11 @@
+pub struct DenseCsr {
+    pub offsets: Vec<int>,
+}
+
+pub fn execute(csr: DenseCsr) -> int {
+    csr.offsets.len() as int
+}
+
+pub fn execute_logical(csr: DenseCsr) -> int {
+    execute(csr)
+}

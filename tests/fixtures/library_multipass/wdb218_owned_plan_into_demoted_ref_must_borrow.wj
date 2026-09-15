@@ -1,0 +1,12 @@
+pub struct GraphSqlQueryPlan {
+    pub kind: string,
+}
+
+pub fn execute(plan: GraphSqlQueryPlan) -> int {
+    let _ = plan.kind
+    0
+}
+
+pub fn execute_logical(plan: GraphSqlQueryPlan) -> int {
+    execute(plan)
+}

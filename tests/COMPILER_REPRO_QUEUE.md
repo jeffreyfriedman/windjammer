@@ -152,6 +152,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | ✅ tip GREEN (P3.284) — forwarder keeps owned `Vec` when callee preregistered owned |
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 RED / filed (P3.287); blocks `wj-sync` bounded channels |
+| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | 🆕 RED / filed (P3.288); blocks `wj-sync` `SharedMap` get |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — defer-drop at fn scope; skip when body has `match` + `.get(` |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -161,6 +162,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
+
+## P3.288 (2026-09-14) — wj-sync SharedMap / HashMap::get through MutexGuard
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` `SharedMap` insert/has/len; get parked | ⏸ get blocked |
+| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | 🆕 filed — `get(key.to_string())` + `Option<&i64>` arm mismatch |
+| Note | Owned `HashMap.get(key)` (no mutex) already cargo-checks |
+
+**Compiler agent:** `HashMap::get`/`contains_key` through `MutexGuard` must pass `&K` / `&Q` (no `.to_string()` on owned `string` keys); Copy values from `Option<&V>` to owned `V` in match arms.
 
 ## P3.287 (2026-09-14) — wj-sync bounded channel / `mpsc::sync_channel` signature
 
@@ -564,16 +575,30 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.289 WindjammerDB CQ-C5 — tip→gen 214–217 + coverage REDs WDB-218/219 (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **520** |
+| Tip **WDB-214–217** | ✅ **GREEN** — tip→gen sync (pg_wire / lsqb / simd / pagerank); hardware `append_i64` lit borrow synced |
+| Tip **WDB-209/212** | ✅ GREEN |
+| Tip **WDB-177** | ❌ RED — bare `key` into owned `query_feedback_cache_put` (fresh tip still RED) |
+| Tip **WDB-218** owned `GraphSqlQueryPlan`→demoted `&Plan` | ❌ RED — tip-out/gen graph_sql |
+| Tip **WDB-219** `&mut DenseCsr`→owned csr | ❌ RED — tip-out/gen graph_sql (inverse WDB-217) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218/219**. Dominant residual: `&str`←String (~284). No Phase 606+.
+
 ## P3.285 WindjammerDB CQ-C5 — coverage REDs WDB-214–217 String/lsqb/simd/DenseCsr (2026-09-14)
 
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` (last) | ⚠️ **523** |
 | Tip recheck prior open set (earlier) | ✅ **24 GREEN** / residual **177** (+ product 209/212 later greened on tip) |
-| Tip **WDB-214** owned String→demoted `&str` `push_cstring` | ❌ RED — tip-out/gen pg_wire |
-| Tip **WDB-215** `u64` index vs `len() as i64` (lsqb) | ❌ RED — tip-out/gen |
-| Tip **WDB-216** demoted `&Vec`→owned SIMD FFI | ❌ RED — tip-out/gen graph_simd |
-| Tip **WDB-217** `csr.clone()`→`&mut DenseCsr` | ❌ RED — tip-out/gen pagerank |
+| Tip **WDB-214** owned String→demoted `&str` `push_cstring` | ✅ GREEN after tip→gen (was RED tip-out lag) |
+| Tip **WDB-215** `u64` index vs `len() as i64` (lsqb) | ✅ GREEN after tip→gen |
+| Tip **WDB-216** demoted `&Vec`→owned SIMD FFI | ✅ GREEN after tip→gen (owned formals) |
+| Tip **WDB-217** `csr.clone()`→`&mut DenseCsr` | ✅ GREEN after tip→gen |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/214–217**. Dominant residual: `&str`←String. No Phase 606+.
