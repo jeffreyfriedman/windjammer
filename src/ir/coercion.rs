@@ -34,6 +34,20 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
     let actual_own = normalize_ownership(&actual.ownership);
     let expected_own = normalize_ownership(&expected.ownership);
 
+    // `FnOnce` / closure values are always passed by value — never `&closure` (E0716 / E0525).
+    if is_fn_trait_base(&expected.base)
+        && matches!(
+            expected_own,
+            OwnedType::Owned | OwnedType::Copy | OwnedType::Ref(_)
+        )
+        && matches!(
+            actual_own,
+            OwnedType::Owned | OwnedType::Copy | OwnedType::Inferred
+        )
+    {
+        return CoercionKind::Identity;
+    }
+
     // String literals are &str-shaped in Rust; never prefix `&` (would produce &&str).
     if is_string_base(&actual.base) && matches!(actual_own, OwnedType::Ref(_)) {
         return match expected_own {
@@ -309,6 +323,13 @@ fn normalize_ownership(own: &OwnedType) -> OwnedType {
         OwnedType::Copy => OwnedType::Owned,
         other => other.clone(),
     }
+}
+
+fn is_fn_trait_base(base: &BaseType) -> bool {
+    matches!(
+        base,
+        BaseType::Custom(n) if n == "Fn" || n == "FnMut" || n == "FnOnce"
+    )
 }
 
 fn is_copy_base(base: &BaseType) -> bool {

@@ -764,7 +764,15 @@ impl<'ast> CodeGenerator<'ast> {
             )
         {
             let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-            let refresh_keys = vec![callee_name.to_string(), simple.to_string()];
+            let skip_bare_spawn_homonym =
+                crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+                    callee_name,
+                );
+            let refresh_keys = if skip_bare_spawn_homonym {
+                vec![callee_name.to_string()]
+            } else {
+                vec![callee_name.to_string(), simple.to_string()]
+            };
             crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
                 &mut sig,
                 registry,
@@ -776,7 +784,7 @@ impl<'ast> CodeGenerator<'ast> {
                     global,
                     &refresh_keys,
                 );
-                for key in [callee_name, simple] {
+                for key in refresh_keys.iter().map(String::as_str) {
                     if let Some(reg) = global.lookup_method(key) {
                         if reg.emitted_rust_ref_params.is_some() {
                             crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
@@ -788,24 +796,34 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
-            if let Some(refreshed) =
-                crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(callee_name).cloned()),
+            let homonym_sigs = if skip_bare_spawn_homonym {
+                [None, None, None, None]
+            } else {
+                [
                     self.global_signature_registry
                         .as_ref()
                         .and_then(|g| g.get_signature(simple).cloned()),
                     self.global_signature_registry
                         .as_ref()
-                        .and_then(|g| g.lookup_method(callee_name).cloned()),
+                        .and_then(|g| g.lookup_method(simple).cloned()),
+                    self.signature_registry.get_signature(simple).cloned(),
+                    self.signature_registry.lookup_method(simple).cloned(),
+                ]
+            };
+            if let Some(refreshed) =
+                crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                     self.global_signature_registry
                         .as_ref()
-                        .and_then(|g| g.lookup_method(simple).cloned()),
+                        .and_then(|g| g.get_signature(callee_name).cloned()),
+                    homonym_sigs[0].clone(),
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.lookup_method(callee_name).cloned()),
+                    homonym_sigs[1].clone(),
                     self.signature_registry.get_signature(callee_name).cloned(),
-                    self.signature_registry.get_signature(simple).cloned(),
+                    homonym_sigs[2].clone(),
                     self.signature_registry.lookup_method(callee_name).cloned(),
-                    self.signature_registry.lookup_method(simple).cloned(),
+                    homonym_sigs[3].clone(),
                     Some(sig.clone()),
                 ])
             {
@@ -858,6 +876,17 @@ impl<'ast> CodeGenerator<'ast> {
             &mut sig,
             Some(callee_name),
         );
+        if let Some(recv) = crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
+            callee_name,
+            receiver_type_name,
+            &sig,
+        ) {
+            let map_qualified = format!("{recv}::{}", method_simple);
+            crate::codegen::rust::signature_promotion::restore_stdlib_collection_key_contract(
+                &mut sig,
+                Some(&map_qualified),
+            );
+        }
         if receiver_type_name.is_none() {
             sig = crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
                 registry,
@@ -981,11 +1010,19 @@ impl<'ast> CodeGenerator<'ast> {
             // String literals are already `&str`; owned `String` needles need `&`.
             expected.base = BaseType::String;
             expected.ownership = OwnedType::Ref(Region::fresh(9));
-        } else if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
-            &sig,
-            arg_index,
-            receiver_type_name,
-        ) || (arg_index == 0
+        } else if {
+            let key_receiver =
+                crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
+                    callee_name,
+                    receiver_type_name,
+                    &sig,
+                );
+            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                &sig,
+                arg_index,
+                key_receiver.as_deref(),
+            )
+        } || (arg_index == 0
             && receiver_is_set
             && crate::codegen::rust::stdlib_method_traits::method_arg_expects_borrowed_reference_from_sig(
                 &sig, arg_index,
@@ -1058,14 +1095,12 @@ impl<'ast> CodeGenerator<'ast> {
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
         if matches!(arg_expr, Expression::Closure { .. })
-            && matches!(expected.ownership, OwnedType::Owned)
-            && sig.param_types.get(param_idx).is_some_and(|t| {
-                matches!(
-                    t,
-                    Type::Custom(n)
-                        if n == "FnOnce" || n == "FnMut" || n == "Fn"
-                ) || matches!(t, Type::FunctionPointer { .. })
-            })
+            && sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx))
+                .is_some_and(
+                    crate::codegen::rust::stdlib_method_traits::formal_is_rust_closure_trait,
+                )
         {
             kind = CoercionKind::Identity;
         }
@@ -5659,6 +5694,13 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 sig, param_idx,
             )
+            && !matches!(arg_expr, Expression::Closure { .. })
+            && !sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx))
+                .is_some_and(
+                    crate::codegen::rust::stdlib_method_traits::formal_is_rust_closure_trait,
+                )
         {
             if let Expression::Identifier { name, .. } = arg_expr {
                 if self.current_function_params.iter().any(|p| p.name == *name)
@@ -7421,6 +7463,7 @@ fn safety_type_from_arg_expression(expr: &Expression) -> SafetyType {
         Expression::FieldAccess { .. } => {
             SafetyType::borrowed(BaseType::Inferred, Region::fresh(3))
         }
+        Expression::Closure { .. } => SafetyType::owned(BaseType::Custom("FnOnce".into())),
         _ => SafetyType::owned(BaseType::Inferred),
     }
 }

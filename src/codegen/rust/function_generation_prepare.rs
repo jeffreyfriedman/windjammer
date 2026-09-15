@@ -10571,8 +10571,14 @@ impl<'ast> CodeGenerator<'ast> {
         let lookup = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup.as_ref();
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let skip_bare_homonym =
+            crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+                callee_name,
+            );
         let keys: Vec<&str> = if import_alias {
             vec![lookup_ref]
+        } else if skip_bare_homonym {
+            vec![callee_name, lookup_ref]
         } else {
             vec![callee_name, simple, lookup_ref]
         };
@@ -10597,6 +10603,8 @@ impl<'ast> CodeGenerator<'ast> {
         {
             let reg_keys: Vec<&str> = if import_alias {
                 vec![lookup_ref]
+            } else if skip_bare_homonym {
+                vec![callee_name, lookup_ref]
             } else {
                 vec![callee_name, simple, lookup_ref]
             };
@@ -10605,7 +10613,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .get_signature(key)
                     .or_else(|| reg.lookup_method(key))
                     .or_else(|| {
-                        if import_alias {
+                        if import_alias || skip_bare_homonym {
                             None
                         } else {
                             reg.find_unique_signature_ending_with(simple)
@@ -10633,8 +10641,14 @@ impl<'ast> CodeGenerator<'ast> {
         let lookup = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup.as_ref();
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let skip_bare_homonym =
+            crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+                callee_name,
+            );
         let keys: Vec<&str> = if import_alias {
             vec![lookup_ref, callee_name]
+        } else if skip_bare_homonym {
+            vec![callee_name, lookup_ref]
         } else {
             vec![callee_name, simple, lookup_ref]
         };
