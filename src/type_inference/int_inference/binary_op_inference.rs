@@ -69,6 +69,12 @@ impl IntInference {
                 }
 
                 self.propagate_typed_operand_to_literal(left, right, left_id, right_id, left_is_literal, right_is_literal, "comparison");
+                // Unify comparison operands (e.g. untyped `acct_idx` vs `len() as int`).
+                self.constraints.push(IntConstraint::MustMatch(
+                    left_id,
+                    right_id,
+                    "comparison operands must share integer width".to_string(),
+                ));
             }
             _ => {}
         }

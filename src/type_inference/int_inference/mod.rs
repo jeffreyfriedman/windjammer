@@ -872,30 +872,41 @@ impl IntInference {
                 // e.g. count += 1 where count: u32 → 1 must be u32, not i32
                 if compound_op.is_some() || is_compound_pattern {
                     let target_type = self.infer_type_from_expression(target);
-                    if let Some(ref tt) = target_type {
-                        if let Some(int_ty) = self.extract_int_type(tt) {
-                            // For compound pattern (x = x + 1), constrain the RHS of the binary op
-                            if is_compound_pattern {
-                                if let Expression::Binary { right, .. } = value {
-                                    let right_id = self.get_expr_id(right);
-                                    self.constraints.push(IntConstraint::MustBe(
-                                        right_id,
-                                        int_ty,
-                                        format!(
-                                            "compound pattern RHS must match LHS type {:?}",
-                                            int_ty
-                                        ),
-                                    ));
-                                }
-                            } else {
-                                // Explicit compound_op: constrain the value directly
+                    let mut int_ty_from_target = target_type
+                        .as_ref()
+                        .and_then(|tt| self.extract_int_type(tt));
+                    // For compound pattern (x = x + 1), constrain the RHS of the binary op
+                    if is_compound_pattern {
+                        if let Expression::Binary { left, right, .. } = value {
+                            let left_id = self.get_expr_id(left);
+                            let right_id = self.get_expr_id(right);
+                            self.constraints.push(IntConstraint::MustMatch(
+                                right_id,
+                                left_id,
+                                "compound pattern RHS must match LHS operand width".to_string(),
+                            ));
+                            if int_ty_from_target.is_none() {
+                                int_ty_from_target =
+                                    self.resolve_expression_int_type(left);
+                            }
+                            if let Some(int_ty) = int_ty_from_target {
                                 self.constraints.push(IntConstraint::MustBe(
-                                    value_id,
+                                    right_id,
                                     int_ty,
-                                    format!("compound assignment target has type {:?}", int_ty),
+                                    format!(
+                                        "compound pattern RHS must match LHS type {:?}",
+                                        int_ty
+                                    ),
                                 ));
                             }
                         }
+                    } else if let Some(int_ty) = int_ty_from_target {
+                        // Explicit compound_op: constrain the value directly
+                        self.constraints.push(IntConstraint::MustBe(
+                            value_id,
+                            int_ty,
+                            format!("compound assignment target has type {:?}", int_ty),
+                        ));
                     }
                 }
             }

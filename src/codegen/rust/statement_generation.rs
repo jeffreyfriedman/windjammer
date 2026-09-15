@@ -233,6 +233,31 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
+    /// Concrete Rust int type for compound assignment targets (solver-first, then annotations).
+    pub(in crate::codegen::rust) fn resolve_compound_assign_int_rust_type_name(
+        &self,
+        target: &Expression,
+    ) -> Option<&'static str> {
+        use crate::type_inference::int_implicit_casts::get_cast_suffix;
+        use crate::type_inference::IntType;
+        if let Some(ni) = &self.numeric_inference {
+            let solved = ni.get_int_type(target);
+            if solved != IntType::Unknown {
+                return Some(get_cast_suffix(solved));
+            }
+        }
+        if let Expression::Identifier { name, .. } = target {
+            if let Some(local_ty) = self.local_var_types.get(name) {
+                if let Some(name) = Self::int_rust_type_name(local_ty) {
+                    return Some(name);
+                }
+            }
+        }
+        self.infer_expression_type(target)
+            .as_ref()
+            .and_then(Self::int_rust_type_name)
+    }
+
     /// Generate a statement with automatic source tracking
     #[allow(dead_code)]
     pub(super) fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {

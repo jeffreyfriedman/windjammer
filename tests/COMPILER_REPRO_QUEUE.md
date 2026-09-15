@@ -329,7 +329,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
 | Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
-| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ❌ tip RED (2026-09-14 strengthened) — nested untyped `acct_idx` / `i = 3` vs `len() as int` still emits `+= 1 as i32`; shallow single-while was tip-GREEN |
+| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ✅ tip GREEN (2026-09-15) — int inference unifies local uses with declaration; index width stays at codegen `as usize` (no solver `MustBe Usize` on loop counters) |
 | Product: bound owned locals into trait string formals; `len() as int` before while; typed nested indices | ⚠️ tip `make api-check` clearing residual nested `i64 += i32` via `: int` on inner counters; outer typed indices + `_len as int` retained |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |

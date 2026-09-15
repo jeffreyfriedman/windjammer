@@ -23,16 +23,19 @@ impl IntInference {
         match expr {
             Expression::Identifier { name, .. } => {
                 let id = self.get_expr_id(expr);
-                
-                // TDD FIX REMOVED: Don't link identifier uses to assignments.
-                // This caused backward propagation where:
-                //   let n = data.len() as i32  // n is i32
-                //   data[n]  // Index forces usize
-                // would make n usize at declaration, breaking comparisons like `if idx >= n`
-                //
-                // Instead, we'll insert casts at use sites during code generation:
-                //   data[n as usize]  // Cast happens here, not at declaration
-                
+
+                // Unify every use of a local with its declaration value (same as float inference).
+                // Indexing still casts to usize in codegen (`maybe_cast_index_to_usize`) — we do
+                // not constrain the variable's width to usize here (that broke `acct_idx` vs
+                // `len() as int` and emitted `+= 1 as i32` on nested loop counters).
+                if let Some(&value_id) = self.var_assignments.get(name.as_str()) {
+                    self.constraints.push(IntConstraint::MustMatch(
+                        id,
+                        value_id,
+                        format!("variable {} shares declaration integer width", name),
+                    ));
+                }
+
                 if let Some(var_type) = self
                     .var_types
                     .get(name)
@@ -331,13 +334,9 @@ impl IntInference {
                 // Don't pass return_type to object - Vec has its own type
                 self.collect_expression_constraints(object, None);
 
-                // TDD FIX: Array indices must be usize in Rust
-                let index_id = self.get_expr_id(index);
-                self.constraints.push(IntConstraint::MustBe(
-                    index_id,
-                    IntType::Usize,
-                    "array index must be usize".to_string(),
-                ));
+                // Rust indexing uses usize at codegen (`maybe_cast_index_to_usize`). Do not
+                // force the variable's unified width to usize — loop counters stay WJ `int`/i64
+                // when compared to `len() as int` (P3.267 / LedgerKit nested loops).
                 self.collect_expression_constraints(index, None);
             }
             Expression::Array { elements, .. } => {
