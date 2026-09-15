@@ -19,7 +19,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Gate | Status |
 |------|--------|
-| `library_multipass_infers_cross_file_trait_mut_self_without_merging_all_asts` | ⏳ tip rebuild + GREEN pending |
+| `library_multipass_infers_cross_file_trait_mut_self_without_merging_all_asts` | ✅ tip GREEN (2026-09-15) — 51-file multipass + cargo check; cross-file `RenderPort` keeps `&mut self` |
 | Full `windjammer-game-core` tip `--library` (~669 files) after ownership pass 10 | ⏳ was **SIGKILL/jetsam** (no EXIT) when Step 4B-pre cloned all items into one `Program` |
 
 **Root cause:** After ownership convergence, Step 4B-pre doubled peak RSS by merging every AST into one mega-`Program` solely for `register_traits` + `infer_trait_signatures_from_impls`.
@@ -179,7 +179,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
-| P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | 🆕 RED / filed (P3.295); blocks shared-inbox Pool |
+| P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — emit `spawn(move \|\| …)`; cargo-check GREEN |
 | P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | 🆕 RED / filed (P3.295); blocks shared-inbox Pool |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ⚠️ tip REGRESSION (2026-09-15) — SharedMap get re-emits key.to_string(); was GREEN (P3.288)
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
