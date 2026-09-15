@@ -20,13 +20,13 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate | Status |
 |------|--------|
 | `library_multipass_infers_cross_file_trait_mut_self_without_merging_all_asts` | ✅ tip GREEN (2026-09-15) — 51-file multipass + cargo check; cross-file `RenderPort` keeps `&mut self` |
-| Full `windjammer-game-core` tip `--library` (~669 files) after ownership pass 10 | ⏳ was **SIGKILL/jetsam** (no EXIT) when Step 4B-pre cloned all items into one `Program` |
+| Full `windjammer-game-core` tip `--library` (~669 files) after ownership pass 10 | ✅ **past Step 4B-pre** (2026-09-15 tip) — next failure was P3.291 stack overflow on `executor.wj` codegen |
 
 **Root cause:** After ownership convergence, Step 4B-pre doubled peak RSS by merging every AST into one mega-`Program` solely for `register_traits` + `infer_trait_signatures_from_impls`.
 
 **Fix:** Per-file `register_traits_from_program` + `infer_trait_signatures_from_impls` on a shared `Analyzer` (no mega merge). Cross-file `analyzed_trait_methods` still accumulates.
 
-**Handoff:** Rebuild tip `wj` → atomic install to `.cargo-target-wj` → `RAYON_NUM_THREADS=1` tip library transpile of game-core → `wj game build --release` for breach-protocol.
+**Handoff:** Tip library transpile now reaches codegen; unblock with P3.291, then `wj game build --release` for breach-protocol.
 
 ## P3.291 — mutual-recursion free-fn codegen stack overflow (2026-09-15)
 
@@ -42,15 +42,15 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 **Verify:**
 
 ```bash
-export CARGO_TARGET_DIR="$(wj cache path)"
-cargo test --release --test bug_mutual_recursion_free_fns_codegen_must_not_stack_overflow_test -- \
-  mutual_recursion_free_fns_codegen_must_not_stack_overflow -- --test-threads=1
+export CARGO_TARGET_DIR=/Users/jeffreyfriedman/src/wj/windjammer-game/.cargo-target-wj
+cd /Users/jeffreyfriedman/src/wj/windjammer
+cargo build --release -p windjammer --bin wj
+cargo test --release --test all mutual_recursion_free_fns_codegen_must_not_stack_overflow -- --nocapture
 export WJ_COMPILER=/Users/jeffreyfriedman/src/wj/windjammer-game/.cargo-target-wj/release/wj
 export RAYON_NUM_THREADS=1
 cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 "$WJ_COMPILER" build src --library -o gen --no-cargo --no-generate-cargo-toml
 ```
-
 ## P3.281 — bare-pass demotion O(registry) hang (2026-09-15)
 
 | Gate | Status |
@@ -204,6 +204,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
 | P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — emit `spawn(move \|\| …)`; cargo-check GREEN |
 | P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — library `--module-file` preserves `move` |
+| P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.298); blocks wj-uuid |
+| P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | 🆕 RED / filed (P3.299); blocks wj-timefmt |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ⚠️ tip REGRESSION (2026-09-15) — SharedMap get re-emits key.to_string(); was GREEN (P3.288)
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
@@ -219,6 +221,26 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 
 
+
+
+## P3.299 (2026-09-15) — int find-pos `>= 0` mixes usize cast with i64 zero
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-timefmt` `split_time_tz` / `plus_pos >= 0` | ⏸ tip RED |
+| Gate `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ❌ tip RED (2026-09-15) |
+| Note | Also related int/usize loop arithmetic in same package |
+
+**Compiler agent:** Windjammer `int` comparisons against `0` must stay in one integer width — do not cast LHS to `usize` while keeping `0_i64`.
+
+## P3.298 (2026-09-15) — mut owned `Vec<u8>` return demoted to `&Vec<u8>`
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-uuid` `append_bytes` / v5 path | ⏸ tip RED |
+| Gate `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ❌ tip RED (2026-09-15) — emits `out: &Vec<u8>` then returns `out` |
+
+**Compiler agent:** `mut out: Vec<u8>` that is mutated and returned must keep owned formal (Identity) — do not demote to `&Vec<u8>` when the value is moved out.
 
 ## P3.297 (2026-09-15) — `spawn(move ||)` strips `move` in Arc-clone worker loop
 
@@ -245,7 +267,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` Pool shared `Arc<Mutex<Receiver>>` workers | ✅ unblocked on tip |
+| Ecosystem: `wj-sync` Pool shared `Arc<Mutex<Receiver>>` workers | ⏸ residual P3.297 (`while` inside closure strips `move`) |
 | Gate `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (2026-09-15) |
 | Workaround | Per-job `spawn(\|\| …)` no longer required for shared inbox |
 
