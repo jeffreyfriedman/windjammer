@@ -82,6 +82,11 @@ impl<'ast> CodeGenerator<'ast> {
         self.local_variable_scopes
             .push(std::collections::HashSet::new());
 
+        self.borrow_delegation_formal_cache.borrow_mut().clear();
+        self.borrow_delegation_formal_in_progress
+            .borrow_mut()
+            .clear();
+
         // AUTO-CLONE: Load auto-clone analysis for this function.
         // When IR cutover is active for clones, read from IrFunction's optimization hints.
         if self.ir_cutover.clones && self.current_ir_function.is_some() {
@@ -7291,6 +7296,34 @@ impl<'ast> CodeGenerator<'ast> {
     /// forward-ref callers can borrow (`key_in_latest_base(&key)`). Self-sibling owned wrappers
     /// (`has_key` → `self.get`) stay owned via `param_passes_to_wj_owned_sibling_call`.
     pub(in crate::codegen::rust) fn param_should_emit_borrowed_delegation_formal(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let key = (func.name.to_string(), param.name.clone());
+        if let Some(cached) = self.borrow_delegation_formal_cache.borrow().get(&key).copied() {
+            return cached;
+        }
+        {
+            let mut in_progress = self.borrow_delegation_formal_in_progress.borrow_mut();
+            if in_progress.contains(&key) {
+                // Reentrant query (e.g. param_keeps_owned_engine_key_facade during formal
+                // emission): return conservative false instead of infinite recursion.
+                return false;
+            }
+            in_progress.insert(key.clone());
+        }
+        let result = self.param_should_emit_borrowed_delegation_formal_body(param, func);
+        self.borrow_delegation_formal_in_progress
+            .borrow_mut()
+            .remove(&key);
+        self.borrow_delegation_formal_cache
+            .borrow_mut()
+            .insert(key, result);
+        result
+    }
+
+    fn param_should_emit_borrowed_delegation_formal_body(
         &self,
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
