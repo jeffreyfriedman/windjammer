@@ -67,7 +67,7 @@ pub fn apply(notes: Vec<Note>, needle: string) -> Vec<Note> {
     let build = Command::new(env!("CARGO_BIN_EXE_wj"))
         .args([
             "build",
-            src.join("domain").to_str().unwrap(),
+            src.to_str().unwrap(),
             "--output",
             out.to_str().unwrap(),
             "--no-cargo",

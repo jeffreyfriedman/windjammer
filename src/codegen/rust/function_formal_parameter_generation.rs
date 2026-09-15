@@ -103,6 +103,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // `&T` once the callee's preregistered/emitted formal converged to shared borrow.
                 if param.name != "self"
                     && self.func_is_pure_forwarding_delegate(func)
+                    && !self.param_only_forwards_to_emitted_owned_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     && (self.param_only_forwards_to_registry_borrow_callees(
                         func.body.as_slice(),
                         &param.name,
@@ -3632,6 +3637,22 @@ impl<'ast> CodeGenerator<'ast> {
                 && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func))
     }
 
+    fn pub_vec_non_copy_custom_indexed_api(
+        &self,
+        func: &FunctionDecl<'_>,
+        param: &Parameter,
+    ) -> bool {
+        if !(func.is_pub && func.parent_type.is_none()) {
+            return false;
+        }
+        if !Self::param_type_is_vec_container(&param.type_)
+            || Self::param_type_is_byte_vec(&param.type_)
+        {
+            return false;
+        }
+        self.param_is_indexed_in_body(func.body.as_slice(), &param.name)
+    }
+
     /// `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay owned at
     /// emission (product pg_wire_decode_startup, opt_dated_quiet_run_live_publishable).
     pub(in crate::codegen::rust) fn is_public_owned_non_copy_formal_api(
@@ -3647,6 +3668,33 @@ impl<'ast> CodeGenerator<'ast> {
         // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry
         // converged to Borrowed from bare-pass caller hints.
         if Self::param_type_is_vec_container(&param.type_) {
+            if self.pub_vec_non_copy_custom_indexed_api(func, param) {
+                return true;
+            }
+            if self.param_only_forwards_to_emitted_owned_callees(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
+                return true;
+            }
+            if func.is_pub
+                && self.param_only_used_as_call_argument(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+                && self
+                    .preregistered_free_function_emitted_params
+                    .values()
+                    .any(|formals| {
+                        formals.iter().any(|s| {
+                            s.contains(": Vec<") && !s.contains(": &Vec<")
+                        })
+                    })
+            {
+                return true;
+            }
             let param_idx = func
                 .parameters
                 .iter()

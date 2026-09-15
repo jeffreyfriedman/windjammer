@@ -345,6 +345,8 @@ pub struct CodeGenerator<'ast> {
     /// e.g., `use crate::ffi::gpu_safe as gpu` → { "gpu": "gpu_safe" }
     /// Used to resolve qualified calls through aliases for signature lookup.
     pub(crate) module_alias_map: std::collections::HashMap<String, String>,
+    /// Function import alias → fully qualified path (`use dep::fn as alias`).
+    pub(crate) import_fn_alias_map: std::collections::HashMap<String, String>,
     /// Names imported via `use std::strings` (etc.) that map to windjammer_runtime modules.
     /// Used to emit `module::fn` instead of `module.fn` for free functions.
     pub(crate) runtime_std_module_imports: std::collections::HashSet<String>,
@@ -481,6 +483,23 @@ impl<'ast> CodeGenerator<'ast> {
             return self.runtime_std_module_imports.contains(original);
         }
         false
+    }
+
+    /// Callee key for registry / IR signature lookup (`use dep::fn as alias` → `dep::fn`).
+    pub(in crate::codegen::rust) fn signature_lookup_callee_name<'a>(
+        &self,
+        callee_name: &'a str,
+    ) -> std::borrow::Cow<'a, str> {
+        if callee_name.contains("::") {
+            return std::borrow::Cow::Borrowed(callee_name);
+        }
+        if let Some(q) = self.import_fn_alias_map.get(callee_name) {
+            return std::borrow::Cow::Owned(q.clone());
+        }
+        if let Some(q) = self.imported_runtime_qualified_callee(callee_name) {
+            return std::borrow::Cow::Owned(q);
+        }
+        std::borrow::Cow::Borrowed(callee_name)
     }
 
     /// Bare `error` after `use std::log` → `log_mod::error` when that import uniquely provides it.
@@ -698,6 +717,7 @@ impl<'ast> CodeGenerator<'ast> {
             extern_submodule_qualifiers: std::collections::HashMap::new(),
             import_aliases: std::collections::HashSet::new(),
             module_alias_map: std::collections::HashMap::new(),
+            import_fn_alias_map: std::collections::HashMap::new(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
@@ -1475,7 +1495,25 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)))
     }
 
+    pub(in crate::codegen::rust) fn refresh_call_site_signature_for_arg(
+        &self,
+        initial: Option<FunctionSignature>,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> Option<FunctionSignature> {
+        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+            initial,
+            callee_name,
+            arg_index,
+            self.global_signature_registry.as_deref(),
+            &self.signature_registry,
+            &self.import_fn_alias_map,
+        )
+    }
+
     pub(crate) fn get_signature_with_global(&self, name: &str) -> Option<&FunctionSignature> {
+        let lookup = self.signature_lookup_callee_name(name);
+        let name = lookup.as_ref();
         let local = self.signature_registry.get_signature(name);
         let global = self
             .global_signature_registry
@@ -1730,7 +1768,10 @@ impl<'ast> CodeGenerator<'ast> {
         arg_count: usize,
     ) -> Option<crate::codegen::rust::call_signature_resolution::ResolvedSignature> {
         let owned_name = self.imported_runtime_qualified_callee(func_name);
-        let func_name = owned_name.as_deref().unwrap_or(func_name);
+        let import_qualified = self.import_fn_alias_map.get(func_name).cloned();
+        let resolved_callee = import_qualified
+            .or(owned_name)
+            .unwrap_or_else(|| func_name.to_string());
         let caller_module = self.library_source_root.as_ref().and_then(|root| {
             if self.current_wj_file.as_os_str().is_empty() {
                 None
@@ -1741,19 +1782,21 @@ impl<'ast> CodeGenerator<'ast> {
         });
         let local = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
             &self.signature_registry,
-            func_name,
+            resolved_callee.as_str(),
             receiver_type,
             arg_count,
             &self.module_alias_map,
+            &self.import_fn_alias_map,
             caller_module.as_deref(),
         );
         let global = self.global_signature_registry.as_ref().and_then(|global| {
             crate::codegen::rust::call_signature_resolution::resolve_call_signature(
                 global,
-                func_name,
+                resolved_callee.as_str(),
                 receiver_type,
                 arg_count,
                 &self.module_alias_map,
+                &self.import_fn_alias_map,
                 caller_module.as_deref(),
             )
         });
@@ -1776,10 +1819,11 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(global_only) =
                         crate::codegen::rust::call_signature_resolution::resolve_call_signature(
                             global_reg,
-                            func_name,
+                            resolved_callee.as_str(),
                             receiver_type,
                             arg_count,
                             &self.module_alias_map,
+                            &self.import_fn_alias_map,
                             caller_module.as_deref(),
                         )
                     {
@@ -3355,13 +3399,11 @@ impl<'ast> CodeGenerator<'ast> {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                         {
-                            let refreshed =
-                                crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                            let refreshed = self
+                                .refresh_call_site_signature_for_arg(
                                     Some(sig.clone()),
                                     fname,
                                     i,
-                                    self.global_signature_registry.as_deref(),
-                                    &self.signature_registry,
                                 )
                                 .unwrap_or_else(|| sig.clone());
                             let pidx = refreshed.arg_param_index(i);

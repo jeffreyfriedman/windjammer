@@ -412,10 +412,11 @@ impl<'ast> CodeGenerator<'ast> {
                     None
                 }
             }
-            // Literal expressions: unsuffixed ints default to i32 (Rust); WJ `int`/`i64`
-            // only when an explicit context demands it (assignment_int_target / return).
+            // Literal expressions: unsuffixed ints are WJ `int` (i64). Narrow widths
+            // (`i32` ranges, `usize` indices) come from assignment_int_target / peers —
+            // not from treating bare literals as i32 (that split `year % 400` → i64 % i32).
             Expression::Literal { value, .. } => match value {
-                Literal::Int(_) => Some(Type::Int32),
+                Literal::Int(_) => Some(Type::Int),
                 // `0_usize`, `256_i64`, etc. — map suffix to Rust primitive name for comparisons/codegen.
                 Literal::IntSuffixed(_, suffix) => Some(Type::Custom(suffix.clone())),
                 Literal::Float(_) => Some(Type::Float),
@@ -425,23 +426,37 @@ impl<'ast> CodeGenerator<'ast> {
             },
             // Binary operations: infer from operands (result usually matches operand type).
             // P3.280: when one side is default WJ `int` (i64) and the other is a specific
-            // width (i32 const/param), prefer the specific width so `let cx = CONST / 2`
-            // records i32 and range literals emit `_i32` not `_i64`.
+            // width from a non-literal (i32 const/param), prefer the specific width so
+            // `let cx = VIEWER_GRID / 2` records i32. Never let an untyped literal's
+            // default int steal width from a typed peer (`year % 400` stays i64).
             Expression::Binary { left, right, .. } => {
                 let l = self.infer_expression_type(left);
                 let r = self.infer_expression_type(right);
+                let untyped_int_lit = |e: &Expression<'_>| {
+                    matches!(
+                        e,
+                        Expression::Literal {
+                            value: Literal::Int(_),
+                            ..
+                        }
+                    )
+                };
                 match (l, r) {
                     (Some(a), Some(b)) if a != b => {
                         if matches!(a, Type::Int)
                             && Self::assignment_target_needs_int_codegen_context(&b)
                             && !matches!(b, Type::Int)
+                            && !untyped_int_lit(right)
                         {
                             Some(b)
                         } else if matches!(b, Type::Int)
                             && Self::assignment_target_needs_int_codegen_context(&a)
                             && !matches!(a, Type::Int)
+                            && !untyped_int_lit(left)
                         {
                             Some(a)
+                        } else if matches!(a, Type::Int) || matches!(b, Type::Int) {
+                            Some(Type::Int)
                         } else {
                             Some(a)
                         }

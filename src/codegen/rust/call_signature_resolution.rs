@@ -81,6 +81,20 @@ pub(crate) fn strip_collision_blocked_call_site_coercions(coerced: &mut String) 
 }
 
 /// `draw::draw_text`-style calls where the qualifier is a user module (not runtime std).
+/// Registry lookup key for `use dep::fn as alias` — never bare homonym `alias`.
+pub(crate) fn import_alias_registry_lookup_key<'a>(
+    callee_name: &'a str,
+    import_fn_aliases: &HashMap<String, String>,
+) -> (std::borrow::Cow<'a, str>, bool) {
+    use std::borrow::Cow;
+    if !callee_name.contains("::") {
+        if let Some(qualified) = import_fn_aliases.get(callee_name) {
+            return (Cow::Owned(qualified.clone()), true);
+        }
+    }
+    (Cow::Borrowed(callee_name), false)
+}
+
 pub(crate) fn is_lowercase_user_module_qualified_call(callee_name: &str) -> bool {
     callee_name.rsplit_once("::").is_some_and(|(module, _)| {
         module
@@ -101,6 +115,12 @@ pub(crate) fn has_ownership_collision_for_call(
     gen: &crate::codegen::rust::generator::CodeGenerator,
     func_name: &str,
 ) -> bool {
+    if gen.import_fn_alias_map.contains_key(func_name) {
+        return false;
+    }
+    if let Some(qualified) = gen.import_fn_alias_map.get(func_name) {
+        return gen.has_explicit_ownership_collision_with_global(qualified);
+    }
     if let Some(qualified) = gen.imported_runtime_qualified_callee(func_name) {
         return gen.has_explicit_ownership_collision_with_global(&qualified);
     }
@@ -213,8 +233,24 @@ pub fn resolve_call_signature(
     receiver_type: Option<&str>,
     arg_count: usize,
     module_aliases: &HashMap<String, String>,
+    import_fn_aliases: &HashMap<String, String>,
     caller_module: Option<&str>,
 ) -> Option<ResolvedSignature> {
+    if !func_name.contains("::") {
+        if let Some(qualified) = import_fn_aliases.get(func_name) {
+            if let Some(sig) = registry.get_signature(qualified) {
+                if validate_arg_count(sig, arg_count) {
+                    return Some(ResolvedSignature {
+                        sig: sig.clone(),
+                        qualified_key: qualified.clone(),
+                        resolution_method: ResolutionMethod::ModuleAlias,
+                        has_collision: registry.has_collision(func_name),
+                    });
+                }
+            }
+        }
+    }
+
     // Step 1: Exact key match (handles already-qualified names like "Vec::push").
     if let Some(sig) = registry.get_signature(func_name) {
         if validate_arg_count(sig, arg_count) {
@@ -1543,7 +1579,7 @@ mod tests {
         let mut reg = SignatureRegistry::new();
         reg.add_function("Vec::push".into(), make_sig("push", 1, true));
 
-        let result = resolve_call_signature(&reg, "Vec::push", None, 1, &empty_aliases(), None);
+        let result = resolve_call_signature(&reg, "Vec::push", None, 1, &empty_aliases(), &empty_aliases(), None);
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ExactQualified);
@@ -1556,7 +1592,7 @@ mod tests {
         reg.add_function("Emitter::new".into(), make_sig("new", 2, false));
 
         let result =
-            resolve_call_signature(&reg, "new", Some("Emitter"), 2, &empty_aliases(), None);
+            resolve_call_signature(&reg, "new", Some("Emitter"), 2, &empty_aliases(), &empty_aliases(), None);
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ReceiverQualified);
@@ -1590,7 +1626,7 @@ mod tests {
 
         // Looking up "new" bare with 2 args should NOT match Vec3::new (3 args)
         // and SHOULD match Emitter::new (2 args) via arg-count validation
-        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), None);
+        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), &empty_aliases(), None);
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.qualified_key, "Emitter::new");
@@ -1612,7 +1648,15 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert("gpu".into(), "gpu_safe".into());
 
-        let result = resolve_call_signature(&reg, "gpu::load_shader", None, 1, &aliases, None);
+        let result = resolve_call_signature(
+            &reg,
+            "gpu::load_shader",
+            None,
+            1,
+            &aliases,
+            &empty_aliases(),
+            None,
+        );
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ModuleAlias);
@@ -1810,7 +1854,7 @@ mod tests {
         reg.add_function("Foo::new".into(), make_sig("new", 3, false));
 
         // Call with 2 args should NOT match a 3-param signature
-        let result = resolve_call_signature(&reg, "Foo::new", None, 2, &empty_aliases(), None);
+        let result = resolve_call_signature(&reg, "Foo::new", None, 2, &empty_aliases(), &empty_aliases(), None);
         assert!(result.is_none());
     }
 
@@ -1834,7 +1878,7 @@ mod tests {
             ),
         );
 
-        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), None);
+        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), &empty_aliases(), None);
         assert!(result.is_some());
         assert!(result.unwrap().has_collision);
     }
@@ -1852,6 +1896,7 @@ mod tests {
             "scene::rendering::Camera::update",
             None,
             1,
+            &empty_aliases(),
             &empty_aliases(),
             None,
         );
@@ -1911,6 +1956,7 @@ impl BuildFingerprint {
             "BuildFingerprint::collect_wj_files",
             Some("BuildFingerprint"),
             1,
+            &empty_aliases(),
             &empty_aliases(),
             None,
         );

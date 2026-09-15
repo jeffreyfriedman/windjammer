@@ -7638,6 +7638,160 @@ impl<'ast> CodeGenerator<'ast> {
         crate::type_classification::type_is_vec_container(ty)
     }
 
+    pub(in crate::codegen::rust) fn param_is_indexed_in_body(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| {
+            self.statement_indexes_bare_param(stmt, param_name)
+                || self.statement_scans_vec_by_len(stmt, param_name)
+        })
+    }
+
+    fn statement_scans_vec_by_len(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::While {
+                condition,
+                body,
+                ..
+            } => {
+                self.expression_uses_param_len(condition, param_name)
+                    && body
+                        .iter()
+                        .any(|inner| self.statement_indexes_bare_param(inner, param_name))
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.param_is_indexed_in_body(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_is_indexed_in_body(b.as_slice(), param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_uses_param_len(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall { object, method, .. } if method == "len" => {
+                matches!(
+                    &**object,
+                    Expression::Identifier { name, .. } if name == param_name
+                )
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_uses_param_len(left, param_name)
+                    || self.expression_uses_param_len(right, param_name)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_uses_param_len(operand, param_name)
+            }
+            _ => false,
+        }
+    }
+
+    fn statement_indexes_bare_param(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_indexes_bare_param(expr, param_name),
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expression_indexes_bare_param(value, param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_is_indexed_in_body(b.as_slice(), param_name)
+                    })
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_indexes_bare_param(value, param_name)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_indexes_bare_param(condition, param_name)
+                    || self.param_is_indexed_in_body(then_block.as_slice(), param_name)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_is_indexed_in_body(b.as_slice(), param_name)
+                    })
+            }
+            Statement::While {
+                condition,
+                body,
+                ..
+            } => {
+                self.expression_indexes_bare_param(condition, param_name)
+                    || self.param_is_indexed_in_body(body.as_slice(), param_name)
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expression_indexes_bare_param(iterable, param_name)
+                    || self.param_is_indexed_in_body(body.as_slice(), param_name)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_indexes_bare_param(value, param_name)
+                    || arms.iter().any(|arm| {
+                        arm.guard.as_ref().is_some_and(|g| {
+                            self.expression_indexes_bare_param(g, param_name)
+                        }) || self.expression_indexes_bare_param(&arm.body, param_name)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_indexes_bare_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::Index { object, index, .. } => {
+                matches!(
+                    &**object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) || self.expression_indexes_bare_param(object, param_name)
+                    || self.expression_indexes_bare_param(index, param_name)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_indexes_bare_param(object, param_name)
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_indexes_bare_param(left, param_name)
+                    || self.expression_indexes_bare_param(right, param_name)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_indexes_bare_param(operand, param_name)
+            }
+            Expression::Call { arguments, .. } => arguments.iter().any(|(_, a)| {
+                self.expression_indexes_bare_param(a, param_name)
+            }),
+            Expression::Block { statements, .. } => {
+                self.param_is_indexed_in_body(statements.as_slice(), param_name)
+            }
+            _ => false,
+        }
+    }
+
     /// `Vec<u8>` / `Vec<uint8>` — FFI/WAL byte buffers may emit `&Vec` + clone at store sites.
     pub(in crate::codegen::rust) fn param_type_is_byte_vec(ty: &Type) -> bool {
         let elem_is_u8 = |inner: &Type| {
@@ -9510,12 +9664,19 @@ impl<'ast> CodeGenerator<'ast> {
                         .as_ref()
                         .and_then(|flags| flags.get(pidx))
                         .copied()
-                        != Some(true));
+                        != Some(true))
+                || self
+                    .preregistered_free_function_emitted_params
+                    .get(sig.name.rsplit("::").next().unwrap_or(&sig.name))
+                    .and_then(|formals| formals.get(pidx))
+                    .is_some_and(|s| s.contains(": Vec<") && !s.contains(": &Vec<"));
             if forwarding && !emitted_owned {
                 all_emitted_owned = false;
             }
             if !emitted_owned {
                 all_emitted_owned = false;
+            } else if self.preregistered_free_call_arg_emits_owned(&sig.name, arg_index) {
+                // Preregistered owned emission beats stale analyzer Borrowed on same-file callees.
             } else if self.preregistered_free_call_arg_expects_borrow(&sig.name, arg_index) {
                 all_emitted_owned = false;
             }
@@ -9952,12 +10113,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .and_then(|local| {
                             let callee_name =
                                 crate::codegen::rust::ast_utilities::extract_function_name(function);
-                            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                            self.refresh_call_site_signature_for_arg(
                                 Some(local),
                                 &callee_name,
                                 i,
-                                self.global_signature_registry.as_deref(),
-                                &self.signature_registry,
                             )
                         })
                         .or_else(|| self.global_free_call_signature_fallback(function))
@@ -10043,12 +10202,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .and_then(|local| {
                             let callee_name =
                                 crate::codegen::rust::ast_utilities::extract_function_name(function);
-                            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                            self.refresh_call_site_signature_for_arg(
                                 Some(local),
                                 &callee_name,
                                 i,
-                                self.global_signature_registry.as_deref(),
-                                &self.signature_registry,
                             )
                         })
                         .or_else(|| self.global_free_call_signature_fallback(function))
@@ -10410,8 +10567,16 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> bool {
+        let import_alias = self.import_fn_alias_map.contains_key(callee_name);
+        let lookup = self.signature_lookup_callee_name(callee_name);
+        let lookup_ref = lookup.as_ref();
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        for key in [callee_name, simple] {
+        let keys: Vec<&str> = if import_alias {
+            vec![lookup_ref]
+        } else {
+            vec![callee_name, simple, lookup_ref]
+        };
+        for key in keys {
             let Some(formals) = self.preregistered_free_function_emitted_params.get(key) else {
                 continue;
             };
@@ -10430,11 +10595,22 @@ impl<'ast> CodeGenerator<'ast> {
         .into_iter()
         .flatten()
         {
-            for key in [callee_name, simple] {
+            let reg_keys: Vec<&str> = if import_alias {
+                vec![lookup_ref]
+            } else {
+                vec![callee_name, simple, lookup_ref]
+            };
+            for key in reg_keys {
                 let Some(sig) = reg
                     .get_signature(key)
                     .or_else(|| reg.lookup_method(key))
-                    .or_else(|| reg.find_unique_signature_ending_with(simple))
+                    .or_else(|| {
+                        if import_alias {
+                            None
+                        } else {
+                            reg.find_unique_signature_ending_with(simple)
+                        }
+                    })
                 else {
                     continue;
                 };
@@ -10453,8 +10629,16 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> bool {
+        let import_alias = self.import_fn_alias_map.contains_key(callee_name);
+        let lookup = self.signature_lookup_callee_name(callee_name);
+        let lookup_ref = lookup.as_ref();
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-        for key in [callee_name, simple] {
+        let keys: Vec<&str> = if import_alias {
+            vec![lookup_ref, callee_name]
+        } else {
+            vec![callee_name, simple, lookup_ref]
+        };
+        for key in keys {
             let Some(formals) = self.preregistered_free_function_emitted_params.get(key) else {
                 continue;
             };

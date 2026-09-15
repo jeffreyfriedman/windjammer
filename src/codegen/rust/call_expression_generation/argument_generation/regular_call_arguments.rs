@@ -244,23 +244,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     let post_ir_borrow_sig = if associated_receiver.is_some()
                         || initial_sig.is_some()
                     {
-                        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                        gen.refresh_call_site_signature_for_arg(
                             initial_sig.or_else(|| signature.clone()),
                             func_name,
                             i,
-                            gen.global_signature_registry.as_deref(),
-                            &gen.signature_registry,
                         )
                         .or_else(|| signature.clone())
                     } else {
-                        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                        gen.refresh_call_site_signature_for_arg(
                             gen.get_signature_with_global(func_name)
                                 .cloned()
                                 .or_else(|| signature.clone()),
                             func_name,
                             i,
-                            gen.global_signature_registry.as_deref(),
-                            &gen.signature_registry,
                         )
                     };
                     // Mut-borrow / owned peel / prefer-shared enforce / text finalize run
@@ -313,14 +309,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     // Single terminal reconcile: prefer-shared enforce, copy-aggregate
                     // `&mut` peel, text/collection finalize, vec borrow, owned-lit peel.
                     let simple = func_name.rsplit("::").next().unwrap_or(func_name);
-                    let peel_sig =
-                        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-                            post_ir_borrow_sig.or_else(|| signature.clone()),
-                            func_name,
-                            i,
-                            gen.global_signature_registry.as_deref(),
-                            &gen.signature_registry,
-                        );
+                    let peel_sig = gen.refresh_call_site_signature_for_arg(
+                        post_ir_borrow_sig.or_else(|| signature.clone()),
+                        func_name,
+                        i,
+                    );
                     if let Some(sig) = peel_sig.as_ref() {
                         gen.reconcile_post_ir_mut_borrow_and_owned_peel(
                             &mut coerced,
@@ -343,8 +336,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &mut coerced,
                         );
                     }
+                    let lookup_callee = gen.signature_lookup_callee_name(func_name);
                     if !func_name.contains("::")
-                        && gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                        && (gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                            || gen.preregistered_free_call_arg_emits_owned(lookup_callee.as_ref(), i))
                         && coerced.starts_with('&')
                         && !coerced.starts_with("&mut ")
                     {
