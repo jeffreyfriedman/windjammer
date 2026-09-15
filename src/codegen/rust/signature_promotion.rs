@@ -879,6 +879,22 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::MutBorrowed)
             ) {
+                if sig.param_types.get(param_idx).is_some_and(|t| {
+                    matches!(t, Type::MutableReference(_))
+                }) {
+                    return false;
+                }
+                if let Some(formal) = sig.formal_param_type(param_idx) {
+                    if matches!(formal, Type::Custom(_))
+                        && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                        && !crate::codegen::rust::types::is_windjammer_text_type(formal)
+                    {
+                        return true;
+                    }
+                }
+                if bare_formal_is_vec_or_map(sig, param_idx) {
+                    return true;
+                }
                 return false;
             }
             // Codegen-confirmed non-ref emission is owned even when analyzer ownership
@@ -936,6 +952,22 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         Some(OwnershipMode::MutBorrowed)
     );
     if analyzer_mut {
+        if sig.param_types.get(param_idx).is_some_and(|t| {
+            matches!(t, Type::MutableReference(_))
+        }) {
+            return false;
+        }
+        if bare_formal_is_owned_user_type(sig, param_idx) {
+            return true;
+        }
+        if let Some(formal) = sig.formal_param_type(param_idx) {
+            if matches!(formal, Type::Custom(_))
+                && !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+                && !crate::codegen::rust::types::is_windjammer_text_type(formal)
+            {
+                return true;
+            }
+        }
         // No emission record yet: do not claim owned (preserve true `&mut` call sites).
         return false;
     }

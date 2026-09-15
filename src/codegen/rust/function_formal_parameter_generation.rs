@@ -99,6 +99,28 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
+                if param.name != "self"
+                    && self.param_has_forward_ref_keep_owned(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !matches!(
+                        &param.type_,
+                        Type::Reference(_) | Type::MutableReference(_)
+                    )
+                    && !self.is_type_copy(&param.type_)
+                {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
+                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                }
                 // Same-file borrow passthrough wrappers (`wrapper` → `process`) must emit
                 // `&T` once the callee's preregistered/emitted formal converged to shared borrow.
                 if param.name != "self"
@@ -144,6 +166,18 @@ impl<'ast> CodeGenerator<'ast> {
                         && crate::codegen::rust::types::is_windjammer_text_type(&param.type_))
                     && !(analyzed.returned_parameters.contains(&param.name)
                         && !self.is_type_copy(&param.type_))
+                    && !self.param_has_forward_ref_keep_owned(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.current_fn_forward_ref_if_params.contains(&param.name)
+                    && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+                    && !self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                 {
                     if self.param_used_via_explicit_user_clone(func.body.as_slice(), &param.name)
                         || self.param_rebound_as_mutable_local(func.body.as_slice(), &param.name)
@@ -163,7 +197,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.str_ref_optimized_params.remove(&param.name);
                         return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                     }
-                    let mut_borrow_formal = self
+                    let mut_borrow_formal = (self
                         .global_signature_for_function(func)
                         .and_then(|sig| sig.param_types.get(param_idx))
                         .is_some_and(|t| matches!(t, Type::MutableReference(_)))
@@ -171,6 +205,18 @@ impl<'ast> CodeGenerator<'ast> {
                             self.global_signature_for_function(func)
                                 .and_then(|sig| sig.param_ownership.get(param_idx)),
                             Some(OwnershipMode::MutBorrowed)
+                        ))
+                        && !self.param_has_forward_ref_keep_owned(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )
+                        && !self.current_fn_forward_ref_if_params.contains(&param.name)
+                        && !self.current_fn_mixed_forwarder_params.contains(&param.name)
+                        && !self.param_passes_to_wj_owned_sibling_call(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
                         );
                     let type_str = if mut_borrow_formal {
                         format!("&mut {}", self.type_to_rust(&param.type_))
