@@ -154,8 +154,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (P3.288) — collection-key borrow + match `.copied()` on map get in block-expr path |
-| P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | 🆕 RED / filed (P3.290); blocks `wj-pipeline` channel fan-out adapter |
-| P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | 🆕 RED / filed (P3.291); blocks `wj-mime` tests |
+| P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
+| P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — defer-drop at fn scope; skip when body has `match` + `.get(` |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -177,24 +177,24 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent:** expose `mpsc::SyncSender` as a usable WJ type (field + send) so ecosystem can ship Go-style bounded channels without casting to `Sender`.
 
-## P3.291 (2026-09-14) — wj-mime thin-wrap from_path Into<String> clone
+## P3.291 (2026-09-15) — wj-mime thin-wrap from_path Into<String> clone
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-mime` `from_path` / `from_extension` thin-wraps | ⏸ tip RED — `path.clone()` on `impl Into<String>` |
-| Gate `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | 🆕 filed |
+| Ecosystem: `wj-mime` `from_path` / `from_extension` thin-wraps | ✅ tip GREEN — `mime::from_path(path.into())` (no `path.clone()`) |
+| Gate `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (2026-09-15) |
 
-**Compiler agent:** demoted/`impl Into<String>` formals forwarding into `mime::from_path` must pass `&path` / `path.as_ref()` without requiring `Clone`.
+**Fix layer:** IR call-site coercion — `into_string_formal_params` force Identity + `.into()` move; skip auto-clone / stale shared-ref reborrow on thin-wrap forwards.
 
 ## P3.290 (2026-09-14) — wj-pipeline cross-crate owned handle loop reassign
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-pipeline` `run_int_pipeline` fan-out `tx = send_int(tx, i)` | ⏸ blocked — tip emits `send_int(&mut tx, …)` |
-| Gate `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | 🆕 filed — same-crate reassign OK; cross-crate `&mut` |
+| Ecosystem: `wj-pipeline` `run_int_pipeline` fan-out `tx = send_int(tx, i)` | ✅ unblocked on tip |
+| Gate `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (2026-09-15) |
 | Note | Metadata already says `param_ownership: Owned` for `send_int` / `counter_inc` |
 
-**Compiler agent:** honor owned formals at cross-crate call sites when the local is `mut` and reassigned from the return value (`h = bump(h, 1)`). Do not demote to `&mut T` solely because the binding is mutable.
+**Fix layer:** prior tip work on cross-crate owned call sites (signature/emitted ownership); loop-reassign no longer prefixes `&mut` on owned handles.
 
 ## P3.288 (2026-09-14) — wj-sync SharedMap / HashMap::get through MutexGuard
 
@@ -329,8 +329,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
 | Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
-| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ✅ tip GREEN (2026-09-14) — bool/string-returning fns keep untyped `let i = 0` as WJ `int` (not i32); P3.280 builder i32 default retained for custom returns |
-| Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` **~104** errors (i64+=i32) after int Rem fix; down from ~298 |
+| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ❌ tip RED (2026-09-14 strengthened) — nested untyped `acct_idx` / `i = 3` vs `len() as int` still emits `+= 1 as i32`; shallow single-while was tip-GREEN |
+| Product: bound owned locals into trait string formals; `len() as int` before while; typed nested indices | ⚠️ tip `make api-check` clearing residual nested `i64 += i32` via `: int` on inner counters; outer typed indices + `_len as int` retained |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
 

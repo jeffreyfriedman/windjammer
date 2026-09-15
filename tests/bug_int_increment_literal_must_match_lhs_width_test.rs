@@ -11,11 +11,12 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — under `--module-file`, int `i = i + 1` must not emit `1 as i32`.
+//! FAILING REPRO — nested untyped int index under `--module-file` must not emit `1 as i32`.
 //!
-//! Product tip api-check (LedgerKit `domain/string_contains.wj` + postgres while loops):
-//!   `i += 1 as i32` / `j + 1_i32` while indices are i64 → E0277/E0308.
-//! Isolate single-file may GREEN; multipass `--module-file` matches product RED.
+//! Product tip api-check (balance_sheet / income_statement / aging / bank_import):
+//!   outer `let mut idx: int = 0` GREEN; inner `let mut acct_idx = 0` vs `len() as int`
+//!   still emits `acct_idx += 1 as i32` → E0277 add-assign i32 to i64.
+//! Shallow single-while fixtures can GREEN; nested + `_len as int` matches product RED.
 
 use std::fs;
 use std::process::Command;

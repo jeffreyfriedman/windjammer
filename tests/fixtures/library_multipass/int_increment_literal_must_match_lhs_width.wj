@@ -1,16 +1,49 @@
-// REPRO — product while + Custom field + len (LedgerKit postgres invoice lines).
-// Tip GREEN after int-width follow-ups: `idx += 1` (not `1 as i32`) under --module-file.
+// REPRO — nested untyped index vs `len() as int` (LedgerKit balance_sheet / aging / bank_import).
+// Outer `let mut idx: int = 0` is tip-GREEN; inner `let mut acct_idx = 0` still emits
+// `acct_idx += 1 as i32` while compared to `_len as i64` → product tip api-check E0277.
+
+pub struct Account {
+    pub code: string
+}
 
 pub struct Line {
+    pub code: string
     pub total_cents: int
 }
 
-pub fn sum(lines: Vec<Line>) -> int {
-    let mut idx = 0
-    let mut subtotal = 0
-    while idx < lines.len() {
-        subtotal = subtotal + lines[idx].total_cents
+pub fn sum_matched(accounts: Vec<Account>, trial_lines: Vec<Line>) -> Result<int, string> {
+    let mut idx: int = 0
+    let mut subtotal: int = 0
+    let _len_outer = trial_lines.len() as int
+    while idx < _len_outer {
+        let code = trial_lines[idx].code + ""
+        let mut found = false
+        let mut acct_idx = 0
+        let _len_inner = accounts.len() as int
+        while acct_idx < _len_inner {
+            if accounts[acct_idx].code == code {
+                found = true
+                break
+            }
+            acct_idx = acct_idx + 1
+        }
+        if !found {
+            return Err("unknown account code: " + code)
+        }
+        subtotal = subtotal + trial_lines[idx].total_cents
         idx = idx + 1
     }
-    subtotal
+    Ok(subtotal)
+}
+
+/// bank_import decode: untyped `let mut i = 3` vs `parts.len() as int`.
+pub fn join_tail(parts: Vec<string>) -> string {
+    let mut external = parts[2] + ""
+    let mut i = 3
+    let _len = parts.len() as int
+    while i < _len {
+        external = external + "~" + (parts[i] + "")
+        i = i + 1
+    }
+    external
 }
