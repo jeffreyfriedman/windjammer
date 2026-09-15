@@ -1,0 +1,6 @@
+// FAILING REPRO — `0 - x` must not emit `0_i32 - x` when x is int/i64.
+// Product: domain/bank_reconciliation.wj `Ok(0 - cents)` → E0308/E0277.
+
+pub fn negate(cents: int) -> int {
+    0 - cents
+}

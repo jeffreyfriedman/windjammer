@@ -1,35 +1,16 @@
-// FAILING REPRO — product multipass shape (LedgerKit domain/string_contains.wj):
-//   after strings.len() / as int, `i = i + 1` / `j + 1` emit `1 as i32` into i64.
+// REPRO — product while + Custom field + len (LedgerKit postgres invoice lines).
+// Tip GREEN after int-width follow-ups: `idx += 1` (not `1 as i32`) under --module-file.
 
-use std::strings
+pub struct Line {
+    pub total_cents: int
+}
 
-pub fn haystack_contains(haystack: string, needle: string) -> bool {
-    let h = haystack
-    let n = needle
-    let h_len = strings.len(h) as int
-    let n_len = strings.len(n) as int
-    if n_len == 0 {
-        return false
+pub fn sum(lines: Vec<Line>) -> int {
+    let mut idx = 0
+    let mut subtotal = 0
+    while idx < lines.len() {
+        subtotal = subtotal + lines[idx].total_cents
+        idx = idx + 1
     }
-    if n_len > h_len {
-        return false
-    }
-    let mut i = 0
-    while i + n_len <= h_len {
-        let mut matched = true
-        let mut j = 0
-        while j < n_len {
-            let hs = strings.substring(h, i + j, i + j + 1)
-            let ns = strings.substring(n, j, j + 1)
-            if hs != ns {
-                matched = false
-            }
-            j = j + 1
-        }
-        if matched {
-            return true
-        }
-        i = i + 1
-    }
-    false
+    subtotal
 }

@@ -151,7 +151,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.283) — `import_fn_alias_map` + refresh skips alias homonym challengers |
 | P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | ✅ tip GREEN (P3.284) — forwarder keeps owned `Vec` when callee preregistered owned |
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
-| P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 RED / filed (P3.287); blocks `wj-sync` bounded channels |
+| P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ⚠️ partial — signature may emit; SyncSender typing still RED (P3.293) |
+| P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | 🆕 RED / filed (P3.293); blocks `wj-sync` `bounded_int` |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | 🆕 RED / filed (P3.288); blocks `wj-sync` `SharedMap` get |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | 🆕 RED / filed (P3.290); blocks `wj-pipeline` channel fan-out adapter |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | 🆕 RED / filed (P3.291); blocks `wj-mime` tests |
@@ -164,6 +165,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
+
+
+## P3.293 (2026-09-14) — wj-sync bounded channel SyncSender typing
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `bounded_int` via `mpsc::sync_channel` | ⏸ tip emits SyncSender; cannot store in `Sender`-shaped struct |
+| Gate `bug_mpsc_sync_sender_type_for_bounded_channel_test` | 🆕 filed — prefer `BoundedIntSender { tx: SyncSender }` cargo-check |
+| Note | P3.287 missing-signature may be partially fixed on tip |
+
+**Compiler agent:** expose `mpsc::SyncSender` as a usable WJ type (field + send) so ecosystem can ship Go-style bounded channels without casting to `Sender`.
 
 ## P3.291 (2026-09-14) — wj-mime thin-wrap from_path Into<String> clone
 
