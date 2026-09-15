@@ -1094,16 +1094,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
         let mut kind = compute_coercion(&actual, &expected);
-        if matches!(arg_expr, Expression::Closure { .. })
-            && sig
-                .formal_param_type(param_idx)
-                .or_else(|| sig.param_types.get(param_idx))
-                .is_some_and(
-                    crate::codegen::rust::stdlib_method_traits::formal_is_rust_closure_trait,
-                )
-        {
-            kind = CoercionKind::Identity;
-        }
         // `rows[i]` / `self.field` into owned non-Copy formals: clone when the root cannot
         // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Always cloning
         // `self.field` into Owned is correct for `&self` (E0507) and harmless for owned-self.
@@ -1516,6 +1506,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if !(matches!(arg_expr, Expression::Identifier { name, .. }
             if self.in_user_written_closure && self.user_closure_params.contains(name))
+            && !matches!(arg_expr, Expression::Closure { .. })
             && self.ir_sig_arg_expects_shared_borrow(&sig, arg_index))
             && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
             &self.signature_registry,
@@ -5718,7 +5709,7 @@ impl<'ast> CodeGenerator<'ast> {
             // prefix `&callee()` here and never return early (blocks force_owned strip).
             if !matches!(
                 arg_expr,
-                Expression::Call { .. } | Expression::MethodCall { .. }
+                Expression::Call { .. } | Expression::MethodCall { .. } | Expression::Closure { .. }
             )
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
@@ -6246,6 +6237,9 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type_name: Option<&str>,
     ) -> String {
         if coerced.contains("string_to_ffi(") {
+            return coerced;
+        }
+        if matches!(arg_expr, Expression::Closure { .. }) {
             return coerced;
         }
         if ownership_from_rust_expr(coerced.as_str()).is_some() {

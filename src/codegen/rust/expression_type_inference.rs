@@ -92,6 +92,40 @@ impl<'ast> CodeGenerator<'ast> {
             .map(|n| Type::Custom(n.to_string()))
     }
 
+    /// Inner payload for stdlib guard/smart-pointer wrappers (`MutexGuard<T>` → `T`).
+    fn stdlib_guard_inner_payload(var_type: &Type) -> Option<Type> {
+        match var_type {
+            Type::Parameterized(name, args) if args.len() == 1 => {
+                let leaf = crate::type_classification::type_name_leaf(name);
+                if matches!(
+                    leaf,
+                    "MutexGuard" | "RwLockReadGuard" | "RwLockWriteGuard"
+                ) {
+                    Some(args[0].clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn field_type_on_named_struct(&self, struct_type: &Type, field: &str) -> Option<Type> {
+        let type_name = match struct_type {
+            Type::Custom(n) => n.as_str(),
+            Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                Type::Custom(n) => n.as_str(),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let base_name = type_name.split('<').next().unwrap_or(type_name);
+        self.struct_field_types
+            .get(type_name)
+            .or_else(|| self.struct_field_types.get(base_name))
+            .and_then(|fields| fields.get(field).cloned())
+    }
+
     /// Try to infer the Type of an expression from local variable tracking and function parameters.
     pub(in crate::codegen::rust) fn infer_expression_type(
         &self,
@@ -178,9 +212,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                                 _ => "",
                             };
-                            if let Some(fields) = self.struct_field_types.get(type_name) {
-                                if let Some(field_type) = fields.get(field.as_str()) {
-                                    return Some(field_type.clone());
+                            if let Some(field_type) =
+                                self.field_type_on_named_struct(&var_type, field)
+                            {
+                                return Some(field_type);
+                            }
+                            if let Some(inner) = Self::stdlib_guard_inner_payload(&var_type) {
+                                if let Some(field_type) =
+                                    self.field_type_on_named_struct(&inner, field)
+                                {
+                                    return Some(field_type);
                                 }
                             }
                             // Qualified name fallback: when simple name lookup fails
