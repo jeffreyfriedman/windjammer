@@ -150,6 +150,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 RED / filed (P3.282); notes uses `encode_text` |
 | P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 RED / filed (P3.283); notes aliases `get as qs_get` |
 | P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | 🆕 RED / filed (P3.284); notes inlines `?q=` filter loop |
+| P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — defer-drop at fn scope; skip when body has `match` + `.get(` |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -159,6 +160,15 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
+
+## P3.286 (2026-09-14) — wj-sync `parallel` / `std::thread::spawn` closure by-ref
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` `parallel_add` / `PendingInt` via `std::thread::spawn(\|\| …)` + channel | ⏸ blocked on tip |
+| Gate `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 filed — codegen emits `spawn(&(move \|\| …))` → E0716 / E0525 |
+
+**Compiler agent:** call-site for `std::thread::spawn` must pass the closure **by value** (`FnOnce + Send + 'static`), never as `&(move \|\| …)`. Same shape breaks any OS-worker / `parallel` dogfood.
 
 ## P3.259 (2026-09-12) — wj-auth-api UUID v7 + string-lit demotion dogfood
 
@@ -261,10 +271,12 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_hashmap_string_key_insert_must_not_cast_usize_test` | ✅ tip GREEN — drop typed `query_with*` interim |
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
-| Product: bound owned locals into trait string formals; `len() as int` before while | ✅ tip `make api-check` **GREEN** |
-| `make client-check` | ✅ GREEN |
+| Gate `bug_int_arith_must_not_split_i64_i32_test` | ❌ tip RED — emit `year as i64 % 400_i32` (fixture + tip transpile verified); assert emit shape not only cargo-check |
+| Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` regresses when tip binary includes int-width churn |
+| Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
+| `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
 
-**Compiler agent:** after keeping trait-impl string formals Owned, call sites must move (not `&format!(…)`) into those formals. `vec.len()` / `strings.len()` in `while i < len` must unify both sides to one integer width without product `as int` binds. Strengthen isolate fixtures until they match product multipass RED (trait call / len width).
+**Compiler agent:** after keeping trait-impl string formals Owned, call sites must move (not `&format!(…)`) into those formals. `vec.len()` / `strings.len()` in `while i < len` must unify both sides to one integer width without product `as int` binds. Int `%` / compare against decimal literals must keep one integer width (no `i64 % i32`). Strengthen isolate fixtures until they match product multipass RED (trait call / len width / int Rem).
 
 ## P3.266 (2026-09-14) — tip owned Vec/string call-site over-borrow + HashMap string key
 
