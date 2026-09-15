@@ -1016,6 +1016,20 @@ impl<'ast> CodeGenerator<'ast> {
         {
             expected.base = BaseType::String;
             expected.ownership = OwnedType::Ref(Region::fresh(5));
+        } else if matches!(
+            sig.param_ownership.get(param_idx),
+            Some(crate::analyzer::OwnershipMode::Borrowed)
+        ) {
+            let formal = sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx));
+            if formal.is_some_and(|t| {
+                matches!(t, Type::Custom(_))
+                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                    && !self.is_type_copy(t)
+            }) {
+                expected.ownership = OwnedType::Ref(Region::fresh(12));
+            }
         } else if let Some(ownership) = sig.param_ownership.get(param_idx).copied() {
             use crate::analyzer::OwnershipMode;
             if matches!(
@@ -1134,6 +1148,11 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } if self.into_string_formal_params.contains(name)
         );
         let mut kind = compute_coercion(&actual, &expected);
+        if matches!(kind, CoercionKind::Clone)
+            && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+        {
+            kind = CoercionKind::Borrow;
+        }
         // Pub `impl Into<String>` forwards (wj-mime): move once — never `.clone()` / `&`.
         if thin_wrap_into_string_formal
             && matches!(
@@ -1181,12 +1200,17 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, .. }
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
         );
+        let callee_wants_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+            &sig, param_idx,
+        ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+            || crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, param_idx)
+            || matches!(
+                sig.param_ownership.get(param_idx),
+                Some(crate::analyzer::OwnershipMode::Borrowed)
+            );
         if matches!(expected.ownership, OwnedType::Owned)
             && !prepared_arg.ends_with(".clone()")
-            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                &sig, param_idx,
-            )
-            && !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+            && !callee_wants_shared
             && (matches!(arg_expr, Expression::Index { .. })
                 || (matches!(arg_expr, Expression::FieldAccess { .. })
                     && (self.field_access_root_is_behind_reference(arg_expr) || field_from_self)))
@@ -1204,11 +1228,27 @@ impl<'ast> CodeGenerator<'ast> {
             if elem_needs_clone {
                 kind = CoercionKind::Clone;
             }
+        } else if callee_wants_shared
+            && matches!(kind, CoercionKind::Clone)
+            && (matches!(arg_expr, Expression::Index { .. })
+                || matches!(arg_expr, Expression::FieldAccess { .. })
+                || matches!(arg_expr, Expression::Identifier { .. }))
+        {
+            kind = CoercionKind::Borrow;
         }
         if matches!(kind, CoercionKind::ToOwnedString)
             && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
-            ) || self.ir_callee_arg_expects_shared_borrow(
+            ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+                || (crate::codegen::rust::types::is_windjammer_text_type(
+                    sig.formal_param_type(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx))
+                        .unwrap_or(&Type::String),
+                ) && matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(crate::analyzer::OwnershipMode::Borrowed)
+                ))
+            || self.ir_callee_arg_expects_shared_borrow(
                 registry,
                 callee_name,
                 arg_index,
@@ -1785,6 +1825,21 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Stale registry MutBorrowed must not become `&mut` when the slot is shared-ref.
+        if coerced.starts_with("&mut ")
+            && (self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                    &sig, param_idx,
+                )
+                || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                ))
+        {
+            coerced = format!(
+                "&{}",
+                crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
+            );
+        }
         // Already-emitted `&T` formals must not grow a second `&` (LsmEngine::get → engine.get).
         // Also cover analyzer-inferred / Phase-2 `&str` formals (`identifier_already_ref`).
         if let Expression::Identifier { name, .. } = arg_expr {
@@ -6351,17 +6406,23 @@ impl<'ast> CodeGenerator<'ast> {
             let wants_shared_ref = crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
                 &sig, pidx,
             ) || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx);
+            let param_is_shared_ref_type = sig
+                .param_types
+                .get(pidx)
+                .is_some_and(|t| matches!(t, Type::Reference(_)));
+            let effective_own =
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                    &sig, arg_index,
+                );
             let wants_mut = !wants_shared_ref
                 && (sig
                     .param_types
                     .get(pidx)
                     .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-                    || matches!(
-                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                            &sig, arg_index,
-                        ),
+                    || (matches!(
+                        effective_own,
                         crate::analyzer::OwnershipMode::MutBorrowed
-                    ));
+                    ) && !param_is_shared_ref_type));
             if wants_mut {
                 // String literals are never `&mut` lvalues.
                 if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
@@ -7711,6 +7772,17 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::parser::Type::Reference(Box::new(crate::parser::Type::Custom(
                             "str".into(),
                         )));
+                } else if let Some(bare) = sig
+                    .formal_param_type(pidx)
+                    .or_else(|| sig.param_types.get(pidx))
+                    .map(|t| match t {
+                        crate::parser::Type::Reference(inner)
+                        | crate::parser::Type::MutableReference(inner) => inner.as_ref().clone(),
+                        other => other.clone(),
+                    })
+                {
+                    sig.param_types[pidx] =
+                        crate::parser::Type::Reference(Box::new(bare));
                 }
             } else {
                 sig.param_ownership[pidx] = crate::analyzer::OwnershipMode::Owned;

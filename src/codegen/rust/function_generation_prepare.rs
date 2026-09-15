@@ -3222,6 +3222,67 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
+    /// Single-expression text helpers (`temp_path`) — only use is a formatting macro arg.
+    /// Pub API placeholder formals never referenced in the body (`replay_all(path: string)`).
+    pub(in crate::codegen::rust) fn param_is_unreferenced_in_body(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        !self.param_used_as_read_operand(body, param_name)
+            && !self.param_passed_as_call_argument(body, param_name, func)
+            && !self.param_has_owning_method_use(body, param_name, func)
+            && !self.param_stored_in_owned_payload(body, param_name)
+    }
+
+    fn expression_is_borrow_only_format_use_of_param(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+    ) -> bool {
+        match expr {
+            Expression::MacroInvocation { name, args, .. } => {
+                if !Self::callee_name_is_borrow_only_formatting(name) {
+                    return false;
+                }
+                args.iter().any(|arg| {
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                })
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let Expression::Identifier { name, .. } = &**function else {
+                    return false;
+                };
+                if !Self::callee_name_is_borrow_only_formatting(name) {
+                    return false;
+                }
+                arguments.iter().any(|(_, arg)| {
+                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                })
+            }
+            _ => false,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn param_only_appears_in_formatting_macro(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+    ) -> bool {
+        body.iter().any(|stmt| match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_is_borrow_only_format_use_of_param(expr, param_name),
+            _ => false,
+        })
+    }
+
     fn expression_has_owning_method_use(
         &self,
         expr: &Expression<'ast>,
@@ -3855,7 +3916,10 @@ impl<'ast> CodeGenerator<'ast> {
         let mut registry_borrow_sites = 0usize;
         self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, arg_index| {
             registry_sites += 1;
-            if self.signature_param_expects_borrow(sig, arg_index) {
+            let pidx = sig.arg_param_index(arg_index);
+            if self.signature_param_expects_borrow(sig, arg_index)
+                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx)
+            {
                 registry_borrow_sites += 1;
             }
         });
@@ -9765,6 +9829,7 @@ impl<'ast> CodeGenerator<'ast> {
             saw_site = true;
             let pidx = sig.arg_param_index(arg_index);
             let readonly_text = self.signature_param_expects_borrow(sig, arg_index)
+                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx)
                 || sig.param_types.get(pidx).is_some_and(|t| {
                     crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                         || matches!(t, Type::Reference(inner) if crate::codegen::rust::types::is_windjammer_text_type(inner))

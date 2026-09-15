@@ -773,7 +773,9 @@ impl<'ast> CodeGenerator<'ast> {
                 ia.cmp(&ib)
             }
         });
-        self.preregistered_free_function_emitted_params.clear();
+        // Keep cross-file preregister entries (e.g. `types/key::keys_equal` → `&Key`) when
+        // emitting later modules (`index/store` call sites). Per-file refresh below overwrites
+        // only homonyms defined in this compilation unit.
         // Borrow-passthrough wrappers (`wrapper` → `process`) after defining callees.
         top_level_funcs.sort_by_key(|af| {
             af.decl.parameters.iter().any(|p| {

@@ -205,15 +205,13 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
 
-            // WJ `"…${param}…"` / `format!(…)` — only a *direct* identifier arg is
-            // moved into the owned String. Nested uses (`data.len()`, `obj.field`) are reads.
+            // WJ `"…${param}…"` / `format!(…)` — arguments are borrowed for `Display`;
+            // the returned String is newly allocated; the param is not moved/consumed.
             Expression::MacroInvocation {
                 name: macro_name,
-                args,
                 ..
             } if crate::type_classification::is_language_level_owned_string_macro(macro_name) => {
-                args.iter()
-                    .any(|arg| matches!(arg, Expression::Identifier { name: id, .. } if id == name))
+                false
             }
 
             // Returning `param.field` moves the field out of an owned parameter (consumes `param`)

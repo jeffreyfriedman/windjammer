@@ -480,12 +480,15 @@ pub fn collect_analyzed_module_metadata(
         match item {
             Item::Function { decl, .. } => {
                 let module_recv = (!module_name.is_empty()).then_some(module_name);
-                let sig = crate::analyzer::stdlib_method_traits::lookup_method_signature(
-                    &decl.name,
-                    module_recv,
-                    registry,
-                )
-                .or_else(|| registry.get_signature(&decl.name));
+                let sig = registry
+                    .get_signature(&decl.name)
+                    .or_else(|| {
+                        crate::analyzer::stdlib_method_traits::lookup_method_signature(
+                            &decl.name,
+                            module_recv,
+                            registry,
+                        )
+                    });
                 if let Some(sig) = sig {
                     let key = if registry.get_signature(&decl.name).is_some() {
                         decl.name.clone()

@@ -103,8 +103,16 @@ impl<'ast> CodeGenerator<'ast> {
             op,
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
         );
-        let left_is_usize = self.expression_produces_usize(left);
-        let right_is_usize = self.expression_produces_usize(right);
+        let ident_in_usize_vars = |expr: &Expression<'ast>| {
+            matches!(
+                expr,
+                Expression::Identifier { name, .. } if self.usize_variables.contains(name)
+            )
+        };
+        let left_is_usize =
+            self.expression_produces_usize(left) || ident_in_usize_vars(left);
+        let right_is_usize =
+            self.expression_produces_usize(right) || ident_in_usize_vars(right);
         let right_is_int_literal = matches!(
             right,
             Expression::Literal {
@@ -352,8 +360,14 @@ impl<'ast> CodeGenerator<'ast> {
             let skip_int_promotion_both_inferred_usize = (is_comparison || is_arithmetic)
                 && self.infer_expression_type_is_usize(left)
                 && self.infer_expression_type_is_usize(right);
+            // Loop counters marked via `.len()` bounds (`usize_variables`) stay usize even when
+            // int inference unified the binding as WJ `int` / i64 (wal_layout upsert loops).
+            let skip_int_promotion_both_usize_operands = (is_comparison || is_arithmetic)
+                && left_is_usize
+                && right_is_usize;
             if !skip_int_promotion_usize_arith_untyped_lit
                 && !skip_int_promotion_both_inferred_usize
+                && !skip_int_promotion_both_usize_operands
             {
                 if self.numeric_inference.is_some() {
                     if is_comparison || is_arithmetic {
