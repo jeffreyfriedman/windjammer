@@ -150,10 +150,10 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | ✅ tip GREEN (P3.282) — import alias + qualified registry lookup; no bare `encode` homonym borrow |
 | P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.283) — `import_fn_alias_map` + refresh skips alias homonym challengers |
 | P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | ✅ tip GREEN (P3.284) — forwarder keeps owned `Vec` when callee preregistered owned |
-| P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
-| P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ⚠️ partial — signature may emit; SyncSender typing still RED (P3.293) |
-| P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | 🆕 RED / filed (P3.293); blocks `wj-sync` `bounded_int` |
-| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | 🆕 RED / filed (P3.288); blocks `wj-sync` `SharedMap` get |
+| P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ tip GREEN (P3.286) — qualified `thread::spawn` + FnOnce owned peel; no bare `spawn` homonym |
+| P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
+| P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
+| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (P3.288) — collection-key borrow + match `.copied()` on map get in block-expr path |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | 🆕 RED / filed (P3.290); blocks `wj-pipeline` channel fan-out adapter |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | 🆕 RED / filed (P3.291); blocks `wj-mime` tests |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
@@ -172,7 +172,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Change | Status |
 |--------|--------|
 | Ecosystem: `bounded_int` via `mpsc::sync_channel` | ⏸ tip emits SyncSender; cannot store in `Sender`-shaped struct |
-| Gate `bug_mpsc_sync_sender_type_for_bounded_channel_test` | 🆕 filed — prefer `BoundedIntSender { tx: SyncSender }` cargo-check |
+| Gate `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (2026-09-14) |
 | Note | P3.287 missing-signature may be partially fixed on tip |
 
 **Compiler agent:** expose `mpsc::SyncSender` as a usable WJ type (field + send) so ecosystem can ship Go-style bounded channels without casting to `Sender`.
@@ -201,28 +201,31 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Change | Status |
 |--------|--------|
 | Ecosystem: `wj-sync` `SharedMap` insert/has/len; get parked | ⏸ get blocked |
-| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | 🆕 filed — `get(key.to_string())` + `Option<&i64>` arm mismatch |
+| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-14) |
 | Note | Owned `HashMap.get(key)` (no mutex) already cargo-checks |
 
-**Compiler agent:** `HashMap::get`/`contains_key` through `MutexGuard` must pass `&K` / `&Q` (no `.to_string()` on owned `string` keys); Copy values from `Option<&V>` to owned `V` in match arms.
+**Root cause layer:** constraint/codegen — collection-key expected Ref + match-in-block-expr `.copied()` for `Option<&Copy>`; `Ok(g)` Result binding types so `g.data` resolves.
+**What became unnecessary:** spurious `.to_string()` on map keys behind MutexGuard.
 
 ## P3.287 (2026-09-14) — wj-sync bounded channel / `mpsc::sync_channel` signature
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` `bounded_int` via `mpsc::sync_channel` | ⏸ blocked on tip |
-| Gate `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 filed — `compile_error!("missing boundary signature for mpsc::sync_channel")` |
+| Ecosystem: `wj-sync` `bounded_int` via `mpsc::sync_channel` | ⏸ SyncSender typing (P3.293) |
+| Gate `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN — no missing-boundary `compile_error!`; cargo-check |
 
-**Compiler agent:** register boundary signature for `std::sync::mpsc::sync_channel` (runtime already has `sync::sync_channel`). Unblocks Go-style bounded channels in `wj-sync`.
+**Root cause layer:** signature — `register_rust_std_boundary_signatures` aliases `mpsc::sync_channel` → runtime `sync::sync_channel`.
 
 ## P3.286 (2026-09-14) — wj-sync `parallel` / `std::thread::spawn` closure by-ref
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` `parallel_add` / `PendingInt` via `std::thread::spawn(\|\| …)` + channel | ⏸ blocked on tip |
-| Gate `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 filed — codegen emits `spawn(&(move \|\| …))` → E0716 / E0525 |
+| Ecosystem: `wj-sync` `parallel_add` / `PendingInt` via `std::thread::spawn(\|\| …)` + channel | ✅ unblocked on tip |
+| Gate `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ tip GREEN (2026-09-14) |
 
-**Compiler agent:** call-site for `std::thread::spawn` must pass the closure **by value** (`FnOnce + Send + 'static`), never as `&(move \|\| …)`. Same shape breaks any OS-worker / `parallel` dogfood.
+**Root cause layer:** signature + coercion — Owned `FnOnce` boundary; `compute_coercion` / enforce never Borrow closures; qualified lowercase-root callees skip bare leaf homonym (`subprocess::spawn`).
+**What became unnecessary:** callee-name `matches!(… "thread::spawn")` hardcodes; temporary peel remains type/AST-driven only until coerce always wins.
+**Gates:** `cargo test --release --test all -- thread_spawn_closure_must_not_be_ref mpsc_sync_channel_boundary_signature hashmap_get_through_mutex_guard_must_borrow_key` → 8 passed.
 
 ## P3.259 (2026-09-12) — wj-auth-api UUID v7 + string-lit demotion dogfood
 

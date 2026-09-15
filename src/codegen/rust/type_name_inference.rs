@@ -109,6 +109,12 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                // MutexGuard locals (`Ok(g) => g.data.get`) — expression inference unwraps guards.
+                if let Some(ty) = self.infer_expression_type(expr) {
+                    if let Some(name) = Self::type_to_name(&ty) {
+                        return Some(name);
+                    }
+                }
                 None
             }
             Expression::Unary {

@@ -1178,16 +1178,14 @@ pub(crate) fn qualified_callee_skips_bare_homonym_lookup(callee_name: &str) -> b
     if is_type_qualified_associated_call(callee_name) {
         return true;
     }
-    // `subprocess::spawn` vs `std::thread::spawn` share bare `spawn` in the method index.
-    if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
-        return true;
-    }
-    callee_name.rsplit_once("::").is_some_and(|(module, _)| {
-        module
-            .chars()
+    // Any `module::…::fn` with a lowercase root skips bare leaf lookup so the method
+    // index cannot attach a homonym (`subprocess::spawn` vs `std::thread::spawn`).
+    // Use the path root (`std` in `std::thread::spawn`), not only runtime-std leaves.
+    callee_name.rsplit_once("::").is_some_and(|(qual, _)| {
+        qual.split("::")
             .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
-            && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
+            .and_then(|m| m.chars().next())
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
     })
 }
 
@@ -2564,6 +2562,49 @@ impl Editor {
         assert!(
             output.contains("subprocess::spawn(\"echo\", &args)"),
             "expected runtime auto-borrow for Vec args, got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn thread_spawn_must_not_borrow_closure_at_ir_or_emit() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+use std::sync::mpsc
+
+pub fn parallel_add(a: int, b: int) -> PendingInt {
+    let pair = mpsc::channel()
+    let tx = pair.0
+    let rx = pair.1
+    std::thread::spawn(|| {
+        match tx.send(a + b) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    })
+    PendingInt { rx: rx }
+}
+
+pub struct PendingInt {
+    rx: mpsc::Receiver<int>,
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut generator =
+            CodeGenerator::new_for_module(registry.clone(), CompilationTarget::Rust);
+        let output = generator.generate_program(&program, &analyzed);
+        assert!(
+            !output.contains("spawn(&(") && !output.contains("spawn(&move"),
+            "thread::spawn must take closure by value:\n{output}"
         );
     }
 

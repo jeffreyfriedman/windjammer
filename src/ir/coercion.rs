@@ -96,8 +96,16 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
         };
     }
 
-    // Shared borrow required.
+    // Shared borrow required — never borrow closures (`thread::spawn`, etc.).
     if matches!(expected_own, OwnedType::Ref(_)) {
+        if is_fn_trait_base(&actual.base)
+            && matches!(
+                actual_own,
+                OwnedType::Owned | OwnedType::Copy | OwnedType::Inferred
+            )
+        {
+            return CoercionKind::Identity;
+        }
         return match actual_own {
             OwnedType::Ref(_) => CoercionKind::Identity,
             OwnedType::MutRef(_) => CoercionKind::Borrow,
@@ -207,6 +215,17 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
     allow_rust_auto_borrow: bool,
     preserve_runtime_std_borrow: bool,
 ) {
+    if is_fn_trait_base(&actual.base)
+        && matches!(
+            actual.ownership,
+            OwnedType::Owned | OwnedType::Copy | OwnedType::Inferred
+        )
+    {
+        if coerced.starts_with('&') {
+            *coerced = strip_rust_ref_expr(coerced).to_string();
+        }
+        return;
+    }
     if !preserve_runtime_std_borrow
         && (matches!(expected.ownership, OwnedType::Owned) || force_owned_contract)
     {

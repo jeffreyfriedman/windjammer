@@ -427,7 +427,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // CRITICAL: Check if matching on self.field to avoid partial move
                 let needs_clone_for_match = self.match_needs_clone_for_self_field(value, arms);
 
-                let value_str = {
+                let mut value_str = {
                     if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
                         if let Expression::MethodCall { method, .. } = value {
                             if method == "find" {
@@ -436,6 +436,12 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     self.generate_expression(value)
                 };
+
+                // `Option<&T>` with Copy `T` (HashMap::get) → `.copied()` so arms agree (WDB-134).
+                let use_copied_option = self.match_scrutinee_option_yields_copy(value);
+                if use_copied_option && !value_str.ends_with(".copied()") {
+                    value_str = format!("{value_str}.copied()");
+                }
 
                 // E0507 fix: when matching on a field of a borrowed
                 // parameter, add & prefix to prevent move-out errors.
@@ -494,9 +500,10 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Generate all arms with the flag set
                 let mut arm_strings: Vec<(String, bool)> = Vec::with_capacity(arms.len());
-                let match_binds_refs_flag = scrutinee_needs_ref
-                    || self.match_expression_binds_refs(value)
-                    || self.expression_type_contains_reference(value);
+                let match_binds_refs_flag = !use_copied_option
+                    && (scrutinee_needs_ref
+                        || self.match_expression_binds_refs(value)
+                        || self.expression_type_contains_reference(value));
 
                 for arm in arms.iter() {
                     // When the scrutinee has a & prefix (or clones from a
@@ -513,8 +520,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // Also try infer_match_bound_types for richer type info
-                    let match_bound_type_entries =
-                        self.infer_match_bound_types(value, &arm.pattern);
+                    let match_bound_type_entries = if use_copied_option {
+                        self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
+                    } else {
+                        self.infer_match_bound_types(value, &arm.pattern)
+                    };
                     for (var_name, var_type) in &match_bound_type_entries {
                         self.local_var_types
                             .insert(var_name.clone(), var_type.clone());
