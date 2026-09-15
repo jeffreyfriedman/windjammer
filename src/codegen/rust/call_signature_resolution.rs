@@ -1178,14 +1178,19 @@ pub(crate) fn qualified_callee_skips_bare_homonym_lookup(callee_name: &str) -> b
     if is_type_qualified_associated_call(callee_name) {
         return true;
     }
-    // Any `module::…::fn` with a lowercase root skips bare leaf lookup so the method
-    // index cannot attach a homonym (`subprocess::spawn` vs `std::thread::spawn`).
-    // Use the path root (`std` in `std::thread::spawn`), not only runtime-std leaves.
-    callee_name.rsplit_once("::").is_some_and(|(qual, _)| {
-        qual.split("::")
+    // `subprocess::spawn` vs `std::thread::spawn` share bare `spawn` in the method index.
+    if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
+        return true;
+    }
+    if callee_name.starts_with("std::") {
+        return true;
+    }
+    callee_name.rsplit_once("::").is_some_and(|(module, _)| {
+        module
+            .chars()
             .next()
-            .and_then(|m| m.chars().next())
-            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+            .is_some_and(|c| c.is_ascii_lowercase())
+            && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
     })
 }
 

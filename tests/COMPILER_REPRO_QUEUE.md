@@ -223,8 +223,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Ecosystem: `wj-sync` `parallel_add` / `PendingInt` via `std::thread::spawn(\|\| …)` + channel | ✅ unblocked on tip |
 | Gate `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ tip GREEN (2026-09-14) |
 
-**Root cause layer:** signature + coercion — Owned `FnOnce` boundary; `compute_coercion` / enforce never Borrow closures; qualified lowercase-root callees skip bare leaf homonym (`subprocess::spawn`).
-**What became unnecessary:** callee-name `matches!(… "thread::spawn")` hardcodes; temporary peel remains type/AST-driven only until coerce always wins.
+**Root cause layer:** signature + coercion — Owned `FnOnce` boundary; `compute_coercion` / enforce never Borrow closures; `qualified_callee_skips_bare_homonym_lookup` only for `std::…`, runtime-std modules, and explicit `thread::spawn` (not every user `helper::fn`).
+**What became unnecessary:** callee-name `matches!(… "thread::spawn")` hardcodes; map-consensus homonym for `remove`/`Vec` (use `suffix_has_conflicting_first_arg_ownership` + receiver-specific sig).
+**Regression (2026-09-15):** P3.286 broadened bare-homonym skip to all lowercase-root paths → ~162 suite RED (cross-module Vec helpers, import aliases, copy-type args). Tip fix restores runtime-std/`std::` scope + map-key conflict guard for `Vec::remove` vs `HashMap::remove`.
 **Gates:** `cargo test --release --test all -- thread_spawn_closure_must_not_be_ref mpsc_sync_channel_boundary_signature hashmap_get_through_mutex_guard_must_borrow_key` → 8 passed.
 
 ## P3.259 (2026-09-12) — wj-auth-api UUID v7 + string-lit demotion dogfood

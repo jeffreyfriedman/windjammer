@@ -570,26 +570,33 @@ pub fn method_is_map_key_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
+    let borrowed_key_on_type = |base: &str| -> bool {
+        lookup_sig(method, Some(base), registry).is_some_and(|s| {
+            s.has_self_receiver
+                && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
+                && first_arg_type(s).is_some_and(is_reference_type)
+        })
+    };
+
+    // `Vec::remove(Owned)` vs `HashMap::remove(Borrowed)` — never map-consensus homonym.
+    if registry.suffix_has_conflicting_first_arg_ownership(method, 1) {
+        return receiver_type
+            .map(|rt| rt.split('<').next().unwrap_or(rt))
+            .is_some_and(|base| borrowed_key_on_type(base));
+    }
+
     if !is_map_receiver(receiver_type) {
         // Non-map receiver names (`MapCell`, `MutexGuard<…>`, …): still classify via
         // stdlib map/set consensus — `g.data.get(key)` must borrow `&K`, not `.to_string()`.
         for map_ty in crate::type_classification::MAP_TYPE_NAMES {
-            if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
-                if sig.has_self_receiver
-                    && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed)
-                    && first_arg_type(sig).is_some_and(is_reference_type)
-                {
-                    return true;
-                }
+            if borrowed_key_on_type(map_ty) {
+                return true;
             }
         }
         return false;
     }
-    let sig = lookup_sig(method, receiver_type, registry);
-    sig.is_some_and(|s| {
-        s.has_self_receiver
-            && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
-            && first_arg_type(s).is_some_and(is_reference_type)
+    receiver_type.is_some_and(|rt| {
+        borrowed_key_on_type(rt.split('<').next().unwrap_or(rt))
     })
 }
 
@@ -1771,6 +1778,10 @@ mod pattern_registry_tests {
         assert!(
             method_is_map_key_qualified("contains_key", Some("MutexGuard"), &reg),
             "contains_key through guard wrapper must classify as map key lookup"
+        );
+        assert!(
+            !method_is_map_key_qualified("remove", Some("Vec"), &reg),
+            "Vec::remove(usize) must not inherit HashMap::remove borrowed-key homonym"
         );
     }
 
