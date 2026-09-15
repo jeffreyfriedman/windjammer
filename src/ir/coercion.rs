@@ -145,6 +145,16 @@ pub fn enforce_ownership_contract_on_coerced_arg(
     );
 }
 
+/// Generated Rust closure value (not a place that needs `.clone()` when stripping `&`).
+fn emitted_rust_closure_value(expr: &str) -> bool {
+    let t = expr.trim();
+    t.starts_with("move ||")
+        || t.starts_with("||")
+        || t.starts_with('|')
+        || (t.starts_with('(')
+            && (t.contains("move ||") || t.contains("||") || t.contains('|')))
+}
+
 fn strip_rust_ref_expr(expr: &str) -> &str {
     let trimmed = expr.trim();
     let inner = if trimmed.starts_with('(') && trimmed.ends_with(')') {
@@ -207,6 +217,8 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
                 *coerced = format!("*{inner}");
             } else if coerced.starts_with("&mut ") {
                 // `&mut place` is already an lvalue; owned formals take the place by value.
+                *coerced = inner.to_string();
+            } else if emitted_rust_closure_value(inner) {
                 *coerced = inner.to_string();
             } else {
                 *coerced = owned_coercion_for_str_subslice(inner);

@@ -38,6 +38,7 @@ pub fn populate_runtime_signatures(registry: &mut SignatureRegistry) -> Result<(
     // Scan all .rs files in runtime (including platform/native/…).
     scan_directory_recursive(&runtime_path, &runtime_path, registry)?;
     register_runtime_modules_from_signature_keys(registry);
+    register_rust_std_boundary_signatures(registry);
 
     Ok(())
 }
@@ -347,6 +348,95 @@ fn parse_pub_struct_field(trimmed: &str) -> Option<(String, String)> {
         return None;
     }
     Some((name.to_string(), ty.to_string()))
+}
+
+/// `use std::sync::mpsc` lowers to Rust `std::sync::mpsc`, not `windjammer_runtime::sync`.
+/// Exact keys avoid fail-closed homonyms (`sync::sync_channel`) and wrong ownership
+/// (`subprocess::spawn` borrows its args; `thread::spawn` takes `FnOnce` by value).
+fn register_rust_std_boundary_signatures(registry: &mut SignatureRegistry) {
+    const MPSC_FROM_SYNC: &[(&str, &str)] = &[
+        ("mpsc::channel", "sync::channel"),
+        ("mpsc::sync_channel", "sync::sync_channel"),
+    ];
+    for (dst, src) in MPSC_FROM_SYNC {
+        register_boundary_signature_alias(registry, dst, src);
+    }
+    for name in ["thread::spawn", "std::thread::spawn"] {
+        if registry.get_signature(name).is_none() {
+            registry.add_function(name.to_string(), thread_spawn_boundary_signature(name));
+        }
+    }
+}
+
+fn register_boundary_signature_alias(
+    registry: &mut SignatureRegistry,
+    dst: &str,
+    src: &str,
+) {
+    if registry.get_signature(dst).is_some() {
+        return;
+    }
+    if let Some(mut sig) = registry.get_signature(src).cloned() {
+        sig.name = dst.to_string();
+        registry.add_function(dst.to_string(), sig);
+        return;
+    }
+    if dst == "mpsc::sync_channel" {
+        registry.add_function(dst.to_string(), mpsc_sync_channel_boundary_signature(dst));
+    } else if dst == "mpsc::channel" {
+        registry.add_function(dst.to_string(), mpsc_channel_boundary_signature(dst));
+    }
+}
+
+fn mpsc_channel_boundary_signature(name: &str) -> FunctionSignature {
+    FunctionSignature {
+        name: name.to_string(),
+        param_types: vec![],
+        formal_param_types: vec![],
+        param_ownership: vec![],
+        return_type: None,
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: None,
+        string_ref_string_formal_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
+fn mpsc_sync_channel_boundary_signature(name: &str) -> FunctionSignature {
+    FunctionSignature {
+        name: name.to_string(),
+        param_types: vec![Type::Custom("usize".into())],
+        formal_param_types: vec![Type::Custom("usize".into())],
+        param_ownership: vec![OwnershipMode::Owned],
+        return_type: None,
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: Some(vec![false]),
+        string_ref_string_formal_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
+fn thread_spawn_boundary_signature(name: &str) -> FunctionSignature {
+    FunctionSignature {
+        name: name.to_string(),
+        param_types: vec![Type::Custom("FnOnce".into())],
+        formal_param_types: vec![Type::Custom("FnOnce".into())],
+        param_ownership: vec![OwnershipMode::Owned],
+        return_type: Some(Type::Custom("JoinHandle".into())),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: Some(vec![false]),
+        string_ref_string_formal_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
 }
 
 /// Lowercase `module::fn` keys (and `_mod` / `_runtime` aliases) → runtime module set.
@@ -1051,6 +1141,7 @@ fn populate_fallback_signatures(registry: &mut SignatureRegistry) -> Result<(), 
 
     register_wj_std_module_names(registry);
     register_runtime_modules_from_signature_keys(registry);
+    register_rust_std_boundary_signatures(registry);
 
     Ok(())
 }
@@ -1524,5 +1615,30 @@ mod tests {
         );
         let log = reg.get_signature("log::error").expect("log::error free fn");
         assert_eq!(log.param_ownership.len(), 1);
+    }
+
+    #[test]
+    fn rust_std_mpsc_and_thread_spawn_boundary_signatures_registered() {
+        let reg = SignatureRegistry::stdlib();
+        let sync_ch = reg
+            .get_signature("mpsc::sync_channel")
+            .expect("mpsc::sync_channel boundary");
+        assert_eq!(sync_ch.param_ownership, vec![OwnershipMode::Owned]);
+        assert!(
+            reg.get_signature("mpsc::channel").is_some(),
+            "mpsc::channel boundary"
+        );
+        let spawn = reg
+            .get_signature("thread::spawn")
+            .expect("thread::spawn boundary");
+        assert_eq!(spawn.param_ownership, vec![OwnershipMode::Owned]);
+        assert!(matches!(
+            spawn.param_types.first(),
+            Some(Type::Custom(n)) if n == "FnOnce"
+        ));
+        assert!(
+            reg.get_signature("std::thread::spawn").is_some(),
+            "std::thread::spawn boundary"
+        );
     }
 }
