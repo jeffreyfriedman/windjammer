@@ -354,8 +354,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
 | Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
-| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ✅ tip GREEN (2026-09-15) — int inference unifies local uses with declaration; index width stays at codegen `as usize` (no solver `MustBe Usize` on loop counters) |
-| Product: bound owned locals into trait string formals; `len() as int` before while; typed nested indices | ⚠️ tip `make api-check` clearing residual nested `i64 += i32` via `: int` on inner counters; outer typed indices + `_len as int` retained |
+| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ✅ tip GREEN (2026-09-15) — nested untyped counter width unified; isolate no longer emits `+= 1 as i32` |
+| Gate `bug_int_while_len_as_int_must_not_emit_usize_arith_test` | ❌ tip RED (2026-09-15) — typed `int` + `len() as int` emits `+= 1 as usize` / `h_len as usize` vs i64 (~113 tip api-check); WAL usize fix did not clear product multipass |
+| Product: bound owned locals into trait string formals; `len() as int` before while; typed nested indices | ⚠️ tip HEAD api-check **RED** (~113 usize/i64); dogfood interim still needed until gate GREEN |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
 
