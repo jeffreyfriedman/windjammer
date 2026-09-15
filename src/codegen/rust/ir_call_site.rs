@@ -70,6 +70,35 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         receiver_type: Option<&str>,
     ) -> bool {
+        let pidx = sig.arg_param_index(arg_index);
+        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(sig, pidx)
+        {
+            return false;
+        }
+        if let Some(rt) = receiver_type {
+            let base = rt.split('<').next().unwrap_or(rt);
+            if !crate::type_classification::is_map_type_name(base)
+                && !crate::type_classification::is_set_type_name(base)
+            {
+                if let Some(sn) = self.current_struct_name.as_deref() {
+                    if sn == base {
+                        if self
+                            .struct_method_ast_formal_param_types
+                            .get(sn)
+                            .and_then(|m| m.get(sig.name.rsplit("::").next().unwrap_or(&sig.name)))
+                            .and_then(|formals| formals.get(pidx.saturating_sub(if sig.has_self_receiver { 1 } else { 0 })))
+                            .is_some_and(|t| {
+                                matches!(t, Type::Custom(_))
+                                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            })
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
         crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup_with_project(
             sig,
             arg_index,
@@ -744,8 +773,13 @@ impl<'ast> CodeGenerator<'ast> {
                                     .and_then(|flags| flags.get(pidx))
                                     .copied()
                                     != Some(true));
+                        let local_bare_owned_user =
+                            crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                                &sig, pidx,
+                            );
                         if !crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, pidx)
                             && !local_copy_aggregate_owned
+                            && !local_bare_owned_user
                         {
                             sig = gs.clone();
                         }
@@ -3998,6 +4032,17 @@ impl<'ast> CodeGenerator<'ast> {
         // Mut-borrow from signature / codegen-recorded mut slots.
         // Defining-module owned Custom formals (field-forward restore / bare emit) must
         // not re-acquire `&mut` from stale MutBorrowed layered stubs.
+        let ast_owned_slot = receiver_type_name.is_some_and(|rt| {
+            self.struct_method_ast_formal_param_types
+                .get(rt)
+                .and_then(|methods| methods.get(simple))
+                .and_then(|formals| formals.get(arg_index))
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !self.is_type_copy(t)
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                })
+        });
         let project_owned_slot = receiver_type_name.is_some_and(|rt| {
             self.resolve_method_function_signature(
                 rt,
@@ -4008,6 +4053,8 @@ impl<'ast> CodeGenerator<'ast> {
                 let ridx = resolved.arg_param_index(arg_index);
                 (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &resolved, ridx,
+                ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    &resolved, ridx,
                 ) || matches!(
                     resolved.param_ownership.get(ridx),
                     Some(crate::analyzer::OwnershipMode::Owned)
@@ -4017,8 +4064,12 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             })
         });
-        let owned_slot = project_owned_slot
+        let owned_slot = ast_owned_slot
+            || project_owned_slot
             || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, param_idx,
+            )
+            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
                 &sig, param_idx,
             )
             || crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
@@ -5967,6 +6018,22 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        if wants_ref
+            && !wants_owned
+            && matches!(arg_expr, Expression::Identifier { .. })
+        {
+            if coerced.ends_with(".clone()") {
+                let base = coerced.trim_end_matches(".clone()").trim();
+                *coerced = if base.starts_with('&') {
+                    base.to_string()
+                } else {
+                    format!("&{base}")
+                };
+            } else if !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                *coerced = format!("&{coerced}");
+            }
+        }
+
         if !is_collection_key {
             self.maybe_pure_forwarding_strip_call_arg(
                 coerced,
@@ -6579,6 +6646,10 @@ impl<'ast> CodeGenerator<'ast> {
                     &sig, arg_index,
                 );
             let wants_mut = !wants_shared_ref
+                && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
+                && !crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    &sig, pidx,
+                )
                 && (sig
                     .param_types
                     .get(pidx)
@@ -7860,6 +7931,9 @@ impl<'ast> CodeGenerator<'ast> {
         let owned_from = |sig: &crate::analyzer::FunctionSignature| {
             let pidx = sig.arg_param_index(arg_index);
             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+                || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    sig, pidx,
+                )
                 || matches!(
                     crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                         sig, arg_index,
