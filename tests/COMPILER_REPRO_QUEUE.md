@@ -207,7 +207,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | 🆕 RED / filed (P3.297); blocks wj-sync shared-inbox Pool |
 | P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.298); blocks wj-uuid |
 | P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | 🆕 RED / filed (P3.299); blocks wj-timefmt |
-| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ⚠️ tip REGRESSION (2026-09-15) — SharedMap get re-emits key.to_string(); was GREEN (P3.288)
+| P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
@@ -308,11 +308,11 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Change | Status |
 |--------|--------|
 | Ecosystem: `wj-sync` `SharedMap` insert/has/len; get parked | ⏸ get blocked |
-| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-14) |
+| Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — regression restored |
 | Note | Owned `HashMap.get(key)` (no mutex) already cargo-checks |
 
-**Root cause layer:** constraint/codegen — collection-key expected Ref + match-in-block-expr `.copied()` for `Option<&Copy>`; `Ok(g)` Result binding types so `g.data` resolves.
-**What became unnecessary:** spurious `.to_string()` on map keys behind MutexGuard.
+**Root cause layer:** constraint/type — `Some(x)`/`Ok(x)` infer `Option`/`Result` for match bindings; signature — owned `get` homonym/`bare_formal` must not defeat map-key consensus for `g.data.get`.
+**What became unnecessary:** blanket non-map early-return before MapCell consensus; owned-formal escape that blocked poisoned `HashMap::get` / unknown-receiver field gets.
 
 ## P3.287 (2026-09-14) — wj-sync bounded channel / `mpsc::sync_channel` signature
 
