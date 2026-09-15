@@ -463,6 +463,52 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !(analyzed.mutated_parameters.contains(&param.name)
                         && !analyzed.returned_parameters.contains(&param.name));
+                // Readonly text-returning helpers (`temp_path`, `replay_to_lsn`) demote before
+                // AsRef-runtime / port-trait owned forwards that would force `String` formals.
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && !payload_stored
+                    && self.function_return_is_text(func)
+                    && !(matches!(
+                        analyzed.inferred_ownership.get(&param.name),
+                        Some(OwnershipMode::Owned)
+                    ) && (self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    ) || self.param_stored_in_owned_payload(
+                        func.body.as_slice(),
+                        &param.name,
+                    )))
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
+                    && !self.param_only_forwards_to_path_asref_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && self.param_has_readonly_expression_use(
+                        func.body.as_slice(),
+                        &param.name,
+                    )
+                    && !self.param_passed_as_call_argument(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !analyzed.returned_parameters.contains(&param.name)
+                {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    return format!("{}: &str", param.name);
+                }
                 // WDB-110: explicit `.clone()` into AST-owned `string` callees keeps caller `String`.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
@@ -688,7 +734,8 @@ impl<'ast> CodeGenerator<'ast> {
                     if self.param_has_readonly_expression_use(
                         func.body.as_slice(),
                         &param.name,
-                    ) && !self.param_has_owning_method_use(
+                    ) && !analyzed.returned_parameters.contains(&param.name)
+                    && !self.param_has_owning_method_use(
                         func.body.as_slice(),
                         &param.name,
                         func,
@@ -3613,12 +3660,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
             return false;
-        }
-        // Pub helpers that return `string` (`join`, `escape_html`) keep owned `String`
-        // formals so call sites move locals — format! accepts `String` without demoting
-        // the API surface to `&str` (wj-url / owned_string_locals).
-        if self.function_return_is_text(func) {
-            return true;
         }
         let body = func.body.as_slice();
         if self.param_has_readonly_expression_use(body, &param.name)

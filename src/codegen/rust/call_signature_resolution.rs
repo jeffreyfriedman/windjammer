@@ -1296,6 +1296,45 @@ pub fn effective_param_ownership_for_method_arg(
     effective_param_ownership(sig, idx)
 }
 
+/// Plain WJ `string` formals that move into an owned text return (not forward-only borrow pipelines).
+pub(crate) fn plain_string_owned_consumer_at_call_site(
+    sig: &FunctionSignature,
+    idx: usize,
+) -> bool {
+    let arg_index = if sig.has_self_receiver {
+        idx.saturating_sub(1)
+    } else {
+        idx
+    };
+    if !formal_is_plain_windjammer_string(sig, idx)
+        && !crate::ir::formal_predicates::formal_is_plain_windjammer_string_for_call_arg(
+            sig, arg_index,
+        )
+    {
+        return false;
+    }
+    if sig
+        .forwarding_borrow_params
+        .as_ref()
+        .and_then(|flags| flags.get(idx))
+        .copied()
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    if sig.return_type.as_ref().is_some_and(|t| {
+        matches!(t, Type::String)
+            || matches!(t, Type::Custom(name) if name == "string")
+            || crate::codegen::rust::types::is_windjammer_text_type(t)
+    }) {
+        return true;
+    }
+    // Same-file / sparse registry stubs may omit return_type while the WJ formal
+    // is still an owned `string` consumer (normalize_value(raw) after starts_with).
+    sig.formal_param_type(idx)
+        .is_some_and(|t| matches!(t, Type::String))
+}
+
 /// E0053: plain `string` trait/item formals are owned `String` at call sites even when body
 /// analysis converged `param_types` to `Reference(str)` and/or stale `param_ownership`.
 pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) {
@@ -1313,6 +1352,7 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
             .emitted_rust_ref_params
             .as_ref()
             .is_some_and(|flags| flags.get(idx).copied().unwrap_or(false))
+            && !plain_string_owned_consumer_at_call_site(sig, idx)
         {
             continue;
         }
@@ -1349,6 +1389,7 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
                 sig.param_ownership.get(idx),
                 Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
             )
+            && !plain_string_owned_consumer_at_call_site(sig, idx)
         {
             continue;
         }
@@ -1380,6 +1421,13 @@ pub fn normalize_owned_string_formal_for_call_site(sig: &mut FunctionSignature) 
                     if crate::codegen::rust::types::is_windjammer_text_type(inner)
             ) {
                 *t = Type::String;
+            }
+        }
+        if plain_string_owned_consumer_at_call_site(sig, idx) {
+            if let Some(ref mut flags) = sig.emitted_rust_ref_params {
+                if idx < flags.len() {
+                    flags[idx] = false;
+                }
             }
         }
         if formal_plain_string {
