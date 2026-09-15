@@ -71,8 +71,22 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type: Option<&str>,
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
-        if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(sig, pidx)
+        let would_be_ck =
+            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup_with_project(
+                sig,
+                arg_index,
+                receiver_type,
+                self.global_signature_registry.as_deref(),
+            );
+        // Owned Custom formals (`MemoryEngine::get(key: Key)`) must not inherit map-key
+        // borrow — but poisoned `HashMap::get(key: K)` / unknown-receiver `g.data.get`
+        // must still classify as `&K` (P3.288). Only apply the owned escape when the
+        // signature path would *not* otherwise be a collection-key lookup.
+        if !would_be_ck
+            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+                || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    sig, pidx,
+                ))
         {
             return false;
         }
@@ -99,12 +113,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup_with_project(
-            sig,
-            arg_index,
-            receiver_type,
-            self.global_signature_registry.as_deref(),
-        )
+        would_be_ck
     }
 
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
