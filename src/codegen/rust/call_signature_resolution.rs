@@ -1178,19 +1178,18 @@ pub(crate) fn qualified_callee_skips_bare_homonym_lookup(callee_name: &str) -> b
     if is_type_qualified_associated_call(callee_name) {
         return true;
     }
-    // `subprocess::spawn` vs `std::thread::spawn` share bare `spawn` in the method index.
-    if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
-        return true;
-    }
+    // Rust std paths (`std::thread::spawn`) never consult bare leaf keys.
     if callee_name.starts_with("std::") {
         return true;
     }
+    // Runtime-std modules (`csv::write`, `thread::spawn` after boundary registration).
+    // Use the first path segment only — do not blanket-skip every user `helper::fn`.
     callee_name.rsplit_once("::").is_some_and(|(module, _)| {
-        module
-            .chars()
+        let root = module.split("::").next().unwrap_or(module);
+        root.chars()
             .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
-            && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(module)
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+            && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(root)
     })
 }
 
