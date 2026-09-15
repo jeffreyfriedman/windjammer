@@ -473,14 +473,10 @@ impl<'ast> CodeGenerator<'ast> {
                     && !(matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Owned)
-                    ) && (self.param_has_owning_method_use(
+                    ) && self.param_stored_in_owned_payload(
                         func.body.as_slice(),
                         &param.name,
-                        func,
-                    ) || self.param_stored_in_owned_payload(
-                        func.body.as_slice(),
-                        &param.name,
-                    )))
+                    ))
                     && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && !self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),
@@ -682,14 +678,10 @@ impl<'ast> CodeGenerator<'ast> {
                     && !(matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Owned)
-                    ) && (self.param_has_owning_method_use(
+                    ) && self.param_stored_in_owned_payload(
                         func.body.as_slice(),
                         &param.name,
-                        func,
-                    ) || self.param_stored_in_owned_payload(
-                        func.body.as_slice(),
-                        &param.name,
-                    )))
+                    ))
                     && !self.pub_module_api_keeps_owned_string_formal(func, param)
                     && !self.param_only_forwards_to_path_asref_callees(
                         func.body.as_slice(),

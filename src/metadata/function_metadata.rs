@@ -165,6 +165,43 @@ pub fn try_analyzer_signature_from_metadata(
         .as_ref()
         .and_then(|s| ModuleMetadata::deserialize_type(s));
 
+    let mut emitted_rust_ref_params = meta_sig.emitted_rust_ref_params.clone();
+    if emitted_rust_ref_params.is_none() {
+        let mut flags = vec![false; formal_param_types.len()];
+        for (i, mode) in param_ownership.iter().enumerate() {
+            if !matches!(mode, OwnershipMode::Borrowed) {
+                continue;
+            }
+            let Some(formal) = formal_param_types.get(i) else {
+                continue;
+            };
+            let bare = match formal {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            if crate::codegen::rust::types::is_windjammer_text_type(bare) {
+                flags[i] = true;
+                continue;
+            }
+            if matches!(bare, Type::Custom(_)) {
+                let is_copy_aggregate = (crate::codegen::rust::type_analysis_pure::is_copy_type(
+                    bare,
+                ) || matches!(
+                    bare,
+                    Type::Custom(name)
+                        if crate::type_classification::is_known_copy_aggregate(name)
+                ))
+                    && !crate::type_classification::is_copy_pass_by_value_formal(bare);
+                if !is_copy_aggregate {
+                    flags[i] = true;
+                }
+            }
+        }
+        if flags.iter().any(|&b| b) {
+            emitted_rust_ref_params = Some(flags);
+        }
+    }
+
     Some(AnalyzerFunctionSignature {
         name: name.to_string(),
         param_types,
@@ -174,7 +211,7 @@ pub fn try_analyzer_signature_from_metadata(
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: meta_sig.has_self_receiver,
         is_extern: meta_sig.is_extern,
-        emitted_rust_ref_params: meta_sig.emitted_rust_ref_params.clone(),
+        emitted_rust_ref_params,
         string_ref_string_formal_params: meta_sig.string_ref_string_formal_params.clone(),
         field_extract_params: None,
         forwarding_borrow_params: meta_sig.forwarding_borrow_params.clone(),

@@ -1327,7 +1327,13 @@ pub(crate) fn plain_string_owned_consumer_at_call_site(
             || matches!(t, Type::Custom(name) if name == "string")
             || crate::codegen::rust::types::is_windjammer_text_type(t)
     }) {
-        return true;
+        // Read-only params in `format!`-style builders (`temp_path(name) -> string`) stay
+        // `&str` even when the function returns owned text — only moved/owned params are
+        // owned consumers (`normalize_value(raw) -> string { raw }`).
+        return !matches!(
+            sig.param_ownership.get(idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        );
     }
     // Same-file / sparse registry stubs may omit return_type while the WJ formal
     // is still an owned `string` consumer (normalize_value(raw) after starts_with).
