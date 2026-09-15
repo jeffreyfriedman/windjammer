@@ -510,7 +510,11 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Cast { type_, .. } => Some(type_.clone()),
             // Call expressions: Type::method(args) → look up return type from signature registry
             // This is critical for Copy-type inference: let u = MathHelper::fade(x) → u is f32
-            Expression::Call { function, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 // Extract function name for signature lookup
                 // Pattern: Type::method() → "Type::method"
                 if let Expression::FieldAccess { object, field, .. } = function {
@@ -545,6 +549,36 @@ impl<'ast> CodeGenerator<'ast> {
                 // Pattern: simple function call → "function_name"
                 // Also: collapsed `Type::assoc` path as a single Identifier (`HashMap::new`).
                 if let Expression::Identifier { name, .. } = function {
+                    // `Some(x)` / `Ok(x)` constructors — match bindings need the payload type
+                    // so `g.data.get(key)` resolves as HashMap::get (P3.288), not an Owned
+                    // `get` homonym that emits `key.to_string()`.
+                    if matches!(name.as_str(), "Some" | "Option::Some") {
+                        if let Some((_, arg)) = arguments.first() {
+                            if let Some(inner) = self.infer_expression_type(arg) {
+                                return Some(Type::Option(Box::new(inner)));
+                            }
+                        }
+                    }
+                    if matches!(name.as_str(), "Ok" | "Result::Ok") {
+                        if let Some((_, arg)) = arguments.first() {
+                            if let Some(inner) = self.infer_expression_type(arg) {
+                                return Some(Type::Result(
+                                    Box::new(inner),
+                                    Box::new(Type::Custom("_".into())),
+                                ));
+                            }
+                        }
+                    }
+                    if matches!(name.as_str(), "Err" | "Result::Err") {
+                        if let Some((_, arg)) = arguments.first() {
+                            if let Some(err) = self.infer_expression_type(arg) {
+                                return Some(Type::Result(
+                                    Box::new(Type::Custom("_".into())),
+                                    Box::new(err),
+                                ));
+                            }
+                        }
+                    }
                     if let Some((type_name, method)) = name.rsplit_once("::") {
                         if type_name
                             .chars()
