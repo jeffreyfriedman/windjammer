@@ -314,7 +314,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
 | Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
-| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ❌ tip RED under `--module-file` — `i += 1 as i32` / `+ 1_i32` into i64 (string_contains / postgres while); isolate single-file may GREEN |
+| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ✅ tip GREEN (2026-09-14) — bool/string-returning fns keep untyped `let i = 0` as WJ `int` (not i32); P3.280 builder i32 default retained for custom returns |
 | Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` **~104** errors (i64+=i32) after int Rem fix; down from ~298 |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
@@ -596,6 +596,19 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.290 WindjammerDB CQ-C5 — tip→gen string-lit sync + WDB-220/221 (2026-09-14)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **447** (↓533 after semantic/append+column + graph batch tip→gen) |
+| Tip **WDB-214–217** | ✅ GREEN |
+| Tip **WDB-177/218/219** | ❌ RED |
+| Tip **WDB-220** `&mut LsqbTypedGraph`→owned neighbors | ❌ RED — tip-out/gen lsqb (~37×) |
+| Tip **WDB-221** string lit→owned `edge_kind: String` | ❌ RED — tip-out/gen lsqb (~298× String←&str) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–221**. Dominant residual: String←&str. No Phase 606+.
 
 ## P3.289 WindjammerDB CQ-C5 — tip→gen 214–217 + coverage REDs WDB-218/219 (2026-09-14)
 
