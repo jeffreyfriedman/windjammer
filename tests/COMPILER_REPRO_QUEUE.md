@@ -165,6 +165,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ tip GREEN (P3.286) — qualified `thread::spawn` + FnOnce owned peel; no bare `spawn` homonym |
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
+| P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | 🆕 RED / filed (P3.294); blocks shared-inbox Pool |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (P3.288) — collection-key borrow + match `.copied()` on map get in block-expr path |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
@@ -178,6 +179,17 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN (2026-09-15) — `plain_string_owned_consumer` + returned-param formal keep; demoted caller auto-`to_string()` |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
 
+
+
+## P3.294 (2026-09-15) — Pool shared-inbox `spawn(move ||)` with Arc still by-ref
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-sync` Pool shared `Arc<Mutex<Receiver>>` workers | ⏸ tip emits `spawn(&(move \|\| …))` → E0716 |
+| Gate `bug_thread_spawn_move_arc_must_not_be_ref_test` | 🆕 filed |
+| Workaround | Per-job `spawn(\|\| …)` (same as Pending) until green |
+
+**Compiler agent:** `spawn(move \|\| …)` must pass the closure by value even when capturing `Arc`/`Mutex` (no `&(move \|\| …)`).
 
 ## P3.293 (2026-09-14) — wj-sync bounded channel SyncSender typing
 
