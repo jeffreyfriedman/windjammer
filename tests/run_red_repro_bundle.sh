@@ -6,10 +6,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  int_arith_must_not_split_i64_i32
+  int_increment_literal_must_match_lhs_width
 )
 
 GREEN_FILTERS=(
+  int_arith_must_not_split_i64_i32
   hashmap_string_key_insert_must_not_cast_usize
   trait_owned_string_call_must_not_over_borrow
   strings_len_must_unify_int_index_arith
