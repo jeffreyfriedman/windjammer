@@ -594,6 +594,24 @@ impl<'ast> CodeGenerator<'ast> {
                 None,
                 receiver_type_name,
             );
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.into_string_formal_params.contains(name) {
+                    while finished.starts_with("&mut ") {
+                        finished = finished["&mut ".len()..].trim().to_string();
+                    }
+                    while finished.starts_with('&') {
+                        finished = finished[1..].trim().to_string();
+                    }
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut finished);
+                    if !finished.ends_with(".into()")
+                        && !finished.ends_with(".to_string()")
+                        && !finished.ends_with(".to_owned()")
+                    {
+                        finished = format!("{finished}.into()");
+                    }
+                    return Some(finished);
+                }
+            }
             self.apply_registry_borrow_to_call_arg(
                 &mut finished,
                 arg_expr,
@@ -1111,7 +1129,23 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         let actual = self.infer_actual_safety_type(arg_expr, prepared_arg.as_str());
+        let thin_wrap_into_string_formal = matches!(
+            arg_expr,
+            Expression::Identifier { name, .. } if self.into_string_formal_params.contains(name)
+        );
         let mut kind = compute_coercion(&actual, &expected);
+        // Pub `impl Into<String>` forwards (wj-mime): move once — never `.clone()` / `&`.
+        if thin_wrap_into_string_formal
+            && matches!(
+                kind,
+                CoercionKind::Clone
+                    | CoercionKind::ToOwnedString
+                    | CoercionKind::Borrow
+                    | CoercionKind::MutBorrow
+            )
+        {
+            kind = CoercionKind::Identity;
+        }
         let key_receiver_for_coercion =
             crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
                 callee_name,
@@ -1751,6 +1785,21 @@ impl<'ast> CodeGenerator<'ast> {
             Some(&sig),
             receiver_type_name,
         );
+        if thin_wrap_into_string_formal {
+            while coerced.starts_with("&mut ") {
+                coerced = coerced["&mut ".len()..].trim().to_string();
+            }
+            while coerced.starts_with('&') {
+                coerced = coerced[1..].trim().to_string();
+            }
+            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+            if !coerced.ends_with(".into()")
+                && !coerced.ends_with(".to_string()")
+                && !coerced.ends_with(".to_owned()")
+            {
+                coerced = format!("{coerced}.into()");
+            }
+        }
         if coerced.ends_with(".clone()") {
             let this_arg_expects_borrow = self.ir_sig_arg_expects_shared_borrow(&sig, arg_index);
             let this_arg_expects_mut = self.ir_sig_arg_expects_mut_borrow(&sig, arg_index);
@@ -2817,7 +2866,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .as_ref()
                         .and_then(|flags| flags.get(param_idx).copied())
                         != Some(true));
-                if local_owned_text && callee_wants_owned_text {
+                if local_owned_text
+                    && callee_wants_owned_text
+                    && !self.into_string_formal_params.contains(name)
+                {
                     if reuse_after_move {
                         let base =
                             crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
@@ -2850,11 +2902,13 @@ impl<'ast> CodeGenerator<'ast> {
             let caller_owned_string_formal = self.current_function_params.iter().any(|p| {
                 p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
             }) && !self.emitted_rust_ref_formals.contains(name)
-                && !self.str_ref_optimized_params.contains(name.as_str());
+                && !self.str_ref_optimized_params.contains(name.as_str())
+                && !self.into_string_formal_params.contains(name);
             if callee_shared
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !self.identifier_binding_already_rust_ref(name)
+                && !self.into_string_formal_params.contains(name)
                 && (caller_owned_string_formal
                     || self.local_binding_reused_after_current_statement(name))
             {
@@ -2869,6 +2923,22 @@ impl<'ast> CodeGenerator<'ast> {
         );
 
         self.peel_fn_trait_or_closure_call_arg(&mut coerced, arg_expr, callee_name, &sig, arg_index);
+
+        if thin_wrap_into_string_formal {
+            while coerced.starts_with("&mut ") {
+                coerced = coerced["&mut ".len()..].trim().to_string();
+            }
+            while coerced.starts_with('&') {
+                coerced = coerced[1..].trim().to_string();
+            }
+            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
+            if !coerced.ends_with(".into()")
+                && !coerced.ends_with(".to_string()")
+                && !coerced.ends_with(".to_owned()")
+            {
+                coerced = format!("{coerced}.into()");
+            }
+        }
 
         Some(coerced)
     }
@@ -6360,6 +6430,25 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return s;
         }
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.into_string_formal_params.contains(name) {
+                let mut s = coerced;
+                while s.starts_with("&mut ") {
+                    s = s["&mut ".len()..].trim().to_string();
+                }
+                while s.starts_with('&') {
+                    s = s[1..].trim().to_string();
+                }
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut s);
+                if !s.ends_with(".into()")
+                    && !s.ends_with(".to_string()")
+                    && !s.ends_with(".to_owned()")
+                {
+                    s = format!("{s}.into()");
+                }
+                return s;
+            }
+        }
         if ownership_from_rust_expr(coerced.as_str()).is_some() {
             return coerced;
         }
@@ -6850,6 +6939,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         match arg_expr {
             Expression::Identifier { name, .. } => {
+                if self.into_string_formal_params.contains(name) {
+                    return arg_str.to_string();
+                }
                 if self.param_used_in_prior_field_extract_call(name) {
                     return arg_str.to_string();
                 }
