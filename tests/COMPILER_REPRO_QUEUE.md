@@ -597,7 +597,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
-## P3.290 WindjammerDB CQ-C5 — tip→gen string-lit sync + WDB-220/221 (2026-09-14)
+## P3.292 WindjammerDB CQ-C5 — tip→gen string-lit sync + WDB-220/221 (2026-09-14)
 
 | Gate | Status |
 |------|--------|
