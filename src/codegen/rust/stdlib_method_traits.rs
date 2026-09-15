@@ -578,11 +578,21 @@ pub fn method_is_map_key_qualified(
         })
     };
 
-    // `Vec::remove(Owned)` vs `HashMap::remove(Borrowed)` — never map-consensus homonym.
+    // `Vec::remove(Owned)` vs `HashMap::remove(Borrowed)` — never map-consensus homonym
+    // when the receiver is a known conflicting type. Map/set receivers stay type-specific;
+    // wrappers (`MapCell`, `MutexGuard<…>`) fall through to consensus below.
     if registry.suffix_has_conflicting_first_arg_ownership(method, 1) {
-        return receiver_type
-            .map(|rt| rt.split('<').next().unwrap_or(rt))
-            .is_some_and(|base| borrowed_key_on_type(base));
+        if let Some(rt) = receiver_type {
+            let base = rt.split('<').next().unwrap_or(rt);
+            if is_map_type_name(base) || is_set_type_name(base) {
+                return borrowed_key_on_type(base);
+            }
+            if lookup_sig(method, Some(base), registry).is_some_and(|s| {
+                s.has_self_receiver && first_arg_ownership(s) == Some(OwnershipMode::Owned)
+            }) {
+                return false;
+            }
+        }
     }
 
     if !is_map_receiver(receiver_type) {
