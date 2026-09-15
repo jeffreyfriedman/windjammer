@@ -1377,6 +1377,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        if self
+            .map_shared_get_value_type(expr)
+            .is_some_and(|v| self.is_type_copy(&v))
+        {
+            return true;
+        }
         false
     }
 
@@ -1479,6 +1485,23 @@ impl<'ast> CodeGenerator<'ast> {
                                     return Some(args[1].clone());
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            // `Ok(g) => g.data.get` — guard binding may lack inference; field `data` on
+            // module structs (e.g. MapCell.data: HashMap<…>) still yields Copy `V`.
+            for fields in self.struct_field_types.values() {
+                if let Some(field_ty) = fields.get(field.as_str()) {
+                    let bare = match field_ty {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    if let Type::Parameterized(map_name, args) = bare {
+                        if crate::codegen::rust::stdlib_method_traits::is_map_type_name(map_name)
+                            && args.len() >= 2
+                        {
+                            return Some(args[1].clone());
                         }
                     }
                 }

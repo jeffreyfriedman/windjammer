@@ -366,6 +366,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.emitted_rust_ref_formals,
                             &gen.current_function_params,
                         );
+                    if let Some(ref sig) = peel_sig {
+                        gen.peel_fn_trait_or_closure_call_arg(
+                            &mut coerced,
+                            arg,
+                            func_name,
+                            sig,
+                            i,
+                        );
+                    }
                     if let Expression::Identifier { name, .. } = arg {
                         let callee_owned = peel_sig.as_ref().is_some_and(|sig| {
                             let pidx = sig.arg_param_index(i);

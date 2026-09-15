@@ -591,6 +591,30 @@ impl<'ast> CodeGenerator<'ast> {
                         if formal_copy && coerced.ends_with(".clone()") {
                             coerced = coerced.trim_end_matches(".clone()").to_string();
                         }
+                        let key_receiver =
+                            crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
+                                &qualified_callee,
+                                receiver_rt.as_deref(),
+                                &contract_sig,
+                            );
+                        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                            &contract_sig,
+                            i,
+                            key_receiver.as_deref(),
+                        ) {
+                            if coerced.ends_with(".to_string()") {
+                                coerced = coerced.trim_end_matches(".to_string()").to_string();
+                            }
+                            crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+                                Some(&contract_sig),
+                                i,
+                                arg_to_generate,
+                                &mut coerced,
+                                false,
+                                key_receiver.as_deref(),
+                                false,
+                            );
+                        }
                         return coerced;
                     }
                     debug_assert!(

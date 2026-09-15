@@ -67,15 +67,20 @@ pub fn collapse_redundant_clones(arg_str: &mut String) {
 
 /// True when prefix `&` would bind to the first sub-expression only (e.g. `&a + b`).
 fn expr_needs_borrow_parentheses(expr_str: &str) -> bool {
-    if expr_str.starts_with('(') {
+    let t = expr_str.trim();
+    if t.starts_with('(') {
         return false;
+    }
+    if t.starts_with("move ||") || t.starts_with("||") {
+        return true;
     }
     [
         " + ", " - ", " * ", " / ", " % ", " == ", " != ", " < ", " > ", " <= ", " >= ", " && ",
-        " || ", " as ",
+        " as ",
     ]
     .iter()
-    .any(|op| expr_str.contains(op))
+    .any(|op| t.contains(op))
+        || (!t.starts_with("move ||") && !t.starts_with("||") && t.contains(" || "))
 }
 
 /// True when `expr_str` is a Rust string literal (`"…"`, `r"…"`, `r#"…"#`).
@@ -86,6 +91,10 @@ pub fn is_rust_string_literal_text(expr_str: &str) -> bool {
 
 /// Prefix shared borrow on generated Rust, parenthesizing compound expressions.
 pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
+    let t = expr_str.trim();
+    if t.starts_with("move ||") || t.starts_with("||") || (t.starts_with('|') && t.contains('|')) {
+        return;
+    }
     if expr_str.starts_with('&') && !expr_str.starts_with("&&") {
         return;
     }

@@ -96,6 +96,30 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
+            Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name))
+                if variant == "Ok" || variant.ends_with("::Ok") =>
+            {
+                if let Type::Result(ok, _) = &inner_type {
+                    let ty = ok.as_ref().clone();
+                    if yields_refs {
+                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
+                    } else {
+                        out.push((var_name.clone(), ty));
+                    }
+                }
+            }
+            Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name))
+                if variant == "Err" || variant.ends_with("::Err") =>
+            {
+                if let Type::Result(_, err) = &inner_type {
+                    let ty = err.as_ref().clone();
+                    if yields_refs {
+                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
+                    } else {
+                        out.push((var_name.clone(), ty));
+                    }
+                }
+            }
             Pattern::EnumVariant(variant_name, EnumPatternBinding::Struct(fields, _)) => {
                 let Some(key) = self.enum_pattern_registry_key(variant_name, &inner_type) else {
                     return out;

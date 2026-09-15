@@ -846,6 +846,16 @@ pub fn call_site_expects_owned_pass(sig: &FunctionSignature, param_idx: usize) -
 /// at call sites. The two sources can diverge on edge cases (documented in parity gates);
 /// this helper preserves the conservative union both previously encoded.
 pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: usize) -> bool {
+    if sig
+        .formal_param_type(param_idx)
+        .or_else(|| sig.param_types.get(param_idx))
+        .is_some_and(|t| {
+            matches!(t, Type::Custom(n) if n == "Fn" || n == "FnMut" || n == "FnOnce")
+                || matches!(t, Type::FunctionPointer { .. })
+        })
+    {
+        return false;
+    }
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         return false;
     }

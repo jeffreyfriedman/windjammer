@@ -571,10 +571,8 @@ pub fn method_is_map_key_qualified(
     registry: &SignatureRegistry,
 ) -> bool {
     if !is_map_receiver(receiver_type) {
-        // For unknown receiver type, check if method exists on any map type
-        if receiver_type.is_some() {
-            return false;
-        }
+        // Non-map receiver names (`MapCell`, `MutexGuard<…>`, …): still classify via
+        // stdlib map/set consensus — `g.data.get(key)` must borrow `&K`, not `.to_string()`.
         for map_ty in crate::type_classification::MAP_TYPE_NAMES {
             if let Some(sig) = lookup_sig(method, Some(map_ty), registry) {
                 if sig.has_self_receiver
@@ -1200,10 +1198,7 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
             return false;
         }
     }
-    // `subprocess::spawn` homonyms must not force `&(move || …)` on `thread::spawn`.
-    if matches!(callee_name, "thread::spawn" | "std::thread::spawn") {
-        return false;
-    }
+    // Closure-trait formals (Owned FnOnce/…) never need auto-borrow — handled above.
     if signature.is_some_and(|sig| runtime_std_module_arg_needs_rust_borrow(sig, arg_index)) {
         return true;
     }
@@ -1279,8 +1274,23 @@ pub fn is_collection_key_lookup(
     {
         return false;
     }
-    let method = sig.name.rsplit("::").next().unwrap_or(&sig.name);
     let registry = SignatureRegistry::stdlib();
+    let method = sig.name.rsplit("::").next().unwrap_or(&sig.name);
+    if let Some((type_prefix, meth)) = sig.name.rsplit_once("::") {
+        if matches!(meth, "get" | "contains_key" | "get_key_value") {
+            let base = type_prefix
+                .rsplit("::")
+                .next()
+                .unwrap_or(type_prefix)
+                .split('<')
+                .next()
+                .unwrap_or(type_prefix);
+            if is_map_type_name(base) || is_set_type_name(base) {
+                return callee_arg_expects_reference_param(sig, arg_index)
+                    || method_is_map_key_qualified(meth, Some(base), registry);
+            }
+        }
+    }
     let receiver_base = receiver_type
         .map(|rt| rt.split('<').next().unwrap_or(rt))
         .or_else(|| {
@@ -1295,6 +1305,24 @@ pub fn is_collection_key_lookup(
                 return true;
             }
             return method_is_map_key_qualified(method, receiver_type, registry);
+        }
+    }
+    // `g.data.get` / guard-wrapped map fields: callee may be `HashMap::get` while the
+    // inferred receiver name is `MapCell` / `MutexGuard<…>` — still a map key lookup.
+    // Do not require `has_self_receiver`: multipass stubs sometimes omit it on
+    // `HashMap::get` even when the method is map-qualified in `sig.name`.
+    if arg_index == 0 && matches!(method, "get" | "contains_key" | "get_key_value") {
+        let from_callee = sig.name.rsplit_once("::").map(|(ty, _)| {
+            ty.rsplit("::")
+                .next()
+                .unwrap_or(ty)
+                .split('<')
+                .next()
+                .unwrap_or(ty)
+        });
+        if from_callee.is_some_and(|b| is_map_type_name(b) || is_set_type_name(b)) {
+            return callee_arg_expects_reference_param(sig, arg_index)
+                || method_is_map_key_qualified(method, from_callee, registry);
         }
     }
     // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus —
@@ -1730,6 +1758,19 @@ mod pattern_registry_tests {
         assert!(
             !runtime_std_param_needs_auto_borrow_resolved(&reg, "get", Some(&stale_homonym), 0),
             "layered user owned get must beat call-site borrowed homonym + stdlib baseline"
+        );
+    }
+
+    #[test]
+    fn map_key_lookup_with_non_map_receiver_type_name() {
+        let reg = SignatureRegistry::stdlib();
+        assert!(
+            method_is_map_key_qualified("get", Some("MapCell"), &reg),
+            "g.data.get on MapCell must still classify as map key lookup"
+        );
+        assert!(
+            method_is_map_key_qualified("contains_key", Some("MutexGuard"), &reg),
+            "contains_key through guard wrapper must classify as map key lookup"
         );
     }
 

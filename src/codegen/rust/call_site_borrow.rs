@@ -567,6 +567,16 @@ pub fn finalize_collection_key_call_site_arg(
     {
         return;
     }
+    if arg_str.ends_with(".to_string()")
+        && matches!(
+            arg_expr,
+            Expression::Identifier { .. } | Expression::FieldAccess { .. }
+        )
+    {
+        *arg_str = arg_str
+            .trim_end_matches(".to_string()")
+            .to_string();
+    }
     if expression_is_string_literal(arg_expr) || expression_is_copy_literal(arg_expr) {
         // Match arms that bind `HashMap<string, _>` may blanket-own every string
         // literal (`.to_string()`). Collection key lookups still want `&str`.

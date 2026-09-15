@@ -250,7 +250,9 @@ fn needs_borrow_parentheses(expr: &str) -> bool {
         || t.contains(" << ")
         || t.contains(" >> ")
         || t.contains(" && ")
-        || t.contains(" || ")
+        || (!t.starts_with("move ||")
+            && !t.starts_with("||")
+            && t.contains(" || "))
 }
 
 /// Apply a target-agnostic coercion to a generated expression string.
