@@ -32,13 +32,7 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
             continue;
         }
         let refreshed_sig =
-            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-                registry_sig.clone(),
-                func_name,
-                i,
-                gen.global_signature_registry.as_deref(),
-                &gen.signature_registry,
-            );
+            gen.refresh_call_site_signature_for_arg(registry_sig.clone(), func_name, i);
         let local_emitted_mut = emitted_indices.is_some_and(|indices| indices.contains(&i));
         let callee_expects_mut = refreshed_sig.as_ref().is_some_and(|sig| {
             crate::codegen::rust::call_signature_resolution::callee_user_arg_expects_mut_borrow(
@@ -177,7 +171,7 @@ fn apply_owned_string_literal_coercion<'ast>(
         }
         // Prefer defining-module / scanned-runtime `&str` over multipass WJ stubs
         // (`std/strings.wj` owned `delimiter: string` shadowing runtime `&str`).
-        let sig = crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+        let sig = gen.refresh_call_site_signature_for_arg(
             signature.clone().or_else(|| {
                 crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
                     gen.global_signature_registry
@@ -208,8 +202,6 @@ fn apply_owned_string_literal_coercion<'ast>(
             }),
             func_name,
             i,
-            gen.global_signature_registry.as_deref(),
-            &gen.signature_registry,
         );
         if gen.preregistered_free_call_arg_expects_borrow(func_name, i) {
             continue;

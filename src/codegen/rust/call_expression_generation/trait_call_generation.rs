@@ -104,12 +104,10 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         // runtime fallback — `refresh_call_site_signature_for_arg` challenges
         // `SignatureRegistry::stdlib()` so `&str`/`AsRef<str>` beat owned WJ formals
         // (`strings::split` delimiter, `fs::write` path, …).
-        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+        gen.refresh_call_site_signature_for_arg(
             gen.get_signature_with_global(&key).cloned(),
             &key,
             0,
-            gen.global_signature_registry.as_deref(),
-            &gen.signature_registry,
         )
         .map(call_signature_resolution::finalize_call_site_signature)
     });

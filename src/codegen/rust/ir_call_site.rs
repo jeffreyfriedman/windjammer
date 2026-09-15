@@ -60,14 +60,8 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         sig: &crate::analyzer::FunctionSignature,
     ) -> crate::analyzer::FunctionSignature {
-        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-            Some(sig.clone()),
-            callee_name,
-            arg_index,
-            self.global_signature_registry.as_deref(),
-            registry,
-        )
-        .unwrap_or_else(|| sig.clone())
+        self.refresh_call_site_signature_for_arg(Some(sig.clone()), callee_name, arg_index)
+            .unwrap_or_else(|| sig.clone())
     }
 
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
@@ -289,17 +283,23 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let lookup_callee = self.signature_lookup_callee_name(callee_name);
+        let lookup = lookup_callee.as_ref();
+        let import_alias_resolved = self.import_fn_alias_map.contains_key(callee_name);
+        let simple = lookup.rsplit("::").next().unwrap_or(lookup);
         let mut sig = if receiver_type_name.is_none() && !callee_name.contains("::") {
             let from_global = self
                 .global_signature_registry
                 .as_ref()
-                .and_then(|g| g.get_signature(callee_name).cloned());
-            let from_global_simple = self
-                .global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(simple).cloned());
-            let from_reg = registry.get_signature(callee_name).cloned();
+                .and_then(|g| g.get_signature(lookup).cloned());
+            let from_global_simple = if import_alias_resolved {
+                None
+            } else {
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(simple).cloned())
+            };
+            let from_reg = registry.get_signature(lookup).cloned();
             let from_local = local_sig.cloned();
             // Prefer defining-module / global refresh first so cross-module free calls
             // see `&str` (regression-049 `replay_to_lsn`) over stale local owned stubs.
@@ -345,12 +345,12 @@ impl<'ast> CodeGenerator<'ast> {
                     callee_name,
                 );
             let challengers: Vec<Option<&crate::analyzer::FunctionSignature>> =
-                if skip_bare_homonym {
+                if skip_bare_homonym || import_alias_resolved {
                     vec![
                         self.global_signature_registry
                             .as_ref()
-                            .and_then(|g| g.get_signature(callee_name)),
-                        registry.get_signature(callee_name),
+                            .and_then(|g| g.get_signature(lookup)),
+                        registry.get_signature(lookup),
                     ]
                 } else {
                     vec![
@@ -828,23 +828,19 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Final associated-call refresh: importer stubs may carry all-false
         // `emitted_rust_ref_params` while the defining module published `[true]`.
-        if let Some(refreshed) =
-            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-                if let Some(rt) = receiver_type_name {
-                    self.resolve_method_function_signature(
-                        rt,
-                        method_simple,
-                        user_arg_count.unwrap_or(arg_index + 1),
-                    )
-                } else {
-                    None
-                },
-                callee_name,
-                arg_index,
-                self.global_signature_registry.as_deref(),
-                registry,
-            )
-        {
+        if let Some(refreshed) = self.refresh_call_site_signature_for_arg(
+            if let Some(rt) = receiver_type_name {
+                self.resolve_method_function_signature(
+                    rt,
+                    method_simple,
+                    user_arg_count.unwrap_or(arg_index + 1),
+                )
+            } else {
+                None
+            },
+            callee_name,
+            arg_index,
+        ) {
             sig = refreshed;
         }
         // Body-converged `&str` refresh must not undo trait owned `string` contracts
@@ -2559,13 +2555,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
             }
             if let Some(refreshed) =
-                crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-                    Some(sig.clone()),
-                    callee_name,
-                    arg_index,
-                    self.global_signature_registry.as_deref(),
-                    registry,
-                )
+                self.refresh_call_site_signature_for_arg(Some(sig.clone()), callee_name, arg_index)
             {
                 sig = refreshed;
             }
@@ -6046,13 +6036,7 @@ impl<'ast> CodeGenerator<'ast> {
             let qualified = format!("{rt}::{method}");
             let initial = self.resolve_method_function_signature(rt, method, arg_count);
             let Some(sig) =
-                crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-                    initial,
-                    &qualified,
-                    arg_index,
-                    self.global_signature_registry.as_deref(),
-                    &self.signature_registry,
-                )
+                self.refresh_call_site_signature_for_arg(initial, &qualified, arg_index)
             else {
                 continue;
             };
@@ -7065,10 +7049,12 @@ impl<'ast> CodeGenerator<'ast> {
         user_arg_count: Option<usize>,
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
-        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index) {
+        let lookup_callee = self.signature_lookup_callee_name(callee_name);
+        let lookup = lookup_callee.as_ref();
+        if self.preregistered_free_call_arg_expects_borrow(lookup, arg_index) {
             return true;
         }
-        if self.preregistered_free_call_arg_emits_owned(callee_name, arg_index) {
+        if self.preregistered_free_call_arg_emits_owned(lookup, arg_index) {
             return false;
         }
         // Prefer emitted owned contracts over stale Borrowed analyzer/global stubs.
@@ -7098,13 +7084,13 @@ impl<'ast> CodeGenerator<'ast> {
         ) {
             return false;
         }
-        if let Some(sig) = registry.get_signature(callee_name) {
+        if let Some(sig) = registry.get_signature(lookup) {
             if self.ir_sig_arg_expects_shared_borrow(sig, arg_index) {
                 return true;
             }
         }
         if let Some(global) = self.global_signature_registry.as_ref() {
-            if let Some(sig) = global.get_signature(callee_name) {
+            if let Some(sig) = global.get_signature(lookup) {
                 if self.ir_sig_arg_expects_shared_borrow(sig, arg_index) {
                     return true;
                 }
@@ -7112,7 +7098,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Qualified callees must not fall back to bare simple-name globals
             // (homonym ownership from a different module).
         }
-        if let Some((rt, method)) = callee_name.rsplit_once("::") {
+        if let Some((rt, method)) = lookup.rsplit_once("::") {
             let arg_count = user_arg_count.unwrap_or(arg_index + 1);
             if self.method_registry_arg_expects_shared_borrow(rt, method, arg_index, arg_count) {
                 return true;
@@ -7130,7 +7116,9 @@ impl<'ast> CodeGenerator<'ast> {
         user_arg_count: Option<usize>,
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
-        if self.preregistered_free_call_arg_emits_owned(callee_name, arg_index) {
+        let lookup_callee = self.signature_lookup_callee_name(callee_name);
+        let lookup = lookup_callee.as_ref();
+        if self.preregistered_free_call_arg_emits_owned(lookup, arg_index) {
             return true;
         }
         let check = |sig: &crate::analyzer::FunctionSignature| {
@@ -7146,24 +7134,24 @@ impl<'ast> CodeGenerator<'ast> {
                 return check(sig);
             }
         }
-        if registry.get_signature(callee_name).is_some_and(check) {
+        if registry.get_signature(lookup).is_some_and(check) {
             return true;
         }
         if self
             .global_signature_registry
             .as_ref()
-            .is_some_and(|g| g.get_signature(callee_name).is_some_and(check))
+            .is_some_and(|g| g.get_signature(lookup).is_some_and(check))
         {
             return true;
         }
         // Imported bare calls (`use crate::html::escape_html` → `escape_html(...)`) register
         // as `html::escape_html` — suffix lookup for unqualified callees only.
-        if !callee_name.contains("::") && registry.lookup_method(callee_name).is_some_and(check) {
+        if !lookup.contains("::") && registry.lookup_method(lookup).is_some_and(check) {
             return true;
         }
-        if !callee_name.contains("::") {
+        if !lookup.contains("::") {
             if self.global_signature_registry.as_ref().is_some_and(|g| {
-                g.lookup_method(callee_name).is_some_and(check)
+                g.lookup_method(lookup).is_some_and(check)
             }) {
                 return true;
             }

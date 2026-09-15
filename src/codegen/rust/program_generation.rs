@@ -259,6 +259,10 @@ impl<'ast> CodeGenerator<'ast> {
                     self.module_alias_map
                         .insert(alias_name.clone(), last_segment.clone());
                 }
+                if !path.is_empty() {
+                    self.import_fn_alias_map
+                        .insert(alias_name.clone(), path.join("::"));
+                }
             }
             if let Item::Use { path, alias, .. } = item {
                 // `use std::map::Map` → `use std::collections::HashMap as Map`; preserve alias in types.

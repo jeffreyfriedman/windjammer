@@ -1,6 +1,8 @@
 //! Signature promotion and convergence: prefer converged global signatures over
 //! per-file declaration stubs and body-inferred borrows at call sites and merge time.
 
+use std::collections::HashMap;
+
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
 
@@ -1795,24 +1797,31 @@ pub(crate) fn refresh_call_site_signature_for_arg(
     arg_index: usize,
     global: Option<&crate::analyzer::SignatureRegistry>,
     local: &crate::analyzer::SignatureRegistry,
+    import_fn_aliases: &HashMap<String, String>,
 ) -> Option<FunctionSignature> {
+    let (lookup_name, import_alias) =
+        crate::codegen::rust::call_signature_resolution::import_alias_registry_lookup_key(
+            callee_name,
+            import_fn_aliases,
+        );
+    let lookup_name = lookup_name.as_ref();
     let type_qualified =
         crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
-            callee_name,
+            lookup_name,
         );
-    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    let simple = lookup_name.rsplit("::").next().unwrap_or(lookup_name);
     let pidx = initial
         .as_ref()
         .map(|s| s.arg_param_index(arg_index))
         .unwrap_or(arg_index);
     let mut sig_candidates: Vec<Option<FunctionSignature>> = global
-        .map(|g| callee_signature_lookup_candidates(g, callee_name))
+        .map(|g| callee_signature_lookup_candidates(g, lookup_name))
         .unwrap_or_default()
         .into_iter()
         .map(Some)
         .collect();
     sig_candidates.extend(
-        callee_signature_lookup_candidates(local, callee_name)
+        callee_signature_lookup_candidates(local, lookup_name)
             .into_iter()
             .map(Some),
     );
@@ -1824,58 +1833,59 @@ pub(crate) fn refresh_call_site_signature_for_arg(
     // Type-qualified calls never challenge bare `error` / `join` homonyms (`log::error`).
     let skip_bare_homonym =
         crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
-            callee_name,
-        );
-    let skip_local_homonym_fallback = skip_runtime_std_fallback_for_local_homonym(local, callee_name);
+            lookup_name,
+        ) || import_alias;
+    let skip_local_homonym_fallback =
+        skip_runtime_std_fallback_for_local_homonym(local, lookup_name);
     // Multipass analyzes `std/*.wj` stubs into the crate registry without layering the
     // scanned runtime baseline — always challenge `SignatureRegistry::stdlib()` so
     // `strings::split` / `Connection::query` keep `&str` literal peels.
     let stdlib = crate::analyzer::SignatureRegistry::stdlib();
     let challengers: Vec<Option<&FunctionSignature>> = if type_qualified || skip_bare_homonym {
         vec![
-            global.and_then(|g| g.get_signature(callee_name)),
+            global.and_then(|g| g.get_signature(lookup_name)),
             if skip_local_homonym_fallback {
                 None
             } else {
-                global.and_then(|g| g.get_fallback_signature(callee_name))
+                global.and_then(|g| g.get_fallback_signature(lookup_name))
             },
-            local.get_signature(callee_name),
+            local.get_signature(lookup_name),
             if skip_local_homonym_fallback {
                 None
             } else {
-                local.get_fallback_signature(callee_name)
+                local.get_fallback_signature(lookup_name)
             },
-            stdlib.get_signature(callee_name),
+            stdlib.get_signature(lookup_name),
         ]
     } else {
         vec![
-            global.and_then(|g| g.get_signature(callee_name)),
+            global.and_then(|g| g.get_signature(lookup_name)),
             global.and_then(|g| g.get_signature(simple)),
             global.and_then(|g| g.find_unique_signature_ending_with(simple)),
             if skip_local_homonym_fallback {
                 None
             } else {
-                global.and_then(|g| g.get_fallback_signature(callee_name))
+                global.and_then(|g| g.get_fallback_signature(lookup_name))
             },
             if skip_local_homonym_fallback {
                 None
             } else {
                 global.and_then(|g| g.get_fallback_signature(simple))
             },
-            local.get_signature(callee_name),
+            local.get_signature(lookup_name),
             local.get_signature(simple),
             local.find_unique_signature_ending_with(simple),
             if skip_local_homonym_fallback {
                 None
             } else {
-                local.get_fallback_signature(callee_name)
+                local.get_fallback_signature(lookup_name)
             },
             if skip_local_homonym_fallback {
                 None
             } else {
                 local.get_fallback_signature(simple)
             },
-            stdlib.get_signature(callee_name),
+            stdlib.get_signature(lookup_name),
             stdlib.get_signature(simple),
         ]
     };
@@ -1883,7 +1893,7 @@ pub(crate) fn refresh_call_site_signature_for_arg(
         refreshed = prefer_shared_ref_signature(refreshed, challenger, pidx);
     }
     let mut out = refreshed.or(initial)?;
-    out = local_user_fn_beats_runtime_std_homonym(local, callee_name, out);
+    out = local_user_fn_beats_runtime_std_homonym(local, lookup_name, out);
     // Trait owned `string` must win over body-converged `&str` after prefer-shared.
     if let Some(g) = global {
         let method = simple;
@@ -2405,6 +2415,7 @@ pub fn exercise(parts: Vec<string>) -> string {
             1,
             Some(&local),
             &local,
+            &HashMap::new(),
         )
         .expect("refresh");
         assert_eq!(
@@ -2438,6 +2449,7 @@ pub fn exercise(parts: Vec<string>) -> string {
             1,
             Some(&local),
             &local,
+            &HashMap::new(),
         )
         .expect("refresh");
         assert_eq!(
@@ -2558,6 +2570,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
             0,
             Some(&global),
             &local,
+            &HashMap::new(),
         )
         .expect("refresh");
         assert!(
@@ -2682,6 +2695,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
             0,
             Some(&global),
             &local,
+            &HashMap::new(),
         )
         .expect("refresh");
         assert!(

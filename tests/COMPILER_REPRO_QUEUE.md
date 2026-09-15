@@ -147,9 +147,9 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
-| P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 RED / filed (P3.282); notes uses `encode_text` |
-| P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 RED / filed (P3.283); notes aliases `get as qs_get` |
-| P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | 🆕 RED / filed (P3.284); notes inlines `?q=` filter loop |
+| P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | ✅ tip GREEN (P3.282) — import alias + qualified registry lookup; no bare `encode` homonym borrow |
+| P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.283) — `import_fn_alias_map` + refresh skips alias homonym challengers |
+| P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | ✅ tip GREEN (P3.284) — forwarder keeps owned `Vec` when callee preregistered owned |
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 RED / filed (P3.287); blocks `wj-sync` bounded channels |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
@@ -209,7 +209,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | Ecosystem: `config_from_dotenv` via `wj-dotenv` + `wj-config::merge` | ✅ **32/32** on cargo-bin `wj` 0.50.0 |
 | Single-map `notes_config_from_map` (auth shape) | ✅ avoids owned `.get` helper |
-| Gate `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ❌ tip RED — injects `spawn(move \|\| drop(map))` mid-`match` |
+| Gate `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — fn-scope defer-drop tail; skip `match` + `.get(` bodies |
 
 **Compiler agent:** defer-drop after owned `HashMap` param must not splice into an open `match map.get(…)` (breaks rustc parse / E0382).
 
@@ -229,7 +229,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |--------|--------|
 | Ecosystem: `wj-base64` `GET /notes/:id?encoding=base64` | ✅ **58/58** on cargo-bin `wj` 0.50.0 |
 | Package adds `encode_text` / `decode_text` aliases | ✅ unblocks call sites |
-| Gate `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | 🆕 filed — bare `encode(text)` emits `encode(&text)` despite Owned metadata (same shape as working `hex`) |
+| Gate `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | ✅ tip GREEN (P3.282) |
 
 **Compiler agent:** ownership/coercion for cross-crate free fns must follow signature registry — do not special-case method/fn name `encode` into a borrow.
 
@@ -238,7 +238,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Change | Status |
 |--------|--------|
 | Ecosystem: `wj-url` `join_url` → `Location` on `POST /notes` + `public_base_url` config | ✅ **60/60** on cargo-bin `wj` 0.50.0 |
-| Gate `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | 🆕 filed — `use owned::get as query_get` + dep exporting Borrowed `query_get` emits `query_get(&query)` into Owned `get(String, …)` |
+| Gate `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.283) |
 | Product workaround | ✅ alias as `qs_get` (not `query_get`) |
 
 **Compiler agent:** resolve call-site ownership by the *imported* function identity (crate + original name), not by the local alias string colliding with another crate's free-fn metadata.
@@ -269,7 +269,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Change | Status |
 |--------|--------|
 | Ecosystem: `wj-regex` `GET /notes?q=` title/body filter | ✅ **62/62** on cargo-bin `wj` 0.50.0 |
-| Gate `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | 🆕 filed — `filter_notes(notes: Vec<Note>)` demotes to `&Vec` while call emits `notes.clone()` |
+| Gate `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | ✅ tip GREEN (P3.284) — `apply` forwarder keeps `Vec<Note>`; build fixture at `src/` root for `cargo check` |
 | Product workaround | ✅ inline filter loop in `list_notes_for_query` |
 
 **Compiler agent:** owned `Vec<T>` filter helpers that push/consume elements must keep Owned formals (or call sites must borrow consistently — never `clone()` into `&Vec`).
@@ -281,8 +281,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_hashmap_string_key_insert_must_not_cast_usize_test` | ✅ tip GREEN — drop typed `query_with*` interim |
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
-| Gate `bug_int_arith_must_not_split_i64_i32_test` | ❌ tip RED — emit `year as i64 % 400_i32` (fixture + tip transpile verified); assert emit shape not only cargo-check |
-| Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` regresses when tip binary includes int-width churn |
+| Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
+| Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` may still need regen after int-width fix |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
 
