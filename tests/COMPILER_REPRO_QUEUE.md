@@ -153,6 +153,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | 🆕 RED / filed (P3.286); blocks `wj-sync` `parallel` / `Pending` |
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | 🆕 RED / filed (P3.287); blocks `wj-sync` bounded channels |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | 🆕 RED / filed (P3.288); blocks `wj-sync` `SharedMap` get |
+| P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | 🆕 RED / filed (P3.290); blocks `wj-pipeline` channel fan-out adapter |
 | P1 | **Hexagonal multipass: `method_label` → demoted `method: &str` must auto-borrow** | `bug_multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow_test` | ✅ tip GREEN; ⚠️ cargo-bin 0.50.0 product residual (notes/auth use `handle_http`) |
 | P1 | **Owned `HashMap` `.get` helper must not inject mid-match defer-drop spawn** | `bug_hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop_test` | ✅ tip GREEN (P3.267) — defer-drop at fn scope; skip when body has `match` + `.get(` |
 | P1 | **Module-file string lit → demoted `&str` method formal must not `.to_string()` (`wj-auth-api`)** | `bug_module_file_string_lit_into_demoted_str_must_not_emit_to_string_test` | ⚠️ tip fixture may keep owned `String` (no false RED); product auth demoted + `.to_string()` (P3.259) |
@@ -162,6 +163,16 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`i64` shift/mask inside `Vec<u8>::push` must not emit `_u8` (`wj-uuid`)** | `bug_i64_bitand_hex_mask_must_not_emit_u8_test` | ✅ tip GREEN — cast clears call-arg int context |
 | P1 | **Demoted `&str` after `starts_with` → owned formal (`wj-toml`)** | `bug_demoted_str_after_starts_with_must_auto_own_test` | ✅ tip GREEN — keeps owned + `.clone()` / cargo-check |
 | P1 | **Single-use owned local → owned `string` formal must move (`wj-toml` get)** | `bug_single_use_owned_local_into_owned_string_formal_must_move_test` | ✅ tip GREEN (P3.254) — bare free-fn not Map::get key-borrow |
+
+## P3.290 (2026-09-14) — wj-pipeline cross-crate owned handle loop reassign
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-pipeline` `run_int_pipeline` fan-out `tx = send_int(tx, i)` | ⏸ blocked — tip emits `send_int(&mut tx, …)` |
+| Gate `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | 🆕 filed — same-crate reassign OK; cross-crate `&mut` |
+| Note | Metadata already says `param_ownership: Owned` for `send_int` / `counter_inc` |
+
+**Compiler agent:** honor owned formals at cross-crate call sites when the local is `mut` and reassigned from the return value (`h = bump(h, 1)`). Do not demote to `&mut T` solely because the binding is mutable.
 
 ## P3.288 (2026-09-14) — wj-sync SharedMap / HashMap::get through MutexGuard
 
@@ -293,7 +304,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate `bug_trait_owned_string_call_must_not_over_borrow_test` | ✅ tip GREEN (isolate); ⚠️ product multipass still needs bound locals / `repo.get` |
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
 | Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
-| Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` may still need regen after int-width fix |
+| Gate `bug_int_increment_literal_must_match_lhs_width_test` | ❌ tip RED under `--module-file` — `i += 1 as i32` / `+ 1_i32` into i64 (string_contains / postgres while); isolate single-file may GREEN |
+| Product: bound owned locals into trait string formals; `len() as int` before while | ⚠️ tip `make api-check` **~104** errors (i64+=i32) after int Rem fix; down from ~298 |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
 

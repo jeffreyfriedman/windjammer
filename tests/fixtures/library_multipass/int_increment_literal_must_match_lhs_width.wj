@@ -1,0 +1,35 @@
+// FAILING REPRO — product multipass shape (LedgerKit domain/string_contains.wj):
+//   after strings.len() / as int, `i = i + 1` / `j + 1` emit `1 as i32` into i64.
+
+use std::strings
+
+pub fn haystack_contains(haystack: string, needle: string) -> bool {
+    let h = haystack
+    let n = needle
+    let h_len = strings.len(h) as int
+    let n_len = strings.len(n) as int
+    if n_len == 0 {
+        return false
+    }
+    if n_len > h_len {
+        return false
+    }
+    let mut i = 0
+    while i + n_len <= h_len {
+        let mut matched = true
+        let mut j = 0
+        while j < n_len {
+            let hs = strings.substring(h, i + j, i + j + 1)
+            let ns = strings.substring(n, j, j + 1)
+            if hs != ns {
+                matched = false
+            }
+            j = j + 1
+        }
+        if matched {
+            return true
+        }
+        i = i + 1
+    }
+    false
+}
