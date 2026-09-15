@@ -28,11 +28,11 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Handoff:** Rebuild tip `wj` → atomic install to `.cargo-target-wj` → `RAYON_NUM_THREADS=1` tip library transpile of game-core → `wj game build --release` for breach-protocol.
 
-## P3.290 — mutual-recursion free-fn codegen stack overflow (2026-09-15)
+## P3.291 — mutual-recursion free-fn codegen stack overflow (2026-09-15)
 
 | Gate | Status |
 |------|--------|
-| `mutual_recursion_free_fns_codegen_must_not_stack_overflow` | ⏳ tip — `bug_mutual_recursion_free_fns_codegen_must_not_stack_overflow_test` |
+| `mutual_recursion_free_fns_codegen_must_not_stack_overflow` | ⏳ tip rebuild + GREEN pending — `bug_mutual_recursion_free_fns_codegen_must_not_stack_overflow_test` |
 | Full `windjammer-game-core` tip `--library` file `behavior_tree/executor.wj` (~15k registry sigs) | ⏳ was **stack overflow** during formal param emission after Step 4B-pre OOM fix |
 
 **Root cause:** `collect_additional_formal_parameter_strings` called `param_should_emit_borrowed_delegation_formal` many times per param; `param_keeps_owned_engine_key_facade` re-entered the same predicate → infinite recursion / stack blowup on BT executor–shaped mutual recursion (owned `Vec` forwards + `match`).
