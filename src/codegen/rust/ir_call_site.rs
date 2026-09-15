@@ -64,6 +64,20 @@ impl<'ast> CodeGenerator<'ast> {
             .unwrap_or_else(|| sig.clone())
     }
 
+    pub(crate) fn is_collection_key_lookup_at_site(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+        receiver_type: Option<&str>,
+    ) -> bool {
+        crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup_with_project(
+            sig,
+            arg_index,
+            receiver_type,
+            self.global_signature_registry.as_deref(),
+        )
+    }
+
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
     ///
     /// For known callees this is total: always returns `Some` when `call_sites` is on.
@@ -1067,7 +1081,7 @@ impl<'ast> CodeGenerator<'ast> {
                     receiver_type_name,
                     &sig,
                 );
-            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            self.is_collection_key_lookup_at_site(
                 &sig,
                 arg_index,
                 key_receiver.as_deref(),
@@ -1171,7 +1185,7 @@ impl<'ast> CodeGenerator<'ast> {
                 receiver_type_name,
                 &sig,
             );
-        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+        if self.is_collection_key_lookup_at_site(
             &sig,
             arg_index,
             key_receiver_for_coercion.as_deref(),
@@ -1181,7 +1195,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
             expected.ownership = OwnedType::Ref(Region::fresh(4));
         }
+        let explicit_move_closure = matches!(
+            arg_expr,
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Or,
+                left,
+                ..
+            } if matches!(
+                &**left,
+                Expression::Identifier { name, .. } if name == "move"
+            )
+        );
         if matches!(arg_expr, Expression::Closure { .. })
+            || explicit_move_closure
             || sig
                 .formal_param_type(param_idx)
                 .or_else(|| sig.param_types.get(param_idx))
@@ -2696,7 +2722,7 @@ impl<'ast> CodeGenerator<'ast> {
             receiver_type_name,
             Some(&self.enum_variant_types),
         );
-        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+        if self.is_collection_key_lookup_at_site(
             &sig,
             arg_index,
             receiver_type_name,
@@ -2725,7 +2751,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) && crate::codegen::rust::string_utilities::already_owned_string_expr(&coerced)
-            && !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            && !self.is_collection_key_lookup_at_site(
                 &sig,
                 arg_index,
                 receiver_type_name,
@@ -3043,7 +3069,7 @@ impl<'ast> CodeGenerator<'ast> {
             receiver_type_name,
             sig,
         );
-        if !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+        if !self.is_collection_key_lookup_at_site(
             sig,
             arg_index,
             key_receiver.as_deref(),
@@ -3691,7 +3717,7 @@ impl<'ast> CodeGenerator<'ast> {
                     receiver_type_name,
                     &sig,
                 );
-            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            self.is_collection_key_lookup_at_site(
                 &sig,
                 arg_index,
                 key_receiver.as_deref(),
@@ -3878,7 +3904,7 @@ impl<'ast> CodeGenerator<'ast> {
                             receiver_type_name,
                             &sig,
                         );
-                    let is_ck = crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                    let is_ck = self.is_collection_key_lookup_at_site(
                         &sig,
                         arg_index,
                         key_receiver.as_deref(),
@@ -4182,7 +4208,7 @@ impl<'ast> CodeGenerator<'ast> {
             receiver_type_name,
             Some(&self.enum_variant_types),
         );
-        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+        if self.is_collection_key_lookup_at_site(
             &text_sig,
             arg_index,
             crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
@@ -4292,11 +4318,11 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver_type_name,
                         &text_sig,
                     );
-                let is_map_key_lookup = crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                let is_map_key_lookup = self.is_collection_key_lookup_at_site(
                     &text_sig,
                     arg_index,
                     key_receiver.as_deref(),
-                ) || crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                ) || self.is_collection_key_lookup_at_site(
                     &sig,
                     arg_index,
                     key_receiver.as_deref(),
@@ -4536,7 +4562,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) && crate::codegen::rust::string_utilities::already_owned_string_expr(coerced)
-            && !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            && !self.is_collection_key_lookup_at_site(
                 &text_sig,
                 arg_index,
                 crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
@@ -4681,7 +4707,19 @@ impl<'ast> CodeGenerator<'ast> {
         let pidx = sig.arg_param_index(arg_index);
         // Signature-/AST-driven only: never key off callee leaf names (`spawn`, …).
         // Temporary until coerce/enforce always win; delete when suite proves Identity.
+        let explicit_move_closure = matches!(
+            arg_expr,
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Or,
+                left,
+                ..
+            } if matches!(
+                &**left,
+                Expression::Identifier { name, .. } if name == "move"
+            )
+        );
         if matches!(arg_expr, Expression::Closure { .. })
+            || explicit_move_closure
             || sig
                 .formal_param_type(pidx)
                 .or_else(|| sig.param_types.get(pidx))
@@ -5141,11 +5179,11 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(base) = receiver_base {
                 if (crate::type_classification::is_map_type_name(base)
                     || crate::type_classification::is_set_type_name(base))
-                    && (crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                    && (self.is_collection_key_lookup_at_site(
                         &refreshed,
                         arg_index,
                         Some(base),
-                    ) || crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                    ) || self.is_collection_key_lookup_at_site(
                         primary_sig,
                         arg_index,
                         Some(base),
@@ -5298,7 +5336,7 @@ impl<'ast> CodeGenerator<'ast> {
                 sig,
             );
         let is_collection_key =
-            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            self.is_collection_key_lookup_at_site(
                 sig,
                 arg_index,
                 key_receiver.as_deref(),
@@ -5571,7 +5609,7 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver_type_name,
                         sig,
                     );
-                crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                self.is_collection_key_lookup_at_site(
                     sig,
                     arg_index,
                     key_receiver.as_deref(),
@@ -5864,7 +5902,7 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if is_collection_key_site
-            || crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            || self.is_collection_key_lookup_at_site(
                 sig,
                 arg_index,
                 crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
@@ -6090,7 +6128,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !emits_shared_ref
             && (local_owned_emission || !global_emits_shared_ref);
         let force_owned = !expects_mut
-            && !crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+            && !self.is_collection_key_lookup_at_site(
                 sig,
                 arg_index,
                 callee_name
@@ -6541,7 +6579,19 @@ impl<'ast> CodeGenerator<'ast> {
         if coerced.contains("string_to_ffi(") {
             return coerced;
         }
-        if matches!(arg_expr, Expression::Closure { .. }) {
+        let is_closure_arg = matches!(arg_expr, Expression::Closure { .. })
+            || matches!(
+                arg_expr,
+                Expression::Binary {
+                    op: crate::parser::BinaryOp::Or,
+                    left,
+                    ..
+                } if matches!(
+                    &**left,
+                    Expression::Identifier { name, .. } if name == "move"
+                )
+            );
+        if is_closure_arg {
             let mut s = coerced;
             while s.starts_with("&mut ") {
                 s = s["&mut ".len()..].trim().to_string();
@@ -6833,7 +6883,19 @@ impl<'ast> CodeGenerator<'ast> {
             return SafetyType::owned(BaseType::String);
         }
 
-        if matches!(arg_expr, Expression::Closure { .. }) {
+        if matches!(arg_expr, Expression::Closure { .. })
+            || matches!(
+                arg_expr,
+                Expression::Binary {
+                    op: crate::parser::BinaryOp::Or,
+                    left,
+                    ..
+                } if matches!(
+                    &**left,
+                    Expression::Identifier { name, .. } if name == "move"
+                )
+            )
+        {
             return safety_type_from_arg_expression(arg_expr);
         }
 
@@ -7853,6 +7915,14 @@ fn safety_type_from_arg_expression(expr: &Expression) -> SafetyType {
             SafetyType::borrowed(BaseType::Inferred, Region::fresh(3))
         }
         Expression::Closure { .. } => SafetyType::owned(BaseType::Custom("FnOnce".into())),
+        Expression::Binary {
+            op: crate::parser::BinaryOp::Or,
+            left,
+            ..
+        } if matches!(
+            &**left,
+            Expression::Identifier { name, .. } if name == "move"
+        ) => SafetyType::owned(BaseType::Custom("FnOnce".into())),
         _ => SafetyType::owned(BaseType::Inferred),
     }
 }

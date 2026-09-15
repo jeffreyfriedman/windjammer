@@ -570,6 +570,15 @@ pub fn method_is_map_key_qualified(
     receiver_type: Option<&str>,
     registry: &SignatureRegistry,
 ) -> bool {
+    method_is_map_key_qualified_with_project(method, receiver_type, registry, None)
+}
+
+pub fn method_is_map_key_qualified_with_project(
+    method: &str,
+    receiver_type: Option<&str>,
+    registry: &SignatureRegistry,
+    project_registry: Option<&SignatureRegistry>,
+) -> bool {
     let borrowed_key_on_type = |base: &str| -> bool {
         lookup_sig(method, Some(base), registry).is_some_and(|s| {
             s.has_self_receiver && first_arg_ownership(s) == Some(OwnershipMode::Borrowed)
@@ -598,9 +607,14 @@ pub fn method_is_map_key_qualified(
         // do not force `&key` into owned Custom formals at delegation sites (dogfood txn).
         if let Some(rt) = receiver_type {
             let base = rt.split('<').next().unwrap_or(rt);
-            if let Some(sig) = lookup_sig(method, Some(base), registry) {
-                if sig.has_self_receiver {
-                    return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
+            for reg in [project_registry, Some(registry)]
+                .into_iter()
+                .flatten()
+            {
+                if let Some(sig) = lookup_sig(method, Some(base), reg) {
+                    if sig.has_self_receiver {
+                        return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
+                    }
                 }
             }
         }
@@ -1286,6 +1300,15 @@ pub fn is_collection_key_lookup(
     arg_index: usize,
     receiver_type: Option<&str>,
 ) -> bool {
+    is_collection_key_lookup_with_project(sig, arg_index, receiver_type, None)
+}
+
+pub fn is_collection_key_lookup_with_project(
+    sig: &FunctionSignature,
+    arg_index: usize,
+    receiver_type: Option<&str>,
+    project_registry: Option<&SignatureRegistry>,
+) -> bool {
     if arg_index != 0 {
         return false;
     }
@@ -1312,7 +1335,12 @@ pub fn is_collection_key_lookup(
                 .unwrap_or(type_prefix);
             if is_map_type_name(base) || is_set_type_name(base) {
                 return callee_arg_expects_reference_param(sig, arg_index)
-                    || method_is_map_key_qualified(meth, Some(base), registry);
+                    || method_is_map_key_qualified_with_project(
+                        meth,
+                        Some(base),
+                        registry,
+                        project_registry,
+                    );
             }
         }
     }
@@ -1329,7 +1357,12 @@ pub fn is_collection_key_lookup(
             if callee_arg_expects_reference_param(sig, arg_index) {
                 return true;
             }
-            return method_is_map_key_qualified(method, receiver_type, registry);
+            return method_is_map_key_qualified_with_project(
+                method,
+                receiver_type,
+                registry,
+                project_registry,
+            );
         }
     }
     // `g.data.get` / guard-wrapped map fields: callee may be `HashMap::get` while the
@@ -1347,12 +1380,17 @@ pub fn is_collection_key_lookup(
         });
         if from_callee.is_some_and(|b| is_map_type_name(b) || is_set_type_name(b)) {
             return callee_arg_expects_reference_param(sig, arg_index)
-                || method_is_map_key_qualified(method, from_callee, registry);
+                || method_is_map_key_qualified_with_project(
+                    method,
+                    from_callee,
+                    registry,
+                    project_registry,
+                );
         }
     }
     // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus —
     // only for method-shaped / self-receiver sigs (guard above).
-    method_is_map_key_qualified(method, receiver_type, registry)
+    method_is_map_key_qualified_with_project(method, receiver_type, registry, project_registry)
 }
 
 /// Extract `Vec` from `Vec::push` for call-site qualification when local type inference failed.
@@ -1792,6 +1830,31 @@ mod pattern_registry_tests {
         assert!(
             method_is_map_key_qualified("get", Some("MapCell"), &reg),
             "g.data.get on MapCell must still classify as map key lookup"
+        );
+        let mut project = SignatureRegistry::empty();
+        project.add_function(
+            "MemoryEngine::get".to_string(),
+            FunctionSignature {
+                name: "MemoryEngine::get".to_string(),
+                param_types: vec![Type::Custom("Key".into())],
+                formal_param_types: vec![Type::Custom("Key".into())],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: Some(Type::Option(Box::new(Type::Custom("Value".into())))),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false]),
+                ..FunctionSignature::default()
+            },
+        );
+        assert!(
+            !method_is_map_key_qualified_with_project(
+                "get",
+                Some("MemoryEngine"),
+                &reg,
+                Some(&project),
+            ),
+            "MemoryEngine::get(key: Key) must not inherit HashMap::get borrow homonym"
         );
         assert!(
             method_is_map_key_qualified("contains_key", Some("MutexGuard"), &reg),

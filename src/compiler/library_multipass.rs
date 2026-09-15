@@ -697,10 +697,11 @@ pub(crate) fn build_library_multipass(
     // in render_port.wj but implemented in voxel_gpu_renderer.wj) would be missing
     // if we only used per-file analysis. This step mirrors main.rs's finalize_trait_inference.
     //
-    // Runs on a separate thread with a large stack because the merged program (~3000 items)
-    // can produce deep recursive analysis.
+    // Do NOT clone every item into one mega-Program (~669 files × thousands of items):
+    // that peak allocation OOMs tip engine rebuilds after ownership convergence (jetsam /
+    // SIGKILL with no EXIT). Register traits globally, then infer impl signatures
+    // per-file so analyzed_trait_methods still accumulates max-permissive receivers.
     let step4b_pre_start = Instant::now();
-    // Reuse upfront parse on main thread (parsers stay alive). Avoids 649-file re-tokenize.
     let global_analyzed_trait_methods = {
         let mut shared_analyzer = Analyzer::new_with_copy_structs((*global_copy_structs).clone());
 
@@ -710,23 +711,16 @@ pub(crate) fn build_library_multipass(
                 .unwrap_or_else(|e| eprintln!("Trait registration warning: {}", e));
         }
 
-        let mut all_items = Vec::new();
         for program in &parsed_programs {
-            all_items.extend(program.items.iter().cloned());
-        }
-
-        let merged_program = crate::parser::Program { items: all_items };
-        match shared_analyzer
-            .infer_trait_signatures_from_impls(&merged_program, global_registry.as_ref())
-        {
-            Ok(()) => shared_analyzer.analyzed_trait_methods.clone(),
-            Err(e) => {
+            if let Err(e) = shared_analyzer
+                .infer_trait_signatures_from_impls(program, global_registry.as_ref())
+            {
                 eprintln!("Cross-file trait inference warning: {}", e);
-                HashMap::new()
             }
         }
+        shared_analyzer.analyzed_trait_methods.clone()
     };
-    profile_phase("Step 4B-pre: Trait inference thread", step4b_pre_start);
+    profile_phase("Step 4B-pre: Trait inference (per-file)", step4b_pre_start);
 
     // Step 4B: Final analysis + code generation (using shared global_float_inference)
     //

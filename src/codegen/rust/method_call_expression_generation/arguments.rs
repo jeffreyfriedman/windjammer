@@ -234,7 +234,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     let strip_ref_for_collection_key = sig_for_effective
                         .is_some_and(|sig| {
-                            crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                            self.is_collection_key_lookup_at_site(
                                 sig,
                                 i,
                                 receiver_type_name,
@@ -597,7 +597,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 receiver_rt.as_deref(),
                                 &contract_sig,
                             );
-                        if crate::codegen::rust::stdlib_method_traits::is_collection_key_lookup(
+                        if self.is_collection_key_lookup_at_site(
                             &contract_sig,
                             i,
                             key_receiver.as_deref(),

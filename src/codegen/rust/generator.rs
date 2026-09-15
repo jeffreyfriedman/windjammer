@@ -3040,6 +3040,7 @@ impl<'ast> CodeGenerator<'ast> {
             if !self.in_if_condition
                 && caller_owned
                 && callee_wants_shared_borrow
+                && !callee_wants_owned
                 && !coerced.starts_with('&')
                 && !self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_expr)
             {
@@ -3080,10 +3081,17 @@ impl<'ast> CodeGenerator<'ast> {
                         *coerced = format!("{coerced}.clone()");
                     }
                 }
+            } else if callee_wants_shared_borrow
+                && !callee_wants_owned
+                && caller_owned
+                && !coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                *coerced = format!("&{coerced}");
             }
             return;
         }
-        if callee_wants_shared_borrow {
+        if callee_wants_shared_borrow && !callee_wants_owned {
             if !coerced.starts_with('&')
                 && !(self.callee_call_uses_rust_auto_borrow_for_owned_struct(arg_expr)
                     && !is_forward_ref)
