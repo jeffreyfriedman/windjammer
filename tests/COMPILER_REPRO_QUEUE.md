@@ -1306,7 +1306,7 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 | P1 | **`std::compress` gzip encode/decode (`wj-compress`)** | `bug_std_compress_gzip_wiring_test` | ✅ tip GREEN — runtime `compress` + flate2 (Base64 gzip string API) |
 | P1 | **`std::regex` wiring (`wj-regex`)** | `bug_std_regex_module_wiring_test` | ✅ tip GREEN (verify) |
 | P1 | **Reuse demoted `string` in `Ok((text, ""))` after `split_once` / `contains` (`wj-url`)** | `bug_match_none_arm_string_after_split_test` | ✅ P3.266 — `returned_parameters` blocks readonly forward demotion; all 4 filters GREEN |
-| P1 | **Cross-crate dogfooding ownership (51 filters)** | `cross_crate_dogfooding_ownership_test` | 🔴 **39/51 GREEN** (2026-09-15). Remaining: `temp_path` literal, WAL path/`through`, `MemoryEngine::put` borrow, forward-ref Key, store patch/enum layout, vec index compare, txn delegate |
+| P1 | **Cross-crate dogfooding ownership (51 filters)** | `cross_crate_dogfooding_ownership_test` | 🔴 **40/51 GREEN** (2026-09-15). Remaining 12: `temp_path` literal, WAL path/`through`, `MemoryEngine::put` borrow, forward-ref Key, store patch/enum layout, vec index compare, txn delegate, substrate enum layout |
 | P1 | **Multipass component library regen gates** | `codegen_component_library_regen_gates_test` | ✅ P3.266 — **6/6 GREEN**. `impl Into<String>` pub free-fn forwarders; owned `String`/`Custom` peel at owned callees after helper reuse |
 
 ### P3.266 batch (pushed — cross-crate + component-library gates green)

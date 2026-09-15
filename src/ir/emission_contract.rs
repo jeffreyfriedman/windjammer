@@ -25,6 +25,14 @@ pub fn plain_string_formal_passes_owned_at_call_site(
     if callee_emits_shared_rust_ref_param(sig, param_idx) {
         return false;
     }
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+    ) && !crate::codegen::rust::call_signature_resolution::plain_string_owned_consumer_at_call_site(
+        sig, param_idx,
+    ) {
+        return false;
+    }
     // Plain WJ `string` without codegen-confirmed `&str` → pass owned.
     // Stale analyzer `Borrowed` / `Reference(str)` multipass metadata must not force
     // call-site `&` (circular-dep owned formals, WDB-099).
@@ -58,6 +66,14 @@ pub fn callee_emits_shared_rust_ref_param(
     if formal_is_plain_windjammer_string(
         sig, param_idx,
     ) {
+        if matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+        ) && !crate::codegen::rust::call_signature_resolution::plain_string_owned_consumer_at_call_site(
+            sig, param_idx,
+        ) {
+            return true;
+        }
         if sig.is_extern
             && sig
                 .param_types
@@ -174,6 +190,20 @@ pub fn callee_emits_shared_rust_ref_param(
             // without refresh must not claim `&T` (Table::column builder forwards).
             if analyzer_converged_borrow && !is_copy_aggregate {
                 return emits_shared_flag == Some(true);
+            }
+            let param_is_bare_custom = sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(|t| matches!(t, Type::Custom(_)));
+            if param_is_bare_custom
+                && !sig.has_self_receiver
+                && matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Borrowed)
+                )
+                && !is_copy_aggregate
+            {
+                return emits_shared_flag != Some(false);
             }
             return false;
         }

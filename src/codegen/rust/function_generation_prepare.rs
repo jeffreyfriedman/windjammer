@@ -3202,6 +3202,26 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
+    fn callee_name_is_borrow_only_formatting(name: &str) -> bool {
+        matches!(
+            name,
+            "format"
+                | "println"
+                | "print"
+                | "eprintln"
+                | "eprint"
+                | "write"
+                | "writeln"
+                | "panic"
+                | "debug"
+                | "info"
+                | "warn"
+                | "error"
+                | "trace"
+                | "log"
+        )
+    }
+
     fn expression_has_owning_method_use(
         &self,
         expr: &Expression<'ast>,
@@ -3282,6 +3302,11 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                if let Expression::Identifier { name, .. } = &**function {
+                    if Self::callee_name_is_borrow_only_formatting(name) {
+                        return false;
+                    }
+                }
                 let call_arg_count = arguments.len();
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     let arg_is_param_or_field =
@@ -3718,6 +3743,13 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                if let Expression::Identifier { name, .. } = &**function {
+                    // `format("…", name)` in .wj parses as Call, not MacroInvocation — same
+                    // borrow-only contract as `format!` (temp_path / regression-048).
+                    if Self::callee_name_is_borrow_only_formatting(name) {
+                        return false;
+                    }
+                }
                 arguments.iter().any(|(_, arg)| {
                     matches!(arg, Expression::Identifier { name, .. } if name == param_name)
                         || self.expression_passes_param_as_call_argument(arg, param_name, func)

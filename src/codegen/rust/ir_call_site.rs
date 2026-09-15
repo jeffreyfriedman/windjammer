@@ -1186,6 +1186,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 &sig, param_idx,
             )
+            && !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
             && (matches!(arg_expr, Expression::Index { .. })
                 || (matches!(arg_expr, Expression::FieldAccess { .. })
                     && (self.field_access_root_is_behind_reference(arg_expr) || field_from_self)))
@@ -6224,7 +6225,13 @@ impl<'ast> CodeGenerator<'ast> {
         if coerced.starts_with('&') || coerced.starts_with("&mut ") {
             return;
         }
-        if !crate::codegen::rust::call_site_borrow::expression_is_vec_literal_producer(arg_expr) {
+        let lvalue_borrow_site = crate::codegen::rust::call_site_borrow::expression_is_vec_literal_producer(
+            arg_expr,
+        ) || matches!(
+            arg_expr,
+            Expression::Index { .. } | Expression::FieldAccess { .. } | Expression::Call { .. }
+        );
+        if !lvalue_borrow_site {
             return;
         }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
@@ -6257,11 +6264,20 @@ impl<'ast> CodeGenerator<'ast> {
                     .copied()
                     .unwrap_or(false)
                     || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx)
+                    || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(gs, pidx)
                     || crate::codegen::rust::call_site_borrow::callee_arg_expects_shared_vec_ref(
                         gs, arg_index,
                     )
                 {
-                    *coerced = format!("&{coerced}");
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
+                    if coerced.ends_with(".to_string()") {
+                        if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                            *coerced = stripped.to_string();
+                        }
+                    }
+                    if !coerced.starts_with('&') {
+                        *coerced = format!("&{coerced}");
+                    }
                     return;
                 }
             }
@@ -6332,16 +6348,20 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 return;
             }
-            let wants_mut = sig
-                .param_types
-                .get(pidx)
-                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-                || matches!(
-                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
-                    &sig, arg_index,
-                ),
-                crate::analyzer::OwnershipMode::MutBorrowed
-            );
+            let wants_shared_ref = crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                &sig, pidx,
+            ) || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx);
+            let wants_mut = !wants_shared_ref
+                && (sig
+                    .param_types
+                    .get(pidx)
+                    .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+                    || matches!(
+                        crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                            &sig, arg_index,
+                        ),
+                        crate::analyzer::OwnershipMode::MutBorrowed
+                    ));
             if wants_mut {
                 // String literals are never `&mut` lvalues.
                 if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
