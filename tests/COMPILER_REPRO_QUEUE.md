@@ -165,7 +165,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ tip GREEN (P3.286) — qualified `thread::spawn` + FnOnce owned peel; no bare `spawn` homonym |
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
-| P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | 🆕 RED / filed (P3.294); blocks shared-inbox Pool |
+| P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (P3.288) — collection-key borrow + match `.copied()` on map get in block-expr path |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
 | P1 | **`wj-mime` thin-wrap `from_path` emits `path.clone()` on `impl Into<String>`** | `bug_mime_from_path_thin_wrap_must_not_clone_into_string_test` | ✅ tip GREEN (P3.291) — `impl Into<String>` forwards move via `.into()`; no `path.clone()` |
@@ -185,11 +185,11 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` Pool shared `Arc<Mutex<Receiver>>` workers | ⏸ tip emits `spawn(&(move \|\| …))` → E0716 |
-| Gate `bug_thread_spawn_move_arc_must_not_be_ref_test` | 🆕 filed |
-| Workaround | Per-job `spawn(\|\| …)` (same as Pending) until green |
+| Ecosystem: `wj-sync` Pool shared `Arc<Mutex<Receiver>>` workers | ✅ unblocked on tip |
+| Gate `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (2026-09-15) |
+| Workaround | Per-job `spawn(\|\| …)` no longer required for shared inbox |
 
-**Compiler agent:** `spawn(move \|\| …)` must pass the closure by value even when capturing `Arc`/`Mutex` (no `&(move \|\| …)`).
+**Root cause layers:** **parser** — `move \|\|` was parsed as `move || …` (logical OR), not `Expression::Closure`; **IR/codegen** — qualified `thread::spawn` + FnOnce/Closure Identity (no `&(move \|\| …)`).
 
 ## P3.293 (2026-09-14) — wj-sync bounded channel SyncSender typing
 
@@ -1331,7 +1331,7 @@ All rows use **`assert_stdlib_runtime_links`** (`cargo check`, not transpile-onl
 | P1 | **`std::compress` gzip encode/decode (`wj-compress`)** | `bug_std_compress_gzip_wiring_test` | ✅ tip GREEN — runtime `compress` + flate2 (Base64 gzip string API) |
 | P1 | **`std::regex` wiring (`wj-regex`)** | `bug_std_regex_module_wiring_test` | ✅ tip GREEN (verify) |
 | P1 | **Reuse demoted `string` in `Ok((text, ""))` after `split_once` / `contains` (`wj-url`)** | `bug_match_none_arm_string_after_split_test` | ✅ P3.266 — `returned_parameters` blocks readonly forward demotion; all 4 filters GREEN |
-| P1 | **Cross-crate dogfooding ownership (51 filters)** | `cross_crate_dogfooding_ownership_test` | 🔴 **44/51 GREEN** (2026-09-15). Remaining 7: Key `keys_equal` vec-index borrow + `.wj.meta`/compile-order, forward-ref `put_value`, patch asymmetric coercion, `has_key` clone path, substrate enum layout, txn `get` delegate `&key` |
+| P1 | **Cross-crate dogfooding ownership (51 filters)** | `cross_crate_dogfooding_ownership_test` | 🔴 **52/55 GREEN** (2026-09-15). Remaining 3: `dogfood_store_has_key_forward_ref_borrows_owned_key` (`has_key` still `&mut key` vs owned/`clone`), `dogfood_lsm_store_apply_patch_asymmetric_coercion` (`&value` at patch + owned outer formals), `dogfood_substrate_full_store_patch_part_enum_value_layout` |
 | P1 | **Multipass component library regen gates** | `codegen_component_library_regen_gates_test` | ✅ P3.266 — **6/6 GREEN**. `impl Into<String>` pub free-fn forwarders; owned `String`/`Custom` peel at owned callees after helper reuse |
 
 ### P3.266 batch (pushed — cross-crate + component-library gates green)

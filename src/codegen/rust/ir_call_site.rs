@@ -2762,11 +2762,16 @@ impl<'ast> CodeGenerator<'ast> {
 
         if self.in_if_condition {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    &sig, param_idx,
-                ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                    &sig, param_idx,
-                )
+                let body: Vec<_> = self.current_function_body.iter().copied().collect();
+                let if_facade_forward_ref = self.current_fn_forward_ref_if_params.contains(name)
+                    && self.param_used_in_if_with_condition_and_branches(&body, name);
+                if !if_facade_forward_ref
+                    && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &sig, param_idx,
+                    )
+                    && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        &sig, param_idx,
+                    )
                     && self.current_function_params.iter().any(|p| {
                         p.name == *name && !self.is_type_copy(&p.type_)
                     })
@@ -3045,6 +3050,60 @@ impl<'ast> CodeGenerator<'ast> {
                 && !coerced.ends_with(".to_owned()")
             {
                 coerced = format!("{coerced}.into()");
+            }
+        }
+
+        if self.in_if_condition {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                let body: Vec<_> = self.current_function_body.iter().copied().collect();
+                if (self.current_fn_forward_ref_if_params.contains(name)
+                    || self.current_fn_mixed_forwarder_params.contains(name))
+                    && self.param_used_in_if_with_condition_and_branches(&body, name)
+                    && self.caller_owned_non_copy_formal(name)
+                {
+                    if coerced.ends_with(".clone()") {
+                        let base = coerced.trim_end_matches(".clone()").trim();
+                        coerced = if base.starts_with('&') {
+                            base.to_string()
+                        } else {
+                            format!("&{base}")
+                        };
+                    } else if coerced.starts_with("&mut ") {
+                        coerced = format!(
+                            "&{}",
+                            crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced),
+                        );
+                    } else if !coerced.starts_with('&') {
+                        coerced = format!("&{coerced}");
+                    }
+                }
+            }
+        }
+
+        if let Some(rt) = receiver_type_name {
+            if let Some(resolved) = self.resolve_method_function_signature(
+                rt,
+                method_simple,
+                user_arg_count.unwrap_or(arg_index + 1),
+            ) {
+                let ridx = resolved.arg_param_index(arg_index);
+                let owned_user_slot =
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &resolved, ridx,
+                    ) || matches!(
+                        resolved.param_ownership.get(ridx),
+                        Some(crate::analyzer::OwnershipMode::Owned)
+                    );
+                if owned_user_slot
+                    && !resolved.param_types.get(ridx).is_some_and(|t| {
+                        matches!(t, Type::MutableReference(_))
+                    })
+                    && (coerced.starts_with("&mut ") || coerced.starts_with('&'))
+                {
+                    coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                        &coerced,
+                    );
+                }
             }
         }
 
@@ -3939,9 +3998,30 @@ impl<'ast> CodeGenerator<'ast> {
         // Mut-borrow from signature / codegen-recorded mut slots.
         // Defining-module owned Custom formals (field-forward restore / bare emit) must
         // not re-acquire `&mut` from stale MutBorrowed layered stubs.
-        let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-            &sig, param_idx,
-        ) || crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
+        let project_owned_slot = receiver_type_name.is_some_and(|rt| {
+            self.resolve_method_function_signature(
+                rt,
+                simple,
+                user_arg_count.unwrap_or(arg_index + 1),
+            )
+            .is_some_and(|resolved| {
+                let ridx = resolved.arg_param_index(arg_index);
+                (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &resolved, ridx,
+                ) || matches!(
+                    resolved.param_ownership.get(ridx),
+                    Some(crate::analyzer::OwnershipMode::Owned)
+                ))
+                    && !resolved.param_types.get(ridx).is_some_and(|t| {
+                        matches!(t, Type::MutableReference(_))
+                    })
+            })
+        });
+        let owned_slot = project_owned_slot
+            || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, param_idx,
+            )
+            || crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, param_idx)
             || matches!(
                 crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
                     &sig, arg_index,
@@ -5578,8 +5658,8 @@ impl<'ast> CodeGenerator<'ast> {
                     pidx,
                     |t| self.is_type_copy(t),
                 );
-        let wants_ref =
-            crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx) && !wants_owned;
+        let wants_ref = !wants_owned
+            && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx);
         (wants_ref, wants_owned)
     }
 
@@ -5598,9 +5678,23 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_type_name: Option<&str>,
         is_collection_key_site: bool,
     ) {
+        let slot_sig = if let (Some(rt), Some(recv)) = (receiver_type_name, receiver) {
+            if crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(recv) {
+                let method = callee_name.rsplit("::").next().unwrap_or(callee_name);
+                let qualified = format!("{rt}::{method}");
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(&qualified).cloned())
+                    .unwrap_or_else(|| sig.clone())
+            } else {
+                sig.clone()
+            }
+        } else {
+            sig.clone()
+        };
         let (wants_ref, wants_owned) =
-            self.call_site_slot_wants_ref_and_owned_for(sig, arg_index, callee_name);
-        let pidx = sig.arg_param_index(arg_index);
+            self.call_site_slot_wants_ref_and_owned_for(&slot_sig, arg_index, callee_name);
+        let pidx = slot_sig.arg_param_index(arg_index);
         let is_collection_key = is_collection_key_site
             || {
                 let key_receiver =
@@ -5637,9 +5731,13 @@ impl<'ast> CodeGenerator<'ast> {
                     (is_mixed_forwarder || if_facade_param) && self.in_if_condition;
                 let actual = self.infer_call_arg_actual_safety_type(arg_expr, coerced.as_str());
                 let expected =
-                    crate::ir::signature_bridge::safety_type_from_signature_param(sig, pidx);
+                    crate::ir::signature_bridge::safety_type_from_signature_param(&slot_sig, pidx);
                 let kind = crate::ir::coercion::compute_coercion(&actual, &expected);
+                let forward_ref_borrow_owned_outer = wants_ref
+                    && !wants_owned
+                    && self.caller_owned_non_copy_formal(name);
                 if mixed_forward_ref
+                    || forward_ref_borrow_owned_outer
                     || (matches!(
                         kind,
                         crate::ir::coercion::CoercionKind::Borrow
@@ -5660,6 +5758,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     *coerced = coerced.trim_start_matches('&').to_string();
                 } else if wants_owned
+                    && !wants_ref
                     && !mixed_forward_ref
                     && !self.current_fn_forward_ref_if_params.contains(name)
                     && coerced.starts_with('&')
@@ -5834,7 +5933,12 @@ impl<'ast> CodeGenerator<'ast> {
             && !coerced.starts_with('&')
         {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if self.caller_owned_non_copy_formal(name) {
+                let body: Vec<_> = self.current_function_body.iter().copied().collect();
+                let if_facade_forward_ref = self.current_fn_forward_ref_if_params.contains(name)
+                    && self.param_used_in_if_with_condition_and_branches(&body, name);
+                if if_facade_forward_ref && self.caller_owned_non_copy_formal(name) {
+                    *coerced = format!("&{coerced}");
+                } else if !if_facade_forward_ref && self.caller_owned_non_copy_formal(name) {
                     *coerced = format!("{coerced}.clone()");
                 } else if self.caller_demoted_non_copy_formal_into_owned_callee(name)
                     && !coerced.ends_with(".to_string()")
@@ -6416,6 +6520,28 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             };
             let pidx = sig.arg_param_index(arg_index);
+            if let Some(resolved) =
+                self.resolve_method_function_signature(rt, method, arg_count)
+            {
+                let ridx = resolved.arg_param_index(arg_index);
+                if (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    &resolved, ridx,
+                ) || matches!(
+                    resolved.param_ownership.get(ridx),
+                    Some(crate::analyzer::OwnershipMode::Owned)
+                ))
+                    && !resolved.param_types.get(ridx).is_some_and(|t| {
+                        matches!(t, Type::MutableReference(_))
+                    })
+                {
+                    if coerced.starts_with('&') {
+                        *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                            coerced,
+                        );
+                    }
+                    return;
+                }
+            }
             if let Some(global) = self.global_signature_registry.as_ref() {
                 let qualified = format!("{rt}::{method}");
                 if let Some(gs) = global.get_signature(&qualified) {
@@ -6462,6 +6588,27 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::analyzer::OwnershipMode::MutBorrowed
                     ) && !param_is_shared_ref_type));
             if wants_mut {
+                if self.in_if_condition {
+                    if let Expression::Identifier { name, .. } = arg_expr {
+                        if self.current_fn_forward_ref_if_params.contains(name)
+                            && self.caller_keeps_owned_outer_formal(name)
+                        {
+                            if coerced.starts_with("&mut ") {
+                                *coerced = format!(
+                                    "&{}",
+                                    crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                        coerced,
+                                    ),
+                                );
+                            } else if !coerced.starts_with('&') {
+                                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                                    coerced,
+                                );
+                            }
+                            return;
+                        }
+                    }
+                }
                 // String literals are never `&mut` lvalues.
                 if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
                     return;

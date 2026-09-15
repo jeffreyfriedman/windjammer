@@ -167,6 +167,25 @@ impl<'ast> CodeGenerator<'ast> {
                             ownership = OwnershipMode::MutBorrowed;
                         }
                     }
+                    if let Some(rt) = receiver_type_name.as_deref() {
+                        if let Some(resolved) = self.resolve_method_function_signature(
+                            rt,
+                            method,
+                            arguments.len(),
+                        ) {
+                            let ridx = resolved.arg_param_index(i);
+                            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                &resolved, ridx,
+                            ) || matches!(
+                                resolved.param_ownership.get(ridx),
+                                Some(OwnershipMode::Owned)
+                            ) && !resolved.param_types.get(ridx).is_some_and(|t| {
+                                matches!(t, Type::MutableReference(_))
+                            }) {
+                                ownership = OwnershipMode::Owned;
+                            }
+                        }
+                    }
                     // Spurious `&mut` from stale IR call-site lowering: strip when the
                     // converged contract is owned (not MutBorrowed).
                     if matches!(ownership, OwnershipMode::Owned)
@@ -332,10 +351,20 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::analyzer::OwnershipMode::MutBorrowed
                             if !arg_str.starts_with("&mut ") =>
                         {
+                            let arg_expr = arguments.get(i).map(|(_, e)| e);
+                            if self.in_if_condition {
+                                if let Some(Expression::Identifier { name, .. }) = arg_expr {
+                                    if self.current_fn_forward_ref_if_params.contains(name)
+                                        && self.caller_keeps_owned_outer_formal(name)
+                                    {
+                                        apply_borrow(&mut arg_str);
+                                        return arg_str;
+                                    }
+                                }
+                            }
                             // Collection keys are always `&Q` (including `get_mut`); never `&mut Q`.
                             // Temporaries (`Type::new()`) cannot be mut-reborrowed as lvalues —
                             // shared `&` matches emitted `&T` formals after multipass convergence.
-                            let arg_expr = arguments.get(i).map(|(_, e)| e);
                             let can_mut = arg_expr.is_some_and(|e| {
                                 crate::codegen::rust::expression_utilities::arg_supports_mut_borrow_coercion(
                                     e,

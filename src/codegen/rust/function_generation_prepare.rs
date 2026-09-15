@@ -3486,19 +3486,21 @@ impl<'ast> CodeGenerator<'ast> {
                 else_block: Some(else_block),
                 ..
             } => {
-                self.expr_mentions_param_name(param_name, condition)
+                (self.expr_mentions_param_name(param_name, condition)
                     && self.stmts_mention_param_name(param_name, then_block)
-                    && self.stmts_mention_param_name(param_name, else_block)
+                    && self.stmts_mention_param_name(param_name, else_block))
+                    || self.stmts_have_if_with_condition_and_branches(param_name, then_block)
+                    || self.stmts_have_if_with_condition_and_branches(param_name, else_block)
             }
             Statement::If {
+                condition,
                 then_block,
-                else_block,
+                else_block: None,
                 ..
             } => {
-                self.stmts_have_if_with_condition_and_branches(param_name, then_block)
-                    || else_block.as_ref().is_some_and(|block| {
-                        self.stmts_have_if_with_condition_and_branches(param_name, block)
-                    })
+                (self.expr_mentions_param_name(param_name, condition)
+                    && self.stmts_mention_param_name(param_name, then_block))
+                    || self.stmts_have_if_with_condition_and_branches(param_name, then_block)
             }
             _ => false,
         }

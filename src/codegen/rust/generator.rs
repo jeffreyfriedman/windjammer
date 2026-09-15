@@ -3144,8 +3144,26 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Callee owned formal: shared `&binding` / clone→borrow is never valid
             // (ReBAC `contains_string(out)` into `items: Vec<String>` inside `if`).
-            // Reuse after the condition requires `.clone()`, not `&`.
+            // Reuse after the condition requires `.clone()`, not `&` — except if-facade
+            // forward-ref (param in condition + then/else): borrow at guard, move in branches.
             if callee_wants_owned && !callee_wants_shared_borrow {
+                let body: Vec<_> = self.current_function_body.iter().copied().collect();
+                let if_facade_forward_ref = self.current_fn_forward_ref_if_params.contains(name)
+                    && self.param_used_in_if_with_condition_and_branches(&body, name);
+                if if_facade_forward_ref {
+                    if coerced.starts_with("&mut ") {
+                        *coerced = format!(
+                            "&{}",
+                            crate::codegen::rust::expression_utilities::borrow_base_expr(coerced),
+                        );
+                    } else if coerced.ends_with(".clone()") {
+                        let base = coerced.trim_end_matches(".clone()").trim();
+                        *coerced = format!("&{base}");
+                    } else if !coerced.starts_with('&') {
+                        *coerced = format!("&{coerced}");
+                    }
+                    return;
+                }
                 if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                     *coerced =
                         crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
@@ -3154,14 +3172,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if !coerced.ends_with(".clone()")
                     && !coerced.starts_with("&mut ")
                     && (self.current_fn_forward_ref_if_params.contains(name)
-                        || self.param_used_in_if_with_condition_and_branches(
-                            &self
-                                .current_function_body
-                                .iter()
-                                .copied()
-                                .collect::<Vec<_>>(),
-                            name,
-                        ))
+                        || self.param_used_in_if_with_condition_and_branches(&body, name))
                 {
                     *coerced = format!("{coerced}.clone()");
                 }
@@ -3336,10 +3347,15 @@ impl<'ast> CodeGenerator<'ast> {
             if !self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition) {
                 continue;
             }
-            // Only rewrite when a callee in this condition expects a shared `&T` for
-            // this binding. Blind `policy,` → `&policy,` breaks owned recursive calls
-            // (ReBAC `resolve_check(policy: Policy)` inside `if`).
-            if !self.expr_call_expects_shared_borrow_for_param(condition, &param.name) {
+            let if_facade_borrow = self.current_fn_forward_ref_if_params.contains(&param.name)
+                && self.param_used_in_if_with_condition_and_branches(&body, &param.name);
+            // Shared-ref callees need explicit `&` in the condition. If-facade forward-ref
+            // (param in condition + then/else body) also borrows even when the callee stub
+            // is still WJ-owned — sibling methods may not be codegen'd yet (LsmStore::put_value
+            // → key_in_latest_base). Blind `policy,` → `&policy,` still blocked unless facade.
+            if !self.expr_call_expects_shared_borrow_for_param(condition, &param.name)
+                && !if_facade_borrow
+            {
                 continue;
             }
             let bare = format!("({})", param.name);
@@ -3352,6 +3368,11 @@ impl<'ast> CodeGenerator<'ast> {
             if cond_str.contains(&bare_comma) && !cond_str.contains(&borrowed_comma) {
                 cond_str = cond_str.replace(&bare_comma, &borrowed_comma);
             }
+            let clone_guard = format!("{}.clone()", param.name);
+            let borrowed_id = format!("&{}", param.name);
+            if cond_str.contains(&clone_guard) {
+                cond_str = cond_str.replace(&clone_guard, &borrowed_id);
+            }
         }
         cond_str
     }
@@ -3363,6 +3384,7 @@ impl<'ast> CodeGenerator<'ast> {
         condition: &Expression<'ast>,
         mut cond_str: String,
     ) -> String {
+        let body: Vec<_> = self.current_function_body.iter().copied().collect();
         for param in &self.current_function_params {
             if param.name == "self" || self.is_type_copy(&param.type_) {
                 continue;
@@ -3371,6 +3393,16 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             if !self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition) {
+                continue;
+            }
+            if self.current_fn_forward_ref_if_params.contains(&param.name)
+                && self.param_used_in_if_with_condition_and_branches(&body, &param.name)
+            {
+                continue;
+            }
+            if self.current_fn_mixed_forwarder_params.contains(&param.name)
+                && self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition)
+            {
                 continue;
             }
             if !self.expr_call_expects_owned_formal_for_param(condition, &param.name) {
