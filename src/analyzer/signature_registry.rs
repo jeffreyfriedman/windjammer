@@ -1041,6 +1041,43 @@ impl SignatureRegistry {
         out.into_iter()
     }
 
+    /// Registry keys that may correspond to a call-site callee name (exact, qualified
+    /// suffix, or simple-name homonyms). Uses [`Self::method_keys_for`] /
+    /// [`Self::signatures_matching_suffix`] — O(matching keys), not O(registry size).
+    pub fn callee_lookup_keys(&self, callee_name: &str) -> Vec<String> {
+        let mut seen = HashSet::new();
+        let mut keys = Vec::new();
+        let mut push = |k: String| {
+            if seen.insert(k.clone()) {
+                keys.push(k);
+            }
+        };
+
+        if self.get_signature(callee_name).is_some() {
+            push(callee_name.to_string());
+        }
+
+        let qualified_suffix = format!("::{callee_name}");
+        for (key, _) in self.signatures_matching_suffix(&qualified_suffix) {
+            push(key.to_string());
+        }
+
+        if callee_name.contains("::") {
+            for (key, _) in self.signatures_matching_suffix(callee_name) {
+                push(key.to_string());
+            }
+        } else if let Some(method_keys) = self.method_keys_for(callee_name) {
+            for key in method_keys {
+                if self.get_signature(key).is_some() {
+                    push(key.clone());
+                }
+            }
+        }
+
+        keys.sort();
+        keys
+    }
+
     /// `(key, sig)` for signatures whose qualified key starts with `receiver::`.
     ///
     /// Scans method-index buckets (unique method names), not the full signature map.
