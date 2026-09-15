@@ -127,11 +127,15 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 });
                 let receiver_type_name = receiver_type_name_owned.as_deref();
-                let is_external_module_method = matches!(
-                    object,
-                    Expression::Identifier { name, .. }
-                        if name.chars().next().is_some_and(|c| c.is_lowercase())
-                );
+                let is_external_module_method = match object {
+                    Expression::Identifier { name, .. } => {
+                        name.chars().next().is_some_and(|c| c.is_lowercase())
+                            && !self.current_function_params.iter().any(|p| p.name == *name)
+                            && !self.local_var_types.contains_key(name)
+                            && !self.match_arm_bindings.contains(name.as_str())
+                    }
+                    _ => false,
+                };
                 let external_module_mut_reborrow = is_external_module_method
                     && i == 0
                     && matches!(
@@ -529,6 +533,23 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(arguments.len()),
                             false,
                         );
+                        let pidx_after = contract_sig.arg_param_index(i);
+                        let callee_wants_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            &contract_sig, pidx_after,
+                        ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                            &contract_sig, pidx_after,
+                        ) || contract_sig
+                            .param_types
+                            .get(pidx_after)
+                            .is_some_and(|t| matches!(t, Type::Reference(_)));
+                        if callee_wants_shared && coerced.ends_with(".clone()") {
+                            let base = coerced.trim_end_matches(".clone()").trim();
+                            coerced = if base.starts_with('&') {
+                                base.to_string()
+                            } else {
+                                format!("&{base}")
+                            };
+                        }
                         coerced = crate::codegen::rust::string_utilities::finalize_explicit_user_clone_call_site(
                             arg_to_generate,
                             &arg_str,

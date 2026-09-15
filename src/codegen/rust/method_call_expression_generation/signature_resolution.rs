@@ -41,6 +41,11 @@ impl<'ast> CodeGenerator<'ast> {
             if (name == "self" || name == "Self") && self.in_impl_block {
                 return self.current_struct_name.clone();
             }
+            if let Some(t) = self.local_var_types.get(name) {
+                if let Some(tn) = Self::type_to_name(t) {
+                    return Some(tn);
+                }
+            }
         }
         if let Expression::FieldAccess {
             object: obj, field, ..

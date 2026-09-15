@@ -10919,6 +10919,21 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        if let Some(rt) = self.mc_infer_method_receiver_type_name(object) {
+            if self
+                .struct_method_ast_formal_param_types
+                .get(rt.as_str())
+                .and_then(|methods| methods.get(method))
+                .and_then(|formals| formals.get(arg_index))
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && !self.is_type_copy(t)
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                })
+            {
+                return true;
+            }
+        }
         if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
             let pidx = sig.arg_param_index(arg_index);
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {

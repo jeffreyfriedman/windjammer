@@ -617,6 +617,9 @@ pub fn method_is_map_key_qualified_with_project(
                     }
                 }
             }
+            if !is_map_type_name(base) && !is_set_type_name(base) {
+                return false;
+            }
         }
         // Non-map receiver names (`MapCell`, `MutexGuard<…>`, …): still classify via
         // stdlib map/set consensus — `g.data.get(key)` must borrow `&K`, not `.to_string()`.

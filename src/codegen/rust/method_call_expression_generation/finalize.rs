@@ -176,6 +176,8 @@ impl<'ast> CodeGenerator<'ast> {
                             let ridx = resolved.arg_param_index(i);
                             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &resolved, ridx,
+                            ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                                &resolved, ridx,
                             ) || matches!(
                                 resolved.param_ownership.get(ridx),
                                 Some(OwnershipMode::Owned)
@@ -244,10 +246,25 @@ impl<'ast> CodeGenerator<'ast> {
                             receiver_type_name.as_deref(),
                         );
                     let callee_arg_emits_owned = {
+                        let ast_owned = receiver_type_name.as_ref().is_some_and(|rt| {
+                            self.struct_method_ast_formal_param_types
+                                .get(rt.as_str())
+                                .and_then(|methods| methods.get(method))
+                                .and_then(|formals| formals.get(i))
+                                .is_some_and(|t| {
+                                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                        && !self.is_type_copy(t)
+                                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                                })
+                        });
                         let from_sig = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             &sig, sig_param_idx,
-                        );
-                        from_sig
+                        )
+                            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                                &sig, sig_param_idx,
+                            );
+                        ast_owned
+                            || from_sig
                             || receiver_type_name.as_ref().is_some_and(|rt| {
                                 self.resolve_method_function_signature(
                                     rt,
@@ -255,9 +272,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     arguments.len(),
                                 )
                                 .is_some_and(|resolved| {
+                                    let pidx = resolved.arg_param_index(i);
                                     crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                        &resolved,
-                                        resolved.arg_param_index(i),
+                                        &resolved, pidx,
+                                    ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                                        &resolved, pidx,
                                     )
                                 })
                             })
@@ -352,6 +371,22 @@ impl<'ast> CodeGenerator<'ast> {
                             if !arg_str.starts_with("&mut ") =>
                         {
                             let arg_expr = arguments.get(i).map(|(_, e)| e);
+                            if callee_arg_emits_owned {
+                                if let Some(Expression::Identifier { name, .. }) = arg_expr {
+                                    let needs_clone = self.emitted_rust_ref_formals.contains(name)
+                                        || self.inferred_borrowed_params.contains(name)
+                                        || self.inferred_mut_borrowed_params.contains(name)
+                                        || self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                                            a.needs_clone(name, self.current_statement_idx)
+                                                .is_some()
+                                        });
+                                    if needs_clone && !arg_str.ends_with(".clone()") {
+                                        let base = crate::codegen::rust::expression_utilities::borrow_base_expr(&arg_str);
+                                        return format!("{base}.clone()");
+                                    }
+                                }
+                                return arg_str;
+                            }
                             if self.in_if_condition {
                                 if let Some(Expression::Identifier { name, .. }) = arg_expr {
                                     if self.current_fn_forward_ref_if_params.contains(name)

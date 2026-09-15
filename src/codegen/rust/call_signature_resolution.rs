@@ -1220,6 +1220,9 @@ pub fn callee_user_arg_expects_mut_borrow(sig: &FunctionSignature, user_arg_inde
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
         return false;
     }
+    if crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(sig, pidx) {
+        return false;
+    }
     // Copy aggregates that emit owned formals (`mut deps: AppDeps`) must not ask for
     // `&mut` at call sites. Copy aggregates that emit `&mut T` (`player: &mut PlayerState`)
     // keep MutBorrowed / MutableReference metadata — still ask for `&mut`.
