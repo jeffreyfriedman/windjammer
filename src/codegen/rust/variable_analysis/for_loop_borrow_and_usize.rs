@@ -453,6 +453,72 @@ impl<'ast> CodeGenerator<'ast> {
         self.walk_condition_mark_usize_loop_counters(condition);
     }
 
+    /// Before emitting a block, mark `.len()` locals and `while i < bound` counters as `usize`
+    /// so `let mut i = 0` and comparisons agree (wal_layout upsert / keys_equal loops).
+    pub(crate) fn prepass_mark_loop_counter_usize_variables(
+        &mut self,
+        body: &[&'ast Statement<'ast>],
+    ) {
+        for stmt in body {
+            self.prepass_mark_loop_counter_usize_in_statement(stmt);
+        }
+    }
+
+    fn prepass_mark_loop_counter_usize_in_statement(&mut self, stmt: &'ast Statement<'ast>) {
+        match stmt {
+            Statement::Let {
+                pattern,
+                value,
+                else_block,
+                ..
+            } => {
+                if let Pattern::Identifier(name) = pattern {
+                    let is_usize = self.expression_produces_usize(value)
+                        || self.infer_expression_type_is_usize(value)
+                        || matches!(value, Expression::MethodCall { method, .. } if method == "len");
+                    if is_usize {
+                        self.usize_variables.insert(name.clone());
+                    }
+                }
+                if let Some(b) = else_block {
+                    self.prepass_mark_loop_counter_usize_variables(b.as_slice());
+                }
+            }
+            Statement::While { condition, body, .. } => {
+                self.mark_usize_variables_in_condition(condition);
+                self.prepass_mark_loop_counter_usize_variables(body.as_slice());
+            }
+            Statement::For { body, .. } => {
+                self.prepass_mark_loop_counter_usize_variables(body.as_slice());
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.prepass_mark_loop_counter_usize_variables(then_block.as_slice());
+                if let Some(b) = else_block {
+                    self.prepass_mark_loop_counter_usize_variables(b.as_slice());
+                }
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    self.prepass_mark_loop_counter_usize_in_expression(arm.body);
+                }
+            }
+            Statement::Loop { body, .. } => {
+                self.prepass_mark_loop_counter_usize_variables(body.as_slice());
+            }
+            _ => {}
+        }
+    }
+
+    fn prepass_mark_loop_counter_usize_in_expression(&mut self, expr: &Expression<'ast>) {
+        if let Expression::Block { statements, .. } = expr {
+            self.prepass_mark_loop_counter_usize_variables(statements.as_slice());
+        }
+    }
+
     fn walk_condition_mark_usize_loop_counters(&mut self, expr: &Expression) {
         if let Expression::Binary {
             left, op, right, ..

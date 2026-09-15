@@ -463,6 +463,27 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                     && !(analyzed.mutated_parameters.contains(&param.name)
                         && !analyzed.returned_parameters.contains(&param.name));
+                // Unused pub string placeholders (`replay_all(path)`) mirror wal-crate `&str`.
+                if param.name != "self"
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !self.in_trait_impl
+                    && !payload_stored
+                    && func.is_pub
+                    && func.parent_type.is_none()
+                    && !self.function_return_is_text(func)
+                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
+                    && self.param_is_unreferenced_in_body(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                {
+                    self.str_ref_optimized_params.insert(param.name.clone());
+                    self.inferred_borrowed_params.insert(param.name.clone());
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
+                    return format!("{}: &str", param.name);
+                }
                 // Readonly text-returning helpers (`temp_path`, `replay_to_lsn`) demote before
                 // AsRef-runtime / port-trait owned forwards that would force `String` formals.
                 if param.name != "self"
@@ -483,10 +504,18 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
-                    && self.param_has_readonly_expression_use(
+                    && (self.param_has_readonly_expression_use(
                         func.body.as_slice(),
                         &param.name,
-                    )
+                    ) || self.param_only_appears_in_formatting_macro(
+                        func.body.as_slice(),
+                        &param.name,
+                    ) || (!self.function_return_is_text(func)
+                        && self.param_is_unreferenced_in_body(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )))
                     && !self.param_passed_as_call_argument(
                         func.body.as_slice(),
                         &param.name,
@@ -586,19 +615,26 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    ) || (self.param_only_forwards_to_borrowed_text_callees(
+                    ) || ((self.param_only_forwards_to_borrowed_text_callees(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    ) && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                    ) || self.param_only_forwards_to_registry_borrow_callees(
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    ) && !self.param_asref_runtime_forces_owned_formal(
-                        func.body.as_slice(),
-                        &param.name,
-                        func,
-                    ) && !analyzed.returned_parameters.contains(&param.name)))
+                    ))
+                        && !self.param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )
+                        && !self.param_asref_runtime_forces_owned_formal(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )
+                        && !analyzed.returned_parameters.contains(&param.name)))
                 {
                     self.str_ref_optimized_params.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());
@@ -723,10 +759,13 @@ impl<'ast> CodeGenerator<'ast> {
                         func,
                     )
                 {
-                    if self.param_has_readonly_expression_use(
+                    if (self.param_has_readonly_expression_use(
                         func.body.as_slice(),
                         &param.name,
-                    ) && !analyzed.returned_parameters.contains(&param.name)
+                    ) || self.param_only_appears_in_formatting_macro(
+                        func.body.as_slice(),
+                        &param.name,
+                    )) && !analyzed.returned_parameters.contains(&param.name)
                     && !self.param_has_owning_method_use(
                         func.body.as_slice(),
                         &param.name,
@@ -3127,11 +3166,24 @@ impl<'ast> CodeGenerator<'ast> {
                 // Public crate API: never emit demoted `&str` for WJ `string` formals —
                 // cross-module callers pass owned fields (`req.path`) before defining-module
                 // demotion is visible at the call site (hexagonal HTTP adapters).
+                // Readonly text-return helpers (`temp_path`, `replay_all`) still demote so
+                // cross-module literals stay bare (`temp_path("recover")`).
+                let readonly_text_return_pub = func.is_pub
+                    && func.parent_type.is_none()
+                    && self.function_return_is_text(func)
+                    && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                    && !self.param_has_owning_method_use(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
                 if param.name != "self"
                     && type_str.starts_with('&')
                     && !type_str.starts_with("&mut ")
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && self.pub_module_api_keeps_owned_string_formal(func, param)
+                    && !readonly_text_return_pub
                 {
                     type_str = self.type_to_rust(&param.type_);
                     self.str_ref_optimized_params.remove(&param.name);
@@ -3654,7 +3706,8 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         let body = func.body.as_slice();
-        if self.param_has_readonly_expression_use(body, &param.name)
+        if (self.param_has_readonly_expression_use(body, &param.name)
+            || self.param_only_appears_in_formatting_macro(body, &param.name))
             && !self.param_has_owning_method_use(body, &param.name, func)
             && !self.param_stored_in_owned_payload(body, &param.name)
             && !self.param_used_as_owned_string_add_operand(body, &param.name)

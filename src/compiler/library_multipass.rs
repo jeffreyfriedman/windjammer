@@ -217,6 +217,27 @@ pub(crate) fn build_library_multipass(
         let source = std::fs::read_to_string(&canon)?;
         sources.push((canon, source));
     }
+    // Emit foundational modules before consumers so converged signatures (`keys_equal` →
+    // `&Key`, `MemoryEngine::get` owned Key) land in `final_global_registry` before
+    // `index/store` / `txn/manager` call sites codegen (alphabetical order put `index`
+    // before `types`).
+    sources.sort_by(|(a, _), (b, _)| {
+        fn tier(path: &std::path::Path) -> u8 {
+            let s = path.to_string_lossy();
+            if s.contains("/types/") {
+                0
+            } else if s.contains("/engine/") {
+                1
+            } else if s.contains("/substrate/") {
+                2
+            } else {
+                10
+            }
+        }
+        tier(a)
+            .cmp(&tier(b))
+            .then_with(|| a.to_string_lossy().cmp(&b.to_string_lossy()))
+    });
 
     let parse_start = Instant::now();
     // PERFORMANCE: Parse all files once upfront and reuse ASTs across all pipeline

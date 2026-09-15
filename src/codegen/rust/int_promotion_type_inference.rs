@@ -45,7 +45,10 @@ impl<'ast> CodeGenerator<'ast> {
             return crate::type_inference::IntType::Unknown;
         };
         match expr {
-            Expression::Identifier { .. } => {
+            Expression::Identifier { name, .. } => {
+                if self.usize_variables.contains(name) {
+                    return crate::type_inference::IntType::Usize;
+                }
                 if let Some(a) = self
                     .infer_expression_type(expr)
                     .as_ref()
@@ -62,6 +65,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // Unknown to prevent incorrect casts. The int inference engine may resolve
                 // field types through a different struct with the same name, producing
                 // wrong results.
+                if self.expression_produces_usize(expr) {
+                    return crate::type_inference::IntType::Usize;
+                }
                 if let Some(a) = self
                     .infer_expression_type(expr)
                     .as_ref()
@@ -71,7 +77,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 crate::type_inference::IntType::Unknown
             }
-            _ => eng,
+            _ => {
+                if self.expression_produces_usize(expr) {
+                    return crate::type_inference::IntType::Usize;
+                }
+                eng
+            }
         }
     }
 }

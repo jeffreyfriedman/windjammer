@@ -15,6 +15,7 @@ use super::{codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
+        self.prepass_mark_loop_counter_usize_variables(stmts);
         if stmts.len() == 1 {
         }
         let mut output = String::new();

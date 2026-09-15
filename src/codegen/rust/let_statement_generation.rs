@@ -745,6 +745,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(name) = var_name {
             let is_usize = self.expression_produces_usize(value)
                 || self.infer_expression_type_is_usize(value)
+                || matches!(value, Expression::MethodCall { method, .. } if method == "len")
                 || matches!(type_, Some(Type::Custom(s)) if s == "usize");
             if is_usize {
                 self.usize_variables.insert(name.to_string());

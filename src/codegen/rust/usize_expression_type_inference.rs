@@ -218,6 +218,11 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression,
     ) -> bool {
+        if let Expression::Identifier { name, .. } = expr {
+            if self.usize_variables.contains(name) {
+                return false;
+            }
+        }
         if self.infer_expression_type_is_usize(expr) {
             return false;
         }

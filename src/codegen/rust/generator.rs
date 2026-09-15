@@ -3265,14 +3265,37 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let (Some(sig), Some(arg_idx)) = (callee_sig, arg_index) {
             let pidx = sig.arg_param_index(arg_idx);
-            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+            let callee_needs_borrow = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, pidx,
             ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
                 || crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
                     sig, arg_idx,
-                )
-            {
+                );
+            if callee_needs_borrow {
                 return;
+            }
+        }
+        // Preregistered owned Rust formals beat stale borrow metadata on the callee sig
+        // (`TxnManager::get` → `MemoryEngine::get(key)` not `&key`).
+        if let (Some(arg_idx), Expression::Identifier { .. }) = (arg_index, arg_expr) {
+            let simple = callee_sig
+                .and_then(|s| s.name.rsplit("::").next())
+                .unwrap_or("");
+            if let Some(formals) = [callee_sig.map(|s| s.name.as_str()), Some(simple)]
+                .iter()
+                .filter_map(|k| *k)
+                .find_map(|key| self.preregistered_free_function_emitted_params.get(key))
+                .or_else(|| {
+                    self.preregistered_free_function_emitted_params
+                        .get(simple)
+                })
+            {
+                if formals.get(arg_idx).is_some_and(|f| {
+                    !f.contains(": &") && !f.contains(": &mut ") && !f.contains(": &'a ")
+                }) {
+                    self.pure_forwarding_strip_call_arg(coerced, arg_expr);
+                    return;
+                }
             }
         }
         // Single-expression owned-formal delegates (TxnManager::seed_write) must not keep

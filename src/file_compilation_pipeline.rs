@@ -522,17 +522,20 @@ fn compile_file_impl(
         &source,
     )? {
         MainCodegenOutcome::EarlySuccess => Ok((HashSet::new(), Vec::new())),
-        MainCodegenOutcome::RustCode(rust_code) => write_single_file_outputs(
-            target,
-            source_root,
-            input_path,
-            output_dir,
-            module_compiler,
-            is_multi_file_project,
-            &program,
-            &signatures,
-            rust_code,
-        ),
+        MainCodegenOutcome::RustCode(rust_code) => {
+            let converged_signatures = module_compiler.global_signatures.clone();
+            write_single_file_outputs(
+                target,
+                source_root,
+                input_path,
+                output_dir,
+                module_compiler,
+                is_multi_file_project,
+                &program,
+                &converged_signatures,
+                rust_code,
+            )
+        }
     };
 
     if has_lint_errors {
