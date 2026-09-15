@@ -1,0 +1,19 @@
+pub struct Field {
+    pub ordinal: int,
+}
+
+pub fn by_ordinal(fields: Vec<Field>, ordinal: int) -> Vec<Field> {
+    let mut out = Vec::new()
+    for f in fields {
+        if f.ordinal == ordinal {
+            out.push(f)
+        }
+    }
+    out
+}
+
+pub fn cap_count() -> int {
+    let fields = vec![Field { ordinal: 1 }, Field { ordinal: 2 }]
+    let attrs = by_ordinal(fields, 1)
+    attrs.len() as int
+}

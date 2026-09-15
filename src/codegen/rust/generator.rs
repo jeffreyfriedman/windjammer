@@ -211,6 +211,13 @@ pub struct CodeGenerator<'ast> {
     pub(crate) current_fn_mixed_forwarder_params: std::collections::HashSet<String>,
     /// Params that borrow at self/sibling calls inside if conditions (forward-ref guard).
     pub(crate) current_fn_forward_ref_if_params: std::collections::HashSet<String>,
+    /// Memo + reentrancy guard for borrow-delegation formal decisions.
+    /// Breaks cycles with `param_keeps_owned_engine_key_facade` and avoids stack blowups when
+    /// formal emission re-queries borrow delegation many times per param (dogfood BT executor).
+    pub(crate) borrow_delegation_formal_cache:
+        std::cell::RefCell<std::collections::HashMap<(String, String), bool>>,
+    pub(crate) borrow_delegation_formal_in_progress:
+        std::cell::RefCell<std::collections::HashSet<(String, String)>>,
     /// Pub builder formals emitted as `impl Into<String>` (windjammer-ui Rust interop).
     pub(crate) into_string_formal_params: std::collections::HashSet<String>,
     /// True when the current function body is a single `self[.field].method(...)` forward.
@@ -660,6 +667,10 @@ impl<'ast> CodeGenerator<'ast> {
             current_fn_emitted_mut_arg_indices: std::collections::HashSet::new(),
             current_fn_mixed_forwarder_params: std::collections::HashSet::new(),
             current_fn_forward_ref_if_params: std::collections::HashSet::new(),
+            borrow_delegation_formal_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            borrow_delegation_formal_in_progress: std::cell::RefCell::new(
+                std::collections::HashSet::new(),
+            ),
             into_string_formal_params: std::collections::HashSet::new(),
             current_func_is_pure_forwarding_delegate: false,
             in_user_written_closure: false,
