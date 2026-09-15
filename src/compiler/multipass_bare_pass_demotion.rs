@@ -975,6 +975,55 @@ pub fn on_startup(buf: Vec<u8>) -> int {
     }
 
     #[test]
+    fn callee_registry_keys_scales_with_method_index_not_registry_size() {
+        use std::time::{Duration, Instant};
+
+        let caller = parse_program(
+            r#"
+struct Row { n: int }
+fn go(row: Row) -> int {
+    col_string(row, "x")
+}
+"#,
+        );
+        let callee = parse_program(
+            r#"
+struct Row { n: int }
+pub fn col_string(row: Row, name: string) -> (Row, string) {
+    (row, name)
+}
+"#,
+        );
+
+        let mut registry = SignatureRegistry::new();
+        registry.add_function(
+            "col_string".to_string(),
+            owned_custom_sig("col_string", "Row"),
+        );
+        for i in 0..50_000 {
+            let key = format!("noise::module_{i}::unrelated_fn");
+            registry.add_function(key, owned_custom_sig("unrelated_fn", "Row"));
+        }
+
+        let programs = vec![caller, callee];
+        let copy_types = std::collections::HashSet::new();
+        let start = Instant::now();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "bare-pass promote must use indexed callee lookup (took {:?} with 50k noise keys)",
+            elapsed
+        );
+
+        let resolved = callee_registry_keys("col_string", &registry);
+        assert!(
+            resolved.iter().any(|k| k == "col_string"),
+            "expected indexed lookup to find col_string, got {resolved:?}"
+        );
+    }
+
+    #[test]
     fn bare_pass_skips_row_col_chain_tuple_return_helper() {
         let domain = parse_program(
             r#"
@@ -1194,19 +1243,7 @@ fn callee_name_from_expr(function: &Expression) -> Option<String> {
 }
 
 fn callee_registry_keys(callee_name: &str, registry: &SignatureRegistry) -> Vec<String> {
-    let mut keys: Vec<String> = registry
-        .signatures
-        .keys()
-        .filter(|k| {
-            **k == callee_name
-                || k.ends_with(&format!("::{callee_name}"))
-                || k.rsplit("::").next() == Some(callee_name)
-        })
-        .cloned()
-        .collect();
-    keys.sort();
-    keys.dedup();
-    keys
+    registry.callee_lookup_keys(callee_name)
 }
 
 fn is_bare_binding_pass(expr: &Expression) -> bool {
