@@ -1,0 +1,12 @@
+pub struct GraphVertexU32Map {
+    pub n: u32,
+}
+
+pub fn get(map: GraphVertexU32Map, vertex: int) -> u32 {
+    let _ = map.n
+    vertex as u32
+}
+
+pub fn read(map: GraphVertexU32Map, vertex: int) -> u32 {
+    get(map, vertex)
+}

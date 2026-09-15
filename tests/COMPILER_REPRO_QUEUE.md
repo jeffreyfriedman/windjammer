@@ -721,6 +721,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.298 WindjammerDB CQ-C5 — coverage REDs WDB-225/226 &str←String + U32Map (2026-09-15)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-214–217** | ✅ GREEN |
+| Tip **WDB-177/218–224** | ❌ RED |
+| Tip **WDB-225** `String::from` lit → demoted `&str` join_path | ❌ RED — tip-out/gen ldbc (~46× &str←String) |
+| Tip **WDB-226** owned `GraphVertexU32Map.clone()`→demoted `&Map` | ❌ RED — tip-out/gen cdlp (~6×) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–226**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph. No Phase 606+.
+
 ## P3.297 WindjammerDB CQ-C5 — coverage REDs WDB-223/224 F64Map + Vec←&Vec (2026-09-15)
 
 | Gate | Status |
