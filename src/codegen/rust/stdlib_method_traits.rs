@@ -1019,6 +1019,9 @@ pub fn resolve_runtime_emit_method_name_for_type(
 /// (e.g. `AsRef<Path>`, `AsRef<str>`, `&str` on runtime helpers) — never by method or
 /// module name lists. Scanner maps AsRef contracts to `Reference(str)` in `param_types`,
 /// so the emitted-ref flag is the reliable signal that WJ still passes owned `string`.
+///
+/// Only **shared** borrows (`Borrowed` → `&T` / `&str` / AsRef). `MutBorrowed` (`&mut T`)
+/// is a different contract and must not force call-site `Ref` / `&arg` (auto_mut fill).
 pub fn runtime_wj_owned_rust_borrowed_param(
     sig: &crate::analyzer::FunctionSignature,
     arg_index: usize,
@@ -1035,11 +1038,11 @@ pub fn runtime_wj_owned_rust_borrowed_param(
     if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, pidx) {
         return false;
     }
-    let scanned_borrow = matches!(
+    // Shared-ref only. MutBorrowed/`&mut T` must stay MutRef at call sites.
+    if !matches!(
         sig.param_ownership.get(pidx),
-        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-    );
-    if !scanned_borrow {
+        Some(OwnershipMode::Borrowed)
+    ) {
         return false;
     }
     if sig
@@ -1759,6 +1762,28 @@ mod pattern_registry_tests {
             Some(&owned),
             0
         ));
+    }
+
+    #[test]
+    fn mut_borrowed_vec_is_not_runtime_shared_borrow() {
+        // auto_mut: `fill(self, buf: Vec<f32>)` mutates → MutBorrowed/`&mut Vec`, not AsRef/`&T`.
+        let mut sig = FunctionSignature::default();
+        sig.name = "Filler::fill".into();
+        sig.has_self_receiver = true;
+        sig.param_types = vec![
+            Type::Custom("Filler".into()),
+            Type::Vec(Box::new(Type::Custom("f32".into()))),
+        ];
+        sig.formal_param_types = vec![
+            Type::Custom("Filler".into()),
+            Type::Vec(Box::new(Type::Custom("f32".into()))),
+        ];
+        sig.param_ownership = vec![OwnershipMode::MutBorrowed, OwnershipMode::MutBorrowed];
+        sig.emitted_rust_ref_params = Some(vec![false, false]);
+        assert!(
+            !runtime_wj_owned_rust_borrowed_param(&sig, 0),
+            "MutBorrowed Vec must not force shared Ref/&buf at call sites"
+        );
     }
 
     #[test]

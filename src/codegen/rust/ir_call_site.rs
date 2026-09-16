@@ -1089,12 +1089,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else if let Some(ownership) = sig.param_ownership.get(param_idx).copied() {
             use crate::analyzer::OwnershipMode;
-            if matches!(
-                ownership,
-                OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-            ) && crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
-                &sig, arg_index,
-            ) {
+            // Region(8): shared Borrowed only — never demote MutBorrowed/`&mut T` to Ref.
+            if matches!(ownership, OwnershipMode::Borrowed)
+                && crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                    &sig, arg_index,
+                )
+            {
                 // Scanned runtime AsRef/&str formals: keep owned WJ text as Ref at call site.
                 if crate::codegen::rust::types::is_windjammer_text_type(
                     sig.formal_param_type(param_idx)
@@ -3270,6 +3270,14 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return arg_str.to_string();
             }
+        }
+        // Mut-ref call sites reborrow — never append `.clone()` onto `&mut place`
+        // (auto_mut `fill(&mut buf)` when `buf` is reused after the call).
+        if arg_str.starts_with("&mut ")
+            || self.ir_sig_arg_expects_mut_borrow(sig, arg_index)
+            || self.callee_slot_emits_mut_borrow(callee_name, arg_index)
+        {
+            return arg_str.to_string();
         }
         let callee_wants_shared_ref = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
@@ -6741,11 +6749,27 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             // Emitted owned formals win over stale MutBorrowed/Borrowed metadata.
-            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
-                || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+            // Never peel true `&mut T` / MutBorrowed slots (auto_mut `fill(&mut buf)`):
+            // AST bare `Vec`/`Custom` formals are still MutBorrowed after analyzer inference.
+            let effective_own =
+                crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                    &sig, arg_index,
+                );
+            let slot_expects_mut = sig
+                .param_types
+                .get(pidx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+                || matches!(
+                    effective_own,
+                    crate::analyzer::OwnershipMode::MutBorrowed
+                );
+            if !slot_expects_mut
+                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &sig, pidx,
-                )
-                || self.struct_method_ast_formal_param_types
+                ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                    &sig, pidx,
+                ) || self
+                    .struct_method_ast_formal_param_types
                     .get(*rt)
                     .and_then(|methods| methods.get(method))
                     .and_then(|formals| formals.get(arg_index))
@@ -6753,7 +6777,7 @@ impl<'ast> CodeGenerator<'ast> {
                         !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                             && !self.is_type_copy(t)
                             && !crate::codegen::rust::types::is_windjammer_text_type(t)
-                    })
+                    }))
             {
                 if coerced.starts_with('&') {
                     *coerced =

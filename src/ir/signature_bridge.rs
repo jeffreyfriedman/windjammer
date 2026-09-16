@@ -1446,6 +1446,38 @@ mod tests {
     }
 
     #[test]
+    fn mut_borrowed_bare_vec_stays_mut_ref_at_call_site() {
+        // auto_mut: analyzer MutBorrowed on bare `Vec` (before MutableReference wrap)
+        // must still expect MutRef so call sites emit `&mut buf`, not `&buf` / clone.
+        let sig = FunctionSignature {
+            name: "Filler::fill".into(),
+            formal_param_types: vec![
+                Type::Custom("Filler".into()),
+                Type::Vec(Box::new(Type::Custom("f32".into()))),
+            ],
+            param_types: vec![
+                Type::Custom("Filler".into()),
+                Type::Vec(Box::new(Type::Custom("f32".into()))),
+            ],
+            param_ownership: vec![OwnershipMode::MutBorrowed, OwnershipMode::MutBorrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 1);
+        assert!(
+            matches!(expected.ownership, OwnedType::MutRef(_)),
+            "MutBorrowed bare Vec must be MutRef, got {:?}",
+            expected.ownership
+        );
+    }
+
+    #[test]
     fn readonly_vec_formal_borrows_at_call_site_without_emitted_flags() {
         // Cross-crate: analyzer converged `Vec` → Borrowed + Reference(Vec), but metadata
         // may lack `emitted_rust_ref_params`. Call sites must still pass `&vec`.

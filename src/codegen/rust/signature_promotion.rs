@@ -892,8 +892,10 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
                         return true;
                     }
                 }
+                // MutBorrowed bare Vec/map emits `&mut Vec` / `&mut Map`, not owned
+                // `mut v: Vec` (auto_mut fill). Do not claim owned from emitted=false alone.
                 if bare_formal_is_vec_or_map(sig, param_idx) {
-                    return true;
+                    return false;
                 }
                 return false;
             }
