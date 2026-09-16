@@ -812,6 +812,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.309 WindjammerDB CQ-C5 — coverage REDs WDB-232/233 u32+1 usize cast + analytics csr.clone (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-230/231** | ❌ RED — tip-out/gen |
+| Tip **WDB-232** `i + 1_u32 as usize` into u32 compare | ❌ RED — tip-out/gen wave1_*_cli (~6×) |
+| Tip **WDB-233** `self.csr.clone()` → `&mut DenseCsr` (analytics) | ❌ RED — tip-out/gen graph_analytics_session (~6×) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–233**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr ownership. No Phase 606+.
+
 ## P3.307 WindjammerDB CQ-C5 — coverage REDs WDB-230/231 Copy put borrow + usize+=i32 (2026-09-16)
 
 | Gate | Status |
