@@ -662,14 +662,6 @@ impl<'ast> CodeGenerator<'ast> {
             // HashMap/Option match arms already lower Copy payloads as owned locals.
             return generated.to_string();
         }
-        if let Some(local) = self.local_var_types.get(name) {
-            if !matches!(
-                local,
-                Type::Reference(_) | Type::MutableReference(_)
-            ) {
-                return generated.to_string();
-            }
-        }
         if generated == *name {
             return format!("*{generated}");
         }
