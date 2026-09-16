@@ -69,7 +69,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | `i32_compound_add_must_not_use_usize_literal` | ✅ tip GREEN |
 | Product `astar_grid.rs` `i += 1 as usize` | ⏳ re-verify (also check `i = i + 1` assign path) |
 
-**Fix:** Strip spurious ` as usize` on integer literals in compound assignment RHS.
+**Fix:** Strip spurious ` as usize` on integer literals in compound assignment RHS; prefer `local_var_types` over loop-promoted `usize` in `resolve_compound_assign_int_rust_type_name` (P3.267 sibling).
 
 ## P3.302 — engine library `cargo check` after tip transpile (2026-09-15)
 
