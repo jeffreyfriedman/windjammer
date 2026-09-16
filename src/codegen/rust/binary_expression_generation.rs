@@ -382,9 +382,42 @@ impl<'ast> CodeGenerator<'ast> {
                             && right_ty != IntType::Unknown
                             && left_ty != right_ty
                         {
-                            let promoted = promote_types(left_ty, right_ty);
+                            // Windjammer `int`/i64 vs usize contamination (e.g. index formals):
+                            // cast the usize side to signed — never cast int bindings to usize
+                            // in comparisons/arith (`n_len as usize == 0_i64`, P3.267).
+                            let signed_vs_usize = |a: IntType, b: IntType| -> Option<IntType> {
+                                let signed = matches!(
+                                    a,
+                                    IntType::I8
+                                        | IntType::I16
+                                        | IntType::I32
+                                        | IntType::I64
+                                        | IntType::Isize
+                                );
+                                (signed && b == IntType::Usize).then_some(a)
+                            };
+                            let promoted = signed_vs_usize(left_ty, right_ty)
+                                .or_else(|| signed_vs_usize(right_ty, left_ty))
+                                .unwrap_or_else(|| promote_types(left_ty, right_ty));
                             if promoted != IntType::Unknown {
-                                if left_ty != promoted && is_safe_implicit_cast(left_ty, promoted) {
+                                // Numeric inference may tag i64 bindings as Usize (index use).
+                                // Only emit `as` when the operand actually produces usize.
+                                let side_needs_cast = |ty: IntType, expr: &Expression<'ast>, flagged_usize: bool| {
+                                    if ty == promoted {
+                                        return false;
+                                    }
+                                    if !is_safe_implicit_cast(ty, promoted) {
+                                        return false;
+                                    }
+                                    if ty == IntType::Usize
+                                        && !flagged_usize
+                                        && !self.expression_produces_usize(expr)
+                                    {
+                                        return false;
+                                    }
+                                    true
+                                };
+                                if side_needs_cast(left_ty, left, left_is_usize) {
                                     let suffix = get_cast_suffix(promoted);
                                     let needs_inner = matches!(left, Expression::Binary { .. })
                                         || left_str.contains(" as ");
@@ -394,8 +427,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         format!("{} as {}", left_str, suffix)
                                     };
                                 }
-                                if right_ty != promoted && is_safe_implicit_cast(right_ty, promoted)
-                                {
+                                if side_needs_cast(right_ty, right, right_is_usize) {
                                     let suffix = get_cast_suffix(promoted);
                                     let needs_inner = matches!(right, Expression::Binary { .. })
                                         || right_str.contains(" as ");

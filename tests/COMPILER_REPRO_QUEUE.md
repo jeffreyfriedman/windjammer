@@ -62,6 +62,14 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Fix:** Treat `.values()`/`.keys()` for-loops as borrowed iterators; clone loop bindings into owned `Vec::push` / owned formals.
 
+
+## P3.307 — usize loop counter compound assign must not use i32 literal (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| `usize_compound_add_must_not_use_i32_literal` | ✅ tip GREEN |
+| Product `astar_grid.wj` `ni += 1 as i32` on `0_usize` binding | ✅ fix via `usize_variables` in compound-assign resolve |
+
 ## P3.304 — i32 loop increment must not use usize literal (2026-09-16)
 
 | Gate | Status |
@@ -511,8 +519,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Gate `bug_strings_len_must_unify_int_index_arith_test` | ✅ tip GREEN (isolate); ⚠️ product still uses `strings.len() as int` + while bound |
 | Gate `bug_int_arith_must_not_split_i64_i32_test` | ✅ tip GREEN (2026-09-14) — bare `Literal::Int` infers WJ `int`; binary prefer-specific skips untyped lit peers (`year % 400` → `_i64`) |
 | Gate `bug_int_increment_literal_must_match_lhs_width_test` | ✅ tip GREEN (2026-09-15) — nested untyped counter width unified; isolate no longer emits `+= 1 as i32` |
-| Gate `bug_int_while_len_as_int_must_not_emit_usize_arith_test` | ❌ tip RED (2026-09-15) — typed `int` + `len() as int` emits `+= 1 as usize` / `h_len as usize` vs i64 (~113 tip api-check); WAL usize fix did not clear product multipass |
-| Product: bound owned locals into trait string formals; `len() as int` before while; typed nested indices | ⚠️ tip HEAD api-check **RED** (~113 usize/i64); dogfood interim still needed until gate GREEN |
+| Gate `bug_int_while_len_as_int_must_not_emit_usize_arith_test` | ✅ tip GREEN (2026-09-16) — `Type::Int`→I64 promotion + signed-vs-usize prefer i64 (not `h_len as usize`) |
+| Product: bound owned locals into trait string formals; `len() as int` before while; typed nested indices | ⚠️ re-check tip api-check after P3.306 while-len / WDB-228 |
 | Platform finance-ui: account-rail asserts StatusChip (`wj-account-rail-status` / `data-wj-status`) | ✅ |
 | `make client-check` / cargo-bin finance-screens | ✅ GREEN (prior); tip finance-screens regen still elevated |
 
@@ -801,12 +809,24 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Fresh `cargo check --lib` | ⚠️ **322** |
 | Tip **WDB-214–217 / 215 lsqb** | ✅ GREEN |
 | Tip **WDB-177/218–226** | ❌ RED |
-| Tip **WDB-227** u64 vs `len() as i64` (LDBC) | ❌ RED — tip-out/gen graph_ldbc_validation_engine |
-| Tip **WDB-228** `impl Into<String>` + `push_str(&…)` | ❌ RED — tip-out/gen + isolate codegen lsqb |
-| Tip **WDB-229** u64 vs bare `len()` usize | ❌ RED — tip-out/gen graph_sql_query_port |
+| Tip **WDB-227** u64 vs `len() as i64` (LDBC) | ❌ RED — tip-out/gen lag (needs tip `wj` regen) |
+| Tip **WDB-228** `impl Into<String>` + `push_str(&…)` | ✅ tip isolate GREEN (2026-09-16) — `param_pub_free_string_builder_forward` requires owned forward site; tip-out/gen still lag |
+| Tip **WDB-229** u64 vs bare `len()` usize | ❌ RED — tip-out/gen lag (needs tip `wj` regen) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–229**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / u64 width. No Phase 606+.
+
+## P3.306 (2026-09-16) — int/usize while-len + push_str Into formal
+
+| Gate | Status |
+|------|--------|
+| `bug_int_while_len_as_int_must_not_emit_usize_arith_test` | ✅ tip GREEN — `Type::Int`→`IntType::I64`; signed-vs-usize prefer i64; skip polluted Usize casts |
+| `bug_wdb228_*` isolate codegen | ✅ tip GREEN — `param_pub_free_string_builder_forward` requires owned forward site (not `push_str` `&str`) |
+| WDB-227/229 tip-out | ❌ tip-out/gen lag until regen with tip `wj` |
+
+**Root cause layers:** constraint/promotion (`int`≠i32) + coercion (prefer i64 over usize) + signature formal (`Into` only when owned forward).
+**What became unnecessary:** casting `len as int` bindings to usize in comparisons; `impl Into` + `push_str(&Into)` for borrow-only builders.
+**Gates:** `cargo test --release --test all -- int_while_len_as_int wdb228_codegen i32_compound_add thread_spawn_closure mpsc_sync_channel` → 7 passed.
 
 ## P3.298 WindjammerDB CQ-C5 — coverage REDs WDB-225/226 &str←String + U32Map (2026-09-15)
 

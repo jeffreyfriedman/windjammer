@@ -10,7 +10,8 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> Option<crate::type_inference::IntType> {
         use crate::type_inference::IntType;
         match ty {
-            Type::Int => Some(IntType::I32),
+            // Windjammer `int` is i64 in Rust codegen — never promote as i32 (P3.267).
+            Type::Int => Some(IntType::I64),
             Type::Int32 => Some(IntType::I32),
             Type::Uint => Some(IntType::U32),
             Type::Custom(name) => match name.as_str() {

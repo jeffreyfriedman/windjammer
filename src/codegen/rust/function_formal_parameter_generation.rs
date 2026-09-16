@@ -3454,6 +3454,8 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Pub free functions returning `string` that only pass a param into builder/method args
     /// (`grid(left)` → `Tile::value_html(left)`) — emit `impl Into<String>` for `&str` callers.
+    ///
+    /// Not for borrow-only sites (`push_str(&str)`): those must stay `String`/`&str` (WDB-228).
     fn param_pub_free_string_builder_forward(
         &self,
         func: &FunctionDecl<'_>,
@@ -3477,6 +3479,11 @@ impl<'ast> CodeGenerator<'ast> {
             &param.name,
             &func.body,
         ) {
+            return false;
+        }
+        // Signature-driven: at least one forward site must expect owned String / Into.
+        // `key.push_str(edge_kind)` alone is Borrowed `&str` — do not emit `impl Into`.
+        if !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func) {
             return false;
         }
         self.param_all_call_sites_are_method_or_call_args(func.body.as_slice(), &param.name, func)

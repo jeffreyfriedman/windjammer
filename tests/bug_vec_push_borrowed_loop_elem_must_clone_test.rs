@@ -55,12 +55,13 @@ impl Manager {
     let out = t.compile().expect("compile");
     let rs = out.get("mgr.rs").expect("mgr.rs");
     assert!(
-        rs.contains(".push(ach.clone())") || rs.contains(".push(ach.clone())"),
+        rs.contains(".push(ach.clone())"),
         "borrowed loop elem into owned Vec::push must clone\n{rs}"
     );
-    assert!(
-        !rs.contains("result.push(ach);") && !rs.contains("result.push(ach)"),
-        "must not push borrowed ref without clone\n{rs}"
-    );
+    for line in rs.lines() {
+        if line.contains("push(ach") && !line.contains("ach.clone()") {
+            panic!("must not push borrowed ref without clone\n{line}\n{rs}");
+        }
+    }
     t.cargo_check().expect("cargo check");
 }
