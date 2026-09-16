@@ -3415,6 +3415,55 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        // Loop / map.values() bindings (`ach: &Achievement`) into owned `Vec::push` (P3.303).
+        if matches!(arg_expr, Expression::Identifier { .. }) {
+            let emits_shared = [sig.name.as_str(), sig.name.rsplit("::").next().unwrap_or(&sig.name)]
+                .iter()
+                .find_map(|key| {
+                    self.signature_registry
+                        .get_signature(key)
+                        .or_else(|| {
+                            self.global_signature_registry
+                                .as_ref()
+                                .and_then(|g| g.get_signature(key))
+                        })
+                        .and_then(|s| s.emitted_rust_ref_params.as_ref())
+                        .and_then(|flags| flags.get(param_idx).copied())
+                })
+                .unwrap_or_else(|| {
+                    sig.emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|flags| flags.get(param_idx).copied())
+                        .unwrap_or_else(|| {
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                sig, param_idx,
+                            )
+                        })
+                });
+            if !emits_shared {
+                if let Expression::Identifier { name, .. } = arg_expr {
+                    if self.borrowed_iterator_vars.contains(name)
+                        && !self.binding_is_copy_pass_by_value_scalar(name)
+                        && !arg_str.ends_with(".clone()")
+                    {
+                        return format!("{arg_str}.clone()");
+                    }
+                }
+                let needs_clone = match self.infer_expression_type(arg_expr) {
+                    None => false,
+                    Some(t) => {
+                        let bare = match &t {
+                            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                            other => other,
+                        };
+                        !self.is_type_copy(bare)
+                    }
+                };
+                if needs_clone && !arg_str.ends_with(".clone()") {
+                    return format!("{arg_str}.clone()");
+                }
+            }
+        }
         if let Expression::Identifier { name, .. } = arg_expr {
             if self.match_arm_bindings.contains(name.as_str()) {
                 let mut out = arg_str.to_string();
@@ -7520,6 +7569,48 @@ impl<'ast> CodeGenerator<'ast> {
                         return self.maybe_auto_clone(name, arg_str);
                     }
                     let emits_owned = self.callee_arg_emits_owned_contract(callee, idx);
+                    if self.borrowed_iterator_vars.contains(name) {
+                        let wants_borrow = self.callee_arg_expects_borrow_at_call(callee, idx)
+                            || self.ir_callee_arg_expects_shared_borrow(
+                                &self.signature_registry,
+                                callee,
+                                idx,
+                                None,
+                                None,
+                            )
+                            || self.global_signature_registry.as_ref().is_some_and(|g| {
+                                self.ir_callee_arg_expects_shared_borrow(
+                                    g, callee, idx, None, None,
+                                )
+                            })
+                            || self.ir_callee_arg_expects_mut_borrow(
+                                &self.signature_registry,
+                                callee,
+                                idx,
+                                None,
+                                None,
+                            );
+                        if !wants_borrow && !self.binding_is_copy_pass_by_value_scalar(name) {
+                            let non_copy = self
+                                .infer_expression_type(arg_expr)
+                                .map(|t| {
+                                    let bare = match &t {
+                                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                                            inner.as_ref()
+                                        }
+                                        other => other,
+                                    };
+                                    !self.is_type_copy(bare)
+                                })
+                                .unwrap_or(true);
+                            if non_copy {
+                                let base = arg_str.trim_start_matches('&');
+                                if !base.ends_with(".clone()") {
+                                    return format!("{base}.clone()");
+                                }
+                            }
+                        }
+                    }
                     if !emits_owned
                         && (self.ir_callee_arg_expects_mut_borrow(
                             &self.signature_registry,

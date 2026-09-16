@@ -52,13 +52,32 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 "$WJ_COMPILER" build src --library -o gen --no-cargo --no-generate-cargo-toml
 ```
 
+
+## P3.303 — map `.values()` loop push must clone (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| `vec_push_borrowed_loop_elem_must_clone_for_owned_push` | ✅ tip GREEN |
+| Product `achievement/manager.rs` `result.push(ach)` | ⏳ re-verify on full engine build |
+
+**Fix:** Treat `.values()`/`.keys()` for-loops as borrowed iterators; clone loop bindings into owned `Vec::push` / owned formals.
+
+## P3.304 — i32 loop increment must not use usize literal (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| `i32_compound_add_must_not_use_usize_literal` | ✅ tip GREEN |
+| Product `astar_grid.rs` `i += 1 as usize` | ⏳ re-verify (also check `i = i + 1` assign path) |
+
+**Fix:** Strip spurious ` as usize` on integer literals in compound assignment RHS.
+
 ## P3.302 — engine library `cargo check` after tip transpile (2026-09-15)
 
 | Gate | Status |
 |------|--------|
 | `windjammer-game-core` tip `--library` EXIT=0 (~664 files) | ✅ tip GREEN (2026-09-15 cloud verify) |
 | `trait_impl_owned_vec_forward_must_match_trait_formal` | ✅ tip GREEN (2026-09-16) — E0053 owned `Vec` impl formal |
-| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ⏳ re-verify after P3.302 fix — was **916** rustc errors |
+| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ⏳ re-verify after P3.303/P3.304 — was **914** rustc errors |
 
 **Sample root cause (E0053):** `RenderPort` trait emits owned formals (`Vec<MaterialData>`) but `impl RenderPort for GameRenderer` emits `&Vec<MaterialData>` when body forwards to borrowing callee — trait impl signature must match trait definition.
 
