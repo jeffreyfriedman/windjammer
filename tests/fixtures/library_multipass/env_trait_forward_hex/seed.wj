@@ -3,12 +3,17 @@ use crate::ports::{InvoiceRepository, InvoiceCreateDraft}
 pub struct SeedInvoiceRepository {}
 impl InvoiceRepository for SeedInvoiceRepository {
     fn create(self, tenant_id: string, draft: InvoiceCreateDraft) -> Result<string, string> {
-        Ok(tenant_id + "-" + draft.note)
+        // Product seed adapters discard unused tenant_id this way; must not demote
+        // the trait formal to shared-ref (callers would emit `&_temp0` into String).
+        let _ = tenant_id
+        Ok(draft.note + "")
     }
     fn get(self, tenant_id: string, invoice_id: string) -> Result<string, string> {
-        Ok(tenant_id + ":" + invoice_id)
+        let _ = tenant_id
+        Ok(invoice_id + "")
     }
     fn list(self, tenant_id: string) -> Vec<string> {
-        vec![tenant_id]
+        let _ = tenant_id
+        vec![]
     }
 }

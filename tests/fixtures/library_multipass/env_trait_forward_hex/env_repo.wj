@@ -9,25 +9,25 @@ impl InvoiceRepository for EnvInvoiceRepository {
     fn create(self, tenant_id: string, draft: InvoiceCreateDraft) -> Result<string, string> {
         if lk_db_is_postgres() {
             let repo = PostgresInvoiceRepository {}
-            return repo.create(tenant_id, draft)
+            return repo.create(tenant_id + "", draft)
         }
         let repo = SeedInvoiceRepository {}
-        repo.create(tenant_id, draft)
+        repo.create(tenant_id + "", draft)
     }
     fn get(self, tenant_id: string, invoice_id: string) -> Result<string, string> {
         if lk_db_is_postgres() {
             let repo = PostgresInvoiceRepository {}
-            return repo.get(tenant_id, invoice_id)
+            return repo.get(tenant_id + "", invoice_id + "")
         }
         let repo = SeedInvoiceRepository {}
-        repo.get(tenant_id, invoice_id)
+        repo.get(tenant_id + "", invoice_id + "")
     }
     fn list(self, tenant_id: string) -> Vec<string> {
         if lk_db_is_postgres() {
             let repo = PostgresInvoiceRepository {}
-            return repo.list(tenant_id)
+            return repo.list(tenant_id + "")
         }
         let repo = SeedInvoiceRepository {}
-        repo.list(tenant_id)
+        repo.list(tenant_id + "")
     }
 }
