@@ -70,6 +70,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | `i32_while_compare_must_not_cast_rhs_to_i64` | ✅ tip GREEN |
 | Product `tps_camera.wj` `while dy < 3` (`dy: i32` / `0_i32`) | ✅ `while dy < 3_i32` (no `3_i64 as i64`) |
 | Product `locomotion` / const / field bounds | ✅ no `(COUNT as i64)` on i32 counters |
+| Breach `wj game build --release` (tip `.cargo-target-wj`, 2026-09-16) | **1606** rustc errors (was **1743**); no `_i64 as i64` while bounds in engine emit |
 
 **Root cause:** Mixed-int promotion widened i32 peers + WJ int literals to i64 (`promote_types(I32,I64)→I64`) and peer literal suffixes lost after `assignment_int_target_type` reset.
 
@@ -97,7 +98,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 |------|--------|
 | `windjammer-game-core` tip `--library` EXIT=0 (~664 files) | ✅ tip GREEN (2026-09-15 cloud verify) |
 | `trait_impl_owned_vec_forward_must_match_trait_formal` | ✅ tip GREEN (2026-09-16) — E0053 owned `Vec` impl formal |
-| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ⏳ re-verify after P3.303/P3.304 — was **914** rustc errors |
+| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ⏳ **1606** rustc errors (2026-09-16 tip `.cargo-target-wj`; was **1743** pre-P3.309 transpile) |
 
 **Sample root cause (E0053):** `RenderPort` trait emits owned formals (`Vec<MaterialData>`) but `impl RenderPort for GameRenderer` emits `&Vec<MaterialData>` when body forwards to borrowing callee — trait impl signature must match trait definition.
 
@@ -823,6 +824,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.310 WindjammerDB CQ-C5 — coverage RED WDB-234 batch DenseCsr←&mut (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-219** graph_sql `&mut`→owned csr | ❌ RED |
+| Tip **WDB-234** batch `find_index(csr)` with `&mut DenseCsr` | ❌ RED — tip-out/gen graph_batch_engine (~13× DenseCsr←&mut) |
+| Tip **WDB-232/233** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–234**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr ownership. No Phase 606+.
 
 ## P3.309 WindjammerDB CQ-C5 — coverage REDs WDB-232/233 u32+1 usize cast + analytics csr.clone (2026-09-16)
 
