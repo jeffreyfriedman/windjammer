@@ -238,6 +238,41 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
+    /// WJ `Type::Int` is ambiguous i64 in codegen; concrete locals (`i32`, `usize`, …) win.
+    pub(in crate::codegen::rust) fn local_int_rust_type_name_excluding_ambiguous_int(
+        &self,
+        name: &str,
+    ) -> Option<&'static str> {
+        let local_ty = self.local_var_types.get(name)?;
+        if matches!(local_ty, Type::Int) {
+            return None;
+        }
+        Self::int_rust_type_name(local_ty)
+    }
+
+    pub(in crate::codegen::rust) fn parser_type_from_rust_int_name(name: &str) -> Option<Type> {
+        match name {
+            "i32" => Some(Type::Int32),
+            "i64" => Some(Type::Int),
+            "usize" => Some(Type::Custom("usize".into())),
+            "u32" => Some(Type::Uint),
+            "u64" => Some(Type::Custom("u64".into())),
+            "isize" => Some(Type::Custom("isize".into())),
+            _ => None,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn set_assignment_int_target_from_compound_target(
+        &mut self,
+        target: &Expression,
+    ) {
+        if let Some(w) = self.resolve_compound_assign_int_rust_type_name(target) {
+            if let Some(t) = Self::parser_type_from_rust_int_name(w) {
+                self.assignment_int_target_type = Some(t);
+            }
+        }
+    }
+
     /// Concrete Rust int type for compound assignment targets (binding type, then solver).
     pub(in crate::codegen::rust) fn resolve_compound_assign_int_rust_type_name(
         &self,
@@ -248,15 +283,18 @@ impl<'ast> CodeGenerator<'ast> {
         // Loop counters may be promoted to `usize` in numeric inference while the binding stays
         // `i32`/`i64` (index via `i as usize`, increment must match the binding — P3.304/P3.267).
         if let Expression::Identifier { name, .. } = target {
-            // Binding type beats `usize_variables` promotion from `.len()` compares
-            // (`while (i as usize) < vec.len()` + `i += 1` must stay i32/i64 — P3.304).
+            // Explicit `i32` / `usize` annotations beat `.len()` promotion (P3.304).
+            if let Some(concrete) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
+                return Some(concrete);
+            }
+            // Untyped WJ `int` used as `vec[i]` / `while i < vec.len()` → usize counter (P3.311).
+            if self.usize_variables.contains(name) {
+                return Some("usize");
+            }
             if let Some(local_ty) = self.local_var_types.get(name) {
                 if let Some(name) = Self::int_rust_type_name(local_ty) {
                     return Some(name);
                 }
-            }
-            if self.usize_variables.contains(name) {
-                return Some("usize");
             }
         }
         if let Some(ni) = &self.numeric_inference {

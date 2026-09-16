@@ -4,6 +4,35 @@ use crate::codegen::rust::CodeGenerator;
 use crate::parser::{Expression, Type};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Operand type for driving int literal suffixes in binary ops (`idx + 1` → `1_usize`).
+    pub(in crate::codegen::rust) fn peer_type_for_int_literal_operand(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> Option<Type> {
+        if let Expression::Identifier { name, .. } = expr {
+            if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
+                return Self::parser_type_from_rust_int_name(w);
+            }
+            if self.usize_variables.contains(name) {
+                return Some(Type::Custom("usize".into()));
+            }
+        }
+        if self.infer_expression_type_is_usize(expr) {
+            return Some(Type::Custom("usize".into()));
+        }
+        self.infer_expression_type(expr).filter(|t| {
+            Self::assignment_target_needs_int_codegen_context(t)
+                && Self::int_type_from_assignment_target(t).is_some()
+        })
+    }
+
+    pub(in crate::codegen::rust) fn expr_is_usize_loop_counter(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        matches!(expr, Expression::Identifier { name, .. } if self.usize_variables.contains(name))
+    }
+
     /// Map parser [`Type`] to [`crate::type_inference::IntType`] for mixed-integer `as T` codegen.
     pub(in crate::codegen::rust) fn parser_type_to_promotion_int_type(
         ty: &Type,

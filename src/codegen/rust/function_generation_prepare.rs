@@ -1090,7 +1090,11 @@ impl<'ast> CodeGenerator<'ast> {
                         && self.param_only_used_in_simple_or_tuple_discard(
                             func.body.as_slice(),
                             &param.name,
-                        );
+                        )
+                        // Trait impl formals must stay owned String (match trait + callers).
+                        // Discard-only demotion would keep `tenant_id: String` in emit but
+                        // mark Borrowed → env `+ ""` emits `create(&_temp0)` (P3.308).
+                        && !self.in_trait_impl;
                 // Returned associated WJ `string` → `&str` + `.to_string()` at return/tail.
                 let text_return_coerce =
                     self.associated_text_identity_return_may_borrow(func, param, analyzed);
@@ -11427,8 +11431,18 @@ impl<'ast> CodeGenerator<'ast> {
                 // both codegen-confirmed `emitted_rust_ref_formals` and body-converged
                 // `str_ref_optimized_params` mark shared `&str` emission. Either alone
                 // without the other is insufficient for owned `String` formals.
-                let emits_shared_ref = (self.emitted_rust_ref_formals.contains(&param.name)
-                    || self.str_ref_optimized_params.contains(&param.name))
+                // Trait-impl bare `string` formals always emit `String` (match the trait);
+                // discard-only analysis must not claim shared-ref (P3.308 → `&_temp0`).
+                let trait_keeps_owned_string = self.in_trait_impl
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                    && !matches!(
+                        &param.type_,
+                        crate::parser::Type::Reference(_)
+                            | crate::parser::Type::MutableReference(_)
+                    );
+                let emits_shared_ref = !trait_keeps_owned_string
+                    && (self.emitted_rust_ref_formals.contains(&param.name)
+                        || self.str_ref_optimized_params.contains(&param.name))
                     && !self.inferred_mut_borrowed_params.contains(&param.name);
                 emitted[reg_idx] = emits_shared_ref;
             }

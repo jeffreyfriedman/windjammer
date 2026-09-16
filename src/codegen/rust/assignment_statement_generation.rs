@@ -77,6 +77,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
+            self.set_assignment_int_target_from_compound_target(target);
             let mut value_str = self.generate_expression(value);
 
             // Int counters compared with `.len()` must not accumulate via `1 as usize` (P3.304).

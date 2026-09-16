@@ -657,7 +657,23 @@ pub(crate) fn format_temp_arg_pass_expr(
     had_borrow_prefix: bool,
 ) -> String {
     if had_borrow_prefix {
-        return format!("&{temp_name}");
+        // Premature `&format!(...)` before hoist (Borrowed ownership / discard-only).
+        // Only keep `&_temp` when codegen *explicitly* recorded a shared-ref formal.
+        // Heuristic `callee_emits_shared_rust_ref_param` is too aggressive for trait-impl
+        // discard that still emits `tenant_id: String` (P3.308).
+        if let Some(sig) = sig {
+            let param_idx = sig.arg_param_index(arg_index);
+            if sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(param_idx))
+                .copied()
+                == Some(true)
+            {
+                return format!("&{temp_name}");
+            }
+        }
+        return temp_name.to_string();
     }
     let Some(sig) = sig else {
         return temp_name.to_string();
@@ -668,6 +684,12 @@ pub(crate) fn format_temp_arg_pass_expr(
     }
     if callee_emits_shared_rust_ref_param(sig, param_idx) {
         return format!("&{temp_name}");
+    }
+    // Bare WJ `string` without shared-ref emission → owned temp (P3.308).
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+        sig, param_idx,
+    ) {
+        return temp_name.to_string();
     }
     if sig
         .param_type_for_arg(arg_index)
