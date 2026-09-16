@@ -79,6 +79,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let mut value_str = self.generate_expression(value);
 
+            // Int counters compared with `.len()` must not accumulate via `1 as usize` (P3.304).
+            if self
+                .resolve_compound_assign_int_rust_type_name(target)
+                .is_some_and(|w| w != "usize")
+            {
+                value_str = Self::strip_compound_assign_int_literal_suffix(&value_str);
+            }
+
             // Untyped integer literals: let Rust infer width from the binding (`i32 += 1`
             // not `i32 += 1_i64` when `let mut i = 0` is inferred as i32 from `while i < n as i32`).
             if matches!(
