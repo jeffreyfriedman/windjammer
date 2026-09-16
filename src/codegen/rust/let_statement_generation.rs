@@ -175,7 +175,13 @@ impl<'ast> CodeGenerator<'ast> {
                         value: crate::parser::Literal::Int(_),
                         ..
                     } => {
-                        if let Some(ret_ty) = &self.current_function_return_type {
+                        // Prepass may have marked this binding as a usize index/len counter
+                        // (`while i < vec.len()` / `vec[i]`) before the let is emitted.
+                        // Do not overwrite with return-inferred Int32 — that yields
+                        // `let i = 0_usize` + `i += 1 as i32` / `i == 0_i32` (P3.311/P3.314).
+                        if self.usize_variables.contains(name) {
+                            Some(Type::Custom("usize".into()))
+                        } else if let Some(ret_ty) = &self.current_function_return_type {
                             match ret_ty {
                                 Type::Int32 => Some(Type::Int32),
                                 Type::Int => Some(Type::Int),
@@ -467,6 +473,9 @@ impl<'ast> CodeGenerator<'ast> {
                             self.assignment_int_target_type = Some(ret_ty.clone());
                         }
                     }
+                }
+                if var_name.is_some_and(|n| self.usize_variables.contains(n)) {
+                    self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }
 
                 // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
