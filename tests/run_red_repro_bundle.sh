@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
+  module_file_recv_reassign_must_move_not_clone_receiver
   int_while_len_as_int_must_not_emit_usize_arith
   wdb223_tip_out_pagerank_must_borrow_owned_f64_map
   module_file_spawn_move_in_worker_loop_must_be_preserved
@@ -13,6 +14,7 @@ RED_FILTERS=(
   int_find_pos_ge_zero_must_not_mix_usize_i64
   substring_end_i_plus_one_must_not_emit_i32_into_usize
   module_file_shared_map_get_must_borrow_key
+  vec_len_eq_zero_must_not_emit_i64_literal
   wdb225_tip_out_ldbc_must_not_pass_string_from
   wdb226_tip_out_cdlp_must_borrow_owned_u32_map
 )
