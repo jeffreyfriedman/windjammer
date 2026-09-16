@@ -24,6 +24,7 @@ GREEN_FILTERS=(
   int_arith_must_not_split_i64_i32
   int_zero_minus_must_keep_lhs_width
   hashmap_string_key_insert_must_not_cast_usize
+  trait_impl_owned_vec_forward_must_match_trait_formal
   trait_owned_string_call_must_not_over_borrow
   strings_len_must_unify_int_index_arith
   hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop

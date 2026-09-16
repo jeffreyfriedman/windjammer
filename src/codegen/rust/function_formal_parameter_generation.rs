@@ -89,14 +89,18 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.remove(&param.name);
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
+                // E0053: trait impl non-self formals must match trait AST types (owned
+                // `Vec<T>`, `string`, etc.) — do not demote thin forwarders to `&T`.
                 if self.in_trait_impl
                     && param.name != "self"
-                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !matches!(
                         &param.type_,
                         Type::Reference(_) | Type::MutableReference(_)
                     )
                 {
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
                 if param.name != "self"
