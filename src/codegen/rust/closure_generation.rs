@@ -237,6 +237,21 @@ impl<'ast> CodeGenerator<'ast> {
                 Self::bind_pattern(&mut for_bound, pattern);
                 self.ref_stmts_have_free_identifier(&for_bound, body)
             }
+            // P3.297: `spawn(move || { while … { use outer } })` — Without While/Loop,
+            // capture analysis misses free ids and codegen drops `move` → E0373.
+            Statement::While {
+                condition,
+                body,
+                ..
+            } => {
+                self.expr_has_free_identifier(local_bound, condition)
+                    || self.ref_stmts_have_free_identifier(local_bound, body)
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                self.ref_stmts_have_free_identifier(local_bound, body)
+            }
             Statement::Match { value, arms, .. } => {
                 if self.expr_has_free_identifier(local_bound, value) {
                     return true;
