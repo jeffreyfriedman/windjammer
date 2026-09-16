@@ -188,6 +188,12 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(" in ");
 
         let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
+        // Map `.values()` / `.keys()` yield shared refs — loop vars are `&V` (P3.303 push clone).
+        if let Expression::MethodCall { method, .. } = iterable {
+            if matches!(method.as_str(), "values" | "keys") {
+                is_borrowed_iterator = true;
+            }
+        }
         if by_value_owned_iter {
             is_borrowed_iterator = false;
         }

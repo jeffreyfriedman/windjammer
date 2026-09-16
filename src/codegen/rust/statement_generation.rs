@@ -151,6 +151,11 @@ impl<'ast> CodeGenerator<'ast> {
                 return stripped.to_string();
             }
         }
+        if let Some(stripped) = value_str.strip_suffix(" as usize") {
+            if stripped.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                return stripped.to_string();
+            }
+        }
         value_str.to_string()
     }
 
