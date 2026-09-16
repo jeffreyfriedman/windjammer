@@ -106,7 +106,18 @@ impl<'ast> CodeGenerator<'ast> {
         let ident_in_usize_vars = |expr: &Expression<'ast>| {
             matches!(
                 expr,
-                Expression::Identifier { name, .. } if self.usize_variables.contains(name)
+                Expression::Identifier { name, .. }
+                    if self.usize_variables.contains(name)
+                        && !self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                            matches!(t, Type::Int | Type::Int32)
+                                || matches!(
+                                    t,
+                                    Type::Custom(n) if matches!(
+                                        n.as_str(),
+                                        "int" | "i64" | "i32" | "u32" | "u64"
+                                    )
+                                )
+                        })
             )
         };
         let left_is_usize =
