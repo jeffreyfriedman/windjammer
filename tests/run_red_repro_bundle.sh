@@ -7,7 +7,6 @@ cd "$ROOT"
 
 RED_FILTERS=(
   module_file_recv_reassign_must_move_not_clone_receiver
-  int_while_len_as_int_must_not_emit_usize_arith
   wdb223_tip_out_pagerank_must_borrow_owned_f64_map
   module_file_spawn_move_in_worker_loop_must_be_preserved
   mut_owned_vec_u8_return_must_not_demote_to_ref
@@ -27,6 +26,7 @@ GREEN_FILTERS=(
   hashmap_string_key_insert_must_not_cast_usize
   vec_push_borrowed_loop_elem_must_clone
   i32_compound_add_must_not_use_usize_literal
+  env_trait_forward_owned_string_must_not_borrow
   vec_len_eq_zero_must_not_emit_i64_literal
   trait_impl_owned_vec_forward_must_match_trait_formal
   int_while_usize_compare_compound_assign_must_stay_int

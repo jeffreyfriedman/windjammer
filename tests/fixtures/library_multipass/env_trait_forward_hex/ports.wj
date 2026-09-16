@@ -1,0 +1,9 @@
+pub struct InvoiceCreateDraft {
+    note: string,
+}
+
+pub trait InvoiceRepository {
+    fn create(self, tenant_id: string, draft: InvoiceCreateDraft) -> Result<string, string>
+    fn get(self, tenant_id: string, invoice_id: string) -> Result<string, string>
+    fn list(self, tenant_id: string) -> Vec<string>
+}

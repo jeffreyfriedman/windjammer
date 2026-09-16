@@ -248,7 +248,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — library `--module-file` preserves `move` |
 | P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | 🆕 RED / filed (P3.297); blocks wj-sync shared-inbox Pool |
 | P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.298); blocks wj-uuid |
-| P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | 🆕 RED / filed (P3.299); blocks wj-timefmt |
+| P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ✅ tip GREEN (2026-09-16) — binding beats usize_variables; `strings::len`→i64 |
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | 🆕 RED / filed (P3.300); blocks duration/toml/semver/cli-args |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (2026-09-15 recheck) — was P3.301 RED |
@@ -283,6 +283,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Note | Correct: `Receiver` must not auto-derive Clone (prior gate); call site must MOVE after reassign |
 
 **Compiler agent:** when `rx` is rebound from `recv_int(rx)` return, pass by move — do not inject `.clone()` on non-Clone channel receivers.
+
+## P3.308 (2026-09-16) — hexagonal env trait forward owned string
+
+| Gate | Status |
+|------|--------|
+| `bug_env_trait_forward_owned_string_must_not_borrow_test` | ✅ tip hexagonal GREEN (`clone`/`to_string`); ⚠️ product multipass previously `&tenant_id` |
+| Product interim | ✅ env_* + composition/seed/postgres call-site `arg + ""` (P3.267); tip api-check 126→~low |
+
+**Compiler agent:** cross-module env selector forwarding owned `string` into trait formals must move/clone consistently in full product multipass (not only shallow hexagonal isolate).
+
 
 ## P3.301 (2026-09-15) — multipass SharedMap get/has re-emits key.to_string()
 

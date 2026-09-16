@@ -88,10 +88,12 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
+                // `strings.len(s)` / `json.len(v)` parse as Call(FieldAccess) with args —
+                // registry baseline returns Rust `usize` even when WJ stubs say `-> int`.
+                if self.method_call_rust_emits_usize(expr) {
+                    return true;
+                }
                 if arguments.is_empty() {
-                    if self.method_call_rust_emits_usize(expr) {
-                        return true;
-                    }
                     if let Expression::FieldAccess { object, field, .. } = function {
                         if crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
                             field,
@@ -105,7 +107,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // `strings::len(text)` / other free calls — registry return type.
+                // Free calls — inferred/registry return type.
                 self.infer_expression_type_is_usize(expr)
             }
             // Binary ops with usize operands: i + 1, len() - 1, etc.
@@ -147,6 +149,18 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Variables assigned from .len() or typed as usize
             Expression::Identifier { name, .. } => {
+                // Binding width beats `.len()`-compare promotion into `usize_variables`
+                // (`let mut i = 0` under `-> int` stays i64; cast `strings::len` instead — P3.299).
+                if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Int | Type::Int32)
+                        || matches!(
+                            t,
+                            Type::Custom(n)
+                                if matches!(n.as_str(), "int" | "i64" | "i32" | "u32" | "u64")
+                        )
+                }) {
+                    return false;
+                }
                 if self.usize_variables.contains(name) {
                     return true;
                 }
@@ -219,6 +233,16 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression,
     ) -> bool {
         if let Expression::Identifier { name, .. } = expr {
+            if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                matches!(t, Type::Int | Type::Int32)
+                    || matches!(
+                        t,
+                        Type::Custom(n)
+                            if matches!(n.as_str(), "int" | "i64" | "i32" | "u32" | "u64")
+                    )
+            }) {
+                return true;
+            }
             if self.usize_variables.contains(name) {
                 return false;
             }

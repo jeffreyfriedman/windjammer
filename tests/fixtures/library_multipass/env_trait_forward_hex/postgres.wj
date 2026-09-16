@@ -1,0 +1,14 @@
+use crate::ports::{InvoiceRepository, InvoiceCreateDraft}
+
+pub struct PostgresInvoiceRepository {}
+impl InvoiceRepository for PostgresInvoiceRepository {
+    fn create(self, tenant_id: string, draft: InvoiceCreateDraft) -> Result<string, string> {
+        Ok(tenant_id + "/" + draft.note)
+    }
+    fn get(self, tenant_id: string, invoice_id: string) -> Result<string, string> {
+        Ok(tenant_id + "#" + invoice_id)
+    }
+    fn list(self, tenant_id: string) -> Vec<string> {
+        vec![tenant_id]
+    }
+}

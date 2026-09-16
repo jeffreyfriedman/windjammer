@@ -1,0 +1,51 @@
+// REPRO — env selector forwards owned tenant_id into seed/pg trait formals.
+// Product LedgerKit tip api-check: env_* emits repo.create(&tenant_id, …).
+
+pub trait InvoiceRepository {
+    fn create(self, tenant_id: string) -> string
+    fn get(self, tenant_id: string, invoice_id: string) -> string
+}
+
+pub struct SeedInvoiceRepository {}
+impl InvoiceRepository for SeedInvoiceRepository {
+    fn create(self, tenant_id: string) -> string {
+        tenant_id + "-seed"
+    }
+    fn get(self, tenant_id: string, invoice_id: string) -> string {
+        tenant_id + ":" + invoice_id
+    }
+}
+
+pub struct PostgresInvoiceRepository {}
+impl InvoiceRepository for PostgresInvoiceRepository {
+    fn create(self, tenant_id: string) -> string {
+        tenant_id + "-pg"
+    }
+    fn get(self, tenant_id: string, invoice_id: string) -> string {
+        tenant_id + "/" + invoice_id
+    }
+}
+
+fn lk_db_is_postgres() -> bool {
+    false
+}
+
+pub struct EnvInvoiceRepository {}
+impl InvoiceRepository for EnvInvoiceRepository {
+    fn create(self, tenant_id: string) -> string {
+        if lk_db_is_postgres() {
+            let repo = PostgresInvoiceRepository {}
+            return repo.create(tenant_id)
+        }
+        let repo = SeedInvoiceRepository {}
+        repo.create(tenant_id)
+    }
+    fn get(self, tenant_id: string, invoice_id: string) -> string {
+        if lk_db_is_postgres() {
+            let repo = PostgresInvoiceRepository {}
+            return repo.get(tenant_id, invoice_id)
+        }
+        let repo = SeedInvoiceRepository {}
+        repo.get(tenant_id, invoice_id)
+    }
+}
