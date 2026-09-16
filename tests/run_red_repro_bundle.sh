@@ -7,9 +7,7 @@ cd "$ROOT"
 
 RED_FILTERS=(
   module_file_usize_index_eq_zero_must_not_emit_i32
-  module_file_vec_index_loop_must_not_add_i32_to_usize
   module_file_recv_reassign_must_move_not_clone_receiver
-  i32_range_end_add_must_not_split_i64_i32
   wdb223_tip_out_pagerank_must_borrow_owned_f64_map
   module_file_spawn_move_in_worker_loop_must_be_preserved
   mut_owned_vec_u8_return_must_not_demote_to_ref
@@ -21,6 +19,8 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  module_file_vec_index_loop_must_not_add_i32_to_usize
+  i32_range_end_add_must_not_split_i64_i32
   thread_spawn_move_keyword_must_be_preserved
   module_file_spawn_move_keyword_must_be_preserved
   int_increment_literal_must_match_lhs_width
