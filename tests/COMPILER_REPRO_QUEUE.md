@@ -246,8 +246,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
 | P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — emit `spawn(move \|\| …)`; cargo-check GREEN |
 | P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — library `--module-file` preserves `move` |
-| P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | 🆕 RED / filed (P3.297); blocks wj-sync shared-inbox Pool |
-| P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.298); blocks wj-uuid |
+| P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN (2026-09-16) — P3.297 While/Loop capture analysis |
+| P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ✅ tip GREEN (2026-09-16) — P3.298 returned Vec must not demote |
 | P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ✅ tip GREEN (2026-09-16) — binding beats usize_variables; `strings::len`→i64 |
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | 🆕 RED / filed (P3.300); blocks duration/toml/semver/cli-args |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
@@ -310,7 +310,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 |--------|--------|
 | Ecosystem: `wj-duration` `parse_ms` digit scan | ⏸ tip RED |
 | Also hits | `wj-toml`, `wj-semver`, `wj-cli-args`, `wj-compress`, `wj-glob` (same `i + 1_i32` pattern) |
-| Gate `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ❌ tip RED (2026-09-15) |
+| Gate `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (2026-09-16 recheck) |
 | Note | Shallower `int_increment` / haystack gates can GREEN; scanner `while` + `substring(…, i, i+1)` is the product shape |
 
 **Compiler agent:** when casting substring indices to `usize`, keep `i + 1` in one integer width — emit `(i + 1) as usize` (or both ends as i64), never `(i + 1_i32) as usize` when `i` is i64/`int`.
@@ -319,8 +319,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-timefmt` `split_time_tz` / `plus_pos >= 0` | ⏸ tip RED |
-| Gate `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ❌ tip RED (2026-09-15) |
+| Ecosystem: `wj-timefmt` `split_time_tz` / `plus_pos >= 0` | ✅ tip gate GREEN (2026-09-16) |
+| Gate `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ✅ tip GREEN (2026-09-16) — binding beats usize_variables; `strings::len`→i64 |
 | Note | Also related int/usize loop arithmetic in same package |
 
 **Compiler agent:** Windjammer `int` comparisons against `0` must stay in one integer width — do not cast LHS to `usize` while keeping `0_i64`.
@@ -329,8 +329,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-uuid` `append_bytes` / v5 path | ⏸ tip RED |
-| Gate `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ❌ tip RED (2026-09-15) — emits `out: &Vec<u8>` then returns `out` |
+| Ecosystem: `wj-uuid` `append_bytes` / v5 path | ✅ tip gate GREEN (2026-09-16) |
+| Gate `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ✅ tip GREEN (2026-09-16) — returned Vec stays owned |
 
 **Compiler agent:** `mut out: Vec<u8>` that is mutated and returned must keep owned formal (Identity) — do not demote to `&Vec<u8>` when the value is moved out.
 
@@ -338,9 +338,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` shared-inbox Pool | ⏸ tip RED — Pool `while` inside `spawn(move \|\|)` emits bare `spawn(\|\| …)` → E0373 |
-| Gate `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ❌ tip RED (2026-09-15 sharpened) — exact Pool shape; simple Arc spawn stays GREEN (P3.295) |
-| Note | Shallow `inbox.clone()` + outer while was tip-GREEN; closure body starting with `while` strips `move` |
+| Ecosystem: `wj-sync` shared-inbox Pool | ✅ tip gate GREEN (2026-09-16) |
+| Gate `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN (2026-09-16) — While/Loop/Thread/Async in closure capture walk |
+| Note | Shallow `inbox.clone()` + outer while was tip-GREEN; closure body starting with `while` needed While in capture walk |
 
 **Compiler agent:** multipass must preserve `move` on closures whose body starts with `while` / after Arc clone rebinds — same emit as simple P3.295 case.
 

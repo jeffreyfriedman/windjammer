@@ -282,7 +282,15 @@ impl<'ast> CodeGenerator<'ast> {
                     && !runtime_wj_owned_keep_owned
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
-                    && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
+                    // P3.298: returned / mutated Vec (`mut out` + `out.push` + `return out`)
+                    // must stay owned — `push` was miscounted as readonly via MethodCall walk.
+                    && !analyzed.returned_parameters.contains(&param.name)
+                    && !analyzed.mutated_parameters.contains(&param.name)
+                    && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
+                    && self.param_has_readonly_expression_use(
+                        func.body.as_slice(),
+                        &param.name,
+                    )
                     && (matches!(
                         analyzed.inferred_ownership.get(&param.name),
                         Some(OwnershipMode::Borrowed)
@@ -3972,7 +3980,25 @@ impl<'ast> CodeGenerator<'ast> {
         if self.param_stored_in_owned_payload(analyzed.decl.body.as_slice(), param_name) {
             return true;
         }
+        // Returned formals must stay owned (`mut out: Vec<u8> → out` / P3.298).
+        // Prior: `mutated && !returned` allowed demotion when BOTH were true.
+        if analyzed.returned_parameters.contains(param_name) {
+            if let Some(param) = analyzed
+                .decl
+                .parameters
+                .iter()
+                .find(|p| p.name == *param_name)
+            {
+                if self.associated_text_identity_return_may_borrow(
+                    &analyzed.decl,
+                    param,
+                    analyzed,
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
         analyzed.mutated_parameters.contains(param_name)
-            && !analyzed.returned_parameters.contains(param_name)
     }
 }
