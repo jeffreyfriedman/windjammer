@@ -280,7 +280,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`total + (n * mult)` emits `(n * mult) as i32` into i64 (`wj-duration`)** | `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | ✅ tip GREEN (P3.317) — int mul stays i64 |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (2026-09-15 recheck) — was P3.301 RED |
-| P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | 🆕 RED / filed (P3.310); breaks tip `wj-sync` drain |
+| P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | ✅ tip GREEN (P3.310) — no blanket clone into owned slots |
 | P1 | **`while i < parts.len()` + `parts[i]` emits `i += 1 as i32` (`wj-dotenv`)** | `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | ✅ tip GREEN (P3.311) — usize index increment width |
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
@@ -360,9 +360,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` `drain_int_until_sentinel` / `channel_sum_range` | ❌ tip RED (E0599 IntReceiver not Clone) |
-| Gate `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | ❌ tip RED (2026-09-16) — emits `recv_int(rx.clone())` |
-| Note | Correct: `Receiver` must not auto-derive Clone (prior gate); call site must MOVE after reassign |
+| Ecosystem: `wj-sync` `drain_int_until_sentinel` / `channel_sum_range` | ✅ tip GREEN (2026-09-16) — unblocked with gate |
+| Gate `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | ✅ tip GREEN (2026-09-16) — emits `recv_int(rx)` move |
+
+**Root cause layer:** constraint / reuse analysis (reconcile shrink)
+- `ensure_owned_move_clone_for_reuse` blanket-cloned every non-Copy identifier into owned slots (P3.303 overreach), bypassing auto_clone writeback (`let got = recv_int(rx); rx = got.0`).
+- Channel `Receiver` wrappers correctly do not derive Clone — call site must move.
+
+**What became unnecessary:** unconditional non-Copy ident→owned `.clone()`; keep only borrowed-iterator (P3.303) + writeback-aware auto_clone path.
+
+**Gates:** `cargo test --release --test all -- module_file_recv_reassign_must_move_not_clone_receiver vec_push_borrowed_loop_elem_must_clone` → 2 passed
 
 **Compiler agent:** when `rx` is rebound from `recv_int(rx)` return, pass by move — do not inject `.clone()` on non-Clone channel receivers.
 

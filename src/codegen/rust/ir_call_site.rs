@@ -3450,25 +3450,17 @@ impl<'ast> CodeGenerator<'ast> {
                 });
             if !emits_shared {
                 if let Expression::Identifier { name, .. } = arg_expr {
+                    // P3.303: borrowed loop/map.values() elems into owned push.
                     if self.borrowed_iterator_vars.contains(name)
                         && !self.binding_is_copy_pass_by_value_scalar(name)
                         && !arg_str.ends_with(".clone()")
                     {
                         return format!("{arg_str}.clone()");
                     }
-                }
-                let needs_clone = match self.infer_expression_type(arg_expr) {
-                    None => false,
-                    Some(t) => {
-                        let bare = match &t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                            other => other,
-                        };
-                        !self.is_type_copy(bare)
-                    }
-                };
-                if needs_clone && !arg_str.ends_with(".clone()") {
-                    return format!("{arg_str}.clone()");
+                    // Do NOT blanket-clone every non-Copy ident into owned slots.
+                    // That undoes move+rebind writeback (`let got = recv_int(rx);
+                    // rx = got.0`) and clones non-Clone Receivers (P3.310).
+                    // Reuse cloning continues below via auto_clone + writeback.
                 }
             }
         }
