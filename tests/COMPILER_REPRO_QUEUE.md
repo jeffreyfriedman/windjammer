@@ -271,6 +271,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **federation demoted `&Vec` return → owned `Vec` must clone** | `bug_wdb243_module_file_demoted_vec_return_into_owned_must_clone_test` | 🆕 RED / filed (P3.320) |
 | P1 | **owned Vec → demoted materialize `&Vec` must borrow** | `bug_wdb239_module_file_owned_vec_into_demoted_materialize_must_borrow_test` | 🆕 RED / filed (P3.319); twin WDB-205/238 |
 | P1 | **demoted `&str` sql → owned `relational_sql_parse_ast` must `.to_string()`** | `bug_wdb240_module_file_demoted_str_sql_into_owned_parse_ast_must_to_string_test` | 🆕 RED / filed (P3.319); twin WDB-191 |
+| P1 | **demoted `&Vec<u32>` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
+| P1 | **demoted `&str` vertex_id_name → owned record-batch ctor must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
+| P1 | **demoted `&Vec` return → owned `Vec` must clone (federation)** | `bug_wdb243_module_file_demoted_vec_return_into_owned_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-205 |
 | P1 | **`for x in (cx - r - 2)..(cx + r + 2)` i32 bounds must not split i64/i32** | `bug_i32_range_bounds_sub_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.318); twin P3.313 |
 | P1 | **`inbound.clone()` → demoted `pg_wire_frame_total_len` must borrow** | `bug_wdb238_module_file_owned_inbound_clone_into_demoted_frame_total_len_must_borrow_test` | 🆕 RED / filed (P3.316); twin WDB-205 |
 | P1 | **Nested `while` + `substring(s, i, i+1)` still `1_i32` / `+= 1 as i32` (`wj-duration`)** | `bug_module_file_nested_while_substring_i_plus_one_must_not_emit_i32_test` | ✅ tip GREEN (P3.315) — nested loops emit `1_usize` |
@@ -942,6 +945,17 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–240**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr. No Phase 606+.
+
+## P3.320 WindjammerDB CQ-C5 — coverage REDs WDB-241–243 ecs/arrow/federation (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-241** demoted `&Vec<u32>` → owned `ecs_soa_archetype_new` | ❌ RED — tip-out/gen ecs_soa_port (`&ids`) |
+| Tip **WDB-242** demoted `&str` → owned record-batch `vertex_id_name` | ❌ RED — tip-out/gen graph_sql_arrow_ffi_port |
+| Tip **WDB-243** demoted `&Vec` return → owned federation scan | ❌ RED — tip-out/gen federation_layer |
+| Verified | 2026-09-16 TDD: all three tip gates FAIL on tip-out |
+
+**Compiler agent:** demoted `&Vec`/`&str` into owned formals/returns must clone / `.to_string()` / `.to_vec()` — signature-driven (twins WDB-224/240/205).
 
 ## P3.316 WindjammerDB CQ-C5 — coverage REDs WDB-235–238 distances_to_map / HashMap String / u64 len cast / frame_total_len (2026-09-16)
 
