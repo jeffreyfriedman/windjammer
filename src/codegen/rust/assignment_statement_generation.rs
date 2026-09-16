@@ -149,7 +149,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .unwrap_or("i64");
                     let already_target_cast = value_str.ends_with(&format!(" as {cast}"))
                         || value_str.ends_with(&format!(") as {cast}"));
-                    if val_width != cast && !already_target_cast {
+                    if val_width != cast
+                        && !already_target_cast
+                        && !Self::compound_rhs_is_untyped_int_literal(value, &value_str)
+                    {
                         if matches!(value, Expression::Binary { .. })
                             || matches!(value, Expression::Call { .. })
                         {
@@ -299,6 +302,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+                    self.set_assignment_int_target_from_compound_target(target);
                     let mut right_str = self.generate_expression(right);
                     if matches!(
                         right,
@@ -369,7 +373,10 @@ impl<'ast> CodeGenerator<'ast> {
                         let already_target_cast = right_str
                             .ends_with(&format!(" as {cast}"))
                             || right_str.ends_with(&format!(") as {cast}"));
-                        if val_width != cast && !already_target_cast {
+                        if val_width != cast
+                            && !already_target_cast
+                            && !Self::compound_rhs_is_untyped_int_literal(right, &right_str)
+                        {
                             if matches!(right, Expression::Binary { .. })
                                 || matches!(right, Expression::Call { .. })
                             {

@@ -557,14 +557,23 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return;
         }
+        // WJ `int` / i64 locals stay i64 for `.len() as int` style bounds (cast len, not counter).
+        if self
+            .local_var_types
+            .get(name.as_str())
+            .is_some_and(|t| matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64"))
+        {
+            return;
+        }
+        // Inferred `i32` from return-type heuristics must not block usize counters when the
+        // bound is already native `usize` (`.len()`, `usize` fields — P3.311 / component_storage).
         if self
             .local_var_types
             .get(name.as_str())
             .is_some_and(|t| {
-                matches!(t, Type::Int)
-                    || matches!(t, Type::Int32)
-                    || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
+                matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
             })
+            && !self.expression_is_usize_loop_bound(bound)
         {
             return;
         }

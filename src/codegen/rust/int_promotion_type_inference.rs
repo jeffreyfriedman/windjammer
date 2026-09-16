@@ -10,11 +10,12 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
     ) -> Option<Type> {
         if let Expression::Identifier { name, .. } = expr {
-            if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
-                return Self::parser_type_from_rust_int_name(w);
-            }
+            // usize index/len counters beat return-inferred Int32 (P3.311/P3.314).
             if self.usize_variables.contains(name) {
                 return Some(Type::Custom("usize".into()));
+            }
+            if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
+                return Self::parser_type_from_rust_int_name(w);
             }
         }
         if self.infer_expression_type_is_usize(expr) {

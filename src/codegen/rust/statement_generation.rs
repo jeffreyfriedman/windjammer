@@ -141,6 +141,16 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Drop forced `_i64`/`_i32`/`_usize` on small integer literals in compound updates so
     /// Rust infers the literal width from the binding (`i32 += 1` not `i32 += 1_i64`).
+    pub(in crate::codegen::rust) fn compound_rhs_is_untyped_int_literal(
+        value: &crate::parser::Expression,
+        value_str: &str,
+    ) -> bool {
+        use crate::parser::{Expression, Literal};
+        matches!(value, Expression::Literal { value: Literal::Int(_), .. })
+            && !value_str.contains('_')
+            && !value_str.contains(" as ")
+    }
+
     pub(in crate::codegen::rust) fn strip_compound_assign_int_literal_suffix(value_str: &str) -> String {
         if let Some(stripped) = value_str
             .strip_suffix("_i64")
@@ -152,6 +162,14 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if let Some(stripped) = value_str.strip_suffix(" as usize") {
+            if stripped.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                return stripped.to_string();
+            }
+        }
+        if let Some(stripped) = value_str
+            .strip_suffix(" as i32")
+            .or_else(|| value_str.strip_suffix(" as i64"))
+        {
             if stripped.chars().all(|c| c.is_ascii_digit() || c == '-') {
                 return stripped.to_string();
             }
@@ -283,17 +301,25 @@ impl<'ast> CodeGenerator<'ast> {
         // Loop counters may be promoted to `usize` in numeric inference while the binding stays
         // `i32`/`i64` (index via `i as usize`, increment must match the binding — P3.304/P3.267).
         if let Expression::Identifier { name, .. } = target {
-            // Explicit `i32` / `usize` annotations beat `.len()` promotion (P3.304).
-            if let Some(concrete) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
-                return Some(concrete);
-            }
-            // Untyped WJ `int` used as `vec[i]` / `while i < vec.len()` → usize counter (P3.311).
+            // Index/len counters marked in prepass (`usize_variables`) win over return-inferred
+            // Int32 for untyped `let i = 0` (P3.311/P3.314). Explicit `let i: i32` is not marked
+            // when the while uses `(i as usize) < len` (P3.304).
             if self.usize_variables.contains(name) {
                 return Some("usize");
+            }
+            // Explicit `i32` / `usize` annotations / concrete locals (P3.304).
+            if let Some(concrete) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
+                return Some(concrete);
             }
             if let Some(local_ty) = self.local_var_types.get(name) {
                 if let Some(name) = Self::int_rust_type_name(local_ty) {
                     return Some(name);
+                }
+            }
+            if let Some(ni) = &self.numeric_inference {
+                let solved = ni.get_int_type(target);
+                if solved == IntType::I64 {
+                    return Some("i64");
                 }
             }
         }
