@@ -11,10 +11,11 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — hexagonal env selector must not `&tenant_id` into owned trait formals.
+//! FAILING REPRO — hexagonal env selector must not borrow into owned trait formals.
 //!
-//! Same-file isolate may clone; LedgerKit product multipass emits
-//! `repo.create(&tenant_id, draft)` across ports/seed/postgres/env modules.
+//! Product seed adapters use `let _ = tenant_id` (discard). That must not demote the
+//! trait formal to shared-ref, or env `tenant_id + ""` emits `repo.create(&_temp0, …)`
+//! into a `String` slot.
 
 use std::fs;
 use std::path::PathBuf;
@@ -32,6 +33,7 @@ fn bad_env_forward_borrow(rs: &str) -> bool {
         || rs.contains("list(&tenant_id")
         || rs.contains(".create(&_")
         || rs.contains(".get(&_")
+        || rs.contains(".list(&_")
 }
 
 #[test]

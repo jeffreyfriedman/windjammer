@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.308: i32 loop counter vs int literal / i32 const / i32 field must stay i32 — no `3_i64 as i64`.
+//! P3.309: i32 loop counter vs int literal / i32 const / i32 field must stay i32 — no `3_i64 as i64`.
 //!
 //! Product (breach-protocol / windjammer-game-core):
 //!   `while dy < 3` with `dy: i32` → `while dy < (3_i64 as i64)`
@@ -25,6 +25,7 @@ use integration_test_helpers::MultiFileTest;
 const MOD: &str = r#"
 pub mod camera
 pub mod bones
+pub mod locomotion
 "#;
 
 const CAMERA: &str = r#"
@@ -34,6 +35,17 @@ pub fn scan_rows() -> i32 {
         dy = dy + 1
     }
     dy
+}
+"#;
+
+const LOCOMOTION: &str = r#"
+// Product: tps_camera `let mut dy = 0` inferred i32, `while dy < 3`.
+pub fn collides_pivot() -> bool {
+    let mut dy = 0
+    while dy < 3 {
+        dy = dy + 1
+    }
+    dy == 3
 }
 "#;
 
@@ -62,13 +74,16 @@ fn p308_fixture() -> MultiFileTest {
     test.add_file("mod.wj", MOD);
     test.add_file("camera.wj", CAMERA);
     test.add_file("bones.wj", BONES);
+    test.add_file("locomotion.wj", LOCOMOTION);
     test
 }
 
 fn bad_i32_while_compare(rs: &str) -> bool {
     rs.contains("_i64 as i64)")
-        || rs.contains(" as i64)")
-            && (rs.contains("while dy <") || rs.contains("while i <") || rs.contains("while ty <"))
+        || rs.contains("while dy < 3_i64")
+        || rs.contains("while dy < (3_i64")
+        || (rs.contains(" as i64)")
+            && (rs.contains("while dy <") || rs.contains("while i <") || rs.contains("while ty <")))
 }
 
 #[test]
@@ -76,13 +91,14 @@ fn i32_while_compare_must_not_cast_rhs_to_i64() {
     let mut test = p308_fixture();
     let map = test
         .compile()
-        .expect("P3.308 multipass compile should succeed");
+        .expect("P3.309 multipass compile should succeed");
     let camera_rs = map.get("camera.rs").expect("camera.rs");
     let bones_rs = map.get("bones.rs").expect("bones.rs");
-    let combined = format!("{camera_rs}\n{bones_rs}");
+    let loco_rs = map.get("locomotion.rs").expect("locomotion.rs");
+    let combined = format!("{camera_rs}\n{bones_rs}\n{loco_rs}");
 
     if bad_i32_while_compare(&combined) {
-        eprintln!("P3.308 RED emit:\n{combined}");
+        eprintln!("P3.309 RED emit:\n{combined}");
     }
 
     assert!(
@@ -91,6 +107,6 @@ fn i32_while_compare_must_not_cast_rhs_to_i64() {
     );
 
     test.cargo_check().expect(
-        "P3.308: i32 loop bounds must cargo-check without i32 vs i64 compare casts",
+        "P3.309: i32 loop bounds must cargo-check without i32 vs i64 compare casts",
     );
 }
