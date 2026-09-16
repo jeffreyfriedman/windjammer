@@ -11,11 +11,13 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — library multipass SharedMap still emits `key.to_string()` on get/has.
+//! FAILING REPRO — library multipass SharedMap module must cargo-check.
 //!
-//! Isolate `compile_single` for the same fixture is tip GREEN (P3.288), but
-//! `wj build --library --module-file` for `wj-sync` SharedMap emits
-//! `get(key.to_string())` / `contains_key(key.to_string())` → E0308.
+//! Isolate `compile_single` for get/has is tip GREEN (P3.288), but
+//! `wj build --library --module-file` for the full SharedMap module (insert +
+//! get + has) still fails cargo-check — historically `get(key.to_string())`,
+//! tip residual may also demote owned insert keys to `&mut String`.
+//! Blocks ecosystem `wj-sync` SharedMap get/has.
 
 use std::fs;
 use std::process::Command;
