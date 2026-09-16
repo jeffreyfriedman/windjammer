@@ -262,13 +262,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN (2026-09-16) — P3.297 While/Loop capture analysis |
 | P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ✅ tip GREEN (2026-09-16) — P3.298 returned Vec must not demote |
 | P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ✅ tip GREEN (2026-09-16) — binding beats usize_variables; `strings::len`→i64 |
-| P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | 🆕 RED / filed (P3.300); blocks duration/toml/semver/cli-args |
+| P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (P3.300 isolate + P3.315 nested) |
+| P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | 🆕 RED / filed (P3.316); twin WDB-234 |
+| P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | 🆕 RED / filed (P3.316); twin WDB-131 |
+| P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | 🆕 RED / filed (P3.316); related WDB-215/227 |
+| P1 | **`inbound.clone()` → demoted `pg_wire_frame_total_len` must borrow** | `bug_wdb238_module_file_owned_inbound_clone_into_demoted_frame_total_len_must_borrow_test` | 🆕 RED / filed (P3.316); twin WDB-205 |
+| P1 | **Nested `while` + `substring(s, i, i+1)` still `1_i32` / `+= 1 as i32` (`wj-duration`)** | `bug_module_file_nested_while_substring_i_plus_one_must_not_emit_i32_test` | ✅ tip GREEN (P3.315) — nested loops emit `1_usize` |
+| P1 | **`total + (n * mult)` emits `(n * mult) as i32` into i64 (`wj-duration`)** | `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | 🆕 RED / filed (P3.317); blocks tip `wj-duration` |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (2026-09-15 recheck) — was P3.301 RED |
 | P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | 🆕 RED / filed (P3.310); breaks tip `wj-sync` drain |
 | P1 | **`while i < parts.len()` + `parts[i]` emits `i += 1 as i32` (`wj-dotenv`)** | `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | ✅ tip GREEN (P3.311) — usize index increment width |
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
-| P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | 🆕 RED / filed (P3.314); blocks tip `wj-validate` |
+| P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |
@@ -312,8 +318,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-validate` `all_ok` | ❌ tip RED |
-| Gate `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ❌ tip RED (2026-09-16) — emits `if i == 0_i32` with `i: usize` |
+| Ecosystem: `wj-validate` `all_ok` | ✅ tip GREEN (2026-09-16) — unblocked with gate |
+| Gate `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (2026-09-16) |
+
+**Root cause layer:** constraint/type write-back (int width) — prepass `usize_variables` for index/len counters was overwritten by return-inferred `Int32` at `let i = 0`.
+**What became unnecessary:** relying on literal peels alone; `usize_variables` now wins in let binding, peer-type, and compound-assign width resolution (with P3.311).
+**Gates:** `cargo test --release --test all -- module_file_usize_index_eq_zero_must_not_emit_i32 module_file_vec_index_loop_must_not_add_i32_to_usize i32_compound_add_must_not_use_usize` → 3 passed.
 
 **Compiler agent:** when loop index is used as `errors[i]` / compared to `.len()`, keep compare-to-zero literal in the same width as `i` — emit `i == 0` / `i == 0_usize`, never `0_i32`.
 
@@ -351,10 +361,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Gate | Status |
 |------|--------|
-| `bug_env_trait_forward_owned_string_must_not_borrow_test` | ❌ tip RED when seed discards via `let _ = tenant_id` + env `+ ""` → `create(&_temp0)` |
-| Product interim | ✅ env_* + composition `arg + ""` (P3.267); tip api-check still ~126 until discard demotion fixed |
+| `bug_env_trait_forward_owned_string_must_not_borrow_test` | ✅ tip GREEN (2026-09-16) — trait discard keeps owned temps (`_tempN`, not `&_tempN`) |
+| Product interim | ✅ env_* + composition `arg + ""` (P3.267); tip `1c52c8e4` clears env `&_temp0` |
 
-**Compiler agent:** trait-impl discard-only `let _ = tenant_id` must NOT demote owned `string` formals to shared-ref; callers must pass `_tempN` / owned into emitted `String` slots (not `&_tempN`).
+**Compiler agent:** trait-impl discard-only `let _ = tenant_id` must NOT claim shared-ref emission; format-temp hoist must pass owned `_tempN` into `String` slots.
 
 
 ## P3.301 (2026-09-15) — multipass SharedMap get/has re-emits key.to_string()
@@ -367,14 +377,34 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent:** library multipass must keep MutexGuard map-key borrow (same as isolate P3.288) — do not reintroduce `key.to_string()` when insert/len live in the same module.
 
+## P3.317 (2026-09-16) — `total + (n * mult)` emits `(n * mult) as i32` (`wj-duration`)
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-duration` `parse_ms` | ❌ tip RED — `Ok(total)` E0308 i32 vs i64 / `total += (n * mult) as i32` |
+| Gate `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | ❌ tip RED (2026-09-16) |
+| Note | Nested substring width fixed (P3.315 GREEN); P3.316 is WDB-235–238 — this is P3.317 |
+
+**Compiler agent:** when `int` lowers to i64, keep `n * mult` and accumulator updates in i64 — never cast the product to `i32`.
+
+## P3.315 (2026-09-16) — nested while + substring `i+1` still emits `1_i32` (`wj-duration`)
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-duration` nested digit/unit scan | ✅ tip GREEN (2026-09-16) — emits `i + 1_usize` / `i += 1` |
+| Gate `bug_module_file_nested_while_substring_i_plus_one_must_not_emit_i32_test` | ✅ tip GREEN (product residual moved to P3.317) |
+| Note | P3.300 single-while isolate was already GREEN; nested outer+inner while now matches |
+
+**Compiler agent:** usize index used as `substring` end `i+1` and compound `i = i + 1` inside nested whiles must keep one width — never `1_i32` peers / `+= 1 as i32` onto usize.
+
 ## P3.300 (2026-09-15) — substring end `i+1` emits `1_i32` into usize cast
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-duration` `parse_ms` digit scan | ⏸ tip RED |
+| Ecosystem: `wj-duration` `parse_ms` digit scan | ✅ tip GREEN nested (P3.315); remaining mul-cast → P3.317 |
 | Also hits | `wj-toml`, `wj-semver`, `wj-cli-args`, `wj-compress`, `wj-glob` (same `i + 1_i32` pattern) |
-| Gate `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (2026-09-16 recheck) |
-| Note | Shallower `int_increment` / haystack gates can GREEN; scanner `while` + `substring(…, i, i+1)` is the product shape |
+| Gate `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (2026-09-16 recheck) — shallow single-while only |
+| Note | Shallower `int_increment` / haystack gates can GREEN; scanner `while` + `substring(…, i, i+1)` nested residual was P3.315 |
 
 **Compiler agent:** when casting substring indices to `usize`, keep `i + 1` in one integer width — emit `(i + 1) as usize` (or both ends as i64), never `(i + 1_i32) as usize` when `i` is i64/`int`.
 
@@ -874,6 +904,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.316 WindjammerDB CQ-C5 — coverage REDs WDB-235–238 distances_to_map / HashMap String / u64 len cast / frame_total_len (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-235** `&mut`→owned `distances_to_map` | ❌ RED — tip-out/gen graph_batch_engine (cargo: 0 pass / 3 fail tip filter) |
+| Tip **WDB-236** HashMap String `contains_key`/`get` | ❌ RED — tip-out/gen lsqb_typed_graph |
+| Tip **WDB-237** `len() as u64 as i64` into u64 acc | ❌ RED — tip-out/gen lsqb vertex_count |
+| Tip **WDB-238** `inbound.clone()` → demoted `frame_total_len` | ❌ RED — tip-out/gen pg_serve (twin WDB-205) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–238**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr ownership. No Phase 606+.
 
 ## P3.310 WindjammerDB CQ-C5 — coverage RED WDB-234 batch DenseCsr←&mut (2026-09-16)
 
