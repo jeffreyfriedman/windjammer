@@ -1,0 +1,13 @@
+pub fn adj_key(edge_kind: string, vertex: int) -> string {
+    let mut key = String::new()
+    // Product lsqb_adj_out_key: tip emits `edge_kind: impl Into<String>` then
+    // `key.push_str(&edge_kind)` → expected &str, found &impl Into<String>.
+    key.push_str(edge_kind)
+    key.push_str(":")
+    key.push_str(format!("{}", vertex))
+    key
+}
+
+pub fn build() -> string {
+    adj_key("KNOWS", 1)
+}

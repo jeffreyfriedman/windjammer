@@ -315,6 +315,12 @@ impl<'ast> CodeGenerator<'ast> {
                     ) {
                         right_str = Self::strip_compound_assign_int_literal_suffix(&right_str);
                     }
+                    if self
+                        .resolve_compound_assign_int_rust_type_name(target)
+                        .is_some_and(|w| w != "usize")
+                    {
+                        right_str = Self::strip_compound_assign_int_literal_suffix(&right_str);
+                    }
 
                     // Mixed int/float: cast RHS integer to target float type
                     // Only cast when the target is genuinely a float type (not int).
