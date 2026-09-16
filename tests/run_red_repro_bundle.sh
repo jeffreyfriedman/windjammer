@@ -14,7 +14,6 @@ RED_FILTERS=(
   int_find_pos_ge_zero_must_not_mix_usize_i64
   substring_end_i_plus_one_must_not_emit_i32_into_usize
   module_file_shared_map_get_must_borrow_key
-  vec_len_eq_zero_must_not_emit_i64_literal
   wdb225_tip_out_ldbc_must_not_pass_string_from
   wdb226_tip_out_cdlp_must_borrow_owned_u32_map
 )
@@ -28,6 +27,7 @@ GREEN_FILTERS=(
   hashmap_string_key_insert_must_not_cast_usize
   vec_push_borrowed_loop_elem_must_clone
   i32_compound_add_must_not_use_usize_literal
+  vec_len_eq_zero_must_not_emit_i64_literal
   trait_impl_owned_vec_forward_must_match_trait_formal
   trait_owned_string_call_must_not_over_borrow
   strings_len_must_unify_int_index_arith

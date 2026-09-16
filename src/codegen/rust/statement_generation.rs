@@ -238,24 +238,26 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
-    /// Concrete Rust int type for compound assignment targets (solver-first, then annotations).
+    /// Concrete Rust int type for compound assignment targets (binding type, then solver).
     pub(in crate::codegen::rust) fn resolve_compound_assign_int_rust_type_name(
         &self,
         target: &Expression,
     ) -> Option<&'static str> {
         use crate::type_inference::int_implicit_casts::get_cast_suffix;
         use crate::type_inference::IntType;
-        if let Some(ni) = &self.numeric_inference {
-            let solved = ni.get_int_type(target);
-            if solved != IntType::Unknown {
-                return Some(get_cast_suffix(solved));
-            }
-        }
+        // Loop counters may be promoted to `usize` in numeric inference while the binding stays
+        // `i32`/`i64` (index via `i as usize`, increment must match the binding — P3.304/P3.267).
         if let Expression::Identifier { name, .. } = target {
             if let Some(local_ty) = self.local_var_types.get(name) {
                 if let Some(name) = Self::int_rust_type_name(local_ty) {
                     return Some(name);
                 }
+            }
+        }
+        if let Some(ni) = &self.numeric_inference {
+            let solved = ni.get_int_type(target);
+            if solved != IntType::Unknown {
+                return Some(get_cast_suffix(solved));
             }
         }
         self.infer_expression_type(target)
