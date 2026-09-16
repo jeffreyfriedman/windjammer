@@ -86,7 +86,7 @@ fn module_file_recv_reassign_must_move_not_clone_receiver() {
     assert!(
         !generated.contains("recv_int(rx.clone())")
             && !generated.contains("recv_int(rx . clone())"),
-        "RED P3.306: recv_int(rx) reassign must move, not clone non-Clone Receiver:\n{generated}"
+        "RED P3.310: recv_int(rx) reassign must move, not clone non-Clone Receiver:\n{generated}"
     );
 
     let check = Command::new("cargo")

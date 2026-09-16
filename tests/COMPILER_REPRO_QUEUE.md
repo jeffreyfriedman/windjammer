@@ -63,6 +63,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Fix:** Treat `.values()`/`.keys()` for-loops as borrowed iterators; clone loop bindings into owned `Vec::push` / owned formals.
 
 
+## P3.309 — i32 while compare must not cast RHS to i64 (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| `i32_while_compare_must_not_cast_rhs_to_i64` | ✅ tip GREEN |
+| Product `tps_camera.wj` `while dy < 3` (`dy: i32` / `0_i32`) | ✅ `while dy < 3_i32` (no `3_i64 as i64`) |
+| Product `locomotion` / const / field bounds | ✅ no `(COUNT as i64)` on i32 counters |
+
+**Root cause:** Mixed-int promotion widened i32 peers + WJ int literals to i64 (`promote_types(I32,I64)→I64`) and peer literal suffixes lost after `assignment_int_target_type` reset.
+
+**Fix:** Prefer i32 in comparisons when peer is i32; honor `literal_peer_int_type` in promotion; binding/`eng` i32 for WJ `int` locals; skip redundant `as i32` on suffixed literals.
+
 ## P3.307 — usize loop counter compound assign must not use i32 literal (2026-09-16)
 
 | Gate | Status |
@@ -252,7 +264,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | 🆕 RED / filed (P3.300); blocks duration/toml/semver/cli-args |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (2026-09-15 recheck) — was P3.301 RED |
-| P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | 🆕 RED / filed (P3.306); breaks tip `wj-sync` drain |
+| P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | 🆕 RED / filed (P3.310); breaks tip `wj-sync` drain |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
@@ -274,12 +286,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 
 
-## P3.306 (2026-09-15) — `recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver
+## P3.310 (2026-09-16) — `recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver
 
 | Change | Status |
 |--------|--------|
 | Ecosystem: `wj-sync` `drain_int_until_sentinel` / `channel_sum_range` | ❌ tip RED (E0599 IntReceiver not Clone) |
-| Gate `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | ❌ tip RED (2026-09-15) — emits `recv_int(rx.clone())` |
+| Gate `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | ❌ tip RED (2026-09-16) — emits `recv_int(rx.clone())` |
 | Note | Correct: `Receiver` must not auto-derive Clone (prior gate); call site must MOVE after reassign |
 
 **Compiler agent:** when `rx` is rebound from `recv_int(rx)` return, pass by move — do not inject `.clone()` on non-Clone channel receivers.
@@ -298,7 +310,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` SharedMap get/has | ✅ unblocked on tip (P3.301 GREEN); package blocked on P3.306 |
+| Ecosystem: `wj-sync` SharedMap get/has | ✅ unblocked on tip (P3.301 GREEN); package blocked on P3.310 |
 | Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN via isolate `compile_single` |
 | Gate `bug_module_file_shared_map_get_must_borrow_key_test` | ❌ tip RED (2026-09-15) — `--library --module-file` emits `key.to_string()` |
 
@@ -398,7 +410,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-sync` `SharedMap` insert/len/get/has | ✅ unblocked; tip drain blocked on P3.306 |
+| Ecosystem: `wj-sync` `SharedMap` insert/len/get/has | ✅ unblocked; tip drain blocked on P3.310 |
 | Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN isolate `compile_single`; multipass product still RED → P3.301 |
 | Note | Owned `HashMap.get(key)` (no mutex) already cargo-checks |
 
