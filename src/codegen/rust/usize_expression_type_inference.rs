@@ -635,7 +635,8 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(ret) = &self.current_function_return_type else {
             return;
         };
-        let to = match ret {
+        // Peel Result/Option so `-> Result<i32, E>` still narrows returned ints.
+        let to = match Self::peel_option_result_payload(ret) {
             Type::Int32 => IntType::I32,
             Type::Custom(name) if name == "i32" => IntType::I32,
             Type::Int => IntType::I64,

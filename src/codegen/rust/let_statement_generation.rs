@@ -182,23 +182,9 @@ impl<'ast> CodeGenerator<'ast> {
                         if self.usize_variables.contains(name) {
                             Some(Type::Custom("usize".into()))
                         } else if let Some(ret_ty) = &self.current_function_return_type {
-                            match ret_ty {
-                                Type::Int32 => Some(Type::Int32),
-                                Type::Int => Some(Type::Int),
-                                Type::Uint => Some(Type::Uint),
-                                Type::Bool | Type::String => Some(Type::Int),
-                                Type::Custom(name)
-                                    if matches!(
-                                        name.as_str(),
-                                        "u32" | "i32" | "i64" | "int" | "u64" | "usize"
-                                    ) =>
-                                {
-                                    Some(ret_ty.clone())
-                                }
-                                // Non-int return (e.g. VoxelGrid): prefer i32 for coordinate
-                                // locals like `let cy = 10` so range peers stay i32 (P3.280).
-                                _ => Some(Type::Int32),
-                            }
+                            // Peel Result/Option so `-> Result<int, string>` keeps i64
+                            // accumulators (P3.317), not coordinate-default Int32.
+                            Some(Self::int_width_hint_from_return_type(ret_ty))
                         } else {
                             Some(Type::Int)
                         }
@@ -426,7 +412,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && Self::mut_let_rhs_is_return_width_counter(value)
                 {
                     if let Some(ret_ty) = &self.current_function_return_type {
-                        match ret_ty {
+                        match Self::peel_option_result_payload(ret_ty) {
                             Type::Int32 => {
                                 output.push_str(": i32");
                                 if let Some(vn) = var_name {
@@ -444,7 +430,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 output.push_str(n);
                                 if let Some(vn) = var_name {
                                     self.local_var_types
-                                        .insert(vn.to_string(), ret_ty.clone());
+                                        .insert(vn.to_string(), Type::Custom(n.clone()));
                                 }
                             }
                             _ => {}
@@ -470,7 +456,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
                     if let Some(ret_ty) = &self.current_function_return_type {
                         if Self::assignment_target_needs_int_codegen_context(ret_ty) {
-                            self.assignment_int_target_type = Some(ret_ty.clone());
+                            // Store peeled int width (not Result/Option wrapper).
+                            self.assignment_int_target_type =
+                                Some(Self::int_width_hint_from_return_type(ret_ty));
                         }
                     }
                 }

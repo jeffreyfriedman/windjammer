@@ -68,6 +68,46 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Peel `Option` / `Result` wrappers so return-inferred int width follows the
+    /// success payload (`-> Result<int, string>` ⇒ `int`/i64, not coordinate `i32`).
+    /// Also peels `Parameterized("Option"|"Result", …)` forms from some signatures.
+    pub(in crate::codegen::rust) fn peel_option_result_payload(ty: &Type) -> &Type {
+        let mut cur = ty;
+        loop {
+            match cur {
+                Type::Option(inner) | Type::Result(inner, _) => cur = inner.as_ref(),
+                Type::Reference(inner) | Type::MutableReference(inner) => cur = inner.as_ref(),
+                Type::Parameterized(name, args)
+                    if (name == "Option" || name == "Result") && !args.is_empty() =>
+                {
+                    cur = &args[0];
+                }
+                _ => return cur,
+            }
+        }
+    }
+
+    /// Int-width hint from a function return type for untyped `let x = 0` bindings.
+    /// Peels `Result`/`Option` so `-> Result<int, E>` keeps WJ `int` (i64), not i32.
+    pub(in crate::codegen::rust) fn int_width_hint_from_return_type(ret_ty: &Type) -> Type {
+        match Self::peel_option_result_payload(ret_ty) {
+            Type::Int32 => Type::Int32,
+            Type::Int => Type::Int,
+            Type::Uint => Type::Uint,
+            Type::Bool | Type::String => Type::Int,
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "u32" | "i32" | "i64" | "int" | "u64" | "usize"
+                ) =>
+            {
+                Type::Custom(name.clone())
+            }
+            // Non-int return (e.g. VoxelGrid): prefer i32 for coordinate locals.
+            _ => Type::Int32,
+        }
+    }
+
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
     pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
         ty: &Type,
@@ -76,8 +116,16 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 Self::assignment_target_needs_int_codegen_context(inner)
             }
+            Type::Option(inner) | Type::Result(inner, _) => {
+                Self::assignment_target_needs_int_codegen_context(inner)
+            }
             Type::Vec(inner) | Type::Array(inner, _) => {
                 Self::assignment_target_needs_int_codegen_context(inner)
+            }
+            Type::Parameterized(name, args)
+                if (name == "Option" || name == "Result") && !args.is_empty() =>
+            {
+                Self::assignment_target_needs_int_codegen_context(&args[0])
             }
             other => Self::is_int_numeric_type(other),
         }
@@ -88,10 +136,7 @@ impl<'ast> CodeGenerator<'ast> {
         ty: &Type,
     ) -> Option<crate::type_inference::IntType> {
         use crate::type_inference::IntType;
-        match ty {
-            Type::Reference(inner) | Type::MutableReference(inner) => {
-                Self::int_type_from_assignment_target(inner)
-            }
+        match Self::peel_option_result_payload(ty) {
             Type::Int => Some(IntType::I64),
             Type::Int32 => Some(IntType::I32),
             Type::Uint => Some(IntType::U64),
@@ -1719,12 +1764,12 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn assignment_cast_target_for_type(ty: &Type) -> Option<String> {
-        match ty {
+        match Self::peel_option_result_payload(ty) {
             Type::Int => Some("int".to_string()),
             Type::Custom(name) if name == "int" || name == "i64" => Some("int".to_string()),
             Type::Custom(name) if name == "i32" => Some("i32".to_string()),
             Type::Custom(name) if name == "usize" => Some("usize".to_string()),
-            Type::Option(inner) => Self::assignment_cast_target_for_type(inner),
+            Type::Int32 => Some("i32".to_string()),
             _ => None,
         }
     }

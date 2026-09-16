@@ -266,9 +266,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | 🆕 RED / filed (P3.316); twin WDB-234 |
 | P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | 🆕 RED / filed (P3.316); twin WDB-131 |
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | 🆕 RED / filed (P3.316); related WDB-215/227 |
+| P1 | **owned Vec → demoted materialize `&Vec` must borrow** | `bug_wdb239_module_file_owned_vec_into_demoted_materialize_must_borrow_test` | 🆕 RED / filed (P3.319); twin WDB-205/238 |
+| P1 | **demoted `&str` sql → owned `relational_sql_parse_ast` must `.to_string()`** | `bug_wdb240_module_file_demoted_str_sql_into_owned_parse_ast_must_to_string_test` | 🆕 RED / filed (P3.319); twin WDB-191 |
+| P1 | **`for x in (cx - r - 2)..(cx + r + 2)` i32 bounds must not split i64/i32** | `bug_i32_range_bounds_sub_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.318); twin P3.313 |
 | P1 | **`inbound.clone()` → demoted `pg_wire_frame_total_len` must borrow** | `bug_wdb238_module_file_owned_inbound_clone_into_demoted_frame_total_len_must_borrow_test` | 🆕 RED / filed (P3.316); twin WDB-205 |
 | P1 | **Nested `while` + `substring(s, i, i+1)` still `1_i32` / `+= 1 as i32` (`wj-duration`)** | `bug_module_file_nested_while_substring_i_plus_one_must_not_emit_i32_test` | ✅ tip GREEN (P3.315) — nested loops emit `1_usize` |
-| P1 | **`total + (n * mult)` emits `(n * mult) as i32` into i64 (`wj-duration`)** | `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | 🆕 RED / filed (P3.317); blocks tip `wj-duration` |
+| P1 | **`total + (n * mult)` emits `(n * mult) as i32` into i64 (`wj-duration`)** | `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | ✅ tip GREEN (P3.317) — int mul stays i64 |
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (2026-09-15 recheck) — was P3.301 RED |
 | P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | 🆕 RED / filed (P3.310); breaks tip `wj-sync` drain |
@@ -377,13 +380,20 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent:** library multipass must keep MutexGuard map-key borrow (same as isolate P3.288) — do not reintroduce `key.to_string()` when insert/len live in the same module.
 
+## P3.318 (2026-09-16) — i32 range bounds `(cx - r - 2)..(cx + r + 2)` must not split i64/i32
+
+| Gate | Status |
+|------|--------|
+| `bug_i32_range_bounds_sub_add_must_not_split_i64_i32_test` | ✅ tip GREEN |
+| Note | Twin of P3.313 (`0..(zd + 1)`); component_viewer_controls / voxel ring loops |
+
 ## P3.317 (2026-09-16) — `total + (n * mult)` emits `(n * mult) as i32` (`wj-duration`)
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-duration` `parse_ms` | ❌ tip RED — `Ok(total)` E0308 i32 vs i64 / `total += (n * mult) as i32` |
-| Gate `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | ❌ tip RED (2026-09-16) |
-| Note | Nested substring width fixed (P3.315 GREEN); P3.316 is WDB-235–238 — this is P3.317 |
+| Ecosystem: `wj-duration` `parse_ms` | ✅ tip GREEN (2026-09-16) |
+| Gate `bug_module_file_int_mul_into_int_acc_must_not_cast_i32_test` | ✅ tip GREEN (2026-09-16) — emits `total += n * mult` |
+| Note | Nested substring width fixed (P3.315 GREEN); P3.316 is WDB-235–238 |
 
 **Compiler agent:** when `int` lowers to i64, keep `n * mult` and accumulator updates in i64 — never cast the product to `i32`.
 
@@ -904,6 +914,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.319 WindjammerDB CQ-C5 — coverage REDs WDB-239/240 materialize &Vec + demoted sql parse_ast (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (lock-contended re-census) |
+| Tip **WDB-239** owned `dsts`/`weights` → demoted materialize `&Vec` | ❌ RED — tip-out/gen graph_sql_query_port |
+| Tip **WDB-240** demoted `&str` sql → owned `relational_sql_parse_ast` | ❌ RED — tip-out/gen relational_df_analytic |
+| Tip **WDB-235–238** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–240**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr. No Phase 606+.
 
 ## P3.316 WindjammerDB CQ-C5 — coverage REDs WDB-235–238 distances_to_map / HashMap String / u64 len cast / frame_total_len (2026-09-16)
 

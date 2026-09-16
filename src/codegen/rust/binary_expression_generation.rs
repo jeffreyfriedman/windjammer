@@ -194,9 +194,11 @@ impl<'ast> CodeGenerator<'ast> {
         let prev_bin_int = self.assignment_int_target_type.clone();
         if (is_comparison || is_arithmetic) && self.assignment_int_target_type.is_none() {
             let peer_int_type = |this: &Self, expr: &Expression<'ast>| -> Option<Type> {
-                this.infer_expression_type(expr).filter(|t| {
-                    Self::assignment_target_needs_int_codegen_context(t)
-                        && Self::int_type_from_assignment_target(t).is_some()
+                this.peer_type_for_int_literal_operand(expr).or_else(|| {
+                    this.infer_expression_type(expr).filter(|t| {
+                        Self::assignment_target_needs_int_codegen_context(t)
+                            && Self::int_type_from_assignment_target(t).is_some()
+                    })
                 })
             };
             if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal)
@@ -407,9 +409,36 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                                 (signed && b == IntType::Usize).then_some(a)
                             };
-                            let promoted = signed_vs_usize(left_ty, right_ty)
+                            let mut promoted = signed_vs_usize(left_ty, right_ty)
                                 .or_else(|| signed_vs_usize(right_ty, left_ty))
                                 .unwrap_or_else(|| promote_types(left_ty, right_ty));
+                            if let Some(forced) = self.promotion_int_type_from_assignment_context() {
+                                let signed = |t: IntType| {
+                                    matches!(
+                                        t,
+                                        IntType::I8
+                                            | IntType::I16
+                                            | IntType::I32
+                                            | IntType::I64
+                                            | IntType::Isize
+                                    )
+                                };
+                                if signed(left_ty) && signed(right_ty) {
+                                    promoted = forced;
+                                }
+                            } else if is_comparison {
+                                if left_ty == IntType::I32
+                                    && right_ty == IntType::I64
+                                    && self.comparison_should_prefer_i32_over_i64(left, right)
+                                {
+                                    promoted = IntType::I32;
+                                } else if right_ty == IntType::I32
+                                    && left_ty == IntType::I64
+                                    && self.comparison_should_prefer_i32_over_i64(right, left)
+                                {
+                                    promoted = IntType::I32;
+                                }
+                            }
                             if promoted != IntType::Unknown {
                                 // Numeric inference may tag i64 bindings as Usize (index use).
                                 // Only emit `as` when the operand actually produces usize.
