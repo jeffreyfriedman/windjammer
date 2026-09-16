@@ -288,10 +288,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Gate | Status |
 |------|--------|
-| `bug_env_trait_forward_owned_string_must_not_borrow_test` | ✅ tip hexagonal GREEN (`clone`/`to_string`); ⚠️ product multipass previously `&tenant_id` |
-| Product interim | ✅ env_* + composition/seed/postgres call-site `arg + ""` (P3.267); tip api-check 126→~low |
+| `bug_env_trait_forward_owned_string_must_not_borrow_test` | ❌ tip RED when seed discards via `let _ = tenant_id` + env `+ ""` → `create(&_temp0)` |
+| Product interim | ✅ env_* + composition `arg + ""` (P3.267); tip api-check still ~126 until discard demotion fixed |
 
-**Compiler agent:** cross-module env selector forwarding owned `string` into trait formals must move/clone consistently in full product multipass (not only shallow hexagonal isolate).
+**Compiler agent:** trait-impl discard-only `let _ = tenant_id` must NOT demote owned `string` formals to shared-ref; callers must pass `_tempN` / owned into emitted `String` slots (not `&_tempN`).
 
 
 ## P3.301 (2026-09-15) — multipass SharedMap get/has re-emits key.to_string()
@@ -811,6 +811,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.307 WindjammerDB CQ-C5 — coverage REDs WDB-230/231 Copy put borrow + usize+=i32 (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **322** |
+| Tip **WDB-138** multipass fixture | ✅ GREEN |
+| Tip **WDB-230** `map.put(&(ids[i]), &(vals[i]))` tip-out | ❌ RED — tip-out/gen pagerank/batch (~7× i64←&i64 / f64←&f64) |
+| Tip **WDB-231** `usize` index `+= 1 as i32` | ❌ RED — tip-out/gen graph_batch_engine (~5× usize←i32) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–231**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / Copy put borrow. No Phase 606+.
 
 ## P3.305 WindjammerDB CQ-C5 — coverage REDs WDB-227–229 u64 width + impl Into push_str (2026-09-15)
 
