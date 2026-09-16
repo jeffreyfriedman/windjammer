@@ -1,9 +1,44 @@
 //! Mixed-integer promotion for `as T` codegen.
 
 use crate::codegen::rust::CodeGenerator;
-use crate::parser::{Expression, Type};
+use crate::parser::{Expression, Literal, Type};
+use crate::type_inference::IntType;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// When let/assign/range set `assignment_int_target_type`, mixed-int ops unify to that width.
+    pub(in crate::codegen::rust) fn promotion_int_type_from_assignment_context(
+        &self,
+    ) -> Option<IntType> {
+        self.assignment_int_target_type
+            .as_ref()
+            .and_then(Self::parser_type_to_promotion_int_type)
+            .filter(|t| *t != IntType::Unknown && *t != IntType::Usize)
+    }
+
+    /// P3.309: i32 loop counter vs int literal / i32 field — do not widen RHS to i64.
+    pub(in crate::codegen::rust) fn comparison_should_prefer_i32_over_i64(
+        &self,
+        _i32_side: &Expression<'ast>,
+        i64_side: &Expression<'ast>,
+    ) -> bool {
+        if matches!(
+            i64_side,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ) {
+            return true;
+        }
+        self.int_type_for_mixed_int_codegen(i64_side) == IntType::I32
+            || self
+                .infer_expression_type(i64_side)
+                .as_ref()
+                .is_some_and(|t| {
+                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+                })
+    }
+
     /// Operand type for driving int literal suffixes in binary ops (`idx + 1` → `1_usize`).
     pub(in crate::codegen::rust) fn peer_type_for_int_literal_operand(
         &self,
@@ -79,6 +114,22 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => {
                 if self.usize_variables.contains(name) {
                     return crate::type_inference::IntType::Usize;
+                }
+                if let Some(t) = self.local_var_types.get(name.as_str()) {
+                    if let Some(a) = Self::parser_type_to_promotion_int_type(t) {
+                        if a == IntType::I64 {
+                            if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name)
+                            {
+                                if w == "i32" {
+                                    return IntType::I32;
+                                }
+                            }
+                            if eng == IntType::I32 {
+                                return IntType::I32;
+                            }
+                        }
+                        return a;
+                    }
                 }
                 if let Some(a) = self
                     .infer_expression_type(expr)
