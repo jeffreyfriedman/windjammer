@@ -248,13 +248,15 @@ impl<'ast> CodeGenerator<'ast> {
         // Loop counters may be promoted to `usize` in numeric inference while the binding stays
         // `i32`/`i64` (index via `i as usize`, increment must match the binding — P3.304/P3.267).
         if let Expression::Identifier { name, .. } = target {
-            if self.usize_variables.contains(name) {
-                return Some("usize");
-            }
+            // Binding type beats `usize_variables` promotion from `.len()` compares
+            // (`while (i as usize) < vec.len()` + `i += 1` must stay i32/i64 — P3.304).
             if let Some(local_ty) = self.local_var_types.get(name) {
                 if let Some(name) = Self::int_rust_type_name(local_ty) {
                     return Some(name);
                 }
+            }
+            if self.usize_variables.contains(name) {
+                return Some("usize");
             }
         }
         if let Some(ni) = &self.numeric_inference {

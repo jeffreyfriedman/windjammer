@@ -25,6 +25,8 @@ const SOURCE: &str =
     include_str!("fixtures/library_multipass/int_while_len_as_int_must_not_emit_usize_arith.wj");
 
 fn bad_usize_into_i64(rs: &str) -> bool {
+    // Legitimate: substring/index formals cast i64 counters with `as usize`.
+    // Illegal: i64 loop/`len as int` bindings compared or incremented via usize.
     rs.contains("+= 1_usize")
         || rs.contains("+= 1 as usize")
         || rs.contains("+ 1_usize")
@@ -32,9 +34,9 @@ fn bad_usize_into_i64(rs: &str) -> bool {
         || rs.contains("< _len as usize")
         || rs.contains("< h_len as usize")
         || rs.contains("<= h_len as usize")
-        || (rs.contains("while ")
-            && rs.contains(" as usize")
-            && (rs.contains(": i64") || rs.contains("0_i64") || rs.contains(" as i64")))
+        || rs.contains("h_len as usize")
+        || rs.contains("n_len as usize")
+        || rs.contains("_len as usize")
 }
 
 #[test]
