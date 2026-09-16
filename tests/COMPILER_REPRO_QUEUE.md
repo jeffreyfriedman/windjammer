@@ -57,11 +57,14 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Gate | Status |
 |------|--------|
 | `windjammer-game-core` tip `--library` EXIT=0 (~664 files) | ✅ tip GREEN (2026-09-15 cloud verify) |
-| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ❌ **916 rustc errors** (2026-09-15) — blocks breach binary |
+| `trait_impl_owned_vec_forward_must_match_trait_formal` | ✅ tip GREEN (2026-09-16) — E0053 owned `Vec` impl formal |
+| `cargo check -p windjammer_game_core` via `wj game build --release` (breach-protocol) | ⏳ re-verify after P3.302 fix — was **916** rustc errors |
 
 **Sample root cause (E0053):** `RenderPort` trait emits owned formals (`Vec<MaterialData>`) but `impl RenderPort for GameRenderer` emits `&Vec<MaterialData>` when body forwards to borrowing callee — trait impl signature must match trait definition.
 
-**Handoff:** Add codegen-shape repro for trait-impl formal alignment; then re-run `wj game build --release` + headless playtest.
+**Fix (P3.302 gate):** Early-return trait impl non-self formals from AST (`param.type_`) so thin forwarders do not demote to `&T`.
+
+**Handoff:** Re-run full engine `cargo check`; remaining errors are separate classes (E0308 push `&T`, etc.).
 
 ## P3.281 — bare-pass demotion O(registry) hang (2026-09-15)
 
