@@ -266,6 +266,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`HashMap::get` through `MutexGuard` must borrow key (not `.to_string()`)** | `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN (2026-09-15) — P3.288 restored (`Some`/`Ok` infer + map-key not defeated by owned get homonym)
 | P1 | **Library multipass SharedMap get/has still `key.to_string()`** | `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (2026-09-15 recheck) — was P3.301 RED |
 | P1 | **`recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver (`wj-sync`)** | `bug_module_file_recv_reassign_must_move_not_clone_receiver_test` | 🆕 RED / filed (P3.310); breaks tip `wj-sync` drain |
+| P1 | **`while i < parts.len()` + `parts[i]` emits `i += 1 as i32` (`wj-dotenv`)** | `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | 🆕 RED / filed (P3.311); tip regression vs prior dotenv green |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |
 | P1 | **Cross-crate owned handle loop reassign emits `&mut` (`send_int`/`bump`)** | `bug_cross_crate_owned_handle_loop_reassign_must_not_emit_mut_ref_test` | ✅ tip GREEN (P3.290) — owned metadata + move at cross-crate call; no loop-reassign `&mut` |
@@ -286,6 +287,17 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 
 
+
+
+## P3.311 (2026-09-16) — vec-index loop emits `i += 1 as i32` onto usize (`wj-dotenv`)
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-dotenv` `parse` | ❌ tip RED (was green) |
+| Gate `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | ❌ tip RED (2026-09-16) |
+| Related | Inverse of P3.304; WDB-231 tip-out only — need multipass module-file gate |
+
+**Compiler agent:** when loop index is used as `parts[i]` / compared to `.len()`, keep increment width matching the binding — emit `i += 1` (usize or i64), never `1 as i32` into a usize counter.
 
 ## P3.310 (2026-09-16) — `recv_int(rx)` reassign emits `rx.clone()` on non-Clone Receiver
 
