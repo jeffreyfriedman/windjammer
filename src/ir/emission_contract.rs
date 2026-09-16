@@ -69,14 +69,11 @@ pub fn callee_emits_shared_rust_ref_param(
     if formal_is_plain_windjammer_string(
         sig, param_idx,
     ) {
-        if matches!(
-            sig.param_ownership.get(param_idx),
-            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-        ) && !crate::codegen::rust::call_signature_resolution::plain_string_owned_consumer_at_call_site(
-            sig, param_idx,
-        ) {
-            return true;
-        }
+        // Borrowed ownership alone must not imply shared-ref for bare WJ `string`.
+        // Trait-impl discard (`let _ = tenant_id`) keeps emitted `tenant_id: String` while
+        // analyzer ownership converges Borrowed — callers must pass owned temps (P3.308).
+        // Shared-ref requires `emitted_rust_ref_params[idx] == true` (handled above) or an
+        // explicit extern/`&str` param_types contract below.
         if sig.is_extern
             && sig
                 .param_types
