@@ -29,6 +29,7 @@ GREEN_FILTERS=(
   i32_compound_add_must_not_use_usize_literal
   vec_len_eq_zero_must_not_emit_i64_literal
   trait_impl_owned_vec_forward_must_match_trait_formal
+  int_while_usize_compare_compound_assign_must_stay_int
   trait_owned_string_call_must_not_over_borrow
   strings_len_must_unify_int_index_arith
   hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop
