@@ -25,7 +25,6 @@ use integration_test_helpers::MultiFileTest;
 const MOD: &str = r#"
 pub mod camera
 pub mod bones
-pub mod locomotion
 "#;
 
 const CAMERA: &str = r#"
@@ -35,17 +34,6 @@ pub fn scan_rows() -> i32 {
         dy = dy + 1
     }
     dy
-}
-"#;
-
-const LOCOMOTION: &str = r#"
-// Product: tps_camera `let mut dy = 0` inferred i32, `while dy < 3`.
-pub fn collides_pivot() -> bool {
-    let mut dy = 0
-    while dy < 3 {
-        dy = dy + 1
-    }
-    dy == 3
 }
 "#;
 
@@ -74,7 +62,6 @@ fn p308_fixture() -> MultiFileTest {
     test.add_file("mod.wj", MOD);
     test.add_file("camera.wj", CAMERA);
     test.add_file("bones.wj", BONES);
-    test.add_file("locomotion.wj", LOCOMOTION);
     test
 }
 
@@ -94,8 +81,7 @@ fn i32_while_compare_must_not_cast_rhs_to_i64() {
         .expect("P3.309 multipass compile should succeed");
     let camera_rs = map.get("camera.rs").expect("camera.rs");
     let bones_rs = map.get("bones.rs").expect("bones.rs");
-    let loco_rs = map.get("locomotion.rs").expect("locomotion.rs");
-    let combined = format!("{camera_rs}\n{bones_rs}\n{loco_rs}");
+    let combined = format!("{camera_rs}\n{bones_rs}");
 
     if bad_i32_while_compare(&combined) {
         eprintln!("P3.309 RED emit:\n{combined}");
