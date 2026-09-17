@@ -1,0 +1,14 @@
+// P3.333: type aliases referencing generic structs must emit after the struct.
+pub struct Shared<T> {
+    n: T,
+}
+
+pub type SharedInt = Shared<int>
+
+pub fn shared_int(n: int) -> SharedInt {
+    Shared { n: n }
+}
+
+pub fn get(s: SharedInt) -> int {
+    s.n
+}
