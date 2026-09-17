@@ -469,14 +469,27 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             } else if is_comparison || is_arithmetic {
                                 // P3.309 comparisons; P3.322 i32 ± int literal arith (dist_sq).
+                                let prefer_i32 = |i32_side: &Expression<'ast>,
+                                                  i64_side: &Expression<'ast>|
+                                 -> bool {
+                                    if is_arithmetic && !is_comparison {
+                                        self.mixed_arith_should_prefer_i32_over_i64(
+                                            i32_side, i64_side,
+                                        )
+                                    } else {
+                                        self.comparison_should_prefer_i32_over_i64(
+                                            i32_side, i64_side,
+                                        )
+                                    }
+                                };
                                 if left_ty == IntType::I32
                                     && right_ty == IntType::I64
-                                    && self.comparison_should_prefer_i32_over_i64(left, right)
+                                    && prefer_i32(left, right)
                                 {
                                     promoted = IntType::I32;
                                 } else if right_ty == IntType::I32
                                     && left_ty == IntType::I64
-                                    && self.comparison_should_prefer_i32_over_i64(right, left)
+                                    && prefer_i32(right, left)
                                 {
                                     promoted = IntType::I32;
                                 } else if left_ty == IntType::U32

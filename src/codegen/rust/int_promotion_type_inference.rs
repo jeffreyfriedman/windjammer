@@ -61,6 +61,48 @@ impl<'ast> CodeGenerator<'ast> {
                 })
     }
 
+    /// P3.347: `cy + dy` with i32 for-range `dy` and WJ `int` coord local `cy` must unify to i32
+    /// (not `dy as i64`). Comparisons keep [`comparison_should_prefer_i32_over_i64`] (P3.329).
+    pub(in crate::codegen::rust) fn mixed_arith_should_prefer_i32_over_i64(
+        &self,
+        i32_side: &Expression<'ast>,
+        i64_side: &Expression<'ast>,
+    ) -> bool {
+        if !self.expression_is_codegen_i32(i32_side) {
+            return false;
+        }
+        if matches!(
+            i64_side,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ) {
+            return true;
+        }
+        if let Expression::Identifier { name, .. } = i64_side {
+            if self.current_function_params.iter().any(|p| {
+                p.name == *name && matches!(&p.type_, Type::Int)
+            }) {
+                return false;
+            }
+            if self.explicit_wj_int_annotated_locals.contains(name) {
+                return false;
+            }
+            if self.literal_init_wj_int_loop_counters.contains(name) {
+                return false;
+            }
+            return matches!(
+                self.local_var_types.get(name.as_str()),
+                Some(Type::Int) | Some(Type::Int32)
+            ) || matches!(
+                self.local_var_types.get(name.as_str()),
+                Some(Type::Custom(n)) if n == "i32"
+            );
+        }
+        self.int_type_for_mixed_int_codegen(i64_side) == IntType::I32
+    }
+
     pub(in crate::codegen::rust) fn expression_is_codegen_i32(&self, expr: &Expression<'ast>) -> bool {
         if let Expression::Identifier { name, .. } = expr {
             if self.codegen_i32_binding_names.contains(name) {
