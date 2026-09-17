@@ -881,6 +881,23 @@ impl<'ast> CodeGenerator<'ast> {
                     return crate::codegen::rust::literals::generate_literal(lit);
                 }
                 use crate::type_inference::IntType;
+                if self.in_struct_literal_field {
+                    if let (Some(struct_name), Some(field_name)) = (
+                        &self.current_struct_literal_name,
+                        &self.current_struct_field_name,
+                    ) {
+                        if let Some(field_type) = self
+                            .lookup_struct_field_types(struct_name)
+                            .and_then(|fields| fields.get(field_name))
+                        {
+                            if let Some(it) = Self::int_type_from_assignment_target(field_type) {
+                                if it != IntType::Unknown {
+                                    return format!("{}_{}", i, it.rust_suffix());
+                                }
+                            }
+                        }
+                    }
+                }
                 // Priority 0: explicit int/usize target from let/assign/call-arg context
                 // (annotated `let mut i: usize = 0` must not become `0_i64` under `-> int`).
                 if let Some(ctx_ty) = self

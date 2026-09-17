@@ -566,7 +566,18 @@ impl<'ast> CodeGenerator<'ast> {
                 self.coerce_string_literals_to_owned = true;
                 let prev_expr_ctx = self.in_expression_context;
                 self.in_expression_context = true;
+                let prev_struct_assign_int = self.assignment_int_target_type.take();
+                if let Some(struct_name) = self.current_struct_literal_name.as_deref() {
+                    if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
+                        if let Some(field_type) = field_types.get(field_name) {
+                            if Self::assignment_target_needs_int_codegen_context(field_type) {
+                                self.assignment_int_target_type = Some(field_type.clone());
+                            }
+                        }
+                    }
+                }
                 let mut expr_str = self.generate_expression(expr);
+                self.assignment_int_target_type = prev_struct_assign_int;
                 self.in_expression_context = prev_expr_ctx;
                 self.coerce_string_literals_to_owned = prev_coerce;
 

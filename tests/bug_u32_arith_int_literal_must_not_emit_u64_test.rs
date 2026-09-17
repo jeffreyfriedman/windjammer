@@ -45,7 +45,8 @@ pub fn build_triangle(base: u32, i0: u32, i1: u32, i2: u32, f: i32) -> HalfEdge 
 
 pub fn loop_edges(tri_count: u32) -> u32 {
     let mut last = 0u32
-    for f in 0..tri_count {
+    let mut f = 0u32
+    while f < tri_count {
         let base = (3 * f) as u32
         let he0 = HalfEdge {
             id: base,
@@ -56,6 +57,7 @@ pub fn loop_edges(tri_count: u32) -> u32 {
             twin: -1,
         }
         last = he0.next
+        f = f + 1
     }
     last
 }

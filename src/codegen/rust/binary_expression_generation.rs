@@ -423,10 +423,23 @@ impl<'ast> CodeGenerator<'ast> {
                                             | IntType::Isize
                                     )
                                 };
+                                let unsigned = |t: IntType| {
+                                    matches!(
+                                        t,
+                                        IntType::U8
+                                            | IntType::U16
+                                            | IntType::U32
+                                            | IntType::U64
+                                            | IntType::Usize
+                                    )
+                                };
                                 if signed(left_ty) && signed(right_ty) {
                                     promoted = forced;
+                                } else if unsigned(left_ty) && unsigned(right_ty) {
+                                    promoted = forced;
                                 }
-                            } else if is_comparison {
+                            } else if is_comparison || is_arithmetic {
+                                // P3.309 comparisons; P3.322 i32 ± int literal arith (dist_sq).
                                 if left_ty == IntType::I32
                                     && right_ty == IntType::I64
                                     && self.comparison_should_prefer_i32_over_i64(left, right)
@@ -437,6 +450,16 @@ impl<'ast> CodeGenerator<'ast> {
                                     && self.comparison_should_prefer_i32_over_i64(right, left)
                                 {
                                     promoted = IntType::I32;
+                                } else if left_ty == IntType::U32
+                                    && right_ty == IntType::U64
+                                    && self.comparison_should_prefer_u32_over_u64(left, right)
+                                {
+                                    promoted = IntType::U32;
+                                } else if right_ty == IntType::U32
+                                    && left_ty == IntType::U64
+                                    && self.comparison_should_prefer_u32_over_u64(right, left)
+                                {
+                                    promoted = IntType::U32;
                                 }
                             }
                             if promoted != IntType::Unknown {
@@ -459,23 +482,83 @@ impl<'ast> CodeGenerator<'ast> {
                                 };
                                 if side_needs_cast(left_ty, left, left_is_usize) {
                                     let suffix = get_cast_suffix(promoted);
-                                    let needs_inner = matches!(left, Expression::Binary { .. })
-                                        || left_str.contains(" as ");
-                                    left_str = if needs_inner {
-                                        format!("({}) as {}", left_str, suffix)
+                                    if promoted == IntType::I32
+                                        && matches!(
+                                            left,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && left_str.ends_with("_i64")
+                                    {
+                                        left_str = format!(
+                                            "{}_i32",
+                                            left_str.trim_end_matches("_i64")
+                                        );
+                                    } else if promoted == IntType::U32
+                                        && matches!(
+                                            left,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && left_str.ends_with("_u64")
+                                    {
+                                        left_str = format!(
+                                            "{}_u32",
+                                            left_str.trim_end_matches("_u64")
+                                        );
                                     } else {
-                                        format!("{} as {}", left_str, suffix)
-                                    };
+                                        let needs_inner = matches!(left, Expression::Binary { .. })
+                                            || left_str.contains(" as ");
+                                        left_str = if needs_inner {
+                                            format!("({}) as {}", left_str, suffix)
+                                        } else {
+                                            format!("{} as {}", left_str, suffix)
+                                        };
+                                    }
                                 }
                                 if side_needs_cast(right_ty, right, right_is_usize) {
                                     let suffix = get_cast_suffix(promoted);
-                                    let needs_inner = matches!(right, Expression::Binary { .. })
-                                        || right_str.contains(" as ");
-                                    right_str = if needs_inner {
-                                        format!("({}) as {}", right_str, suffix)
+                                    if promoted == IntType::I32
+                                        && matches!(
+                                            right,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && right_str.ends_with("_i64")
+                                    {
+                                        right_str = format!(
+                                            "{}_i32",
+                                            right_str.trim_end_matches("_i64")
+                                        );
+                                    } else if promoted == IntType::U32
+                                        && matches!(
+                                            right,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && right_str.ends_with("_u64")
+                                    {
+                                        right_str = format!(
+                                            "{}_u32",
+                                            right_str.trim_end_matches("_u64")
+                                        );
                                     } else {
-                                        format!("{} as {}", right_str, suffix)
-                                    };
+                                        let needs_inner = matches!(right, Expression::Binary { .. })
+                                            || right_str.contains(" as ");
+                                        right_str = if needs_inner {
+                                            format!("({}) as {}", right_str, suffix)
+                                        } else {
+                                            format!("{} as {}", right_str, suffix)
+                                        };
+                                    }
                                 }
                             }
                         }
