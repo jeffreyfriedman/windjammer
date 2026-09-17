@@ -413,6 +413,9 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 if self.numeric_inference.is_some()
                     || self.promotion_int_type_from_assignment_context().is_some()
+                    || (is_arithmetic
+                        && self.function_prefers_i32_coord_locals()
+                        && (left_is_int_literal || right_is_int_literal))
                 {
                     if is_comparison || is_arithmetic {
                         use crate::type_inference::int_implicit_casts::{
@@ -422,9 +425,20 @@ impl<'ast> CodeGenerator<'ast> {
 
                         let left_ty = self.int_type_for_mixed_int_codegen(left);
                         let right_ty = self.int_type_for_mixed_int_codegen(right);
+                        let coord_i64_literal_peer = is_arithmetic
+                            && self.function_prefers_i32_coord_locals()
+                            && left_ty == IntType::I64
+                            && right_ty == IntType::I64
+                            && (left_is_int_literal || right_is_int_literal)
+                            && (self.wj_int_coord_builder_operand(left)
+                                || self.wj_int_coord_builder_operand(right)
+                                || self.arithmetic_prefers_i32_ambiguous_int_local(left)
+                                || self.arithmetic_prefers_i32_ambiguous_int_local(right)
+                                || self.expression_is_codegen_i32(left)
+                                || self.expression_is_codegen_i32(right));
                         if left_ty != IntType::Unknown
                             && right_ty != IntType::Unknown
-                            && left_ty != right_ty
+                            && (left_ty != right_ty || coord_i64_literal_peer)
                         {
                             // Windjammer `int`/i64 vs usize contamination (e.g. index formals):
                             // cast the usize side to signed — never cast int bindings to usize
