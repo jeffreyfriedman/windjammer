@@ -283,13 +283,14 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
 | P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ✅ tip GREEN (P3.343) — small literal ranges bind i32 + peer arith |
 | P1 | **void `while i < seg` after if/else i32 clamp must not emit `_i64`** | `bug_module_file_void_while_i32_seg_counter_must_not_emit_i64_test` | ✅ tip GREEN (P3.345) — if/else seg bind i32 |
-| P1 | **`cy + dy` for-range must not widen to i64 for i32 `set_if` coords** | `bug_i32_cy_plus_dy_for_range_must_not_widen_to_i64_test` | ✅ tip GREEN (P3.347) |
+| P1 | **`cy + dy` nested for-range must not widen to i64** | `bug_i32_cy_plus_dy_for_range_must_not_widen_to_i64_test` | ✅ tip GREEN (P3.347) — mixed arith prefer-i32 |
 | P1 | **owned String field ← demoted `&str` must `.to_string()`** | `bug_module_file_demoted_str_field_assign_must_to_string_test` | ✅ tip GREEN (P3.346) — loop-reuse demotion |
-| P1 | **`cy + dy` nested for-range must not widen to i64** | `bug_i32_cy_plus_dy_for_range_must_not_widen_to_i64_test` | ✅ tip GREEN (P3.347) — P3.343 regression lock |
 | P1 | **CDLP `&vertices` → owned `init_identity` must clone** | `bug_wdb259_module_file_demoted_vec_into_owned_init_identity_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241 |
 | P1 | **PageRank `&Vec` → owned `f64_sum` vertices must clone** | `bug_wdb260_module_file_demoted_vec_into_owned_f64_sum_vertices_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241/259 |
 | P1 | **LCC `&offsets`/`&tri` → owned simd bind must clone** | `bug_wdb261_module_file_demoted_vec_into_owned_simd_lcc_bind_must_clone_test` | 🆕 RED / filed (P3.344); twin WDB-241 |
 | P1 | **wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle must reborrow** | `bug_wdb262_module_file_owned_into_demoted_mut_wave1_fill_bundle_must_reborrow_test` | 🆕 RED / filed (P3.344); twin WDB-257; gen lag |
+| P1 | **WCC `&vertices` → owned `init_identity` must clone** | `bug_wdb263_module_file_demoted_vec_into_owned_wcc_init_identity_must_clone_test` | 🆕 RED / filed (P3.348); twin WDB-259; gen lag |
+| P1 | **BFS `csr.clone()` → demoted `&DenseCsr` distances_to_map must reborrow** | `bug_wdb264_module_file_owned_csr_clone_into_demoted_distances_to_map_must_reborrow_test` | 🆕 RED / filed (P3.348); twin WDB-252; gen lag |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1222,7 +1223,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.348 WindjammerDB CQ-C5 — coverage REDs WDB-263/264 WCC init_identity + BFS distances_to_map (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-263** WCC `&vertices` → owned `init_identity` must clone | ❌ RED — gen graph_wcc_engine (tip-out GREEN; twin WDB-259) |
+| Tip **WDB-264** BFS `csr.clone()` → demoted `&DenseCsr` distances_to_map | ❌ RED — gen graph_bfs_engine (tip-out GREEN; twin WDB-252) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–264**; sync tip-out→gen for WCC/BFS + prior Vec/map/csr cluster. No Phase 606+.
+
 ## P3.344 WindjammerDB CQ-C5 — coverage REDs WDB-261/262 LCC simd &Vec→owned + wave1 fill_bundle &mut (2026-09-17)
+
 
 | Gate | Status |
 |------|--------|
