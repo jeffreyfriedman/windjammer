@@ -272,6 +272,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **analytics `csr.clone()` → demoted `&DenseCsr` multi_source must reborrow** | `bug_wdb248_module_file_owned_csr_clone_into_demoted_ref_analytics_must_reborrow_test` | 🆕 RED / filed (P3.328); twin WDB-233 |
 | P1 | **SSSP `distances.clone()` → demoted `&GraphVertexF64Map` get must borrow** | `bug_wdb249_module_file_owned_sssp_f64_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.330); twin WDB-223 |
 | P1 | **CDLP `labels.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb250_module_file_owned_cdlp_i64_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.330); twin WDB-222/247 |
+| P1 | **incremental `prior.*.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb251_module_file_owned_incremental_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.333); twin WDB-222/250 |
+| P1 | **`csr.clone()` → demoted `&DenseCsr` vertex_count/find_index must reborrow** | `bug_wdb252_module_file_owned_csr_clone_into_demoted_vertex_count_find_index_must_reborrow_test` | 🆕 RED / filed (P3.333); twin WDB-233/248 |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1029,6 +1031,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.333 WindjammerDB CQ-C5 — coverage REDs WDB-251/252 incremental maps + demoted vertex_count/find_index (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (gen lag) |
+| Tip **WDB-251** incremental `prior.distances/labels.clone()` → demoted `&GraphVertexI64Map` | ❌ RED — tip-out/gen graph_incremental_views (twin WDB-222/250) |
+| Tip **WDB-252** `csr.clone()` → demoted `&DenseCsr` vertex_count/find_index | ❌ RED — tip-out bfs/wcc/sssp/epoch/datafusion (twin WDB-233/248) |
+| Tip **WDB-249/250 / 247/248 / 244–246** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–252**; sync tip-out→gen for 234–238. Dominant residual: Vec←&Vec / `&str`←String / map.clone→`&Map` / csr.clone→`&DenseCsr`. No Phase 606+.
 
 ## P3.330 WindjammerDB CQ-C5 — coverage REDs WDB-249/250 SSSP F64Map + CDLP I64Map (2026-09-16)
 
