@@ -127,8 +127,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Same-file borrow passthrough wrappers (`wrapper` → `process`) must emit
                 // `&T` once the callee's preregistered/emitted formal converged to shared borrow.
+                // Copy scalars stay owned — Rust auto-borrows into Vec::contains (auto_ref_deref_copy).
                 if param.name != "self"
                     && self.func_is_pure_forwarding_delegate(func)
+                    && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                     && !self.param_only_forwards_to_emitted_owned_callees(
                         func.body.as_slice(),
                         &param.name,
@@ -1760,6 +1762,11 @@ impl<'ast> CodeGenerator<'ast> {
                             // already gates multiparam store forwards (`apply_patch_put`),
                             // including when the body stores via owned callees (regression-047).
                             && !self.func_is_pure_forwarding_delegate(func)
+                            // Copy scalars stay pass-by-value (auto_ref_deref_copy / Vec::contains
+                            // auto-borrows at the call site).
+                            && !crate::type_classification::is_copy_pass_by_value_formal(
+                                &param.type_,
+                            )
                         {
                             let type_str =
                                 self.borrowed_formal_rust_type_for_param(param, func, param_idx);
@@ -3050,6 +3057,30 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                                 OwnershipMode::Borrowed => {
+                                    let bare = match formal_type {
+                                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                                            inner.as_ref()
+                                        }
+                                        other => other,
+                                    };
+                                    // Scalar Copy formals declared as `usize`/`i32`/… stay
+                                    // pass-by-value even when body analysis marked Borrowed
+                                    // (auto_ref_deref_copy — callers pass values, Rust auto-borrows).
+                                    if crate::type_classification::is_copy_pass_by_value_formal(bare)
+                                        && !matches!(
+                                            bare,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
+                                        && !matches!(bare, Type::String)
+                                        && !matches!(
+                                            bare,
+                                            Type::Custom(n) if n == "string" || n == "str"
+                                        )
+                                    {
+                                        self.emitted_rust_ref_formals.remove(&param.name);
+                                        self.str_ref_optimized_params.remove(&param.name);
+                                        self.type_to_rust(bare)
+                                    } else {
                                     let is_string = matches!(formal_type, Type::String)
                                         || matches!(formal_type, Type::Custom(ref name) if name == "string");
                                     if is_string
@@ -3193,6 +3224,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else {
                                         format!("&{}", self.type_to_rust(formal_type))
                                     }
+                                    } // end scalar-copy else
                                 }
                             })
                         }
@@ -3213,29 +3245,33 @@ impl<'ast> CodeGenerator<'ast> {
                     type_str
                 };
 
-                // Copy scalars (`int`/`float`/`bool`): never emit `&T` / read-only `&mut T`.
+                // Copy scalars (`int`/`float`/`bool`/`usize`): never emit `&T` / read-only `&mut T`.
+                // Peel `Reference(T)` so demoted `&usize` still yields owned `usize`.
                 // Copy aggregates: strip spurious readonly `&T` from field reads; keep `&mut T`
                 // for direct mutation and passthrough to mutating callees.
-                if param.name != "self"
-                    && type_str.starts_with('&')
-                    && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
-                    && !analyzed.mutated_parameters.contains(&param.name)
-                    && !analyzed.field_mutated_parameters.contains(&param.name)
-                {
-                    type_str = self.type_to_rust(&param.type_);
-                } else if param.name != "self"
-                    && type_str.starts_with('&')
-                    && !type_str.starts_with("&mut ")
-                    && (self.is_type_copy(&param.type_)
-                        && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                if param.name != "self" && type_str.starts_with('&') {
+                    let bare = match &param.type_ {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    if crate::type_classification::is_copy_pass_by_value_formal(bare)
+                        && !matches!(bare, Type::Reference(_) | Type::MutableReference(_))
+                        && !analyzed.mutated_parameters.contains(&param.name)
+                        && !analyzed.field_mutated_parameters.contains(&param.name)
+                    {
+                        type_str = self.type_to_rust(bare);
+                    } else if !type_str.starts_with("&mut ")
+                        && self.is_type_copy(bare)
+                        && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                         && !crate::analyzer::field_enum_borrow::param_only_used_as_field_enum_match_scrutinee(
                             &param.name,
                             func.body.as_slice(),
                         )
                         && !self.inferred_borrowed_params.contains(&param.name)
-                        && !self.emitted_rust_ref_formals.contains(&param.name))
-                {
-                    type_str = self.type_to_rust(&param.type_);
+                        && !self.emitted_rust_ref_formals.contains(&param.name)
+                    {
+                        type_str = self.type_to_rust(bare);
+                    }
                 }
 
                 // Public crate API: never emit demoted `&str` for WJ `string` formals —

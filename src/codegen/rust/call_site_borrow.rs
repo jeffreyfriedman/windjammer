@@ -422,11 +422,13 @@ pub fn user_wrote_explicit_deref(arg_expr: &Expression) -> bool {
                     op: crate::parser::UnaryOp::Deref,
                     ..
                 }
-            )
+            ) || user_wrote_explicit_deref(object)
         }
         Expression::Binary { left, right, .. } => {
             user_wrote_explicit_deref(left) || user_wrote_explicit_deref(right)
         }
+        Expression::Unary { operand, .. } => user_wrote_explicit_deref(operand),
+        Expression::Cast { expr, .. } => user_wrote_explicit_deref(expr),
         _ => false,
     }
 }
