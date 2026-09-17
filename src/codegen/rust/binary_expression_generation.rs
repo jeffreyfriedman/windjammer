@@ -523,6 +523,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     && (left_is_int_literal || right_is_int_literal)
                                 {
                                     promoted = IntType::I32;
+                                } else if is_arithmetic
+                                    && self.function_prefers_i32_coord_locals()
+                                    && left_ty == IntType::I64
+                                    && right_ty == IntType::I32
+                                    && self.wj_int_coord_builder_operand(left)
+                                {
+                                    promoted = IntType::I32;
+                                } else if is_arithmetic
+                                    && self.function_prefers_i32_coord_locals()
+                                    && left_ty == IntType::I32
+                                    && right_ty == IntType::I64
+                                    && self.wj_int_coord_builder_operand(right)
+                                {
+                                    promoted = IntType::I32;
                                 }
                             }
                             if promoted != IntType::Unknown {

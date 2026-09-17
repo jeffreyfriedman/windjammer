@@ -62,6 +62,41 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
 
+    /// P3.353: WJ `int` const/locals in void/i32-coord builders (not `int` params).
+    pub(in crate::codegen::rust) fn wj_int_coord_builder_operand(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        if !self.function_prefers_i32_coord_locals() {
+            return false;
+        }
+        let Expression::Identifier { name, .. } = expr else {
+            return false;
+        };
+        if self.explicit_wj_int_annotated_locals.contains(name) {
+            return false;
+        }
+        if self.current_function_params.iter().any(|p| {
+            p.name == *name
+                && (matches!(&p.type_, Type::Int)
+                    || matches!(
+                        &p.type_,
+                        Type::Custom(n) if matches!(n.as_str(), "int" | "i64")
+                    ))
+        }) {
+            return false;
+        }
+        if self.codegen_i32_binding_names.contains(name) {
+            return true;
+        }
+        if self.arithmetic_prefers_i32_ambiguous_int_local(expr) {
+            return true;
+        }
+        self.infer_expression_type(expr)
+            .as_ref()
+            .is_some_and(|t| matches!(t, Type::Int))
+    }
+
     /// P3.353: WJ `int` locals in voxel/set_if coord builders (not formal `int` params).
     fn arithmetic_prefers_i32_ambiguous_int_local(
         &self,
@@ -101,7 +136,8 @@ impl<'ast> CodeGenerator<'ast> {
         i64_side: &Expression<'ast>,
     ) -> bool {
         let i32_side_ok = self.expression_is_codegen_i32(i32_side)
-            || self.arithmetic_prefers_i32_ambiguous_int_local(i32_side);
+            || self.arithmetic_prefers_i32_ambiguous_int_local(i32_side)
+            || self.wj_int_coord_builder_operand(i32_side);
         if !i32_side_ok {
             return false;
         }
@@ -166,6 +202,29 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|t| {
                     matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
                 })
+    }
+
+    /// P3.353: after `let cx = (VIEWER_GRID as i32) / 2_i32`, keep binding width i32 for downstream ops.
+    pub(in crate::codegen::rust) fn sync_i32_coord_binding_after_let(
+        &mut self,
+        name: &str,
+        value_str: &str,
+    ) {
+        if !self.function_prefers_i32_coord_locals() {
+            return;
+        }
+        if self.explicit_wj_int_annotated_locals.contains(name) {
+            return;
+        }
+        let i32_emitted = value_str.contains("_i32")
+            || value_str.contains(" as i32")
+            || value_str.contains("as i32)");
+        if !i32_emitted {
+            return;
+        }
+        self.local_var_types.insert(name.to_string(), Type::Int32);
+        self.codegen_i32_binding_names.insert(name.to_string());
+        self.usize_variables.remove(name);
     }
 
     /// P3.323 / P3.326: untyped `let mut x = 0` may emit `_i32` / `_usize` while
@@ -512,6 +571,9 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
     ) -> Option<Type> {
+        if self.wj_int_coord_builder_operand(expr) {
+            return Some(Type::Int32);
+        }
         if let Expression::Identifier { name, .. } = expr {
             // usize index/len counters beat return-inferred Int32 (P3.311/P3.314).
             if self.usize_variables.contains(name) {
@@ -686,6 +748,18 @@ impl<'ast> CodeGenerator<'ast> {
                         (IntType::I64, IntType::I64)
                             if self.function_prefers_i32_coord_locals()
                                 && (lit(left) || lit(right)) =>
+                        {
+                            IntType::I32
+                        }
+                        (IntType::I64, IntType::I32)
+                            if self.function_prefers_i32_coord_locals()
+                                && self.wj_int_coord_builder_operand(left) =>
+                        {
+                            IntType::I32
+                        }
+                        (IntType::I32, IntType::I64)
+                            if self.function_prefers_i32_coord_locals()
+                                && self.wj_int_coord_builder_operand(right) =>
                         {
                             IntType::I32
                         }

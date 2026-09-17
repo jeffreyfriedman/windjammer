@@ -249,6 +249,12 @@ impl<'ast> CodeGenerator<'ast> {
                         let l = self.infer_expression_type(left);
                         let r = self.infer_expression_type(right);
                         match (l, r) {
+                            (Some(a), Some(b)) if a == b
+                                && matches!(a, Type::Int)
+                                && self.function_prefers_i32_coord_locals() =>
+                            {
+                                Some(Type::Int32)
+                            }
                             (Some(a), Some(b)) if a != b => {
                                 if self.function_prefers_i32_coord_locals()
                                     && (matches!(a, Type::Int) || matches!(b, Type::Int))
@@ -451,6 +457,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
+                    self.sync_i32_coord_binding_after_let(vn, &value_str);
                 }
                 output.push_str(&value_str);
             } else {
@@ -664,6 +671,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
+                    self.sync_i32_coord_binding_after_let(vn, &value_str);
                 }
                 output.push_str(&value_str);
 
