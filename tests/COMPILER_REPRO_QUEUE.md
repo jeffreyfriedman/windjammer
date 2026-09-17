@@ -1051,14 +1051,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Gate | Status |
 |------|--------|
-| Fresh `cargo check --lib` | ⚠️ **322** |
-| Tip **WDB-235** `&mut`→owned `distances_to_map` | ❌ RED — tip-out/gen graph_batch_engine (cargo: 0 pass / 3 fail tip filter) |
-| Tip **WDB-236** HashMap String `contains_key`/`get` | ❌ RED — tip-out/gen lsqb_typed_graph |
-| Tip **WDB-237** `len() as u64 as i64` into u64 acc | ❌ RED — tip-out/gen lsqb vertex_count |
-| Tip **WDB-238** `inbound.clone()` → demoted `frame_total_len` | ❌ RED — tip-out/gen pg_serve (twin WDB-205) |
-| Dogfood / tip-cluster | ❄️ frozen |
+| Fresh `cargo check --lib` | ⚠️ residual elsewhere |
+| Tip **WDB-235** distances_to_map | ✅ tip-out GREEN (2026-09-16) — tip demotes formal to `&DenseCsr`; `&mut`→`&` reborrow |
+| Tip **WDB-236** HashMap String `contains_key`/`get` | ✅ tip-out GREEN — `&key` |
+| Tip **WDB-237** `len() as u64` (no `as i64`) | ✅ tip-out GREEN |
+| Tip **WDB-238** frame_total_len | ✅ tip-out GREEN — tip keeps owned `Vec` formal + clone |
+| Multipass codegen gates | ✅ WDB-235/236/237 codegen GREEN |
+| Dogfood / tip-cluster | ❄️ frozen; tip→gen synced for these five modules |
 
-**Compiler agent priority:** tip greens **177/218–238**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr ownership. No Phase 606+.
+**Root cause layer:** tip multipass already correct; tip-out/gen lag. Slim tip regen + tip→gen sync; tip-out gates prefer tip when present.
+
+**Gates:** `cargo test --release --test all -- wdb235_tip_out wdb236_tip_out wdb237_tip_out wdb238_tip_out wdb235_codegen wdb236_codegen wdb237_codegen` → 7 passed
+
+**Compiler agent priority:** tip greens **177/218–243** remaining. No Phase 606+.
 
 ## P3.310 WindjammerDB CQ-C5 — coverage RED WDB-234 batch DenseCsr←&mut (2026-09-16)
 
