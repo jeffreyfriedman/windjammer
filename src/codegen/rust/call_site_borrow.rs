@@ -561,6 +561,45 @@ pub fn finalize_collection_key_call_site_arg(
     let Some(sig) = sig else {
         return;
     };
+    let strip_leading_shared_ref = |s: &mut String| {
+        if s.starts_with("&mut ") {
+            return;
+        }
+        if let Some(rest) = s.strip_prefix('&') {
+            *s = rest.to_string();
+        }
+    };
+    let key_formal_is_copy = {
+        let param_idx = sig.arg_param_index(arg_index);
+        sig.param_types
+            .get(param_idx)
+            .or_else(|| sig.formal_param_type(param_idx))
+            .is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+                    || matches!(
+                        bare,
+                        Type::Custom(n)
+                            if matches!(
+                                n.as_str(),
+                                "usize" | "isize" | "u8" | "u16" | "u32" | "u64" | "i8" | "i16"
+                                    | "i32" | "i64" | "bool" | "char" | "f32" | "f64"
+                            )
+                    )
+            })
+    };
+    // Explicit `*x` / `(*x).field` already yields a Copy value — Rust auto-borrows for
+    // `&T` formals. Re-prefixing `&` produces `&*x` / `&(x).field` (auto_ref_deref_copy).
+    // Same for Copy field access when the Deref was lowered away (`(entity_ref).id`).
+    if user_wrote_explicit_deref(arg_expr)
+        || (key_formal_is_copy && matches!(arg_expr, Expression::FieldAccess { .. }))
+    {
+        strip_leading_shared_ref(arg_str);
+        return;
+    }
     if arg_binding_already_shared_ref
         || !is_collection_key_arg(sig, arg_index, receiver_type)
         || arg_str.starts_with('&')

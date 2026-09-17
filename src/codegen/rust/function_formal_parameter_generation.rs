@@ -3019,17 +3019,34 @@ impl<'ast> CodeGenerator<'ast> {
                                         format!("&mut {}", self.type_to_rust(inner))
                                     }
                                 }
-                                OwnershipMode::Borrowed if self.is_type_copy(formal_type) => {
+                                OwnershipMode::Borrowed
+                                    if {
+                                        let bare = match formal_type {
+                                            Type::Reference(inner)
+                                            | Type::MutableReference(inner) => inner.as_ref(),
+                                            other => other,
+                                        };
+                                        self.is_type_copy(bare) || self.is_type_copy(formal_type)
+                                    } =>
+                                {
                                     // Copy-by-value: owned formal + call-site borrow, except
                                     // field-projection-only aggregates (`run_query` → `&Graph`).
+                                    // Peel `Reference(T)` so we never emit `&usize` when the
+                                    // AST declared bare `usize` (auto_ref_deref_copy).
+                                    let bare = match formal_type {
+                                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                                            inner.as_ref()
+                                        }
+                                        other => other,
+                                    };
                                     if self.emitted_rust_ref_formals.contains(&param.name)
                                         && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            formal_type,
+                                            bare,
                                         )
                                     {
-                                        format!("&{}", self.type_to_rust(formal_type))
+                                        format!("&{}", self.type_to_rust(bare))
                                     } else {
-                                        self.type_to_rust(formal_type)
+                                        self.type_to_rust(bare)
                                     }
                                 }
                                 OwnershipMode::Borrowed => {
