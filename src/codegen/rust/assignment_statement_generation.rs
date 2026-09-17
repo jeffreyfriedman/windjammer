@@ -445,7 +445,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             if self.usize_variables.contains(name) {
-                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                let wj_int_local = self.local_var_types.get(name).is_some_and(|t| {
+                    matches!(t, Type::Int)
+                        || matches!(t, Type::Custom(s) if s == "int" || s == "i64")
+                });
+                if !wj_int_local {
+                    self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                }
             }
         }
         self.set_assignment_int_target_from_compound_target(target);

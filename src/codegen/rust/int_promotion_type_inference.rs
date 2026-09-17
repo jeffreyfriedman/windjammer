@@ -75,6 +75,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // P3.326: numeric inference may emit `0_usize` for index locals while the let
         // still recorded WJ `Int` (String/bool return width hint). Treat as usize.
+        if self.explicit_wj_int_annotated_locals.contains(name) {
+            return;
+        }
         if emitted_rhs.ends_with("_usize")
             || self.int_type_for_mixed_int_codegen(value) == IntType::Usize
         {
@@ -128,7 +131,9 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) else {
             return;
         };
-        if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int)) {
+        if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+            && self.literal_init_wj_int_loop_counters.contains(&name)
+        {
             self.local_var_types.insert(name, Type::Int32);
         }
     }

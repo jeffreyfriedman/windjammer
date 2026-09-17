@@ -1,18 +1,15 @@
 # LedgerKit `wj` pin (api-check)
 
-When `next/v0.50.0` tip source fails LedgerKit `make api-check` (~289 i64/i32 width errors), use a **known-good compiler binary** without moving the branch tip:
+LedgerKit `make api-check` is **GREEN on `next/v0.50.0` tip** after P3.336 (2026-09-17). Use `target/release/wj` built from tip; no binary pin.
 
 | Field | Value |
 |-------|--------|
-| Last GREEN commit (api-check on LedgerKit platform) | `27255538` |
-| First RED after that | `99503c93` (P3.323) |
-| Branch tip (source stays here) | `next/v0.50.0` @ `a6bb24e6`+ |
+| Last GREEN commit (api-check on LedgerKit platform) | tip (`next/v0.50.0`) |
+| Regression window | `99503c93` (P3.323) … P3.336 fix |
+| Gate | `int_mod_literal_zero_compare_must_not_split_i64_i32` |
 
 ```bash
-git worktree add --detach /tmp/wj-ledgerkit-green 27255538
-cd /tmp/wj-ledgerkit-green
-CARGO_TARGET_DIR=/tmp/wj-ledgerkit-green-target cargo build --release -p windjammer --bin wj
-cp /tmp/wj-ledgerkit-green-target/release/wj ~/src/wj/windjammer/target/release/wj
+cd ~/src/wj/windjammer
+cargo build --release -p windjammer --bin wj
+# financial-management-platform: make api-check
 ```
-
-Track fix progress with gate `int_mod_literal_zero_compare_must_not_split_i64_i32` (P3.336).

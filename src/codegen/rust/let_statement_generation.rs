@@ -153,6 +153,14 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(name) = var_name {
             let inferred_type: Option<Type> = if let Some(type_) = type_ {
                 // Explicit type annotation: let x: Foo = ...
+                if let Some(vn) = var_name {
+                    if matches!(type_, Type::Int)
+                        || matches!(type_, Type::Custom(n) if n == "int" || n == "i64")
+                    {
+                        self.usize_variables.remove(vn);
+                        self.explicit_wj_int_annotated_locals.insert(vn.to_string());
+                    }
+                }
                 Some((*type_).clone())
             } else {
                 // Infer from value expression
@@ -260,6 +268,16 @@ impl<'ast> CodeGenerator<'ast> {
             };
             if let Some(t) = inferred_type {
                 self.local_var_types.insert(name.to_string(), t);
+            }
+            if mutable
+                && Self::mut_let_rhs_is_return_width_counter(value)
+                && matches!(
+                    self.local_var_types.get(name),
+                    Some(Type::Int) | Some(Type::Int32)
+                )
+            {
+                self.literal_init_wj_int_loop_counters
+                    .insert(name.to_string());
             }
         } else {
             // Struct / enum destructure: `let VertexMap { mut inner } = map`
