@@ -291,7 +291,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle must reborrow** | `bug_wdb262_module_file_owned_into_demoted_mut_wave1_fill_bundle_must_reborrow_test` | 🆕 RED / filed (P3.344); twin WDB-257; gen lag |
 | P1 | **WCC `&vertices` → owned `init_identity` must clone** | `bug_wdb263_module_file_demoted_vec_into_owned_wcc_init_identity_must_clone_test` | 🆕 RED / filed (P3.349); twin WDB-259; gen lag |
 | P1 | **BFS `csr.clone()` → demoted `&DenseCsr` distances_to_map must reborrow** | `bug_wdb264_module_file_owned_csr_clone_into_demoted_distances_to_map_must_reborrow_test` | 🆕 RED / filed (P3.349); twin WDB-252; gen lag |
+| P1 | **BFS `distances.clone()` → demoted `&Map` `i64_len` must borrow** | `bug_wdb265_module_file_owned_map_clone_into_demoted_i64_len_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222; gen lag |
+| P1 | **BFS `distances.clone()` → demoted `&Map` `i64_contains` must borrow** | `bug_wdb266_module_file_owned_map_clone_into_demoted_i64_contains_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222/265; gen lag |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
+| P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | 🆕 RED / filed (P3.352) |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -314,6 +317,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
 | P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
+| P1 | **`wj build --release` must pass `--release` to cargo** | `bug_wj_build_release_must_invoke_cargo_release_test` | 🆕 RED / filed (P3.350); `_release` discarded in `cli/build.rs` |
 | P1 | **assign generic `send` must not inject unbound `Sender<T>`** | `bug_generic_assign_must_not_inject_unbound_t_test` | ✅ tip GREEN (P3.342) |
 | P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ✅ tip GREEN (P3.331) |
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (P3.332) |
@@ -372,6 +376,37 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
 
+
+## P3.352 (2026-09-17) — i32 `while` vs `.len()` / literal bounds must not emit `as i64`
+
+| Gate | Status |
+|------|--------|
+| `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | 🆕 RED / filed |
+
+**Product:** csg `emit_instruction`, perlin perm init, `for i < vec.len()` mirrors.
+
+**Verify:**
+
+```bash
+cargo test --release --test all -- i32_while_len_and_literal_bound -- --nocapture
+```
+
+## P3.350 (2026-09-17) — `wj build --release` must invoke `cargo build --release`
+
+| Gate | Status |
+|------|--------|
+| `bug_wj_build_release_must_invoke_cargo_release_test` | 🆕 RED / filed |
+| Product impact | `wj-sync` fair benches; eco packages reporting false ~4× vs Rust |
+
+**Root cause:** `cli/build.rs` `execute(..., _release: bool, …)` discards the flag; always runs `cargo build` (dev).
+
+**Fix needed:** Pass `--release` to cargo when `-r`/`--release` is set; surface `Finished \`release\`` / `target/release/` artifact.
+
+**Verify:**
+
+```bash
+cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_release -- --nocapture
+```
 
 ## P3.346 (2026-09-17) — owned String field assign from demoted `&str`
 
@@ -1234,6 +1269,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.351 WindjammerDB CQ-C5 — coverage REDs WDB-265/266 BFS i64_len/contains map.clone (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-265** BFS `distances.clone()` → demoted `&Map` `i64_len` | ❌ RED — gen graph_bfs_engine (tip owned formal OK; twin WDB-222) |
+| Tip **WDB-266** BFS `distances.clone()` → demoted `&Map` `i64_contains` | ❌ RED — gen graph_bfs_engine (tip-out GREEN; twin WDB-222/265) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–266**; sync tip-out→gen for BFS map.contains/len + WCC/BFS csr/map cluster. No Phase 606+.
 
 ## P3.349 WindjammerDB CQ-C5 — coverage REDs WDB-263/264 WCC init_identity + BFS distances_to_map (2026-09-17)
 
