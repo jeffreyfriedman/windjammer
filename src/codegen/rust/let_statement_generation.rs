@@ -250,8 +250,11 @@ impl<'ast> CodeGenerator<'ast> {
                         let r = self.infer_expression_type(right);
                         match (l, r) {
                             (Some(a), Some(b)) if a != b => {
-                                // Prefer specific int widths over default WJ `int` (i64).
-                                if matches!(a, Type::Int)
+                                if self.function_prefers_i32_coord_locals()
+                                    && (matches!(a, Type::Int) || matches!(b, Type::Int))
+                                {
+                                    Some(Type::Int32)
+                                } else if matches!(a, Type::Int)
                                     && Self::assignment_target_needs_int_codegen_context(&b)
                                     && !matches!(b, Type::Int)
                                 {
