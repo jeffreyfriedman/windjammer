@@ -262,6 +262,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN (2026-09-16) — P3.297 While/Loop capture analysis |
 | P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ✅ tip GREEN (2026-09-16) — P3.298 returned Vec must not demote |
 | P1 | **`int` find-pos `>= 0` must not emit `as usize >= 0_i64` (`wj-timefmt`)** | `bug_int_find_pos_ge_zero_must_not_mix_usize_i64_test` | ✅ tip GREEN (2026-09-16) — binding beats usize_variables; `strings::len`→i64 |
+| P1 | **`int` `while n>0` `n % 10` / `digit == 0` must not split i64 vs i32 (LedgerKit)** | `bug_int_mod_literal_zero_compare_must_not_split_i64_i32_test` | 🆕 RED / filed (P3.336); tip api-check **289** errors until fix |
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (P3.300 isolate + P3.315 nested) |
 | P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | ✅ tip GREEN (P3.316) — tip demotes to `&DenseCsr` |
 | P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (P3.316) — `&key` |
@@ -398,6 +399,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Gates:** `cargo test --release --test all -- u32_arith_int_literal_must_not_emit_u64 module_file_recv_reassign i32_compound_add_must_not_use_usize` → 3 passed.
 
 
+
+## P3.336 (2026-09-17) — `int` `% 10` / `digit == 0` in `while n > 0` must not split i64 vs i32 (LedgerKit)
+
+| Gate | Status |
+|------|--------|
+| `int_mod_literal_zero_compare_must_not_split_i64_i32` | 🆕 RED on tip (2026-09-17) |
+| Product LedgerKit `make api-check` | ❌ **289** rustc errors on tip `a6bb24e6` (`audit_events.wj`, `postgres_invoice_repository.wj`) |
+| Last GREEN Windjammer commit (api-check) | **`27255538`** (pre P3.323); pin `target/release/wj` from that SHA for LedgerKit |
+
+**Root cause:** P3.323 inferred i32 loop counters widened `while n > 0` bounds and `% 10` peers to `_i32` while `n` stayed i64 → `n as i64 % 10_i32`, `while n > (0_i32 as i32)`.
+
+**Gates:** `cargo test --release --test all -- int_mod_literal_zero_compare_must_not_split_i64_i32` → RED on tip.
 
 ## P3.334 (2026-09-17) — i32 `for i in 0..seg` loop counter must not widen to i64 literals
 
