@@ -687,6 +687,55 @@ pub fn apply_call_site_borrow(decision: &CallSiteBorrowDecision, arg_str: &mut S
     }
 }
 
+fn callee_formal_is_owned_vec_container(sig: &FunctionSignature, pidx: usize) -> bool {
+    if callee_emits_shared_rust_ref_param(sig, pidx) {
+        return false;
+    }
+    sig.formal_param_type(pidx)
+        .or_else(|| sig.param_types.get(pidx))
+        .is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && type_is_vec_container(t)
+        })
+}
+
+/// P3.353 / WDB-108 balance: explicit `argv.clone()` into owned `Vec` callees is a move when
+/// the caller param is not reused; sequential multi-call reuse keeps `.clone()`.
+pub(crate) fn reconcile_explicit_user_clone_into_owned_vec_formal<'ast>(
+    gen: &crate::codegen::rust::generator::CodeGenerator<'ast>,
+    arg_expr: &Expression<'ast>,
+    coerced: String,
+    sig: &FunctionSignature,
+    arg_index: usize,
+) -> String {
+    if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr) {
+        return coerced;
+    }
+    let Some(name) =
+        crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg_expr)
+    else {
+        return coerced;
+    };
+    let pidx = sig.arg_param_index(arg_index);
+    if !callee_formal_is_owned_vec_container(sig, pidx) {
+        return coerced;
+    }
+    if !gen.current_function_params.iter().any(|p| {
+        p.name == name && type_is_vec_container(&p.type_)
+    }) {
+        return coerced;
+    }
+    let preserve_clone = gen.caller_param_has_later_owned_formal_pass(name)
+        || gen.auto_clone_analysis.as_ref().is_some_and(|a| {
+            a.needs_clone(name, gen.current_statement_idx).is_some()
+                || a.needs_clone_anywhere(name)
+        });
+    if preserve_clone {
+        return coerced;
+    }
+    name.to_string()
+}
+
 /// How to pass a hoisted `format!` / write!-block temp at a call site.
 ///
 /// Signature-driven: shared-ref formals get `&_tempN`; owned string formals get `_tempN`.

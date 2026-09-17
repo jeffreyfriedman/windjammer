@@ -59,6 +59,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             // `params: Vec<string>`) — same IR element coercion as method args.
             let prev_call_arg_expected = gen.call_arg_expected_type.clone();
             let prev_arg_float_target = gen.assignment_float_target_type.clone();
+            let prev_arg_int_target = gen.assignment_int_target_type.clone();
             if let Some(ref sig) = signature {
                 let pidx = sig.arg_param_index(i);
                 let param_ty = sig
@@ -72,6 +73,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 {
                     gen.assignment_float_target_type = param_ty.clone();
                 }
+                if gen.assignment_int_target_type.is_none() {
+                    if let Some(peer) =
+                        crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                            param_ty.as_ref(),
+                        )
+                    {
+                        gen.assignment_int_target_type = Some(peer);
+                    }
+                }
                 if let Some(ty) = param_ty {
                     gen.call_arg_expected_type = Some(ty);
                 }
@@ -80,6 +90,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
             let mut arg_str = gen.generate_expression(arg);
             gen.restore_arg_gen_scope(scope);
             gen.assignment_float_target_type = prev_arg_float_target;
+            gen.assignment_int_target_type = prev_arg_int_target;
             gen.call_arg_expected_type = prev_call_arg_expected;
             gen.suppress_borrowed_clone = prev_suppress;
             arg_str = gen.peel_copy_ref_match_binding_for_value(arg, &arg_str);
@@ -366,6 +377,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.emitted_rust_ref_formals,
                             &gen.current_function_params,
                         );
+                    if let Some(ref sig) = peel_sig {
+                        coerced = crate::codegen::rust::call_site_borrow::reconcile_explicit_user_clone_into_owned_vec_formal(
+                            gen,
+                            arg,
+                            coerced,
+                            sig,
+                            i,
+                        );
+                    }
                     if let Some(ref sig) = peel_sig {
                         gen.peel_fn_trait_or_closure_call_arg(
                             &mut coerced,

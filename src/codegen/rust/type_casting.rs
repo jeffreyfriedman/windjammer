@@ -39,6 +39,19 @@ pub fn type_is_i32(ty: &Type) -> bool {
     matches!(ty, Type::Int32) || matches!(ty, Type::Custom(n) if n == "i32")
 }
 
+/// Drive int literal suffixes while generating a call argument (P3.353 `set_if` coords).
+pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
+    if formal.is_some_and(type_is_i32) {
+        return Some(Type::Int32);
+    }
+    if formal.is_some_and(|ty| {
+        matches!(ty, Type::Uint) || matches!(ty, Type::Custom(n) if n == "u32")
+    }) {
+        return Some(Type::Uint);
+    }
+    None
+}
+
 /// Coerce a WJ `int`/`i64` argument to an `i32` formal (WDB-160 / `process::exit`).
 ///
 /// Signature-driven: only when the resolved formal is `i32`. Literals already
@@ -53,7 +66,7 @@ pub fn coerce_arg_str_for_i32_formal(
     if !formal.is_some_and(type_is_i32) {
         return;
     }
-    if arg_type.is_some_and(type_is_i32) {
+    if arg_type.is_some_and(type_is_i32) && !arg_str.contains("_i64") {
         return;
     }
     if arg_str.contains(" as i32") || arg_str.ends_with("_i32") {

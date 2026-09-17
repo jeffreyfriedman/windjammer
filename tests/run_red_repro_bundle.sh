@@ -70,6 +70,7 @@ GREEN_FILTERS=(
   engine_i32_range_literal_must_not_emit_i64_suffix
   owned_path_extract_must_not_over_borrow
   vec_string_helper_must_not_over_borrow
+  cross_crate_vec_string_helper_must_auto_borrow_at_call_site
   thin_vec_forwarder_must_not_demote_owned
   vec_custom_view_helper_must_not_over_borrow
   mut_param_passthrough_must_not_prefix_shared_amp

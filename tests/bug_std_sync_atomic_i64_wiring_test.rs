@@ -11,8 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — `std::sync::atomic` (AtomicI64) for hot Counter graduation.
-//! Ecosystem `wj-sync` Counter is Mutex-backed until runtime re-exports atomics.
+//! `std::sync::atomic` AtomicI64 must link for wj-sync Counter hot path.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -29,17 +28,8 @@ pub fn bump() -> int {
 
 #[test]
 fn std_sync_atomic_i64_must_wire() {
-    let generated = test_utils::compile_single(ATOMIC);
-    assert!(
-        !generated.contains("compile_error!")
-            && !generated.contains("unresolved import")
-            && (generated.contains("AtomicI64") || generated.contains("atomic")),
-        "std::sync::atomic AtomicI64 must wire for wj-sync Counter hot path:\n{generated}"
-    );
-    // Runtime re-export must exist (cargo-check style needle).
-    assert!(
-        generated.contains("std::sync::atomic")
-            || generated.contains("windjammer_runtime::sync::atomic"),
-        "atomic module path must resolve:\n{generated}"
+    test_utils::assert_stdlib_runtime_links(
+        ATOMIC,
+        &["AtomicI64", "fetch_add"],
     );
 }

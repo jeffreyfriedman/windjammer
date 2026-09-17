@@ -154,6 +154,23 @@ impl<'ast> CodeGenerator<'ast> {
         fields.values().any(|t| matches!(t, Type::Vec(_) | Type::Array(_, _)))
     }
 
+    /// P3.353: void builders / narrow-return fns default coordinate locals to i32/u32 width.
+    pub(in crate::codegen::rust) fn function_prefers_i32_coord_locals(&self) -> bool {
+        let Some(rt) = &self.current_function_return_type else {
+            return true;
+        };
+        match Self::peel_option_result_payload(rt) {
+            Type::Int32 | Type::Uint => true,
+            Type::Custom(n) if matches!(n.as_str(), "i32" | "u32") => true,
+            Type::Int | Type::Bool | Type::String => false,
+            Type::Custom(n) if matches!(n.as_str(), "int" | "i64") => false,
+            Type::Custom(n) if self.struct_fields_include_wj_int(n) => false,
+            Type::Tuple(v) if v.is_empty() => true,
+            Type::Custom(n) if n == "Unit" => true,
+            _ => true,
+        }
+    }
+
     /// P3.335: `-> i32` scan loops keep `i32` counters vs `.len()`.
     pub(in crate::codegen::rust) fn function_returns_i32_for_loop_scan(&self) -> bool {
         self.current_function_return_type.as_ref().is_some_and(|rt| {
