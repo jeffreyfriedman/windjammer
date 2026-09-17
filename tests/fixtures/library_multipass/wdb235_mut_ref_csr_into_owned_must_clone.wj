@@ -1,0 +1,22 @@
+pub struct DenseCsr {
+    pub n: int,
+    pub edges: Vec<int>,
+}
+
+pub fn distances_to_map(csr: DenseCsr, distances: Vec<int>) -> int {
+    let _ = csr.n
+    let _ = csr.edges
+    distances.len() as int
+}
+
+pub fn run_batch(csr: DenseCsr, sources: Vec<int>) -> int {
+    // Product demotes csr to &mut DenseCsr then forwards into owned distances_to_map.
+    let mut total = 0
+    let mut i = 0
+    while i < sources.len() {
+        let distances = Vec::new()
+        total = total + distances_to_map(csr, distances)
+        i = i + 1
+    }
+    total
+}
