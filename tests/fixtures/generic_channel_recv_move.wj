@@ -1,0 +1,13 @@
+// P3.332: generic recv must move Receiver, not rx.clone().
+use std::sync::mpsc
+
+pub struct Receiver<T> {
+    rx: mpsc::Receiver<T>,
+}
+
+pub fn recv<T>(rx: Receiver<T>) -> (Receiver<T>, Option<T>) {
+    match rx.rx.recv() {
+        Ok(v) => (rx, Some(v)),
+        Err(_) => (rx, None),
+    }
+}
