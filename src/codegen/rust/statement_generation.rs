@@ -143,6 +143,20 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// P3.335: `-> i32` scan loops keep `i32` counters vs `.len()`.
+    pub(in crate::codegen::rust) fn function_returns_i32_for_loop_scan(&self) -> bool {
+        self.current_function_return_type.as_ref().is_some_and(|rt| {
+            match Self::peel_option_result_payload(rt) {
+                Type::Int32 => true,
+                Type::Custom(n) => n == "i32",
+                _ => false,
+            }
+        })
+    }
+
+        })
+    }
+
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
     pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
         ty: &Type,

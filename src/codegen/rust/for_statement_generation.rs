@@ -399,10 +399,15 @@ impl<'ast> CodeGenerator<'ast> {
         // `for i in 0..vec.len()` → Rust `usize`; `for x in (cx - 16)..(cx + 16)` → bound width (e.g. i32).
         if let Some(var) = &loop_var {
             if let Expression::Range { start, end, .. } = iterable {
-                if self.range_loop_should_bind_usize(start, end) {
+                let bind_usize = self.range_loop_should_bind_usize(start, end)
+                    && !(self.function_returns_i32_for_loop_scan() && self.end_is_usize_len(end));
+                if bind_usize {
                     self.usize_variables.insert(var.clone());
                     self.local_var_types
                         .insert(var.clone(), Type::Custom("usize".to_string()));
+                } else if self.function_returns_i32_for_loop_scan() && self.end_is_usize_len(end) {
+                    self.local_var_types.insert(var.clone(), Type::Int32);
+                    self.codegen_i32_binding_names.insert(var.clone());
                 } else if let Some(bound_ty) = self
                     .range_loop_int_counter_type(start, end)
                     .or_else(|| {
@@ -497,6 +502,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         None
+    }
+
+    fn end_is_usize_len(&self, end: &Expression<'ast>) -> bool {
+        matches!(
+            end,
+            Expression::MethodCall { method, .. } if method == "len" || method == "capacity"
+        ) || self.expression_produces_usize(end)
     }
 
     /// Fixed-width loop counter for `for i in start..end` (P3.334 mesh_primitives `0..seg`).

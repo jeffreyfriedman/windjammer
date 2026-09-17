@@ -601,6 +601,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Clear ONCE at function start (before any analysis)
         self.usize_variables.clear();
+        self.codegen_i32_binding_names.clear();
         self.literal_init_wj_int_loop_counters.clear();
         self.explicit_wj_int_annotated_locals.clear();
 

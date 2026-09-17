@@ -180,6 +180,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) match_arm_bindings: std::collections::HashSet<String>,
     // USIZE VARIABLES: Track variables assigned from .len() for auto-casting
     pub(crate) usize_variables: std::collections::HashSet<String>,
+    /// Locals emitted as `i32` (`let mut i: i32 = …`) — slice index needs `as usize` (P3.335).
+    pub(crate) codegen_i32_binding_names: std::collections::HashSet<String>,
     pub(crate) literal_init_wj_int_loop_counters: std::collections::HashSet<String>,
     pub(crate) explicit_wj_int_annotated_locals: std::collections::HashSet<String>,
     /// Module-level `const NAME: string = "…"` identifiers (lower to `&'static str` in Rust).
@@ -658,6 +660,7 @@ impl<'ast> CodeGenerator<'ast> {
             match_arm_bindings: std::collections::HashSet::new(),
             owned_string_iterator_vars: std::collections::HashSet::new(),
             usize_variables: std::collections::HashSet::new(),
+            codegen_i32_binding_names: std::collections::HashSet::new(),
             literal_init_wj_int_loop_counters: std::collections::HashSet::new(),
             explicit_wj_int_annotated_locals: std::collections::HashSet::new(),
             module_string_consts: std::collections::HashSet::new(),

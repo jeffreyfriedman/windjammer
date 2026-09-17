@@ -299,15 +299,38 @@ impl<'ast> CodeGenerator<'ast> {
         let mut skip_mixed_int_promotion = false;
         if is_comparison {
             let narrow_unsigned = |expr: &Expression<'ast>| {
-                self.infer_expression_type(expr).is_some_and(|t| {
-                    matches!(t, Type::Int32)
-                        || matches!(t, Type::Custom(n) if n == "u32" || n == "i32" || n == "u64")
-                })
+                self.expression_is_codegen_i32(expr)
+                    || self.infer_expression_type(expr).is_some_and(|t| {
+                        matches!(t, Type::Int32)
+                            || matches!(t, Type::Custom(n) if n == "u32" || n == "i32" || n == "u64")
+                    })
             };
-            if narrow_unsigned(left) && right_is_usize {
+            let right_is_len_bound = matches!(
+                right,
+                Expression::MethodCall { method, .. } if method == "len" || method == "capacity"
+            );
+            let left_is_len_bound = matches!(
+                left,
+                Expression::MethodCall { method, .. } if method == "len" || method == "capacity"
+            );
+            if self.function_returns_i32_for_loop_scan()
+                && (right_is_usize || right_is_len_bound)
+                && !left_is_usize
+            {
+                if let Expression::Identifier { name, .. } = left {
+                    let param_is_wj_int = self.current_function_params.iter().any(|p| {
+                        p.name == *name && matches!(&p.type_, Type::Int)
+                    });
+                    if !param_is_wj_int {
+                        left_str = format!("{left_str} as usize");
+                        skip_mixed_int_promotion = true;
+                    }
+                }
+            }
+            if narrow_unsigned(left) && (right_is_usize || right_is_len_bound) {
                 left_str = format!("{left_str} as usize");
                 skip_mixed_int_promotion = true;
-            } else if narrow_unsigned(right) && left_is_usize {
+            } else if narrow_unsigned(right) && (left_is_usize || left_is_len_bound) {
                 right_str = format!("{right_str} as usize");
                 skip_mixed_int_promotion = true;
             } else if right_is_usize && !left_is_usize {

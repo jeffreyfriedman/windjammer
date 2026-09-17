@@ -74,7 +74,9 @@ impl<'ast> CodeGenerator<'ast> {
                 &self.signature_registry,
             ),
             _ => false,
-        };
+        } || self.expression_produces_usize(end);
+        let i32_scan_len_range =
+            self.function_returns_i32_for_loop_scan() && end_is_usize;
 
         // P3.280: peer-drive int literal suffixes from the other bound's type
         // (`(cx - 16)..(cx + 16)` with cx:i32 → `16_i32`, not default `_i64`).
@@ -139,8 +141,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut start_str = self.generate_expression(start);
 
-        // If end is usize and start has _i32 suffix, replace with _usize or add cast
-        if end_is_usize {
+        // P3.337: `-> i32` + `for i in 0..vec.len()` keeps i32 counter; cast len end, not start.
+        if i32_scan_len_range {
+            if start_str.ends_with("_usize") {
+                start_str = start_str.replace("_usize", "_i32");
+            }
+        } else if end_is_usize {
             if start_str.ends_with("_i32") {
                 // Replace _i32 with _usize for literals
                 start_str = start_str.replace("_i32", "_usize");
@@ -158,7 +164,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let end_str = self.generate_expression(end);
+        let mut end_str = self.generate_expression(end);
+        if i32_scan_len_range && !end_str.contains(" as i32") {
+            end_str = format!("({} as i32)", end_str);
+        }
         self.assignment_int_target_type = prev_range_int;
         if inclusive {
             format!("{}..={}", start_str, end_str)
