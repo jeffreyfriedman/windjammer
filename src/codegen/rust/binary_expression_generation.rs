@@ -334,12 +334,18 @@ impl<'ast> CodeGenerator<'ast> {
                 right_str = format!("{right_str} as usize");
                 skip_mixed_int_promotion = true;
             } else if right_is_usize && !left_is_usize {
-                if let Some(width) = self.expression_unsigned_width_for_len_cast(left) {
+                if let Some(width) = self.expression_narrow_signed_width_for_len_compare(left) {
+                    right_str = format!("({right_str} as {width})");
+                    skip_mixed_int_promotion = true;
+                } else if let Some(width) = self.expression_unsigned_width_for_len_cast(left) {
                     right_str = format!("({right_str} as {width})");
                     skip_mixed_int_promotion = true;
                 }
             } else if left_is_usize && !right_is_usize {
-                if let Some(width) = self.expression_unsigned_width_for_len_cast(right) {
+                if let Some(width) = self.expression_narrow_signed_width_for_len_compare(right) {
+                    left_str = format!("({left_str} as {width})");
+                    skip_mixed_int_promotion = true;
+                } else if let Some(width) = self.expression_unsigned_width_for_len_cast(right) {
                     left_str = format!("({left_str} as {width})");
                     skip_mixed_int_promotion = true;
                 }
