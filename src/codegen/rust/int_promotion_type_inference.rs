@@ -2,7 +2,7 @@
 
 use crate::codegen::rust::CodeGenerator;
 use crate::parser::{Expression, Literal, Type};
-use crate::type_inference::IntType;
+use crate::type_inference::{promote_types, IntType};
 
 impl<'ast> CodeGenerator<'ast> {
     /// When let/assign/range set `assignment_int_target_type`, mixed-int ops unify to that width.
@@ -61,6 +61,38 @@ impl<'ast> CodeGenerator<'ast> {
                 })
     }
 
+
+    /// P3.353: WJ `int` locals in voxel/set_if coord builders (not formal `int` params).
+    fn arithmetic_prefers_i32_ambiguous_int_local(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        let Expression::Identifier { name, .. } = expr else {
+            return false;
+        };
+        if self.explicit_wj_int_annotated_locals.contains(name) {
+            return false;
+        }
+        if self.literal_init_wj_int_loop_counters.contains(name) {
+            return false;
+        }
+        if self.current_function_params.iter().any(|p| {
+            p.name == *name
+                && (matches!(&p.type_, Type::Int)
+                    || matches!(
+                        &p.type_,
+                        Type::Custom(n) if matches!(n.as_str(), "int" | "i64")
+                    ))
+        }) {
+            return false;
+        }
+        matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+            || matches!(
+                self.local_var_types.get(name.as_str()),
+                Some(Type::Custom(n)) if n == "int" || n == "i64"
+            )
+    }
+
     /// P3.347: `cy + dy` with i32 for-range `dy` and WJ `int` coord local `cy` must unify to i32
     /// (not `dy as i64`). Comparisons keep [`comparison_should_prefer_i32_over_i64`] (P3.329).
     pub(in crate::codegen::rust) fn mixed_arith_should_prefer_i32_over_i64(
@@ -68,7 +100,9 @@ impl<'ast> CodeGenerator<'ast> {
         i32_side: &Expression<'ast>,
         i64_side: &Expression<'ast>,
     ) -> bool {
-        if !self.expression_is_codegen_i32(i32_side) {
+        let i32_side_ok = self.expression_is_codegen_i32(i32_side)
+            || self.arithmetic_prefers_i32_ambiguous_int_local(i32_side);
+        if !i32_side_ok {
             return false;
         }
         if matches!(
@@ -105,6 +139,13 @@ impl<'ast> CodeGenerator<'ast> {
 
     pub(in crate::codegen::rust) fn expression_is_codegen_i32(&self, expr: &Expression<'ast>) -> bool {
         if let Expression::Identifier { name, .. } = expr {
+            if self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && (matches!(&p.type_, Type::Int32)
+                        || matches!(&p.type_, Type::Custom(n) if n == "i32"))
+            }) {
+                return true;
+            }
             if self.codegen_i32_binding_names.contains(name) {
                 return true;
             }
@@ -518,7 +559,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn parser_type_to_promotion_int_type(
         ty: &Type,
     ) -> Option<crate::type_inference::IntType> {
-        use crate::type_inference::IntType;
+        use crate::type_inference::{promote_types, IntType};
         match ty {
             // Windjammer `int` is i64 in Rust codegen — never promote as i32 (P3.267).
             Type::Int => Some(IntType::I64),
@@ -576,6 +617,11 @@ impl<'ast> CodeGenerator<'ast> {
                         return a;
                     }
                 }
+                if let Some(p) = self.current_function_params.iter().find(|p| p.name == *name) {
+                    if let Some(a) = Self::parser_type_to_promotion_int_type(&p.type_) {
+                        return a;
+                    }
+                }
                 if let Some(a) = self
                     .infer_expression_type(expr)
                     .as_ref()
@@ -604,9 +650,59 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 crate::type_inference::IntType::Unknown
             }
+            Expression::Binary { left, right, op, .. } => {
+                use crate::parser::BinaryOp;
+                if matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                ) {
+                    let lt = self.int_type_for_mixed_int_codegen(left);
+                    let rt = self.int_type_for_mixed_int_codegen(right);
+                    let lit = |e: &Expression<'ast>| {
+                        matches!(
+                            e,
+                            Expression::Literal {
+                                value: Literal::Int(_),
+                                ..
+                            }
+                        )
+                    };
+                    let unified = match (lt, rt) {
+                        (IntType::I32, IntType::I32) => IntType::I32,
+                        (IntType::I32, IntType::I64) if lit(right) => IntType::I32,
+                        (IntType::I64, IntType::I32) if lit(left) => IntType::I32,
+                        (IntType::I64, IntType::I64)
+                            if lit(right)
+                                && self.arithmetic_prefers_i32_ambiguous_int_local(left) =>
+                        {
+                            IntType::I32
+                        }
+                        (IntType::I64, IntType::I64)
+                            if lit(left)
+                                && self.arithmetic_prefers_i32_ambiguous_int_local(right) =>
+                        {
+                            IntType::I32
+                        }
+                        (IntType::I64, IntType::I64)
+                            if self.function_prefers_i32_coord_locals()
+                                && (lit(left) || lit(right)) =>
+                        {
+                            IntType::I32
+                        }
+                        _ => promote_types(lt, rt),
+                    };
+                    if unified != IntType::Unknown {
+                        return unified;
+                    }
+                }
+                if self.expression_produces_usize(expr) {
+                    return IntType::Usize;
+                }
+                eng
+            }
             _ => {
                 if self.expression_produces_usize(expr) {
-                    return crate::type_inference::IntType::Usize;
+                    return IntType::Usize;
                 }
                 eng
             }

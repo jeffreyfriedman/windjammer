@@ -602,6 +602,13 @@ impl<'ast> CodeGenerator<'ast> {
         } = index
         {
             if *n >= 0 {
+                // Bounds may be pre-emitted with `_i64` before this cast runs (e.g. substring).
+                if idx_str.ends_with("_i64")
+                    || idx_str.ends_with("_i32")
+                    || idx_str.ends_with("_int")
+                {
+                    *idx_str = n.to_string();
+                }
                 return;
             }
         }

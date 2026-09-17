@@ -28,8 +28,8 @@ pub fn parse_hex_byte(pair: string) -> int {
     if pair.len() != 2 {
         return -1
     }
-    let hi = hex_digit_value(pair.substring(0, 1))
-    let lo = hex_digit_value(pair.substring(1, 2))
+    let hi = hex_digit_value(pair[0..1])
+    let lo = hex_digit_value(pair[1..2])
     if hi < 0 || lo < 0 {
         return -1
     }

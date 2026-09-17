@@ -62,6 +62,7 @@ GREEN_FILTERS=(
   int_while_usize_compare_compound_assign_must_stay_int
   trait_owned_string_call_must_not_over_borrow
   strings_len_must_unify_int_index_arith
+  str_slice_range_literals_must_not_emit_i64
   hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop
   explicit_type_import_must_not_duplicate_prelude
   owned_string_locals_move_into_owned_string_formals
