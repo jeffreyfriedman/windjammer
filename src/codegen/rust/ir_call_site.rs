@@ -2854,6 +2854,13 @@ impl<'ast> CodeGenerator<'ast> {
             &self.emitted_rust_ref_formals,
             &self.current_function_params,
         );
+        coerced = crate::codegen::rust::call_site_borrow::reconcile_explicit_user_clone_into_owned_vec_formal(
+            self,
+            arg_expr,
+            coerced,
+            &sig,
+            arg_index,
+        );
 
         // Borrowed for-loop elems into demoted `&str` callees: pass `item` (Rust
         // autoref), not `&item` (double-borrow / E0308 on owned loop variables).

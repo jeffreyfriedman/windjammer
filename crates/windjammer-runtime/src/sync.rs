@@ -4,8 +4,10 @@
 //! with simplified error handling and ergonomic APIs.
 
 pub use std::sync::{
-    mpsc, Arc, Condvar, Mutex, MutexGuard, Once, RwLock, RwLockReadGuard, RwLockWriteGuard,
+    atomic, mpsc, Arc, Condvar, Mutex, MutexGuard, Once, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
+
+pub use atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 
 /// Create a new Mutex
 pub fn mutex<T>(value: T) -> Mutex<T> {

@@ -559,6 +559,13 @@ impl<'ast> CodeGenerator<'ast> {
                             &self.emitted_rust_ref_formals,
                             &self.current_function_params,
                         );
+                        coerced = crate::codegen::rust::call_site_borrow::reconcile_explicit_user_clone_into_owned_vec_formal(
+                            self,
+                            arg_to_generate,
+                            coerced,
+                            &contract_sig,
+                            i,
+                        );
                         coerced = crate::codegen::rust::call_site_borrow::normalize_explicit_deref_copy_operand(
                             arg_to_generate,
                             &coerced,

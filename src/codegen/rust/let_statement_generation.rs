@@ -204,7 +204,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // accumulators (P3.317), not coordinate-default Int32.
                             Some(self.int_width_hint_from_return_type_resolved(ret_ty))
                         } else {
-                            Some(Type::Int)
+                            Some(Type::Int32)
                         }
                     }
                     Expression::Literal {
@@ -552,6 +552,19 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(vn) = var_name {
                         self.usize_variables.remove(vn);
                     }
+                } else if self.assignment_int_target_type.is_none()
+                    && self.function_prefers_i32_coord_locals()
+                {
+                    let peer = self
+                        .current_function_return_type
+                        .as_ref()
+                        .map(|rt| match Self::peel_option_result_payload(rt) {
+                            Type::Uint => Type::Uint,
+                            Type::Custom(n) if n == "u32" => Type::Uint,
+                            _ => Type::Int32,
+                        })
+                        .unwrap_or(Type::Int32);
+                    self.assignment_int_target_type = Some(peer);
                 }
 
                 // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
