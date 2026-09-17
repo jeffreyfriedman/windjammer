@@ -1,0 +1,9 @@
+pub fn frame_total_len(bytes: Vec<u8>, offset: int) -> int {
+    let _ = offset
+    bytes.len() as int
+}
+
+pub fn feed(inbound: Vec<u8>, offset: int) -> int {
+    // Multipass may demote frame_total_len to &Vec<u8>; must borrow, not clone.
+    frame_total_len(inbound, offset)
+}
