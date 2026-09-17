@@ -154,9 +154,6 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-        })
-    }
-
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
     pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
         ty: &Type,
