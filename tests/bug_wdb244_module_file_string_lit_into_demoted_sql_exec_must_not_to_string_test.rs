@@ -18,6 +18,28 @@
 //!   `"props".to_string()`, `"edges".to_string()` → E0308.
 //! Twin of WDB-225 (join_path String::from). Signature-driven: bare lit / no `.to_string()`.
 
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+const FIXTURE: &str = include_str!(
+    "fixtures/library_multipass/wdb244_string_lit_into_demoted_sql_exec_must_not_to_string.wj"
+);
+
+#[test]
+fn wdb244_codegen_string_lit_into_demoted_sql_exec_must_not_to_string() {
+    let (rs, ok) = test_utils::compile_single_check(FIXTURE);
+    let demoted = rs.contains("fn sql_exec(") && rs.contains("left_table: &str");
+    let bad = rs.contains("\"props\".to_string()")
+        || rs.contains("\"edges\".to_string()")
+        || rs.contains("String::from(\"props\")");
+    if demoted && bad {
+        panic!(
+            "WDB-244 RED: demoted &str sql_exec received owned string lit. Generated:\n{rs}"
+        );
+    }
+    assert!(ok, "WDB-244 fixture must cargo-check. Generated:\n{rs}");
+}
+
 use std::path::PathBuf;
 
 #[test]

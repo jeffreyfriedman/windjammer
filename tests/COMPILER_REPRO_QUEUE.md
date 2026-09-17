@@ -293,8 +293,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **BFS `csr.clone()` → demoted `&DenseCsr` distances_to_map must reborrow** | `bug_wdb264_module_file_owned_csr_clone_into_demoted_distances_to_map_must_reborrow_test` | 🆕 RED / filed (P3.349); twin WDB-252; gen lag |
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_len` must borrow** | `bug_wdb265_module_file_owned_map_clone_into_demoted_i64_len_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222; gen lag |
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_contains` must borrow** | `bug_wdb266_module_file_owned_map_clone_into_demoted_i64_contains_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222/265; gen lag |
+| P1 | **PageRank `scores.clone()` → demoted `&Map` `f64_sum` must borrow** | `bug_wdb267_module_file_owned_map_clone_into_demoted_f64_sum_must_borrow_test` | 🆕 RED / filed (P3.354); twin WDB-223; gen lag |
+| P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.354); twin WDB-248/256 |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
+| P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | 🆕 RED / filed (P3.356) |
+| P1 | **generated Cargo.toml release profile must default LTO** | `bug_generated_cargo_toml_release_profile_lto_test` | 🆕 RED / filed (P3.355) |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1270,6 +1274,16 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.354 WindjammerDB CQ-C5 — coverage REDs WDB-267/268 PageRank f64_sum + incremental bfs_run_dense (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-267** PageRank `scores.clone()` → demoted `&Map` `f64_sum` | ❌ RED — gen graph_pagerank_engine (tip owned formal OK; twin WDB-223) |
+| Tip **WDB-268** incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` | ❌ RED — tip graph_incremental_views (twin WDB-248/256) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–268**; sync tip-out→gen for PageRank f64_sum + incremental bfs_run_dense. No Phase 606+.
+
 ## P3.351 WindjammerDB CQ-C5 — coverage REDs WDB-265/266 BFS i64_len/contains map.clone (2026-09-17)
 
 | Gate | Status |
@@ -2158,7 +2172,7 @@ Verified on clean tip (`cargo test --test all`, no local `src/` patches):
 | WDB-113 | ✅ |
 | WDB-114 | ✅ |
 | WDB-115 | ✅ tip GREEN (regression guard) |
-| Cross-module Vec borrow | ⚠️ RED |
+| Cross-module Vec borrow | ✅ tip GREEN (P3.353) |
 | HashMap field `.get(i64)` | ✅ |
 | `DirEntry.name()` | ✅ |
 | `pub mod` EOF | ✅ tip GREEN |
@@ -2179,7 +2193,7 @@ bash tests/run_red_repro_bundle.sh
 | WDB-112 demoted `&str` + `.clone()` | `wdb112_full_library_multipass_*` | ⚠️ RED |
 | WDB-113 demoted `&mut T` + `.clone()` | `wdb113_full_library_multipass_*` | ⚠️ RED |
 | WDB-114 `Vec<T>` annotation missing import | `wdb114_module_file_vec_type_annotation_*` | ⚠️ RED |
-| Cross-module Vec borrow | `cross_crate_vec_string_helper_*` | ⚠️ RED |
+| Cross-module Vec borrow | `cross_crate_vec_string_helper_*` | ✅ tip GREEN (P3.353 — owned `Vec` formal + explicit clone → move) |
 | HashMap field `.get(i64)` | `hashmap_field_get_i64_key_*` | ✅ |
 | `DirEntry.name()` wiring | `std_fs_dir_entry_name_*` | ⚠️ RED |
 | `HttpMethod` lib port vs `wj test` | `app_test_http_method_*` | ⚠️ RED |
@@ -2226,7 +2240,7 @@ Remaining RED rows above are **compiler-only** — no further product shim drops
 | Change | Status |
 |--------|--------|
 | WDB-112 gate: emit assertion + `cargo_check()` when borrow fix lands | ⚠️ RED — demoted `&str` + `.clone()` call sites |
-| `bug_cross_crate_vec_helper_must_auto_borrow_test` | ⚠️ RED — demote+clone multipass `&Vec` borrow |
+| `bug_cross_crate_vec_helper_must_auto_borrow_test` | ✅ tip GREEN (P3.353 — `reconcile_explicit_user_clone_into_owned_vec_formal`) |
 | WDB-113 / `std_fs DirEntry.name` / HashMap i64 `.get` | ⚠️ RED — strengthened in P3.204 |
 
 ## P3.204 repro harness closure (2026-08-30)

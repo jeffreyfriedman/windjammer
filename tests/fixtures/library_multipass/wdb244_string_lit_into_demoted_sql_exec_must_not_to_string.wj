@@ -1,0 +1,18 @@
+// WDB-244 isolate: demoted &str method formals must not get `.to_string()` on lits.
+pub struct Batch {
+    pub n: int,
+}
+
+impl Batch {
+    pub fn sql_exec(self, right: Batch, left_table: string, right_table: string, sql: string) -> bool {
+        let _ = right.n
+        let _ = left_table
+        let _ = right_table
+        let _ = sql
+        true
+    }
+}
+
+pub fn run(left: Batch, right: Batch, sql: string) -> bool {
+    left.sql_exec(right, "props", "edges", sql)
+}
