@@ -1,4 +1,4 @@
-// P3.334: call-site assign of generic send must not annotate Sender<T>.
+// P3.342: call-site assign of generic send must not annotate Sender<T>.
 use std::sync::mpsc
 
 pub struct Sender<T> {
