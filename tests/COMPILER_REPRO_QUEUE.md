@@ -964,6 +964,24 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent priority:** tip greens **177/218–243**. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph / DenseCsr. No Phase 606+.
 
+## P3.321 (2026-09-16) — for-in struct Vec field partial-moves parent
+
+| Gate | Status |
+|------|--------|
+| `bug_module_file_for_in_struct_vec_field_must_not_partial_move_parent_test` | ❌ tip RED (2026-09-16) — E0382 after `for a in payment.allocations` |
+| Product interim | ✅ `payment.allocations.clone()` in postgres_payment_repository (tip api-check GREEN) |
+
+**Compiler agent:** `for x in parent.field` on `Vec<T>` should borrow/clone for iteration when `parent` is used afterward — do not IntoIterator-move the field alone.
+
+## P3.322 (2026-09-16) — `vec.len() > 0` uint/int
+
+| Gate | Status |
+|------|--------|
+| `bug_module_file_vec_len_gt_zero_must_not_mix_uint_int_test` | ✅ tip GREEN (2026-09-16) |
+| Product interim | ✅ `!rows.is_empty()` / `!roles.is_empty()` where tip still complained |
+
+**Compiler agent:** keep `len()` compare literals in the same width as `len()` (uint/usize), or prefer `is_empty()`.
+
 ## P3.319 WindjammerDB CQ-C5 — coverage REDs WDB-239/240 materialize &Vec + demoted sql parse_ast (2026-09-16)
 
 | Gate | Status |
