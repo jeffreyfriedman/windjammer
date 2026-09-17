@@ -6,11 +6,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  i32_nested_range_eq_mod_literals_must_not_emit_i64
   wdb253_tip_out
   wdb254_tip_out
   wdb239_tip_out
-  generic_assign_must_not_inject_unbound_t
   timefmt_product_must_not_mix_i32_month_or_ref_string
   demoted_str_substring_assign_must_own
   usize_i_plus_one_assign_must_stay_usize
@@ -18,19 +16,22 @@ RED_FILTERS=(
   wdb241_tip_out
   wdb242_tip_out
   wdb243_tip_out
-  i32_range_bounds_sub_add_must_not_split_i64_i32
   module_file_usize_index_eq_zero_must_not_emit_i32
   wdb223_tip_out_pagerank_must_borrow_owned_f64_map
   module_file_spawn_move_in_worker_loop_must_be_preserved
   mut_owned_vec_u8_return_must_not_demote_to_ref
   int_find_pos_ge_zero_must_not_mix_usize_i64
-  int_mod_literal_zero_compare_must_not_split_i64_i32
   module_file_shared_map_get_must_borrow_key
   wdb225_tip_out_ldbc_must_not_pass_string_from
   wdb226_tip_out_cdlp_must_borrow_owned_u32_map
 )
 
 GREEN_FILTERS=(
+  i32_nested_range_eq_mod_literals_must_not_emit_i64
+  module_file_void_while_i32_seg_counter_must_not_emit_i64
+  generic_assign_must_not_inject_unbound_t
+  i32_range_bounds_sub_add_must_not_split_i64_i32
+  int_mod_literal_zero_compare_must_not_split_i64_i32
   generic_type_alias_must_emit_after_struct
   generic_channel_send_owned_param_must_not_demote_to_ref
   generic_channel_recv_must_move_receiver_not_clone

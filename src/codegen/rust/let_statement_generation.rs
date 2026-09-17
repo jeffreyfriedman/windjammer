@@ -269,6 +269,31 @@ impl<'ast> CodeGenerator<'ast> {
                             (None, None) => None,
                         }
                     }
+                    Expression::Block { statements, .. } => {
+                        let if_i32 = statements.last().and_then(|last_stmt| {
+                            let Statement::If {
+                                then_block,
+                                else_block,
+                                ..
+                            } = last_stmt
+                            else {
+                                return None;
+                            };
+                            let then_expr = then_block.last().and_then(|s| match s {
+                                Statement::Expression { expr, .. } => Some(*expr),
+                                _ => None,
+                            })?;
+                            let else_expr = else_block.as_ref().and_then(|b| {
+                                b.last().and_then(|s| match s {
+                                    Statement::Expression { expr, .. } => Some(*expr),
+                                    _ => None,
+                                })
+                            })?;
+                            self.if_else_binding_should_be_i32(then_expr, else_expr)
+                                .then_some(Type::Int32)
+                        });
+                        if_i32.or_else(|| self.infer_expression_type(value))
+                    }
                     _ => {
                         // Fall back to general expression type inference
                         // Handles if/else, binary ops, method calls, etc.
@@ -277,7 +302,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             };
             if let Some(t) = inferred_type {
-                self.local_var_types.insert(name.to_string(), t);
+                self.local_var_types.insert(name.to_string(), t.clone());
+                if matches!(t, Type::Int32) {
+                    self.codegen_i32_binding_names.insert(name.to_string());
+                }
             }
             if mutable
                 && Self::mut_let_rhs_is_return_width_counter(value)
