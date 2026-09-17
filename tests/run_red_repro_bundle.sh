@@ -6,9 +6,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  module_file_for_in_struct_vec_field_must_not_partial_move_parent
+  timefmt_product_must_not_mix_i32_month_or_ref_string
   demoted_str_substring_assign_must_own
   usize_i_plus_one_assign_must_stay_usize
+  u32_arith_int_literal_must_not_emit_u64
+  module_file_for_in_struct_vec_field_must_not_partial_move_parent
   wdb241_tip_out
   wdb242_tip_out
   wdb243_tip_out
