@@ -41,6 +41,10 @@ pub struct WjConfig {
     #[serde(default, alias = "dev-dependencies")]
     pub dev_dependencies: HashMap<String, DependencySpec>,
 
+    /// Cargo-style profiles forwarded into generated `Cargo.toml`.
+    #[serde(default)]
+    pub profile: ProfileSection,
+
     /// Backend configuration for WASM proxy (optional)
     #[serde(default)]
     pub backend: Option<BackendConfig>,
@@ -49,6 +53,76 @@ pub struct WjConfig {
     /// Declares which side-effects this application is allowed to perform.
     #[serde(default)]
     pub app_capabilities: Option<AppCapabilities>,
+}
+
+/// `[profile.*]` section in `wj.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProfileSection {
+    #[serde(default)]
+    pub release: ReleaseProfile,
+}
+
+/// Release profile settings written into generated Cargo.toml.
+/// Defaults: `opt-level = 3`, `lto = true` (cross-crate hot paths need LTO).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseProfile {
+    #[serde(default = "default_opt_level", rename = "opt-level")]
+    pub opt_level: OptLevel,
+    #[serde(default = "default_lto_true")]
+    pub lto: bool,
+    #[serde(default, rename = "codegen-units")]
+    pub codegen_units: Option<u32>,
+}
+
+impl Default for ReleaseProfile {
+    fn default() -> Self {
+        Self {
+            opt_level: default_opt_level(),
+            lto: default_lto_true(),
+            codegen_units: None,
+        }
+    }
+}
+
+fn default_opt_level() -> OptLevel {
+    OptLevel::Int(3)
+}
+
+fn default_lto_true() -> bool {
+    true
+}
+
+/// Cargo `opt-level` accepts integers (`0`–`3`) or strings (`"s"` / `"z"`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OptLevel {
+    Int(u8),
+    Str(String),
+}
+
+impl OptLevel {
+    pub fn to_toml_value(&self) -> String {
+        match self {
+            OptLevel::Int(n) => n.to_string(),
+            OptLevel::Str(s) => format!("\"{}\"", s),
+        }
+    }
+}
+
+impl ReleaseProfile {
+    /// Render a `[profile.release]` block for generated Cargo.toml.
+    pub fn to_cargo_toml_section(&self) -> String {
+        let mut lines = vec![
+            "[profile.release]".to_string(),
+            format!("opt-level = {}", self.opt_level.to_toml_value()),
+            format!("lto = {}", self.lto),
+        ];
+        if let Some(units) = self.codegen_units {
+            lines.push(format!("codegen-units = {}", units));
+        }
+        lines.push(String::new());
+        lines.join("\n")
+    }
 }
 
 /// Project metadata (for windjammer.toml)
