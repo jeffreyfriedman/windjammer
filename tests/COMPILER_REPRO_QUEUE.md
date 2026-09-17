@@ -398,6 +398,21 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Gates:** `cargo test --release --test all -- u32_arith_int_literal_must_not_emit_u64 module_file_recv_reassign i32_compound_add_must_not_use_usize` → 3 passed.
 
 
+
+## P3.334 (2026-09-17) — i32 `for i in 0..seg` loop counter must not widen to i64 literals
+
+| Gate | Status |
+|------|--------|
+| `i32_for_range_counter_arith_must_not_emit_i64` | ✅ tip GREEN (2026-09-17) |
+| Product `mesh_primitives.wj` `((i + 1) % seg)` | ✅ `+ 1_i32` (was `+ 1_i64`) |
+| Breach `wj game build` | **466** errors (was **495**); i32←i64 **38** (was **51**); u32←i64 **14** (was **29**) |
+
+**Root cause:** Range loop `local_var_types` used `infer_expression_type(start)` first; literal `0` → WJ `Int`, ignoring `seg: i32`.
+
+**Fix:** `range_loop_int_counter_type` in `for_statement_generation.rs` — prefer i32/u32 when either bound is fixed width.
+
+**Gates:** `cargo test --release --test all -- i32_for_range_counter_arith_must_not_emit_i64` → 1 passed.
+
 ## P3.330 (2026-09-16) — Vec subscript index must not emit `as f32`
 
 | Gate | Status |

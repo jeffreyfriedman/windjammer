@@ -404,9 +404,12 @@ impl<'ast> CodeGenerator<'ast> {
                     self.local_var_types
                         .insert(var.clone(), Type::Custom("usize".to_string()));
                 } else if let Some(bound_ty) = self
-                    .infer_expression_type(start)
-                    .or_else(|| self.infer_expression_type(end))
-                    .filter(|t| Self::assignment_target_needs_int_codegen_context(t))
+                    .range_loop_int_counter_type(start, end)
+                    .or_else(|| {
+                        self.infer_expression_type(start)
+                            .or_else(|| self.infer_expression_type(end))
+                            .filter(|t| Self::assignment_target_needs_int_codegen_context(t))
+                    })
                 {
                     self.local_var_types.insert(var.clone(), bound_ty);
                 }
@@ -492,6 +495,42 @@ impl<'ast> CodeGenerator<'ast> {
             if let Some(Pattern::Identifier(name)) = elements.first() {
                 return Some(name.clone());
             }
+        }
+        None
+    }
+
+    /// Fixed-width loop counter for `for i in start..end` (P3.334 mesh_primitives `0..seg`).
+    fn range_loop_int_counter_type(
+        &self,
+        start: &Expression<'ast>,
+        end: &Expression<'ast>,
+    ) -> Option<Type> {
+        use crate::type_inference::IntType;
+        let start_it = self.int_type_for_mixed_int_codegen(start);
+        let end_it = self.int_type_for_mixed_int_codegen(end);
+        if matches!(start_it, IntType::I32) || matches!(end_it, IntType::I32) {
+            return Some(Type::Int32);
+        }
+        if matches!(start_it, IntType::U32) || matches!(end_it, IntType::U32) {
+            return Some(Type::Uint);
+        }
+        let is_i32 = |expr: &Expression<'ast>| {
+            self.infer_expression_type(expr).is_some_and(|t| {
+                matches!(t, Type::Int32)
+                    || matches!(t, Type::Custom(ref n) if n == "i32")
+            })
+        };
+        if is_i32(start) || is_i32(end) {
+            return Some(Type::Int32);
+        }
+        let is_u32 = |expr: &Expression<'ast>| {
+            self.infer_expression_type(expr).is_some_and(|t| {
+                matches!(t, Type::Uint)
+                    || matches!(t, Type::Custom(ref n) if n == "u32")
+            })
+        };
+        if is_u32(start) || is_u32(end) {
+            return Some(Type::Uint);
         }
         None
     }
