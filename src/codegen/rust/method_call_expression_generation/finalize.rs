@@ -1121,24 +1121,18 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Special case: substring(start, end) -> text[start..end] (or owned String in match arms)
         if method == "substring" && args.len() == 2 {
-            let (start_expr, end_expr) = match (arguments.first(), arguments.get(1)) {
-                (Some((_, s)), Some((_, e))) => (s, e),
-                _ => {
-                    return format!(
-                        "{}.substring({})",
-                        obj_str,
-                        args.join(", ")
-                    );
-                }
-            };
-            // Re-emit bounds in index context (same as `generate_index` range slices — P3.354).
-            let prev_index_ctx = self.in_index_context;
-            self.in_index_context = true;
-            let mut start_str = self.generate_expression(start_expr);
-            let mut end_str = self.generate_expression(end_expr);
-            self.in_index_context = prev_index_ctx;
-            self.maybe_cast_index_to_usize(&mut start_str, start_expr);
-            self.maybe_cast_index_to_usize(&mut end_str, end_expr);
+            let mut start_str = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
+                &args[0],
+            );
+            let mut end_str = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
+                &args[1],
+            );
+            if let Some((_, start_expr)) = arguments.first() {
+                self.maybe_cast_index_to_usize(&mut start_str, start_expr);
+            }
+            if let Some((_, end_expr)) = arguments.get(1) {
+                self.maybe_cast_index_to_usize(&mut end_str, end_expr);
+            }
             let slice_inner = format!("{}[{}..{}]", obj_str, start_str, end_str);
             let needs_owned = self.in_match_arm_needing_string
                 || self.coerce_string_literals_to_owned
