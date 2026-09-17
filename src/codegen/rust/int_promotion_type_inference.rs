@@ -180,6 +180,14 @@ impl<'ast> CodeGenerator<'ast> {
             || self.int_type_for_mixed_int_codegen(value) == IntType::I32
         {
             self.local_var_types.insert(name.to_string(), Type::Int32);
+            return;
+        }
+        // P3.348: numeric inference may emit `0_u32` for u32 loop peers while let still
+        // recorded WJ `Int` from bool/void return width — sync so `while i < count` stays u32.
+        if emitted_rhs.ends_with("_u32")
+            || self.int_type_for_mixed_int_codegen(value) == IntType::U32
+        {
+            self.local_var_types.insert(name.to_string(), Type::Uint);
         }
     }
 
@@ -222,6 +230,37 @@ impl<'ast> CodeGenerator<'ast> {
                 && (matches!(p.type_, Type::Int32)
                     || matches!(&p.type_, Type::Custom(n) if n == "i32"))
         })
+    }
+
+    fn expression_has_u32_width_in_tree(&self, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+                }) || self.int_type_for_mixed_int_codegen(expr) == IntType::U32
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_u32_width_in_tree(left)
+                    || self.expression_has_u32_width_in_tree(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_has_u32_width_in_tree(operand),
+            Expression::Cast { expr, type_, .. } => {
+                matches!(type_, Type::Uint)
+                    || matches!(type_, Type::Custom(n) if n == "u32")
+                    || self.expression_has_u32_width_in_tree(expr)
+            }
+            Expression::MethodCall { .. } | Expression::Call { .. } => {
+                self.int_type_for_mixed_int_codegen(expr) == IntType::U32
+                    || self
+                        .infer_expression_type(expr)
+                        .as_ref()
+                        .is_some_and(|t| {
+                            matches!(t, Type::Uint)
+                                || matches!(t, Type::Custom(n) if n == "u32")
+                        })
+            }
+            _ => false,
+        }
     }
 
     fn expression_has_i32_width_in_tree(&self, expr: &Expression<'ast>) -> bool {
@@ -300,7 +339,7 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             return;
                         }
-                        Type::Custom(n) if self.struct_fields_include_wj_int(n) => return,
+                        // P3.350: struct returns with i64 fields must not block i32 loop counters.
                         _ => {}
                     }
                 }
@@ -323,10 +362,56 @@ impl<'ast> CodeGenerator<'ast> {
                     self.codegen_i32_binding_names.insert(name.clone());
                     self.usize_variables.remove(name);
                 }
+            } else if self.expression_has_u32_width_in_tree(right) {
+                let is_counter = self.literal_init_wj_int_loop_counters.contains(name)
+                    || matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Int) | Some(Type::Uint)
+                    );
+                if is_counter {
+                    self.local_var_types.insert(name.clone(), Type::Uint);
+                    self.usize_variables.remove(name);
+                }
             }
         }
     }
 
+
+    /// P3.348: u32 loop counter vs u32 bound — do not widen either side to i64.
+    pub(in crate::codegen::rust) fn comparison_should_prefer_u32_over_i64(
+        &self,
+        u32_side: &Expression<'ast>,
+        i64_side: &Expression<'ast>,
+    ) -> bool {
+        let u32_counter = match u32_side {
+            Expression::Identifier { name, .. } => {
+                self.literal_init_wj_int_loop_counters.contains(name)
+                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                        matches!(t, Type::Uint)
+                            || matches!(t, Type::Custom(n) if n == "u32")
+                    })
+                    || self.int_type_for_mixed_int_codegen(u32_side) == IntType::U32
+            }
+            _ => self.expression_promotes_to_u32_in_compare(u32_side),
+        };
+        if !u32_counter {
+            return false;
+        }
+        if matches!(
+            i64_side,
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } if *n >= 0
+        ) {
+            return true;
+        }
+        self.expression_promotes_to_u32_in_compare(i64_side)
+            || self.int_type_for_mixed_int_codegen(i64_side) == IntType::U32
+            || self.infer_expression_type(i64_side).as_ref().is_some_and(|t| {
+                matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+            })
+    }
 
     /// P3.324: u32 locals / fields vs untyped int literals — do not widen to u64.
     pub(in crate::codegen::rust) fn comparison_should_prefer_u32_over_u64(
