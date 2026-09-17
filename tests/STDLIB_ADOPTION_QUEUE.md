@@ -52,6 +52,13 @@ Definition of done per row:
 | `std::compress` gzip encode/decode | `bug_std_compress_gzip_wiring_test` | ✅ | Runtime `compress` + flate2; Base64 gzip string round-trip |
 | `std::regex` is_match / find_all / escape | `bug_std_regex_module_wiring_test` | ✅ | Runtime `regex_mod` string APIs |
 
+## P1 — concurrency (`wj-sync` graduation)
+
+| Need | Repro | Gate status | Fix hint |
+|---|---|---|---|
+| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | Land `std/sync.wj` + runtime; unblock after P3.331/332 |
+| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | Same module; public names `shared` not Arc/Mutex |
+
 ## Run
 
 ```bash
