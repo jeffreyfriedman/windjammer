@@ -13,11 +13,11 @@
 
 //! WDB-234: `&mut DenseCsr` into owned `DenseCsr` formal must clone (batch engine).
 //!
-//! Twin of WDB-219 (graph_sql tip-out). Product residual still in tip-out/gen
-//! graph_batch_engine (~13× DenseCsr←&mut overall):
+//! Twin of WDB-219 (graph_sql tip-out). Product residual historically in tip-out/gen
+//! graph_batch_engine:
 //!   `graph_dense_csr_find_index(csr: DenseCsr, …)` called with bare `csr`
 //!   while caller formal is `&mut DenseCsr` → E0308.
-//! Signature-driven: clone (or reborrow if formal demotes).
+//! Signature-driven: clone — or GREEN when formal demotes to `&DenseCsr` (`&mut` coerces).
 
 use std::path::PathBuf;
 
@@ -32,18 +32,27 @@ fn wdb234_tip_out_batch_must_clone_mut_ref_csr_into_owned_find_index() {
         tip.join("graph_dense_csr.rs"),
         gen.join("graph/graph_dense_csr.rs"),
     ];
-    let mut owned_formal = false;
+    let mut formal_kind = "missing";
     for path in &dense_paths {
         if !path.exists() {
             continue;
         }
         let text = std::fs::read_to_string(path).expect("dense");
         if text.contains("fn graph_dense_csr_find_index(csr: DenseCsr") {
-            owned_formal = true;
+            formal_kind = "owned";
+            break;
+        }
+        if text.contains("fn graph_dense_csr_find_index(csr: &DenseCsr")
+            || text.contains("fn graph_dense_csr_find_index(csr: &mut DenseCsr")
+        {
+            formal_kind = "borrowed";
             break;
         }
     }
-    assert!(owned_formal, "WDB-234: owned DenseCsr find_index formal missing");
+    assert!(
+        formal_kind != "missing",
+        "WDB-234: find_index DenseCsr formal missing"
+    );
 
     let paths = [
         tip.join("graph_batch_engine.rs"),
@@ -56,14 +65,16 @@ fn wdb234_tip_out_batch_must_clone_mut_ref_csr_into_owned_find_index() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("batch");
-        // Caller is &mut DenseCsr (multi-source helpers) passing bare csr into owned find_index
         let has_mut_helpers = text.contains("csr: &mut DenseCsr");
+        // Owned formal requires clone; borrowed formal accepts bare &mut→& coerce.
         let bad = has_mut_helpers
+            && formal_kind == "owned"
             && text.contains("graph_dense_csr_find_index(csr,")
             && !text.contains("graph_dense_csr_find_index(csr.clone(),")
             && !text.contains("graph_dense_csr_find_index((*csr).clone(),");
         eprintln!(
-            "WDB-234 has_mut_helpers={} bad={} path={}",
+            "WDB-234 formal_kind={} has_mut_helpers={} bad={} path={}",
+            formal_kind,
             has_mut_helpers,
             bad,
             path.display()
