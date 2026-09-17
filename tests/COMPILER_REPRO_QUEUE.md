@@ -327,6 +327,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Gates:** `cargo test --release --test all -- auto_mut_borrow_arg_test bug_cross_crate_mut_borrow_module_fn_test`; lib `mut_borrowed_vec_is_not_runtime_shared_borrow` + `mut_borrowed_bare_vec_stays_mut_ref_at_call_site`
 
+## P3.323 (2026-09-16) — inferred i32 loop counters + i32 sentinel vs field (`windjammer-game-core`)
+
+| Gate | Status |
+|------|--------|
+| `i32_inferred_loop_counter_and_sentinel_priority_must_stay_i32` | ✅ tip GREEN (2026-09-16) |
+| Product `tps_camera.wj` `let mut dy = 0` + `while dy < 3` | ✅ `while dy < 3_i32` (no `3_i64`) |
+| Product `reverb_zones.wj` `priority > best_priority` | ✅ i32 compare (no `priority as i64`) |
+| Breach `wj game build --release` (tip `.cargo-target-wj`) | **640** rustc errors (was **1000** cap / ~550 E0308+E0277 in prior log); binary still blocked |
+
+**Root cause:** WJ `Type::Int` locals could emit as `0_i32` while `local_var_types` stayed ambiguous `Int` (i64 promotion on while bounds); i32 field vs WJ `int` sentinel compared via `(field as i64) > sentinel`, forcing i64 inference and i32 assign failures.
+
+**Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
+
 ## P3.322 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
 
 | Change | Status |

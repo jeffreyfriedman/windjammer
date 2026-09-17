@@ -381,6 +381,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                if let Some(vn) = var_name {
+                    self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
+                }
                 output.push_str(&value_str);
             } else {
                 // E0282: Emit type ascription for collection types.
@@ -545,6 +548,9 @@ impl<'ast> CodeGenerator<'ast> {
                     &value_str,
                 );
 
+                if let Some(vn) = var_name {
+                    self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
+                }
                 output.push_str(&value_str);
 
                 // Restore expression context
