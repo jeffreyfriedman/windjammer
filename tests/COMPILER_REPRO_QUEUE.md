@@ -317,7 +317,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
 | P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
-| P1 | **`wj build --release` must pass `--release` to cargo** | `bug_wj_build_release_must_invoke_cargo_release_test` | 🆕 RED / filed (P3.350); `_release` discarded in `cli/build.rs` |
+| P1 | **`wj build --release` must pass `--release` to cargo** | `bug_wj_build_release_must_invoke_cargo_release_test` | ✅ tip GREEN (P3.350) — `cli/build.rs` passes `--release` |
 | P1 | **assign generic `send` must not inject unbound `Sender<T>`** | `bug_generic_assign_must_not_inject_unbound_t_test` | ✅ tip GREEN (P3.342) |
 | P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ✅ tip GREEN (P3.331) |
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (P3.332) |
@@ -395,12 +395,12 @@ cargo test --release --test all -- i32_while_len_and_literal_bound -- --nocaptur
 
 | Gate | Status |
 |------|--------|
-| `bug_wj_build_release_must_invoke_cargo_release_test` | 🆕 RED / filed |
-| Product impact | `wj-sync` fair benches; eco packages reporting false ~4× vs Rust |
+| `bug_wj_build_release_must_invoke_cargo_release_test` | ✅ tip GREEN (2026-09-17) |
+| Product impact | `wj-sync` fair benches; eco packages need release for ≤1.2× claims |
 
-**Root cause:** `cli/build.rs` `execute(..., _release: bool, …)` discards the flag; always runs `cargo build` (dev).
+**Root cause:** `cli/build.rs` previously discarded `_release` and always ran `cargo build` (dev).
 
-**Fix needed:** Pass `--release` to cargo when `-r`/`--release` is set; surface `Finished \`release\`` / `target/release/` artifact.
+**Fix:** Pass `--release` to cargo when `-r`/`--release` is set; print profile in progress line.
 
 **Verify:**
 
