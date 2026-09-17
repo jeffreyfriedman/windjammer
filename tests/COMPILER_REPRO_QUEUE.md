@@ -297,8 +297,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
 | P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
-| P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.331); blocks generic `wj-sync` channels |
-| P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | 🆕 RED / filed (P3.332); blocks generic `wj-sync` channels |
+| P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ✅ tip GREEN (P3.331) |
+| P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (P3.332) |
 | P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ✅ tip GREEN (P3.329) |
 | P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | ✅ tip GREEN (P3.325) — tuple Result return owns demoted bind |
 | P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ✅ tip GREEN (P3.326) — reconcile `_usize` emit vs Int local |
@@ -358,19 +358,25 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Item | Status |
 |------|--------|
-| Gate `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ❌ tip RED (2026-09-16) |
+| Gate `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (2026-09-17) |
 | Blocks | generic `wj-sync` `Receiver<T>` roundtrip |
 
-**Expected:** `recv` returns `(rx, Some(v))` by move. **Actual:** `rx.clone()` on non-Clone mpsc wrapper.
+**Root cause layer:** constraint/auto_clone — exclusive Match arms each move `rx` once; do not treat as same-stmt multi-move. Projection-parent reads of `rx` in `rx.rx.recv()` must not force clone.
+
+**Gates:** `cargo test --release --test all -- generic_channel_recv_must_move` → pass.
 
 ## P3.331 (2026-09-16) — generic `send<T>(…, value: T)` demoted to `&T` + clone
 
 | Item | Status |
 |------|--------|
-| Gate `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ❌ tip RED (2026-09-16) |
+| Gate `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ✅ tip GREEN (2026-09-17) |
 | Blocks | generic `wj-sync` `Channel<T>` / std::sync graduation |
 
-**Expected:** `pub fn send<T>(tx: Sender<T>, value: T)` and `tx.send(value)`. **Actual:** `value: &T` + `value.clone()` (and Clone bound pressure).
+**Root cause layer:** signature/boundary — `is_generic_type_param` missed `Type::Generic("T")` (only handled `Custom`), so analyzer demoted owned `T` to borrowed; codegen borrow-delegation also skipped generics.
+
+**What became unnecessary:** `&T` + `.clone()` demotion for bare type params.
+
+**Gates:** `cargo test --release --test all -- generic_channel_send_owned_param` → pass.
 
 ## P3.329 (2026-09-16) — `wj-timefmt` product month `12_i32` / `&String` into String
 

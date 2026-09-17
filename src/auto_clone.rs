@@ -86,6 +86,7 @@ impl AutoCloneAnalysis {
                         is_move: false,
                         in_loop: false,
                         is_projection_parent: false,
+                    in_exclusive_match_arm: false,
                     },
                 );
             }
@@ -238,6 +239,10 @@ impl AutoCloneAnalysis {
                             Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                         }
                     } else {
+                        let lens_before: HashMap<String, usize> = map
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.len()))
+                            .collect();
                         Self::collect_usages_from_expression(
                             arm.body,
                             idx,
@@ -246,6 +251,14 @@ impl AutoCloneAnalysis {
                             map,
                             registry,
                         );
+                        // P3.332: Ok/Err arms are exclusive — do not treat multi-arm
+                        // moves of the same binding as same-stmt multi-move.
+                        for (key, usages) in map.iter_mut() {
+                            let start = lens_before.get(key).copied().unwrap_or(0);
+                            for u in usages.iter_mut().skip(start) {
+                                u.in_exclusive_match_arm = true;
+                            }
+                        }
                     }
                 }
             }
@@ -464,6 +477,7 @@ impl AutoCloneAnalysis {
                     is_move: false,
                     in_loop,
                     is_projection_parent: true,
+                in_exclusive_match_arm: false,
                 });
             }
             Expression::FieldAccess { object, .. } => {
@@ -474,6 +488,7 @@ impl AutoCloneAnalysis {
                         is_move: false,
                         in_loop,
                         is_projection_parent: true,
+                    in_exclusive_match_arm: false,
                     });
                 }
                 Self::collect_field_projection_parent_usages(object, idx, in_loop, map, registry);
@@ -508,6 +523,7 @@ impl AutoCloneAnalysis {
                     is_move: kind == UsageKind::Move,
                     in_loop,
                         is_projection_parent: false,
+                    in_exclusive_match_arm: false,
                     });
             }
             Expression::FieldAccess { object, .. } => {
@@ -518,6 +534,7 @@ impl AutoCloneAnalysis {
                         is_move: kind == UsageKind::Move,
                         in_loop,
                         is_projection_parent: false,
+                    in_exclusive_match_arm: false,
                     });
                 }
                 // Parent binding uses from `root.field` are not whole-root reuse.
@@ -546,6 +563,7 @@ impl AutoCloneAnalysis {
                             is_move: kind == UsageKind::Move,
                             in_loop,
                             is_projection_parent: false,
+                        in_exclusive_match_arm: false,
                         });
                     }
                     Self::collect_usages_from_expression(
@@ -614,6 +632,7 @@ impl AutoCloneAnalysis {
                         is_move: kind == UsageKind::Move,
                         in_loop,
                         is_projection_parent: false,
+                    in_exclusive_match_arm: false,
                     });
                 }
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
@@ -645,6 +664,7 @@ impl AutoCloneAnalysis {
                         is_move: kind == UsageKind::Move,
                         in_loop,
                         is_projection_parent: false,
+                    in_exclusive_match_arm: false,
                     });
                 }
                 Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
@@ -734,6 +754,7 @@ impl AutoCloneAnalysis {
                     is_move: false,
                     in_loop,
                         is_projection_parent: false,
+                    in_exclusive_match_arm: false,
                     });
             }
             crate::parser::Pattern::Tuple(patterns) => {
@@ -789,15 +810,25 @@ impl AutoCloneAnalysis {
                 let same_stmt_read_after_move = total_uses.iter().any(|u| {
                     u.statement_idx == move_usage.statement_idx
                         && u.kind == UsageKind::Read
+                        && !u.is_projection_parent
                         && move_usage.kind == UsageKind::Move
                 });
                 let same_stmt_moves = moves
                     .iter()
                     .filter(|m| m.statement_idx == move_usage.statement_idx)
                     .count();
+                let same_stmt_exclusive_arm_moves = moves
+                    .iter()
+                    .filter(|m| {
+                        m.statement_idx == move_usage.statement_idx && m.in_exclusive_match_arm
+                    })
+                    .count();
+                // Exclusive Match arms each move `rx` once — not a multi-move conflict (P3.332).
+                let multi_move_conflict = same_stmt_moves > 1
+                    && same_stmt_exclusive_arm_moves != same_stmt_moves;
                 if has_later_use
                     || same_stmt_read_after_move
-                    || same_stmt_moves > 1
+                    || multi_move_conflict
                     || move_usage.in_loop
                 {
                     self.clone_sites.insert(
@@ -844,6 +875,7 @@ impl AutoCloneAnalysis {
             let same_stmt_read_after_move = total_uses.iter().any(|u| {
                 u.statement_idx == move_usage.statement_idx
                     && u.kind == UsageKind::Read
+                    && !u.is_projection_parent
                     && move_usage.kind == UsageKind::Move
             });
 
@@ -851,6 +883,14 @@ impl AutoCloneAnalysis {
                 .iter()
                 .filter(|m| m.statement_idx == move_usage.statement_idx)
                 .count();
+            let same_stmt_exclusive_arm_moves = moves
+                .iter()
+                .filter(|m| {
+                    m.statement_idx == move_usage.statement_idx && m.in_exclusive_match_arm
+                })
+                .count();
+            let multi_move_conflict = same_stmt_moves > 1
+                && same_stmt_exclusive_arm_moves != same_stmt_moves;
 
             // Moves inside loops need clone when the variable is captured from
             // an outer scope (each iteration re-uses the same binding). But
@@ -859,7 +899,7 @@ impl AutoCloneAnalysis {
             let loop_capture_needs_clone = move_usage.in_loop && !definition_is_loop_scoped;
             let needs_clone = has_later_use
                 || same_stmt_read_after_move
-                || same_stmt_moves > 1
+                || multi_move_conflict
                 || loop_capture_needs_clone;
 
             if needs_clone {
@@ -1335,6 +1375,10 @@ struct Usage {
     /// the binding (`buf` in `buf.scores`). Distinct field moves must not treat these
     /// as whole-root reuse (WDB-096).
     is_projection_parent: bool,
+    /// True when this use is in a Match arm expression body (arms are exclusive).
+    /// Multiple moves of the same binding across Ok/Err arms must not force `.clone()`
+    /// (P3.332 `recv` returning `rx` from each arm).
+    in_exclusive_match_arm: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
