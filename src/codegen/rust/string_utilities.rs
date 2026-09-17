@@ -119,6 +119,11 @@ pub fn type_expects_owned_string_payload(ty: &Type) -> bool {
     match ty {
         Type::Option(inner) => type_expects_owned_string_payload(inner),
         Type::Result(ok, _) => type_expects_owned_string_payload(ok),
+        // P3.325: `-> Result<(string, string), E>` still needs owned string locals.
+        Type::Tuple(elems) => elems.iter().any(type_expects_owned_string_payload),
+        Type::Parameterized(name, args) if name == "Tuple" || name.starts_with('(') => {
+            args.iter().any(type_expects_owned_string_payload)
+        }
         other => type_is_owned_string(other),
     }
 }

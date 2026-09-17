@@ -372,14 +372,23 @@ impl<'ast> CodeGenerator<'ast> {
                                 .needs_clone(name, self.current_statement_idx)
                                 .is_some()
                                 && !value_str.ends_with(".clone()")
+                                && !value_str.ends_with(".to_string()")
                             {
                                 value_str = self.maybe_auto_clone(name, &value_str);
-                                if !value_str.ends_with(".clone()") {
+                                if !value_str.ends_with(".clone()")
+                                    && !value_str.ends_with(".to_string()")
+                                {
                                     value_str = format!("{}.clone()", value_str);
                                 }
                             }
                         }
                     }
+                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                        &mut value_str,
+                        value,
+                        &self.emitted_rust_ref_formals,
+                        &self.current_function_params,
+                    );
                 }
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
@@ -531,14 +540,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 .needs_clone(name, self.current_statement_idx)
                                 .is_some()
                                 && !value_str.ends_with(".clone()")
+                                && !value_str.ends_with(".to_string()")
                             {
                                 value_str = self.maybe_auto_clone(name, &value_str);
-                                if !value_str.ends_with(".clone()") {
+                                if !value_str.ends_with(".clone()")
+                                    && !value_str.ends_with(".to_string()")
+                                {
                                     value_str = format!("{}.clone()", value_str);
                                 }
                             }
                         }
                     }
+                    // P3.325: demoted `&str` formal `.clone()` is still `&str` — own it.
+                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                        &mut value_str,
+                        value,
+                        &self.emitted_rust_ref_formals,
+                        &self.current_function_params,
+                    );
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
@@ -713,14 +732,23 @@ impl<'ast> CodeGenerator<'ast> {
                                 .needs_clone(name, self.current_statement_idx)
                                 .is_some()
                                 && !value_str.ends_with(".clone()")
+                                && !value_str.ends_with(".to_string()")
                             {
                                 value_str = self.maybe_auto_clone(name, &value_str);
-                                if !value_str.ends_with(".clone()") {
+                                if !value_str.ends_with(".clone()")
+                                    && !value_str.ends_with(".to_string()")
+                                {
                                     value_str = format!("{}.clone()", value_str);
                                 }
                             }
                         }
                     }
+                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                        &mut value_str,
+                        value,
+                        &self.emitted_rust_ref_formals,
+                        &self.current_function_params,
+                    );
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(

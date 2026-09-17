@@ -56,14 +56,31 @@ impl<'ast> CodeGenerator<'ast> {
                 })
     }
 
-    /// P3.323: `let mut x = 0_i32` keeps WJ `Type::Int` in `local_var_types` — sync concrete width.
+    /// P3.323 / P3.326: untyped `let mut x = 0` may emit `_i32` / `_usize` while
+    /// `local_var_types` still holds WJ `Int` from a non-int return hint (e.g. `-> string`).
+    /// Sync the binding to the emitted width so later assigns do not `as i64` a usize RHS.
     pub(in crate::codegen::rust) fn reconcile_ambiguous_int_local_after_let(
         &mut self,
         name: &str,
         value: &Expression<'ast>,
         emitted_rhs: &str,
     ) {
-        if !matches!(self.local_var_types.get(name), Some(Type::Int)) {
+        let ambiguous_int = match self.local_var_types.get(name) {
+            Some(Type::Int) | Some(Type::Int32) => true,
+            Some(Type::Custom(n)) => matches!(n.as_str(), "int" | "i64" | "i32"),
+            _ => false,
+        };
+        if !ambiguous_int {
+            return;
+        }
+        // P3.326: numeric inference may emit `0_usize` for index locals while the let
+        // still recorded WJ `Int` (String/bool return width hint). Treat as usize.
+        if emitted_rhs.ends_with("_usize")
+            || self.int_type_for_mixed_int_codegen(value) == IntType::Usize
+        {
+            self.local_var_types
+                .insert(name.to_string(), Type::Custom("usize".into()));
+            self.usize_variables.insert(name.to_string());
             return;
         }
         if emitted_rhs.ends_with("_i32")

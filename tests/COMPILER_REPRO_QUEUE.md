@@ -299,8 +299,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.331); blocks generic `wj-sync` channels |
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | 🆕 RED / filed (P3.332); blocks generic `wj-sync` channels |
 | P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | 🆕 RED / filed (P3.329); blocks tip `wj-timefmt` |
-| P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | 🆕 RED / filed (P3.325); blocks tip `wj-semver` |
-| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | 🆕 RED / filed (P3.326); blocks tip `wj-toml` |
+| P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | ✅ tip GREEN (P3.325) — tuple Result return owns demoted bind |
+| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ✅ tip GREEN (P3.326) — reconcile `_usize` emit vs Int local |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |
@@ -412,21 +412,36 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-toml` scanners | ❌ tip RED |
-| Gate `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ❌ tip RED (2026-09-16) — `start = i + 1_usize as i64` (product also `as i32`) |
+| Ecosystem: `wj-toml` scanners | ✅ tip GREEN (2026-09-16) |
+| Gate `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ✅ tip GREEN (2026-09-16) |
 
-**Compiler agent:** when `start` and `i` are usize (index/substring), keep `i + 1` as usize — never cast the `1` peer through i32/i64.
+**Root cause layer:** constraint/type write-back
+- Untyped `let mut start = 0` under `-> string` recorded WJ `Int` while numeric inference emitted `0_usize`.
+- Assign `start = i + 1_usize` then `maybe_cast_usize_to_int_target` appended ` as i64` (precedence → `i + (1_usize as i64)`).
+- Regular assigns did not set `assignment_int_target_type` (compound assigns did).
+
+**Fix:** reconcile `_usize` emit → `local_var_types`/`usize_variables`; set int assignment context on plain assigns.
+
+**What became unnecessary:** post-assign `as i64` peel on usize index locals.
+
+**Gates:** `cargo test --release --test all -- bug_module_file_usize_i_plus_one_assign_must_stay_usize bug_module_file_demoted_str_substring_assign_must_own u32_arith_int_literal_must_not_emit_u64` → 3 passed.
 
 ## P3.325 (2026-09-16) — demoted `&str` substring assign into `String` (`wj-semver`)
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-semver` `split_build` / `split_pre` | ❌ tip RED |
-| Gate `bug_module_file_demoted_str_substring_assign_must_own_test` | ❌ tip RED (2026-09-16) — `core = strings::substring(text, …)` with `core: String`, `text: &str` |
-| Note | Isolate `pub fn(text: String)` may stay owned + GREEN; private demoted formal is the product shape |
+| Ecosystem: `wj-semver` `split_build` / `split_pre` | ✅ tip GREEN (2026-09-16) |
+| Gate `bug_module_file_demoted_str_substring_assign_must_own_test` | ✅ tip GREEN (2026-09-16) |
 
-**Compiler agent:** when assigning `strings::substring` into an owned `String` local (including after `let mut core = text.clone()` from a demoted `&str`), emit `.to_string()` / owned substring — never bare `&str` into `String`.
+**Root cause layer:** constraint / owned-string coercion
+- `return_type_expects_owned_string` ignored `Result<(string, string), _>` tuples → skipped coerce on `let mut core = text`.
+- Auto-clone then emitted `text.clone()` (`&str`→`&str`); substring `String` assigns / `Ok((core,…))` failed.
 
+**Fix:** tuple payloads count as owned-string returns; rewrite demoted `&str` `.clone()` → `.to_string()` on let binds; skip auto-clone after `.to_string()`.
+
+**What became unnecessary:** relying on substring-site `.to_string()` peels when the initial bind was wrong.
+
+**Gates:** same filter as P3.326 → GREEN.
 ## P3.314 (2026-09-16) — usize index `i == 0` emits `0_i32` (`wj-validate`)
 
 | Change | Status |
