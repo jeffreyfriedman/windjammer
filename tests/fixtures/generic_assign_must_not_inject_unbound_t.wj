@@ -1,0 +1,32 @@
+// P3.334: call-site assign of generic send must not annotate Sender<T>.
+use std::sync::mpsc
+
+pub struct Sender<T> {
+    tx: mpsc::Sender<T>,
+}
+
+pub struct Receiver<T> {
+    rx: mpsc::Receiver<T>,
+}
+
+pub fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
+    let pair = mpsc::channel()
+    (
+        Sender { tx: pair.0 },
+        Receiver { rx: pair.1 },
+    )
+}
+
+pub fn send<T>(tx: Sender<T>, value: T) -> Sender<T> {
+    match tx.tx.send(value) {
+        Ok(_) => tx,
+        Err(_) => tx,
+    }
+}
+
+pub fn demo() -> int {
+    let pair = unbounded()
+    let tx = send(pair.0, 7)
+    let _ = tx
+    7
+}

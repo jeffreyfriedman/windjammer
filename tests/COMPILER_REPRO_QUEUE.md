@@ -279,6 +279,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **datafusion `csr.clone()` → demoted SQL count_edges must reborrow** | `bug_wdb254_module_file_owned_csr_clone_into_demoted_sql_edge_count_must_reborrow_test` | 🆕 RED / filed (P3.334); twin WDB-252 |
 | P1 | **CDLP `csr.clone()` → demoted `&mut DenseCsr` parallel must reborrow** | `bug_wdb255_module_file_owned_csr_clone_into_demoted_mut_cdlp_parallel_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
+| P1 | **`&mut vertices.clone()` → demoted `&mut Vec` init_scores must reborrow** | `bug_wdb257_module_file_mut_ref_vec_clone_into_demoted_init_scores_must_reborrow_test` | 🆕 RED / filed (P3.340) |
+| P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1128,6 +1130,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.340 WindjammerDB CQ-C5 — coverage REDs WDB-257/258 init_scores &mut clone + owned materialize &Vec (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (gen lag) |
+| Tip **WDB-257** `&mut vertices.clone()` → demoted `&mut Vec` init_scores | ❌ RED — tip-out/gen graph_pagerank_engine |
+| Tip **WDB-258** `&Vec` → owned materialize dsts/weights must clone | ❌ RED — tip-out/gen csr_integrate/write_port (twin WDB-241; opposite WDB-239) |
+| Tip **WDB-255/256 / 253/254 / 251/252** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–258**; sync tip-out→gen for 234–238. Dominant residual: Vec←&Vec / &Vec←Vec / map.clone→`&Map` / csr.clone→`&DenseCsr`. No Phase 606+.
 
 ## P3.339 WindjammerDB CQ-C5 — coverage REDs WDB-255/256 CDLP parallel + incremental BFS &mut DenseCsr (2026-09-17)
 
