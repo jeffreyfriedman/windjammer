@@ -344,6 +344,15 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
 
+## P3.327 (2026-09-16) — u32 ± int literal must not emit `_u64`
+
+| Gate | Status |
+|------|--------|
+| `bug_u32_arith_int_literal_must_not_emit_u64_test` | 🆕 RED / filed |
+| Note | Product: half_edge / mesh_primitives / steering |
+
+**Compiler agent:** keep u32 arithmetic peers as u32 — never `_u64` literals into u32 locals/fields.
+
 ## P3.326 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
 
 | Change | Status |
