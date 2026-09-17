@@ -56,8 +56,8 @@ Definition of done per row:
 
 | Need | Repro | Gate status | Fix hint |
 |---|---|---|---|
-| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | Land `std/sync.wj` + runtime; unblock after P3.331/332 |
-| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | Same module; public names `shared` not Arc/Mutex |
+| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `assert_stdlib_runtime_links` → `sync::unbounded` (not raw mpsc) |
+| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `sync::shared` / `shared_add` / `shared_get` |
 
 ## Run
 

@@ -182,6 +182,12 @@ pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
     if s.starts_with('"') {
         return crate::codegen::rust::literals::string_literal_to_owned_rust(&s);
     }
+    // P3.329: `&parts[i]` must become `parts[i].to_string()`, never `&parts[i].to_string()`.
+    if let Some(base) = s.strip_prefix('&').map(str::trim_start) {
+        if !base.starts_with("mut ") {
+            return format!("{base}.to_string()");
+        }
+    }
     format!("{s}.to_string()")
 }
 
