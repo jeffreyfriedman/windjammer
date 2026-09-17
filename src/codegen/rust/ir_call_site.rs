@@ -1517,14 +1517,10 @@ impl<'ast> CodeGenerator<'ast> {
                 kind = CoercionKind::Identity;
             }
         }
-        // Explicit `*binding` on Copy types: Rust auto-borrows at the call site — no `&*`.
-        if matches!(
-            arg_expr,
-            Expression::Unary {
-                op: crate::parser::UnaryOp::Deref,
-                ..
-            }
-        ) && matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
+        // Explicit `*binding` / `(*binding).field` on Copy: Rust auto-borrows — no `&*` /
+        // `&(binding).field` (auto_ref_deref_copy_test).
+        if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
+            && matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
         {
             let callee_formal_is_copy = sig
                 .formal_param_type(param_idx)
@@ -1535,9 +1531,8 @@ impl<'ast> CodeGenerator<'ast> {
                         other => other,
                     };
                     self.is_type_copy(bare)
-                        && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                 });
-            if callee_formal_is_copy {
+            if callee_formal_is_copy || self.expression_is_copy(arg_expr) {
                 kind = CoercionKind::Identity;
             } else if let Expression::Unary { operand, .. } = arg_expr {
                 if self
@@ -7301,6 +7296,18 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.is_type_copy(&param.type_)
                     && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                 {
+                    // Demoted Copy-aggregate formals emit `&T` in Rust. Treating them as
+                    // OwnedType::Copy makes Vec/HashSet::contains Borrow → `&*entity`
+                    // (auto_ref_deref_copy). Honor emitted shared-ref formals as Ref.
+                    if self.emitted_rust_ref_formals.contains(name.as_str())
+                        || self.inferred_borrowed_params.contains(name.as_str())
+                        || self.identifier_already_ref(name)
+                    {
+                        return self.safety_type_for_param_binding(
+                            arg_expr,
+                            OwnedType::Ref(Region::fresh(0)),
+                        );
+                    }
                     return SafetyType::copy(crate::ir::node::parser_type_to_base_type(
                         &param.type_,
                     ));

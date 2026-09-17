@@ -516,20 +516,10 @@ impl<'ast> CodeGenerator<'ast> {
                         ));
                     }
                 }
-                Item::TypeAlias {
-                    name,
-                    target,
-                    is_pub,
-                    ..
-                } => {
-                    let pub_prefix = if *is_pub { "pub " } else { "" };
-                    body.push_str(&format!(
-                        "{}type {} = {};\n",
-                        pub_prefix,
-                        name,
-                        self.type_to_rust(target)
-                    ));
-                }
+                // Type aliases that name user structs/enums must emit *after* those
+                // definitions (P3.333 / `wj-sync` SharedInt = Shared<int>). Skip here;
+                // emit in the post-struct pass below.
+                Item::TypeAlias { .. } => {}
                 Item::Macro {
                     doc_comment, expr, ..
                 } => {
@@ -718,6 +708,26 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 _ => {}
+            }
+        }
+
+        // Type aliases after structs/enums/traits so `type SharedInt = Shared<i64>`
+        // resolves (P3.333). Preserve source order among aliases.
+        for item in &program.items {
+            if let Item::TypeAlias {
+                name,
+                target,
+                is_pub,
+                ..
+            } = item
+            {
+                let pub_prefix = if *is_pub { "pub " } else { "" };
+                body.push_str(&format!(
+                    "{}type {} = {};\n\n",
+                    pub_prefix,
+                    name,
+                    self.type_to_rust(target)
+                ));
             }
         }
 

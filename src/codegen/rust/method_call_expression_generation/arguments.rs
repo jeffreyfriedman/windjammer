@@ -636,6 +636,13 @@ impl<'ast> CodeGenerator<'ast> {
                                 false,
                             );
                         }
+                        if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(
+                            arg_to_generate,
+                        ) && coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                        {
+                            coerced = coerced[1..].to_string();
+                        }
                         return coerced;
                     }
                     debug_assert!(
