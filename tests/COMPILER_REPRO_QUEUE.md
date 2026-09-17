@@ -284,6 +284,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`while i < parts.len()` + `parts[i]` emits `i += 1 as i32` (`wj-dotenv`)** | `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | ✅ tip GREEN (P3.311) — usize index increment width |
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
+| P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | 🆕 RED / filed (P3.321); blocks tip `wj-semver` |
+| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | 🆕 RED / filed (P3.322); blocks tip `wj-toml` |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |
@@ -322,6 +324,25 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **What became unnecessary:** Region(8) demotion of MutBorrowed; MutBorrowed-Vec owned claim; shared-ref classification of `&mut T`; owned peel / reuse-clone on MutBorrow slots
 
 **Gates:** `cargo test --release --test all -- auto_mut_borrow_arg_test bug_cross_crate_mut_borrow_module_fn_test`; lib `mut_borrowed_vec_is_not_runtime_shared_borrow` + `mut_borrowed_bare_vec_stays_mut_ref_at_call_site`
+
+## P3.322 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-toml` scanners | ❌ tip RED |
+| Gate `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ❌ tip RED (2026-09-16) — `start = i + 1_usize as i64` (product also `as i32`) |
+
+**Compiler agent:** when `start` and `i` are usize (index/substring), keep `i + 1` as usize — never cast the `1` peer through i32/i64.
+
+## P3.321 (2026-09-16) — demoted `&str` substring assign into `String` (`wj-semver`)
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-semver` `split_build` / `split_pre` | ❌ tip RED |
+| Gate `bug_module_file_demoted_str_substring_assign_must_own_test` | ❌ tip RED (2026-09-16) — `core = strings::substring(text, …)` with `core: String`, `text: &str` |
+| Note | Isolate `pub fn(text: String)` may stay owned + GREEN; private demoted formal is the product shape |
+
+**Compiler agent:** when assigning `strings::substring` into an owned `String` local (including after `let mut core = text.clone()` from a demoted `&str`), emit `.to_string()` / owned substring — never bare `&str` into `String`.
 
 ## P3.314 (2026-09-16) — usize index `i == 0` emits `0_i32` (`wj-validate`)
 

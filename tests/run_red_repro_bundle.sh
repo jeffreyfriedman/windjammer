@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
+  demoted_str_substring_assign_must_own
+  usize_i_plus_one_assign_must_stay_usize
   wdb241_tip_out
   wdb242_tip_out
   wdb243_tip_out
