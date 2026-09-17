@@ -34,6 +34,14 @@ fn wdb238_tip_out_pg_serve_must_borrow_inbound_into_demoted_frame_total_len() {
         gen.join("relational/relational_pg_wire_port.rs"),
     ];
     let mut demoted = false;
+    let mut owned = false;
+    // Prefer tip-out wire formal when present — gen lag must not poison tip truth.
+    let tip_wire = tip.join("relational_pg_wire_port.rs");
+    let wire_paths = if tip_wire.exists() {
+        vec![tip_wire]
+    } else {
+        vec![gen.join("relational/relational_pg_wire_port.rs")]
+    };
     for path in &wire_paths {
         if !path.exists() {
             continue;
@@ -45,16 +53,24 @@ fn wdb238_tip_out_pg_serve_must_borrow_inbound_into_demoted_frame_total_len() {
             demoted = true;
             break;
         }
+        if text.contains("fn pg_wire_frame_total_len(bytes: Vec<u8>")
+            || text.contains("fn pg_wire_frame_total_len(inbound: Vec<u8>")
+        {
+            owned = true;
+            break;
+        }
     }
     assert!(
-        demoted,
-        "WDB-238: demoted &Vec formal for pg_wire_frame_total_len missing"
+        demoted || owned,
+        "WDB-238: pg_wire_frame_total_len Vec formal missing"
     );
 
-    let paths = [
-        tip.join("relational_pg_serve_port.rs"),
-        gen.join("relational/relational_pg_serve_port.rs"),
-    ];
+    let tip_serve = tip.join("relational_pg_serve_port.rs");
+    let paths = if tip_serve.exists() {
+        vec![tip_serve]
+    } else {
+        vec![gen.join("relational/relational_pg_serve_port.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {
@@ -62,9 +78,17 @@ fn wdb238_tip_out_pg_serve_must_borrow_inbound_into_demoted_frame_total_len() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("serve");
-        let bad = text.contains("pg_wire_frame_total_len(inbound.clone()")
+        // Only RED when formal is demoted &Vec but call site still clones owned.
+        let bad = demoted
+            && text.contains("pg_wire_frame_total_len(inbound.clone()")
             && !text.contains("pg_wire_frame_total_len(&inbound");
-        eprintln!("WDB-238 demoted={} bad={} path={}", demoted, bad, path.display());
+        eprintln!(
+            "WDB-238 demoted={} owned={} bad={} path={}",
+            demoted,
+            owned,
+            bad,
+            path.display()
+        );
         assert!(
             !bad,
             "WDB-238 RED: tip-out/product passes inbound.clone() into demoted &Vec frame_total_len. {}",

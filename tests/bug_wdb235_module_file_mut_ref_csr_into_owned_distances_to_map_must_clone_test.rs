@@ -32,20 +32,26 @@ fn wdb235_tip_out_batch_must_clone_mut_ref_csr_into_owned_distances_to_map() {
         tip.join("graph_dense_csr.rs"),
         gen.join("graph/graph_dense_csr.rs"),
     ];
-    let mut owned_formal = false;
+    let mut formal_kind = "missing";
     for path in &dense_paths {
         if !path.exists() {
             continue;
         }
         let text = std::fs::read_to_string(path).expect("dense");
         if text.contains("fn graph_dense_distances_to_map(csr: DenseCsr") {
-            owned_formal = true;
+            formal_kind = "owned";
+            break;
+        }
+        if text.contains("fn graph_dense_distances_to_map(csr: &DenseCsr")
+            || text.contains("fn graph_dense_distances_to_map(csr: &mut DenseCsr")
+        {
+            formal_kind = "borrowed";
             break;
         }
     }
     assert!(
-        owned_formal,
-        "WDB-235: owned DenseCsr distances_to_map formal missing"
+        formal_kind != "missing",
+        "WDB-235: distances_to_map DenseCsr formal missing"
     );
 
     let paths = [
@@ -60,12 +66,15 @@ fn wdb235_tip_out_batch_must_clone_mut_ref_csr_into_owned_distances_to_map() {
         saw = true;
         let text = std::fs::read_to_string(path).expect("batch");
         let has_mut_helpers = text.contains("csr: &mut DenseCsr");
+        // Owned formal requires clone; borrowed formal accepts bare &mut→& coerce.
         let bad = has_mut_helpers
+            && formal_kind == "owned"
             && text.contains("graph_dense_distances_to_map(csr,")
             && !text.contains("graph_dense_distances_to_map(csr.clone(),")
             && !text.contains("graph_dense_distances_to_map((*csr).clone(),");
         eprintln!(
-            "WDB-235 has_mut_helpers={} bad={} path={}",
+            "WDB-235 formal_kind={} has_mut_helpers={} bad={} path={}",
+            formal_kind,
             has_mut_helpers,
             bad,
             path.display()

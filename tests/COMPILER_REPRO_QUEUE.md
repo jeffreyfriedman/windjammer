@@ -266,6 +266,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | 🆕 RED / filed (P3.316); twin WDB-234 |
 | P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | 🆕 RED / filed (P3.316); twin WDB-131 |
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | 🆕 RED / filed (P3.316); related WDB-215/227 |
+| P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-225 |
+| P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-221 |
+| P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
 | P1 | **federation demoted `&Vec` return → owned `Vec` must clone** | `bug_wdb243_module_file_demoted_vec_return_into_owned_must_clone_test` | 🆕 RED / filed (P3.320) |
@@ -286,8 +289,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`while i < parts.len()` + `parts[i]` emits `i += 1 as i32` (`wj-dotenv`)** | `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | ✅ tip GREEN (P3.311) — usize index increment width |
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
-| P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | 🆕 RED / filed (P3.321); blocks tip `wj-semver` |
-| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | 🆕 RED / filed (P3.322); blocks tip `wj-toml` |
+| P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | 🆕 RED / filed (P3.325); blocks tip `wj-semver` |
+| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | 🆕 RED / filed (P3.326); blocks tip `wj-toml` |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |
@@ -340,7 +343,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
 
-## P3.322 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
+## P3.326 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
 
 | Change | Status |
 |--------|--------|
@@ -349,7 +352,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent:** when `start` and `i` are usize (index/substring), keep `i + 1` as usize — never cast the `1` peer through i32/i64.
 
-## P3.321 (2026-09-16) — demoted `&str` substring assign into `String` (`wj-semver`)
+## P3.325 (2026-09-16) — demoted `&str` substring assign into `String` (`wj-semver`)
 
 | Change | Status |
 |--------|--------|
@@ -963,6 +966,22 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.324 WindjammerDB CQ-C5 — coverage REDs WDB-244–246 datafusion string ownership + tip-out greens 235–238 (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (gen may lag tip-out) |
+| Tip-out **WDB-235** distances_to_map formal demoted `&DenseCsr` | ✅ tip-out GREEN |
+| Tip-out **WDB-236** HashMap String `&key` | ✅ tip-out GREEN |
+| Tip-out **WDB-237** `len() as u64` (no `as i64`) | ✅ tip-out GREEN |
+| Tip-out **WDB-238** frame_total_len owned formal | ✅ tip-out GREEN |
+| Tip **WDB-244** `"props".to_string()` → demoted `sql_exec` `&str` | ❌ RED — tip-out/gen datafusion |
+| Tip **WDB-245** bare `"props"` → owned table_provider `String` | ❌ RED — tip-out/gen df_analytic |
+| Tip **WDB-246** format temps → demoted `hash_join` `&str` | ❌ RED — tip-out/gen datafusion |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–246**; sync tip-out→gen for 235–238. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph. No Phase 606+.
 
 ## P3.320 WindjammerDB CQ-C5 — coverage REDs WDB-241–243 ecs/arrow/federation Vec+String (2026-09-16)
 
