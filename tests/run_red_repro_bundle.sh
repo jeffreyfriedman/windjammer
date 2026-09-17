@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
+  module_file_for_in_struct_vec_field_must_not_partial_move_parent
   demoted_str_substring_assign_must_own
   usize_i_plus_one_assign_must_stay_usize
   wdb241_tip_out
@@ -23,6 +24,7 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  module_file_vec_len_gt_zero_must_not_mix_uint_int
   module_file_recv_reassign_must_move_not_clone_receiver
   module_file_int_mul_into_int_acc_must_not_cast_i32
   module_file_nested_while_substring_i_plus_one_must_not_emit_i32
