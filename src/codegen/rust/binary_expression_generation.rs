@@ -411,7 +411,9 @@ impl<'ast> CodeGenerator<'ast> {
                 && !skip_int_promotion_both_inferred_usize
                 && !skip_int_promotion_both_usize_operands
             {
-                if self.numeric_inference.is_some() {
+                if self.numeric_inference.is_some()
+                    || self.promotion_int_type_from_assignment_context().is_some()
+                {
                     if is_comparison || is_arithmetic {
                         use crate::type_inference::int_implicit_casts::{
                             get_cast_suffix, is_safe_implicit_cast, promote_types,

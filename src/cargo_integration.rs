@@ -599,6 +599,9 @@ pub fn create_cargo_toml_with_deps(
         }
     };
 
+    let wj_config = crate::cargo_toml::find_wj_config(source_dir);
+    let release_profile = wj_config.profile.release.to_cargo_toml_section();
+
     let cargo_toml = format!(
         r#"[package]
 name = "{}"
@@ -608,10 +611,8 @@ edition = "2021"
 # Prevent this from being treated as part of parent workspace
 [workspace]
 
-{}{}[profile.release]
-opt-level = 3
-"#,
-        project_name, deps_section, lib_or_bin_section
+{}{}{}"#,
+        project_name, deps_section, lib_or_bin_section, release_profile
     );
 
     eprintln!(
