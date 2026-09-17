@@ -293,8 +293,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **BFS `csr.clone()` → demoted `&DenseCsr` distances_to_map must reborrow** | `bug_wdb264_module_file_owned_csr_clone_into_demoted_distances_to_map_must_reborrow_test` | 🆕 RED / filed (P3.349); twin WDB-252; gen lag |
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_len` must borrow** | `bug_wdb265_module_file_owned_map_clone_into_demoted_i64_len_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222; gen lag |
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_contains` must borrow** | `bug_wdb266_module_file_owned_map_clone_into_demoted_i64_contains_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222/265; gen lag |
-| P1 | **PageRank `scores.clone()` → demoted `&Map` `f64_sum` must borrow** | `bug_wdb267_module_file_owned_map_clone_into_demoted_f64_sum_must_borrow_test` | 🆕 RED / filed (P3.354); twin WDB-223; gen lag |
-| P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.354); twin WDB-248/256 |
+| P1 | **PageRank `scores.clone()` → demoted `&Map` `f64_sum` must borrow** | `bug_wdb267_module_file_owned_map_clone_into_demoted_f64_sum_must_borrow_test` | 🆕 RED / filed (P3.357); twin WDB-223; gen lag |
+| P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.357); twin WDB-248/256 |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | 🆕 RED / filed (P3.356) |
@@ -322,6 +322,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
 | P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
 | P1 | **`wj build --release` must pass `--release` to cargo** | `bug_wj_build_release_must_invoke_cargo_release_test` | ✅ tip GREEN (P3.350) — `cli/build.rs` passes `--release` |
+| P1 | **`string[0..1]` / `substring(0,1)` slice bounds must not emit `_i64` (`finance-screens` theme)** | `bug_str_slice_range_literals_must_not_emit_i64_test` | ✅ tip GREEN (P3.354) — `in_index_context` + `maybe_cast_index_to_usize` on substring lowering |
 | P1 | **assign generic `send` must not inject unbound `Sender<T>`** | `bug_generic_assign_must_not_inject_unbound_t_test` | ✅ tip GREEN (P3.342) |
 | P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ✅ tip GREEN (P3.331) |
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (P3.332) |
@@ -1274,7 +1275,18 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
-## P3.354 WindjammerDB CQ-C5 — coverage REDs WDB-267/268 PageRank f64_sum + incremental bfs_run_dense (2026-09-17)
+## P3.354 finance-screens — `string` slice range bounds must be `usize` (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| `bug_str_slice_range_literals_must_not_emit_i64_test` — `pair[0..1]` / `hex_digit_value` | ✅ tip GREEN |
+| `run_red_repro_bundle.sh` — `str_slice_range_literals_must_not_emit_i64` | ✅ |
+
+**Root cause:** `substring(start,end)` lowering reused pre-codegen call args (`0_i64`) instead of re-emitting bounds with `in_index_context` (same path as `generate_index` range slices). `maybe_cast_index_to_usize` early-returned on literal AST nodes while the string still carried `_i64`.
+
+**Fix:** `method_call_expression_generation/finalize.rs` — re-generate start/end with `in_index_context` + `maybe_cast_index_to_usize`.
+
+## P3.357 WindjammerDB CQ-C5 — coverage REDs WDB-267/268 PageRank f64_sum + incremental bfs_run_dense (2026-09-17)
 
 | Gate | Status |
 |------|--------|

@@ -516,6 +516,13 @@ impl<'ast> CodeGenerator<'ast> {
                                     && self.comparison_should_prefer_u32_over_i64(right, left)
                                 {
                                     promoted = IntType::U32;
+                                } else if is_arithmetic
+                                    && self.function_prefers_i32_coord_locals()
+                                    && left_ty == IntType::I64
+                                    && right_ty == IntType::I64
+                                    && (left_is_int_literal || right_is_int_literal)
+                                {
+                                    promoted = IntType::I32;
                                 }
                             }
                             if promoted != IntType::Unknown {
@@ -525,12 +532,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     if ty == promoted {
                                         return false;
                                     }
-                                    // P3.353: void/i32 builders unify WJ `int` consts with i32 coord math.
+                                    // P3.353: void/i32 builders cast WJ `int`/i64 operands to i32 coords.
                                     if ty == IntType::I64
                                         && promoted == IntType::I32
                                         && self.function_prefers_i32_coord_locals()
-                                        && self.promotion_int_type_from_assignment_context()
-                                            == Some(IntType::I32)
                                     {
                                         return true;
                                     }
