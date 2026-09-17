@@ -13,7 +13,9 @@ impl<'ast> Analyzer<'ast> {
     /// This matches the logic in codegen/rust/generator.rs is_generic_type().
     pub(crate) fn is_generic_type_param(ty: &Type) -> bool {
         match ty {
-            Type::Custom(name) => {
+            // Parser emits `Type::Generic("T")` for fn type params; also accept
+            // `Type::Custom("T")` for metadata / older AST shapes (P3.331).
+            Type::Generic(name) | Type::Custom(name) => {
                 // Generic type parameters are single uppercase letters, optionally followed by a digit.
                 // Examples: T, U, K, V, S, G, T1, T2
                 // NOT: BVH, GPU, API, SVO, AABB, AABB3 (these are concrete type names)

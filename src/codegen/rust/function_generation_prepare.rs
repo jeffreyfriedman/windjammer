@@ -7415,6 +7415,9 @@ impl<'ast> CodeGenerator<'ast> {
         let result = param.name != "self"
             // Registry-aware Copy (Vec3, etc.) — not the primitive-only `type_analysis` helper.
             && !self.is_type_copy(&param.type_)
+            // P3.331: bare type params (`T`) must stay owned — demoting to `&T` + `.clone()`
+            // invents a Clone bound the signature never promised.
+            && !crate::analyzer::Analyzer::is_generic_type_param(&param.type_)
             && !matches!(
                 &param.type_,
                 Type::Reference(_) | Type::MutableReference(_)
