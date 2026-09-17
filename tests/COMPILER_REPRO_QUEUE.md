@@ -280,10 +280,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **CDLP `csr.clone()` → demoted `&mut DenseCsr` parallel must reborrow** | `bug_wdb255_module_file_owned_csr_clone_into_demoted_mut_cdlp_parallel_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **`&mut vertices.clone()` → demoted `&mut Vec` init_scores must reborrow** | `bug_wdb257_module_file_mut_ref_vec_clone_into_demoted_init_scores_must_reborrow_test` | 🆕 RED / filed (P3.340) |
-| P1 | **`&Vec` → owned materialize dsts/weights must clone**
-| P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | 🆕 RED / filed (P3.343) | | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
+| P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
+| P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | 🆕 RED / filed (P3.343) |
 | P1 | **CDLP `&vertices` → owned `init_identity` must clone** | `bug_wdb259_module_file_demoted_vec_into_owned_init_identity_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241 |
 | P1 | **PageRank `&Vec` → owned `f64_sum` vertices must clone** | `bug_wdb260_module_file_demoted_vec_into_owned_f64_sum_vertices_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241/259 |
+| P1 | **LCC `&offsets`/`&tri` → owned simd bind must clone** | `bug_wdb261_module_file_demoted_vec_into_owned_simd_lcc_bind_must_clone_test` | 🆕 RED / filed (P3.343); twin WDB-241 |
+| P1 | **wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle must reborrow** | `bug_wdb262_module_file_owned_into_demoted_mut_wave1_fill_bundle_must_reborrow_test` | 🆕 RED / filed (P3.343); twin WDB-257; gen lag |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1167,6 +1169,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.343 WindjammerDB CQ-C5 — coverage REDs WDB-261/262 LCC simd &Vec→owned + wave1 fill_bundle &mut (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (gen lag) |
+| Tip **WDB-261** LCC `&offsets`/`&tri` → owned `graph_simd_lcc_bind_oriented` | ❌ RED — tip-out/gen graph_lcc_engine (twin WDB-241) |
+| Tip **WDB-262** wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle | ❌ RED — gen wave1_opt_live_port (tip owned formals OK; twin WDB-257) |
+| Tip **WDB-259/260 / 257/258 / 255/256** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–262**; sync tip-out→gen for wave1 fill_bundle + 234–238. Dominant residual: Vec←&Vec / &Vec←Vec / map.clone→`&Map` / csr.clone→`&DenseCsr`. No Phase 606+.
 
 ## P3.341 WindjammerDB CQ-C5 — coverage REDs WDB-259/260 &Vec→owned init_identity + f64_sum vertices (2026-09-17)
 
