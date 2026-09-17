@@ -511,6 +511,15 @@ impl<'ast> CodeGenerator<'ast> {
         idx_str: &mut String,
         index: &Expression<'ast>,
     ) {
+        // P3.329: float coercion from call-site context must not stick on `[expr]` indices.
+        if idx_str.contains(" as f32") {
+            *idx_str = idx_str.replace(" as f32", " as usize");
+            return;
+        }
+        if idx_str.contains(" as f64") {
+            *idx_str = idx_str.replace(" as f64", " as usize");
+            return;
+        }
         // Non-negative integer literals infer as usize in index context — no cast needed.
         if let Expression::Literal {
             value: Literal::Int(n),

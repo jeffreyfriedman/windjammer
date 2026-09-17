@@ -373,6 +373,17 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Gates:** `cargo test --release --test all -- u32_arith_int_literal_must_not_emit_u64 module_file_recv_reassign i32_compound_add_must_not_use_usize` → 3 passed.
 
+
+## P3.330 (2026-09-16) — Vec subscript index must not emit `as f32`
+
+| Gate | Status |
+|------|--------|
+| `vec_index_must_not_cast_subscript_to_f32` | ✅ tip GREEN (2026-09-16) |
+| Product `lod_generator.wj` `mesh.vertices[vb + 1]` | ✅ `(vb + 1) as usize` (was `as f32`) |
+| Breach `wj game build` | **495** errors (was **516**); `[f32] indexed by f32` **0** |
+
+**Fix:** `maybe_cast_index_to_usize` rewrites call-site float coercion leaks (`as f32`/`as f64` → `as usize` on index expr).
+
 ## P3.326 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
 
 | Change | Status |
