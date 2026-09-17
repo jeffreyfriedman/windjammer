@@ -116,6 +116,55 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+
+    /// P3.324: u32 locals / fields vs untyped int literals — do not widen to u64.
+    pub(in crate::codegen::rust) fn comparison_should_prefer_u32_over_u64(
+        &self,
+        u32_side: &Expression<'ast>,
+        u64_side: &Expression<'ast>,
+    ) -> bool {
+        if matches!(
+            u64_side,
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } if *n >= 0
+        ) {
+            return true;
+        }
+        if self.expression_promotes_to_u32_in_compare(u32_side) {
+            if let Expression::Identifier { name, .. } = u64_side {
+                if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+                    || matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Custom(n)) if n == "uint"
+                    )
+                {
+                    return true;
+                }
+            }
+        }
+        self.int_type_for_mixed_int_codegen(u64_side) == IntType::U32
+            || self
+                .infer_expression_type(u64_side)
+                .as_ref()
+                .is_some_and(|t| {
+                    matches!(t, Type::Uint)
+                        || matches!(t, Type::Custom(n) if n == "u32")
+                })
+    }
+
+    fn expression_promotes_to_u32_in_compare(&self, expr: &Expression<'ast>) -> bool {
+        self.int_type_for_mixed_int_codegen(expr) == IntType::U32
+            || self
+                .infer_expression_type(expr)
+                .as_ref()
+                .is_some_and(|t| {
+                    matches!(t, Type::Uint)
+                        || matches!(t, Type::Custom(n) if n == "u32")
+                })
+    }
+
     /// Operand type for driving int literal suffixes in binary ops (`idx + 1` → `1_usize`).
     pub(in crate::codegen::rust) fn peer_type_for_int_literal_operand(
         &self,
