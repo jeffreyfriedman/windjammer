@@ -283,6 +283,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
 | P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ✅ tip GREEN (P3.343) — small literal ranges bind i32 + peer arith |
 | P1 | **void `while i < seg` after if/else i32 clamp must not emit `_i64`** | `bug_module_file_void_while_i32_seg_counter_must_not_emit_i64_test` | ✅ tip GREEN (P3.345) — if/else seg bind i32 |
+| P1 | **`cy + dy` for-range must not widen to i64 for i32 `set_if` coords** | `bug_i32_cy_plus_dy_for_range_must_not_widen_to_i64_test` | ✅ tip GREEN (P3.347) |
+| P1 | **owned String field ← demoted `&str` must `.to_string()`** | `bug_module_file_demoted_str_field_assign_must_to_string_test` | ✅ tip GREEN (P3.346) — loop-reuse demotion |
+| P1 | **`cy + dy` nested for-range must not widen to i64** | `bug_i32_cy_plus_dy_for_range_must_not_widen_to_i64_test` | ✅ tip GREEN (P3.347) — P3.343 regression lock |
 | P1 | **CDLP `&vertices` → owned `init_identity` must clone** | `bug_wdb259_module_file_demoted_vec_into_owned_init_identity_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241 |
 | P1 | **PageRank `&Vec` → owned `f64_sum` vertices must clone** | `bug_wdb260_module_file_demoted_vec_into_owned_f64_sum_vertices_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241/259 |
 | P1 | **LCC `&offsets`/`&tri` → owned simd bind must clone** | `bug_wdb261_module_file_demoted_vec_into_owned_simd_lcc_bind_must_clone_test` | 🆕 RED / filed (P3.344); twin WDB-241 |
@@ -368,15 +371,27 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
 
 
-## P3.346 (2026-09-17) — owned String field assign from demoted `&str` (partial)
+## P3.346 (2026-09-17) — owned String field assign from demoted `&str`
 
 | Item | Status |
 |------|--------|
-| Product | `self.field = param` with auto-clone → `param.clone()` E0308 String←&str |
-| Breach tip | 22→16 String←&str after assignment `.to_string()` guard |
-| Gate | 🚧 RED — needs WDB-180-style multipass demotion fixture |
+| Gate `bug_module_file_demoted_str_field_assign_must_to_string_test` | ✅ tip GREEN (2026-09-17) — loop-reuse demotion fixture |
+| Product | `asset_browser.search` / Breach String←&str residual |
 
-**Fix (partial):** Before auto-clone on assign, coerce demoted string params to `.to_string()` when LHS is owned `String`.
+**Root cause layer:** constraint/auto_clone — demoted `&str` params hit auto-clone on owned `String` field assign → `query.clone()` (still `&str`).
+
+**Fix:** when LHS is owned `String` and RHS ident is inferred-borrowed, emit `.to_string()` before/instead of `.clone()`.
+
+**Gates:** `cargo test --test all --features integration_tests -- module_file_demoted_str_field_assign_must_to_string` → pass.
+
+## P3.347 (2026-09-17) — `cy + dy` in nested for-range must not widen to i64
+
+| Gate | Status |
+|------|--------|
+| `bug_i32_cy_plus_dy_for_range_must_not_widen_to_i64_test` | ✅ tip GREEN (2026-09-17) — covered by P3.343 i32 range binding |
+| Ecosystem | `component_viewer_controls` ring body `let y = cy + dy` |
+
+**Regression lock:** untyped `let cy = 10` + `for dy in 0..2` must keep `cy + dy` as i32 (no `as i64`).
 
 ## P3.343 (2026-09-17) — nested i32 range loops emit `_i64` on `==` / `%` / `+` literals
 
