@@ -294,7 +294,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_len` must borrow** | `bug_wdb265_module_file_owned_map_clone_into_demoted_i64_len_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222; gen lag |
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_contains` must borrow** | `bug_wdb266_module_file_owned_map_clone_into_demoted_i64_contains_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222/265; gen lag |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
-| P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | 🆕 RED / filed (P3.352) |
+| P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -381,15 +381,15 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Gate | Status |
 |------|--------|
-| `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | 🆕 RED / filed |
+| `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (2026-09-17) |
 
 **Product:** csg `emit_instruction`, perlin perm init, `for i < vec.len()` mirrors.
 
-**Verify:**
+**Root cause layer:** codegen int-width — `function_returns_i32_for_loop_scan` early-returned when the fn returned a struct whose fields included WJ `int`, so `while i < 512` in `PermTable::new` stayed i64.
 
-```bash
-cargo test --release --test all -- i32_while_len_and_literal_bound -- --nocapture
-```
+**Fix:** do not block i32 loop-counter promotion solely because the return struct has `int` fields.
+
+**Gates:** `cargo test --release --test all -- i32_while_len_and_literal_bound` → pass.
 
 ## P3.350 (2026-09-17) — `wj build --release` must invoke `cargo build --release`
 
