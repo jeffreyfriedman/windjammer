@@ -367,6 +367,17 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
 
+
+## P3.346 (2026-09-17) — owned String field assign from demoted `&str` (partial)
+
+| Item | Status |
+|------|--------|
+| Product | `self.field = param` with auto-clone → `param.clone()` E0308 String←&str |
+| Breach tip | 22→16 String←&str after assignment `.to_string()` guard |
+| Gate | 🚧 RED — needs WDB-180-style multipass demotion fixture |
+
+**Fix (partial):** Before auto-clone on assign, coerce demoted string params to `.to_string()` when LHS is owned `String`.
+
 ## P3.343 (2026-09-17) — nested i32 range loops emit `_i64` on `==` / `%` / `+` literals
 
 | Gate | Status |
