@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
+  i32_nested_range_eq_mod_literals_must_not_emit_i64
   wdb253_tip_out
   wdb254_tip_out
   wdb239_tip_out

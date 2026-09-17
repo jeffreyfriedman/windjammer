@@ -280,7 +280,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **CDLP `csr.clone()` → demoted `&mut DenseCsr` parallel must reborrow** | `bug_wdb255_module_file_owned_csr_clone_into_demoted_mut_cdlp_parallel_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **`&mut vertices.clone()` → demoted `&mut Vec` init_scores must reborrow** | `bug_wdb257_module_file_mut_ref_vec_clone_into_demoted_init_scores_must_reborrow_test` | 🆕 RED / filed (P3.340) |
-| P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
+| P1 | **`&Vec` → owned materialize dsts/weights must clone**
+| P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | 🆕 RED / filed (P3.343) | | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
 | P1 | **CDLP `&vertices` → owned `init_identity` must clone** | `bug_wdb259_module_file_demoted_vec_into_owned_init_identity_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241 |
 | P1 | **PageRank `&Vec` → owned `f64_sum` vertices must clone** | `bug_wdb260_module_file_demoted_vec_into_owned_f64_sum_vertices_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241/259 |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
@@ -362,6 +363,15 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Root cause:** WJ `Type::Int` locals could emit as `0_i32` while `local_var_types` stayed ambiguous `Int` (i64 promotion on while bounds); i32 field vs WJ `int` sentinel compared via `(field as i64) > sentinel`, forcing i64 inference and i32 assign failures.
 
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
+
+## P3.343 (2026-09-17) — nested i32 range loops emit `_i64` on `==` / `%` / `+` literals
+
+| Gate | Status |
+|------|--------|
+| `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ❌ tip RED (2026-09-17) — `(dx + dz) % 2_i64 == 0_i64` |
+| Ecosystem | `component_viewer_controls` vents/checker nested `for dy in 0..3` |
+
+**Compiler agent:** i32 range loop counters must keep compare/mod/add literals in i32 width — never `_i64` peers.
 
 ## P3.342 (2026-09-17) — assign generic `send` injects unbound `Sender<T>`
 
