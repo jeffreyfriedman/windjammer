@@ -473,6 +473,74 @@ impl<'ast> CodeGenerator<'ast> {
         for stmt in body {
             self.prepass_mark_loop_counter_usize_in_statement(stmt);
         }
+        // P3.329: `let mut i = clock_end` must inherit usize when `while i < len`.
+        self.prepass_mark_usize_init_sources(body);
+    }
+
+    fn prepass_mark_usize_init_sources(&mut self, body: &[&'ast Statement<'ast>]) {
+        let mut changed = true;
+        while changed {
+            changed = false;
+            changed |= self.prepass_mark_usize_init_sources_in_stmts(body);
+        }
+    }
+
+    fn prepass_mark_usize_init_sources_in_stmts(
+        &mut self,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        let mut changed = false;
+        for stmt in body {
+            match stmt {
+                Statement::Let {
+                    pattern,
+                    value,
+                    else_block,
+                    ..
+                } => {
+                    if let Pattern::Identifier(name) = pattern {
+                        if self.usize_variables.contains(name) {
+                            if let Expression::Identifier {
+                                name: src_name, ..
+                            } = value
+                            {
+                                if self.usize_variables.insert(src_name.clone()) {
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                    if let Some(b) = else_block {
+                        changed |= self.prepass_mark_usize_init_sources_in_stmts(b.as_slice());
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::For { body, .. }
+                | Statement::Loop { body, .. } => {
+                    changed |= self.prepass_mark_usize_init_sources_in_stmts(body.as_slice());
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    changed |= self.prepass_mark_usize_init_sources_in_stmts(then_block.as_slice());
+                    if let Some(b) = else_block {
+                        changed |= self.prepass_mark_usize_init_sources_in_stmts(b.as_slice());
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            changed |= self
+                                .prepass_mark_usize_init_sources_in_stmts(statements.as_slice());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        changed
     }
 
     fn prepass_mark_loop_counter_usize_in_statement(&mut self, stmt: &'ast Statement<'ast>) {

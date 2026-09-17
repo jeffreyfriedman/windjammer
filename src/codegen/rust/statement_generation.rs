@@ -108,6 +108,41 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// P3.329: like `int_width_hint_from_return_type`, but structs whose fields include
+    /// WJ `int` keep i64 locals (`Rfc3339.month`) instead of coordinate-default i32.
+    pub(in crate::codegen::rust) fn int_width_hint_from_return_type_resolved(
+        &self,
+        ret_ty: &Type,
+    ) -> Type {
+        match Self::peel_option_result_payload(ret_ty) {
+            Type::Int32 => Type::Int32,
+            Type::Int => Type::Int,
+            Type::Uint => Type::Uint,
+            Type::Bool | Type::String => Type::Int,
+            Type::Custom(name)
+                if matches!(
+                    name.as_str(),
+                    "u32" | "i32" | "i64" | "int" | "u64" | "usize"
+                ) =>
+            {
+                Type::Custom(name.clone())
+            }
+            Type::Custom(name) if self.struct_fields_include_wj_int(name) => Type::Int,
+            _ => Type::Int32,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn struct_fields_include_wj_int(&self, struct_name: &str) -> bool {
+        let base = struct_name.split('<').next().unwrap_or(struct_name);
+        let Some(fields) = self.lookup_struct_field_types(base) else {
+            return false;
+        };
+        fields.values().any(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+        })
+    }
+
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
     pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
         ty: &Type,
@@ -570,16 +605,31 @@ impl<'ast> CodeGenerator<'ast> {
         let is_string = matches!(elem_type, Some(Type::String))
             || matches!(elem_type, Some(Type::Custom(ref n)) if n == "string");
 
-        if value_str.starts_with('&') {
-            if is_string {
-                *value_str = format!("({}).to_string()", *value_str);
-            } else {
-                let base = value_str
-                    .strip_prefix('&')
-                    .map(str::trim_start)
-                    .unwrap_or(value_str.as_str());
-                *value_str = format!("{}.clone()", base);
+        if is_string {
+            // P3.329: owned `string` lets need `parts[i].to_string()`, never `&….to_string()`.
+            let mut base = value_str
+                .strip_prefix('&')
+                .map(str::trim_start)
+                .unwrap_or(value_str.as_str())
+                .to_string();
+            while let Some(inner) = base
+                .strip_prefix('(')
+                .and_then(|x| x.strip_suffix(')'))
+                .map(|x| x.trim().to_string())
+            {
+                base = inner;
             }
+            if base.ends_with(".to_string()") || base.ends_with(".clone()") {
+                *value_str = base;
+            } else {
+                *value_str = format!("{base}.to_string()");
+            }
+        } else if value_str.starts_with('&') {
+            let base = value_str
+                .strip_prefix('&')
+                .map(str::trim_start)
+                .unwrap_or(value_str.as_str());
+            *value_str = format!("{}.clone()", base);
         } else {
             *value_str = format!("{}.clone()", *value_str);
         }
