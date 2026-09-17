@@ -58,6 +58,7 @@ Definition of done per row:
 |---|---|---|---|
 | `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `assert_stdlib_runtime_links` → `sync::unbounded` (not raw mpsc) |
 | `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `sync::shared` / `shared_add` / `shared_get` |
+| `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | 🆕 RED | Hot `Counter` for `wj-sync` (runtime re-export) |
 
 ## Run
 
