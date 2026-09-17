@@ -17,6 +17,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Applies to locals **and** parameters (parameters were incorrectly skipped before).
     pub(crate) fn precompute_for_loop_borrows(&mut self, body: &[&'ast Statement<'ast>]) {
         self.for_loop_borrow_needed.clear();
+        self.for_loop_field_owner_borrow_needed.clear();
         let mut counts: HashMap<String, usize> = HashMap::new();
         Self::count_for_loop_iterable_identifiers(body, &mut counts);
         self.precompute_for_loop_borrows_walk(body, 0, &counts);
@@ -154,6 +155,16 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Expression::Identifier { name, .. } = iterable {
                     if Self::variable_used_in_statements(&stmts[i + 1..], name) {
                         self.for_loop_borrow_needed.insert(name.clone());
+                    }
+                }
+                if let Expression::FieldAccess { object, .. } = iterable {
+                    if let Expression::Identifier { name, .. } = &**object {
+                        if name != "self"
+                            && Self::variable_used_in_statements(&stmts[i + 1..], name)
+                        {
+                            self.for_loop_field_owner_borrow_needed
+                                .insert(name.clone());
+                        }
                     }
                 }
             }

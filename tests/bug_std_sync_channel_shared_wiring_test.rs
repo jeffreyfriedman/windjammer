@@ -11,10 +11,11 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — `std::sync` channel + Shared graduation target for `wj-sync`.
+//! FAILING REPRO — idiomatic `std::sync` channel + Shared for `wj-sync` graduation.
 //!
-//! Ecosystem package is the reference (generics-first). Std should grow:
-//! `unbounded` / `send` / `recv` / `Shared` / `wait` vocabulary (not Arc/Mutex).
+//! Runtime today re-exports Rust `mpsc` / Arc / Mutex helpers (`channel`, `mutex`).
+//! Target vocabulary: `unbounded` / `send` / `recv` / `shared` (no Arc/Mutex in WJ).
+//! Use `assert_stdlib_runtime_links` so substring-only checks cannot false-green.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -24,7 +25,7 @@ use std::sync
 
 pub fn ping() -> int {
     let pair = sync.unbounded()
-    let tx = sync.send(pair.0, 42)
+    let _tx = sync.send(pair.0, 42)
     let got = sync.recv(pair.1)
     match got.1 {
         Some(v) => v,
@@ -45,20 +46,20 @@ pub fn bump() -> int {
 
 #[test]
 fn std_sync_unbounded_channel_must_wire() {
-    let generated = test_utils::compile_single(CHANNEL);
-    assert!(
-        !generated.contains("compile_error!")
-            && (generated.contains("unbounded") || generated.contains("sync::")),
-        "std::sync.unbounded/send/recv must wire for wj-sync graduation:\n{generated}"
+    // Prefer WJ vocabulary needles once std/sync.wj exists; until then cargo check must fail.
+    test_utils::assert_stdlib_runtime_links(
+        CHANNEL,
+        &[
+            "windjammer_runtime::sync::unbounded",
+            // interim: accept channel() only after std wraps it as unbounded
+        ],
     );
 }
 
 #[test]
 fn std_sync_shared_must_wire() {
-    let generated = test_utils::compile_single(SHARED);
-    assert!(
-        !generated.contains("compile_error!")
-            && (generated.contains("shared") || generated.contains("sync::")),
-        "std::sync.shared must wire for wj-sync graduation:\n{generated}"
+    test_utils::assert_stdlib_runtime_links(
+        SHARED,
+        &["windjammer_runtime::sync::shared"],
     );
 }

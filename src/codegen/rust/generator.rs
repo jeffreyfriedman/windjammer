@@ -161,6 +161,8 @@ pub struct CodeGenerator<'ast> {
     // FOR-LOOP AUTO-BORROW: Track local variables that need `&` in for-loops
     // because they are used after the loop (pre-computed per function body)
     pub(crate) for_loop_borrow_needed: std::collections::HashSet<String>,
+    /// `for x in owner.field` when `owner` is used in later statements in the same block (P3.321).
+    pub(crate) for_loop_field_owner_borrow_needed: std::collections::HashSet<String>,
     // BORROWED ITERATOR VARIABLES: Track variables that are iterating over borrowed collections
     // These variables are references, so accessing their fields requires .clone()
     pub(crate) borrowed_iterator_vars: std::collections::HashSet<String>,
@@ -647,6 +649,7 @@ impl<'ast> CodeGenerator<'ast> {
             suppress_string_conversion: Cell::new(false),
             coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
+            for_loop_field_owner_borrow_needed: std::collections::HashSet::new(),
             borrowed_iterator_vars: std::collections::HashSet::new(),
             mut_borrowed_iterator_vars: std::collections::HashSet::new(),
             upgrade_get_to_get_mut: false,

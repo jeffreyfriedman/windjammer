@@ -160,9 +160,13 @@ impl<'ast> CodeGenerator<'ast> {
             if name == "self" {
                 return false;
             }
-            return Self::variable_used_in_statements(body, name)
-                && !self.inferred_borrowed_params.contains(name)
-                && !self.inferred_mut_borrowed_params.contains(name);
+            if self.inferred_borrowed_params.contains(name)
+                || self.inferred_mut_borrowed_params.contains(name)
+            {
+                return false;
+            }
+            return self.for_loop_field_owner_borrow_needed.contains(name)
+                || Self::variable_used_in_statements(body, name);
         }
         false
     }

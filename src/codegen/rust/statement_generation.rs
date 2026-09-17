@@ -89,7 +89,11 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Int-width hint from a function return type for untyped `let x = 0` bindings.
     /// Peels `Result`/`Option` so `-> Result<int, E>` keeps WJ `int` (i64), not i32.
-    pub(in crate::codegen::rust) fn int_width_hint_from_return_type(ret_ty: &Type) -> Type {
+    ///
+    /// When the return is a user struct whose fields include WJ `int`/`i64` (e.g.
+    /// `Rfc3339`), prefer `Int` so month/year counters stay i64 (P3.329) — not the
+    /// coordinate-default `Int32` used for opaque Custom returns.
+    pub(in crate::codegen::rust) fn int_width_hint_from_return_type(&self, ret_ty: &Type) -> Type {
         match Self::peel_option_result_payload(ret_ty) {
             Type::Int32 => Type::Int32,
             Type::Int => Type::Int,
@@ -103,9 +107,22 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 Type::Custom(name.clone())
             }
+            Type::Custom(name) if self.struct_fields_include_wj_int(name) => Type::Int,
             // Non-int return (e.g. VoxelGrid): prefer i32 for coordinate locals.
             _ => Type::Int32,
         }
+    }
+
+    /// True when a named struct has at least one WJ `int` / `i64` field.
+    pub(in crate::codegen::rust) fn struct_fields_include_wj_int(&self, struct_name: &str) -> bool {
+        let base = struct_name.split('<').next().unwrap_or(struct_name);
+        let Some(fields) = self.lookup_struct_field_types(base) else {
+            return false;
+        };
+        fields.values().any(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+        })
     }
 
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.

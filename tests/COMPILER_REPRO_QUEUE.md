@@ -283,7 +283,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **demoted `&Vec<u32>` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned record-batch ctor must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
 | P1 | **demoted `&Vec` return → owned `Vec` must clone (federation)** | `bug_wdb243_module_file_demoted_vec_return_into_owned_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-205 |
-| P1 | **`for x in parent.field` then use `parent` partial-moves Vec** | `bug_module_file_for_in_struct_vec_field_must_not_partial_move_parent_test` | 🆕 RED / filed (P3.321); LedgerKit payment alloc interim `.clone()` |
+| P1 | **`for x in parent.field` then use `parent` partial-moves Vec** | `bug_module_file_for_in_struct_vec_field_must_not_partial_move_parent_test` | ✅ tip GREEN (P3.321); borrow field when owner used after loop |
 | P1 | **`vec.len() > 0` uint/int mix** | `bug_module_file_vec_len_gt_zero_must_not_mix_uint_int_test` | ✅ tip GREEN (P3.322); product used `is_empty()` interim |
 | P1 | **`for x in (cx - r - 2)..(cx + r + 2)` i32 bounds must not split i64/i32** | `bug_i32_range_bounds_sub_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.318); twin P3.313 |
 | P1 | **`inbound.clone()` → demoted `pg_wire_frame_total_len` must borrow** | `bug_wdb238_module_file_owned_inbound_clone_into_demoted_frame_total_len_must_borrow_test` | ✅ tip GREEN (P3.316) — owned formal + clone OK |
@@ -1132,10 +1132,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Gate | Status |
 |------|--------|
-| `bug_module_file_for_in_struct_vec_field_must_not_partial_move_parent_test` | ❌ tip RED (2026-09-16) — E0382 after `for a in payment.allocations` |
-| Product interim | ✅ `payment.allocations.clone()` in postgres_payment_repository (tip api-check GREEN) |
+| `bug_module_file_for_in_struct_vec_field_must_not_partial_move_parent_test` | ✅ tip GREEN (2026-09-17) — `&parent.field` when owner used after loop |
+| Product interim | removable — drop `payment.allocations.clone()` in LedgerKit when convenient |
 
-**Compiler agent:** `for x in parent.field` on `Vec<T>` should borrow/clone for iteration when `parent` is used afterward — do not IntoIterator-move the field alone.
+**Fix:** precompute `for_loop_field_owner_borrow_needed` (sibling use after `for`) + `field_iterable_needs_borrow_when_owner_used_in_body`.
 
 ## P3.322 (2026-09-16) — `vec.len() > 0` uint/int
 
