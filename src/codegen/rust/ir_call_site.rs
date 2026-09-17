@@ -1463,10 +1463,10 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr)
         {
             prepared_arg = prepared_arg.trim_end_matches(".clone()").to_string();
-        } else if prepared_arg.ends_with(".clone()") && matches!(kind, CoercionKind::Borrow) {
-            // Other shared-ref targets: `.clone()` is already owned — never prefix `&`.
-            kind = CoercionKind::Identity;
         }
+        // NOTE: do NOT demote Borrow→Identity on `.clone()` for other shared-ref
+        // formals (WDB-222/247/249). Auto-clone leaves `map.clone()` while expected
+        // is `&Map`; keep Borrow and let the strip below peel to `&map`.
         if matches!(kind, CoercionKind::Clone) {
             let formal_ty = sig
                 .formal_param_type(param_idx)

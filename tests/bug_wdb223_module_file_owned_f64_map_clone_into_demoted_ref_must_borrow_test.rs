@@ -52,24 +52,21 @@ fn wdb223_tip_out_pagerank_must_borrow_owned_f64_map_into_demoted_get() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let map_paths = [
-        tip.join("graph_vertex_map.rs"),
-        gen.join("graph/graph_vertex_map.rs"),
-    ];
-    let mut demoted = false;
-    for path in &map_paths {
-        if !path.exists() {
-            continue;
-        }
-        let text = std::fs::read_to_string(path).expect("vertex_map");
-        if text.contains("fn graph_vertex_f64_get(map: &GraphVertexF64Map") {
-            demoted = true;
-            break;
-        }
-    }
-    assert!(demoted, "WDB-223: demoted &GraphVertexF64Map get formal missing");
-
     // Prefer tip-out when present (gen may lag behind tip multipass).
+    let map_path = if tip.join("graph_vertex_map.rs").exists() {
+        tip.join("graph_vertex_map.rs")
+    } else {
+        gen.join("graph/graph_vertex_map.rs")
+    };
+    assert!(map_path.exists(), "WDB-223: graph_vertex_map missing");
+    let map_text = std::fs::read_to_string(&map_path).expect("vertex_map");
+    let demoted_get = map_text.contains("fn graph_vertex_f64_get(map: &GraphVertexF64Map");
+    let demoted_sum = map_text.contains("fn graph_vertex_f64_sum(map: &GraphVertexF64Map");
+    assert!(
+        demoted_get,
+        "WDB-223: demoted &GraphVertexF64Map get formal missing"
+    );
+
     let engine_paths = if tip.join("graph_pagerank_engine.rs").exists() {
         vec![tip.join("graph_pagerank_engine.rs")]
     } else {
@@ -82,11 +79,21 @@ fn wdb223_tip_out_pagerank_must_borrow_owned_f64_map_into_demoted_get() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("pagerank");
-        let bad = text.contains("graph_vertex_f64_get(self.scores.clone(),")
-            || text.contains("graph_vertex_f64_get(scores.clone(),")
-            || text.contains("graph_vertex_f64_sum(self.scores.clone(),")
-            || text.contains("graph_vertex_f64_sum(scores.clone(),");
-        eprintln!("WDB-223 bad={} path={}", bad, path.display());
+        let bad_get = demoted_get
+            && (text.contains("graph_vertex_f64_get(self.scores.clone(),")
+                || text.contains("graph_vertex_f64_get(scores.clone(),"));
+        // Tip may keep sum Owned (`map: GraphVertexF64Map`) — clone is then required.
+        let bad_sum = demoted_sum
+            && (text.contains("graph_vertex_f64_sum(self.scores.clone(),")
+                || text.contains("graph_vertex_f64_sum(scores.clone(),"));
+        let bad = bad_get || bad_sum;
+        eprintln!(
+            "WDB-223 demoted_get={} demoted_sum={} bad={} path={}",
+            demoted_get,
+            demoted_sum,
+            bad,
+            path.display()
+        );
         assert!(
             !bad,
             "WDB-223 RED: tip-out/product passes owned f64 map.clone() into demoted &GraphVertexF64Map. {}",
