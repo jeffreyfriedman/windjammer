@@ -601,6 +601,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Clear ONCE at function start (before any analysis)
         self.usize_variables.clear();
+        self.literal_init_wj_int_loop_counters.clear();
+        self.explicit_wj_int_annotated_locals.clear();
 
         // When a parameter is declared as `usize`, add it to usize_variables
         // so expression_produces_usize() correctly identifies it

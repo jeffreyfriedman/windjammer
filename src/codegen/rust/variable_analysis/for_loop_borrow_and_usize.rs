@@ -479,11 +479,15 @@ impl<'ast> CodeGenerator<'ast> {
         match stmt {
             Statement::Let {
                 pattern,
+                type_,
                 value,
                 else_block,
                 ..
             } => {
                 if let Pattern::Identifier(name) = pattern {
+                    if let Some(t) = type_ {
+                        self.local_var_types.insert(name.clone(), t.clone());
+                    }
                     let is_usize = self.expression_produces_usize(value)
                         || self.infer_expression_type_is_usize(value)
                         || matches!(value, Expression::MethodCall { method, .. } if method == "len");
