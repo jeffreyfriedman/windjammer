@@ -1,4 +1,4 @@
-// P3.333: type aliases referencing generic structs must emit after the struct.
+// P3.339: type aliases referencing generic structs must emit after the struct.
 pub struct Shared<T> {
     n: T,
 }

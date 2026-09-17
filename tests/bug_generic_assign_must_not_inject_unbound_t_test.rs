@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.334: assigning `send(...)` / `shared_int(...)` must not inject
+//! P3.342: assigning `send(...)` / `shared_int(...)` must not inject
 //! `let mut x: Sender<T>` (unbound T) or `Shared<i64>` without imports.
 //! Blocks `wj test` for generics-first wj-sync even when the library cargo-checks.
 
@@ -62,10 +62,10 @@ fn generic_assign_must_not_inject_unbound_sender_t() {
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     // Also check any sibling if multipass splits — primary is lib.rs for single file.
     if bad_annotation(&generated) {
-        eprintln!("P3.334 RED (snippet):\n{}", &generated[..generated.len().min(2000)]);
+        eprintln!("P3.342 RED (snippet):\n{}", &generated[..generated.len().min(2000)]);
     }
     assert!(
         !bad_annotation(&generated),
-        "RED P3.334: must not inject unbound Sender<T> on assign:\n{generated}"
+        "RED P3.342: must not inject unbound Sender<T> on assign:\n{generated}"
     );
 }
