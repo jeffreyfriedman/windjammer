@@ -21,6 +21,7 @@ RED_FILTERS=(
   module_file_spawn_move_in_worker_loop_must_be_preserved
   mut_owned_vec_u8_return_must_not_demote_to_ref
   int_find_pos_ge_zero_must_not_mix_usize_i64
+  int_mod_literal_zero_compare_must_not_split_i64_i32
   module_file_shared_map_get_must_borrow_key
   wdb225_tip_out_ldbc_must_not_pass_string_from
   wdb226_tip_out_cdlp_must_borrow_owned_u32_map
