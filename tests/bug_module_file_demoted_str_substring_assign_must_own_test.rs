@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.321: demoted `&str` formal + `let mut core = text` (clone to String) then
+//! P3.325: demoted `&str` formal + `let mut core = text` (clone to String) then
 //! `core = strings.substring(...)` must own the substring (`.to_string()`), not
 //! assign `&str` into `String` (`wj-semver` split_build / split_pre).
 //!
@@ -84,11 +84,11 @@ fn module_file_demoted_str_substring_assign_must_own() {
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     if bad_substring_into_string(&generated) {
-        eprintln!("P3.321 RED:\n{generated}");
+        eprintln!("P3.325 RED:\n{generated}");
     }
     assert!(
         !bad_substring_into_string(&generated),
-        "RED P3.321: substring into owned String local must .to_string() when formal is &str:\n{generated}"
+        "RED P3.325: substring into owned String local must .to_string() when formal is &str:\n{generated}"
     );
 
     let check = Command::new("cargo")

@@ -106,10 +106,13 @@ fn wdb236_tip_out_lsqb_must_borrow_string_keys_into_hashmap_get() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let paths = [
-        tip.join("lsqb_typed_graph.rs"),
-        gen.join("graph/lsqb_typed_graph.rs"),
-    ];
+    // Prefer tip-out when present — gen lag must not poison tip truth.
+    let tip_path = tip.join("lsqb_typed_graph.rs");
+    let paths = if tip_path.exists() {
+        vec![tip_path]
+    } else {
+        vec![gen.join("graph/lsqb_typed_graph.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {

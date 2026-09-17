@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.322: usize index `start = i + 1` (then used as substring start) must not
+//! P3.326: usize index `start = i + 1` (then used as substring start) must not
 //! emit `i + 1_usize as i64` / `as i32` (`wj-toml` array/table scanners).
 //!
 //! Related: P3.300/315 substring end width; this is assign of `i+1` into usize.
@@ -73,11 +73,11 @@ fn module_file_usize_i_plus_one_assign_must_stay_usize() {
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     if bad_i_plus_one_cast(&generated) {
-        eprintln!("P3.322 RED:\n{generated}");
+        eprintln!("P3.326 RED:\n{generated}");
     }
     assert!(
         !bad_i_plus_one_cast(&generated),
-        "RED P3.322: usize start = i + 1 must stay usize width:\n{generated}"
+        "RED P3.326: usize start = i + 1 must stay usize width:\n{generated}"
     );
 
     let check = Command::new("cargo")
