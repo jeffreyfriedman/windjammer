@@ -281,11 +281,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **`&mut vertices.clone()` → demoted `&mut Vec` init_scores must reborrow** | `bug_wdb257_module_file_mut_ref_vec_clone_into_demoted_init_scores_must_reborrow_test` | 🆕 RED / filed (P3.340) |
 | P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
-| P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | 🆕 RED / filed (P3.343) |
+| P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ✅ tip GREEN (P3.343) — small literal ranges bind i32 + peer arith |
+| P1 | **void `while i < seg` after if/else i32 clamp must not emit `_i64`** | `bug_module_file_void_while_i32_seg_counter_must_not_emit_i64_test` | ✅ tip GREEN (P3.345) — if/else seg bind i32 |
 | P1 | **CDLP `&vertices` → owned `init_identity` must clone** | `bug_wdb259_module_file_demoted_vec_into_owned_init_identity_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241 |
 | P1 | **PageRank `&Vec` → owned `f64_sum` vertices must clone** | `bug_wdb260_module_file_demoted_vec_into_owned_f64_sum_vertices_must_clone_test` | 🆕 RED / filed (P3.341); twin WDB-241/259 |
-| P1 | **LCC `&offsets`/`&tri` → owned simd bind must clone** | `bug_wdb261_module_file_demoted_vec_into_owned_simd_lcc_bind_must_clone_test` | 🆕 RED / filed (P3.343); twin WDB-241 |
-| P1 | **wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle must reborrow** | `bug_wdb262_module_file_owned_into_demoted_mut_wave1_fill_bundle_must_reborrow_test` | 🆕 RED / filed (P3.343); twin WDB-257; gen lag |
+| P1 | **LCC `&offsets`/`&tri` → owned simd bind must clone** | `bug_wdb261_module_file_demoted_vec_into_owned_simd_lcc_bind_must_clone_test` | 🆕 RED / filed (P3.344); twin WDB-241 |
+| P1 | **wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle must reborrow** | `bug_wdb262_module_file_owned_into_demoted_mut_wave1_fill_bundle_must_reborrow_test` | 🆕 RED / filed (P3.344); twin WDB-257; gen lag |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -370,10 +371,29 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Gate | Status |
 |------|--------|
-| `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ❌ tip RED (2026-09-17) — `(dx + dz) % 2_i64 == 0_i64` |
+| `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ✅ tip GREEN (2026-09-17) |
 | Ecosystem | `component_viewer_controls` vents/checker nested `for dy in 0..3` |
 
-**Compiler agent:** i32 range loop counters must keep compare/mod/add literals in i32 width — never `_i64` peers.
+**Root cause layer:** codegen int-width — pure `0..N` ranges (bool-returning fns) never entered `function_returns_i32_for_loop_scan`, so counters stayed WJ `int` and peers defaulted to `_i64`.
+
+**Fix:** bind small literal-only ranges as `Int32` + `codegen_i32_binding_names`; peer-type recurse through arith/mod so `(dx + dz) % 2 == 0` stays i32.
+
+**What became unnecessary:** `_i64` compare/mod/add literals beside i32 range counters.
+
+**Gates:** `cargo test --test all --features integration_tests -- i32_nested_range_eq_mod_literals_must_not_emit_i64` (+ sibling i32 range gates) → pass.
+
+## P3.345 (2026-09-17) — void impl `while i < seg` after if/else i32 clamp emits `_i64`
+
+| Gate | Status |
+|------|--------|
+| `bug_module_file_void_while_i32_seg_counter_must_not_emit_i64_test` | ✅ tip GREEN (2026-09-17) |
+| Ecosystem | `debug_renderer.draw_circle_xz` `let seg = if segments < 4 { 4 } else { segments }` |
+
+**Root cause layer:** codegen int-width — block-tailed if/else lets in void methods never registered `codegen_i32_binding_names`, so `i + 1` defaulted to `_i64`.
+
+**Fix:** detect if/else branches that are i32-width (literal + i32 formal/binding); bind `Int32` + `codegen_i32_binding_names` on the let name.
+
+**Gates:** `cargo test --test all --features integration_tests -- module_file_void_while_i32_seg_counter_must_not_emit_i64` → pass.
 
 ## P3.342 (2026-09-17) — assign generic `send` injects unbound `Sender<T>`
 
@@ -1176,7 +1196,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
-## P3.343 WindjammerDB CQ-C5 — coverage REDs WDB-261/262 LCC simd &Vec→owned + wave1 fill_bundle &mut (2026-09-17)
+## P3.344 WindjammerDB CQ-C5 — coverage REDs WDB-261/262 LCC simd &Vec→owned + wave1 fill_bundle &mut (2026-09-17)
 
 | Gate | Status |
 |------|--------|

@@ -142,6 +142,46 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
 
+    /// P3.345: `let seg = if segments < 4 { 4 } else { segments }` in void methods must
+    /// register as i32 so `while i < seg` promotes the literal-init counter.
+    pub(in crate::codegen::rust) fn if_else_binding_should_be_i32(
+        &self,
+        then_branch: &Expression<'ast>,
+        else_branch: &Expression<'ast>,
+    ) -> bool {
+        self.if_branch_is_i32_width(then_branch) && self.if_branch_is_i32_width(else_branch)
+    }
+
+    fn if_branch_is_i32_width(&self, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } => *n >= 0,
+            Expression::Identifier { name, .. } => self.identifier_is_i32_formal_or_binding(name),
+            Expression::Cast { type_, .. } => {
+                matches!(type_, Type::Int32) || matches!(type_, Type::Custom(n) if n == "i32")
+            }
+            _ => self.int_type_for_mixed_int_codegen(expr) == IntType::I32,
+        }
+    }
+
+    fn identifier_is_i32_formal_or_binding(&self, name: &str) -> bool {
+        if self.codegen_i32_binding_names.contains(name) {
+            return true;
+        }
+        if self.local_var_types.get(name).is_some_and(|t| {
+            matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+        }) {
+            return true;
+        }
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(p.type_, Type::Int32)
+                    || matches!(&p.type_, Type::Custom(n) if n == "i32"))
+        })
+    }
+
     fn expression_has_i32_width_in_tree(&self, expr: &Expression<'ast>) -> bool {
         match expr {
             Expression::Identifier { name, .. } => {
@@ -304,8 +344,22 @@ impl<'ast> CodeGenerator<'ast> {
             if self.usize_variables.contains(name) {
                 return Some(Type::Custom("usize".into()));
             }
+            if self.codegen_i32_binding_names.contains(name) {
+                return Some(Type::Int32);
+            }
             if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
                 return Self::parser_type_from_rust_int_name(w);
+            }
+        }
+        if let Expression::Binary { left, right, op, .. } = expr {
+            use crate::parser::BinaryOp;
+            if matches!(
+                op,
+                BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+            ) {
+                return self
+                    .peer_type_for_int_literal_operand(left)
+                    .or_else(|| self.peer_type_for_int_literal_operand(right));
             }
         }
         if self.infer_expression_type_is_usize(expr) {

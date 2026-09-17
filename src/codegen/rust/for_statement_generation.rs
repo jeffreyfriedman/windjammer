@@ -419,7 +419,10 @@ impl<'ast> CodeGenerator<'ast> {
                             .filter(|t| Self::assignment_target_needs_int_codegen_context(t))
                     })
                 {
-                    self.local_var_types.insert(var.clone(), bound_ty);
+                    self.local_var_types.insert(var.clone(), bound_ty.clone());
+                    if matches!(bound_ty, Type::Int32) {
+                        self.codegen_i32_binding_names.insert(var.clone());
+                    }
                 }
             }
         }
@@ -520,7 +523,20 @@ impl<'ast> CodeGenerator<'ast> {
         start: &Expression<'ast>,
         end: &Expression<'ast>,
     ) -> Option<Type> {
+        use crate::parser::Literal;
         use crate::type_inference::IntType;
+        let small_int_literal = |expr: &Expression<'ast>| {
+            matches!(
+                expr,
+                Expression::Literal {
+                    value: Literal::Int(n),
+                    ..
+                } if (0..=4096).contains(n)
+            )
+        };
+        if small_int_literal(start) && small_int_literal(end) {
+            return Some(Type::Int32);
+        }
         let start_it = self.int_type_for_mixed_int_codegen(start);
         let end_it = self.int_type_for_mixed_int_codegen(end);
         if matches!(start_it, IntType::I32) || matches!(end_it, IntType::I32) {
