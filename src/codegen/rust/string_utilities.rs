@@ -169,6 +169,14 @@ pub fn coerce_expr_to_owned_string(expr_str: &str) -> String {
     {
         s = inner;
     }
+    // P3.329: strip shared refs before owning — `&parts[i].to_string()` is still `&String`.
+    while let Some(rest) = s.strip_prefix('&') {
+        let rest = rest.trim_start();
+        if rest.starts_with("mut ") {
+            break;
+        }
+        s = rest.to_string();
+    }
     // Normalize `String::from("…").to_string()` → `String::from("…")`.
     if let Some(base) = s.strip_suffix(".to_string()") {
         let base = base.trim();

@@ -30,9 +30,23 @@ impl<'ast> CodeGenerator<'ast> {
         ) {
             return true;
         }
+        // WJ `int` identifiers are i64. Preferring i32 splits `month <= 12` / `n > 0`
+        // (P3.329 / P3.336). Soft-promoted while counters are already Type::Int32.
+        if let Expression::Identifier { name, .. } = i64_side {
+            if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+                || matches!(
+                    self.local_var_types.get(name.as_str()),
+                    Some(Type::Custom(n)) if n == "int" || n == "i64"
+                )
+            {
+                return false;
+            }
+        }
         if self.expression_promotes_to_i32_in_compare(i32_side) {
             if let Expression::Identifier { name, .. } = i64_side {
-                if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int)) {
+                if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+                }) {
                     return true;
                 }
             }
@@ -77,6 +91,25 @@ impl<'ast> CodeGenerator<'ast> {
         // still recorded WJ `Int` (String/bool return width hint). Treat as usize.
         if self.explicit_wj_int_annotated_locals.contains(name) {
             return;
+        }
+        // P3.329: Call/MethodCall WJ `int` results must not become usize via later
+        // substring formals (`let plus_pos = find_tz_sign(...)`).
+        if matches!(value, Expression::Call { .. } | Expression::MethodCall { .. }) {
+            let signed_ret = self.infer_expression_type(value).as_ref().is_some_and(|t| {
+                matches!(t, Type::Int | Type::Int32)
+                    || matches!(
+                        t,
+                        Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "i32")
+                    )
+            });
+            if signed_ret {
+                if emitted_rhs.ends_with("_i32")
+                    || self.int_type_for_mixed_int_codegen(value) == IntType::I32
+                {
+                    self.local_var_types.insert(name.to_string(), Type::Int32);
+                }
+                return;
+            }
         }
         if emitted_rhs.ends_with("_usize")
             || self.int_type_for_mixed_int_codegen(value) == IntType::Usize
@@ -131,11 +164,29 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) else {
             return;
         };
-        if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
-            && self.literal_init_wj_int_loop_counters.contains(&name)
+        if !matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+            || !self.literal_init_wj_int_loop_counters.contains(&name)
         {
-            self.local_var_types.insert(name, Type::Int32);
+            return;
         }
+        // P3.329: int-/struct-int returns already chose WJ `int` (i64) at the let.
+        if let Some(ret_ty) = &self.current_function_return_type {
+            let peeled = Self::peel_option_result_payload(ret_ty);
+            match peeled {
+                Type::Int | Type::Int32 | Type::Uint => return,
+                Type::Custom(n)
+                    if matches!(
+                        n.as_str(),
+                        "int" | "i64" | "i32" | "u32" | "u64" | "usize"
+                    ) =>
+                {
+                    return;
+                }
+                Type::Custom(n) if self.struct_fields_include_wj_int(n) => return,
+                _ => {}
+            }
+        }
+        self.local_var_types.insert(name, Type::Int32);
     }
 
 

@@ -175,6 +175,16 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         Some(Type::Custom(name.to_string()))
                     }
+                    // P3.329: `let mut i = clock_end` when binding/RHS is a usize index counter.
+                    Expression::Identifier { name: rhs_name, .. } => {
+                        if self.usize_variables.contains(name)
+                            || self.usize_variables.contains(rhs_name)
+                        {
+                            Some(Type::Custom("usize".into()))
+                        } else {
+                            self.infer_expression_type(value)
+                        }
+                    }
                     // Literal types: untyped `let x = 25` follows enclosing return width
                     // (WDB-081 / P3.280). Bool/string returns keep WJ `int` so loop counters
                     // `i = i + 1` stay i64 (not `+= 1 as i32`). Custom/struct returns still
@@ -192,7 +202,7 @@ impl<'ast> CodeGenerator<'ast> {
                         } else if let Some(ret_ty) = &self.current_function_return_type {
                             // Peel Result/Option so `-> Result<int, string>` keeps i64
                             // accumulators (P3.317), not coordinate-default Int32.
-                            Some(Self::int_width_hint_from_return_type(ret_ty))
+                            Some(self.int_width_hint_from_return_type_resolved(ret_ty))
                         } else {
                             Some(Type::Int)
                         }
@@ -488,7 +498,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if Self::assignment_target_needs_int_codegen_context(ret_ty) {
                             // Store peeled int width (not Result/Option wrapper).
                             self.assignment_int_target_type =
-                                Some(Self::int_width_hint_from_return_type(ret_ty));
+                                Some(self.int_width_hint_from_return_type_resolved(ret_ty));
                         }
                     }
                 }

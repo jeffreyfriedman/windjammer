@@ -299,7 +299,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
 | P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | 🆕 RED / filed (P3.331); blocks generic `wj-sync` channels |
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | 🆕 RED / filed (P3.332); blocks generic `wj-sync` channels |
-| P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | 🆕 RED / filed (P3.329); blocks tip `wj-timefmt` |
+| P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ✅ tip GREEN (P3.329) |
 | P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | ✅ tip GREEN (P3.325) — tuple Result return owns demoted bind |
 | P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ✅ tip GREEN (P3.326) — reconcile `_usize` emit vs Int local |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
@@ -376,11 +376,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Change | Status |
 |--------|--------|
-| Ecosystem: `wj-timefmt` | ❌ tip RED |
-| Gate `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ❌ tip RED (2026-09-16) |
-| Note | Slim month-loop isolates tip GREEN; full package multipass still emits `12_i32 as i32` and `&parts[1].to_string()` |
+| Ecosystem: `wj-timefmt` | ✅ tip GREEN (2026-09-17) |
+| Gate `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ✅ tip GREEN (2026-09-17) |
 
-**Compiler agent:** keep `month <= 12` in i64 when `month: int`; pass owned `parts[i]` into owned `string` formals — never `&….to_string()`.
+**Root cause layer:** constraint/solver (int-width from struct-int return) + coercion (owned string index) + temporary reconcile narrow
+- Struct returns with WJ `int` fields → `int_width_hint_from_return_type_resolved` keeps i64 locals (`month`).
+- Do not prefer i32 over Type::Int identifiers; skip while-promote for struct-int returns.
+- Call `int` results (`plus_pos = find_*`) must not reconcile to usize; cast at usize formals.
+- `coerce_expr_to_owned_string` / vec-index fixup emit `parts[i].to_string()` (strip `&`).
+- Usize init-source prepass: `let mut i = clock_end` inherits usize from `while i < len`.
+
+**What became unnecessary:** `&parts[i].to_string()` peel; i32 prefer over WJ `int` idents.
+
+**Gates:** `cargo test --release --test all -- module_file_timefmt_product_must_not_mix int_mod_literal_zero_compare i32_inferred_loop_counter int_find_pos_ge_zero`
 
 ## P3.327 (2026-09-16) — u32 ± int literal must not emit `_u64`
 
