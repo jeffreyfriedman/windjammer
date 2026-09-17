@@ -1,0 +1,330 @@
+use std::strings
+use std::time
+
+/// Current UTC time as RFC3339 text (thin-wraps `std::time.utc_now().to_rfc3339`).
+pub fn now_rfc3339() -> string {
+    time.utc_now().to_rfc3339()
+}
+
+/// Current UTC Unix epoch seconds (thin-wraps `std::time.utc_now().timestamp`).
+pub fn now_epoch_secs() -> int {
+    time.utc_now().timestamp() as int
+}
+
+/// RFC3339 timestamp with timezone offset.
+pub struct Rfc3339 {
+    pub year: int,
+    pub month: int,
+    pub day: int,
+    pub hour: int,
+    pub minute: int,
+    pub second: int,
+    pub offset_minutes: int,
+}
+
+/// Parse `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTHH:MM:SS+HH:MM` / `-HH:MM`.
+pub fn parse_rfc3339(text: string) -> Result<Rfc3339, string> {
+    let s = strings.trim(text)
+    if strings.len(s) == 0 {
+        return Err("empty timestamp")
+    }
+    let parts = strings.split(s, "T")
+    if parts.len() != 2 {
+        return Err("expected dateTtime")
+    }
+    let date_part = parts[0]
+    let time_and_tz = parts[1]
+    match parse_date(date_part) {
+        Ok(d) => {
+            match split_time_tz(time_and_tz) {
+                Ok(pair) => {
+                    let clock_part = pair.0
+                    let offset_min = pair.1
+                    match parse_clock(clock_part) {
+                        Ok(c) => Ok(Rfc3339 {
+                            year: d.0,
+                            month: d.1,
+                            day: d.2,
+                            hour: c.0,
+                            minute: c.1,
+                            second: c.2,
+                            offset_minutes: offset_min,
+                        }),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Format as `YYYY-MM-DDTHH:MM:SSZ` or `+HH:MM` / `-HH:MM`.
+pub fn format_rfc3339(t: Rfc3339) -> string {
+    let date = "${pad4(t.year)}-${pad2(t.month)}-${pad2(t.day)}"
+    let clock = "${pad2(t.hour)}:${pad2(t.minute)}:${pad2(t.second)}"
+    let tz = format_offset(t.offset_minutes)
+    "${date}T${clock}${tz}"
+}
+
+/// Convert to epoch seconds (UTC), applying the offset.
+pub fn to_epoch_secs(t: Rfc3339) -> int {
+    let days = days_since_epoch(t.year, t.month, t.day)
+    let secs = (days * 86400) + (t.hour * 3600) + (t.minute * 60) + t.second
+    secs - (t.offset_minutes * 60)
+}
+
+/// Convert epoch seconds (UTC) to an Rfc3339 with offset 0 (Zulu).
+pub fn from_epoch_secs(epoch: int) -> Rfc3339 {
+    let mut rem = epoch
+    let mut year = 1970
+    let mut done = false
+    while !done {
+        let dy = days_in_year(year)
+        if rem < dy * 86400 {
+            done = true
+        } else {
+            rem = rem - (dy * 86400)
+            year = year + 1
+        }
+    }
+    let mut month = 1
+    let mut month_done = false
+    while month <= 12 && !month_done {
+        let dm = days_in_month(year, month)
+        if rem < dm * 86400 {
+            month_done = true
+        } else {
+            rem = rem - (dm * 86400)
+            month = month + 1
+        }
+    }
+    let day = (rem / 86400) + 1
+    rem = rem - ((day - 1) * 86400)
+    let hour = rem / 3600
+    rem = rem - (hour * 3600)
+    let minute = rem / 60
+    let second = rem - (minute * 60)
+    Rfc3339 { year: year, month: month, day: day, hour: hour, minute: minute, second: second, offset_minutes: 0 }
+}
+
+/// -1 if a < b, 0 if equal, 1 if a > b (compares UTC epoch).
+pub fn compare(a: Rfc3339, b: Rfc3339) -> int {
+    let ea = to_epoch_secs(a)
+    let eb = to_epoch_secs(b)
+    if ea < eb {
+        return -1
+    }
+    if ea > eb {
+        return 1
+    }
+    0
+}
+
+pub fn is_before(a: Rfc3339, b: Rfc3339) -> bool {
+    compare(a, b) < 0
+}
+
+pub fn is_after(a: Rfc3339, b: Rfc3339) -> bool {
+    compare(a, b) > 0
+}
+
+pub fn is_leap_year(year: int) -> bool {
+    if year % 400 == 0 {
+        return true
+    }
+    if year % 100 == 0 {
+        return false
+    }
+    year % 4 == 0
+}
+
+pub fn days_in_month(year: int, month: int) -> int {
+    if month == 2 {
+        if is_leap_year(year) {
+            return 29
+        }
+        return 28
+    }
+    if month == 4 || month == 6 || month == 9 || month == 11 {
+        return 30
+    }
+    31
+}
+
+fn days_in_year(year: int) -> int {
+    if is_leap_year(year) {
+        return 366
+    }
+    365
+}
+
+fn days_since_epoch(year: int, month: int, day: int) -> int {
+    let mut total = 0
+    let mut y = 1970
+    while y < year {
+        total = total + days_in_year(y)
+        y = y + 1
+    }
+    let mut m = 1
+    while m < month {
+        total = total + days_in_month(year, m)
+        m = m + 1
+    }
+    total + (day - 1)
+}
+
+fn split_time_tz(text: string) -> Result<(string, int), string> {
+    if strings.ends_with(text, "Z") {
+        let clock = strings.substring(text, 0, strings.len(text) - 1)
+        return Ok((clock, 0))
+    }
+    let plus_pos = find_tz_sign(text, "+")
+    if plus_pos >= 0 {
+        let clock = strings.substring(text, 0, plus_pos)
+        let tz = strings.substring(text, plus_pos + 1, strings.len(text))
+        match parse_tz_offset(tz) {
+            Ok(mins) => return Ok((clock, mins)),
+            Err(e) => return Err(e),
+        }
+    }
+    let minus_pos = find_last_minus(text)
+    if minus_pos >= 0 {
+        let clock = strings.substring(text, 0, minus_pos)
+        let tz = strings.substring(text, minus_pos + 1, strings.len(text))
+        match parse_tz_offset(tz) {
+            Ok(mins) => return Ok((clock, 0 - mins)),
+            Err(e) => return Err(e),
+        }
+    }
+    Err("missing timezone (Z or +/-HH:MM)")
+}
+
+fn find_tz_sign(text: string, sign: string) -> int {
+    let clock_end = 8
+    let mut i = clock_end
+    while i < strings.len(text) {
+        if strings.substring(text, i, i + 1) == sign {
+            return i
+        }
+        i = i + 1
+    }
+    -1
+}
+
+fn find_last_minus(text: string) -> int {
+    let clock_end = 8
+    let mut i = strings.len(text) - 1
+    while i >= clock_end {
+        if strings.substring(text, i, i + 1) == "-" {
+            return i
+        }
+        i = i - 1
+    }
+    -1
+}
+
+fn parse_tz_offset(tz: string) -> Result<int, string> {
+    let parts = strings.split(tz, ":")
+    if parts.len() != 2 {
+        return Err("bad offset format")
+    }
+    match parse_nonneg_int(parts[0]) {
+        Ok(h) => {
+            match parse_nonneg_int(parts[1]) {
+                Ok(m) => Ok(h * 60 + m),
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn format_offset(offset_minutes: int) -> string {
+    if offset_minutes == 0 {
+        return "Z"
+    }
+    let mut sign = "+"
+    let mut abs = offset_minutes
+    if offset_minutes < 0 {
+        sign = "-"
+        abs = 0 - offset_minutes
+    }
+    let h = abs / 60
+    let m = abs - (h * 60)
+    "${sign}${pad2(h)}:${pad2(m)}"
+}
+
+fn parse_date(date: string) -> Result<(int, int, int), string> {
+    let parts = strings.split(date, "-")
+    if parts.len() != 3 {
+        return Err("bad date")
+    }
+    match parse_nonneg_int(parts[0]) {
+        Ok(y) => {
+            match parse_nonneg_int(parts[1]) {
+                Ok(m) => {
+                    match parse_nonneg_int(parts[2]) {
+                        Ok(d) => Ok((y, m, d)),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn parse_clock(clock: string) -> Result<(int, int, int), string> {
+    let parts = strings.split(clock, ":")
+    if parts.len() != 3 {
+        return Err("bad time")
+    }
+    match parse_nonneg_int(parts[0]) {
+        Ok(h) => {
+            match parse_nonneg_int(parts[1]) {
+                Ok(m) => {
+                    match parse_nonneg_int(parts[2]) {
+                        Ok(s) => Ok((h, m, s)),
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn parse_nonneg_int(text: string) -> Result<int, string> {
+    if strings.len(text) == 0 {
+        return Err("empty number")
+    }
+    let n = strings.parse_i32(text) as int
+    if n < 0 {
+        return Err("negative number")
+    }
+    Ok(n)
+}
+
+fn pad2(n: int) -> string {
+    if n < 10 {
+        return "0${n}"
+    }
+    "${n}"
+}
+
+fn pad4(n: int) -> string {
+    if n < 10 {
+        return "000${n}"
+    }
+    if n < 100 {
+        return "00${n}"
+    }
+    if n < 1000 {
+        return "0${n}"
+    }
+    "${n}"
+}
