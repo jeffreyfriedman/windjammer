@@ -233,12 +233,19 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression,
     ) -> bool {
         if let Expression::Identifier { name, .. } = expr {
+            if self.codegen_i32_binding_names.contains(name)
+                || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+                })
+            {
+                return false;
+            }
             if self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                matches!(t, Type::Int | Type::Int32)
+                matches!(t, Type::Int)
                     || matches!(
                         t,
                         Type::Custom(n)
-                            if matches!(n.as_str(), "int" | "i64" | "i32" | "u32" | "u64")
+                            if matches!(n.as_str(), "int" | "i64" | "u32" | "u64")
                     )
             }) {
                 return true;
@@ -277,18 +284,22 @@ impl<'ast> CodeGenerator<'ast> {
             if it == IntType::Usize {
                 return false;
             }
-            return matches!(
-                it,
-                IntType::I8 | IntType::I16 | IntType::I32 | IntType::I64 | IntType::Isize
-            );
+            if matches!(it, IntType::I32 | IntType::U32 | IntType::Usize) {
+                return false;
+            }
+            return matches!(it, IntType::I8 | IntType::I16 | IntType::I64 | IntType::Isize);
         }
         false
     }
 
     fn type_is_signed_int_for_len_usize_comparison(t: &Type) -> bool {
         match t {
+            Type::Int32 => false,
             Type::Int => true,
             Type::Custom(name) => {
+                if name == "i32" {
+                    return false;
+                }
                 crate::type_classification::is_integer_type(name) && name.starts_with('i')
             }
             Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -315,6 +326,44 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
+    }
+
+    /// i32 counters vs `.len()`: cast len to `i32`, not `i64` (P3.338).
+    pub(in crate::codegen::rust) fn narrow_signed_width_for_len_compare(ty: &Type) -> Option<&'static str> {
+        match ty {
+            Type::Int32 => Some("i32"),
+            Type::Custom(name) if name == "i32" => Some("i32"),
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::narrow_signed_width_for_len_compare(inner.as_ref())
+            }
+            _ => None,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn expression_narrow_signed_width_for_len_compare(
+        &self,
+        expr: &Expression,
+    ) -> Option<&'static str> {
+        if let Expression::Identifier { name, .. } = expr {
+            if self.codegen_i32_binding_names.contains(name) {
+                return Some("i32");
+            }
+            if let Some(t) = self.local_var_types.get(name) {
+                if let Some(w) = Self::narrow_signed_width_for_len_compare(t) {
+                    return Some(w);
+                }
+            }
+        }
+        self.infer_expression_type(expr)
+            .as_ref()
+            .and_then(Self::narrow_signed_width_for_len_compare)
+            .or_else(|| {
+                if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::I32 {
+                    Some("i32")
+                } else {
+                    None
+                }
+            })
     }
 
     pub(in crate::codegen::rust) fn expression_unsigned_width_for_len_cast(

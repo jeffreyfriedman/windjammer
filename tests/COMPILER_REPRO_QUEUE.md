@@ -429,6 +429,21 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Gates:** `cargo test --release --test all -- int_mod_literal_zero_compare_must_not_split_i64_i32 i32_inferred_loop_counter_and_sentinel_priority_must_stay_i32 int_arith_must_not_split_i64_i32` → pass; LedgerKit `make api-check` GREEN.
 
 
+## P3.338 (2026-09-17) — i32 loop arith + `i < params.len()` must not emit i64 / `len() as i64`
+
+| Gate | Status |
+|------|--------|
+| `i32_loop_arith_and_len_compare_must_not_emit_i64` | ✅ tip GREEN (2026-09-17) |
+| Product track `j + 1` / scene `i < params.len()` / debug_draw `0..14` | ✅ i32 peers; `len() as i32` |
+
+**Root cause layer:** constraint/type-inference — `codegen_i32_binding_names` + narrow signed width for len compare (cast `.len()` to `i32`, not promote counter to i64 via unsigned-width path).
+
+**What became unnecessary:** Preferring `expression_unsigned_width_for_len_cast` (→ i64) when the compare peer is already an i32 binding.
+
+**Fix:** `expression_narrow_signed_width_for_len_compare`; for-range bind Int32 for all `-> i32` scan loops; while-condition peer promotion via `expression_has_i32_width_in_tree`; exclude Int32 from signed→usize len widen.
+
+**Gates:** `cargo test --release --test all -- i32_loop_arith_and_len_compare` → 1 passed.
+
 ## P3.337 (2026-09-17) — `-> i32` + `for i in 0..vec.len()` must cast len end (not widen start to usize)
 
 | Gate | Status |

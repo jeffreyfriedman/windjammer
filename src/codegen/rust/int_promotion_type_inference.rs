@@ -28,7 +28,8 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             }
         ) {
-            return true;
+            return self.expression_is_codegen_i32(i32_side)
+                || self.expression_promotes_to_i32_in_compare(i32_side);
         }
         // WJ `int` identifiers are i64. Preferring i32 splits `month <= 12` / `n > 0`
         // (P3.329 / P3.336). Soft-promoted while counters are already Type::Int32.
@@ -62,6 +63,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     pub(in crate::codegen::rust) fn expression_is_codegen_i32(&self, expr: &Expression<'ast>) -> bool {
         if let Expression::Identifier { name, .. } = expr {
+            if self.codegen_i32_binding_names.contains(name) {
+                return true;
+            }
             if self.local_var_types.get(name.as_str()).is_some_and(|t| {
                 matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
             }) {
@@ -137,6 +141,31 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+
+    fn expression_has_i32_width_in_tree(&self, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                self.codegen_i32_binding_names.contains(name)
+                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                        matches!(t, Type::Int32)
+                            || matches!(t, Type::Custom(n) if n == "i32")
+                    })
+                    || self.int_type_for_mixed_int_codegen(expr) == IntType::I32
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_i32_width_in_tree(left)
+                    || self.expression_has_i32_width_in_tree(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_has_i32_width_in_tree(operand),
+            Expression::Cast { expr, type_, .. } => {
+                matches!(type_, Type::Int32)
+                    || matches!(type_, Type::Custom(n) if n == "i32")
+                    || self.expression_has_i32_width_in_tree(expr)
+            }
+            _ => false,
+        }
+    }
+
     /// P3.323: untyped `let mut i = 0` + `while i < 4` — treat counter as i32, not WJ `int`/i64.
     pub(in crate::codegen::rust) fn promote_ambiguous_int_loop_counter_in_while_condition(
         &mut self,
@@ -172,32 +201,48 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => None,
                 }
             };
-        let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) else {
-            return;
-        };
-        if !matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
-            || !self.literal_init_wj_int_loop_counters.contains(&name)
-        {
-            return;
-        }
-        // P3.329: int-/struct-int returns already chose WJ `int` (i64) at the let.
-        if let Some(ret_ty) = &self.current_function_return_type {
-            let peeled = Self::peel_option_result_payload(ret_ty);
-            match peeled {
-                Type::Int | Type::Int32 | Type::Uint => return,
-                Type::Custom(n)
-                    if matches!(
-                        n.as_str(),
-                        "int" | "i64" | "i32" | "u32" | "u64" | "usize"
-                    ) =>
-                {
-                    return;
+        if let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) {
+            if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+                && self.literal_init_wj_int_loop_counters.contains(&name)
+            {
+                // P3.329: int-/struct-int returns already chose WJ `int` (i64) at the let.
+                if let Some(ret_ty) = &self.current_function_return_type {
+                    let peeled = Self::peel_option_result_payload(ret_ty);
+                    match peeled {
+                        Type::Int | Type::Int32 | Type::Uint => return,
+                        Type::Custom(n)
+                            if matches!(
+                                n.as_str(),
+                                "int" | "i64" | "i32" | "u32" | "u64" | "usize"
+                            ) =>
+                        {
+                            return;
+                        }
+                        Type::Custom(n) if self.struct_fields_include_wj_int(n) => return,
+                        _ => {}
+                    }
                 }
-                Type::Custom(n) if self.struct_fields_include_wj_int(n) => return,
-                _ => {}
+                self.local_var_types.insert(name.clone(), Type::Int32);
+                self.codegen_i32_binding_names.insert(name.clone());
+                return;
             }
         }
-        self.local_var_types.insert(name, Type::Int32);
+
+        if let Expression::Identifier { name, .. } = left {
+            if self.expression_has_i32_width_in_tree(right) {
+                let is_counter = self.literal_init_wj_int_loop_counters.contains(name)
+                    || self.codegen_i32_binding_names.contains(name)
+                    || matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Int) | Some(Type::Int32)
+                    );
+                if is_counter {
+                    self.local_var_types.insert(name.clone(), Type::Int32);
+                    self.codegen_i32_binding_names.insert(name.clone());
+                    self.usize_variables.remove(name);
+                }
+            }
+        }
     }
 
 

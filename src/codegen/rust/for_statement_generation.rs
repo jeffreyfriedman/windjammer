@@ -408,6 +408,9 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if self.function_returns_i32_for_loop_scan() && self.end_is_usize_len(end) {
                     self.local_var_types.insert(var.clone(), Type::Int32);
                     self.codegen_i32_binding_names.insert(var.clone());
+                } else if self.function_returns_i32_for_loop_scan() {
+                    self.local_var_types.insert(var.clone(), Type::Int32);
+                    self.codegen_i32_binding_names.insert(var.clone());
                 } else if let Some(bound_ty) = self
                     .range_loop_int_counter_type(start, end)
                     .or_else(|| {
