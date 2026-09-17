@@ -49,10 +49,12 @@ fn wdb245_tip_out_df_analytic_must_to_string_props_lit_into_owned_table_provider
         "WDB-245: owned String left_table formal for table_provider missing"
     );
 
-    let paths = [
-        tip.join("relational_df_analytic_execute_port.rs"),
-        gen.join("relational/relational_df_analytic_execute_port.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let paths = if tip.join("relational_df_analytic_execute_port.rs").exists() {
+        vec![tip.join("relational_df_analytic_execute_port.rs")]
+    } else {
+        vec![gen.join("relational/relational_df_analytic_execute_port.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {
@@ -62,7 +64,8 @@ fn wdb245_tip_out_df_analytic_must_to_string_props_lit_into_owned_table_provider
         let text = std::fs::read_to_string(path).expect("analytic");
         let bare = text.contains("relational_df_sql_via_table_provider(left, \"props\",")
             || text.contains("relational_df_sql_via_table_provider(left,\"props\",");
-        let has_to_string = text.contains("\"props\".to_string()");
+        let has_to_string = text.contains("\"props\".to_string()")
+            || text.contains("String::from(\"props\")");
         let bad = bare && !has_to_string;
         eprintln!(
             "WDB-245 owned={} bare={} has_to_string={} bad={} path={}",

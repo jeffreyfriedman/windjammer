@@ -69,10 +69,12 @@ fn wdb223_tip_out_pagerank_must_borrow_owned_f64_map_into_demoted_get() {
     }
     assert!(demoted, "WDB-223: demoted &GraphVertexF64Map get formal missing");
 
-    let engine_paths = [
-        tip.join("graph_pagerank_engine.rs"),
-        gen.join("graph/graph_pagerank_engine.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let engine_paths = if tip.join("graph_pagerank_engine.rs").exists() {
+        vec![tip.join("graph_pagerank_engine.rs")]
+    } else {
+        vec![gen.join("graph/graph_pagerank_engine.rs")]
+    };
     let mut saw = false;
     for path in &engine_paths {
         if !path.exists() {

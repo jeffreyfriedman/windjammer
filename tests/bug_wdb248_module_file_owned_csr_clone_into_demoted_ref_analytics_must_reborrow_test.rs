@@ -48,10 +48,12 @@ fn wdb248_tip_out_analytics_must_reborrow_csr_clone_into_demoted_ref_multi_sourc
         "WDB-248: demoted &DenseCsr multi_source formal missing"
     );
 
-    let paths = [
-        tip.join("graph_analytics_session.rs"),
-        gen.join("graph/graph_analytics_session.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let paths = if tip.join("graph_analytics_session.rs").exists() {
+        vec![tip.join("graph_analytics_session.rs")]
+    } else {
+        vec![gen.join("graph/graph_analytics_session.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {

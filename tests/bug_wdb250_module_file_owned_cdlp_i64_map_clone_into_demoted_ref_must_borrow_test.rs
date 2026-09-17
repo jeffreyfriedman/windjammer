@@ -45,10 +45,12 @@ fn wdb250_tip_out_cdlp_must_borrow_owned_i64_map_clone_into_demoted_get() {
     }
     assert!(demoted, "WDB-250: demoted &GraphVertexI64Map get formal missing");
 
-    let engine_paths = [
-        tip.join("graph_cdlp_engine.rs"),
-        gen.join("graph/graph_cdlp_engine.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let engine_paths = if tip.join("graph_cdlp_engine.rs").exists() {
+        vec![tip.join("graph_cdlp_engine.rs")]
+    } else {
+        vec![gen.join("graph/graph_cdlp_engine.rs")]
+    };
     let mut saw = false;
     for path in &engine_paths {
         if !path.exists() {

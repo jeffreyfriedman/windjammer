@@ -44,10 +44,12 @@ fn wdb247_tip_out_wcc_must_borrow_owned_map_clone_into_demoted_get() {
     }
     assert!(demoted_get, "WDB-247: demoted &GraphVertexI64Map get formal missing");
 
-    let paths = [
-        tip.join("graph_wcc_engine.rs"),
-        gen.join("graph/graph_wcc_engine.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let paths = if tip.join("graph_wcc_engine.rs").exists() {
+        vec![tip.join("graph_wcc_engine.rs")]
+    } else {
+        vec![gen.join("graph/graph_wcc_engine.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {

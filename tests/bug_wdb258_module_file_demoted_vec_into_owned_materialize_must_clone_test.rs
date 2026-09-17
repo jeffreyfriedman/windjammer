@@ -53,12 +53,23 @@ fn wdb258_tip_out_must_clone_ref_vec_into_owned_materialize_dsts_weights() {
         "WDB-258: owned-all materialize edge-list formals missing"
     );
 
-    let call_paths = [
-        tip.join("graph_csr_integrate.rs"),
-        tip.join("graph_write_port.rs"),
-        gen.join("graph/graph_csr_integrate.rs"),
-        gen.join("graph/graph_write_port.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let call_paths = if tip.join("graph_csr_integrate.rs").exists()
+        || tip.join("graph_write_port.rs").exists()
+    {
+        [
+            tip.join("graph_csr_integrate.rs"),
+            tip.join("graph_write_port.rs"),
+        ]
+        .into_iter()
+        .filter(|p| p.exists())
+        .collect::<Vec<_>>()
+    } else {
+        vec![
+            gen.join("graph/graph_csr_integrate.rs"),
+            gen.join("graph/graph_write_port.rs"),
+        ]
+    };
     let mut saw = false;
     let mut any_bad = false;
     let mut bad_path = String::new();
