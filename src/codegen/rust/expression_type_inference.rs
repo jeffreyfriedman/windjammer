@@ -593,7 +593,13 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     if let Some(sig) = self.get_signature_with_global(name.as_str()) {
-                        return sig.return_type.clone();
+                        // P3.342: instantiate return type from call args so
+                        // `let tx = send(pair.0, 7)` is `Sender<i64>`, not `Sender<T>`.
+                        return sig.return_type.as_ref().map(|ret| {
+                            Self::instantiate_fn_return_from_args(ret, &sig, arguments, |arg| {
+                                self.infer_expression_type(arg)
+                            })
+                        });
                     }
                 }
                 None
@@ -662,6 +668,126 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let idx = field.parse::<usize>().ok()?;
         tuple.get(idx).cloned()
+    }
+
+    /// Bind free type params in `ret` by unifying formals with concrete call-arg types.
+    fn instantiate_fn_return_from_args(
+        ret: &Type,
+        sig: &crate::analyzer::FunctionSignature,
+        arguments: &[(Option<String>, &Expression<'_>)],
+        mut infer_arg: impl FnMut(&Expression<'_>) -> Option<Type>,
+    ) -> Type {
+        let formals = if !sig.formal_param_types.is_empty() {
+            &sig.formal_param_types
+        } else {
+            &sig.param_types
+        };
+        let mut subst: std::collections::HashMap<String, Type> =
+            std::collections::HashMap::new();
+        for (i, formal) in formals.iter().enumerate() {
+            let Some((_, arg)) = arguments.get(i) else {
+                continue;
+            };
+            let Some(actual) = infer_arg(arg) else {
+                continue;
+            };
+            Self::collect_generic_bindings(formal, &actual, &mut subst);
+        }
+        if subst.is_empty() {
+            return ret.clone();
+        }
+        Self::apply_generic_subst(ret, &subst)
+    }
+
+    fn collect_generic_bindings(
+        formal: &Type,
+        actual: &Type,
+        subst: &mut std::collections::HashMap<String, Type>,
+    ) {
+        let formal = Self::peel_references(formal);
+        let actual = Self::peel_references(actual);
+        match formal {
+            Type::Generic(name) | Type::Custom(name)
+                if crate::analyzer::Analyzer::is_generic_type_param(formal) =>
+            {
+                subst.entry(name.clone()).or_insert_with(|| actual.clone());
+            }
+            Type::Parameterized(f_base, f_args) => {
+                if let Type::Parameterized(a_base, a_args) = actual {
+                    if f_base == a_base && f_args.len() == a_args.len() {
+                        for (f, a) in f_args.iter().zip(a_args.iter()) {
+                            Self::collect_generic_bindings(f, a, subst);
+                        }
+                    }
+                }
+            }
+            Type::Tuple(f_elems) => {
+                if let Type::Tuple(a_elems) = actual {
+                    if f_elems.len() == a_elems.len() {
+                        for (f, a) in f_elems.iter().zip(a_elems.iter()) {
+                            Self::collect_generic_bindings(f, a, subst);
+                        }
+                    }
+                }
+            }
+            Type::Option(f_inner) => {
+                if let Type::Option(a_inner) = actual {
+                    Self::collect_generic_bindings(f_inner, a_inner, subst);
+                }
+            }
+            Type::Result(f_ok, f_err) => {
+                if let Type::Result(a_ok, a_err) = actual {
+                    Self::collect_generic_bindings(f_ok, a_ok, subst);
+                    Self::collect_generic_bindings(f_err, a_err, subst);
+                }
+            }
+            Type::Vec(f_inner) => {
+                if let Type::Vec(a_inner) = actual {
+                    Self::collect_generic_bindings(f_inner, a_inner, subst);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn apply_generic_subst(
+        ty: &Type,
+        subst: &std::collections::HashMap<String, Type>,
+    ) -> Type {
+        match ty {
+            Type::Generic(name) | Type::Custom(name)
+                if crate::analyzer::Analyzer::is_generic_type_param(ty) =>
+            {
+                subst.get(name).cloned().unwrap_or_else(|| ty.clone())
+            }
+            Type::Parameterized(base, args) => Type::Parameterized(
+                base.clone(),
+                args.iter()
+                    .map(|a| Self::apply_generic_subst(a, subst))
+                    .collect(),
+            ),
+            Type::Tuple(elems) => Type::Tuple(
+                elems
+                    .iter()
+                    .map(|e| Self::apply_generic_subst(e, subst))
+                    .collect(),
+            ),
+            Type::Option(inner) => {
+                Type::Option(Box::new(Self::apply_generic_subst(inner, subst)))
+            }
+            Type::Result(ok, err) => Type::Result(
+                Box::new(Self::apply_generic_subst(ok, subst)),
+                Box::new(Self::apply_generic_subst(err, subst)),
+            ),
+            Type::Vec(inner) => Type::Vec(Box::new(Self::apply_generic_subst(inner, subst))),
+            Type::Reference(inner) => {
+                Type::Reference(Box::new(Self::apply_generic_subst(inner, subst)))
+            }
+            Type::MutableReference(inner) => {
+                Type::MutableReference(Box::new(Self::apply_generic_subst(inner, subst)))
+            }
+            other => other.clone(),
+        }
     }
 
     /// Substitute stdlib generic placeholders (`T`, `K`, `V`) from the concrete receiver type.

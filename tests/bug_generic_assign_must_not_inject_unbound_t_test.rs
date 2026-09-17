@@ -27,9 +27,15 @@ fn fixture() -> String {
 }
 
 fn bad_annotation(rs: &str) -> bool {
-    rs.contains("Sender<T>")
-        || rs.contains("BoundedSender<T>")
-        || rs.contains(": Pending<") && rs.contains("parallel_int")
+    // Struct/fn signatures legitimately use `Sender<T>`; only reject unbound
+    // ascriptions on let bindings (P3.342).
+    rs.lines().any(|line| {
+        let t = line.trim_start();
+        (t.starts_with("let ") || t.starts_with("let mut "))
+            && (t.contains(": Sender<T>")
+                || t.contains(": BoundedSender<T>")
+                || (t.contains(": Pending<") && rs.contains("parallel_int")))
+    })
 }
 
 #[test]

@@ -436,10 +436,12 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 let needs_collection_ascription_sv = !type_inferred_from_context
                     && var_name.is_some_and(|vn| {
-                        matches!(
-                            self.local_var_types.get(vn),
-                            Some(Type::Vec(_)) | Some(Type::Parameterized(_, _))
-                        )
+                        self.local_var_types.get(vn).is_some_and(|ty| {
+                            matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))
+                                && !crate::codegen::rust::types::type_contains_unbound_generic_param(
+                                    ty,
+                                )
+                        })
                     });
                 if needs_collection_ascription_sv {
                     let vn = var_name.unwrap();
@@ -698,10 +700,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // E0282: Emit type ascription for collection types inferred from
                 // forward-scanned .push()/.insert() usage
                 let needs_collection_ascription = var_name.is_some_and(|vn| {
-                    matches!(
-                        self.local_var_types.get(vn),
-                        Some(Type::Vec(_)) | Some(Type::Parameterized(_, _))
-                    )
+                    self.local_var_types.get(vn).is_some_and(|ty| {
+                        matches!(ty, Type::Vec(_) | Type::Parameterized(_, _))
+                            && !crate::codegen::rust::types::type_contains_unbound_generic_param(ty)
+                    })
                 });
                 if needs_collection_ascription {
                     let vn = var_name.unwrap();
