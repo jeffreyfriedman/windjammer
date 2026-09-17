@@ -291,7 +291,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 owned/`&mut.clone` → demoted `&mut` fill_bundle must reborrow** | `bug_wdb262_module_file_owned_into_demoted_mut_wave1_fill_bundle_must_reborrow_test` | 🆕 RED / filed (P3.344); twin WDB-257; gen lag |
 | P1 | **WCC `&vertices` → owned `init_identity` must clone** | `bug_wdb263_module_file_demoted_vec_into_owned_wcc_init_identity_must_clone_test` | 🆕 RED / filed (P3.349); twin WDB-259; gen lag |
 | P1 | **BFS `csr.clone()` → demoted `&DenseCsr` distances_to_map must reborrow** | `bug_wdb264_module_file_owned_csr_clone_into_demoted_distances_to_map_must_reborrow_test` | 🆕 RED / filed (P3.349); twin WDB-252; gen lag |
-| P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | 🆕 RED / filed (P3.348) |
+| P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -386,6 +386,17 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Gates:** `cargo test --test all --features integration_tests -- module_file_demoted_str_field_assign_must_to_string` → pass.
 
+## P3.348 (2026-09-17) — u32 `while i < count` must not cast bound `as i64`
+
+| Gate | Status |
+|------|--------|
+| `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (2026-09-17) |
+| Ecosystem | `frame_analysis` / `weight_paint` mirror loops |
+
+**Root cause:** `let mut i = 0` kept WJ `Int` (i64) in `local_var_types` while numeric inference emitted `0_u32`; mixed-int compare promoted to i64 and cast u32 bounds (`count`, `half`).
+
+**Fix:** `reconcile_ambiguous_int_local_after_let` syncs `_u32`; `promote_ambiguous_int_loop_counter_in_while_condition` binds u32 peers; `comparison_should_prefer_u32_over_i64` in binary compare (P3.327/P3.343 pattern).
+
 ## P3.347 (2026-09-17) — `cy + dy` in nested for-range must not widen to i64
 
 | Gate | Status |
@@ -422,21 +433,6 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Fix:** detect if/else branches that are i32-width (literal + i32 formal/binding); bind `Int32` + `codegen_i32_binding_names` on the let name.
 
 **Gates:** `cargo test --test all --features integration_tests -- module_file_void_while_i32_seg_counter_must_not_emit_i64` → pass.
-
-## P3.349 (2026-09-17) — auto-clone into demoted `&Map` must keep Borrow
-
-| Item | Status |
-|------|--------|
-| Gate `bug_wdb222_module_file_owned_map_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (codegen + tip-out) |
-| Twin tip gates WDB-247/249/250 / 223 get | ✅ tip GREEN after tip regen + prefer tip |
-
-**Root cause layer:** coercion/reconcile — `ir_call_site` demoted `Borrow`→`Identity` whenever `prepared_arg` ended in `.clone()` for non-`&str` shared-ref formals, so auto-clone emitted `get(map.clone())` into `&Map`.
-
-**What became unnecessary:** Borrow→Identity branch on `.clone()` for demoted struct/map refs (strip clone + keep Borrow instead).
-
-**Gates:** `cargo test --release --test all -- wdb222_codegen wdb222_tip_out wdb247_tip_out wdb249_tip_out wdb250_tip_out` → pass.
-
-**Still RED:** WDB-244 tip `.to_string()` into demoted `sql_exec` `&str`.
 
 ## P3.342 (2026-09-17) — assign generic `send` injects unbound `Sender<T>`
 

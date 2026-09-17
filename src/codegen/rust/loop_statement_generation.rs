@@ -61,6 +61,17 @@ impl<'ast> CodeGenerator<'ast> {
                         self.assignment_int_target_type = Some(Type::Int32);
                         break;
                     }
+                    let is_u32_local = matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Uint)
+                    ) || matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Custom(n)) if n == "u32"
+                    );
+                    if is_u32_local {
+                        self.assignment_int_target_type = Some(Type::Uint);
+                        break;
+                    }
                 }
             }
         }

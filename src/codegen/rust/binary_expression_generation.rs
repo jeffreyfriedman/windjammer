@@ -502,6 +502,18 @@ impl<'ast> CodeGenerator<'ast> {
                                     && self.comparison_should_prefer_u32_over_u64(right, left)
                                 {
                                     promoted = IntType::U32;
+                                } else if left_ty == IntType::U32
+                                    && right_ty == IntType::I64
+                                    && is_comparison
+                                    && self.comparison_should_prefer_u32_over_i64(left, right)
+                                {
+                                    promoted = IntType::U32;
+                                } else if right_ty == IntType::U32
+                                    && left_ty == IntType::I64
+                                    && is_comparison
+                                    && self.comparison_should_prefer_u32_over_i64(right, left)
+                                {
+                                    promoted = IntType::U32;
                                 }
                             }
                             if promoted != IntType::Unknown {
