@@ -18,7 +18,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// P3.309: i32 loop counter vs int literal / i32 field — do not widen RHS to i64.
     pub(in crate::codegen::rust) fn comparison_should_prefer_i32_over_i64(
         &self,
-        _i32_side: &Expression<'ast>,
+        i32_side: &Expression<'ast>,
         i64_side: &Expression<'ast>,
     ) -> bool {
         if matches!(
@@ -30,6 +30,13 @@ impl<'ast> CodeGenerator<'ast> {
         ) {
             return true;
         }
+        if self.expression_promotes_to_i32_in_compare(i32_side) {
+            if let Expression::Identifier { name, .. } = i64_side {
+                if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int)) {
+                    return true;
+                }
+            }
+        }
         self.int_type_for_mixed_int_codegen(i64_side) == IntType::I32
             || self
                 .infer_expression_type(i64_side)
@@ -37,6 +44,76 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|t| {
                     matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
                 })
+    }
+
+    fn expression_promotes_to_i32_in_compare(&self, expr: &Expression<'ast>) -> bool {
+        self.int_type_for_mixed_int_codegen(expr) == IntType::I32
+            || self
+                .infer_expression_type(expr)
+                .as_ref()
+                .is_some_and(|t| {
+                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+                })
+    }
+
+    /// P3.323: `let mut x = 0_i32` keeps WJ `Type::Int` in `local_var_types` — sync concrete width.
+    pub(in crate::codegen::rust) fn reconcile_ambiguous_int_local_after_let(
+        &mut self,
+        name: &str,
+        value: &Expression<'ast>,
+        emitted_rhs: &str,
+    ) {
+        if !matches!(self.local_var_types.get(name), Some(Type::Int)) {
+            return;
+        }
+        if emitted_rhs.ends_with("_i32")
+            || self.int_type_for_mixed_int_codegen(value) == IntType::I32
+        {
+            self.local_var_types.insert(name.to_string(), Type::Int32);
+        }
+    }
+
+    /// P3.323: untyped `let mut i = 0` + `while i < 4` — treat counter as i32, not WJ `int`/i64.
+    pub(in crate::codegen::rust) fn promote_ambiguous_int_loop_counter_in_while_condition(
+        &mut self,
+        condition: &Expression<'ast>,
+    ) {
+        use crate::parser::BinaryOp;
+        let Expression::Binary { left, right, op, .. } = condition else {
+            return;
+        };
+        if !matches!(
+            op,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+        ) {
+            return;
+        }
+        let ident_name =
+            |expr: &Expression<'ast>, lit: &Expression<'ast>| -> Option<String> {
+                match (expr, lit) {
+                    (
+                        Expression::Identifier { name, .. },
+                        Expression::Literal {
+                            value: Literal::Int(n),
+                            ..
+                        },
+                    ) if (0..=4096).contains(n) => Some(name.to_string()),
+                    (
+                        Expression::Literal {
+                            value: Literal::Int(n),
+                            ..
+                        },
+                        Expression::Identifier { name, .. },
+                    ) if (0..=4096).contains(n) => Some(name.to_string()),
+                    _ => None,
+                }
+            };
+        let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) else {
+            return;
+        };
+        if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int)) {
+            self.local_var_types.insert(name, Type::Int32);
+        }
     }
 
     /// Operand type for driving int literal suffixes in binary ops (`idx + 1` → `1_usize`).
@@ -55,6 +132,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if self.infer_expression_type_is_usize(expr) {
             return Some(Type::Custom("usize".into()));
+        }
+        // P3.322: ambiguous WJ `int` locals may emit as i32 while `local_var_types` stays `Int`.
+        if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::I32 {
+            return Some(Type::Int32);
         }
         self.infer_expression_type(expr).filter(|t| {
             Self::assignment_target_needs_int_codegen_context(t)

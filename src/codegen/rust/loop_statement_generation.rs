@@ -41,11 +41,32 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
     ) -> String {
         self.mark_usize_variables_in_condition(condition);
+        self.promote_ambiguous_int_loop_counter_in_while_condition(condition);
 
         let mut output = self.indent();
         output.push_str("while ");
 
+        let prev_while_int = self.assignment_int_target_type.clone();
+        if let Expression::Binary { left, right, .. } = condition {
+            for id_expr in [left, right] {
+                if let Expression::Identifier { name, .. } = id_expr {
+                    let is_i32_local = matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Int32)
+                    ) || matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Custom(n)) if n == "i32"
+                    );
+                    if is_i32_local {
+                        self.assignment_int_target_type = Some(Type::Int32);
+                        break;
+                    }
+                }
+            }
+        }
+
         let condition_str = self.generate_expression(condition);
+        self.assignment_int_target_type = prev_while_int;
         output.push_str(&condition_str);
         output.push_str(" {\n");
 
