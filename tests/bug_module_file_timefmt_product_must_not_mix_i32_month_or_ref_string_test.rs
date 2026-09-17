@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.328: `wj-timefmt` product multipass must not emit:
+//! P3.329: `wj-timefmt` product multipass must not emit:
 //! - `while month <= 12_i32 as i32` (i64 month vs i32 literal)
 //! - `let time_and_tz = &parts[1].to_string()` into owned `String` formal
 //!
@@ -64,11 +64,11 @@ fn module_file_timefmt_product_must_not_mix_i32_month_or_ref_string() {
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     if bad_timefmt(&generated) {
-        eprintln!("P3.328 RED (snippet):\n{}", &generated[..generated.len().min(2500)]);
+        eprintln!("P3.329 RED (snippet):\n{}", &generated[..generated.len().min(2500)]);
     }
     assert!(
         !bad_timefmt(&generated),
-        "RED P3.328: timefmt product must not emit i32 month sentinel or &String into String:\n{}",
+        "RED P3.329: timefmt product must not emit i32 month sentinel or &String into String:\n{}",
         generated
             .lines()
             .filter(|l| l.contains("12_i32") || l.contains("time_and_tz") || l.contains("parts[1]"))
