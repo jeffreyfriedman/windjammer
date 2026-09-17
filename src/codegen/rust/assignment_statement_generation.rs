@@ -419,6 +419,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_expression_context = true;
 
         let prev_assign_ty = self.assignment_float_target_type.take();
+        let prev_assign_int = self.assignment_int_target_type.take();
         let tgt_ty = self.infer_expression_type(target);
         if tgt_ty
             .as_ref()
@@ -430,8 +431,27 @@ impl<'ast> CodeGenerator<'ast> {
             // compound-assign resolution when direct LHS type inference is weak.
             self.assignment_float_target_type = Some(Type::Custom(ft.to_string()));
         }
+        // P3.326: drive int literal / peer width from the LHS (same as compound assign).
+        if tgt_ty
+            .as_ref()
+            .is_some_and(Self::assignment_target_needs_int_codegen_context)
+        {
+            self.assignment_int_target_type = tgt_ty.clone();
+        }
+        if let Expression::Identifier { name, .. } = target {
+            if let Some(t) = self.local_var_types.get(name) {
+                if Self::assignment_target_needs_int_codegen_context(t) {
+                    self.assignment_int_target_type = Some(t.clone());
+                }
+            }
+            if self.usize_variables.contains(name) {
+                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+            }
+        }
+        self.set_assignment_int_target_from_compound_target(target);
         let mut value_str = self.generate_expression(value);
         self.assignment_float_target_type = prev_assign_ty;
+        self.assignment_int_target_type = prev_assign_int;
         if matches!(
             value,
             Expression::Literal {
