@@ -93,18 +93,19 @@ impl World {
         let rust_code = compile_code(source).expect("Failed to compile");
         println!("Generated Rust code:\n{}", rust_code);
 
-        // Check what was actually generated
-        if rust_code.contains("contains(&*entity)") {
+        // Check call site only — method body may still contain `contains(&*entity)`
+        // when the formal was demoted to `&Entity` (Vec::contains key path).
+        if rust_code.contains("velocities.contains(&*entity)") {
             panic!(
-                "BUG REPRODUCED! Generated contains(&*entity) instead of contains(*entity):\n{}",
+                "BUG REPRODUCED! Generated velocities.contains(&*entity) instead of contains(*entity):\n{}",
                 rust_code
             );
         }
 
-        // Should keep the deref as-is
-        if !rust_code.contains("contains(*entity)") {
+        // Should keep the deref as-is at the World::update call site
+        if !rust_code.contains("velocities.contains(*entity)") {
             panic!(
-                "Expected contains(*entity) but didn't find it. Generated:\n{}",
+                "Expected velocities.contains(*entity) but didn't find it. Generated:\n{}",
                 rust_code
             );
         }
@@ -147,16 +148,18 @@ impl World {
 
         // Should NOT add & to dereferenced struct's Copy field
         assert!(
-            !rust_code.contains("contains(&(*entity_ref).id)"),
+            !rust_code.contains("velocities.contains(&(*entity_ref).id)")
+                && !rust_code.contains("velocities.contains(&(entity_ref).id)")
+                && !rust_code.contains("velocities.contains(&entity_ref.id)"),
             "Should NOT add & to dereferenced struct's Copy field. Generated:\n{}",
             rust_code
         );
 
         // Should keep as-is or simplify to entity_ref.id
         assert!(
-            rust_code.contains("contains((*entity_ref).id)")
-                || rust_code.contains("contains(entity_ref.id)")
-                || rust_code.contains("contains((entity_ref).id)"),
+            rust_code.contains("velocities.contains((*entity_ref).id)")
+                || rust_code.contains("velocities.contains(entity_ref.id)")
+                || rust_code.contains("velocities.contains((entity_ref).id)"),
             "Should preserve deref access pattern. Generated:\n{}",
             rust_code
         );

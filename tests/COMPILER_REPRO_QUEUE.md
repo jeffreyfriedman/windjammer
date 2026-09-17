@@ -277,6 +277,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`csr.clone()` → demoted `&DenseCsr` vertex_count/find_index must reborrow** | `bug_wdb252_module_file_owned_csr_clone_into_demoted_vertex_count_find_index_must_reborrow_test` | 🆕 RED / filed (P3.333); twin WDB-233/248 |
 | P1 | **BFS `distances.clone()` → demoted contains/len must borrow** | `bug_wdb253_module_file_owned_bfs_map_clone_into_demoted_contains_len_must_borrow_test` | 🆕 RED / filed (P3.334); twin WDB-222 |
 | P1 | **datafusion `csr.clone()` → demoted SQL count_edges must reborrow** | `bug_wdb254_module_file_owned_csr_clone_into_demoted_sql_edge_count_must_reborrow_test` | 🆕 RED / filed (P3.334); twin WDB-252 |
+| P1 | **CDLP `csr.clone()` → demoted `&mut DenseCsr` parallel must reborrow** | `bug_wdb255_module_file_owned_csr_clone_into_demoted_mut_cdlp_parallel_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
+| P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1127,6 +1129,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
 
+## P3.339 WindjammerDB CQ-C5 — coverage REDs WDB-255/256 CDLP parallel + incremental BFS &mut DenseCsr (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (gen lag) |
+| Tip **WDB-255** CDLP `csr.clone()` → demoted `&mut DenseCsr` parallel | ❌ RED — tip-out/gen graph_cdlp_engine (twin WDB-233) |
+| Tip **WDB-256** incremental `csr.clone()` → demoted `&mut DenseCsr` bfs | ❌ RED — tip-out/gen graph_incremental_views (twin WDB-233) |
+| Tip **WDB-253/254 / 251/252 / 249/250 / 247/248** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–256**; sync tip-out→gen for 234–238. Dominant residual: Vec←&Vec / `&str`←String / map.clone→`&Map` / csr.clone→`&DenseCsr`/`&mut DenseCsr`. No Phase 606+.
+
 ## P3.334 WindjammerDB CQ-C5 — coverage REDs WDB-253/254 BFS contains/len + SQL count_edges (2026-09-16)
 
 | Gate | Status |
@@ -1138,6 +1152,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–254**; sync tip-out→gen for 234–238. Dominant residual: Vec←&Vec / `&str`←String / map.clone→`&Map` / csr.clone→`&DenseCsr`. No Phase 606+.
+
+## P3.333b — generic type alias must emit after struct (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| `generic_type_alias_must_emit_after_struct` | ✅ tip GREEN — TypeAlias deferred until after struct/enum/trait emit (`program_generation.rs`) |
+
+**Root cause:** Const/static early pass also emitted `type` aliases, hoisting `SharedInt = Shared<…>` above `struct Shared` (E0425).
+
+**Product:** generics-first `wj-sync` Shared/Pending aliases.
 
 ## P3.333 WindjammerDB CQ-C5 — coverage REDs WDB-251/252 incremental maps + demoted vertex_count/find_index (2026-09-16)
 
