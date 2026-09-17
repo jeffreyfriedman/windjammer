@@ -143,6 +143,17 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    pub(in crate::codegen::rust) fn struct_fields_include_vec_or_array(
+        &self,
+        struct_name: &str,
+    ) -> bool {
+        let base = struct_name.split('<').next().unwrap_or(struct_name);
+        let Some(fields) = self.lookup_struct_field_types(base) else {
+            return false;
+        };
+        fields.values().any(|t| matches!(t, Type::Vec(_) | Type::Array(_, _)))
+    }
+
     /// P3.335: `-> i32` scan loops keep `i32` counters vs `.len()`.
     pub(in crate::codegen::rust) fn function_returns_i32_for_loop_scan(&self) -> bool {
         self.current_function_return_type.as_ref().is_some_and(|rt| {
