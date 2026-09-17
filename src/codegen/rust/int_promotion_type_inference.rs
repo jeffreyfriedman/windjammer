@@ -98,7 +98,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// P3.353: WJ `int` locals in voxel/set_if coord builders (not formal `int` params).
-    fn arithmetic_prefers_i32_ambiguous_int_local(
+    pub(in crate::codegen::rust) fn arithmetic_prefers_i32_ambiguous_int_local(
         &self,
         expr: &Expression<'ast>,
     ) -> bool {
