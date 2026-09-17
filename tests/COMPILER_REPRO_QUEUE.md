@@ -274,6 +274,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **demoted `&Vec<u32>` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned record-batch ctor must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
 | P1 | **demoted `&Vec` return → owned `Vec` must clone (federation)** | `bug_wdb243_module_file_demoted_vec_return_into_owned_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-205 |
+| P1 | **`for x in parent.field` then use `parent` partial-moves Vec** | `bug_module_file_for_in_struct_vec_field_must_not_partial_move_parent_test` | 🆕 RED / filed (P3.321); LedgerKit payment alloc interim `.clone()` |
+| P1 | **`vec.len() > 0` uint/int mix** | `bug_module_file_vec_len_gt_zero_must_not_mix_uint_int_test` | ✅ tip GREEN (P3.322); product used `is_empty()` interim |
 | P1 | **`for x in (cx - r - 2)..(cx + r + 2)` i32 bounds must not split i64/i32** | `bug_i32_range_bounds_sub_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.318); twin P3.313 |
 | P1 | **`inbound.clone()` → demoted `pg_wire_frame_total_len` must borrow** | `bug_wdb238_module_file_owned_inbound_clone_into_demoted_frame_total_len_must_borrow_test` | 🆕 RED / filed (P3.316); twin WDB-205 |
 | P1 | **Nested `while` + `substring(s, i, i+1)` still `1_i32` / `+= 1 as i32` (`wj-duration`)** | `bug_module_file_nested_while_substring_i_plus_one_must_not_emit_i32_test` | ✅ tip GREEN (P3.315) — nested loops emit `1_usize` |
