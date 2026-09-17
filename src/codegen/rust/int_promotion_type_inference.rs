@@ -339,7 +339,12 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             return;
                         }
-                        // P3.350: struct returns with i64 fields must not block i32 loop counters.
+                        Type::Custom(n)
+                            if self.struct_fields_include_wj_int(n)
+                                && !self.struct_fields_include_vec_or_array(n) =>
+                        {
+                            return;
+                        }
                         _ => {}
                     }
                 }

@@ -19,7 +19,7 @@ pub struct BuildOptions {
 pub fn execute(
     path: &Path,
     output: Option<&Path>,
-    _release: bool,
+    release: bool,
     target_str: &str,
     options: BuildOptions,
     check: bool,
@@ -140,12 +140,19 @@ pub fn execute(
 
     // Run cargo build automatically for Rust target (unless disabled)
     if (target_str == "rust") && run_cargo && !check {
-        println!("\n{} Running cargo build...", "⚙️".bold());
+        let profile = if release { "release" } else { "dev" };
+        println!(
+            "\n{} Running cargo build ({})...",
+            "⚙️".bold(),
+            profile
+        );
 
-        let cargo_status = std::process::Command::new("cargo")
-            .arg("build")
-            .current_dir(output_dir)
-            .status();
+        let mut cargo = std::process::Command::new("cargo");
+        cargo.arg("build");
+        if release {
+            cargo.arg("--release");
+        }
+        let cargo_status = cargo.current_dir(output_dir).status();
 
         match cargo_status {
             Ok(status) if status.success() => {
@@ -155,7 +162,11 @@ pub fn execute(
                     "Success!".green().bold()
                 );
                 println!("Run your project with:");
-                println!("  cd {:?} && cargo run", output_dir);
+                if release {
+                    println!("  cd {:?} && cargo run --release", output_dir);
+                } else {
+                    println!("  cd {:?} && cargo run", output_dir);
+                }
             }
             Ok(status) => {
                 println!(
