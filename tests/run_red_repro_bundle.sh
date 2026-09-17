@@ -29,6 +29,8 @@ RED_FILTERS=(
 GREEN_FILTERS=(
   i32_nested_range_eq_mod_literals_must_not_emit_i64
   module_file_void_while_i32_seg_counter_must_not_emit_i64
+  module_file_demoted_str_field_assign_must_to_string
+  i32_cy_plus_dy_for_range_must_not_widen_to_i64
   generic_assign_must_not_inject_unbound_t
   i32_range_bounds_sub_add_must_not_split_i64_i32
   int_mod_literal_zero_compare_must_not_split_i64_i32

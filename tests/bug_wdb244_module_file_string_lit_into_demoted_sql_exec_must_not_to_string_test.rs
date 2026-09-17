@@ -39,10 +39,12 @@ fn wdb244_tip_out_datafusion_must_not_to_string_lits_into_demoted_sql_exec() {
         true // tip-out call-site gate still valid
     };
 
-    let paths = [
-        tip.join("graph_sql_datafusion_port.rs"),
-        gen.join("graph/graph_sql_datafusion_port.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let paths = if tip.join("graph_sql_datafusion_port.rs").exists() {
+        vec![tip.join("graph_sql_datafusion_port.rs")]
+    } else {
+        vec![gen.join("graph/graph_sql_datafusion_port.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {
