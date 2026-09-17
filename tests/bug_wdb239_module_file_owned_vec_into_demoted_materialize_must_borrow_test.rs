@@ -19,9 +19,23 @@
 //! Signature-driven: pass `&dsts`, `&weights`. Twin of WDB-205/238 (owned into demoted Vec).
 //!
 //! Tip truth (2026-09-17): multipass keeps all three Vec formals Owned — call sites move.
-//! Gate accepts owned formals + owned call, or demoted formals + borrowed call.
+//! Prefer tip-out over stale gen/; pair formal shape with call site per root.
 
 use std::path::PathBuf;
+
+fn materialize_formal_shape(text: &str) -> Option<&'static str> {
+    if text.contains("fn graph_materialize_from_edge_lists(srcs: Vec<i64>, dsts: &Vec<i64>")
+        || text.contains("dsts: &Vec<i64>, weights: &Vec<f64>")
+    {
+        Some("demoted")
+    } else if text.contains(
+        "fn graph_materialize_from_edge_lists(srcs: Vec<i64>, dsts: Vec<i64>, weights: Vec<f64>",
+    ) {
+        Some("owned")
+    } else {
+        None
+    }
+}
 
 #[test]
 fn wdb239_tip_out_sql_must_borrow_owned_vecs_into_demoted_materialize() {
@@ -30,61 +44,46 @@ fn wdb239_tip_out_sql_must_borrow_owned_vecs_into_demoted_materialize() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let mat_paths = [
-        tip.join("graph_materialize_port.rs"),
-        gen.join("graph/graph_materialize_port.rs"),
-    ];
-    let mut demoted = false;
-    let mut owned_all = false;
-    for path in &mat_paths {
-        if !path.exists() {
-            continue;
-        }
-        let text = std::fs::read_to_string(path).expect("materialize");
-        if text.contains("fn graph_materialize_from_edge_lists(srcs: Vec<i64>, dsts: &Vec<i64>")
-            || text.contains("dsts: &Vec<i64>, weights: &Vec<f64>")
-        {
-            demoted = true;
-            break;
-        }
-        if text.contains(
-            "fn graph_materialize_from_edge_lists(srcs: Vec<i64>, dsts: Vec<i64>, weights: Vec<f64>",
-        ) {
-            owned_all = true;
-        }
-    }
-    assert!(
-        demoted || owned_all,
-        "WDB-239: materialize edge-list formals missing (demoted or owned)"
-    );
 
-    let paths = [
-        tip.join("graph_sql_query_port.rs"),
-        gen.join("graph/graph_sql_query_port.rs"),
-    ];
+    // Prefer tip-out when present (gen may lag behind tip multipass).
+    let roots: Vec<(PathBuf, PathBuf)> = if tip.join("graph_materialize_port.rs").exists() {
+        vec![(
+            tip.join("graph_materialize_port.rs"),
+            tip.join("graph_sql_query_port.rs"),
+        )]
+    } else {
+        vec![(
+            gen.join("graph/graph_materialize_port.rs"),
+            gen.join("graph/graph_sql_query_port.rs"),
+        )]
+    };
+
     let mut saw = false;
-    for path in &paths {
-        if !path.exists() {
+    for (mat_path, sql_path) in &roots {
+        if !mat_path.exists() || !sql_path.exists() {
             continue;
         }
         saw = true;
-        let text = std::fs::read_to_string(path).expect("sql");
-        let bad = demoted
-            && text.contains("graph_materialize_from_edge_lists(srcs, dsts, weights,")
-            && !text.contains("graph_materialize_from_edge_lists(srcs, &dsts, &weights,")
-            && !text.contains("graph_materialize_from_edge_lists(srcs, &dsts, weights,");
+        let mat = std::fs::read_to_string(mat_path).expect("materialize");
+        let sql = std::fs::read_to_string(sql_path).expect("sql");
+        let shape = materialize_formal_shape(&mat)
+            .expect("WDB-239: materialize edge-list formals missing (demoted or owned)");
+        let bad = shape == "demoted"
+            && sql.contains("graph_materialize_from_edge_lists(srcs, dsts, weights,")
+            && !sql.contains("graph_materialize_from_edge_lists(srcs, &dsts, &weights,")
+            && !sql.contains("graph_materialize_from_edge_lists(srcs, &dsts, weights,");
         eprintln!(
-            "WDB-239 demoted={} owned_all={} bad={} path={}",
-            demoted,
-            owned_all,
+            "WDB-239 shape={} bad={} mat={} sql={}",
+            shape,
             bad,
-            path.display()
+            mat_path.display(),
+            sql_path.display()
         );
         assert!(
             !bad,
             "WDB-239 RED: tip-out/product passes owned dsts/weights into demoted &Vec materialize. {}",
-            path.display()
+            sql_path.display()
         );
     }
-    assert!(saw, "WDB-239: graph_sql_query_port missing");
+    assert!(saw, "WDB-239: graph_sql_query_port / materialize missing");
 }
