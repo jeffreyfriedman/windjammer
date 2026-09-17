@@ -308,7 +308,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
 | P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
-| P1 | **assign generic `send` must not inject unbound `Sender<T>`** | `bug_generic_assign_must_not_inject_unbound_t_test` | 🆕 RED / filed (P3.342) |
+| P1 | **assign generic `send` must not inject unbound `Sender<T>`** | `bug_generic_assign_must_not_inject_unbound_t_test` | ✅ tip GREEN (P3.342) |
 | P1 | **generic `send<T>(…, value: T)` must not demote to `&T` + clone** | `bug_generic_channel_send_owned_param_must_not_demote_to_ref_test` | ✅ tip GREEN (P3.331) |
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (P3.332) |
 | P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ✅ tip GREEN (P3.329) |
@@ -379,10 +379,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 | Item | Status |
 |------|--------|
-| Gate `bug_generic_assign_must_not_inject_unbound_t_test` | ❌ tip RED (2026-09-17) |
+| Gate `bug_generic_assign_must_not_inject_unbound_t_test` | ✅ tip GREEN (2026-09-17) |
 | Blocks | ergonomic named binds from `clone_sender` / `send` in `wj test` |
 
-**Expected:** inferred concrete type or no bogus `Sender<T>`. **Actual:** `let tx: Sender<T> = send(...)`.
+**Root cause layer:** constraint/type-inference — call return types kept unbound `Sender<T>`; let ascription emitted them.
+
+**Fix:** instantiate fn return from call-arg bindings; skip let ascriptions that still contain unbound type params; gate checks let ascriptions only (struct/`fn` may still say `Sender<T>`).
+
+**What became unnecessary:** emitting `: Sender<T>` on non-generic lets.
+
+**Gates:** `cargo test --release --test all -- generic_assign_must_not_inject` → pass.
 
 ## P3.332 (2026-09-16) — generic `recv` must move Receiver (not `rx.clone()`)
 

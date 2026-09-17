@@ -407,6 +407,32 @@ pub fn type_contains_reference(type_: &Type) -> bool {
     }
 }
 
+/// True when `ty` still mentions an unbound fn type param (`T`, `K`, `T1`, …).
+/// Emitting such a type as a Rust let ascription (`let x: Sender<T> = …`) is invalid
+/// outside a generic fn — leave inference to rustc instead (P3.342).
+pub fn type_contains_unbound_generic_param(type_: &Type) -> bool {
+    match type_ {
+        Type::Generic(_) | Type::Custom(_)
+            if crate::analyzer::Analyzer::is_generic_type_param(type_) =>
+        {
+            true
+        }
+        Type::Option(inner) | Type::Vec(inner) | Type::Array(inner, _) => {
+            type_contains_unbound_generic_param(inner)
+        }
+        Type::Result(ok, err) => {
+            type_contains_unbound_generic_param(ok) || type_contains_unbound_generic_param(err)
+        }
+        Type::Tuple(types) | Type::Parameterized(_, types) => {
+            types.iter().any(type_contains_unbound_generic_param)
+        }
+        Type::Reference(inner) | Type::MutableReference(inner) => {
+            type_contains_unbound_generic_param(inner)
+        }
+        _ => false,
+    }
+}
+
 /// Convert a Windjammer type to Rust, adding lifetime 'a to all references.
 /// Used when the function signature requires explicit lifetime annotations.
 pub fn type_to_rust_with_lifetime(type_: &Type) -> String {
