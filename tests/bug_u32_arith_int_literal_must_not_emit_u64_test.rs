@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.324: u32 locals / struct u32 fields ± untyped int literals must not emit `_u64` peers.
+//! P3.327: u32 locals / struct u32 fields ± untyped int literals must not emit `_u64` peers.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -85,16 +85,16 @@ fn u32_arith_int_literal_must_not_emit_u64() {
     test.add_file("mod.wj", MOD);
     test.add_file("editor.wj", EDITOR);
     test.add_file("ai.wj", AI);
-    let map = test.compile().expect("P3.324 compile");
+    let map = test.compile().expect("P3.327 compile");
     let editor_rs = map.get("editor.rs").expect("editor.rs");
     let ai_rs = map.get("ai.rs").expect("ai.rs");
     let combined = format!("{editor_rs}\n{ai_rs}");
     if bad_u32_arith_u64_literal(&combined) {
-        eprintln!("P3.324 RED:\n{combined}");
+        eprintln!("P3.327 RED:\n{combined}");
     }
     assert!(
         !bad_u32_arith_u64_literal(&combined),
-        "P3.324: u32 arith/mod with int literals must stay u32 width:\n{combined}"
+        "P3.327: u32 arith/mod with int literals must stay u32 width:\n{combined}"
     );
-    test.cargo_check().expect("P3.324 cargo-check");
+    test.cargo_check().expect("P3.327 cargo-check");
 }
