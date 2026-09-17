@@ -6,8 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 RED_FILTERS=(
-  generic_channel_send_owned_param_must_not_demote_to_ref
-  generic_channel_recv_must_move_receiver_not_clone
+  generic_type_alias_must_emit_after_struct
+  generic_assign_must_not_inject_unbound_t
   timefmt_product_must_not_mix_i32_month_or_ref_string
   demoted_str_substring_assign_must_own
   usize_i_plus_one_assign_must_stay_usize
@@ -28,6 +28,8 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  generic_channel_send_owned_param_must_not_demote_to_ref
+  generic_channel_recv_must_move_receiver_not_clone
   u32_arith_int_literal_must_not_emit_u64
   module_file_vec_len_gt_zero_must_not_mix_uint_int
   module_file_recv_reassign_must_move_not_clone_receiver

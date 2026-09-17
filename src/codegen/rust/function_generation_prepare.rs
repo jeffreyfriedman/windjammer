@@ -7335,6 +7335,11 @@ impl<'ast> CodeGenerator<'ast> {
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // Copy scalars (`usize`/`i32`/…) always pass by value — never demote to `&T`
+        // for Vec::contains forwarding (auto_ref_deref_copy).
+        if crate::type_classification::is_copy_pass_by_value_formal(&param.type_) {
+            return false;
+        }
         if self.param_cross_module_borrowed_callee_keeps_owned_formal(
             func.body.as_slice(),
             &param.name,

@@ -435,6 +435,21 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 **Gates:** `cargo test --release --test all -- int_mod_literal_zero_compare_must_not_split_i64_i32 i32_inferred_loop_counter_and_sentinel_priority_must_stay_i32 int_arith_must_not_split_i64_i32` → pass; LedgerKit `make api-check` GREEN.
 
 
+## P3.341 (2026-09-17) — auto-ref: no `&*` / `&(ref).field` on Copy into `&T`
+
+| Gate | Status |
+|------|--------|
+| `auto_ref_deref_copy_test::test_deref_copy_no_extra_ref` | ✅ tip GREEN (2026-09-17) |
+| `auto_ref_deref_copy_test::test_deref_field_copy_no_extra_ref` | ✅ tip GREEN (2026-09-17) |
+
+**Root cause layer:** signature/formal — pure-forwarding demotion emitted `&usize`/`&Entity` for Copy scalars/aggregates forwarded to `Vec::contains`; call-site actual then treated demoted Copy aggregates as `OwnedType::Copy` → Borrow → `&*entity`.
+
+**What became unnecessary:** Relying on post-IR `&*` peels for explicit-deref Copy args when formals stay owned (rustc auto-borrows).
+
+**Fix:** Gate `func_is_pure_forwarding_delegate` + `param_should_emit_borrowed_delegation_formal` on `!is_copy_pass_by_value_formal`; honor `emitted_rust_ref_formals` as Ref in `infer_actual` for Copy aggregates; strip redundant `&` on Copy field projections / explicit deref at method call sites.
+
+**Gates:** `cargo test --release --test all -- auto_ref_deref_copy_test` → 2 passed.
+
 ## P3.338 (2026-09-17) — i32 loop arith + `i < params.len()` must not emit i64 / `len() as i64`
 
 | Gate | Status |

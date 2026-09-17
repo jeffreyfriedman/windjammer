@@ -643,6 +643,16 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = coerced[1..].to_string();
                         }
+                        // Copy field projections into `&Copy` slots: rustc auto-borrows.
+                        // Do not require `formal_copy` from a possibly-stale contract sig —
+                        // `expression_is_copy` is the source of truth (auto_ref_deref_copy).
+                        if matches!(arg_to_generate, Expression::FieldAccess { .. })
+                            && self.expression_is_copy(arg_to_generate)
+                            && coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                        {
+                            coerced = coerced[1..].to_string();
+                        }
                         return coerced;
                     }
                     debug_assert!(
