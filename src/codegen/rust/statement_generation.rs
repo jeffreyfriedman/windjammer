@@ -139,7 +139,8 @@ impl<'ast> CodeGenerator<'ast> {
         match Self::peel_option_result_payload(ty) {
             Type::Int => Some(IntType::I64),
             Type::Int32 => Some(IntType::I32),
-            Type::Uint => Some(IntType::U64),
+            // WJ `uint` / bare `u32` annotations lower to Rust `u32` (P3.327) — not u64.
+            Type::Uint => Some(IntType::U32),
             Type::Custom(n) => match n.as_str() {
                 "usize" => Some(IntType::Usize),
                 "isize" => Some(IntType::Isize),
@@ -199,7 +200,9 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn strip_compound_assign_int_literal_suffix(value_str: &str) -> String {
         if let Some(stripped) = value_str
             .strip_suffix("_i64")
+            .or_else(|| value_str.strip_suffix("_u64"))
             .or_else(|| value_str.strip_suffix("_i32"))
+            .or_else(|| value_str.strip_suffix("_u32"))
             .or_else(|| value_str.strip_suffix("_usize"))
         {
             if stripped.chars().all(|c| c.is_ascii_digit() || c == '-') {

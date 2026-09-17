@@ -268,6 +268,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | ✅ tip GREEN (P3.316) — `len() as u64` |
 | P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-225 |
 | P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-221 |
+| P1 | **WCC `p.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb247_module_file_owned_wcc_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.328); twin WDB-222 |
+| P1 | **analytics `csr.clone()` → demoted `&DenseCsr` multi_source must reborrow** | `bug_wdb248_module_file_owned_csr_clone_into_demoted_ref_analytics_must_reborrow_test` | 🆕 RED / filed (P3.328); twin WDB-233 |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -289,7 +291,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`while i < parts.len()` + `parts[i]` emits `i += 1 as i32` (`wj-dotenv`)** | `bug_module_file_vec_index_loop_must_not_add_i32_to_usize_test` | ✅ tip GREEN (P3.311) — usize index increment width |
 | P1 | **`for zi in 0..(zd + 1)` emits `zd as i64 + 1_i32` (`mesh_primitives`)** | `bug_i32_range_end_add_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.313) — range-end width unified |
 | P1 | **`while i < errors.len()` + `if i == 0` emits `0_i32` (`wj-validate`)** | `bug_module_file_usize_index_eq_zero_must_not_emit_i32_test` | ✅ tip GREEN (P3.314) — usize_variables beats return-inferred Int32 |
-| P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | 🆕 RED / filed (P3.327); half_edge/mesh_primitives |
+| P1 | **u32 ± untyped int literal must not emit `_u64` peers** | `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (P3.327) — `Type::Uint` → `U32` suffix |
+| P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | 🆕 RED / filed (P3.328); blocks tip `wj-timefmt` |
 | P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | 🆕 RED / filed (P3.325); blocks tip `wj-semver` |
 | P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | 🆕 RED / filed (P3.326); blocks tip `wj-toml` |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
@@ -344,14 +347,31 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Fix:** Reconcile `Int`→`Int32` after let when RHS is i32; promote `while i < N` counters; seed i32 literal peers in while conditions; prefer i32 compare when peer is i32 field and other side is ambiguous `int` local.
 
+## P3.328 (2026-09-16) — `wj-timefmt` product month `12_i32` / `&String` into String
+
+| Change | Status |
+|--------|--------|
+| Ecosystem: `wj-timefmt` | ❌ tip RED |
+| Gate `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ❌ tip RED (2026-09-16) |
+| Note | Slim month-loop isolates tip GREEN; full package multipass still emits `12_i32 as i32` and `&parts[1].to_string()` |
+
+**Compiler agent:** keep `month <= 12` in i64 when `month: int`; pass owned `parts[i]` into owned `string` formals — never `&….to_string()`.
+
 ## P3.327 (2026-09-16) — u32 ± int literal must not emit `_u64`
 
 | Gate | Status |
 |------|--------|
-| `bug_u32_arith_int_literal_must_not_emit_u64_test` | 🆕 RED / filed |
+| `bug_u32_arith_int_literal_must_not_emit_u64_test` | ✅ tip GREEN (2026-09-16) |
 | Note | Product: half_edge / mesh_primitives / steering |
 
-**Compiler agent:** keep u32 arithmetic peers as u32 — never `_u64` literals into u32 locals/fields.
+**Root cause layer:** coercion/encoding (int-width from assignment target)
+- `int_type_from_assignment_target`: WJ `Type::Uint` was mapped to `IntType::U64` → literal peers emitted `_u64` into `u32` locals/fields.
+- Fix: `Type::Uint => IntType::U32` (matches Rust lowering of bare `u32` / `uint`).
+- Also strip `_u64`/`_u32` in `strip_compound_assign_int_literal_suffix` so compound `+=` can re-suffix from target width.
+
+**What became unnecessary:** no new reconcile peel; width comes from typed assignment target.
+
+**Gates:** `cargo test --release --test all -- u32_arith_int_literal_must_not_emit_u64 module_file_recv_reassign i32_compound_add_must_not_use_usize` → 3 passed.
 
 ## P3.326 (2026-09-16) — usize `start = i + 1` emits `1_usize as i64/i32` (`wj-toml`)
 
@@ -976,6 +996,19 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens 201/203/204 (+ open 176/177/191–198). No Phase 606+. No dogfood transforms.
+
+## P3.328 WindjammerDB CQ-C5 — coverage REDs WDB-247/248 WCC map + analytics &DenseCsr; tip-out GREEN WDB-234 (2026-09-16)
+
+| Gate | Status |
+|------|--------|
+| Fresh `cargo check --lib` | ⚠️ **~322** (gen lag) |
+| Tip-out **WDB-234** `find_index` demoted `&DenseCsr` | ✅ tip-out GREEN |
+| Tip **WDB-247** WCC `p.clone()` → demoted `&GraphVertexI64Map` get | ❌ RED — tip-out/gen graph_wcc_engine (twin WDB-222) |
+| Tip **WDB-248** analytics `csr.clone()` → demoted `&DenseCsr` multi_source | ❌ RED — tip-out/gen graph_analytics_session (twin WDB-233) |
+| Tip **WDB-244–246** | ❌ RED |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–248**; sync tip-out→gen for 234–238. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph. No Phase 606+.
 
 ## P3.324 WindjammerDB CQ-C5 — coverage REDs WDB-244–246 datafusion string ownership + tip-out greens 235–238 (2026-09-16)
 
