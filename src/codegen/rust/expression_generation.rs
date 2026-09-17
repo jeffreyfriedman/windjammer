@@ -492,10 +492,12 @@ impl<'ast> CodeGenerator<'ast> {
                 format!("{}({})", func_str, args_str)
             }
             Expression::Index { object, index, .. } => {
+                let mut idx_str = self.generate_expression_immut(index);
+                self.maybe_cast_index_to_usize(&mut idx_str, index);
                 format!(
                     "{}[{}]",
                     self.generate_expression_immut(object),
-                    self.generate_expression_immut(index)
+                    idx_str
                 )
             }
             // For complex expressions, just output a placeholder

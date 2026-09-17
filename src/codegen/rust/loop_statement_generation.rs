@@ -2,7 +2,7 @@
 
 use crate::parser::*;
 
-use super::CodeGenerator;
+use super::{operators, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn generate_loop_statement(
@@ -65,8 +65,42 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let condition_str = self.generate_expression(condition);
+        let mut condition_str = self.generate_expression(condition);
         self.assignment_int_target_type = prev_while_int;
+        if let Expression::Binary { left, op, right, .. } = condition {
+                if matches!(
+                    op,
+                    BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+                ) {
+                    let bound_is_len = matches!(
+                        right,
+                        Expression::MethodCall { method, .. }
+                            if method == "len" || method == "capacity"
+                    ) || self.expression_produces_usize(right);
+                    if bound_is_len || condition_str.contains(".len()") {
+                        if let Expression::Identifier { name, .. } = left {
+                            let param_is_wj_int = self.current_function_params.iter().any(|p| {
+                                p.name == *name && matches!(&p.type_, Type::Int)
+                            });
+                            let local_is_i64 = self.local_var_types.get(name).is_some_and(|t| {
+                                matches!(t, Type::Int)
+                                    || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                            });
+                            if !param_is_wj_int
+                                && !local_is_i64
+                                && !condition_str.contains(" as usize")
+                            {
+                                self.usize_variables.remove(name);
+                                let left_str = self.generate_expression(left);
+                                let right_str = self.generate_expression(right);
+                                let op_str = operators::binary_op_to_rust(op);
+                                condition_str =
+                                    format!("({left_str} as usize) {op_str} {right_str}");
+                            }
+                        }
+                    }
+                }
+            }
         output.push_str(&condition_str);
         output.push_str(" {\n");
 

@@ -60,6 +60,17 @@ impl<'ast> CodeGenerator<'ast> {
                 })
     }
 
+    pub(in crate::codegen::rust) fn expression_is_codegen_i32(&self, expr: &Expression<'ast>) -> bool {
+        if let Expression::Identifier { name, .. } = expr {
+            if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+            }) {
+                return true;
+            }
+        }
+        self.expression_promotes_to_i32_in_compare(expr)
+    }
+
     fn expression_promotes_to_i32_in_compare(&self, expr: &Expression<'ast>) -> bool {
         self.int_type_for_mixed_int_codegen(expr) == IntType::I32
             || self

@@ -946,6 +946,14 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.maybe_cast_index_to_usize(&mut idx_str, index);
+        if let Expression::Identifier { name, .. } = index {
+            if self.codegen_i32_binding_names.contains(name)
+                && !idx_str.contains(" as usize")
+                && !idx_str.ends_with("_usize")
+            {
+                idx_str = format!("({} as usize)", idx_str);
+            }
+        }
         let final_idx = idx_str;
 
         // WJ `string[i]` / `String[i]` / `&str[i]` → Rust byte indexing (WDB-120).

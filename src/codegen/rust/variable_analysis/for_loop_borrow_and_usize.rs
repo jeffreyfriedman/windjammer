@@ -660,6 +660,11 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return;
         }
+        if self.function_returns_i32_for_loop_scan()
+            && self.expression_is_usize_loop_bound(bound)
+        {
+            return;
+        }
         if self.expression_is_usize_loop_bound(bound) {
             self.usize_variables.insert(name.clone());
         }
@@ -669,6 +674,11 @@ impl<'ast> CodeGenerator<'ast> {
     fn expression_is_usize_loop_bound(&self, expr: &Expression) -> bool {
         self.expression_produces_usize(expr)
             || self.infer_expression_type_is_usize(expr)
+            || matches!(
+                expr,
+                Expression::MethodCall { method, .. }
+                    if method == "len" || method == "capacity"
+            )
             || matches!(
                 expr,
                 Expression::Identifier { name, .. } if self.usize_variables.contains(name)

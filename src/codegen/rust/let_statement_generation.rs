@@ -457,6 +457,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 output.push_str(": i32");
                                 if let Some(vn) = var_name {
                                     self.local_var_types.insert(vn.to_string(), Type::Int32);
+                                    self.codegen_i32_binding_names.insert(vn.to_string());
+                                    if self.function_returns_i32_for_loop_scan() {
+                                        self.usize_variables.remove(vn);
+                                    }
                                 }
                             }
                             Type::Uint => {
@@ -471,6 +475,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 if let Some(vn) = var_name {
                                     self.local_var_types
                                         .insert(vn.to_string(), Type::Custom(n.clone()));
+                                    if n == "i32" {
+                                        self.codegen_i32_binding_names.insert(vn.to_string());
+                                    }
                                 }
                             }
                             _ => {}
@@ -502,8 +509,19 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                if var_name.is_some_and(|n| self.usize_variables.contains(n)) {
+                let i32_return_scan_counter = mutable
+                    && Self::mut_let_rhs_is_return_width_counter(value)
+                    && self.function_returns_i32_for_loop_scan();
+                if var_name.is_some_and(|n| self.usize_variables.contains(n))
+                    && !i32_return_scan_counter
+                {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                }
+                if i32_return_scan_counter {
+                    self.assignment_int_target_type = Some(Type::Int32);
+                    if let Some(vn) = var_name {
+                        self.usize_variables.remove(vn);
+                    }
                 }
 
                 // WINDJAMMER PHILOSOPHY: Auto-convert string literals to String
@@ -512,6 +530,9 @@ impl<'ast> CodeGenerator<'ast> {
                 // This is safe because String auto-borrows to &str when needed.
                 let mut value_str = self.generate_expression(value);
                 self.assignment_int_target_type = prev_assign_int;
+                if i32_return_scan_counter && value_str.ends_with("_usize") {
+                    value_str = value_str.replace("_usize", "_i32");
+                }
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, None, &mut value_str);
                 if let Expression::Literal {

@@ -422,6 +422,25 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 
 **Gates:** `cargo test --release --test all -- int_mod_literal_zero_compare_must_not_split_i64_i32 i32_inferred_loop_counter_and_sentinel_priority_must_stay_i32 int_arith_must_not_split_i64_i32` → pass; LedgerKit `make api-check` GREEN.
 
+
+## P3.337 (2026-09-17) — `-> i32` + `for i in 0..vec.len()` must cast len end (not widen start to usize)
+
+| Gate | Status |
+|------|--------|
+| `i32_for_range_len_end_must_cast_to_i32` | ✅ tip GREEN (2026-09-17) |
+| Breach `wj game build` | **416** errors (was **466**); i32←usize **~2** (was **34**) |
+
+**Fix:** `generate_range` `i32_scan_len_range`; for-loop bind `Int32` when `-> i32` + len end; P3.335 while/let/index peers.
+
+## P3.335 (2026-09-17) — `-> i32` scan loops: i32 counters vs `.len()` (not `0_usize`)
+
+| Gate | Status |
+|------|--------|
+| `i32_return_while_len_counter_must_not_emit_usize` | ✅ tip GREEN (2026-09-17) |
+| Product autotiler / behavior_tree while scans | ✅ `(i as usize) < len` + `0_i32` init |
+
+**Fix:** `function_returns_i32_for_loop_scan`, let/while/binary compare casts, `codegen_i32_binding_names`, index `as usize`.
+
 ## P3.334 (2026-09-17) — i32 `for i in 0..seg` loop counter must not widen to i64 literals
 
 | Gate | Status |

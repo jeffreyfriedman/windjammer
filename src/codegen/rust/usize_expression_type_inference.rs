@@ -520,6 +520,32 @@ impl<'ast> CodeGenerator<'ast> {
             *idx_str = idx_str.replace(" as f64", " as usize");
             return;
         }
+        // P3.335: concrete `i32` locals always cast for slice/Vec index (before usize inference
+        // early-returns that skip cast when numeric inference disagrees with the binding).
+        if let Expression::Identifier { name, .. } = index {
+            if self.local_int_rust_type_name_excluding_ambiguous_int(name) == Some("i32")
+                && !idx_str.contains(" as usize")
+            {
+                *idx_str = format!("({} as usize)", idx_str);
+                return;
+            }
+        }
+        if let Expression::Identifier { name, .. } = index {
+            if self.local_var_types.get(name.as_str()).is_some_and(|ty| {
+                matches!(ty, Type::Int32)
+                    || matches!(ty, Type::Custom(n) if n == "i32")
+            }) && !idx_str.contains(" as usize")
+            {
+                *idx_str = format!("({} as usize)", idx_str);
+                return;
+            }
+        }
+        if self.int_type_for_mixed_int_codegen(index) == crate::type_inference::IntType::I32
+            && !idx_str.contains(" as usize")
+        {
+            *idx_str = format!("({} as usize)", idx_str);
+            return;
+        }
         // Non-negative integer literals infer as usize in index context — no cast needed.
         if let Expression::Literal {
             value: Literal::Int(n),
@@ -535,19 +561,35 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if self.infer_expression_type_is_usize(index) {
-            return;
+            if let Expression::Identifier { name, .. } = index {
+                let is_i32_scan = self.local_var_types.get(name.as_str()).is_some_and(|ty| {
+                    matches!(ty, Type::Int32)
+                        || matches!(ty, Type::Custom(n) if n == "i32")
+                }) || self.int_type_for_mixed_int_codegen(index) == crate::type_inference::IntType::I32;
+                if is_i32_scan && !idx_str.contains(" as usize") {
+                    *idx_str = format!("({} as usize)", idx_str);
+                    return;
+                }
+                if !is_i32_scan {
+                    return;
+                }
+            } else {
+                return;
+            }
         }
         if let Expression::Identifier { name, .. } = index {
             // Loop-promoted `int` counters (`while i < vec.len()`) stay i64 in Rust — index still
             // needs `as usize` even when comparison analysis marked them in `usize_variables`.
-            if self.identifier_emits_as_usize(name) {
+            if self.identifier_emits_as_usize(name)
+                && self.local_int_rust_type_name_excluding_ambiguous_int(name) != Some("i32")
+            {
                 return;
             }
         } else if self.expression_produces_usize(index) {
             return;
         }
         if let Some(ty) = self.infer_expression_type(index) {
-            let needs_usize_cast = matches!(ty, Type::Int)
+            let needs_usize_cast = matches!(ty, Type::Int | Type::Int32)
                 || matches!(ty, Type::Custom(name) if name == "int" || name == "i64" || name == "i32");
             if needs_usize_cast {
                 let needs_parens = matches!(index, Expression::Binary { .. });
@@ -574,6 +616,14 @@ impl<'ast> CodeGenerator<'ast> {
                 .trim();
             *idx_str = format!("{} as usize", base);
         } else if !idx_str.contains(" as ") {
+            if let Expression::Identifier { name, .. } = index {
+                if self.local_int_rust_type_name_excluding_ambiguous_int(name).as_deref()
+                    == Some("i32")
+                {
+                    *idx_str = format!("{} as usize", idx_str);
+                    return;
+                }
+            }
             if self.infer_expression_type_is_usize(index) {
                 return;
             }
