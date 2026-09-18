@@ -96,6 +96,63 @@ impl<'ast> CodeGenerator<'ast> {
             _ => None,
         };
         let tuple_slot_types = return_tuple_types.or(call_arg_tuple_types);
+
+        // Peer-drive bare int literals from sibling non-literal slots (match-arm
+        // unification). Without this, `(true, *v)` vs `(false, 0)` emits `0_i32`
+        // while `*v` is `i64` (HashMap<string, int> get None arm).
+        let peer_int_target: Option<Type> = elements
+            .iter()
+            .find_map(|e| {
+                if matches!(
+                    e,
+                    Expression::Literal {
+                        value: crate::parser::Literal::Int(_)
+                            | crate::parser::Literal::IntSuffixed(_, _),
+                        ..
+                    }
+                ) {
+                    return None;
+                }
+                let ty = self.infer_expression_type(e)?;
+                match &ty {
+                    Type::Int => Some(Type::Int),
+                    Type::Custom(n) if n == "int" || n == "i64" => Some(Type::Int),
+                    Type::Int32 => Some(Type::Int32),
+                    Type::Custom(n) if n == "i32" => Some(Type::Int32),
+                    Type::Uint => Some(Type::Uint),
+                    Type::Custom(n) if n == "u32" => Some(Type::Uint),
+                    _ => None,
+                }
+            })
+            .or_else(|| {
+                // Nested `(bool, int)` into a let (not the fn return tuple): prefer WJ
+                // `int`/`i64` when the enclosing return type contains that width.
+                fn tuple_contains(t: &Type, pred: &dyn Fn(&Type) -> bool) -> bool {
+                    match t {
+                        Type::Tuple(ts) => ts.iter().any(|x| tuple_contains(x, pred)),
+                        Type::Result(ok, _) | Type::Option(ok) => tuple_contains(ok, pred),
+                        Type::Parameterized(name, args) if name == "Result" => args
+                            .first()
+                            .is_some_and(|x| tuple_contains(x, pred)),
+                        other => pred(other),
+                    }
+                }
+                let ret = self.current_function_return_type.as_ref()?;
+                let has_i64 = tuple_contains(ret, &|t| {
+                    matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                });
+                let has_i32 = tuple_contains(ret, &|t| {
+                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+                });
+                if has_i64 {
+                    Some(Type::Int)
+                } else if has_i32 {
+                    Some(Type::Int32)
+                } else {
+                    None
+                }
+            });
+
         let expr_strs: Vec<String> = elements
             .iter()
             .enumerate()
@@ -111,8 +168,53 @@ impl<'ast> CodeGenerator<'ast> {
                 if !expects_ref {
                     self.in_owned_value_context = true;
                 }
+                let prev_int_target = self.assignment_int_target_type.clone();
+                let is_bare_int_lit = matches!(
+                    e,
+                    Expression::Literal {
+                        value: crate::parser::Literal::Int(_),
+                        ..
+                    }
+                );
+                if is_bare_int_lit {
+                    if let Some(slot_ty) = tuple_slot_types
+                        .as_ref()
+                        .and_then(|types| types.get(i))
+                        .cloned()
+                        .or_else(|| peer_int_target.clone())
+                    {
+                        if matches!(
+                            slot_ty,
+                            Type::Int
+                                | Type::Int32
+                                | Type::Uint
+                                | Type::Custom(_)
+                        ) {
+                            self.assignment_int_target_type = Some(slot_ty);
+                        }
+                    }
+                }
                 let mut s = self.generate_expression(e);
+                self.assignment_int_target_type = prev_int_target;
                 self.in_owned_value_context = prev_owned;
+                // Belt-and-suspenders: numeric inference may still stamp `_i32` on bare
+                // zeros in nested `(bool, int)` arms; rewrite when WJ int is expected.
+                if is_bare_int_lit {
+                    let prefer_i64 = matches!(peer_int_target, Some(Type::Int))
+                        || tuple_slot_types.as_ref().and_then(|t| t.get(i)).is_some_and(
+                            |t| {
+                                matches!(t, Type::Int)
+                                    || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                            },
+                        );
+                    if prefer_i64 {
+                        if let Some(digits) = s.strip_suffix("_i32") {
+                            if digits.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                                s = format!("{digits}_i64");
+                            }
+                        }
+                    }
+                }
                 if let Some(ref tuple_types) = tuple_slot_types {
                     if let Some(expected) = tuple_types.get(i) {
                         if !matches!(expected, Type::Reference(_) | Type::MutableReference(_))

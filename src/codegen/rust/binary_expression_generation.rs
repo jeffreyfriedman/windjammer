@@ -536,7 +536,15 @@ impl<'ast> CodeGenerator<'ast> {
                                     && right_ty == IntType::I64
                                     && (left_is_int_literal || right_is_int_literal)
                                 {
-                                    promoted = IntType::I32;
+                                    // Unit/i32 builders demote bare `int` arith to i32 — but not
+                                    // when an i64 local (channel job payload) is the non-literal.
+                                    let left_is_payload = !left_is_int_literal
+                                        && !self.wj_int_coord_builder_operand(left);
+                                    let right_is_payload = !right_is_int_literal
+                                        && !self.wj_int_coord_builder_operand(right);
+                                    if !left_is_payload && !right_is_payload {
+                                        promoted = IntType::I32;
+                                    }
                                 } else if is_arithmetic
                                     && self.function_prefers_i32_coord_locals()
                                     && left_ty == IntType::I64
