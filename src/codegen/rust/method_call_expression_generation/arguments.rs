@@ -325,9 +325,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_arg_float_target = self.assignment_float_target_type.clone();
+                let prev_arg_int_target = self.assignment_int_target_type.clone();
                 let prev_call_arg_expected = self.call_arg_expected_type.clone();
                 // Prefer specialized call-site signature (e.g. Vec<(String,String)>::push)
                 // so nested tuple slots get owned-text coercion.
+                let mut method_param_ty: Option<Type> = None;
                 if let Some(sig) = sig_for_effective {
                     let mut specialized = sig.clone();
                     if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
@@ -365,9 +367,30 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         self.assignment_float_target_type = param_ty.clone();
                     }
+                    method_param_ty = param_ty.clone();
                     if let Some(ty) = param_ty {
                         self.call_arg_expected_type = Some(ty);
                     }
+                }
+                // P3.366/P3.367: Drive int literal suffixes from formals / receiver — override
+                // file-wide i32-coord context (`seed.wrapping_mul(1103515245)` → `_u32` not `_i32`).
+                if let Some(peer) = crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                    method_param_ty.as_ref(),
+                )
+                .or_else(|| {
+                    crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                        receiver_type_inferred.as_ref(),
+                    )
+                })
+                .or_else(|| {
+                    use crate::type_inference::IntType;
+                    match self.int_type_for_mixed_int_codegen(object) {
+                        IntType::U32 => Some(Type::Uint),
+                        IntType::I32 => Some(Type::Int32),
+                        _ => None,
+                    }
+                }) {
+                    self.assignment_int_target_type = Some(peer);
                 }
 
                 let scope = self.arg_gen_scope();
@@ -376,6 +399,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.restore_arg_gen_scope(scope);
                 self.suppress_borrowed_clone = prev_suppress;
                 self.assignment_float_target_type = prev_arg_float_target;
+                self.assignment_int_target_type = prev_arg_int_target;
                 self.call_arg_expected_type = prev_call_arg_expected;
                 arg_str = self
                     .peel_copy_ref_match_binding_for_value(arg_to_generate, &arg_str);

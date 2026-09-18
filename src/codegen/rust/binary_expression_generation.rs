@@ -103,6 +103,10 @@ impl<'ast> CodeGenerator<'ast> {
             op,
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
         );
+        let is_bitwise = matches!(
+            op,
+            BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr
+        );
         let ident_in_usize_vars = |expr: &Expression<'ast>| {
             matches!(
                 expr,
@@ -192,7 +196,7 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.280: use full `infer_expression_type` so i32 locals from `CONST / 2` and
         // module consts peer-drive range/edge literals (`cx - 16` → `16_i32`, not `_i64`).
         let prev_bin_int = self.assignment_int_target_type.clone();
-        if (is_comparison || is_arithmetic) && self.assignment_int_target_type.is_none() {
+        if is_comparison || is_arithmetic || is_bitwise {
             let peer_int_type = |this: &Self, expr: &Expression<'ast>| -> Option<Type> {
                 this.peer_type_for_int_literal_operand(expr).or_else(|| {
                     this.infer_expression_type(expr).filter(|t| {
@@ -616,6 +620,20 @@ impl<'ast> CodeGenerator<'ast> {
                                             "{}_u32",
                                             left_str.trim_end_matches("_u64")
                                         );
+                                    } else if promoted == IntType::U32
+                                        && matches!(
+                                            left,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && left_str.ends_with("_i32")
+                                    {
+                                        left_str = format!(
+                                            "{}_u32",
+                                            left_str.trim_end_matches("_i32")
+                                        );
                                     } else {
                                         let needs_inner = matches!(left, Expression::Binary { .. })
                                             || left_str.contains(" as ");
@@ -655,6 +673,20 @@ impl<'ast> CodeGenerator<'ast> {
                                         right_str = format!(
                                             "{}_u32",
                                             right_str.trim_end_matches("_u64")
+                                        );
+                                    } else if promoted == IntType::U32
+                                        && matches!(
+                                            right,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && right_str.ends_with("_i32")
+                                    {
+                                        right_str = format!(
+                                            "{}_u32",
+                                            right_str.trim_end_matches("_i32")
                                         );
                                     } else {
                                         let needs_inner = matches!(right, Expression::Binary { .. })

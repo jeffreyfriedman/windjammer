@@ -306,6 +306,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | ✅ tip GREEN (P3.361) — tuple peer-drive / nested return int width |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | ✅ tip GREEN (P3.360) |
+| P1 | **`u32::wrapping_*` args must peer u32 in i32-coord files** | `bug_u32_method_call_literals_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN (P3.366–367) |
+| P1 | **u32 compare/bitwise literals must peer u32 in mixed i32 files** | `bug_u32_compare_and_bitwise_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN (P3.367) |
 | P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
@@ -2400,3 +2402,16 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
   dogfood_wal_ffi_snapshot path_bytes_ffi_vec \
   -- --test-threads=1
 ```
+
+## P3.367 Breach dogfood — u32 literal peers in i32-coord / void GPU files (2026-09-18)
+
+| Cluster | Gate | Status |
+|---------|------|--------|
+| `u32::wrapping_*` method args vs file i32 suffix | `bug_u32_method_call_literals_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN |
+| u32 compare / `<<` / `&` literal peers | `bug_u32_compare_and_bitwise_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN |
+| u32 mesh arith (regression) | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | ✅ tip GREEN |
+
+**Root cause:** i32-coord / void-builder context (`function_prefers_i32_coord_locals`) overwrote call-arg and binary literal peers; bitwise ops did not peer-drive; chained `wrapping_*` lost u32 receiver; `self.field` in standalone fns missed struct field types.
+
+**Dogfood:** Breach `568` → `374` rustc errors; `expected u32, found i32` `122` → `~14`; binary still **NO**.
+

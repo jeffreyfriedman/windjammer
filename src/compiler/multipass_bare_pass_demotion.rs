@@ -35,6 +35,9 @@ pub fn promote_callees_from_bare_pass_callers(
     restore_owned_returned_formals(registry, programs);
     restore_pub_owned_non_copy_api_formals(registry, programs);
     restore_owned_formals_for_producer_only_call_sites(registry, programs);
+    // WDB-216/275/276: wrappers that forward bare into owned FFI/`Vec` formals must
+    // stay owned — demoting to `&Vec` then bare-passing into `*_ffi(Vec)` is E0308.
+    restore_owned_formals_forwarded_to_owned_callees(registry, programs);
 }
 
 /// WDB-190: when every call site passes an owned producer (`encode_startup(…)`), keep
@@ -90,6 +93,71 @@ pub fn restore_owned_formals_for_producer_only_call_sites(
         if let Some(simple) = key.rsplit("::").next() {
             if simple != key.as_str() && registry.signatures.contains_key(simple) {
                 registry.signatures.insert(simple.to_string(), new_sig);
+            }
+        }
+    }
+}
+
+/// WDB-216/275/276: if a formal is already demoted but its body still forwards the
+/// binding bare into an owned callee (typically `extern` FFI), restore Owned.
+pub fn restore_owned_formals_forwarded_to_owned_callees(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+) {
+    let keys: Vec<String> = registry.signatures.keys().cloned().collect();
+    for key in keys {
+        let Some(sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let n = sig.param_ownership.len();
+        let mut changed = false;
+        let mut new_sig = sig.clone();
+        for idx in 0..n {
+            if !matches!(
+                new_sig.param_ownership.get(idx),
+                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            ) {
+                continue;
+            }
+            let Some((param_name, body)) =
+                find_function_body_for_registry_key(programs, &key, idx)
+            else {
+                continue;
+            };
+            if !param_forwarded_bare_into_owned_callee(body, param_name, registry, programs) {
+                continue;
+            }
+            new_sig.param_ownership[idx] = OwnershipMode::Owned;
+            let bare = new_sig
+                .formal_param_types
+                .get(idx)
+                .cloned()
+                .or_else(|| new_sig.param_types.get(idx).cloned());
+            if let Some(bare) = bare {
+                let owned_ty = match bare {
+                    Type::Reference(inner) | Type::MutableReference(inner) => *inner,
+                    other => other,
+                };
+                if new_sig.param_types.len() > idx {
+                    new_sig.param_types[idx] = owned_ty.clone();
+                }
+                if new_sig.formal_param_types.len() > idx {
+                    new_sig.formal_param_types[idx] = owned_ty;
+                }
+            }
+            if let Some(ref mut flags) = new_sig.emitted_rust_ref_params {
+                if flags.len() > idx {
+                    flags[idx] = false;
+                }
+            }
+            changed = true;
+        }
+        if changed {
+            registry.signatures.insert(key.clone(), new_sig.clone());
+            if let Some(bare) = key.rsplit("::").next() {
+                if bare != key.as_str() && registry.signatures.contains_key(bare) {
+                    registry.signatures.insert(bare.to_string(), new_sig);
+                }
             }
         }
     }
@@ -374,7 +442,7 @@ pub fn restore_pub_owned_non_copy_api_formals(
             {
                 continue;
             }
-            if !callee_pub_owned_formal_skip_bare_pass(&new_sig, programs, &key, idx) {
+            if !callee_pub_owned_formal_skip_bare_pass(&new_sig, programs, registry, &key, idx) {
                 continue;
             }
             if matches!(
@@ -838,6 +906,84 @@ fn char_to_digit(ch: char) -> Option<int> {
             OwnershipMode::Owned,
             "char formal must stay owned, got {:?}",
             sig.param_ownership
+        );
+    }
+
+    #[test]
+    fn bare_pass_keeps_owned_vec_forwarded_into_owned_extern_ffi() {
+        // WDB-216/275/276: `return_f64(buf) { return_f64_ffi(buf) }` must not demote
+        // to `&Vec` while FFI still takes owned `Vec`.
+        let wrapper = parse_program(
+            r#"
+extern fn return_f64_ffi(buf: Vec<f64>)
+pub fn return_f64(buf: Vec<f64>) {
+    return_f64_ffi(buf)
+}
+"#,
+        );
+        let caller = parse_program(
+            r#"
+fn consume(scores: Vec<f64>) {
+    return_f64(scores)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        let vec_f64 = Type::Vec(Box::new(Type::Float));
+        registry.signatures.insert(
+            "return_f64_ffi".to_string(),
+            FunctionSignature {
+                name: "return_f64_ffi".into(),
+                param_types: vec![vec_f64.clone()],
+                formal_param_types: vec![vec_f64.clone()],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: true,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        registry.signatures.insert(
+            "return_f64".to_string(),
+            FunctionSignature {
+                name: "return_f64".into(),
+                param_types: vec![vec_f64.clone()],
+                formal_param_types: vec![vec_f64],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let programs = vec![wrapper, caller];
+        promote_callees_from_bare_pass_callers(
+            &mut registry,
+            &programs,
+            &std::collections::HashSet::new(),
+        );
+        let sig = registry.signatures.get("return_f64").unwrap();
+        assert_eq!(
+            sig.param_ownership[0],
+            OwnershipMode::Owned,
+            "FFI-forwarding Vec formal must stay owned, got {:?}",
+            sig.param_ownership
+        );
+        assert!(
+            !matches!(
+                sig.param_types.get(0),
+                Some(Type::Reference(_))
+            ),
+            "FFI-forwarding Vec formal type must stay owned Vec, got {:?}",
+            sig.param_types
         );
     }
 
@@ -1410,7 +1556,7 @@ fn bare_pass_hint_should_skip(
         return true;
     }
     if matches!(mode, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-        && callee_pub_owned_formal_skip_bare_pass(&sig, programs, callee_key, param_idx)
+        && callee_pub_owned_formal_skip_bare_pass(&sig, programs, registry, callee_key, param_idx)
     {
         return true;
     }
@@ -1431,6 +1577,7 @@ fn bare_pass_hint_should_skip(
                 // WDB-158: compare helpers that only `match` the formal must stay owned
                 // (not `&mut Cell` / `&mut Value`).
                 || param_used_only_as_match_scrutinee(body, param_name)
+                || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
         }
         OwnershipMode::Borrowed => {
             param_stored_in_struct_literal(body, param_name)
@@ -1438,6 +1585,7 @@ fn bare_pass_hint_should_skip(
                 || param_whole_binding_returned(body, param_name)
                 || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
+                || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
         }
         OwnershipMode::Owned => false,
     }
@@ -1564,6 +1712,224 @@ fn expr_match_scrutinee_only(
 
 fn expr_is_bare_param(expr: &Expression, param_name: &str) -> bool {
     matches!(expr, Expression::Identifier { name, .. } if name == param_name)
+}
+
+/// True when `param` is passed bare into a callee formal that is Owned in the registry
+/// (WDB-216/275/276: `return_f64(buf) { return_f64_ffi(buf) }` with FFI `buf: Vec`).
+fn param_forwarded_bare_into_owned_callee(
+    body: &[&Statement],
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    body.iter().any(|stmt| {
+        stmt_forwards_bare_into_owned_callee(stmt, param_name, registry, programs)
+    })
+}
+
+fn stmt_forwards_bare_into_owned_callee(
+    stmt: &Statement,
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    match stmt {
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Assignment { value: expr, .. } => {
+            expr_forwards_bare_into_owned_callee(expr, param_name, registry, programs)
+        }
+        Statement::Let { value, else_block, .. } => {
+            expr_forwards_bare_into_owned_callee(value, param_name, registry, programs)
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
+                    })
+                })
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            condition,
+            ..
+        } => {
+            expr_forwards_bare_into_owned_callee(condition, param_name, registry, programs)
+                || then_block.iter().any(|s| {
+                    stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
+                })
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
+                    })
+                })
+        }
+        Statement::While { body, condition, .. } => {
+            expr_forwards_bare_into_owned_callee(condition, param_name, registry, programs)
+                || body.iter().any(|s| {
+                    stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
+                })
+        }
+        Statement::For { body, iterable, .. } => {
+            expr_forwards_bare_into_owned_callee(iterable, param_name, registry, programs)
+                || body.iter().any(|s| {
+                    stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
+                })
+        }
+        Statement::Match { value, arms, .. } => {
+            expr_forwards_bare_into_owned_callee(value, param_name, registry, programs)
+                || arms.iter().any(|arm| {
+                    expr_forwards_bare_into_owned_callee(&arm.body, param_name, registry, programs)
+                })
+        }
+        _ => false,
+    }
+}
+
+fn expr_forwards_bare_into_owned_callee(
+    expr: &Expression,
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    match expr {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            if let Some(name) = callee_name_from_expr(function) {
+                for (arg_i, (_, arg)) in arguments.iter().enumerate() {
+                    if expr_is_bare_param(arg, param_name)
+                        && (callee_arg_expects_owned(registry, &name, arg_i)
+                            || callee_arg_expects_owned_in_programs(programs, &name, arg_i))
+                    {
+                        return true;
+                    }
+                }
+            }
+            expr_forwards_bare_into_owned_callee(function, param_name, registry, programs)
+                || arguments.iter().any(|(_, arg)| {
+                    expr_forwards_bare_into_owned_callee(arg, param_name, registry, programs)
+                })
+        }
+        Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } => {
+            for (arg_i, (_, arg)) in arguments.iter().enumerate() {
+                if expr_is_bare_param(arg, param_name)
+                    && (callee_arg_expects_owned(registry, method, arg_i)
+                        || callee_arg_expects_owned_in_programs(programs, method, arg_i))
+                {
+                    return true;
+                }
+            }
+            expr_forwards_bare_into_owned_callee(object, param_name, registry, programs)
+                || arguments.iter().any(|(_, arg)| {
+                    expr_forwards_bare_into_owned_callee(arg, param_name, registry, programs)
+                })
+        }
+        Expression::Block { statements, .. } => statements.iter().any(|s| {
+            stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
+        }),
+        Expression::Binary { left, right, .. } => {
+            expr_forwards_bare_into_owned_callee(left, param_name, registry, programs)
+                || expr_forwards_bare_into_owned_callee(right, param_name, registry, programs)
+        }
+        Expression::Unary { operand, .. }
+        | Expression::FieldAccess { object: operand, .. }
+        | Expression::Index { object: operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. } => {
+            expr_forwards_bare_into_owned_callee(operand, param_name, registry, programs)
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
+            .iter()
+            .any(|e| expr_forwards_bare_into_owned_callee(e, param_name, registry, programs)),
+        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| {
+            expr_forwards_bare_into_owned_callee(e, param_name, registry, programs)
+        }),
+        _ => false,
+    }
+}
+
+fn callee_arg_expects_owned(
+    registry: &SignatureRegistry,
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    for key in callee_registry_keys(callee_name, registry) {
+        let Some(sig) = registry.get_signature(&key) else {
+            continue;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(OwnershipMode::Owned)
+        ) {
+            // Prefer explicit Owned; also treat missing demotion flags as owned when
+            // the declared formal type is a bare (non-ref) Vec/Custom.
+            let formal = sig
+                .formal_param_types
+                .get(pidx)
+                .or_else(|| sig.param_types.get(pidx));
+            if formal.is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            }) {
+                return true;
+            }
+            if sig.is_extern {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// AST fallback when registry stubs are incomplete during bare-pass (extern FFI often
+/// registered late). Owned bare formals on `extern fn` / free fns count as owned targets.
+fn callee_arg_expects_owned_in_programs(
+    programs: &[&Program],
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    for program in programs {
+        for item in &program.items {
+            let Item::Function { decl, .. } = item else {
+                continue;
+            };
+            if decl.name != simple && decl.name != callee_name {
+                continue;
+            }
+            let params: Vec<_> = decl
+                .parameters
+                .iter()
+                .filter(|p| p.name != "self")
+                .collect();
+            let Some(param) = params.get(arg_index) else {
+                continue;
+            };
+            if matches!(
+                &param.type_,
+                Type::Reference(_) | Type::MutableReference(_)
+            ) {
+                continue;
+            }
+            // Extern FFI and pub free wrappers declare owned Vec/Custom in source.
+            if decl.is_extern
+                || is_vec_container_type(&param.type_)
+                || matches!(&param.type_, Type::Custom(_))
+            {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Callee returns the whole `param` binding (directly or in a tuple) — must stay owned
@@ -1768,6 +2134,7 @@ fn callee_owned_text_builder_stores_payload(sig: &FunctionSignature, param_idx: 
 fn callee_pub_owned_formal_skip_bare_pass(
     sig: &FunctionSignature,
     programs: &[&Program],
+    registry: &SignatureRegistry,
     callee_key: &str,
     param_idx: usize,
 ) -> bool {
@@ -1802,6 +2169,14 @@ fn callee_pub_owned_formal_skip_bare_pass(
     // that mismatch produces `&local` into owned formals at call sites.
     if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
         return true;
+    }
+    if let Some((param_name, body)) =
+        find_function_body_for_registry_key(programs, callee_key, param_idx)
+    {
+        // WDB-216/275/276: bare forward into owned FFI / owned peer formals.
+        if param_forwarded_bare_into_owned_callee(body, param_name, registry, programs) {
+            return true;
+        }
     }
     if is_vec_container_type(formal_ty) {
         // WDB-175/190: lock owned pub `Vec` only when callers bare-pass the same binding

@@ -73,14 +73,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 {
                     gen.assignment_float_target_type = param_ty.clone();
                 }
-                if gen.assignment_int_target_type.is_none() {
-                    if let Some(peer) =
-                        crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
-                            param_ty.as_ref(),
-                        )
-                    {
-                        gen.assignment_int_target_type = Some(peer);
-                    }
+                if let Some(peer) =
+                    crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                        param_ty.as_ref(),
+                    )
+                {
+                    gen.assignment_int_target_type = Some(peer);
                 }
                 if let Some(ty) = param_ty {
                     gen.call_arg_expected_type = Some(ty);

@@ -27,10 +27,16 @@ fn wdb275_tip_out_pagerank_must_clone_ref_vec_into_owned_arena_return_f64() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let port_paths = [
-        tip.join("graph_scratch_arena_port.rs"),
-        gen.join("graph/graph_scratch_arena_port.rs"),
-    ];
+    let port_paths = if tip.join("graph_scratch_arena_port.rs").exists() {
+        vec![tip.join("graph_scratch_arena_port.rs")]
+    } else if tip.join("graph/graph_scratch_arena_port.rs").exists() {
+        vec![tip.join("graph/graph_scratch_arena_port.rs")]
+    } else {
+        vec![
+            tip.join("graph_scratch_arena_port.rs"),
+            gen.join("graph/graph_scratch_arena_port.rs"),
+        ]
+    };
     let mut owned = false;
     for path in &port_paths {
         if !path.exists() {
@@ -44,12 +50,14 @@ fn wdb275_tip_out_pagerank_must_clone_ref_vec_into_owned_arena_return_f64() {
     }
     assert!(
         owned,
-        "WDB-275: owned Vec graph_arena_return_f64 formal missing"
+        "WDB-275: owned Vec graph_arena_return_f64 formal missing (must not demote into owned FFI)"
     );
 
     // Prefer tip-out (gen may already move owned args).
     let engine_paths = if tip.join("graph_pagerank_engine.rs").exists() {
         vec![tip.join("graph_pagerank_engine.rs")]
+    } else if tip.join("graph/graph_pagerank_engine.rs").exists() {
+        vec![tip.join("graph/graph_pagerank_engine.rs")]
     } else {
         vec![gen.join("graph/graph_pagerank_engine.rs")]
     };

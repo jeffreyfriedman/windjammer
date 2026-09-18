@@ -11,12 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-274: demoted `&DenseCsr` / `&self.csr` into owned `graph_lcc_run_dense` must clone.
+//! WDB-274: `&self.csr` / demoted `&DenseCsr` vs owned `graph_lcc_run_dense` coherence.
 //!
-//! Twin of WDB-241 (ecs) / inverse of WDB-233 (analytics clone into mut-ref). Tip-out
-//! analytics session still emits:
-//!   `graph_lcc_run_dense(&self.csr)` while formal is `csr: DenseCsr` → E0308.
-//! Signature-driven: `self.csr.clone()` / move when formal is owned.
+//! Tip multipass may demote readonly `DenseCsr` formals to `&DenseCsr` (field projection
+//! only) — then `&self.csr` is correct. When the formal stays owned `DenseCsr`, the call
+//! must clone (`self.csr.clone()`). Prefer tip-out over stale gen (WDB-236/273 pattern).
 
 use std::path::PathBuf;
 
@@ -27,11 +26,16 @@ fn wdb274_tip_out_analytics_must_clone_ref_csr_into_owned_lcc_run_dense() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let eng_paths = [
-        tip.join("graph_lcc_engine.rs"),
-        gen.join("graph/graph_lcc_engine.rs"),
-    ];
+    // Prefer tip-out when present — gen lag must not poison tip truth.
+    let eng_paths = if tip.join("graph_lcc_engine.rs").exists() {
+        vec![tip.join("graph_lcc_engine.rs")]
+    } else if tip.join("graph/graph_lcc_engine.rs").exists() {
+        vec![tip.join("graph/graph_lcc_engine.rs")]
+    } else {
+        vec![gen.join("graph/graph_lcc_engine.rs")]
+    };
     let mut owned = false;
+    let mut demoted = false;
     for path in &eng_paths {
         if !path.exists() {
             continue;
@@ -41,37 +45,49 @@ fn wdb274_tip_out_analytics_must_clone_ref_csr_into_owned_lcc_run_dense() {
             owned = true;
             break;
         }
+        if text.contains("fn graph_lcc_run_dense(csr: &DenseCsr") {
+            demoted = true;
+            break;
+        }
     }
     assert!(
-        owned,
-        "WDB-274: owned DenseCsr graph_lcc_run_dense formal missing"
+        owned || demoted,
+        "WDB-274: graph_lcc_run_dense DenseCsr formal missing"
     );
 
-    let session_paths = [
-        tip.join("graph_analytics_session.rs"),
-        gen.join("graph/graph_analytics_session.rs"),
-    ];
+    let session_paths = if tip.join("graph_analytics_session.rs").exists() {
+        vec![tip.join("graph_analytics_session.rs")]
+    } else if tip.join("graph/graph_analytics_session.rs").exists() {
+        vec![tip.join("graph/graph_analytics_session.rs")]
+    } else {
+        vec![gen.join("graph/graph_analytics_session.rs")]
+    };
     let mut saw = false;
-    let mut any_bad = false;
-    let mut bad_path = String::new();
     for path in &session_paths {
         if !path.exists() {
             continue;
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("session");
-        let bad = text.contains("graph_lcc_run_dense(&self.csr)")
-            && !text.contains("graph_lcc_run_dense(self.csr.clone())");
-        eprintln!("WDB-274 bad={} path={}", bad, path.display());
-        if bad {
-            any_bad = true;
-            bad_path = path.display().to_string();
+        if owned {
+            let bad = text.contains("graph_lcc_run_dense(&self.csr)")
+                && !text.contains("graph_lcc_run_dense(self.csr.clone())");
+            eprintln!("WDB-274 owned formal bad={} path={}", bad, path.display());
+            assert!(
+                !bad,
+                "WDB-274 RED: tip-out passes &DenseCsr into owned graph_lcc_run_dense. {}",
+                path.display()
+            );
+        } else {
+            // Demoted formal: `&self.csr` is correct; owned clone would be wrong.
+            let bad = text.contains("graph_lcc_run_dense(self.csr.clone())");
+            eprintln!("WDB-274 demoted formal bad={} path={}", bad, path.display());
+            assert!(
+                !bad,
+                "WDB-274 RED: tip-out clones into demoted &DenseCsr graph_lcc_run_dense. {}",
+                path.display()
+            );
         }
     }
     assert!(saw, "WDB-274: graph_analytics_session missing");
-    assert!(
-        !any_bad,
-        "WDB-274 RED: tip-out/product passes &DenseCsr into owned graph_lcc_run_dense. {}",
-        bad_path
-    );
 }

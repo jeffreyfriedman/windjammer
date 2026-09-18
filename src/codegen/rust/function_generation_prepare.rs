@@ -858,6 +858,20 @@ impl<'ast> CodeGenerator<'ast> {
             if self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name) {
                 continue;
             }
+            // WDB-216/275/276: bare forward into owned FFI / owned siblings (`return_f64_ffi(buf)`)
+            // must keep Owned — `expression_uses_param_as_read_operand` treats call args as
+            // "readonly" and would otherwise demote to `&Vec` then bare-pass into `Vec` FFI.
+            if self.param_passes_to_wj_owned_sibling_call(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) || self.param_only_used_as_call_argument(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) {
+                continue;
+            }
             if unused.contains(&param.name)
                 || self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                 // Store-only `Vec<u8>` constructors (`from_bytes`) emit `&Vec` and clone at

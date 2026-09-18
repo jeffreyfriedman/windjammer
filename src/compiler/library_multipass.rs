@@ -1077,6 +1077,10 @@ pub(crate) fn build_library_multipass(
             reg,
             &program_refs,
         );
+        crate::compiler::multipass_bare_pass_demotion::restore_owned_formals_forwarded_to_owned_callees(
+            reg,
+            &program_refs,
+        );
         for sig in reg.signatures.values_mut() {
             wrap_converged_borrow_param_types(sig);
         }
@@ -1133,6 +1137,10 @@ pub(crate) fn build_library_multipass(
             &program_refs,
         );
         crate::compiler::multipass_bare_pass_demotion::restore_owned_formals_for_producer_only_call_sites(
+            reg,
+            &program_refs,
+        );
+        crate::compiler::multipass_bare_pass_demotion::restore_owned_formals_forwarded_to_owned_callees(
             reg,
             &program_refs,
         );

@@ -27,10 +27,13 @@ fn wdb276_tip_out_bfs_must_clone_ref_vec_into_owned_par_bfs_bind() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let port_paths = [
-        tip.join("graph_parallel_port.rs"),
-        gen.join("graph/graph_parallel_port.rs"),
-    ];
+    let port_paths = if tip.join("graph_parallel_port.rs").exists() {
+        vec![tip.join("graph_parallel_port.rs")]
+    } else if tip.join("graph/graph_parallel_port.rs").exists() {
+        vec![tip.join("graph/graph_parallel_port.rs")]
+    } else {
+        vec![gen.join("graph/graph_parallel_port.rs")]
+    };
     let mut owned = false;
     for path in &port_paths {
         if !path.exists() {
@@ -44,11 +47,13 @@ fn wdb276_tip_out_bfs_must_clone_ref_vec_into_owned_par_bfs_bind() {
     }
     assert!(
         owned,
-        "WDB-276: owned Vec graph_par_bfs_bind formal missing"
+        "WDB-276: owned Vec graph_par_bfs_bind formal missing (must not demote into owned FFI)"
     );
 
     let engine_paths = if tip.join("graph_bfs_engine.rs").exists() {
         vec![tip.join("graph_bfs_engine.rs")]
+    } else if tip.join("graph/graph_bfs_engine.rs").exists() {
+        vec![tip.join("graph/graph_bfs_engine.rs")]
     } else {
         vec![gen.join("graph/graph_bfs_engine.rs")]
     };
