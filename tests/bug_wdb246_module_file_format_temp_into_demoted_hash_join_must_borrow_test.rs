@@ -38,10 +38,13 @@ fn wdb246_tip_out_datafusion_must_borrow_format_temps_into_demoted_hash_join() {
         true
     };
 
-    let paths = [
-        tip.join("graph_sql_datafusion_port.rs"),
-        gen.join("graph/graph_sql_datafusion_port.rs"),
-    ];
+    // Prefer tip-out when present — gen lag must not poison tip truth.
+    let tip_path = tip.join("graph_sql_datafusion_port.rs");
+    let paths = if tip_path.exists() {
+        vec![tip_path]
+    } else {
+        vec![gen.join("graph/graph_sql_datafusion_port.rs")]
+    };
     let mut saw = false;
     for path in &paths {
         if !path.exists() {

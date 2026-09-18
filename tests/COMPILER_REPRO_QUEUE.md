@@ -299,7 +299,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` | 🆕 RED / filed (P3.358) |
 | P1 | **SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow must reborrow** | `bug_wdb271_module_file_owned_edge_batch_clone_into_demoted_to_arrow_must_reborrow_test` | 🆕 RED / filed (P3.363); gen lag |
 | P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | 🆕 RED / filed (P3.363); twin WDB-270 |
-| P1 | **WCC `csr.clone()` → demoted `&mut DenseCsr` afforest must reborrow** | `bug_wdb273_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | 🆕 RED / filed (P3.365); twin WDB-255; gen lag |
+| P1 | **WCC `csr.clone()` → demoted `&mut DenseCsr` afforest must reborrow** | `bug_wdb273_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | ✅ tip GREEN (P3.365) — tip-prefer; gen lag |
 | P1 | **analytics `&self.csr` → owned `lcc_run_dense` must clone** | `bug_wdb274_module_file_demoted_csr_into_owned_lcc_run_dense_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241; inverse WDB-233 |
 | P1 | **PageRank `&Vec` → owned `arena_return_f64` must clone/move** | `bug_wdb275_module_file_demoted_vec_into_owned_arena_return_f64_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241/261 |
 | P1 | **BFS `&Vec` → owned `par_bfs_bind` must clone** | `bug_wdb276_module_file_demoted_vec_into_owned_par_bfs_bind_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-261 |
@@ -311,7 +311,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.356) — coord prefer-i32 same-width literal peers |
 | P1 | **generated Cargo.toml release profile must default LTO** | `bug_generated_cargo_toml_release_profile_lto_test` | 🆕 RED / filed (P3.355) |
-| P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | 🆕 RED / filed (P3.324); twin WDB-244 |
+| P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | ✅ tip GREEN (P3.365) — module-file + tip-out; twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
 | P1 | **federation demoted `&Vec` return → owned `Vec` must clone** | `bug_wdb243_module_file_demoted_vec_return_into_owned_must_clone_test` | 🆕 RED / filed (P3.320) |
@@ -1302,10 +1302,11 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-273** WCC `csr.clone()` → demoted `&mut DenseCsr` afforest | ❌ RED — gen graph_wcc_engine (tip-out GREEN; twin WDB-255) |
+| Tip **WDB-273** WCC `csr.clone()` → demoted `&mut DenseCsr` afforest | ✅ tip GREEN (P3.365) — tip-prefer; gen lag |
 | Tip **WDB-274** analytics `&self.csr` → owned `lcc_run_dense` | ❌ RED — tip graph_analytics_session (twin WDB-241) |
 | Tip **WDB-275** PageRank `&Vec` → owned `arena_return_f64` | ❌ RED — tip graph_pagerank_engine (twin WDB-241/261) |
 | Tip **WDB-276** BFS `&Vec` → owned `par_bfs_bind` | ❌ RED — tip graph_bfs_engine (twin WDB-261) |
+| Tip **WDB-246** format temps → demoted `hash_join_semi` `&str` | ✅ tip GREEN (P3.365) — module-file + tip-out regen |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–276**; sync tip-out→gen for WCC afforest; fix tip `&T`→owned Vec/Csr call sites. No Phase 606+.
@@ -1479,7 +1480,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Tip-out **WDB-238** frame_total_len owned formal | ✅ tip-out GREEN |
 | Tip **WDB-244** `"props".to_string()` → demoted `sql_exec` `&str` | ✅ tip GREEN (P3.364) — multipass bare-pass key match |
 | Tip **WDB-245** bare `"props"` → owned table_provider `String` | ❌ RED — tip-out/gen df_analytic |
-| Tip **WDB-246** format temps → demoted `hash_join` `&str` | ❌ RED — tip-out/gen datafusion |
+| Tip **WDB-246** format temps → demoted `hash_join` `&str` | ✅ tip GREEN (P3.365) — module-file + tip-out |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–246**; sync tip-out→gen for 235–238. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph. No Phase 606+.
