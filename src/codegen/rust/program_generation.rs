@@ -559,9 +559,12 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // WJ AST formals for free functions (never overwritten by codegen refresh).
+        // Include `extern fn` so wrappers that forward into owned FFI (`Vec` / Custom)
+        // see AST-owned targets (WDB-216/275/276) — previously externs were skipped and
+        // `wj_ast_bare_owned_non_text_type` never matched FFI `Vec` formals.
         for analyzed_func in analyzed
             .iter()
-            .filter(|af| !impl_methods.contains(&af.decl.name) && !af.decl.is_extern)
+            .filter(|af| !impl_methods.contains(&af.decl.name))
         {
             self.register_free_function_ast_formals(&analyzed_func.decl, Some(analyzed_func));
         }
@@ -569,9 +572,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Preregister free-function formals BEFORE impl blocks so methods that call
         // later free fns (e.g. WalWriter::replay_all_records → replay_all) see converged
         // `&str` / borrowed contracts instead of stale owned stubs (regression-057/058/060).
+        // Include `extern fn` so wrappers that forward into owned FFI see Owned registry
+        // slots during the same generate_program pass (WDB-216/275/276).
         for analyzed_func in analyzed
             .iter()
-            .filter(|af| !impl_methods.contains(&af.decl.name) && !af.decl.is_extern)
+            .filter(|af| !impl_methods.contains(&af.decl.name))
         {
             self.preregister_function_formals_in_registry(analyzed_func);
         }

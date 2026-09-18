@@ -14,6 +14,49 @@ use crate::parser::{Expression, Type};
 use super::{string_analysis, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+
+    /// P3.368: homogenous int literal suffixes inside `vec![1_u8, 2, 3]`.
+    fn vec_macro_int_literal_peer(&self, args: &[&Expression<'ast>]) -> Option<Type> {
+        if let Some(elem) = self.vec_macro_expected_element_type() {
+            if crate::codegen::rust::type_casting::assignment_int_peer_from_formal(Some(&elem))
+                .is_some()
+            {
+                return crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                    Some(&elem),
+                );
+            }
+            if matches!(&elem, Type::Custom(n) if matches!(n.as_str(), "u8" | "i16" | "i8" | "u16" | "u64" | "i64")) {
+                return Some(elem.clone());
+            }
+        }
+        use crate::parser::Literal;
+        for arg in args {
+            if let Expression::Literal {
+                value: Literal::IntSuffixed(_, suffix),
+                ..
+            } = arg
+            {
+                return Some(Type::Custom(suffix.clone()));
+            }
+        }
+        None
+    }
+
+    fn generate_vec_macro_arg_strings(&mut self, args: &[&Expression<'ast>]) -> Vec<String> {
+        let peer = self.vec_macro_int_literal_peer(args);
+        args.iter()
+            .map(|e| {
+                let prev = self.assignment_int_target_type.clone();
+                if let Some(t) = peer.clone() {
+                    self.assignment_int_target_type = Some(t);
+                }
+                let s = self.generate_expression(e);
+                self.assignment_int_target_type = prev;
+                s
+            })
+            .collect()
+    }
+
     /// Expected element type for `vec![…]` from return type or call-arg context.
     fn vec_macro_expected_element_type(&self) -> Option<Type> {
         for ctx_ty in [
@@ -152,6 +195,11 @@ impl<'ast> CodeGenerator<'ast> {
                     out.push(self.generate_expression(e));
                 }
                 out
+            } else if name == "vec"
+                && matches!(delimiter, MacroDelimiter::Brackets)
+                && !is_repeat
+            {
+                self.generate_vec_macro_arg_strings(args)
             } else {
                 args.iter().map(|e| self.generate_expression(e)).collect()
             }

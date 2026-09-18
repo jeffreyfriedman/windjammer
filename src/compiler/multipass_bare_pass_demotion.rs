@@ -930,23 +930,8 @@ fn consume(scores: Vec<f64>) {
         );
         let mut registry = SignatureRegistry::new();
         let vec_f64 = Type::Vec(Box::new(Type::Float));
-        registry.signatures.insert(
-            "return_f64_ffi".to_string(),
-            FunctionSignature {
-                name: "return_f64_ffi".into(),
-                param_types: vec![vec_f64.clone()],
-                formal_param_types: vec![vec_f64.clone()],
-                param_ownership: vec![OwnershipMode::Owned],
-                return_type: None,
-                return_ownership: OwnershipMode::Owned,
-                has_self_receiver: false,
-                is_extern: true,
-                emitted_rust_ref_params: None,
-                string_ref_string_formal_params: None,
-                field_extract_params: None,
-                forwarding_borrow_params: None,
-            },
-        );
+        // Intentionally omit FFI from registry — product multipass may not have
+        // completed extern stubs when bare-pass runs; AST fallback must still keep owned.
         registry.signatures.insert(
             "return_f64".to_string(),
             FunctionSignature {
@@ -974,7 +959,7 @@ fn consume(scores: Vec<f64>) {
         assert_eq!(
             sig.param_ownership[0],
             OwnershipMode::Owned,
-            "FFI-forwarding Vec formal must stay owned, got {:?}",
+            "FFI-forwarding Vec formal must stay owned (AST fallback), got {:?}",
             sig.param_ownership
         );
         assert!(

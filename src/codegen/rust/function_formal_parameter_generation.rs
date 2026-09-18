@@ -283,6 +283,16 @@ impl<'ast> CodeGenerator<'ast> {
                     && !payload_forces_owned
                     && !runtime_wj_owned_keep_owned
                     && !self.is_public_owned_non_copy_formal_api(param, func)
+                    && !self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_only_forwards_to_emitted_owned_callees(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
                     && !self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name)
                     // P3.298: returned / mutated Vec (`mut out` + `out.push` + `return out`)
                     // must stay owned — `push` was miscounted as readonly via MethodCall walk.
@@ -3875,7 +3885,13 @@ impl<'ast> CodeGenerator<'ast> {
             if self.pub_vec_non_copy_custom_indexed_api(func, param) {
                 return true;
             }
-            if self.param_only_forwards_to_emitted_owned_callees(
+            // WDB-216/275/276: bare forward into owned FFI / owned siblings must keep Owned
+            // even when registry stubs are incomplete during library multipass.
+            if self.param_passes_to_wj_owned_sibling_call(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            ) || self.param_only_forwards_to_emitted_owned_callees(
                 func.body.as_slice(),
                 &param.name,
                 func,

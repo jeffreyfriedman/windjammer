@@ -7001,8 +7001,16 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         call_arg_count: Option<usize>,
     ) -> bool {
+        let callee_name = match function {
+            Expression::Identifier { name, .. } => name.as_str(),
+            Expression::FieldAccess { field, .. } => field.as_str(),
+            _ => "",
+        };
         let Some(sig) = self.resolve_free_call_signature(function, call_arg_count) else {
-            return false;
+            // WDB-216/275/276: library multipass may omit extern stubs from the registry
+            // while preparing wrappers — fall back to WJ AST bare owned formals.
+            return !callee_name.is_empty()
+                && self.free_function_ast_arg_is_owned_wj_formal(callee_name, arg_index);
         };
         let pidx = sig.arg_param_index(arg_index);
         // Completed codegen `&` / `&mut` emission wins over WJ AST bare formals
@@ -7016,12 +7024,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
-        let callee_name = match function {
-            Expression::Identifier { name, .. } => name.as_str(),
-            Expression::FieldAccess { field, .. } => field.as_str(),
-            _ => "",
-        };
-        // Multipass: when emission flags are unset/false, WJ AST bare owned Custom
+        // Multipass: when emission flags are unset/false, WJ AST bare owned Custom/Vec
         // and registry bare slots defeat stale Borrowed stubs.
         if !callee_name.is_empty()
             && self.free_function_ast_arg_is_owned_wj_formal(callee_name, arg_index)
@@ -9857,7 +9860,9 @@ impl<'ast> CodeGenerator<'ast> {
         if saw_site {
             return all_emitted_owned;
         }
-        // Registry miss: preregistered same-file callee still counts.
+        // Registry miss: AST-owned / preregistered same-file callees still count
+        // (WDB-216/275/276: extern FFI often absent from the registry during multipass).
+        let mut saw_ast_owned = false;
         for stmt in body {
             let expr = match stmt {
                 Statement::Expression { expr, .. } => Some(expr),
@@ -9879,14 +9884,20 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             };
             for (arg_index, (_, arg)) in arguments.iter().enumerate() {
-                if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                    && self.preregistered_free_call_arg_expects_borrow(callee, arg_index)
-                {
+                if !matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                    continue;
+                }
+                if self.preregistered_free_call_arg_expects_borrow(callee, arg_index) {
                     return false;
+                }
+                if self.free_function_ast_arg_is_owned_wj_formal(callee, arg_index)
+                    || self.preregistered_free_call_arg_emits_owned(callee, arg_index)
+                {
+                    saw_ast_owned = true;
                 }
             }
         }
-        false
+        saw_ast_owned
     }
 
     /// True when the body only forwards `param_name` to callees that take borrowed text (`&str`).

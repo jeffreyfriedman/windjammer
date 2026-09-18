@@ -308,6 +308,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | ✅ tip GREEN (P3.360) |
 | P1 | **`u32::wrapping_*` args must peer u32 in i32-coord files** | `bug_u32_method_call_literals_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN (P3.366–367) |
 | P1 | **u32 compare/bitwise literals must peer u32 in mixed i32 files** | `bug_u32_compare_and_bitwise_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN (P3.367) |
+| P1 | **i32-coord → i64/u32 formals (ECS/FFI)** | `bug_i32_binding_into_i64_and_u32_formal_must_cast_test` | ✅ tip GREEN (P3.368) |
 | P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
@@ -2414,4 +2415,16 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Root cause:** i32-coord / void-builder context (`function_prefers_i32_coord_locals`) overwrote call-arg and binary literal peers; bitwise ops did not peer-drive; chained `wrapping_*` lost u32 receiver; `self.field` in standalone fns missed struct field types.
 
 **Dogfood:** Breach `568` → `374` rustc errors; `expected u32, found i32` `122` → `~14`; binary still **NO**.
+
+
+## P3.368 Breach dogfood — i32-coord → i64/u32 formals (2026-09-18)
+
+| Issue | Gate | Status |
+|-------|------|--------|
+| i32 locals into `i64` / WJ `int` call + struct fields | `bug_i32_binding_into_i64_and_u32_formal_must_cast_test` | ✅ tip GREEN |
+| i32 into `u32` extern FFI + struct fields (texture.rs) | same gate | ✅ tip GREEN |
+
+**Fix:** `coerce_arg_str_for_i64/u32_formal`, `apply_numeric_formal_coercions`, extern-call path in `regular_call_arguments.rs`, struct literal `coerce_struct_field_numeric`.
+
+**Dogfood:** Breach `374` → `359` errors; `u32<-i32` ~14 → ~5; binary **NO**.
 

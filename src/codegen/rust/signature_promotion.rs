@@ -1417,11 +1417,23 @@ pub(crate) fn shared_ref_emission_beats(
     pref_has && !other_has
 }
 
-/// WJ AST declares bare non-text, non-Copy `Custom(T)` (owned API intent).
+/// WJ AST declares bare owned non-text formals: non-Copy `Custom(T)`, or container
+/// `Vec`/`Map` (WDB-216/275/276: `extern fn …_ffi(buf: Vec<f64>)` must count as owned
+/// so wrappers that forward bare into FFI keep owned formals).
 pub(crate) fn wj_ast_bare_owned_non_text_type(t: &Type) -> bool {
+    if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
+        return false;
+    }
+    if crate::codegen::rust::types::is_windjammer_text_type(t) {
+        return false;
+    }
+    if matches!(t, Type::Vec(_))
+        || matches!(t, Type::Parameterized(name, _) if name == "Vec" || name == "Map" || name == "HashMap")
+        || matches!(t, Type::Custom(name) if name.starts_with("Vec") || name.starts_with("Map") || name.starts_with("HashMap"))
+    {
+        return true;
+    }
     matches!(t, Type::Custom(_))
-        && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        && !crate::codegen::rust::types::is_windjammer_text_type(t)
         && !crate::codegen::rust::type_analysis_pure::is_copy_type(t)
 }
 

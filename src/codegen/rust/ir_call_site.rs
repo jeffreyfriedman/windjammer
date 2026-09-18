@@ -5311,11 +5311,26 @@ impl<'ast> CodeGenerator<'ast> {
         );
         // WDB-160: runtime `process::exit(i32)` — cast WJ `int`/`i64` args.
         let arg_ty = self.infer_expression_type(arg_expr);
+        let mixed_int = Some(self.int_type_for_mixed_int_codegen(arg_expr));
         crate::codegen::rust::type_casting::coerce_arg_str_for_i32_formal(
             arg_expr,
             coerced,
             formal.or(formal_for_usize),
             arg_ty.as_ref(),
+        );
+        crate::codegen::rust::type_casting::coerce_arg_str_for_i64_formal(
+            arg_expr,
+            coerced,
+            formal.or(formal_for_usize),
+            arg_ty.as_ref(),
+            mixed_int,
+        );
+        crate::codegen::rust::type_casting::coerce_arg_str_for_u32_formal(
+            arg_expr,
+            coerced,
+            formal.or(formal_for_usize),
+            arg_ty.as_ref(),
+            mixed_int,
         );
         // Numeric inference may have already emitted `1_usize` from a Vec::insert
         // suffix match; undo when the *effective* formal is not usize (after

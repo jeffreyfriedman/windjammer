@@ -93,6 +93,129 @@ pub fn coerce_arg_str_for_i32_formal(
     }
 }
 
+/// True when a formal is Rust `u32` / WJ `uint`.
+pub fn type_is_u32(ty: &Type) -> bool {
+    matches!(ty, Type::Uint) || matches!(ty, Type::Custom(n) if n == "u32")
+}
+
+/// WJ `int` / Rust `i64` formals (entity ids, etc.).
+pub fn type_is_wj_i64(ty: &Type) -> bool {
+    matches!(ty, Type::Int) || matches!(ty, Type::Custom(n) if n == "int" || n == "i64")
+}
+
+fn arg_str_emits_i32(arg_str: &str) -> bool {
+    arg_str.ends_with("_i32") || arg_str.contains(" as i32")
+}
+
+fn arg_str_emits_u32(arg_str: &str) -> bool {
+    arg_str.ends_with("_u32") || arg_str.contains(" as u32")
+}
+
+fn arg_str_emits_i64(arg_str: &str) -> bool {
+    arg_str.ends_with("_i64") || arg_str.contains(" as i64")
+}
+
+fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
+    if arg_str.contains(&format!(" as {suffix}")) {
+        return;
+    }
+    if let Expression::Literal {
+        value: Literal::Int(val),
+        ..
+    } = arg
+    {
+        if arg_str.ends_with("_i32") {
+            *arg_str = format!("{val}_{suffix}");
+            return;
+        }
+        if suffix == "i64" && arg_str.ends_with("_i64") {
+            return;
+        }
+        if suffix == "u32" && arg_str.ends_with("_u32") {
+            return;
+        }
+    }
+    let needs_parens = matches!(arg, Expression::Binary { .. }) || arg_str.contains(' ');
+    if needs_parens {
+        *arg_str = format!("({}) as {}", arg_str, suffix);
+    } else {
+        *arg_str = format!("{} as {}", arg_str, suffix);
+    }
+}
+
+/// P3.368: i32-coord locals/literals into `i64` / WJ `int` formals (ECS entity ids).
+pub fn coerce_arg_str_for_i64_formal(
+    arg: &Expression,
+    arg_str: &mut String,
+    formal: Option<&Type>,
+    arg_type: Option<&Type>,
+    mixed_int: Option<crate::type_inference::IntType>,
+) {
+    if !formal.is_some_and(type_is_wj_i64) {
+        return;
+    }
+    if arg_type.is_some_and(type_is_wj_i64) || arg_str_emits_i64(arg_str) {
+        return;
+    }
+    if arg_type.is_some_and(type_is_i32)
+        || arg_str_emits_i32(arg_str)
+        || mixed_int == Some(crate::type_inference::IntType::I32)
+    {
+        append_int_cast(arg, arg_str, "i64");
+    }
+}
+
+/// P3.368: i32-coord locals/literals into `u32` formals (GPU / texture FFI).
+pub fn coerce_arg_str_for_u32_formal(
+    arg: &Expression,
+    arg_str: &mut String,
+    formal: Option<&Type>,
+    arg_type: Option<&Type>,
+    mixed_int: Option<crate::type_inference::IntType>,
+) {
+    if !formal.is_some_and(type_is_u32) {
+        return;
+    }
+    if arg_type.is_some_and(type_is_u32) || arg_str_emits_u32(arg_str) {
+        return;
+    }
+    if arg_type.is_some_and(type_is_i32)
+        || arg_str_emits_i32(arg_str)
+        || mixed_int == Some(crate::type_inference::IntType::I32)
+    {
+        append_int_cast(arg, arg_str, "u32");
+    }
+}
+
+/// All signature-driven numeric formal coercions (extern + IR terminal).
+pub fn apply_numeric_formal_coercions(
+    arg: &Expression,
+    arg_str: &mut String,
+    formal: Option<&Type>,
+    arg_type: Option<&Type>,
+    mixed_int: Option<crate::type_inference::IntType>,
+) {
+    coerce_arg_str_for_usize_formal(None, arg, arg_str, formal, false);
+    coerce_arg_str_for_i32_formal(arg, arg_str, formal, arg_type);
+    coerce_arg_str_for_i64_formal(arg, arg_str, formal, arg_type, mixed_int);
+    coerce_arg_str_for_u32_formal(arg, arg_str, formal, arg_type, mixed_int);
+}
+
+/// P3.368: struct literal field slot — i32 binding into u32/i64 field.
+pub fn coerce_struct_field_numeric(
+    arg: &Expression,
+    expr_str: &mut String,
+    field_type: &Type,
+    arg_type: Option<&Type>,
+) {
+    if type_is_u32(field_type) {
+        coerce_arg_str_for_u32_formal(arg, expr_str, Some(field_type), arg_type, None);
+    } else if type_is_wj_i64(field_type) {
+        coerce_arg_str_for_i64_formal(arg, expr_str, Some(field_type), arg_type, None);
+    }
+}
+
+
 /// Coerce a call argument to match a `usize` formal (Rust collection capacity/index).
 ///
 /// Signature-driven: only runs when the resolved formal is `usize`. Skips when the
