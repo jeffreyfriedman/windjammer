@@ -517,6 +517,25 @@ impl<'ast> CodeGenerator<'ast> {
                                         && crate::codegen::rust::types::is_windjammer_text_type(t)
                                 });
                             if formal_is_owned_string {
+                                // P3.376: `pub const SCOPE_*: string` / module string consts lower
+                                // to `&'static str`; owned `string` formals need `.to_string()`.
+                                let arg_is_string_const = arguments.get(i).is_some_and(|(_, arg_expr)| {
+                                    let name = match arg_expr {
+                                        Expression::Identifier { name, .. } => Some(name.as_str()),
+                                        Expression::FieldAccess { field, .. } => Some(field.as_str()),
+                                        _ => None,
+                                    };
+                                    name.is_some_and(|n| {
+                                        crate::codegen::rust::string_utilities::is_string_const_identifier(
+                                            n,
+                                            self.auto_clone_analysis.as_ref(),
+                                            Some(&self.module_string_consts),
+                                        )
+                                    })
+                                });
+                                if arg_is_string_const && !arg_str.ends_with(".to_string()") {
+                                    return format!("{}.to_string()", arg_str);
+                                }
                                 let caller_passes_str_slice =
                                     arguments.get(i).is_some_and(|(_, arg_expr)| {
                                         if let Expression::Identifier { name, .. } = *arg_expr {

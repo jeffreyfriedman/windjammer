@@ -15,6 +15,19 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.376 — string const into owned `string` formal must auto-own (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `string_const_into_owned_string_formal_must_auto_own` | ⏳ tip rebuild + GREEN pending |
+| Product `game_loop.wj` `record_scope(SCOPE_GAME_LOOP_*, …)` | ⏳ E0308 expected `String`, found `&str` |
+
+**Root cause:** `pub const SCOPE_*: string` lowers to `&'static str`; method-call Owned string formals did not `.to_string()` const identifiers (struct-literal path already did).
+
+**Fix:** In method-call finalize Owned+text formal path, detect `is_string_const_identifier` / `FieldAccess` last segment and emit `.to_string()`.
+
+**Handoff:** Rebuild tip → retranspile game-core / `wj game build` → drop SCOPE_* E0308 cluster.
+
 ## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
 
 | Gate | Status |
@@ -308,13 +321,13 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **SSSP `&Vec` → owned `par_sssp_bind` must clone** | `bug_wdb279_module_file_demoted_vec_into_owned_par_sssp_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
 | P1 | **pull `&Vec` → owned `par_pull_bind` must clone** | `bug_wdb280_module_file_demoted_vec_into_owned_par_pull_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
 | P1 | **lsqb `&Vec` → owned `lsqb_vec_contains` must clone** | `bug_wdb281_module_file_demoted_vec_into_owned_lsqb_vec_contains_must_clone_test` | ✅ tip GREEN (P3.375); twin WDB-241 — bare Vec AST owned + Clone↛Borrow |
-| P1 | **pg_wire `&Vec` → owned int64_matrix must clone** | `bug_wdb282_module_file_demoted_vec_into_owned_pg_wire_int64_matrix_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
+| P1 | **pg_wire `&Vec` → owned int64_matrix must clone** | `bug_wdb282_module_file_demoted_vec_into_owned_pg_wire_int64_matrix_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241 |
 | P1 | **incremental `&csr` → owned bfs_run_dense must clone** | `bug_wdb283_module_file_demoted_csr_into_owned_incremental_bfs_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
 | P1 | **csr.clone() → demoted `&mut` afforest must reborrow** | `bug_wdb284_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | 🆕 RED / filed (P3.370); twin WDB-273 |
-| P1 | **sysbench `&samples` → owned workload_verdict must clone** | `bug_wdb285_module_file_demoted_vec_into_owned_sysbench_verdict_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241; inverse WDB-185 |
-| P1 | **tpch `&samples` → owned query_verdict must clone** | `bug_wdb286_module_file_demoted_vec_into_owned_tpch_verdict_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-285 |
-| P1 | **wave1 `&line`/`&ord` → owned session_from_batches must clone** | `bug_wdb287_module_file_demoted_vec_into_owned_wave1_session_from_batches_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241 |
-| P1 | **pubsub `&backlog` → owned live_poll must clone** | `bug_wdb288_module_file_demoted_vec_into_owned_pubsub_live_poll_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241 |
+| P1 | **sysbench `&samples` → owned workload_verdict must clone** | `bug_wdb285_module_file_demoted_vec_into_owned_sysbench_verdict_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241; inverse WDB-185 |
+| P1 | **tpch `&samples` → owned query_verdict must clone** | `bug_wdb286_module_file_demoted_vec_into_owned_tpch_verdict_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-285 |
+| P1 | **wave1 `&line`/`&ord` → owned session_from_batches must clone** | `bug_wdb287_module_file_demoted_vec_into_owned_wave1_session_from_batches_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241 |
+| P1 | **pubsub `&backlog` → owned live_poll must clone** | `bug_wdb288_module_file_demoted_vec_into_owned_pubsub_live_poll_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241 |
 | P1 | **dremel `&fields` → owned fields_by_ordinal must clone** | `bug_wdb289_module_file_demoted_vec_into_owned_dremel_fields_by_ordinal_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
 | P1 | **wave1 `&args` → owned parse_sf1_floor must clone** | `bug_wdb290_module_file_demoted_vec_into_owned_wave1_sf1_cli_floor_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
 | P1 | **wave1 `&args` → owned publish_check_cli must clone** | `bug_wdb291_module_file_demoted_vec_into_owned_wave1_publish_check_cli_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
@@ -2509,7 +2522,22 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 
 
+## P3.376 — WDB tip-out Vec→owned cluster regen + finance raw-string gate (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-281/282/285–288** | ✅ tip GREEN after module-file tip-out sync |
+| `reused_vec_second_arg_into_owned_callee_must_clone_not_reborrow` | ✅ tip GREEN |
+| finance-screens `String::from` into demoted `&str` fixture | compile fixed (`r##` for `#loadBills`) |
+
+**Root cause layer:** signature (P3.373–375 bare Vec owned + Clone↛Borrow) + tip-out lag.
+
+**What became unnecessary:** stale tip-out `&samples` / `&items` once tip `wj` module-file regen lands.
+
+**Gates:** `cargo test --release --test all -- wdb281_tip_out wdb282_tip_out wdb285_tip_out wdb286_tip_out wdb287_tip_out wdb288_tip_out reused_vec_second_arg owned_vec_reuse` → pass.
+
 ## P3.375 WindjammerDB CQ-C5 — coverage REDs WDB-289–292 &Vec→owned (2026-09-18)
+
 
 | Gate | Status |
 |------|--------|
@@ -2551,10 +2579,10 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-285** sysbench `&samples` → owned `workload_verdict` | ❌ RED — tip sysbench_opt_port (inverse WDB-185) |
-| Tip **WDB-286** tpch `&samples` → owned `query_verdict` | ❌ RED — tip tpch_opt_port (twin WDB-285) |
-| Tip **WDB-287** wave1 `&line`/`&ord` → owned `session_from_batches` | ❌ RED — tip wave1_sf1_session_port |
-| Tip **WDB-288** pubsub `&backlog` → owned `live_poll` | ❌ RED — tip observability_pubsub_live_subscribe |
+| Tip **WDB-285** sysbench `&samples` → owned `workload_verdict` | ✅ tip GREEN (P3.376) — tip-out synced |
+| Tip **WDB-286** tpch `&samples` → owned `query_verdict` | ✅ tip GREEN (P3.376) — tip-out synced |
+| Tip **WDB-287** wave1 `&line`/`&ord` → owned `session_from_batches` | ✅ tip GREEN (P3.376) — tip-out synced |
+| Tip **WDB-288** pubsub `&backlog` → owned `live_poll` | ✅ tip GREEN (P3.376) — tip-out synced |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **285–288**; signature-driven clone into owned Vec second/later args. No Phase 606+.
@@ -2563,11 +2591,11 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-281** lsqb `&Vec` → owned `lsqb_vec_contains` | ✅ tip GREEN (P3.375) — bare Vec AST owned; Clone↛Borrow demotion narrowed |
-| Tip **WDB-282** pg_wire `&Vec` → owned int64_matrix | ❌ RED — tip relational_pg_wire |
+| Tip **WDB-281** lsqb `&Vec` → owned `lsqb_vec_contains` | ✅ tip GREEN (P3.375/376) — bare Vec AST owned; tip-out synced |
+| Tip **WDB-282** pg_wire `&Vec` → owned int64_matrix | ✅ tip GREEN (P3.376) — tip-out synced |
 | Tip **WDB-283** incremental `&csr` → owned bfs_run_dense | ❌ RED — tip graph incremental |
 | Tip **WDB-284** csr.clone() → demoted `&mut` afforest | ❌ RED — tip WCC (twin WDB-273) |
-| `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ❌ RED — SharedInt / AtomicI64 peers |
+| `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** tip greens **281–284**; signature-driven clone into owned Vec/Csr; wj-sync int width. No Phase 606+.
+**Compiler agent priority:** tip greens **283–284**, then **289–292**; signature-driven clone into owned Vec/Csr. No Phase 606+.
