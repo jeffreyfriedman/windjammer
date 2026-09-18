@@ -267,7 +267,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | ✅ tip GREEN (P3.316) — tip demotes to `&DenseCsr` |
 | P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (P3.316) — `&key` |
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | ✅ tip GREEN (P3.316) — `len() as u64` |
-| P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-225 |
+| P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | ✅ tip GREEN (P3.364); twin module-file gate |
 | P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-221 |
 | P1 | **WCC `p.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb247_module_file_owned_wcc_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.328); twin WDB-222 |
 | P1 | **analytics `csr.clone()` → demoted `&DenseCsr` multi_source must reborrow** | `bug_wdb248_module_file_owned_csr_clone_into_demoted_ref_analytics_must_reborrow_test` | 🆕 RED / filed (P3.328); twin WDB-233 |
@@ -302,7 +302,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | 🆕 RED / filed (P3.361) |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | 🆕 RED / filed (P3.360) |
-| P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | 🆕 RED / filed (P3.362); twin WDB-244 |
+| P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.356) — coord prefer-i32 same-width literal peers |
@@ -1447,7 +1447,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Tip-out **WDB-234** `find_index` demoted `&DenseCsr` | ✅ tip-out GREEN |
 | Tip **WDB-247** WCC `p.clone()` → demoted `&GraphVertexI64Map` get | ❌ RED — tip-out/gen graph_wcc_engine (twin WDB-222) |
 | Tip **WDB-248** analytics `csr.clone()` → demoted `&DenseCsr` multi_source | ❌ RED — tip-out/gen graph_analytics_session (twin WDB-233) |
-| Tip **WDB-244–246** | ❌ RED |
+| Tip **WDB-244–246** | ⚠️ **244** ✅ tip GREEN (P3.364); **245–246** still ❌ |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–248**; sync tip-out→gen for 234–238. Dominant residual: Vec←&Vec / `&str`←String / LsqbTypedGraph. No Phase 606+.
@@ -1461,7 +1461,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Tip-out **WDB-236** HashMap String `&key` | ✅ tip-out GREEN |
 | Tip-out **WDB-237** `len() as u64` (no `as i64`) | ✅ tip-out GREEN |
 | Tip-out **WDB-238** frame_total_len owned formal | ✅ tip-out GREEN |
-| Tip **WDB-244** `"props".to_string()` → demoted `sql_exec` `&str` | ❌ RED — tip-out/gen datafusion |
+| Tip **WDB-244** `"props".to_string()` → demoted `sql_exec` `&str` | ✅ tip GREEN (P3.364) — multipass bare-pass key match |
 | Tip **WDB-245** bare `"props"` → owned table_provider `String` | ❌ RED — tip-out/gen df_analytic |
 | Tip **WDB-246** format temps → demoted `hash_join` `&str` | ❌ RED — tip-out/gen datafusion |
 | Dogfood / tip-cluster | ❄️ frozen |

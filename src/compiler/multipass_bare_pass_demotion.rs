@@ -228,22 +228,43 @@ fn visit_expr_for_producer_only_kinds(
     }
 }
 
+/// True when `registry_key`'s final segment equals `name`.
+///
+/// Never use `registry_key.ends_with("::{simple}")` alone: for `Batch::sql_exec` that
+/// predicate is always true, so the first pub `fn` in the crate falsely matches and
+/// bare-pass restores wipe cross-crate demotion (WDB-244).
+fn registry_key_simple_name_is(registry_key: &str, name: &str) -> bool {
+    registry_key == name
+        || registry_key
+            .rsplit_once("::")
+            .is_some_and(|(_, simple)| simple == name)
+}
+
+/// `Type::method` registry keys must not bind to free-function AST items.
+fn registry_key_is_type_qualified_method(registry_key: &str) -> bool {
+    registry_key.rsplit_once("::").is_some_and(|(parent, _)| {
+        parent
+            .rsplit("::")
+            .next()
+            .is_some_and(|leaf| leaf.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+    })
+}
+
 fn programs_declare_pub_free_fn_owned_custom_formal_at(
     programs: &[&Program],
     callee_key: &str,
     param_idx: usize,
     copy_types: &std::collections::HashSet<String>,
 ) -> bool {
-    let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    if registry_key_is_type_qualified_method(callee_key) {
+        return false;
+    }
     programs.iter().any(|program| {
         program.items.iter().any(|item| {
             let Item::Function { decl, .. } = item else {
                 return false;
             };
-            if !(decl.name == simple
-                || callee_key.ends_with(&format!("::{simple}"))
-                || callee_key == decl.name)
-            {
+            if !registry_key_simple_name_is(callee_key, &decl.name) {
                 return false;
             }
             if !decl.is_pub || decl.parent_type.is_some() {
@@ -264,16 +285,15 @@ fn programs_declare_pub_free_fn_vec_formal_at(
     callee_key: &str,
     param_idx: usize,
 ) -> bool {
-    let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    if registry_key_is_type_qualified_method(callee_key) {
+        return false;
+    }
     programs.iter().any(|program| {
         program.items.iter().any(|item| {
             let Item::Function { decl, .. } = item else {
                 return false;
             };
-            if !(decl.name == simple
-                || callee_key.ends_with(&format!("::{simple}"))
-                || callee_key == decl.name)
-            {
+            if !registry_key_simple_name_is(callee_key, &decl.name) {
                 return false;
             }
             if !decl.is_pub || decl.parent_type.is_some() {
@@ -343,6 +363,17 @@ pub fn restore_pub_owned_non_copy_api_formals(
         let mut changed = false;
         let mut new_sig = sig.clone();
         for idx in 0..n {
+            // Defining-module / dependency demotion (`emitted_rust_ref_params[idx]=true`)
+            // must not be undone by importer-crate bare-pass restores (WDB-244).
+            if new_sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                == Some(true)
+            {
+                continue;
+            }
             if !callee_pub_owned_formal_skip_bare_pass(&new_sig, programs, &key, idx) {
                 continue;
             }
@@ -409,6 +440,15 @@ pub fn restore_owned_string_formals_stored_in_payload(
         let mut changed = false;
         let mut new_sig = sig.clone();
         for idx in 0..n {
+            if new_sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                == Some(true)
+            {
+                continue;
+            }
             if !matches!(
                 new_sig.param_ownership.get(idx),
                 Some(OwnershipMode::Borrowed)
@@ -1622,6 +1662,15 @@ pub fn restore_owned_returned_formals(
         let mut changed = false;
         let mut new_sig = sig.clone();
         for idx in 0..n {
+            if new_sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                == Some(true)
+            {
+                continue;
+            }
             if !matches!(
                 new_sig.param_ownership.get(idx),
                 Some(OwnershipMode::MutBorrowed | OwnershipMode::Borrowed)
@@ -1733,10 +1782,14 @@ fn callee_pub_owned_formal_skip_bare_pass(
         return false;
     }
     let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    // Type::method keys are not free functions — never treat them as pub free APIs.
+    if registry_key_is_type_qualified_method(callee_key) {
+        return false;
+    }
     let is_pub_free_fn = programs.iter().any(|program| {
         program.items.iter().any(|item| {
             matches!(item, Item::Function { decl, .. }
-                if (decl.name == simple || callee_key.ends_with(&format!("::{simple}")))
+                if registry_key_simple_name_is(callee_key, &decl.name)
                     && decl.is_pub
                     && decl.parent_type.is_none())
         })
@@ -1925,17 +1978,29 @@ fn find_function_body_for_registry_key<'a>(
     param_idx: usize,
 ) -> Option<(&'a str, &'a [&'a Statement<'a>])> {
     let simple = registry_key.rsplit("::").next().unwrap_or(registry_key);
+    let type_method = registry_key_is_type_qualified_method(registry_key);
     for program in programs {
         for item in &program.items {
-            if let Item::Function { decl, .. } = item {
-                if decl.name == simple || registry_key.ends_with(&format!("::{simple}")) {
-                    let param = non_self_param(&decl.parameters, param_idx)?;
-                    return Some((param.name.as_str(), decl.body.as_slice()));
+            if !type_method {
+                if let Item::Function { decl, .. } = item {
+                    if registry_key_simple_name_is(registry_key, &decl.name) {
+                        let param = non_self_param(&decl.parameters, param_idx)?;
+                        return Some((param.name.as_str(), decl.body.as_slice()));
+                    }
                 }
             }
             if let Item::Impl { block, .. } = item {
+                if type_method {
+                    let parent_leaf = registry_key
+                        .rsplit_once("::")
+                        .map(|(p, _)| p.rsplit("::").next().unwrap_or(p))
+                        .unwrap_or(registry_key);
+                    if block.type_name != parent_leaf {
+                        continue;
+                    }
+                }
                 for method in &block.functions {
-                    if method.name == simple || registry_key.ends_with(&format!("::{simple}")) {
+                    if method.name == simple {
                         let param = non_self_param(&method.parameters, param_idx)?;
                         return Some((param.name.as_str(), method.body.as_slice()));
                     }
@@ -1950,10 +2015,19 @@ fn non_self_param<'a>(
     parameters: &'a [crate::parser::Parameter<'a>],
     param_idx: usize,
 ) -> Option<&'a crate::parser::Parameter<'a>> {
-    parameters
-        .iter()
-        .filter(|p| p.name != "self")
-        .nth(param_idx)
+    // `param_idx` is the full signature index (self at 0 when present).
+    let has_self = parameters.iter().any(|p| p.name == "self");
+    if has_self {
+        if param_idx == 0 {
+            return None;
+        }
+        parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .nth(param_idx - 1)
+    } else {
+        parameters.get(param_idx)
+    }
 }
 
 /// Callee body only reads `param` via `param.field` / `param[i]` in call arguments (HTTP

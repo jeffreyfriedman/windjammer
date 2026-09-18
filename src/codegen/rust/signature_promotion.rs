@@ -107,7 +107,19 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
             // those Owned slots stale lets call sites prefer the global converged signature.
             // Real payload-store Owned params (Value on MemoryEngine::put) refresh via
             // codegen `emitted_rust_ref_params[idx] == false` (early return above).
-            OwnershipMode::Owned => sig.has_self_receiver && idx > 0 && bare_non_copy,
+            OwnershipMode::Owned => {
+                // Sibling demoted shared-ref slots (dependency metadata) mean this Owned
+                // Custom is a real payload formal, not a stale engine stub (WDB-244).
+                if sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .is_some_and(|flags| flags.iter().any(|&f| f))
+                {
+                    false
+                } else {
+                    sig.has_self_receiver && idx > 0 && bare_non_copy
+                }
+            }
         }
     })
 }

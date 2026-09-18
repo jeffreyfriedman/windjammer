@@ -1316,6 +1316,11 @@ pub(crate) fn plain_string_owned_consumer_at_call_site(
     {
         return false;
     }
+    // Codegen-confirmed `&str` / shared-ref emission beats bare WJ `string` formals
+    // (WDB-244 `ArrowColumnarBatch::sql_exec` / `Batch::sql_exec` demotion).
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx) {
+        return false;
+    }
     if sig
         .forwarding_borrow_params
         .as_ref()
@@ -1323,6 +1328,14 @@ pub(crate) fn plain_string_owned_consumer_at_call_site(
         .copied()
         .unwrap_or(false)
     {
+        return false;
+    }
+    // Analyzer Borrowed/MutBorrowed on a plain `string` formal is a readonly/`&str`
+    // contract unless emission flags say otherwise (handled above).
+    if matches!(
+        sig.param_ownership.get(idx),
+        Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+    ) {
         return false;
     }
     if sig.return_type.as_ref().is_some_and(|t| {
@@ -1333,14 +1346,19 @@ pub(crate) fn plain_string_owned_consumer_at_call_site(
         // Read-only params in `format!`-style builders (`temp_path(name) -> string`) stay
         // `&str` even when the function returns owned text — only moved/owned params are
         // owned consumers (`normalize_value(raw) -> string { raw }`).
-        return !matches!(
+        return matches!(
             sig.param_ownership.get(idx),
-            Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+            Some(OwnershipMode::Owned) | None
         );
     }
     // Same-file / sparse registry stubs may omit return_type while the WJ formal
     // is still an owned `string` consumer (normalize_value(raw) after starts_with).
-    sig.formal_param_type(idx)
+    // Require Owned (or missing ownership) — never treat Borrowed demotions as owned.
+    matches!(
+        sig.param_ownership.get(idx),
+        Some(OwnershipMode::Owned) | None
+    ) && sig
+        .formal_param_type(idx)
         .is_some_and(|t| matches!(t, Type::String))
 }
 
