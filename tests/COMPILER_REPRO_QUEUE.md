@@ -297,6 +297,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.357); twin WDB-248/256 |
 | P1 | **LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors must reborrow** | `bug_wdb269_module_file_owned_graph_clone_into_demoted_lsqb_neighbors_must_reborrow_test` | 🆕 RED / filed (P3.358); inverse WDB-220 |
 | P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` | 🆕 RED / filed (P3.358) |
+| P1 | **SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow must reborrow** | `bug_wdb271_module_file_owned_edge_batch_clone_into_demoted_to_arrow_must_reborrow_test` | 🆕 RED / filed (P3.363); gen lag |
+| P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | 🆕 RED / filed (P3.363); twin WDB-270 |
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | 🆕 RED / filed (P3.361) |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | 🆕 RED / filed (P3.360) |
@@ -1291,6 +1293,16 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 **Root cause:** `substring(start,end)` lowering reused pre-codegen call args (`0_i64`) instead of re-emitting bounds with `in_index_context` (same path as `generate_index` range slices). `maybe_cast_index_to_usize` early-returned on literal AST nodes while the string still carried `_i64`.
 
 **Fix:** `method_call_expression_generation/finalize.rs` — re-generate start/end with `in_index_context` + `maybe_cast_index_to_usize`.
+
+## P3.363 WindjammerDB CQ-C5 — coverage REDs WDB-271/272 edge_batch to_arrow + wave1 push_str (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-271** SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow | ❌ RED — gen graph_sql_datafusion_port (tip-out GREEN) |
+| Tip **WDB-272** wave1 `push_str(&owned.clone())` must reborrow | ❌ RED — tip wave1_publish_port (twin WDB-270) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–272**; sync tip-out→gen for edge_batch to_arrow + wave1 `&str` clones. No Phase 606+.
 
 ## P3.358 WindjammerDB CQ-C5 — coverage REDs WDB-269/270 LSQB graph.clone + wave1 &str clone (2026-09-17)
 
