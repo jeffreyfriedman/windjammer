@@ -19,8 +19,8 @@ mod test_utils;
 const ATOMIC: &str = r#"
 use std::sync::atomic::{AtomicI64, Ordering}
 
-pub fn bump() -> int {
-    let n = AtomicI64::new(0)
+pub fn bump(start: int) -> int {
+    let n = AtomicI64::new(start)
     n.fetch_add(1, Ordering::Relaxed)
     n.load(Ordering::Relaxed)
 }

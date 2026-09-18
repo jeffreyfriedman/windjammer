@@ -311,7 +311,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **pg_wire `&Vec` → owned int64_matrix must clone** | `bug_wdb282_module_file_demoted_vec_into_owned_pg_wire_int64_matrix_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
 | P1 | **incremental `&csr` → owned bfs_run_dense must clone** | `bug_wdb283_module_file_demoted_csr_into_owned_incremental_bfs_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
 | P1 | **csr.clone() → demoted `&mut` afforest must reborrow** | `bug_wdb284_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | 🆕 RED / filed (P3.370); twin WDB-273 |
+| P1 | **sysbench `&samples` → owned workload_verdict must clone** | `bug_wdb285_module_file_demoted_vec_into_owned_sysbench_verdict_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241; inverse WDB-185 |
+| P1 | **tpch `&samples` → owned query_verdict must clone** | `bug_wdb286_module_file_demoted_vec_into_owned_tpch_verdict_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-285 |
+| P1 | **wave1 `&line`/`&ord` → owned session_from_batches must clone** | `bug_wdb287_module_file_demoted_vec_into_owned_wave1_session_from_batches_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241 |
+| P1 | **pubsub `&backlog` → owned live_poll must clone** | `bug_wdb288_module_file_demoted_vec_into_owned_pubsub_live_poll_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370) — i64 formals + SharedInt/Counter return width
+| P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | ✅ tip GREEN (P3.361) — tuple peer-drive / nested return int width |
@@ -2495,6 +2500,33 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Gate:** `cargo test --test all --features integration_tests theme_hex_byte_arith_must_stay_one_int_width -- --nocapture` → pass (2026-09-18 GREEN incl. cargo-check).
 
+
+
+
+
+## P3.373 — owned Vec reuse into owned callee (`if` forward-ref) (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `owned_vec_reuse_into_owned_callee_must_clone_not_reborrow` | ✅ tip GREEN |
+
+**Root cause:** `coerce_forward_ref_params_in_if_condition` rewrote `contains(items, …)` → `contains(&items, …)` for if-facade forward-ref params even when the callee slot emits owned `Vec<i64>`. `coerce_owned_params_clone_in_if_condition` skipped the same params, so reuse after the call never got `items.clone()`.
+
+**Fix:** Skip forward-ref `&` rewrite when `expr_call_expects_owned_formal_for_param` (incl. `bare_formal_is_vec_or_map` + preregistered owned formals). Allow owned clone coercion for if-facade params into owned callees. DRY helpers: `clone_reused_binding_for_owned_vec_formal`, `bare_formal_is_vec_or_map` codegen-owned beat stale `Reference(Vec)`.
+
+**Gate:** `cargo test --test all --features integration_tests,codegen_tests owned_vec_reuse_into_owned_callee_must_clone -- --nocapture` → pass (2026-09-18 GREEN incl. cargo-check).
+
+## P3.372 WindjammerDB CQ-C5 — coverage REDs WDB-285–288 second-arg &Vec→owned (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-285** sysbench `&samples` → owned `workload_verdict` | ❌ RED — tip sysbench_opt_port (inverse WDB-185) |
+| Tip **WDB-286** tpch `&samples` → owned `query_verdict` | ❌ RED — tip tpch_opt_port (twin WDB-285) |
+| Tip **WDB-287** wave1 `&line`/`&ord` → owned `session_from_batches` | ❌ RED — tip wave1_sf1_session_port |
+| Tip **WDB-288** pubsub `&backlog` → owned `live_poll` | ❌ RED — tip observability_pubsub_live_subscribe |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **285–288**; signature-driven clone into owned Vec second/later args. No Phase 606+.
 
 ## P3.370 WindjammerDB CQ-C5 — coverage REDs WDB-281–284 + wj-sync i64 peers (2026-09-18)
 
