@@ -171,18 +171,33 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Tuple(elems) => {
                 elems.is_empty() || !elems.iter().any(|t| self.type_contains_wj_int_width(t))
             }
+            // `Vec<int>` / `HashMap<…, int>` channel/pool payloads — keep i64 peers
+            // (`pool_run_double` → `v * 2` not `v * 2_i32`).
+            Type::Vec(inner) | Type::Array(inner, _) => {
+                !self.type_contains_wj_int_width(inner)
+            }
+            Type::Parameterized(name, args)
+                if matches!(
+                    name.as_str(),
+                    "Vec" | "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet"
+                ) && args.iter().any(|a| self.type_contains_wj_int_width(a)) =>
+            {
+                false
+            }
             Type::Custom(n) if n == "Unit" => true,
             _ => true,
         }
     }
 
-    /// True when `t` is WJ `int`/`i64` or a struct/tuple carrying that width.
+    /// True when `t` is WJ `int`/`i64` or a struct/tuple/collection carrying that width.
     fn type_contains_wj_int_width(&self, t: &Type) -> bool {
         match Self::peel_option_result_payload(t) {
             Type::Int => true,
             Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "SharedInt" | "Counter") => true,
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => true,
             Type::Tuple(elems) => elems.iter().any(|e| self.type_contains_wj_int_width(e)),
+            Type::Vec(inner) | Type::Array(inner, _) => self.type_contains_wj_int_width(inner),
+            Type::Parameterized(_, args) => args.iter().any(|a| self.type_contains_wj_int_width(a)),
             _ => false,
         }
     }
