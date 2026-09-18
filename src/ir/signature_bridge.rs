@@ -294,6 +294,19 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 let analyzer_mode = sig.param_ownership.get(param_idx).copied();
                 match analyzer_mode {
                     Some(OwnershipMode::Borrowed) => {
+                        // WJ AST still declares bare `Vec` (for-in consume) while analyzer
+                        // converged Borrowed — defining module emits owned `Vec`, not `&Vec`
+                        // (push_unique → contains(items) must clone, not `&items`).
+                        let ast_bare_vec = sig
+                            .formal_param_types
+                            .get(param_idx)
+                            .is_some_and(|t| is_bare_vec_type(t));
+                        if ast_bare_vec && ref_emission != Some(true) {
+                            return safety_type_from_parser_type(
+                                bare,
+                                Some(OwnershipMode::Owned),
+                            );
+                        }
                         // Cross-file / pre-emission stubs keep bare `Vec` in param_types
                         // while ownership is Borrowed — call sites still need `&walls`.
                         return safety_type_from_parser_type(
@@ -866,6 +879,9 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         return false;
     }
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return false;
+    }
+    if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx) {
         return false;
     }
     if sig

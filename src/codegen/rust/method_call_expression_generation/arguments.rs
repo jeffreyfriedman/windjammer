@@ -383,10 +383,16 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 })
                 .or_else(|| {
+                    receiver_type_name.and_then(|n| {
+                        crate::codegen::rust::type_casting::assignment_int_peer_from_owner_type_name(n)
+                    })
+                })
+                .or_else(|| {
                     use crate::type_inference::IntType;
                     match self.int_type_for_mixed_int_codegen(object) {
                         IntType::U32 => Some(Type::Uint),
                         IntType::I32 => Some(Type::Int32),
+                        IntType::I64 => Some(Type::Int),
                         _ => None,
                     }
                 }) {

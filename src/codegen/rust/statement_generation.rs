@@ -524,7 +524,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// P3.370: if-else value expressions — unify float literal suffixes from branch tails.
+    /// P3.370 / P3.374: if-else value expressions — unify float literal suffixes from branch tails.
     pub(in crate::codegen::rust) fn branch_tail_float_type(
         &self,
         block: &[&'ast Statement<'ast>],
@@ -534,12 +534,64 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Expression { expr, .. } => expr,
             _ => return None,
         };
-        let ty = self.infer_expression_type(expr)?;
-        if crate::codegen::rust::type_classification_utilities::is_float_type(&ty) {
-            Some(ty)
-        } else {
-            None
+        self.if_else_branch_expr_float_type(expr)
+    }
+
+    /// Effective float type of an if/else branch tail (P3.374: `1.0 / sx` with f32 `sx` → f32).
+    pub(in crate::codegen::rust) fn if_else_branch_expr_float_type(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> Option<Type> {
+        if let Some(ni) = &self.numeric_inference {
+            use crate::type_inference::FloatType;
+            match ni.get_float_type(expr) {
+                FloatType::F32 => return Some(Type::Custom("f32".into())),
+                FloatType::F64 => return Some(Type::Custom("f64".into())),
+                FloatType::Unknown => {}
+            }
         }
+        if let Some(ty) = self.infer_expression_type(expr) {
+            if matches!(&ty, Type::Custom(n) if n == "f32") {
+                return Some(ty);
+            }
+            if matches!(&ty, Type::Float)
+                && self.expr_has_f32_arithmetic_context(expr)
+            {
+                return Some(Type::Custom("f32".into()));
+            }
+            if crate::codegen::rust::type_classification_utilities::is_float_type(&ty) {
+                return Some(ty);
+            }
+        }
+        None
+    }
+
+    fn expr_has_f32_arithmetic_context(&self, expr: &Expression<'ast>) -> bool {
+        use crate::parser::ast::operators::BinaryOp;
+        match expr {
+            Expression::Binary { left, right, op, .. } => {
+                if !matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div
+                ) {
+                    return false;
+                }
+                self.expr_is_inferred_f32(left)
+                    || self.expr_is_inferred_f32(right)
+                    || self.expr_has_f32_arithmetic_context(left)
+                    || self.expr_has_f32_arithmetic_context(right)
+            }
+            Expression::Cast { type_, .. } => {
+                matches!(type_, Type::Custom(n) if n == "f32")
+            }
+            Expression::Unary { operand, .. } => self.expr_has_f32_arithmetic_context(operand),
+            _ => self.expr_is_inferred_f32(expr),
+        }
+    }
+
+    fn expr_is_inferred_f32(&self, expr: &Expression<'ast>) -> bool {
+        self.infer_expression_type(expr)
+            .is_some_and(|t| matches!(t, Type::Custom(n) if n == "f32"))
     }
 
     pub(in crate::codegen::rust) fn generate_statement_impl(
