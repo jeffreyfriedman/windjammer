@@ -303,10 +303,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **analytics `&self.csr` → owned `lcc_run_dense` must clone** | `bug_wdb274_module_file_demoted_csr_into_owned_lcc_run_dense_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241; inverse WDB-233 |
 | P1 | **PageRank `&Vec` → owned `arena_return_f64` must clone/move** | `bug_wdb275_module_file_demoted_vec_into_owned_arena_return_f64_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241/261 |
 | P1 | **BFS `&Vec` → owned `par_bfs_bind` must clone** | `bug_wdb276_module_file_demoted_vec_into_owned_par_bfs_bind_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-261 |
-| P1 | **CDLP `&Vec` → owned `par_cdlp_bind` must clone** | `bug_wdb277_module_file_demoted_vec_into_owned_par_cdlp_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
-| P1 | **WCC `&Vec` → owned `par_wcc_bind` must clone** | `bug_wdb278_module_file_demoted_vec_into_owned_par_wcc_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
-| P1 | **SSSP `&Vec` → owned `par_sssp_bind` must clone** | `bug_wdb279_module_file_demoted_vec_into_owned_par_sssp_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
-| P1 | **pull `&Vec` → owned `par_pull_bind` must clone** | `bug_wdb280_module_file_demoted_vec_into_owned_par_pull_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
+| P1 | **CDLP `&Vec` → owned `par_cdlp_bind` must clone** | `bug_wdb277_module_file_demoted_vec_into_owned_par_cdlp_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
+| P1 | **WCC `&Vec` → owned `par_wcc_bind` must clone** | `bug_wdb278_module_file_demoted_vec_into_owned_par_wcc_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
+| P1 | **SSSP `&Vec` → owned `par_sssp_bind` must clone** | `bug_wdb279_module_file_demoted_vec_into_owned_par_sssp_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
+| P1 | **pull `&Vec` → owned `par_pull_bind` must clone** | `bug_wdb280_module_file_demoted_vec_into_owned_par_pull_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
+| P1 | **lsqb `&Vec` → owned `lsqb_vec_contains` must clone** | `bug_wdb281_module_file_demoted_vec_into_owned_lsqb_vec_contains_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
+| P1 | **pg_wire `&Vec` → owned int64_matrix must clone** | `bug_wdb282_module_file_demoted_vec_into_owned_pg_wire_int64_matrix_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
+| P1 | **incremental `&csr` → owned bfs_run_dense must clone** | `bug_wdb283_module_file_demoted_csr_into_owned_incremental_bfs_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
+| P1 | **csr.clone() → demoted `&mut` afforest must reborrow** | `bug_wdb284_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | 🆕 RED / filed (P3.370); twin WDB-273 |
+| P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370) — i64 formals + SharedInt/Counter return width
+| P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | ✅ tip GREEN (P3.361) — tuple peer-drive / nested return int width |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | ✅ tip GREEN (P3.360) |
@@ -319,7 +325,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.356) — coord prefer-i32 same-width literal peers |
-| P1 | **generated Cargo.toml release profile must default LTO** | `bug_generated_cargo_toml_release_profile_lto_test` | 🆕 RED / filed (P3.355) |
+| P1 | **generated Cargo.toml release profile must default LTO** | `bug_generated_cargo_toml_release_profile_lto_test` | ✅ tip GREEN (P3.355) |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | ✅ tip GREEN (P3.365) — module-file + tip-out; twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
 | P1 | **demoted `&str` vertex_id_name → owned from_ids_labels must `.to_string()`** | `bug_wdb242_module_file_demoted_str_into_owned_record_batch_name_must_to_string_test` | 🆕 RED / filed (P3.320); twin WDB-240 |
@@ -1318,6 +1324,19 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–280**; signature-driven clone into owned `graph_par_*_bind` formals (or demote FFI to slices). No Phase 606+.
+
+## P3.370 (2026-09-18) — wj-sync WJ `int` literal peers must emit `_i64`
+
+| Gate | Status |
+|---|---|
+| `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (2026-09-18) |
+
+**Root cause layer:** codegen int-width — `assignment_int_peer_from_formal` only peer-drove `i32`/`u32` call formals (not WJ `int`/`i64`), and `function_prefers_i32_coord_locals` treated `SharedInt`/`Counter` handle returns as i32-coord builders, demoting `1`/`0`/`2` to `_i32` in compare/mul/call/atomic args.
+
+**Fix:** peer-drive `Type::Int` from i64 formals; treat custom returns that carry WJ int width (`SharedInt`, `Counter`, …) as non–i32-coord builders via `type_contains_wj_int_width`.
+
+**Gates:** `cargo test --release --test all -- wj_sync_int_literal hashmap_none_zero vec_int_return std_sync_atomic_i64 generated_cargo_toml_release_profile_lto` → pass.
+
 
 ## P3.365 WindjammerDB CQ-C5 — coverage REDs WDB-273–276 WCC afforest + LCC/arena/par_bfs owned (2026-09-17)
 
@@ -2463,3 +2482,29 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Gates:** `cargo test --release --test all -- wdb216_module_file_owned_ffi wdb275_tip_out wdb276_tip_out wdb277_tip_out wdb278_tip_out wdb279_tip_out wdb280_tip_out i64_entity_literal` → pass.
 
+## P3.371 — finance-screens theme hex byte arith (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `theme_hex_byte_arith_must_stay_one_int_width` | ✅ tip GREEN |
+| Product `finance-screens` `theme.rs` `hi * 16 + lo` | ✅ `hi * 16_i64 + lo` (no `lo as i32`) |
+
+**Root cause:** After `< 0` compares, numeric inference tagged later `hex_digit_value()` call results as i32; `reconcile_ambiguous_int_local_after_let` narrowed WJ `int` call bindings to `Type::Int32`, and `int_type_for_mixed_int_codegen` let `eng == I32` override WJ `int` locals — mixed add emitted `16_i64 + lo as i32`.
+
+**Fix:** Keep WJ `int`/`i64` call-result lets at i64 unless RHS actually emitted `_i32`; trust WJ `int` local types over post-compare i32 inference. `assignment_int_peer_from_formal` already peers i64 formals for call literals (P3.368 WIP).
+
+**Gate:** `cargo test --test all --features integration_tests theme_hex_byte_arith_must_stay_one_int_width -- --nocapture` → pass.
+
+
+## P3.370 WindjammerDB CQ-C5 — coverage REDs WDB-281–284 + wj-sync i64 peers (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-281** lsqb `&Vec` → owned `lsqb_vec_contains` | ❌ RED — tip lsqb_typed_graph (call-site `&` into owned) |
+| Tip **WDB-282** pg_wire `&Vec` → owned int64_matrix | ❌ RED — tip relational_pg_wire |
+| Tip **WDB-283** incremental `&csr` → owned bfs_run_dense | ❌ RED — tip graph incremental |
+| Tip **WDB-284** csr.clone() → demoted `&mut` afforest | ❌ RED — tip WCC (twin WDB-273) |
+| `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ❌ RED — SharedInt / AtomicI64 peers |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **281–284**; signature-driven clone into owned Vec/Csr; wj-sync int width. No Phase 606+.

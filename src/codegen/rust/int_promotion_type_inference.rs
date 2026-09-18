@@ -144,6 +144,9 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
     ) -> bool {
+        if !self.function_prefers_i32_coord_locals() {
+            return false;
+        }
         let Expression::Identifier { name, .. } = expr else {
             return false;
         };
@@ -294,7 +297,8 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.329: Call/MethodCall WJ `int` results must not become usize via later
         // substring formals (`let plus_pos = find_tz_sign(...)`).
         if matches!(value, Expression::Call { .. } | Expression::MethodCall { .. }) {
-            let signed_ret = self.infer_expression_type(value).as_ref().is_some_and(|t| {
+            let ret_ty = self.infer_expression_type(value);
+            let signed_ret = ret_ty.as_ref().is_some_and(|t| {
                 matches!(t, Type::Int | Type::Int32)
                     || matches!(
                         t,
@@ -302,6 +306,18 @@ impl<'ast> CodeGenerator<'ast> {
                     )
             });
             if signed_ret {
+                // P3.371: WJ `int` / i64 callee results stay i64 — do not narrow bindings
+                // to i32 because numeric inference tagged the call after `< 0` compares.
+                let wj_int_ret = ret_ty.as_ref().is_some_and(|t| {
+                    matches!(t, Type::Int)
+                        || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                });
+                if wj_int_ret {
+                    if emitted_rhs.ends_with("_i32") {
+                        self.local_var_types.insert(name.to_string(), Type::Int32);
+                    }
+                    return;
+                }
                 if emitted_rhs.ends_with("_i32")
                     || self.int_type_for_mixed_int_codegen(value) == IntType::I32
                 {
@@ -756,6 +772,19 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                             if eng == IntType::I32 {
+                                // P3.371: WJ `int` locals stay i64; inference may flip i32 after compares.
+                                let wj_int_local = self.local_var_types.get(name.as_str()).is_some_and(
+                                    |t| {
+                                        matches!(t, Type::Int)
+                                            || matches!(
+                                                t,
+                                                Type::Custom(n) if n == "int" || n == "i64"
+                                            )
+                                    },
+                                );
+                                if wj_int_local && !self.codegen_i32_binding_names.contains(name) {
+                                    return IntType::I64;
+                                }
                                 return IntType::I32;
                             }
                         }

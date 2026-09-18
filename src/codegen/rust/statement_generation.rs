@@ -165,6 +165,7 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int | Type::Bool | Type::String => false,
             Type::Custom(n) if matches!(n.as_str(), "int" | "i64") => false,
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => false,
+            Type::Custom(n) if self.type_contains_wj_int_width(&Type::Custom(n.clone())) => false,
             // `(Once, SharedInt)` / `(int, int)` / `(Pool, bool)` — do not force i32
             // literals into i64 SharedInt / channel payloads (wj-sync Counter graduation).
             // Empty tuples stay unit-like (prefer i32 builder demotion).
@@ -520,6 +521,24 @@ impl<'ast> CodeGenerator<'ast> {
         match last {
             Statement::Expression { expr, .. } => self.expr_suggests_owned_string_coercion(expr),
             _ => false,
+        }
+    }
+
+    /// P3.370: if-else value expressions — unify float literal suffixes from branch tails.
+    pub(in crate::codegen::rust) fn branch_tail_float_type(
+        &self,
+        block: &[&'ast Statement<'ast>],
+    ) -> Option<Type> {
+        let last = block.last().copied()?;
+        let expr = match last {
+            Statement::Expression { expr, .. } => expr,
+            _ => return None,
+        };
+        let ty = self.infer_expression_type(expr)?;
+        if crate::codegen::rust::type_classification_utilities::is_float_type(&ty) {
+            Some(ty)
+        } else {
+            None
         }
     }
 

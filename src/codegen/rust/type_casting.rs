@@ -44,6 +44,9 @@ pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
     if formal.is_some_and(type_is_i32) {
         return Some(Type::Int32);
     }
+    if formal.is_some_and(type_is_wj_i64) {
+        return Some(Type::Int);
+    }
     if formal.is_some_and(|ty| {
         matches!(ty, Type::Uint) || matches!(ty, Type::Custom(n) if n == "u32")
     }) {
