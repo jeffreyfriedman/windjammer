@@ -683,6 +683,20 @@ impl<'ast> CodeGenerator<'ast> {
                 self.in_expression_context = prev_expr_ctx;
                 self.coerce_string_literals_to_owned = prev_coerce;
 
+                if let Some(struct_name) = self.current_struct_literal_name.as_deref() {
+                    if let Some(field_types) = self.lookup_struct_field_types(struct_name) {
+                        if let Some(field_type) = field_types.get(field_name) {
+                            let arg_ty = self.infer_expression_type(expr);
+                            crate::codegen::rust::type_casting::coerce_struct_field_numeric(
+                                expr,
+                                &mut expr_str,
+                                field_type,
+                                arg_ty.as_ref(),
+                            );
+                        }
+                    }
+                }
+
                 // Restore previous context
                 self.in_struct_literal_field = prev_in_struct_field;
                 self.current_struct_field_name = prev_field_name;

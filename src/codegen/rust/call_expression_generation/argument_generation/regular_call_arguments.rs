@@ -191,6 +191,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 arg_str = format!("{}.clone()", arg_str);
                             }
                         }
+                        // P3.368: i32-coord locals into u32/i64 extern formals (texture FFI, ECS).
+                        let mixed_int = Some(gen.int_type_for_mixed_int_codegen(arg));
+                        let arg_ty = gen.infer_expression_type(arg);
+                        crate::codegen::rust::type_casting::apply_numeric_formal_coercions(
+                            arg,
+                            &mut arg_str,
+                            Some(param_type),
+                            arg_ty.as_ref(),
+                            mixed_int,
+                        );
                     }
                 } else if matches!(
                     arg,
