@@ -27,10 +27,13 @@ fn wdb273_tip_out_wcc_must_reborrow_owned_csr_clone_into_demoted_mut_afforest() 
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
-    let paths = [
-        tip.join("graph_wcc_engine.rs"),
-        gen.join("graph/graph_wcc_engine.rs"),
-    ];
+    // Prefer tip-out when present — gen lag must not poison tip truth (WDB-236 pattern).
+    let tip_path = tip.join("graph_wcc_engine.rs");
+    let paths = if tip_path.exists() {
+        vec![tip_path]
+    } else {
+        vec![gen.join("graph/graph_wcc_engine.rs")]
+    };
     let mut demoted = false;
     for path in &paths {
         if !path.exists() {
@@ -48,8 +51,6 @@ fn wdb273_tip_out_wcc_must_reborrow_owned_csr_clone_into_demoted_mut_afforest() 
     );
 
     let mut saw = false;
-    let mut any_bad = false;
-    let mut bad_path = String::new();
     for path in &paths {
         if !path.exists() {
             continue;
@@ -58,15 +59,11 @@ fn wdb273_tip_out_wcc_must_reborrow_owned_csr_clone_into_demoted_mut_afforest() 
         let text = std::fs::read_to_string(path).expect("wcc");
         let bad = text.contains("graph_wcc_run_dense_afforest(csr.clone())");
         eprintln!("WDB-273 bad={} path={}", bad, path.display());
-        if bad {
-            any_bad = true;
-            bad_path = path.display().to_string();
-        }
+        assert!(
+            !bad,
+            "WDB-273 RED: tip-out/product passes owned csr.clone() into demoted &mut DenseCsr afforest. {}",
+            path.display()
+        );
     }
     assert!(saw, "WDB-273: graph_wcc_engine missing");
-    assert!(
-        !any_bad,
-        "WDB-273 RED: tip-out/product passes owned csr.clone() into demoted &mut DenseCsr afforest. {}",
-        bad_path
-    );
 }
