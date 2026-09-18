@@ -167,32 +167,22 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => false,
             // `(Once, SharedInt)` / `(int, int)` / `(Pool, bool)` — do not force i32
             // literals into i64 SharedInt / channel payloads (wj-sync Counter graduation).
-            Type::Tuple(elems) => !elems.iter().any(|t| self.type_contains_wj_int_width(t)),
-            Type::Tuple(v) if v.is_empty() => true,
-            // `Vec<int>` / `HashMap<…, int>` channel/pool payloads — keep i64 peers.
-            Type::Vec(inner) | Type::Array(inner, _) => {
-                !self.type_contains_wj_int_width(inner)
-            }
-            Type::Parameterized(name, args)
-                if matches!(name.as_str(), "Vec" | "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet")
-                    && args.iter().any(|a| self.type_contains_wj_int_width(a)) =>
-            {
-                false
+            // Empty tuples stay unit-like (prefer i32 builder demotion).
+            Type::Tuple(elems) => {
+                elems.is_empty() || !elems.iter().any(|t| self.type_contains_wj_int_width(t))
             }
             Type::Custom(n) if n == "Unit" => true,
             _ => true,
         }
     }
 
-    /// True when `t` is WJ `int`/`i64` or a struct/tuple/collection carrying that width.
+    /// True when `t` is WJ `int`/`i64` or a struct/tuple carrying that width.
     fn type_contains_wj_int_width(&self, t: &Type) -> bool {
         match Self::peel_option_result_payload(t) {
             Type::Int => true,
             Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "SharedInt" | "Counter") => true,
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => true,
             Type::Tuple(elems) => elems.iter().any(|e| self.type_contains_wj_int_width(e)),
-            Type::Vec(inner) | Type::Array(inner, _) => self.type_contains_wj_int_width(inner),
-            Type::Parameterized(_, args) => args.iter().any(|a| self.type_contains_wj_int_width(a)),
             _ => false,
         }
     }
