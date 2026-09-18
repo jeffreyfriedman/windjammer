@@ -1467,6 +1467,10 @@ fn apply_bare_pass_hint(
     let Some(mut sig) = registry.get_signature(key).cloned() else {
         return;
     };
+    // Extern FFI boundaries stay owned (see bare_pass_hint_should_skip).
+    if sig.is_extern {
+        return;
+    }
     if sig.param_ownership.is_empty() {
         let n = sig
             .formal_param_types
@@ -1535,6 +1539,12 @@ fn bare_pass_hint_should_skip(
     let Some(sig) = registry.get_signature(callee_key) else {
         return false;
     };
+    // WDB-216/275/276: `extern fn` formals are the C/FFI boundary — bare-pass must never
+    // demote them to Borrowed/`&Vec`. Doing so makes wrappers that forward bare into FFI
+    // look like borrow-passthrough delegates and emit `&Vec` + bare into `Vec` (E0308).
+    if sig.is_extern {
+        return true;
+    }
     if matches!(mode, OwnershipMode::Borrowed)
         && callee_owned_text_builder_stores_payload(&sig, param_idx)
     {

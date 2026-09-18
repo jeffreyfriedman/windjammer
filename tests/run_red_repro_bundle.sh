@@ -29,6 +29,8 @@ RED_FILTERS=(
 )
 
 GREEN_FILTERS=(
+  i64_entity_literal_peers_and_index_add_must_cast
+  wdb216_module_file_owned_ffi_forwarder_must_stay_owned_vec
   i32_nested_range_eq_mod_literals_must_not_emit_i64
   module_file_void_while_i32_seg_counter_must_not_emit_i64
   module_file_demoted_str_field_assign_must_to_string

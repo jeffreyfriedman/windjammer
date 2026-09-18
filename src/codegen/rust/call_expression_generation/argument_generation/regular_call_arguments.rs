@@ -225,6 +225,23 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 gen.maybe_clone_index_for_owned_param(arg, &mut arg_str);
             }
 
+            if let Some(ref sig) = signature {
+                let pidx = sig.arg_param_index(i);
+                let param_ty = sig
+                    .param_type_for_arg(i)
+                    .or_else(|| sig.formal_param_type(pidx))
+                    .or_else(|| sig.param_types.get(pidx));
+                let mixed_int = Some(gen.int_type_for_mixed_int_codegen(arg));
+                let arg_ty = gen.infer_expression_type(arg);
+                crate::codegen::rust::type_casting::apply_numeric_formal_coercions(
+                    arg,
+                    &mut arg_str,
+                    param_ty,
+                    arg_ty.as_ref(),
+                    mixed_int,
+                );
+            }
+
             if gen.ir_cutover.call_sites && !is_extern_call {
                 if let Some(mut coerced) = gen.apply_ir_call_site_coercion(
                     &gen.signature_registry,

@@ -9829,17 +9829,19 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx));
             // AST bare owned only when emission metadata does not already record a Rust ref
             // (take/restore callees keep `emitted_rust_ref_params=true`).
+            // Extern FFI: AST bare owned beats stale bare-pass Borrowed/`Reference` wraps.
             let emitted_owned = emitted_owned
                 || (self.free_function_ast_arg_is_owned_wj_formal(&sig.name, arg_index)
-                    && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                        sig, pidx,
-                    )
-                    && sig
-                        .emitted_rust_ref_params
-                        .as_ref()
-                        .and_then(|flags| flags.get(pidx))
-                        .copied()
-                        != Some(true))
+                    && (sig.is_extern
+                        || (!crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            sig, pidx,
+                        )
+                            && sig
+                                .emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|flags| flags.get(pidx))
+                                .copied()
+                                != Some(true))))
                 || self
                     .preregistered_free_function_emitted_params
                     .get(sig.name.rsplit("::").next().unwrap_or(&sig.name))

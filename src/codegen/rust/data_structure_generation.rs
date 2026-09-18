@@ -1046,9 +1046,21 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let prev_index_ctx = self.in_index_context;
+        let prev_index_assign_int = self.assignment_int_target_type.clone();
+        self.in_index_context = true;
+        if matches!(
+            index,
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Add | crate::parser::BinaryOp::Sub,
+                ..
+            }
+        ) {
+            self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+        }
         self.in_index_context = true;
         let mut idx_str = self.generate_expression(index);
         self.in_index_context = prev_index_ctx;
+        self.assignment_int_target_type = prev_index_assign_int;
 
         // Match/if-let on `.as_ref()` binds `&usize` etc.; array indexing needs owned index.
         if let Some(ty) = self.infer_expression_type(index) {

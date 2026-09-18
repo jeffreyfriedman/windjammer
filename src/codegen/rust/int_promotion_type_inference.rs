@@ -61,6 +61,48 @@ impl<'ast> CodeGenerator<'ast> {
                 })
     }
 
+    /// P3.369: Typed i64 entity ids / WJ `int` vs i32-coord literal (`old_parent >= 0`).
+    pub(in crate::codegen::rust) fn comparison_should_prefer_i64_over_i32(
+        &self,
+        i64_side: &Expression<'ast>,
+        literal_side: &Expression<'ast>,
+    ) -> bool {
+        if !matches!(
+            literal_side,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ) {
+            return false;
+        }
+        if self.int_type_for_mixed_int_codegen(i64_side) == crate::type_inference::IntType::I64 {
+            return true;
+        }
+        if self.infer_expression_type(i64_side).is_some_and(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+        }) {
+            return true;
+        }
+        if let Expression::Identifier { name, .. } = i64_side {
+            if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                matches!(t, Type::Int)
+                    || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+            }) {
+                return true;
+            }
+            if self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && (matches!(&p.type_, Type::Int)
+                        || matches!(&p.type_, Type::Custom(n) if n == "int" || n == "i64"))
+            }) {
+                return true;
+            }
+        }
+        false
+    }
+
 
     /// P3.353: WJ `int` const/locals in void/i32-coord builders (not `int` params).
     pub(in crate::codegen::rust) fn wj_int_coord_builder_operand(
@@ -571,6 +613,15 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
     ) -> Option<Type> {
+        if self.infer_expression_type(expr).is_some_and(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+        }) {
+            return Some(Type::Int);
+        }
+        if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::I64 {
+            return Some(Type::Int);
+        }
         if self.wj_int_coord_builder_operand(expr) {
             return Some(Type::Int32);
         }

@@ -303,12 +303,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **analytics `&self.csr` → owned `lcc_run_dense` must clone** | `bug_wdb274_module_file_demoted_csr_into_owned_lcc_run_dense_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241; inverse WDB-233 |
 | P1 | **PageRank `&Vec` → owned `arena_return_f64` must clone/move** | `bug_wdb275_module_file_demoted_vec_into_owned_arena_return_f64_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241/261 |
 | P1 | **BFS `&Vec` → owned `par_bfs_bind` must clone** | `bug_wdb276_module_file_demoted_vec_into_owned_par_bfs_bind_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-261 |
+| P1 | **CDLP `&Vec` → owned `par_cdlp_bind` must clone** | `bug_wdb277_module_file_demoted_vec_into_owned_par_cdlp_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
+| P1 | **WCC `&Vec` → owned `par_wcc_bind` must clone** | `bug_wdb278_module_file_demoted_vec_into_owned_par_wcc_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
+| P1 | **SSSP `&Vec` → owned `par_sssp_bind` must clone** | `bug_wdb279_module_file_demoted_vec_into_owned_par_sssp_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
+| P1 | **pull `&Vec` → owned `par_pull_bind` must clone** | `bug_wdb280_module_file_demoted_vec_into_owned_par_pull_bind_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-276 |
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | ✅ tip GREEN (P3.361) — tuple peer-drive / nested return int width |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | ✅ tip GREEN (P3.360) |
 | P1 | **`u32::wrapping_*` args must peer u32 in i32-coord files** | `bug_u32_method_call_literals_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN (P3.366–367) |
 | P1 | **u32 compare/bitwise literals must peer u32 in mixed i32 files** | `bug_u32_compare_and_bitwise_must_peer_u32_in_mixed_i32_fn_file_test` | ✅ tip GREEN (P3.367) |
 | P1 | **i32-coord → i64/u32 formals (ECS/FFI)** | `bug_i32_binding_into_i64_and_u32_formal_must_cast_test` | ✅ tip GREEN (P3.368) |
+| P1 | **i64 entity compare / call lit + `idx + 1` index cast** | `bug_i64_entity_literal_peers_and_index_add_test` | ✅ tip GREEN (P3.369) — prefer i64 over i32 lit; index i64+lit → usize |
+| P1 | **module-file owned FFI Vec forwarder must stay owned** | `bug_wdb216_module_file_owned_ffi_wrapper_must_stay_owned_test` | ✅ tip GREEN (P3.369); twin WDB-216/275 |
 | P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
@@ -1301,14 +1307,26 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 
 **Fix:** `method_call_expression_generation/finalize.rs` — re-generate start/end with `in_index_context` + `maybe_cast_index_to_usize`.
 
+## P3.369 WindjammerDB CQ-C5 — coverage REDs WDB-277–280 par_*_bind owned Vec (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-277** CDLP `&Vec` → owned `par_cdlp_bind` | ✅ tip GREEN (P3.369) — tip-out owned formals + bare pass |
+| Tip **WDB-278** WCC `&Vec` → owned `par_wcc_bind` | ✅ tip GREEN (P3.369) — tip-out owned formals + bare pass |
+| Tip **WDB-279** SSSP `&Vec` → owned `par_sssp_bind` | ✅ tip GREEN (P3.369) — tip-out owned formals + bare pass |
+| Tip **WDB-280** PageRank `&Vec` → owned `par_pull_bind` | ✅ tip GREEN (P3.369) — tip-out owned formals + bare pass |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–280**; signature-driven clone into owned `graph_par_*_bind` formals (or demote FFI to slices). No Phase 606+.
+
 ## P3.365 WindjammerDB CQ-C5 — coverage REDs WDB-273–276 WCC afforest + LCC/arena/par_bfs owned (2026-09-17)
 
 | Gate | Status |
 |------|--------|
 | Tip **WDB-273** WCC `csr.clone()` → demoted `&mut DenseCsr` afforest | ✅ tip GREEN (P3.365) — tip-prefer; gen lag |
 | Tip **WDB-274** analytics `&self.csr` → owned `lcc_run_dense` | ❌ RED — tip graph_analytics_session (twin WDB-241) |
-| Tip **WDB-275** PageRank `&Vec` → owned `arena_return_f64` | ❌ RED — tip graph_pagerank_engine (twin WDB-241/261) |
-| Tip **WDB-276** BFS `&Vec` → owned `par_bfs_bind` | ❌ RED — tip graph_bfs_engine (twin WDB-261) |
+| Tip **WDB-275** PageRank `&Vec` → owned `arena_return_f64` | ✅ tip GREEN (P3.369) — extern bare-pass skip + AST owned FFI |
+| Tip **WDB-276** BFS `&Vec` → owned `par_bfs_bind` | ✅ tip GREEN (P3.369) — same as WDB-275 |
 | Tip **WDB-246** format temps → demoted `hash_join_semi` `&str` | ✅ tip GREEN (P3.365) — module-file + tip-out regen |
 | Dogfood / tip-cluster | ❄️ frozen |
 
@@ -2427,4 +2445,21 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Fix:** `coerce_arg_str_for_i64/u32_formal`, `apply_numeric_formal_coercions`, extern-call path in `regular_call_arguments.rs`, struct literal `coerce_struct_field_numeric`.
 
 **Dogfood:** Breach `374` → `359` errors; `u32<-i32` ~14 → ~5; binary **NO**.
+
+## P3.369 (2026-09-18) — i64 entity literal peers + index `idx + 1` + owned FFI forwarder
+
+| Gate | Status |
+|------|--------|
+| `bug_i64_entity_literal_peers_and_index_add_test` | ✅ tip GREEN |
+| `bug_wdb216_module_file_owned_ffi_wrapper_must_stay_owned_test` | ✅ tip GREEN |
+| Tip **WDB-275/276** arena/par_bfs owned Vec | ✅ tip GREEN |
+| Tip **WDB-277–280** par_*_bind owned Vec | ✅ tip GREEN (tip-out regen) |
+
+**Root cause layer:** signature — bare-pass demoted `extern fn` `Vec` formals to Borrowed/`&Vec`, so wrappers that forward bare into FFI looked like borrow-passthrough and emitted `&Vec` + bare into `Vec` (E0308). Secondary: i32-coord prefer overwrote i64 entity compares; index `i64 + lit` promoted before usize rewrite.
+
+**What became unnecessary:** no new ir_call_site peels; wrappers stay owned via intact extern Owned signatures + AST-owned FFI detection (narrowed prepare AST path for `sig.is_extern`).
+
+**Fix:** never bare-pass-demote `is_extern` formals (`multipass_bare_pass_demotion`); AST bare owned beats stale Borrowed on extern; `comparison_should_prefer_i64_over_i32`; skip i32 promotion for index i64+lit.
+
+**Gates:** `cargo test --release --test all -- wdb216_module_file_owned_ffi wdb275_tip_out wdb276_tip_out wdb277_tip_out wdb278_tip_out wdb279_tip_out wdb280_tip_out i64_entity_literal` → pass.
 
