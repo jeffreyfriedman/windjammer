@@ -2491,9 +2491,9 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Root cause:** After `< 0` compares, numeric inference tagged later `hex_digit_value()` call results as i32; `reconcile_ambiguous_int_local_after_let` narrowed WJ `int` call bindings to `Type::Int32`, and `int_type_for_mixed_int_codegen` let `eng == I32` override WJ `int` locals — mixed add emitted `16_i64 + lo as i32`.
 
-**Fix:** Keep WJ `int`/`i64` call-result lets at i64 unless RHS actually emitted `_i32`; trust WJ `int` local types over post-compare i32 inference. `assignment_int_peer_from_formal` already peers i64 formals for call literals (P3.368 WIP).
+**Fix:** Keep WJ `int`/`i64` call-result lets at i64 unless RHS actually emitted `_i32`; trust WJ `int` local types over post-compare i32 inference. `assignment_int_peer_from_formal` already peers i64 formals for call literals (P3.368 WIP). `maybe_clone_index_for_owned_param`: `text[lo..hi]` into owned `string` → `.to_string()` (not `.clone()` on `str`).
 
-**Gate:** `cargo test --test all --features integration_tests theme_hex_byte_arith_must_stay_one_int_width -- --nocapture` → pass.
+**Gate:** `cargo test --test all --features integration_tests theme_hex_byte_arith_must_stay_one_int_width -- --nocapture` → pass (2026-09-18 GREEN incl. cargo-check).
 
 
 ## P3.370 WindjammerDB CQ-C5 — coverage REDs WDB-281–284 + wj-sync i64 peers (2026-09-18)
