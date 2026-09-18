@@ -55,6 +55,15 @@ pub fn lookup(m: HashMap<string, int>, key: string) -> (bool, int) {
 }
 "#;
 
+
+const VOID_BENCH_MUL: &str = r#"
+pub fn bench_channel_peer() {
+    let n = 100_000
+    let _ = n * (n - 1)
+    let _ = n * (n - 1) / 2
+}
+"#;
+
 const ATOMIC_NEW: &str = r#"
 use std::sync::atomic::AtomicI64
 
@@ -66,6 +75,20 @@ pub fn zero_counter() {
     let _ = counter_new(0)
 }
 "#;
+
+
+#[test]
+fn wj_sync_void_bench_mul_literals_must_emit_i64() {
+    let generated = test_utils::compile_single(VOID_BENCH_MUL);
+    assert!(
+        !generated.contains("1_i32") && !generated.contains("2_i32"),
+        "void @test-style bench arith must not demote int literal peers to _i32:\n{generated}"
+    );
+    assert!(
+        generated.contains("1_i64") || generated.contains("(n - 1)"),
+        "expected i64 literal peer for n - 1:\n{generated}"
+    );
+}
 
 #[test]
 fn wj_sync_call_int_formal_literal_must_emit_i64() {
