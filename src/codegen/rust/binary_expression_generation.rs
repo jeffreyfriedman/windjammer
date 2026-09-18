@@ -411,9 +411,34 @@ impl<'ast> CodeGenerator<'ast> {
             let skip_int_promotion_both_usize_operands = (is_comparison || is_arithmetic)
                 && left_is_usize
                 && right_is_usize;
+            // P3.369: i64 index + literal offset — skip i32 promotion before usize rewrite.
+            let skip_int_promotion_index_i64_offset = self.in_index_context
+                && is_arithmetic
+                && matches!(op, BinaryOp::Add | BinaryOp::Sub)
+                && {
+                    use crate::type_inference::IntType;
+                    let lit = |e: &Expression<'ast>| {
+                        matches!(
+                            e,
+                            Expression::Literal {
+                                value: Literal::Int(_),
+                                ..
+                            }
+                        )
+                    };
+                    (matches!(
+                        self.int_type_for_mixed_int_codegen(left),
+                        IntType::I64 | IntType::I32
+                    ) && lit(right))
+                        || (matches!(
+                            self.int_type_for_mixed_int_codegen(right),
+                            IntType::I64 | IntType::I32
+                        ) && lit(left))
+                };
             if !skip_int_promotion_usize_arith_untyped_lit
                 && !skip_int_promotion_both_inferred_usize
                 && !skip_int_promotion_both_usize_operands
+                && !skip_int_promotion_index_i64_offset
             {
                 if self.numeric_inference.is_some()
                     || self.promotion_int_type_from_assignment_context().is_some()
@@ -534,6 +559,18 @@ impl<'ast> CodeGenerator<'ast> {
                                     && self.comparison_should_prefer_u32_over_i64(right, left)
                                 {
                                     promoted = IntType::U32;
+                                } else if is_comparison
+                                    && left_ty == IntType::I64
+                                    && right_ty == IntType::I32
+                                    && self.comparison_should_prefer_i64_over_i32(left, right)
+                                {
+                                    promoted = IntType::I64;
+                                } else if is_comparison
+                                    && right_ty == IntType::I64
+                                    && left_ty == IntType::I32
+                                    && self.comparison_should_prefer_i64_over_i32(right, left)
+                                {
+                                    promoted = IntType::I64;
                                 } else if is_arithmetic
                                     && self.function_prefers_i32_coord_locals()
                                     && left_ty == IntType::I64
@@ -546,7 +583,18 @@ impl<'ast> CodeGenerator<'ast> {
                                         && !self.wj_int_coord_builder_operand(left);
                                     let right_is_payload = !right_is_int_literal
                                         && !self.wj_int_coord_builder_operand(right);
-                                    if !left_is_payload && !right_is_payload {
+                                    let i64_entity_peer = is_comparison
+                                        && ((left_is_int_literal
+                                            && self.comparison_should_prefer_i64_over_i32(
+                                                right, left,
+                                            ))
+                                            || (right_is_int_literal
+                                                && self.comparison_should_prefer_i64_over_i32(
+                                                    left, right,
+                                                )));
+                                    if i64_entity_peer {
+                                        promoted = IntType::I64;
+                                    } else if !left_is_payload && !right_is_payload {
                                         promoted = IntType::I32;
                                     }
                                 } else if is_arithmetic
@@ -634,6 +682,20 @@ impl<'ast> CodeGenerator<'ast> {
                                             "{}_u32",
                                             left_str.trim_end_matches("_i32")
                                         );
+                                    } else if promoted == IntType::I64
+                                        && matches!(
+                                            left,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && left_str.ends_with("_i32")
+                                    {
+                                        left_str = format!(
+                                            "{}_i64",
+                                            left_str.trim_end_matches("_i32")
+                                        );
                                     } else {
                                         let needs_inner = matches!(left, Expression::Binary { .. })
                                             || left_str.contains(" as ");
@@ -686,6 +748,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     {
                                         right_str = format!(
                                             "{}_u32",
+                                            right_str.trim_end_matches("_i32")
+                                        );
+                                    } else if promoted == IntType::I64
+                                        && matches!(
+                                            right,
+                                            Expression::Literal {
+                                                value: Literal::Int(_),
+                                                ..
+                                            }
+                                        )
+                                        && right_str.ends_with("_i32")
+                                    {
+                                        right_str = format!(
+                                            "{}_i64",
                                             right_str.trim_end_matches("_i32")
                                         );
                                     } else {
@@ -1050,6 +1126,44 @@ impl<'ast> CodeGenerator<'ast> {
                         );
                         return format!("({normalized}) as {target}");
                     }
+                }
+            }
+        }
+
+
+        // P3.369: i64/i32 index base + literal offset → usize slice index.
+        if self.in_index_context
+            && is_arithmetic
+            && matches!(op, BinaryOp::Add | BinaryOp::Sub)
+        {
+            use crate::type_inference::IntType;
+            let lt = self.int_type_for_mixed_int_codegen(left);
+            let rt = self.int_type_for_mixed_int_codegen(right);
+            let lit = |e: &Expression<'ast>| {
+                matches!(
+                    e,
+                    Expression::Literal {
+                        value: Literal::Int(_),
+                        ..
+                    }
+                )
+            };
+            let strip_i32_suffix = |s: &mut String| {
+                if s.ends_with(" as i32") {
+                    *s = s.trim_end_matches(" as i32").to_string();
+                } else if s.ends_with("_i32") {
+                    *s = s.trim_end_matches("_i32").to_string();
+                }
+            };
+            if matches!(lt, IntType::I64 | IntType::I32) && lit(right) {
+                strip_i32_suffix(&mut right_str);
+                if !left_str.contains(" as usize") {
+                    return format!("({} as usize) {} {}", left_str, op_str, right_str);
+                }
+            } else if matches!(rt, IntType::I64 | IntType::I32) && lit(left) {
+                strip_i32_suffix(&mut left_str);
+                if !right_str.contains(" as usize") {
+                    return format!("{} {} ({} as usize)", left_str, op_str, right_str);
                 }
             }
         }

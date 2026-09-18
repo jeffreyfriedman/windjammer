@@ -560,6 +560,10 @@ impl<'ast> CodeGenerator<'ast> {
         idx_str: &mut String,
         index: &Expression<'ast>,
     ) {
+        // P3.369: binary index already cast the i64 base to usize — do not wrap again.
+        if idx_str.contains(" as usize)") {
+            return;
+        }
         // P3.329: float coercion from call-site context must not stick on `[expr]` indices.
         if idx_str.contains(" as f32") {
             *idx_str = idx_str.replace(" as f32", " as usize");

@@ -119,6 +119,12 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
     if arg_str.contains(&format!(" as {suffix}")) {
         return;
     }
+    if let Some(base) = arg_str.strip_suffix(".clone()") {
+        if !base.contains(" as ") {
+            *arg_str = format!("({} as {}).clone()", base, suffix);
+            return;
+        }
+    }
     if let Expression::Literal {
         value: Literal::Int(val),
         ..
@@ -135,7 +141,9 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
             return;
         }
     }
-    let needs_parens = matches!(arg, Expression::Binary { .. }) || arg_str.contains(' ');
+    let needs_parens = matches!(arg, Expression::Binary { .. })
+        || arg_str.contains(' ')
+        || arg_str.contains('.');
     if needs_parens {
         *arg_str = format!("({}) as {}", arg_str, suffix);
     } else {
