@@ -421,6 +421,18 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         );
                     }
                     if let Expression::Identifier { name, .. } = arg {
+                        if let Some(cloned) = peel_sig.as_ref().and_then(|sig| {
+                            crate::codegen::rust::call_site_borrow::clone_reused_binding_for_owned_vec_formal(
+                                gen,
+                                sig,
+                                i,
+                                arg,
+                                &coerced,
+                                Some(func_name),
+                            )
+                        }) {
+                            coerced = cloned;
+                        } else {
                         let callee_owned = peel_sig.as_ref().is_some_and(|sig| {
                             let pidx = sig.arg_param_index(i);
                             (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
@@ -445,6 +457,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             };
                             coerced =
                                 gen.append_clone_for_owned_non_copy_binding(name, base);
+                        }
                         }
                     } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
                         && !coerced.ends_with(".clone()")
@@ -519,8 +532,36 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 &mut coerced,
                             );
                         }
+                        // Terminal: owned caller `Vec` reused after call into owned
+                        // callee formal — `.clone()`, never `&binding` (WDB-281 class).
+                        if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                            let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &coerced,
+                            );
+                            if let Expression::Identifier { name, .. } = arg {
+                                let caller_vec = gen.current_function_params.iter().any(|p| {
+                                    p.name == *name
+                                        && (matches!(&p.type_, crate::parser::Type::Vec(_))
+                                            || matches!(
+                                                &p.type_,
+                                                crate::parser::Type::Parameterized(n, _)
+                                                    if n == "Vec"
+                                            ))
+                                });
+                                if base == name.as_str()
+                                    && caller_vec
+                                    && gen.caller_owned_non_copy_formal(name)
+                                    && (gen.local_binding_reused_after_current_statement(name)
+                                        || gen.in_if_condition)
+                                {
+                                    coerced = gen.append_clone_for_owned_non_copy_binding(
+                                        name, base,
+                                    );
+                                }
+                            }
+                        }
                     }
-                    return vec![coerced];
+return vec![coerced];
                 }
                 debug_assert!(
                     false,

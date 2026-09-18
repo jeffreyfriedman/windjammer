@@ -202,9 +202,22 @@ impl<'ast> CodeGenerator<'ast> {
                         } else if let Some(ret_ty) = &self.current_function_return_type {
                             // Peel Result/Option so `-> Result<int, string>` keeps i64
                             // accumulators (P3.317), not coordinate-default Int32.
-                            Some(self.int_width_hint_from_return_type_resolved(ret_ty))
+                            let hint = self.int_width_hint_from_return_type_resolved(ret_ty);
+                            // P3.370: void `@test` payload sizes (`let n = 100_000`) stay WJ int.
+                            if matches!(hint, Type::Int32)
+                                && matches!(
+                                    Self::peel_option_result_payload(ret_ty),
+                                    Type::Custom(n) if n == "Unit"
+                                )
+                            {
+                                Some(Type::Int)
+                            } else {
+                                Some(hint)
+                            }
                         } else {
-                            Some(Type::Int32)
+                            // Void / no return type (incl. `@test`): keep WJ int (i64).
+                            // Game i32 coords use i32-returning builders or explicit `i32`.
+                            Some(Type::Int)
                         }
                     }
                     Expression::Literal {
@@ -564,16 +577,38 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 } else if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
+                    && !matches!(
+                        value,
+                        Expression::Literal {
+                            value: crate::parser::Literal::Int(_),
+                            ..
+                        }
+                    )
                 {
-                    let peer = self
-                        .current_function_return_type
-                        .as_ref()
-                        .map(|rt| match Self::peel_option_result_payload(rt) {
-                            Type::Uint => Type::Uint,
-                            Type::Custom(n) if n == "u32" => Type::Uint,
-                            _ => Type::Int32,
-                        })
-                        .unwrap_or(Type::Int32);
+                    let wj_int_slot = var_name.is_some_and(|vn| {
+                        if self.explicit_wj_int_annotated_locals.contains(vn) {
+                            return true;
+                        }
+                        matches!(
+                            self.local_var_types.get(vn),
+                            Some(Type::Int)
+                        ) || matches!(
+                            self.local_var_types.get(vn),
+                            Some(Type::Custom(n)) if n == "int" || n == "i64"
+                        )
+                    });
+                    let peer = if wj_int_slot {
+                        Type::Int
+                    } else {
+                        self.current_function_return_type
+                            .as_ref()
+                            .map(|rt| match Self::peel_option_result_payload(rt) {
+                                Type::Uint => Type::Uint,
+                                Type::Custom(n) if n == "u32" => Type::Uint,
+                                _ => Type::Int32,
+                            })
+                            .unwrap_or(Type::Int32)
+                    };
                     self.assignment_int_target_type = Some(peer);
                 }
 

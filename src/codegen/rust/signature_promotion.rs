@@ -950,14 +950,11 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
     ) {
-        // Bare WJ container formals (`Vec`, maps) emit owned Rust params when codegen
-        // confirmed non-shared emission. Without a record, honor converged Borrowed
-        // (Vec<AABB>) — do not recurse into `callee_emits_shared_rust_ref_param` (cycle).
+        // Bare WJ container formals (`Vec`, maps) emit owned Rust params unless codegen
+        // confirmed shared-ref emission. Analyzer Borrowed alone is not an owned denial
+        // (WDB-281 for-in consume → Borrowed while formal stays bare `Vec`).
         if bare_formal_is_vec_or_map(sig, param_idx) {
-            if let Some(ref flags) = sig.emitted_rust_ref_params {
-                return flags.get(param_idx).copied() == Some(false);
-            }
-            return false;
+            return true;
         }
         return false;
     }
@@ -1473,7 +1470,7 @@ pub(crate) fn wj_registry_bare_owned_formal_slot(
 }
 
 pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usize) -> bool {
-    sig.formal_param_type(param_idx).is_some_and(|t| {
+    let formal_is_container = sig.formal_param_type(param_idx).is_some_and(|t| {
         if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
             return false;
         }
@@ -1484,9 +1481,18 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
                 Type::Parameterized(name, _)
                     if name == "HashMap" || name == "Map" || name == "BTreeMap"
             )
-    }) && !sig.param_types.get(param_idx).is_some_and(|t| {
-        matches!(t, Type::Reference(_) | Type::MutableReference(_))
-    })
+    });
+    if !formal_is_container {
+        return false;
+    }
+    // Bare WJ `Vec`/`Map` AST formals emit owned containers unless codegen confirmed `&Vec`
+    // (WDB-281). Stale analyzer `Reference(Vec)` in `param_types` must not deny the slot —
+    // that previously forced call-site `&items` into owned `contains(items: Vec)`.
+    sig.emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(param_idx))
+        .copied()
+        != Some(true)
 }
 
 /// Bare WJ user `Custom` formals that emit owned Rust params (not `&T` / `&str`).

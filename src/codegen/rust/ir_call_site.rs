@@ -22,6 +22,19 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return true;
         }
+        // Bare WJ `Vec`/`Map` formals emit owned Rust containers (WDB-281: `contains(items)`
+        // must not auto-borrow `&items` then leave E0308 into owned `Vec`).
+        if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx)
+            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
+            && sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(pidx))
+                .copied()
+                != Some(true)
+        {
+            return true;
+        }
         sig.formal_param_type(pidx)
             .or_else(|| sig.param_types.get(pidx))
             .is_some_and(|t| {
@@ -1207,6 +1220,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut kind = compute_coercion(&actual, &expected);
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+            && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
         {
             kind = CoercionKind::Borrow;
         }
@@ -1269,14 +1283,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, .. }
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
         );
+        // Shared-ref at emit only — analyzer `Borrowed` alone must not demote Clone→Borrow
+        // for bare owned Vec formals (WDB-281: `contains(items.clone())`, not `&items`).
         let callee_wants_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             &sig, param_idx,
         ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
-            || crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, param_idx)
-            || matches!(
-                sig.param_ownership.get(param_idx),
-                Some(crate::analyzer::OwnershipMode::Borrowed)
-            );
+            || crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, param_idx);
         if matches!(expected.ownership, OwnedType::Owned)
             && !prepared_arg.ends_with(".clone()")
             && !callee_wants_shared
@@ -1298,6 +1310,7 @@ impl<'ast> CodeGenerator<'ast> {
                 kind = CoercionKind::Clone;
             }
         } else if callee_wants_shared
+            && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
             && matches!(kind, CoercionKind::Clone)
             && (matches!(arg_expr, Expression::Index { .. })
                 || matches!(arg_expr, Expression::FieldAccess { .. })
@@ -2804,9 +2817,9 @@ impl<'ast> CodeGenerator<'ast> {
                 let if_facade_forward_ref = self.current_fn_forward_ref_if_params.contains(name)
                     && self.param_used_in_if_with_condition_and_branches(&body, name);
                 if !if_facade_forward_ref
-                    && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         &sig, param_idx,
-                    )
+                    ) || Self::sig_arg_confirms_owned_emission(&sig, arg_index))
                     && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                         &sig, param_idx,
                     )
@@ -3062,7 +3075,19 @@ impl<'ast> CodeGenerator<'ast> {
             }) && !self.emitted_rust_ref_formals.contains(name)
                 && !self.str_ref_optimized_params.contains(name.as_str())
                 && !self.into_string_formal_params.contains(name);
-            if callee_shared
+            if let Some(cloned) =
+                crate::codegen::rust::call_site_borrow::clone_reused_binding_for_owned_vec_formal(
+                    self,
+                    &sig,
+                    arg_index,
+                    arg_expr,
+                    &coerced,
+                    Some(callee_name),
+                )
+            {
+                coerced = cloned;
+            } else if callee_shared
+                && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !self.identifier_binding_already_rust_ref(name)
@@ -3106,7 +3131,15 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.param_used_in_if_with_condition_and_branches(&body, name)
                     && self.caller_owned_non_copy_formal(name)
                 {
-                    if coerced.ends_with(".clone()") {
+                    if Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+                        || crate::codegen::rust::call_site_borrow::callee_formal_is_owned_vec_container(
+                            &sig, param_idx,
+                        )
+                    {
+                        if !coerced.ends_with(".clone()") {
+                            coerced = format!("{coerced}.clone()");
+                        }
+                    } else if coerced.ends_with(".clone()") {
                         let base = coerced.trim_end_matches(".clone()").trim();
                         coerced = if base.starts_with('&') {
                             base.to_string()
@@ -3366,9 +3399,10 @@ impl<'ast> CodeGenerator<'ast> {
         // condition moves before the then-branch reuses the binding (list_unique / ReBAC).
         if self.in_if_condition {
             if let Expression::Identifier { name, .. } = arg_expr {
-                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                if (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
-                ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                ) || Self::sig_arg_confirms_owned_emission(sig, arg_index))
+                    && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                     sig, param_idx,
                 )
                     && self.current_function_params.iter().any(|p| {
@@ -7678,6 +7712,26 @@ impl<'ast> CodeGenerator<'ast> {
                         let reuse_after =
                             self.local_binding_reused_after_current_statement(name);
                         if reuse_after {
+                            if let Some(sig) = self
+                                .signature_registry
+                                .get_signature(callee)
+                                .or_else(|| {
+                                    self.global_signature_registry
+                                        .as_ref()
+                                        .and_then(|g| g.get_signature(callee))
+                                })
+                            {
+                                if let Some(cloned) = crate::codegen::rust::call_site_borrow::clone_reused_binding_for_owned_vec_formal(
+                                    self,
+                                    sig,
+                                    idx,
+                                    arg_expr,
+                                    arg_str,
+                                    Some(callee),
+                                ) {
+                                    return cloned;
+                                }
+                            }
                             let base =
                                 crate::codegen::rust::expression_utilities::borrow_base_expr(
                                     arg_str,
@@ -7695,6 +7749,26 @@ impl<'ast> CodeGenerator<'ast> {
                         && self.callee_arg_expects_borrow_at_call(callee, idx)
                     {
                         if self.local_binding_reused_after_current_statement(name) {
+                            if let Some(sig) = self
+                                .signature_registry
+                                .get_signature(callee)
+                                .or_else(|| {
+                                    self.global_signature_registry
+                                        .as_ref()
+                                        .and_then(|g| g.get_signature(callee))
+                                })
+                            {
+                                if let Some(cloned) = crate::codegen::rust::call_site_borrow::clone_reused_binding_for_owned_vec_formal(
+                                    self,
+                                    sig,
+                                    idx,
+                                    arg_expr,
+                                    arg_str,
+                                    Some(callee),
+                                ) {
+                                    return cloned;
+                                }
+                            }
                             let base =
                                 crate::codegen::rust::expression_utilities::borrow_base_expr(
                                     arg_str,
@@ -8558,4 +8632,5 @@ fn dispatch(json: string) -> string {
             "demoted &str formal must borrow owned caller param, got: {coerced}"
         );
     }
+
 }

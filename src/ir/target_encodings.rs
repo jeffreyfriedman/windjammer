@@ -279,7 +279,13 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
                     .strip_prefix('(')
                     .and_then(|s| s.strip_suffix(')'))
                     .unwrap_or(core);
-                format!("{core}.clone()")
+                // Cast must bind before `.clone()` — `x as i32.clone()` is invalid Rust.
+                let wrapped = if core.contains(" as ") && !core.trim_start().starts_with('(') {
+                    format!("({core})")
+                } else {
+                    core.to_string()
+                };
+                format!("{wrapped}.clone()")
             }
         }
         (Target::Rust, CoercionKind::Deref) => {

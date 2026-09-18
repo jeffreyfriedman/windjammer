@@ -131,12 +131,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.codegen_i32_binding_names.contains(name) {
             return true;
         }
-        if self.arithmetic_prefers_i32_ambiguous_int_local(expr) {
-            return true;
-        }
-        self.infer_expression_type(expr)
-            .as_ref()
-            .is_some_and(|t| matches!(t, Type::Int))
+        self.arithmetic_prefers_i32_ambiguous_int_local(expr)
     }
 
     /// P3.353: WJ `int` locals in voxel/set_if coord builders (not formal `int` params).
@@ -166,10 +161,13 @@ impl<'ast> CodeGenerator<'ast> {
         }) {
             return false;
         }
-        matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+        if self.codegen_i32_binding_names.contains(name) {
+            return true;
+        }
+        matches!(self.local_var_types.get(name.as_str()), Some(Type::Int32))
             || matches!(
                 self.local_var_types.get(name.as_str()),
-                Some(Type::Custom(n)) if n == "int" || n == "i64"
+                Some(Type::Custom(n)) if n == "i32"
             )
     }
 
@@ -327,6 +325,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if emitted_rhs.ends_with("_usize")
+            || emitted_rhs.contains("_usize")
             || self.int_type_for_mixed_int_codegen(value) == IntType::Usize
         {
             self.local_var_types
@@ -873,6 +872,9 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     };
                     let unified = match (lt, rt) {
+                        (IntType::Usize, IntType::Usize) => IntType::Usize,
+                        (IntType::Usize, _) if lit(right) => IntType::Usize,
+                        (_, IntType::Usize) if lit(left) => IntType::Usize,
                         (IntType::U32, IntType::U32) => IntType::U32,
                         (IntType::U32, IntType::I64) if lit(right) => IntType::U32,
                         (IntType::I64, IntType::U32) if lit(left) => IntType::U32,
@@ -895,7 +897,15 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         (IntType::I64, IntType::I64)
                             if self.function_prefers_i32_coord_locals()
-                                && (lit(left) || lit(right)) =>
+                                && lit(left)
+                                && self.wj_int_coord_builder_operand(right) =>
+                        {
+                            IntType::I32
+                        }
+                        (IntType::I64, IntType::I64)
+                            if self.function_prefers_i32_coord_locals()
+                                && lit(right)
+                                && self.wj_int_coord_builder_operand(left) =>
                         {
                             IntType::I32
                         }

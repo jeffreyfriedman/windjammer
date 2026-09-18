@@ -55,6 +55,17 @@ pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
     None
 }
 
+/// When registry formals are missing, owner Rust type drives WJ `int` literal suffixes
+/// (e.g. `AtomicI64::new(0)`, `fetch_add(1, …)` in void `@test` builders).
+pub fn assignment_int_peer_from_owner_type_name(type_name: &str) -> Option<Type> {
+    let base = type_name.split('<').next().unwrap_or(type_name);
+    let base = base.rsplit("::").next().unwrap_or(base);
+    if base == "AtomicI64" {
+        return Some(Type::Int);
+    }
+    None
+}
+
 /// Coerce a WJ `int`/`i64` argument to an `i32` formal (WDB-160 / `process::exit`).
 ///
 /// Signature-driven: only when the resolved formal is `i32`. Literals already
@@ -88,12 +99,7 @@ pub fn coerce_arg_str_for_i32_formal(
             return;
         }
     }
-    let needs_parens = matches!(arg, Expression::Binary { .. }) || arg_str.contains(' ');
-    if needs_parens {
-        *arg_str = format!("({}) as i32", arg_str);
-    } else {
-        *arg_str = format!("{} as i32", arg_str);
-    }
+    append_int_cast(arg, arg_str, "i32");
 }
 
 /// True when a formal is Rust `u32` / WJ `uint`.

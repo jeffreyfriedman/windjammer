@@ -687,7 +687,10 @@ pub fn apply_call_site_borrow(decision: &CallSiteBorrowDecision, arg_str: &mut S
     }
 }
 
-fn callee_formal_is_owned_vec_container(sig: &FunctionSignature, pidx: usize) -> bool {
+pub(crate) fn callee_formal_is_owned_vec_container(sig: &FunctionSignature, pidx: usize) -> bool {
+    if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx) {
+        return true;
+    }
     if callee_emits_shared_rust_ref_param(sig, pidx) {
         return false;
     }
@@ -726,6 +729,7 @@ pub(crate) fn reconcile_explicit_user_clone_into_owned_vec_formal<'ast>(
         return coerced;
     }
     let preserve_clone = gen.caller_param_has_later_owned_formal_pass(name)
+        || gen.local_binding_reused_after_current_statement(name)
         || gen.auto_clone_analysis.as_ref().is_some_and(|a| {
             a.needs_clone(name, gen.current_statement_idx).is_some()
                 || a.needs_clone_anywhere(name)
@@ -734,6 +738,49 @@ pub(crate) fn reconcile_explicit_user_clone_into_owned_vec_formal<'ast>(
         return coerced;
     }
     name.to_string()
+}
+
+/// Reused owned `Vec` binding into an owned `Vec` formal — `.clone()`, never `&binding`.
+pub(crate) fn clone_reused_binding_for_owned_vec_formal<'ast>(
+    gen: &crate::codegen::rust::generator::CodeGenerator<'ast>,
+    sig: &FunctionSignature,
+    arg_index: usize,
+    arg_expr: &Expression<'ast>,
+    coerced: &str,
+    callee_name: Option<&str>,
+) -> Option<String> {
+    let Expression::Identifier { name, .. } = arg_expr else {
+        return None;
+    };
+    let pidx = sig.arg_param_index(arg_index);
+    let caller_vec = gen.current_function_params.iter().any(|p| {
+        p.name == *name && type_is_vec_container(&p.type_)
+    });
+    let owned_vec_slot = callee_formal_is_owned_vec_container(sig, pidx)
+        || (caller_vec
+            && callee_name.is_some_and(|c| {
+                gen.callee_arg_emits_owned_contract(c, arg_index)
+                    || gen.ir_callee_arg_emits_owned_contract(
+                        &gen.signature_registry,
+                        c,
+                        arg_index,
+                        None,
+                        Some(sig),
+                    )
+            }));
+    if !owned_vec_slot {
+        return None;
+    }
+    let reused = gen.local_binding_reused_after_current_statement(name)
+        || gen.auto_clone_analysis.as_ref().is_some_and(|a| {
+            a.needs_clone(name, gen.current_statement_idx).is_some()
+        });
+    if !reused {
+        return None;
+    }
+    let base =
+        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).trim_end_matches(".clone()");
+    Some(gen.append_clone_for_owned_non_copy_binding(name, base))
 }
 
 /// How to pass a hoisted `format!` / write!-block temp at a call site.

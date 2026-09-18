@@ -3370,6 +3370,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let if_facade_borrow = self.current_fn_forward_ref_if_params.contains(&param.name)
                 && self.param_used_in_if_with_condition_and_branches(&body, &param.name);
+            // Owned callee formals (Vec consume, …) need `.clone()` in the condition, not
+            // if-facade `&binding` (push_unique → contains(items)).
+            if if_facade_borrow
+                && self.expr_call_expects_owned_formal_for_param(condition, &param.name)
+            {
+                continue;
+            }
             // Shared-ref callees need explicit `&` in the condition. If-facade forward-ref
             // (param in condition + then/else body) also borrows even when the callee stub
             // is still WJ-owned — sibling methods may not be codegen'd yet (LsmStore::put_value
@@ -3418,11 +3425,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if self.current_fn_forward_ref_if_params.contains(&param.name)
                 && self.param_used_in_if_with_condition_and_branches(&body, &param.name)
+                && !self.expr_call_expects_owned_formal_for_param(condition, &param.name)
             {
                 continue;
             }
             if self.current_fn_mixed_forwarder_params.contains(&param.name)
                 && self.expr_mentions_param_as_call_arg_in_expr(&param.name, condition)
+                && !self.expr_call_expects_owned_formal_for_param(condition, &param.name)
             {
                 continue;
             }
@@ -3498,7 +3507,10 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &refreshed, pidx,
-                            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(
+                            ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                                &refreshed, pidx,
+                            ) || self.preregistered_free_call_arg_emits_owned(fname, i)
+                            || crate::ir::signature_bridge::call_site_expects_owned_pass(
                                 &refreshed, pidx,
                             ) {
                                 return true;
@@ -4339,34 +4351,56 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Clone a Vec-index expression when the callee expects Owned and the element is non-Copy.
+    /// String range slices (`text[lo..hi]`) emit `.to_string()` — Rust indexing yields `str`,
+    /// which has no useful `.clone()` into owned `String` (P3.371 theme hex).
     pub(crate) fn maybe_clone_index_for_owned_param(
         &self,
         arg: &crate::parser::Expression,
         arg_str: &mut String,
     ) -> bool {
-        if let crate::parser::Expression::Index { .. } = arg {
-            if arg_str.ends_with(".clone()") {
+        if let crate::parser::Expression::Index { object, index, .. } = arg {
+            if arg_str.ends_with(".clone()") || arg_str.ends_with(".to_string()") {
                 return false;
             }
+            let string_range_slice = matches!(index, crate::parser::Expression::Range { .. })
+                && self.infer_expression_type(object).as_ref().is_some_and(|t| {
+                    let bare = match t {
+                        crate::parser::Type::Reference(inner)
+                        | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    matches!(bare, crate::parser::Type::String)
+                        || matches!(
+                            bare,
+                            crate::parser::Type::Custom(n) if n == "String" || n == "str"
+                        )
+                });
             // Clone when non-Copy, or for Custom elements (empty WJ std stubs may be mis-
             // classified Copy while runtime types are Clone-only — E0507 on `rows[0]`).
-            let needs_clone = !self.index_expression_is_copy_scalar(arg)
-                && match self.infer_expression_type(arg) {
-                    None => true,
-                    Some(t) => {
-                        let bare = match &t {
-                            crate::parser::Type::Reference(inner)
-                            | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
-                            other => other,
-                        };
-                        !self.is_type_copy(bare) || matches!(bare, crate::parser::Type::Custom(_))
-                    }
-                };
+            let needs_clone = string_range_slice
+                || (!self.index_expression_is_copy_scalar(arg)
+                    && match self.infer_expression_type(arg) {
+                        None => true,
+                        Some(t) => {
+                            let bare = match &t {
+                                crate::parser::Type::Reference(inner)
+                                | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
+                                other => other,
+                            };
+                            !self.is_type_copy(bare)
+                                || matches!(bare, crate::parser::Type::Custom(_))
+                        }
+                    });
             if needs_clone {
-                if arg_str.starts_with('&') {
-                    *arg_str = format!("({}).clone()", arg_str);
+                let suffix = if string_range_slice {
+                    "to_string()"
                 } else {
-                    *arg_str = format!("{}.clone()", arg_str);
+                    "clone()"
+                };
+                if arg_str.starts_with('&') {
+                    *arg_str = format!("({}).{}", arg_str, suffix);
+                } else {
+                    *arg_str = format!("{}.{}", arg_str, suffix);
                 }
                 return true;
             }

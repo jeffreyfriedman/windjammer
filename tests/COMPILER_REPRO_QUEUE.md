@@ -315,9 +315,14 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **tpch `&samples` → owned query_verdict must clone** | `bug_wdb286_module_file_demoted_vec_into_owned_tpch_verdict_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-285 |
 | P1 | **wave1 `&line`/`&ord` → owned session_from_batches must clone** | `bug_wdb287_module_file_demoted_vec_into_owned_wave1_session_from_batches_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241 |
 | P1 | **pubsub `&backlog` → owned live_poll must clone** | `bug_wdb288_module_file_demoted_vec_into_owned_pubsub_live_poll_must_clone_test` | 🆕 RED / filed (P3.372); twin WDB-241 |
+| P1 | **dremel `&fields` → owned fields_by_ordinal must clone** | `bug_wdb289_module_file_demoted_vec_into_owned_dremel_fields_by_ordinal_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
+| P1 | **wave1 `&args` → owned parse_sf1_floor must clone** | `bug_wdb290_module_file_demoted_vec_into_owned_wave1_sf1_cli_floor_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
+| P1 | **wave1 `&args` → owned publish_check_cli must clone** | `bug_wdb291_module_file_demoted_vec_into_owned_wave1_publish_check_cli_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
+| P1 | **wave1 `&args` → owned attest_cli must clone** | `bug_wdb292_module_file_demoted_vec_into_owned_wave1_attest_cli_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370) — i64 formals + SharedInt/Counter return width
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
+| P1 | **if/else float lit must peer f32 then-branch** | `bug_let_if_else_f32_branch_must_peer_else_float_literal_test` | ✅ tip GREEN (P3.374) |
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | ✅ tip GREEN (P3.361) — tuple peer-drive / nested return int width |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | ✅ tip GREEN (P3.360) |
@@ -2503,6 +2508,32 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 
 
+
+## P3.375 WindjammerDB CQ-C5 — coverage REDs WDB-289–292 &Vec→owned (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-289** dremel `&fields` → owned `fields_by_ordinal` | ❌ RED — tip document_dremel_query_port |
+| Tip **WDB-290** wave1 `&args` → owned `parse_sf1_floor` | ❌ RED — tip wave1_sf1_cli |
+| Tip **WDB-291** wave1 `&args` → owned publish_check_cli | ❌ RED — tip wave1 publish_check |
+| Tip **WDB-292** wave1 `&args` → owned attest_cli | ❌ RED — tip wave1 attest |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** after 285–288, tip greens **289–292**; same signature-driven clone into owned Vec args. No Phase 606+.
+
+## P3.374 — if/else float literal peers `f32` then-branch (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `let_if_else_f32_branch_must_peer_else_float_literal` | ✅ tip GREEN |
+
+**Product:** `skeleton.wj` `let isx = if sx > … { 1.0 / sx } else { 0.0 }` emitted else as `0.0_f64` (~36× E0308 expected f32 found f64).
+
+**Root cause:** Else-branch bare float literals defaulted to f64 without peering the then-branch's effective f32 type (`1.0 / sx` with f32 `sx`).
+
+**Fix:** `if_else_branch_expr_float_type` + let-binding peer for if/else float tails (`statement_generation` / `let_statement_generation`).
+
+**Gate:** `cargo test --test all --features integration_tests let_if_else_f32_branch_must_peer_else_float_literal -- --nocapture` → pass (2026-09-18 GREEN incl. cargo-check).
 
 ## P3.373 — owned Vec reuse into owned callee (`if` forward-ref) (2026-09-18)
 
