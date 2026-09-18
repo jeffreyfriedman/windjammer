@@ -103,6 +103,28 @@ impl<'ast> CodeGenerator<'ast> {
             self.coerce_string_literals_to_owned = true;
         }
 
+        // P3.370: `mean_a = if c { mean_a / n as f32 } else { 0.0 }` — else must not stay `_f64`
+        // when the then-branch (or sibling else tail) is concrete `f32`.
+        let mut prev_if_float_target = None;
+        if self.in_expression_context && else_body.is_some() {
+            let then_f = self.branch_tail_float_type(then_body);
+            let else_f = else_body
+                .as_ref()
+                .and_then(|eb| self.branch_tail_float_type(eb));
+            let pick_f32 = |t: &Type| {
+                crate::codegen::rust::type_classification_utilities::float_target(t) == "f32"
+            };
+            let unified = match (&then_f, &else_f) {
+                (Some(t), _) if pick_f32(t) => Some(t.clone()),
+                (_, Some(t)) if pick_f32(t) => Some(t.clone()),
+                _ => None,
+            };
+            if let Some(f32_ty) = unified {
+                prev_if_float_target = Some(self.assignment_float_target_type.clone());
+                self.assignment_float_target_type = Some(f32_ty);
+            }
+        }
+
         self.indent_level += 1;
         output.push_str(&self.generate_block(then_body));
         self.indent_level -= 1;
@@ -123,6 +145,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.in_void_block = old_in_void_block;
+
+        if let Some(prev) = prev_if_float_target {
+            self.assignment_float_target_type = prev;
+        }
 
         self.coerce_string_literals_to_owned = old_coerce_lit;
 

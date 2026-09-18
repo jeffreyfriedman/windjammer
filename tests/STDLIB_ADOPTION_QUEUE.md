@@ -58,7 +58,7 @@ Definition of done per row:
 |---|---|---|---|
 | `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `assert_stdlib_runtime_links` → `sync::unbounded` (not raw mpsc) |
 | `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `sync::shared` / `shared_add` / `shared_get` |
-| `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | 🆕 RED | Hot `Counter` for `wj-sync` — transpile emits `windjammer_runtime::sync::atomic` but runtime does not re-export yet; Mutex `SharedInt` already ≤1.2× Rust on release |
+| `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | ✅ GREEN | Hot `Counter` for `wj-sync`; runtime re-exports + P3.370 i64 literal peers for `AtomicI64::new` / `fetch_add` |
 
 ## Run
 
