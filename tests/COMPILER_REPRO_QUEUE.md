@@ -295,6 +295,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_contains` must borrow** | `bug_wdb266_module_file_owned_map_clone_into_demoted_i64_contains_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222/265; gen lag |
 | P1 | **PageRank `scores.clone()` → demoted `&Map` `f64_sum` must borrow** | `bug_wdb267_module_file_owned_map_clone_into_demoted_f64_sum_must_borrow_test` | 🆕 RED / filed (P3.357); twin WDB-223; gen lag |
 | P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.357); twin WDB-248/256 |
+| P1 | **LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors must reborrow** | `bug_wdb269_module_file_owned_graph_clone_into_demoted_lsqb_neighbors_must_reborrow_test` | 🆕 RED / filed (P3.358); inverse WDB-220 |
+| P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` | 🆕 RED / filed (P3.358) |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.356) — coord prefer-i32 same-width literal peers |
@@ -1285,6 +1287,16 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 **Root cause:** `substring(start,end)` lowering reused pre-codegen call args (`0_i64`) instead of re-emitting bounds with `in_index_context` (same path as `generate_index` range slices). `maybe_cast_index_to_usize` early-returned on literal AST nodes while the string still carried `_i64`.
 
 **Fix:** `method_call_expression_generation/finalize.rs` — re-generate start/end with `in_index_context` + `maybe_cast_index_to_usize`.
+
+## P3.358 WindjammerDB CQ-C5 — coverage REDs WDB-269/270 LSQB graph.clone + wave1 &str clone (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-269** LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors | ❌ RED — tip/gen lsqb_query_engine (inverse WDB-220) |
+| Tip **WDB-270** wave1 `&owned.clone()` → demoted `&str` helpers | ❌ RED — tip wave1_publish / sf1_quiet |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–270**; sync tip-out→gen for LSQB neighbors + wave1 `&str`. No Phase 606+.
 
 ## P3.357 WindjammerDB CQ-C5 — coverage REDs WDB-267/268 PageRank f64_sum + incremental bfs_run_dense (2026-09-17)
 
