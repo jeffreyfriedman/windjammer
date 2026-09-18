@@ -182,6 +182,35 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
+                        // P3.367: `fn update(self: PassState)` — no impl `current_struct_name`
+                        if let Some(self_ty) = self
+                            .current_function_params
+                            .iter()
+                            .find(|p| p.name == "self")
+                            .map(|p| p.type_.clone())
+                        {
+                            let struct_name = match Self::peel_option_result_payload(&self_ty) {
+                                Type::Custom(n) => Some(n.as_str()),
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    match Self::peel_option_result_payload(inner.as_ref()) {
+                                        Type::Custom(n) => Some(n.as_str()),
+                                        _ => None,
+                                    }
+                                }
+                                _ => None,
+                            };
+                            if let Some(struct_name) = struct_name {
+                                let base = struct_name.split('<').next().unwrap_or(struct_name);
+                                if let Some(fields) = self
+                                    .lookup_struct_field_types(struct_name)
+                                    .or_else(|| self.lookup_struct_field_types(base))
+                                {
+                                    if let Some(field_type) = fields.get(field.as_str()) {
+                                        return Some(field_type.clone());
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         // var.field → look up var's type, then its field
                         // Check local variables first, then function parameters

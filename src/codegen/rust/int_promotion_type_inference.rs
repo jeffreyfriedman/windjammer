@@ -590,7 +590,16 @@ impl<'ast> CodeGenerator<'ast> {
             use crate::parser::BinaryOp;
             if matches!(
                 op,
-                BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+                    | BinaryOp::BitAnd
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor
+                    | BinaryOp::Shl
+                    | BinaryOp::Shr
             ) {
                 return self
                     .peer_type_for_int_literal_operand(left)
@@ -600,7 +609,30 @@ impl<'ast> CodeGenerator<'ast> {
         if self.infer_expression_type_is_usize(expr) {
             return Some(Type::Custom("usize".into()));
         }
+        if let Expression::MethodCall { object, method, .. } = expr {
+            if matches!(
+                method.as_str(),
+                "wrapping_mul"
+                    | "wrapping_add"
+                    | "wrapping_sub"
+                    | "wrapping_div"
+                    | "wrapping_shl"
+                    | "wrapping_shr"
+                    | "rotate_left"
+                    | "rotate_right"
+            ) {
+                return self.peer_type_for_int_literal_operand(object);
+            }
+        }
+        if self.infer_expression_type(expr).is_some_and(|t| {
+            matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+        }) {
+            return Some(Type::Uint);
+        }
         // P3.322: ambiguous WJ `int` locals may emit as i32 while `local_var_types` stays `Int`.
+        if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::U32 {
+            return Some(Type::Uint);
+        }
         if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::I32 {
             return Some(Type::Int32);
         }
@@ -712,11 +744,42 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 crate::type_inference::IntType::Unknown
             }
+            Expression::MethodCall { object, method, .. } => {
+                if matches!(
+                    method.as_str(),
+                    "wrapping_mul"
+                        | "wrapping_add"
+                        | "wrapping_sub"
+                        | "wrapping_div"
+                        | "wrapping_shl"
+                        | "wrapping_shr"
+                        | "rotate_left"
+                        | "rotate_right"
+                ) {
+                    let r = self.int_type_for_mixed_int_codegen(object);
+                    if r != IntType::Unknown {
+                        return r;
+                    }
+                }
+                if self.expression_produces_usize(expr) {
+                    return IntType::Usize;
+                }
+                eng
+            }
             Expression::Binary { left, right, op, .. } => {
                 use crate::parser::BinaryOp;
                 if matches!(
                     op,
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                    BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                        | BinaryOp::BitAnd
+                        | BinaryOp::BitOr
+                        | BinaryOp::BitXor
+                        | BinaryOp::Shl
+                        | BinaryOp::Shr
                 ) {
                     let lt = self.int_type_for_mixed_int_codegen(left);
                     let rt = self.int_type_for_mixed_int_codegen(right);
@@ -730,6 +793,11 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     };
                     let unified = match (lt, rt) {
+                        (IntType::U32, IntType::U32) => IntType::U32,
+                        (IntType::U32, IntType::I64) if lit(right) => IntType::U32,
+                        (IntType::I64, IntType::U32) if lit(left) => IntType::U32,
+                        (IntType::U32, IntType::I32) if lit(right) => IntType::U32,
+                        (IntType::I32, IntType::U32) if lit(left) => IntType::U32,
                         (IntType::I32, IntType::I32) => IntType::I32,
                         (IntType::I32, IntType::I64) if lit(right) => IntType::I32,
                         (IntType::I64, IntType::I32) if lit(left) => IntType::I32,
