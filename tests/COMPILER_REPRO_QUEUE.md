@@ -307,7 +307,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **WCC `&Vec` → owned `par_wcc_bind` must clone** | `bug_wdb278_module_file_demoted_vec_into_owned_par_wcc_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
 | P1 | **SSSP `&Vec` → owned `par_sssp_bind` must clone** | `bug_wdb279_module_file_demoted_vec_into_owned_par_sssp_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
 | P1 | **pull `&Vec` → owned `par_pull_bind` must clone** | `bug_wdb280_module_file_demoted_vec_into_owned_par_pull_bind_must_clone_test` | ✅ tip GREEN (P3.369); twin WDB-276 |
-| P1 | **lsqb `&Vec` → owned `lsqb_vec_contains` must clone** | `bug_wdb281_module_file_demoted_vec_into_owned_lsqb_vec_contains_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
+| P1 | **lsqb `&Vec` → owned `lsqb_vec_contains` must clone** | `bug_wdb281_module_file_demoted_vec_into_owned_lsqb_vec_contains_must_clone_test` | ✅ tip GREEN (P3.375); twin WDB-241 — bare Vec AST owned + Clone↛Borrow |
 | P1 | **pg_wire `&Vec` → owned int64_matrix must clone** | `bug_wdb282_module_file_demoted_vec_into_owned_pg_wire_int64_matrix_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
 | P1 | **incremental `&csr` → owned bfs_run_dense must clone** | `bug_wdb283_module_file_demoted_csr_into_owned_incremental_bfs_must_clone_test` | 🆕 RED / filed (P3.370); twin WDB-241 |
 | P1 | **csr.clone() → demoted `&mut` afforest must reborrow** | `bug_wdb284_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | 🆕 RED / filed (P3.370); twin WDB-273 |
@@ -2563,7 +2563,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-281** lsqb `&Vec` → owned `lsqb_vec_contains` | ❌ RED — tip lsqb_typed_graph (call-site `&` into owned) |
+| Tip **WDB-281** lsqb `&Vec` → owned `lsqb_vec_contains` | ✅ tip GREEN (P3.375) — bare Vec AST owned; Clone↛Borrow demotion narrowed |
 | Tip **WDB-282** pg_wire `&Vec` → owned int64_matrix | ❌ RED — tip relational_pg_wire |
 | Tip **WDB-283** incremental `&csr` → owned bfs_run_dense | ❌ RED — tip graph incremental |
 | Tip **WDB-284** csr.clone() → demoted `&mut` afforest | ❌ RED — tip WCC (twin WDB-273) |
