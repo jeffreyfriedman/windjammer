@@ -58,7 +58,7 @@ pub fn lookup(m: HashMap<string, int>, key: string) -> (bool, int) {
 
 const VOID_BENCH_MUL: &str = r#"
 pub fn bench_channel_peer() {
-    let n = 100_000
+    let n: int = 100_000
     let _ = n * (n - 1)
     let _ = n * (n - 1) / 2
 }
@@ -73,6 +73,16 @@ pub fn counter_new(n: int) -> AtomicI64 {
 
 pub fn zero_counter() {
     let _ = counter_new(0)
+}
+"#;
+
+const ATOMIC_VOID_MAIN: &str = r#"
+use std::sync::atomic::{AtomicI64, Ordering}
+
+fn main() {
+    let a = AtomicI64::new(0)
+    a.fetch_add(1, Ordering::Relaxed)
+    let _ = a.load(Ordering::Relaxed)
 }
 "#;
 
@@ -144,6 +154,20 @@ fn wj_sync_atomic_i64_new_zero_must_emit_i64() {
 }
 
 #[test]
+fn wj_sync_atomic_i64_void_main_literals_must_emit_i64() {
+    let generated = test_utils::compile_single(ATOMIC_VOID_MAIN);
+    assert!(
+        !generated.contains("0_i32") && !generated.contains("1_i32"),
+        "void main AtomicI64::new/fetch_add must not use _i32:\n{generated}"
+    );
+    assert!(
+        generated.contains("0_i64") && (generated.contains("1_i64") || generated.contains("fetch_add(1,")),
+        "expected i64-width AtomicI64 literals in void main:\n{generated}"
+    );
+}
+
+#[test]
 fn wj_sync_int_literal_peers_must_cargo_check() {
     test_utils::assert_stdlib_runtime_links(ATOMIC_NEW, &["AtomicI64", "new"]);
+    test_utils::assert_stdlib_runtime_links(ATOMIC_VOID_MAIN, &["AtomicI64", "fetch_add"]);
 }

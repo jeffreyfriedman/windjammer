@@ -561,7 +561,43 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                     }
-return vec![coerced];
+                    // P3.376: demoted free-fn `&str` formals — strip `String::from("lit")`
+                    // left by WJ-owned expected-type / owned-literal paths (list_panels).
+                    if matches!(
+                        arg,
+                        Expression::Literal {
+                            value: Literal::String(_),
+                            ..
+                        }
+                    ) {
+                        let owned_sig = peel_sig.clone().or_else(|| signature.clone()).or_else(|| {
+                            gen.get_signature_with_global(func_name).cloned()
+                        });
+                        if let Some(sig) = owned_sig.as_ref() {
+                            let pidx = sig.arg_param_index(i);
+                            let callee_wants_str = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                sig, pidx,
+                            ) || sig.param_types.get(pidx).is_some_and(|t| {
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            }) || sig.formal_param_type(pidx).is_some_and(|t| {
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            }) || (matches!(
+                                sig.param_ownership.get(pidx),
+                                Some(crate::analyzer::OwnershipMode::Borrowed)
+                            ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                sig, pidx,
+                            ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, pidx,
+                            ));
+                            if callee_wants_str {
+                                crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                                    arg,
+                                    &mut coerced,
+                                );
+                            }
+                        }
+                    }
+                    return vec![coerced];
                 }
                 debug_assert!(
                     false,
