@@ -299,6 +299,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` | 🆕 RED / filed (P3.358) |
 | P1 | **SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow must reborrow** | `bug_wdb271_module_file_owned_edge_batch_clone_into_demoted_to_arrow_must_reborrow_test` | 🆕 RED / filed (P3.363); gen lag |
 | P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | 🆕 RED / filed (P3.363); twin WDB-270 |
+| P1 | **WCC `csr.clone()` → demoted `&mut DenseCsr` afforest must reborrow** | `bug_wdb273_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | 🆕 RED / filed (P3.365); twin WDB-255; gen lag |
+| P1 | **analytics `&self.csr` → owned `lcc_run_dense` must clone** | `bug_wdb274_module_file_demoted_csr_into_owned_lcc_run_dense_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241; inverse WDB-233 |
+| P1 | **PageRank `&Vec` → owned `arena_return_f64` must clone/move** | `bug_wdb275_module_file_demoted_vec_into_owned_arena_return_f64_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241/261 |
+| P1 | **BFS `&Vec` → owned `par_bfs_bind` must clone** | `bug_wdb276_module_file_demoted_vec_into_owned_par_bfs_bind_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-261 |
 | P1 | **`for i in 0..vec.len()` must not emit `0_i32..len()`** | `bug_for_zero_to_len_must_not_emit_i32_range_test` | ✅ tip GREEN (P3.359) |
 | P1 | **HashMap None arm `0` must be `0_i64` for int values** | `bug_hashmap_int_none_zero_must_emit_i64_test` | 🆕 RED / filed (P3.361) |
 | P1 | **u32 mesh arith must not take i32 literal peers** | `bug_u32_arith_must_not_take_i32_literal_peers_in_coord_fn_test` | 🆕 RED / filed (P3.360) |
@@ -1293,6 +1297,18 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 **Root cause:** `substring(start,end)` lowering reused pre-codegen call args (`0_i64`) instead of re-emitting bounds with `in_index_context` (same path as `generate_index` range slices). `maybe_cast_index_to_usize` early-returned on literal AST nodes while the string still carried `_i64`.
 
 **Fix:** `method_call_expression_generation/finalize.rs` — re-generate start/end with `in_index_context` + `maybe_cast_index_to_usize`.
+
+## P3.365 WindjammerDB CQ-C5 — coverage REDs WDB-273–276 WCC afforest + LCC/arena/par_bfs owned (2026-09-17)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-273** WCC `csr.clone()` → demoted `&mut DenseCsr` afforest | ❌ RED — gen graph_wcc_engine (tip-out GREEN; twin WDB-255) |
+| Tip **WDB-274** analytics `&self.csr` → owned `lcc_run_dense` | ❌ RED — tip graph_analytics_session (twin WDB-241) |
+| Tip **WDB-275** PageRank `&Vec` → owned `arena_return_f64` | ❌ RED — tip graph_pagerank_engine (twin WDB-241/261) |
+| Tip **WDB-276** BFS `&Vec` → owned `par_bfs_bind` | ❌ RED — tip graph_bfs_engine (twin WDB-261) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **177/218–276**; sync tip-out→gen for WCC afforest; fix tip `&T`→owned Vec/Csr call sites. No Phase 606+.
 
 ## P3.363 WindjammerDB CQ-C5 — coverage REDs WDB-271/272 edge_batch to_arrow + wave1 push_str (2026-09-17)
 
