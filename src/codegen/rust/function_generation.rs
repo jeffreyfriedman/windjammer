@@ -52,6 +52,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.refresh_method_registry_from_emitted_formals(func);
         self.refresh_free_function_registry_from_emitted_formals(func, &params);
+        if self.current_struct_name.is_none() {
+            self.preregistered_free_function_emitted_params
+                .insert(func.name.to_string(), params.clone());
+        }
 
         output.push_str(&params.join(", "));
         output.push(')');

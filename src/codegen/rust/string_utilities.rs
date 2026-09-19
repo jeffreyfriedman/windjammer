@@ -867,12 +867,16 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         };
 
     let param_idx = sig.arg_param_index(arg_index);
+    let registry_emits_rust_str = sig.param_types.get(param_idx).is_some_and(|t| {
+        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+    });
     // Fail closed: codegen-confirmed owned `String` / plain WJ `string` contracts never
     // receive call-site `&` — stale analyzer `Reference(str)` must not win (join_path seed).
-    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-        || crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
-            sig, param_idx,
-        )
+    if !registry_emits_rust_str
+        && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+            || crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+                sig, param_idx,
+            ))
     {
         return;
     }
@@ -1180,16 +1184,66 @@ pub fn rewrite_borrowed_str_clone_to_to_string<'ast>(
         _ => None,
     };
     if let Some(name) = ident_name {
-        let is_string_type = function_params.iter().any(|p| {
-            p.name == name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-        });
-        let is_emitted_str_ref = emitted_rust_ref_formals.contains(name);
-        if is_emitted_str_ref && is_string_type {
+        if demoted_wj_text_param_emits_rust_str_ref_extended(
+            name,
+            emitted_rust_ref_formals,
+            None,
+            None,
+            function_params,
+        ) {
             *expr_str = expr_str.replacen(".clone()", ".to_string()", 1);
             return true;
         }
     }
     false
+}
+
+/// WJ `string` formal lowered to Rust `&str` at emit (demotion / str-ref optimization).
+pub fn demoted_wj_text_param_emits_rust_str_ref_extended(
+    name: &str,
+    emitted_rust_ref_formals: &std::collections::HashSet<String>,
+    str_ref_optimized_params: Option<&std::collections::HashSet<String>>,
+    inferred_borrowed_params: Option<&std::collections::HashSet<String>>,
+    function_params: &[crate::parser::Parameter<'_>],
+) -> bool {
+    let is_string_type = function_params.iter().any(|p| {
+        p.name == name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+    });
+    if !is_string_type {
+        return false;
+    }
+    emitted_rust_ref_formals.contains(name)
+        || str_ref_optimized_params.is_some_and(|s| s.contains(name))
+        || inferred_borrowed_params.is_some_and(|s| s.contains(name))
+}
+
+/// Tuple/push call args: `{param}.clone()` → `{param}.to_string()` for demoted text formals.
+pub fn rewrite_demoted_text_param_str_clones_in_rust_expr(
+    expr_str: &mut String,
+    emitted_rust_ref_formals: &std::collections::HashSet<String>,
+    str_ref_optimized_params: &std::collections::HashSet<String>,
+    inferred_borrowed_params: &std::collections::HashSet<String>,
+    function_params: &[crate::parser::Parameter<'_>],
+) {
+    for p in function_params {
+        if !crate::codegen::rust::types::is_windjammer_text_type(&p.type_) {
+            continue;
+        }
+        if !demoted_wj_text_param_emits_rust_str_ref_extended(
+            p.name.as_str(),
+            emitted_rust_ref_formals,
+            Some(str_ref_optimized_params),
+            Some(inferred_borrowed_params),
+            function_params,
+        ) {
+            continue;
+        }
+        let from = format!("{}.clone()", p.name);
+        let to = format!("{}.to_string()", p.name);
+        if expr_str.contains(&from) {
+            *expr_str = expr_str.replace(&from, &to);
+        }
+    }
 }
 
 /// Strip a trailing auto-inserted `.clone()` when the source call is itself an explicit
