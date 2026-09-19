@@ -336,7 +336,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&args` → owned report_cli_is_report must clone** | `bug_wdb294_module_file_demoted_vec_into_owned_wave1_report_cli_must_clone_test` | ✅ tip GREEN (P3.379 tip-out wave1_cli); twin WDB-291 |
 | P1 | **wave1 `&args` → owned scale_status_cli_main must clone** | `bug_wdb295_module_file_demoted_vec_into_owned_wave1_scale_status_cli_must_clone_test` | ✅ tip GREEN (P3.379 tip-out wave1_cli); twin WDB-291 |
 | P1 | **gen-lag join_path `String::from` must match tip bare `&str`** | `bug_wdb296_module_file_gen_lag_join_path_string_from_must_match_tip_test` | ✅ GREEN (P3.377 tip→gen sync); twin WDB-225 |
-| P1 | **MultiFile CLI owned Vec reuse must clone (not `&args`)** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | ✅ tip GREEN (P3.378) — regression guard; product tip-out still RED on WDB-291/294 |
+| P1 | **MultiFile CLI owned Vec reuse must clone (not `&args`)** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | ✅ tip GREEN (P3.379) — regression guard; tip-out WDB-291/294 also GREEN |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2552,7 +2552,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-289–290** dremel/sf1 floor | ✅ tip GREEN |
 | Tip **WDB-291/292/294/295** wave1 CLI `&args`→owned | ✅ tip GREEN after flat `wave1_cli.rs` sync (nested already correct) |
 | Tip **WDB-293/296** | ✅ already GREEN |
-| MultiFile **WDB-297** CLI `&args`→owned isolate | 🆕 RED / filed (P3.378) — compiler gate (not tip-out lag) |
+| MultiFile **WDB-297** CLI `&args`→owned isolate | ✅ tip GREEN (P3.379) — tip emits `args.clone()` |
 
 **Root cause layer:** signature (bare Vec/DenseCsr owned + Clone↛Borrow) + tip-out/gen lag (flat `wave1_cli.rs` stale while nested was greened).
 
@@ -2570,7 +2570,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gen-lag **WDB-296** join_path `String::from` vs tip bare | ✅ GREEN after tip-out→gen sync |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** MultiFile **WDB-297** isolate; remaining queue ❌. No Phase 606+.
+**Compiler agent priority:** remaining queue 🆕/❌ (245–276 cluster tip-out lag). No Phase 606+.
 
 ## P3.376 — WDB tip-out Vec→owned cluster regen + finance raw-string gate (2026-09-18)
 
@@ -2604,7 +2604,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| MultiFile **WDB-297** owned CLI Vec reuse must clone | ✅ tip GREEN — regression guard (product tip-out still RED: 291/292/294/295) |
+| MultiFile **WDB-297** owned CLI Vec reuse must clone | ✅ tip GREEN — regression guard; tip-out 291/292/294/295 GREEN (P3.379) |
 
 **Gate:** `cargo test --release --test all --features integration_tests -- wdb297_ -- --nocapture`
 
