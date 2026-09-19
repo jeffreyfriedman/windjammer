@@ -1,7 +1,8 @@
 //! Owned `string` locals must move into owned `string` formals (not `&String`).
 //!
-//! Ecosystem `wj-url` tests: `let base = "…"; join(base, relative)` emits
-//! `join(&base, &relative)` → E0308.
+//! Format-only helpers (`"${a}/${b}"`) demote to `&str` by design (P3.264 readonly
+//! pub APIs). Use a real concat chain so formals stay owned `String` — the ecosystem
+//! over-borrow bug (`join(&base, &relative)` → E0308 into owned formals).
 
 #![cfg(any(
     not(any(
@@ -23,7 +24,7 @@ mod test_utils;
 fn owned_string_locals_move_into_owned_string_formals() {
     let source = r#"
 pub fn join(base: string, relative: string) -> string {
-    "${base}/${relative}"
+    (base + "/") + (relative + "")
 }
 
 pub fn resolve() -> string {
