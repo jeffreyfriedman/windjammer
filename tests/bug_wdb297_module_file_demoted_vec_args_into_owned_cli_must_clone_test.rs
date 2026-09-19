@@ -24,7 +24,7 @@ use integration_test_helpers::MultiFileTest;
 const SRC: &str = r#"
 pub fn scale_status_main(args: Vec<string>) -> int {
     let mut owned = args
-    owned.push("status".to_string())
+    owned.push("status")
     owned.len() as int
 }
 
