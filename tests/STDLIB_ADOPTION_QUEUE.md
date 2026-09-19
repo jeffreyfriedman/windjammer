@@ -47,7 +47,7 @@ Definition of done per row:
 | `std::csv.write` owned rows (homonym `write`) | `bug_std_csv_write_owned_rows_auto_borrow_test` | ✅ | Package `pub fn write` → `csv.write(rows)` emits `&rows` |
 | `std::db` connect + execute | `bug_std_db_execute_wiring_test` | ✅ | `execute` returns `i64` (WJ `int`) |
 | `std::time` RFC3339 | `bug_std_time_rfc3339_roundtrip_wiring_test` | ✅ | `parse_rfc3339` + `DateTime::to_rfc3339` |
-| `std::time.parse_duration_ms` (`1h30m`) | `bug_std_time_parse_duration_ms_wiring_test` | 🆕 RED | Human duration parse for `wj-duration` graduation |
+| `std::time.parse_duration_ms` / `format_duration_ms` | `bug_std_time_parse_duration_ms_wiring_test` | ✅ GREEN | Runtime helpers; `wj-duration` thin-wrap (P3.391) |
 | `std::crypto.hash_password` / `verify_password` | `bug_std_crypto_bcrypt_password_wiring_test` | ✅ | Runtime bcrypt + `std/crypto.wj` → `windjammer_runtime::crypto` |
 | `std::compress` gzip encode/decode | `bug_std_compress_gzip_wiring_test` | ✅ | Runtime `compress` + flate2; Base64 gzip string round-trip |
 | `std::regex` is_match / find_all / escape | `bug_std_regex_module_wiring_test` | ✅ | Runtime `regex_mod` string APIs |
