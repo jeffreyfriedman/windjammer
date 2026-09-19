@@ -338,6 +338,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&args` → owned scale_status_cli_main must clone** | `bug_wdb295_module_file_demoted_vec_into_owned_wave1_scale_status_cli_must_clone_test` | ✅ tip GREEN (P3.379 tip-out wave1_cli); twin WDB-291 |
 | P1 | **gen-lag join_path `String::from` must match tip bare `&str`** | `bug_wdb296_module_file_gen_lag_join_path_string_from_must_match_tip_test` | ✅ GREEN (P3.377 tip→gen sync); twin WDB-225 |
 | P1 | **MultiFile CLI owned Vec reuse must clone (not `&args`)** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | ✅ tip GREEN (P3.379) — regression guard; tip-out WDB-291/294 also GREEN |
+| P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.381); tip-out RED (~17×); MultiFile isolate GREEN |
+| P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | 🆕 RED / filed (P3.381); tip-out RED (~8×); MultiFile isolate GREEN; twin WDB-241 |
+| P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | 🆕 RED / filed (P3.381); MultiFile + tip-out RED (PageRank / pg_serve) |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2540,10 +2543,19 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Gate:** `cargo test --test all --features integration_tests theme_hex_byte_arith_must_stay_one_int_width -- --nocapture` → pass (2026-09-18 GREEN incl. cargo-check).
 
+## P3.383 WindjammerDB CQ-C5 — coverage REDs WDB-298–300 (2026-09-19)
 
+| Gate | Status |
+|------|--------|
+| Tip **WDB-298** `u32 = 0_usize` loop init | ❌ RED — tip-out/gen adjacency/CDLP/LCC (~17×); MultiFile isolate GREEN |
+| Tip **WDB-299** `Key::from_components(&parts)` → owned Vec | ❌ RED — tip-out/gen layers (~8×); MultiFile isolate GREEN; twin WDB-241 |
+| MultiFile **WDB-300** `n as usize.clone()` | ❌ RED — MultiFile + tip-out PageRank/pg_serve |
+| Tip **WDB-291–295/297** wave1 CLI | ✅ tip GREEN (P3.379) |
+| Dogfood / tip-cluster | ❄️ frozen; gen/mod.rs probe-junk cleaned locally (gitignored) |
 
+**Census (after gen/mod.rs hygiene):** `cargo check --lib` on wdb-layers → **287 errors** (205× E0308). Dominant tip-same classes: `0_usize`→u32, `&parts`→owned Key, `as T.clone()`, int-width peers.
 
-
+**Compiler agent priority:** tip greens **WDB-298–300**; signature-driven int-width peers + clone-after-cast ban + owned Vec into `Key::from_components`. No Phase 606+. No windjammer/src edits from DB agent.
 
 ## P3.382 — tip-out bulk module-file sync (2026-09-18)
 
