@@ -272,6 +272,12 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     let any_emits_shared_ref = |sig: &FunctionSignature| {
         let pidx = sig.arg_param_index(arg_index);
         callee_emits_shared_rust_ref_param(sig, pidx)
+            || sig.param_types.get(pidx).is_some_and(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            })
+            || sig.formal_param_type(pidx).is_some_and(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            })
     };
     if any_emits_shared_ref(call_sig)
         || global

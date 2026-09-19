@@ -1229,6 +1229,15 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } if self.into_string_formal_params.contains(name)
         );
         let mut kind = compute_coercion(&actual, &expected);
+        // WDB-170 / eco wj-toml: demoted `&str` into owned `String` must `.to_string()`, not `.clone()`.
+        if matches!(kind, CoercionKind::Clone)
+            && crate::ir::coercion::is_string_base(&expected.base)
+            && matches!(expected.ownership, OwnedType::Owned)
+            && matches!(actual.ownership, OwnedType::Ref(_))
+            && crate::ir::coercion::is_string_base(&actual.base)
+        {
+            kind = CoercionKind::ToOwnedString;
+        }
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
             && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
@@ -3261,10 +3270,25 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Terminal: preregistered demoted `&str` callees must borrow owned caller params
-        // (`compare_identifiers` → `cmp_string(&left, &right)` while caller keeps `String`).
+        // Terminal: registry/preregister demoted `&str` callees must borrow owned
+        // caller params (`compare_identifiers` → `cmp_string(&left, &right)`).
         if let Expression::Identifier { name, .. } = arg_expr {
-            let callee_wants_shared = self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+            let registry_wants_str = registry
+                .get_signature(callee_name)
+                .or_else(|| {
+                    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+                    registry.get_signature(simple)
+                })
+                .is_some_and(|rs| {
+                    let pidx = rs.arg_param_index(arg_index);
+                    rs.param_types.get(pidx).is_some_and(|t| {
+                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                    }) || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        rs, pidx,
+                    )
+                });
+            let callee_wants_shared = registry_wants_str
+                || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
                 || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
             if callee_wants_shared
                 && self.caller_owned_non_copy_formal(name)
@@ -3275,6 +3299,30 @@ impl<'ast> CodeGenerator<'ast> {
                 coerced = format!("&{coerced}");
             }
         }
+
+        if let Expression::Identifier { name, .. } = arg_expr {
+            let mut tmp = coerced.clone();
+            if crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                &mut tmp,
+                arg_expr,
+                &self.emitted_rust_ref_formals,
+                &self.current_function_params,
+            ) {
+                coerced = tmp;
+            } else if self.emitted_rust_ref_formals.contains(name)
+                && coerced.ends_with(".clone()")
+            {
+                coerced = format!("{}.to_string()", name);
+            }
+        }
+
+        crate::codegen::rust::string_utilities::rewrite_demoted_text_param_str_clones_in_rust_expr(
+            &mut coerced,
+            &self.emitted_rust_ref_formals,
+            &self.str_ref_optimized_params,
+            &self.inferred_borrowed_params,
+            &self.current_function_params,
+        );
 
         // Terminal: never leave `n as usize.clone()` (WDB-300).
         coerced = crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&coerced);

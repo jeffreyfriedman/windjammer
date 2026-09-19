@@ -328,7 +328,8 @@ impl<'ast> CodeGenerator<'ast> {
                         // Demoted params that skipped auto-clone (Copy `&str`) still need own.
                         if !crate::codegen::rust::string_utilities::already_owned_string_expr(&s) {
                             if let Expression::Identifier { name, .. } = e {
-                                let demoted_text = (self.inferred_borrowed_params.contains(name)
+                                let demoted_text = (self.emitted_rust_ref_formals.contains(name)
+                                    || self.inferred_borrowed_params.contains(name)
                                     || self.str_ref_optimized_params.contains(name)
                                     || self.identifier_already_ref(name))
                                     && self.current_function_params.iter().any(|p| {

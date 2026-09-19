@@ -2778,3 +2778,15 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Note:** `wj-sync` keeps `Arc<AtomicI64>` Counter for Clone handles; bare AtomicI64 is now legal when Clone is not required. Do not add a WJ `SharedInt` stub in `std/sync.wj` — Copy stub poisons package `type SharedInt = Shared<int>`.
 
+## P3.389 (2026-09-19) — eco wj-semver / wj-toml string ownership
+
+**Symptom:**
+- `wj-semver`: owned `String` params into demoted `&str` sibling (`cmp_string`) without `&` at tail call.
+- `wj-toml`: demoted `key: &str` into `Vec<(String, String)>::push` emitted `key.clone()` → `&str`.
+
+**Fix:** registry `&str` formals force call-site borrow; demoted text `.clone()` into owned String → `.to_string()`.
+
+**Gates:** `bug_eco_wj_semver_owned_into_demoted_str_tail_call_must_borrow_test`, `bug_eco_wj_toml_demoted_str_tuple_push_must_to_string_test` (PASSING).
+
+**Ecosystem:** `wj-timefmt` / `wj-semver` / `wj-toml` / `wj-config` tip GREEN.
+

@@ -664,6 +664,35 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             );
                         }
                     }
+                    if let Expression::Identifier { name, .. } = arg {
+                        let lookup = gen.signature_lookup_callee_name(func_name);
+                        if let Some(rs) = gen
+                            .signature_registry
+                            .get_signature(func_name)
+                            .or_else(|| gen.signature_registry.get_signature(lookup.as_ref()))
+                        {
+                            let pidx = rs.arg_param_index(i);
+                            if rs.param_types.get(pidx).is_some_and(|t| {
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            }) && gen.caller_owned_non_copy_formal(name)
+                                && !coerced.starts_with('&')
+                                && !coerced.starts_with("&mut ")
+                            {
+                                coerced = format!("&{name}");
+                            }
+                        }
+                    }
+                    if let Expression::Identifier { name, .. } = arg {
+                        let mut tmp = coerced.clone();
+                        if crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
+                            &mut tmp,
+                            arg,
+                            &gen.emitted_rust_ref_formals,
+                            &gen.current_function_params,
+                        ) {
+                            coerced = tmp;
+                        }
+                    }
                     // Absolute terminal: never emit `n as usize.clone()` (WDB-300).
                     coerced =
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
