@@ -3209,6 +3209,33 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `param` or `param + "…"` / `param + ""` as a call argument (owned forward into
+    /// concat2 / overlay helpers). Leaf empty-append into borrowed text callees still
+    /// demotes via `param_only_forwards_to_borrowed_text_callees`.
+    fn expr_is_param_or_string_add_lhs(expr: &Expression<'_>, param_name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => name == param_name,
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Add,
+                left,
+                right,
+                ..
+            } => {
+                matches!(
+                    &**left,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) && matches!(
+                    &**right,
+                    Expression::Literal {
+                        value: crate::parser::Literal::String(_),
+                        ..
+                    }
+                )
+            }
+            _ => false,
+        }
+    }
+
     fn stdlib_vec_push_value_arg_is_owned(&self) -> bool {
         let sig = self
             .signature_registry
@@ -3846,7 +3873,7 @@ impl<'ast> CodeGenerator<'ast> {
                 object, arguments, ..
             } => {
                 arguments.iter().any(|(_, arg)| {
-                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    Self::expr_is_param_or_string_add_lhs(arg, param_name)
                         || self.expression_passes_param_as_call_argument(arg, param_name, func)
                 }) || self.expression_passes_param_as_call_argument(object, param_name, func)
             }
@@ -3863,7 +3890,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 arguments.iter().any(|(_, arg)| {
-                    matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    Self::expr_is_param_or_string_add_lhs(arg, param_name)
                         || self.expression_passes_param_as_call_argument(arg, param_name, func)
                 }) || self.expression_passes_param_as_call_argument(function, param_name, func)
             }
@@ -10675,7 +10702,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    if Self::expr_is_param_or_string_add_lhs(arg, param_name)
                         || Self::expr_is_field_or_index_of_param(arg, param_name)
                     {
                         let sig = self
@@ -10715,7 +10742,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 let call_arg_count = arguments.len();
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                    if Self::expr_is_param_or_string_add_lhs(arg, param_name)
                         || Self::expr_is_field_or_index_of_param(arg, param_name)
                     {
                         let sig = self

@@ -4,3 +4,13 @@
 fn v4() -> string {
     "" + ""
 }
+
+/// Unix-ms time-ordered UUID version 7 (RFC 9562) using the current UTC clock.
+fn v7() -> string {
+    "" + ""
+}
+
+/// UUID version 7 from explicit Unix millis + 10 random bytes (20 hex digits).
+fn v7_from_timestamp(unix_millis: int, random_hex: string) -> Result<string, string> {
+    Err("" + "")
+}

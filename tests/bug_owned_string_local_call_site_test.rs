@@ -35,9 +35,14 @@ pub fn resolve() -> string {
 "#;
     let generated = test_utils::compile_single(source);
     assert!(
+        generated.contains("base: String") && generated.contains("relative: String"),
+        "join formals must stay owned String, got:\n{generated}"
+    );
+    assert!(
         generated.contains("join(base, relative)")
-            || generated.contains("join(base.clone(), relative.clone())"),
-        "owned string locals must move (or clone) into owned formals, got:\n{generated}"
+            || generated.contains("join(base.clone(), relative.clone())")
+            || generated.contains("join(base.to_string(), relative.to_string())"),
+        "owned string locals must move (or clone/to_string) into owned formals, got:\n{generated}"
     );
     assert!(
         !generated.contains("join(&base, &relative)"),
