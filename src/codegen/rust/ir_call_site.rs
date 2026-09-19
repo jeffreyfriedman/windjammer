@@ -2304,7 +2304,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // P3.376: `pub const SCOPE_*: string` / module string consts lower to `&'static str`,
         // but IR still types them as owned WJ `string` → compute_coercion is Identity.
-        // Owned `string` formals still need `.to_string()` (same as string literals).
+        // Owned formals (named `string` *and* `Vec<string>::push(T)`) need `.to_string()`.
         // IR call-sites skip method-call finalize, so this must live here.
         let arg_is_string_const = match arg_expr {
             Expression::Identifier { name, .. } => {
@@ -2329,20 +2329,32 @@ impl<'ast> CodeGenerator<'ast> {
                 &sig,
                 sig.arg_param_index(arg_index),
             )
-            && (crate::codegen::rust::string_utilities::string_literal_needs_to_string(
+            && !crate::codegen::rust::string_utilities::already_owned_string_expr(&coerced)
+        {
+            let pidx = sig.arg_param_index(arg_index);
+            // Vec::push / generic Owned T: formal may not look like WJ `string` until
+            // specialized — still own when the call site expects an owned pass.
+            let wants_owned = crate::codegen::rust::string_utilities::string_literal_needs_to_string(
                 &sig,
                 arg_index,
             ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
                 &sig,
                 arg_index,
-            ))
-            && !crate::codegen::rust::string_utilities::already_owned_string_expr(&coerced)
-        {
-            return Some(
-                crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
-                    coerced.trim_start_matches('&'),
-                ),
-            );
+            ) || crate::ir::signature_bridge::call_site_expects_owned_pass(&sig, pidx)
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
+                || matches!(
+                    crate::codegen::rust::call_signature_resolution::effective_param_ownership(
+                        &sig, pidx
+                    ),
+                    crate::analyzer::OwnershipMode::Owned
+                );
+            if wants_owned {
+                return Some(
+                    crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                        coerced.trim_start_matches('&'),
+                    ),
+                );
+            }
         }
         let callee_has_ownership_collision =
             crate::codegen::rust::call_signature_resolution::has_ownership_collision_for_call(

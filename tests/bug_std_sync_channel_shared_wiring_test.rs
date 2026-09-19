@@ -25,8 +25,10 @@ use std::sync
 
 pub fn ping() -> int {
     let pair = sync.unbounded()
-    let _tx = sync.send(pair.0, 42)
-    let got = sync.recv(pair.1)
+    let tx = pair.0
+    let rx = pair.1
+    let _tx = sync.send(tx, 42)
+    let got = sync.recv(rx)
     match got.1 {
         Some(v) => v,
         None => 0,
@@ -50,8 +52,10 @@ fn std_sync_unbounded_channel_must_wire() {
     test_utils::assert_stdlib_runtime_links(
         CHANNEL,
         &[
-            "windjammer_runtime::sync::unbounded",
-            // interim: accept channel() only after std wraps it as unbounded
+            "windjammer_runtime::sync",
+            "sync::unbounded",
+            "sync::send",
+            "sync::recv",
         ],
     );
 }
@@ -60,6 +64,11 @@ fn std_sync_unbounded_channel_must_wire() {
 fn std_sync_shared_must_wire() {
     test_utils::assert_stdlib_runtime_links(
         SHARED,
-        &["windjammer_runtime::sync::shared"],
+        &[
+            "windjammer_runtime::sync",
+            "sync::shared",
+            "sync::shared_add",
+            "sync::shared_get",
+        ],
     );
 }
