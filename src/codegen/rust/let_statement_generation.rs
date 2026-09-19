@@ -504,7 +504,22 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
                 {
-                    if let Some(ret_ty) = &self.current_function_return_type {
+                    // WDB-305: later `x = u32` assign beats return-width i64 for untyped counters.
+                    let later_peer = var_name.and_then(|vn| {
+                        self.mut_int_local_peer_width_from_later_assigns(vn)
+                    });
+                    if let Some(Type::Uint) = later_peer.as_ref() {
+                        output.push_str(": u32");
+                        if let Some(vn) = var_name {
+                            self.local_var_types.insert(vn.to_string(), Type::Uint);
+                        }
+                    } else if let Some(Type::Int32) = later_peer.as_ref() {
+                        output.push_str(": i32");
+                        if let Some(vn) = var_name {
+                            self.local_var_types.insert(vn.to_string(), Type::Int32);
+                            self.codegen_i32_binding_names.insert(vn.to_string());
+                        }
+                    } else if let Some(ret_ty) = &self.current_function_return_type {
                         match Self::peel_option_result_payload(ret_ty) {
                             Type::Int32 => {
                                 output.push_str(": i32");
@@ -554,11 +569,19 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let prev_assign_int = self.assignment_int_target_type.take();
                 if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
-                    if let Some(ret_ty) = &self.current_function_return_type {
-                        if Self::assignment_target_needs_int_codegen_context(ret_ty) {
-                            // Store peeled int width (not Result/Option wrapper).
-                            self.assignment_int_target_type =
-                                Some(self.int_width_hint_from_return_type_resolved(ret_ty));
+                    // WDB-305: later u32 assign peer beats return i64 for `let mut x = 0`.
+                    if let Some(vn) = var_name {
+                        if let Some(peer) = self.mut_int_local_peer_width_from_later_assigns(vn) {
+                            self.assignment_int_target_type = Some(peer);
+                        }
+                    }
+                    if self.assignment_int_target_type.is_none() {
+                        if let Some(ret_ty) = &self.current_function_return_type {
+                            if Self::assignment_target_needs_int_codegen_context(ret_ty) {
+                                // Store peeled int width (not Result/Option wrapper).
+                                self.assignment_int_target_type =
+                                    Some(self.int_width_hint_from_return_type_resolved(ret_ty));
+                            }
                         }
                     }
                 }

@@ -3035,6 +3035,11 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `param` used as the owned lhs of string `+` (P3.264 concat2 / overlay_row).
+    ///
+    /// Leaf `param + ""` alone is a readonly empty-append temp (demote to `&str` —
+    /// `parse_twice(json + "")`). Nested concat chains
+    /// (`(left + "") + (right + "")`) still count as owned concat lhs so pub free-fn
+    /// formals stay `String` (LedgerKit `concat2` / overlay_row).
     pub(in crate::codegen::rust) fn param_used_as_owned_string_add_operand(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -3043,6 +3048,7 @@ impl<'ast> CodeGenerator<'ast> {
         fn expr_uses_owned_add_lhs<'ast>(
             expr: &Expression<'ast>,
             param_name: &str,
+            under_string_add: bool,
         ) -> bool {
             match expr {
                 Expression::Binary {
@@ -3051,42 +3057,47 @@ impl<'ast> CodeGenerator<'ast> {
                     right,
                     ..
                 } => {
-                    let readonly_empty_append = matches!(
+                    let left_is_param = matches!(
                         &**left,
                         Expression::Identifier { name, .. } if name == param_name
-                    ) && matches!(
+                    );
+                    let right_is_empty_string = matches!(
                         &**right,
                         Expression::Literal {
                             value: crate::parser::Literal::String(s),
                             ..
                         } if s.is_empty()
                     );
-                    (!readonly_empty_append
-                        && matches!(
-                            &**left,
-                            Expression::Identifier { name, .. } if name == param_name
-                        ))
-                        || expr_uses_owned_add_lhs(left, param_name)
-                        || expr_uses_owned_add_lhs(right, param_name)
+                    // Real concat (`param + "x"`) always owns. Empty-append owns only when
+                    // nested under another string `+` (concat2 chains), not as a leaf temp.
+                    if left_is_param && (!right_is_empty_string || under_string_add) {
+                        return true;
+                    }
+                    expr_uses_owned_add_lhs(left, param_name, true)
+                        || expr_uses_owned_add_lhs(right, param_name, true)
                 }
                 Expression::Binary { left, right, .. } => {
-                    expr_uses_owned_add_lhs(left, param_name)
-                        || expr_uses_owned_add_lhs(right, param_name)
+                    expr_uses_owned_add_lhs(left, param_name, under_string_add)
+                        || expr_uses_owned_add_lhs(right, param_name, under_string_add)
                 }
                 Expression::Call { arguments, .. }
                 | Expression::MethodCall { arguments, .. } => arguments
                     .iter()
-                    .any(|(_, a)| expr_uses_owned_add_lhs(a, param_name)),
-                Expression::Unary { operand, .. } => expr_uses_owned_add_lhs(operand, param_name),
+                    .any(|(_, a)| expr_uses_owned_add_lhs(a, param_name, false)),
+                Expression::Unary { operand, .. } => {
+                    expr_uses_owned_add_lhs(operand, param_name, under_string_add)
+                }
                 Expression::FieldAccess { object, .. }
-                | Expression::Index { object, .. } => expr_uses_owned_add_lhs(object, param_name),
+                | Expression::Index { object, .. } => {
+                    expr_uses_owned_add_lhs(object, param_name, under_string_add)
+                }
                 Expression::StructLiteral { fields, .. } => fields
                     .iter()
-                    .any(|(_, v)| expr_uses_owned_add_lhs(v, param_name)),
+                    .any(|(_, v)| expr_uses_owned_add_lhs(v, param_name, under_string_add)),
                 Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                     elements
                         .iter()
-                        .any(|el| expr_uses_owned_add_lhs(el, param_name))
+                        .any(|el| expr_uses_owned_add_lhs(el, param_name, under_string_add))
                 }
                 _ => false,
             }
@@ -3100,7 +3111,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Statement::Let { value, .. } => Some(*value),
                 _ => None,
             };
-            if expr.is_some_and(|e| expr_uses_owned_add_lhs(e, param_name)) {
+            if expr.is_some_and(|e| expr_uses_owned_add_lhs(e, param_name, false)) {
                 return true;
             }
         }
