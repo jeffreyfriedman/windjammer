@@ -360,6 +360,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`Some(x)` must not emit `Some(x.clone()).cloned()`** | `bug_wdb304_module_file_some_must_not_emit_cloned_chain_test` | 🆕 RED / filed (P3.391); MultiFile + tip-out RED (semantic) |
 | P1 | **CDLP `best_count` must peer `u32` (not `0_i64`)** | `bug_wdb305_module_file_cdlp_best_count_must_peer_u32_test` | 🆕 RED / filed (P3.391); MultiFile + tip-out RED |
 | P1 | **owned bakeoff String must not receive `&hw.clone()`** | `bug_wdb306_module_file_owned_string_must_not_receive_ref_clone_bakeoff_test` | 🆕 RED / filed (P3.391); tip-out RED; MultiFile isolate GREEN; twin WDB-301 |
+| P1 | **`for` over owned field must not move when parent reused** | `bug_wdb307_module_file_for_field_must_not_move_when_parent_reused_test` | 🆕 RED / filed (P3.392); MultiFile + tip-out RED (vector_topk) |
+| P1 | **wave1 CLI residual `u32=0_usize` / `args[i+1]`** | `bug_wdb308_module_file_wave1_cli_u32_init_and_index_must_peer_test` | 🆕 RED / filed (P3.392); tip-out RED; twin WDB-298/303 coverage |
+| P1 | **owned csr into demoted `&mut` take must be `mut`** | `bug_wdb309_module_file_owned_into_mut_ref_must_declare_mut_test` | 🆕 RED / filed (P3.392); tip-out RED; MultiFile isolate GREEN |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2643,6 +2646,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb304_ wdb305_ wdb306_` → 1 passed / 5 failed (expected RED).
 
 **Compiler agent priority:** tip greens **WDB-304–306** (ban `.cloned()` on `Option<T>`; peer u32 for majority count; no `&owned.clone()` into owned String). No Phase 606+. No windjammer/src edits from DB agent.
+
+## P3.392 WindjammerDB CQ-C5 — coverage REDs WDB-307–309 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-307** `for node in index.graph.nodes` move | ❌ RED — MultiFile + tip-out vector_topk |
+| Tip **WDB-308** wave1 CLI `u32=0_usize` / `args[i+1]` | ❌ RED — tip-out/gen residual after 298/303 sync |
+| Tip **WDB-309** BFS `&mut csr` without `mut` param | ❌ RED — tip-out/gen beamer_parallel; MultiFile isolate GREEN |
+| Tip **WDB-304–306** | ❌ still RED (P3.391) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb307_ wdb308_ wdb309_` → 1 passed / 4 failed (expected RED).
+
+**Compiler agent priority:** tip greens **WDB-307–309** (borrow field in for when parent reused; wave1 CLI int-width residual; `mut` binding for demoted `&mut`). No Phase 606+.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
