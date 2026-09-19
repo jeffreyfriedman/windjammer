@@ -341,6 +341,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.381); tip-out RED (~17×); MultiFile isolate GREEN |
 | P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | 🆕 RED / filed (P3.381); tip-out RED (~8×); MultiFile isolate GREEN; twin WDB-241 |
 | P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | 🆕 RED / filed (P3.381); MultiFile + tip-out RED (PageRank / pg_serve) |
+| P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | 🆕 RED / filed (P3.385); MultiFile + tip-out RED |
+| P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
+| P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2557,6 +2560,19 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Compiler agent priority:** tip greens **WDB-298–300**; signature-driven int-width peers + clone-after-cast ban + owned Vec into `Key::from_components`. No Phase 606+. No windjammer/src edits from DB agent.
 
+## P3.385 WindjammerDB CQ-C5 — coverage REDs WDB-301–303 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-301** owned LDBC string / `&path.clone()` | ❌ RED — MultiFile + tip-out validation_entry / validate_* |
+| Tip **WDB-302** `as i64 as i32` / `total / 3_u64` (LCC) | ❌ RED — tip-out/gen; MultiFile isolate GREEN with `total: i64` |
+| Tip **WDB-303** `offsets[i + 1]` u32 index | ❌ RED — tip-out/gen adjacency; MultiFile isolate GREEN |
+| Tip **WDB-298–300** | ❌ still RED (P3.383) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Census:** ~287 gen errors; next cluster after 298–300 is String ownership (~78) + int-width (LCC double-cast, u32 index).
+
+**Compiler agent priority:** tip greens **WDB-301–303** (own string args; ban double cast on i64 accum; usize index casts). No Phase 606+.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
@@ -2611,7 +2627,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gen-lag **WDB-296** join_path `String::from` vs tip bare | ✅ GREEN after tip-out→gen sync |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** remaining queue 🆕/❌ (245–276 cluster tip-out lag). No Phase 606+.
+**Compiler agent priority:** remaining queue 🆕/❌ (245–276 cluster tip-out lag); P3.383 owned.clone→`&str` reborrow. No Phase 606+.
+
+## P3.383 — owned `.clone()` into demoted `&str` must reborrow (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `owned_str_clone_into_demoted_str_must_reborrow` | ✅ tip GREEN |
+| Twin tip-out **WDB-270/272** wave1 `&owned.clone()` | 🆕 RED / filed (tip-out lag) |
+
+**Root cause:** `finalize_explicit_user_clone_call_site` restored `.clone()` for owned caller text params even when the callee emitted `&str`, producing `helper(owned.clone())` (E0308) / `&owned.clone()`.
+
+**Fix:** when callee emits shared-ref / `&str` (or demoted plain WJ string), strip explicit user clone and reborrow `&binding` (WDB-270 class).
+
+**Gate:** `cargo test --test all --features integration_tests owned_str_clone_into_demoted_str_must_reborrow -- --nocapture` → pass (2026-09-18 GREEN incl. cargo-check).
 
 ## P3.376 — WDB tip-out Vec→owned cluster regen + finance raw-string gate (2026-09-18)
 
