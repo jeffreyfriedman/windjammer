@@ -588,8 +588,16 @@ impl<'ast> CodeGenerator<'ast> {
                 let i32_return_scan_counter = mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && self.function_returns_i32_for_loop_scan();
+                let u32_return_scan_counter = mutable
+                    && Self::mut_let_rhs_is_return_width_counter(value)
+                    && (self.function_returns_u32_for_loop_scan()
+                        || self.assignment_int_target_type.as_ref().is_some_and(|t| {
+                            matches!(t, Type::Uint)
+                                || matches!(t, Type::Custom(n) if n == "u32")
+                        }));
                 if var_name.is_some_and(|n| self.usize_variables.contains(n))
                     && !i32_return_scan_counter
+                    && !u32_return_scan_counter
                 {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }
@@ -597,6 +605,13 @@ impl<'ast> CodeGenerator<'ast> {
                     self.assignment_int_target_type = Some(Type::Int32);
                     if let Some(vn) = var_name {
                         self.usize_variables.remove(vn);
+                    }
+                } else if u32_return_scan_counter {
+                    // WDB-308: return/later u32 peer wins over index-driven usize for `let mut i = 0`.
+                    self.assignment_int_target_type = Some(Type::Uint);
+                    if let Some(vn) = var_name {
+                        self.usize_variables.remove(vn);
+                        self.local_var_types.insert(vn.to_string(), Type::Uint);
                     }
                 } else if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
@@ -657,6 +672,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.assignment_int_target_type = prev_assign_int;
                 if i32_return_scan_counter && value_str.ends_with("_usize") {
                     value_str = value_str.replace("_usize", "_i32");
+                }
+                if u32_return_scan_counter && value_str.ends_with("_usize") {
+                    value_str = value_str.replace("_usize", "_u32");
                 }
 
                 self.apply_vec_index_let_rhs_fixup(var_name, value, None, &mut value_str);

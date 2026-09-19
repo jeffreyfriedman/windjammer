@@ -69,8 +69,9 @@ fn wdb303_tip_out_adjacency_must_not_index_by_u32() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("adj");
-        // Product residual: offsets[i + 1] with i: u32
-        if text.contains("offsets[i + 1]") || text.contains("offsets[i+1]") {
+        // Tip may use `let mut i = 0_usize` for offset walks (bare `i + 1` is fine).
+        // Only flag when a u32-typed `i` indexes with bare `i + 1` (no cast).
+        if u32_i_indexes_offsets_with_bare_plus_one(&text) {
             bad_paths.push(path.display().to_string());
         }
     }
@@ -80,4 +81,32 @@ fn wdb303_tip_out_adjacency_must_not_index_by_u32() {
         "WDB-303 RED: tip-out/product indexes offsets with bare u32 `i + 1` in:\n  {}",
         bad_paths.join("\n  ")
     );
+}
+
+/// True when some `let mut i: u32` / `i: u32` window also has bare `offsets[i + 1]`.
+fn u32_i_indexes_offsets_with_bare_plus_one(text: &str) -> bool {
+    let lines: Vec<&str> = text.lines().collect();
+    for (idx, line) in lines.iter().enumerate() {
+        let bare = line.contains("offsets[i + 1]") || line.contains("offsets[i+1]");
+        if !bare || line.contains("(i + 1) as usize") || line.contains("((i + 1) as usize)") {
+            continue;
+        }
+        // Look backward for nearest `let mut i` / `i:` binding.
+        for prev in lines[..idx].iter().rev().take(40) {
+            let t = prev.trim();
+            if t.starts_with("let mut i:") || t.starts_with("let mut i =") || t.contains("i: u32")
+            {
+                if t.contains("u32") {
+                    return true;
+                }
+                if t.contains("usize") || t.contains("i32") || t.contains("i64") {
+                    break;
+                }
+            }
+            if t.starts_with("fn ") || t.starts_with("pub fn ") {
+                break;
+            }
+        }
+    }
+    false
 }

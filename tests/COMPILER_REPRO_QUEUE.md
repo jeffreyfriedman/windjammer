@@ -391,7 +391,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **LSQB edge owned String must not receive bare `&content`** | `bug_wdb321_module_file_owned_string_must_not_receive_bare_ref_content_lsqb_test` | ✅ tip GREEN (P3.399 gate accuracy — call-line only; not `split_lines(&content)`) |
 | P1 | **LSQB push_adj owned String key must not receive `&out_key`** | `bug_wdb322_module_file_owned_string_key_must_not_receive_ref_lsqb_push_adj_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
 | P1 | **Arrow FFI owned String must not receive `&vname`/`&lname`** | `bug_wdb323_module_file_owned_string_must_not_receive_ref_names_arrow_ffi_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
-| P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.398); tip RED; MultiFile TBD; twin WDB-298; blocks `wj game build` |
+| P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | ✅ MultiFile + tip gen GREEN (P3.400); twin WDB-308/298 |
 | P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | 🆕 RED / filed (P3.399); tip-out RED; MultiFile isolate GREEN; twin WDB-306/320; cross-crate `ArrowColumnarBatch::sql_exec` |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
@@ -2695,7 +2695,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | MultiFile **WDB-307** `for node in index.graph.nodes` move | ❌ RED — MultiFile + tip-out vector_topk |
-| Tip **WDB-308** wave1 CLI `u32=0_usize` / `args[i+1]` | ❌ RED — tip-out/gen residual after 298/303 sync |
+| Tip **WDB-308** wave1 CLI `u32=0_usize` / `args[i+1]` | ✅ MultiFile + tip-out GREEN (P3.400) |
 | Tip **WDB-309** BFS `&mut csr` without `mut` param | ❌ RED — tip-out/gen beamer_parallel; MultiFile isolate GREEN |
 | Tip **WDB-304–306** | ✅ MultiFile GREEN (P3.391); tip-out may lag |
 | Dogfood / tip-cluster | ❄️ frozen |
@@ -2792,15 +2792,15 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | `wj game build --release` tip transpile | ✅ past `.wj → gen/` (2026-09-19) |
-| `windjammer_game_core` cargo | ❌ **354** rustc errors (E0308×197 dominant) |
-| Tip **WDB-324** navmesh `u32 = 0_usize` | 🆕 RED / filed (test body landed P3.399) |
+| `windjammer_game_core` cargo | ❌ residual E0308 cluster (WDB-324 navmesh cleared P3.400) |
+| Tip **WDB-324** navmesh `u32 = 0_usize` | ✅ MultiFile + tip gen GREEN (P3.400) |
 | Binary / MCP / Gate 1 | ❌ NO_BINARY |
 
-**Error mix (tip gen):** E0308 197 · E0277 76 · E0507 20 · E0505 18 · E0596 14 · E0599 5 (split/Into — Vec.to_string largely gone post-P3.390).
+**Error mix (tip gen, pre-P3.400):** E0308 197 · E0277 76 · E0507 20 · E0505 18 · E0596 14 · E0599 5 (split/Into — Vec.to_string largely gone post-P3.390).
 
-**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb324_`
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb324_` → **2 passed** (P3.400).
 
-**Compiler agent priority:** cut game-core tip E0308 (u32/usize/i32 peers) starting with WDB-324. Game session: repros + product dogfood only — no `windjammer/src` edits.
+**Compiler agent priority:** next game-core tip E0308 after WDB-324. Game session: repros + product dogfood only — no `windjammer/src` edits.
 
 ## P3.399 WindjammerDB CQ-C5 — WDB-325 sql_exec + WDB-321 gate accuracy (2026-09-19)
 
@@ -2808,12 +2808,29 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | Tip **WDB-325** DF analytic `sql_exec(..., &emit.table, &right_name, &emit.sql)` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN (struct-store owned formals) |
 | Tip **WDB-321** LSQB edge `&content` | ✅ tip GREEN after call-line-only assert (was false-RED on `split_lines(&content)`) |
-| Tip **WDB-324** navmesh `u32=0_usize` | ❌ RED — game-core gen (P3.398) |
+| Tip **WDB-324** navmesh `u32=0_usize` | ✅ GREEN (P3.400) |
 | Tip **WDB-311/313** | ❌ still RED (`u32=0_usize`) |
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb321_tip wdb324_ wdb325_`
 
-**Compiler agent priority:** tip green **WDB-325** (cross-crate owned `sql_exec` string args) + **WDB-324** navmesh u32 peers. No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip green **WDB-325** (cross-crate owned `sql_exec` string args). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+## P3.400 — WDB-308/324 u32 return-width counters vs `.len()` (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-308** `-> u32` + `args.len()` / `args[i+1]` | ✅ GREEN |
+| Tip-out **WDB-308** wave1 artifact/bench/publish CLI | ✅ GREEN (tip regen) |
+| MultiFile **WDB-324** navmesh `find_triangle` → `Option<u32>` | ✅ GREEN |
+| Tip gen **WDB-324** game-core `gen/ai/navmesh.rs` | ✅ GREEN (tip regen) |
+
+**Root cause:** index analysis marked loop counters as `usize` while return-width ascription emitted `: u32` → `let mut i: u32 = 0_usize`. Binary indices `i + 1` skipped usize cast when peers looked like usize.
+
+**Fix:** `function_returns_u32_for_loop_scan` + `u32_return_scan_counter` (parallel to i32 path) so return/later u32 peer wins over `usize_variables`; `index_expr_needs_u32_or_i32_usize_cast` forces `(i + 1) as usize`.
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb308_ wdb324_` → **4 passed**.
+
+**Compiler agent priority:** tip green **WDB-325** sql_exec `&emit.*`; residual u32 init **WDB-311/313/317**. No Phase 606+.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 

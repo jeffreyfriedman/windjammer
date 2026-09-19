@@ -15,9 +15,46 @@
 //!
 //! Twin of WDB-298/303 for remaining tip-out/gen sites (artifact/bench/publish CLI):
 //!   `let mut i: u32 = 0_usize;` + `args[i + 1]` → E0308 / E0277.
-//! Adjacency/CDLP/LCC were synced (P3.390); wave1 CLI still RED.
+//! Product WJ is untyped `let mut i = 0` with `-> u32` and `args.len()` / `args[i+1]`.
+//! Adjacency/CDLP/LCC were synced (P3.390); wave1 CLI still RED on tip emit.
 
+#[path = "common/integration_test_helpers.rs"]
+mod integration_test_helpers;
+
+use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
+
+const SRC: &str = r#"
+pub fn parse_samples(args: Vec<string>) -> u32 {
+    let mut i = 0
+    while i < args.len() {
+        if args[i] == "--samples" {
+            if i + 1 < args.len() {
+                let _n = args[i + 1]
+                return 1
+            }
+        }
+        i = i + 1
+    }
+    0
+}
+"#;
+
+#[test]
+fn wdb308_module_file_u32_return_index_loop_must_not_emit_0_usize_or_bare_i_plus_1() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC);
+    let map = test.compile().expect("WDB-308 compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-308 MultiFile lib.rs:\n{rs}");
+    let bad_init = rs.contains("u32 = 0_usize") || rs.contains(": u32 = 0_usize");
+    let bad_index = rs.contains("args[i + 1]") || rs.contains("args[i+1]");
+    assert!(
+        !bad_init && !bad_index,
+        "WDB-308 RED: MultiFile u32 return + len() loop emitted init={bad_init} index={bad_index}:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-308 cargo-check");
+}
 
 #[test]
 fn wdb308_tip_out_wave1_cli_must_not_emit_u32_eq_0_usize_or_index_by_u32() {

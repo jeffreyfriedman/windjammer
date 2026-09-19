@@ -564,6 +564,31 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(|t| matches!(t, Type::Custom(s) if s == "usize"))
     }
 
+    /// WDB-308/303: index expressions involving u32/i32 locals need an outer `as usize`
+    /// even when binary peers temporarily look like usize (`i + 1`).
+    fn index_expr_needs_u32_or_i32_usize_cast(&self, index: &Expression<'ast>) -> bool {
+        match index {
+            Expression::Identifier { name, .. } => {
+                let from_local = self.local_var_types.get(name.as_str()).is_some_and(|ty| {
+                    matches!(ty, Type::Uint | Type::Int32)
+                        || matches!(ty, Type::Custom(n) if n == "u32" || n == "i32")
+                });
+                let rust_name = self.local_int_rust_type_name_excluding_ambiguous_int(name);
+                let from_name = matches!(rust_name.as_deref(), Some("u32") | Some("i32"));
+                let from_mixed = matches!(
+                    self.int_type_for_mixed_int_codegen(index),
+                    crate::type_inference::IntType::U32 | crate::type_inference::IntType::I32
+                );
+                from_local || from_name || from_mixed
+            }
+            Expression::Binary { left, right, .. } => {
+                self.index_expr_needs_u32_or_i32_usize_cast(left)
+                    || self.index_expr_needs_u32_or_i32_usize_cast(right)
+            }
+            _ => false,
+        }
+    }
+
     pub(in crate::codegen::rust) fn maybe_cast_index_to_usize(
         &self,
         idx_str: &mut String,
@@ -580,6 +605,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if idx_str.contains(" as f64") {
             *idx_str = idx_str.replace(" as f64", " as usize");
+            return;
+        }
+        // WDB-308 / WDB-303: u32 (and i32) locals — including `i + 1` binaries — must index as usize.
+        // Do this before expression_produces_usize early-return (binary peers often look like usize).
+        // Use `({}) as usize` so `as` does not bind tighter than `+` (`(i + 1 as usize)` is wrong).
+        if self.index_expr_needs_u32_or_i32_usize_cast(index) && !idx_str.contains(" as usize") {
+            *idx_str = format!("({}) as usize", idx_str);
             return;
         }
         // P3.335: concrete `i32` locals always cast for slice/Vec index (before usize inference
@@ -658,8 +690,12 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if let Some(ty) = self.infer_expression_type(index) {
-            let needs_usize_cast = matches!(ty, Type::Int | Type::Int32)
-                || matches!(ty, Type::Custom(name) if name == "int" || name == "i64" || name == "i32");
+            let needs_usize_cast = matches!(ty, Type::Int | Type::Int32 | Type::Uint)
+                || matches!(
+                    ty,
+                    Type::Custom(name)
+                        if name == "int" || name == "i64" || name == "i32" || name == "u32"
+                );
             if needs_usize_cast {
                 let needs_parens = matches!(index, Expression::Binary { .. });
                 if needs_parens {

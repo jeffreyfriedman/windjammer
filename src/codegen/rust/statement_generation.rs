@@ -214,6 +214,18 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// WDB-308: `-> u32` CLI/parse loops keep `u32` counters vs `.len()` / `args[i]`.
+    /// Without this, index analysis marks the counter as usize → `let mut i: u32 = 0_usize`.
+    pub(in crate::codegen::rust) fn function_returns_u32_for_loop_scan(&self) -> bool {
+        self.current_function_return_type.as_ref().is_some_and(|rt| {
+            match Self::peel_option_result_payload(rt) {
+                Type::Uint => true,
+                Type::Custom(n) => n == "u32",
+                _ => false,
+            }
+        })
+    }
+
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
     pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
         ty: &Type,
