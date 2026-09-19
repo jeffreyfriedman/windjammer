@@ -2655,6 +2655,15 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Compiler agent priority:** tip greens **WDB-302–303** (+ 298–299 tip-out); ban double cast on i64 accum; usize index casts. No Phase 606+.
 
+
+## P3.393 — nested empty-append + demoted shared-ref bare call sites (2026-09-19)
+
+| Item | Status |
+|------|--------|
+| Root cause | Leaf `param + ""` alone demotes (readonly); nested `(left+"")+(right+"")` and `body+""` into owned concat2 must keep owned formals. Early `keeps_owned` demote skipped owned-callee forwards. Demoted caller `&str` got `parse_twice(&json)` when HashSet lagged. |
+| Fix | `expr_is_param_or_string_add_lhs` + `passed_into_owned` in `keeps_owned`; `caller_formal_emitted_shared_ref` peels `&name` using preregistered formal strings. |
+| Gates | `string_concat_nested_owned_must_not_over_borrow` (×2), `owned_string_locals_move_into_owned_string_formals`, `eco_wj_semver_*`, `eco_wj_toml_*`, `cross_module_match_arm_readonly_concat_demotes_to_str` → **6/6 GREEN** |
+
 ## P3.391 WindjammerDB CQ-C5 — coverage REDs WDB-304–306 (2026-09-19)
 
 | Gate | Status |
