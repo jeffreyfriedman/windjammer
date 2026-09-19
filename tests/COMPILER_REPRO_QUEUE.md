@@ -373,7 +373,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`Some(x)` must not emit `Some(x.clone()).cloned()`** | `bug_wdb304_module_file_some_must_not_emit_cloned_chain_test` | ✅ MultiFile GREEN (P3.391); tip-out may lag until regen |
 | P1 | **CDLP `best_count` must peer `u32` (not `0_i64`)** | `bug_wdb305_module_file_cdlp_best_count_must_peer_u32_test` | ✅ MultiFile GREEN (P3.391); tip-out may lag until regen |
 | P1 | **owned bakeoff String must not receive `&hw.clone()`** | `bug_wdb306_module_file_owned_string_must_not_receive_ref_clone_bakeoff_test` | ✅ MultiFile GREEN (P3.389/391); tip-out RED lag; twin WDB-301 |
-| P1 | **`for` over owned field must not move when parent reused** | `bug_wdb307_module_file_for_field_must_not_move_when_parent_reused_test` | 🆕 RED / filed (P3.392); MultiFile + tip-out RED (vector_topk) |
+| P1 | **`for` over owned field must not move when parent reused** | `bug_wdb307_module_file_for_field_must_not_move_when_parent_reused_test` | ✅ MultiFile GREEN (P3.392); tip-out lag (vector_topk) |
 | P1 | **wave1 CLI residual `u32=0_usize` / `args[i+1]`** | `bug_wdb308_module_file_wave1_cli_u32_init_and_index_must_peer_test` | 🆕 RED / filed (P3.392); tip-out RED; twin WDB-298/303 coverage |
 | P1 | **owned csr into demoted `&mut` take must be `mut`** | `bug_wdb309_module_file_owned_into_mut_ref_must_declare_mut_test` | 🆕 RED / filed (P3.392); tip-out RED; MultiFile isolate GREEN |
 | P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_wdb310_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |

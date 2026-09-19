@@ -147,7 +147,8 @@ impl<'ast> CodeGenerator<'ast> {
         Self::variable_used_in_statements(body, "self")
     }
 
-    /// `for x in owner.field` must borrow when the loop body also uses `owner` (avoid partial move).
+    /// `for x in owner.field` / `owner.a.b` must borrow to avoid partial moves
+    /// (WDB-307: `index.graph.nodes` while body reuses `index`, including `&Index`).
     pub(crate) fn field_iterable_needs_borrow_when_owner_used_in_body(
         &self,
         iterable: &Expression,
@@ -156,6 +157,13 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::FieldAccess { object, .. } = iterable else {
             return false;
         };
+        // Nested `owner.a.b`: always borrow (cannot move Vec out of Graph).
+        if matches!(
+            &**object,
+            Expression::FieldAccess { .. } | Expression::Index { .. }
+        ) {
+            return true;
+        }
         if let Expression::Identifier { name, .. } = &**object {
             if name == "self" {
                 return false;

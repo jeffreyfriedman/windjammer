@@ -138,6 +138,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.codegen_expression_traces_to_self(iterable) && self_is_borrowed {
                     // Preserve needs_borrow for &self.* iteration.
                 } else if !self.field_iterable_needs_borrow_when_owner_used_in_body(iterable, body)
+                    && !self.should_borrow_for_iteration(iterable)
                 {
                     // Indexed field (`pass_defs[pi].dependencies`) must stay borrowed even
                     // for Copy elements — moving the subscript temporary is E0507.
