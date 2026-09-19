@@ -196,6 +196,10 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.280: use full `infer_expression_type` so i32 locals from `CONST / 2` and
         // module consts peer-drive range/edge literals (`cx - 16` → `16_i32`, not `_i64`).
         let prev_bin_int = self.assignment_int_target_type.clone();
+        let assign_slot_is_usize = prev_bin_int.as_ref().is_some_and(|t| {
+            matches!(t, Type::Custom(n) if n == "usize")
+                || crate::codegen::rust::type_casting::type_is_usize(t)
+        });
         if is_comparison || is_arithmetic || is_bitwise {
             let peer_int_type = |this: &Self, expr: &Expression<'ast>| -> Option<Type> {
                 this.peer_type_for_int_literal_operand(expr).or_else(|| {
@@ -207,25 +211,35 @@ impl<'ast> CodeGenerator<'ast> {
             };
             if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal)
             {
-                let peer = if right_is_int_literal {
-                    peer_int_type(self, left)
-                } else {
-                    peer_int_type(self, right)
-                };
-                if peer.as_ref().is_some_and(|t| {
-                    matches!(t, Type::Int32)
-                        || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
-                }) {
-                    self.assignment_int_target_type = peer;
-                } else {
+                // WDB-315: `pos + 4 + 2` (usize accum) must keep `_usize` literals.
+                // Do not let coord-builder i32 peer overwrite a true usize operand / assign slot.
+                if assign_slot_is_usize || left_is_usize || right_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                } else {
+                    let peer = if right_is_int_literal {
+                        peer_int_type(self, left)
+                    } else {
+                        peer_int_type(self, right)
+                    };
+                    if peer.as_ref().is_some_and(|t| {
+                        matches!(t, Type::Int32)
+                            || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
+                    }) {
+                        self.assignment_int_target_type = peer;
+                    } else {
+                        self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                    }
                 }
             } else if right_is_int_literal {
-                if let Some(t) = peer_int_type(self, left) {
+                if assign_slot_is_usize {
+                    self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                } else if let Some(t) = peer_int_type(self, left) {
                     self.assignment_int_target_type = Some(t);
                 }
             } else if left_is_int_literal {
-                if let Some(t) = peer_int_type(self, right) {
+                if assign_slot_is_usize {
+                    self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+                } else if let Some(t) = peer_int_type(self, right) {
                     self.assignment_int_target_type = Some(t);
                 }
             }

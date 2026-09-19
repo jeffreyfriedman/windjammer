@@ -839,6 +839,10 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
     ) -> Option<Type> {
+        // WDB-315: usize + lit chains (incl. nested) peer usize before coord i32.
+        if self.expression_produces_usize(expr) {
+            return Some(Type::Custom("usize".into()));
+        }
         if self.infer_expression_type(expr).is_some_and(|t| {
             matches!(t, Type::Int)
                 || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
@@ -878,6 +882,10 @@ impl<'ast> CodeGenerator<'ast> {
                     | BinaryOp::Shl
                     | BinaryOp::Shr
             ) {
+                // WDB-315: usize + lit chains peer usize before coord i32.
+                if self.expression_produces_usize(expr) {
+                    return Some(Type::Custom("usize".into()));
+                }
                 return self
                     .peer_type_for_int_literal_operand(left)
                     .or_else(|| self.peer_type_for_int_literal_operand(right));

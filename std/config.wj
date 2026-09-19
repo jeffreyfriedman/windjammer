@@ -1,0 +1,57 @@
+// std::config — config loading process (implementation: windjammer_runtime::config)
+//
+// Format (`toml` / `yaml`) is an implementation detail. Structured interchange
+// stays in `std::json`; use `to_json` when you need a JSON Value bridge.
+
+use std::collections::HashMap
+
+/// Parse config text into JSON (for `std::json`). `format` is `"toml"` or `"yaml"`.
+fn to_json(text: string, format: string) -> Result<string, string> {
+    Err("" + "")
+}
+
+/// Parse config text into a flat dotted-key string map for resolve/merge.
+fn parse_flat(text: string, format: string) -> Result<HashMap<string, string>, string> {
+    Err("" + "")
+}
+
+/// Later map wins on shared keys.
+fn merge(base: HashMap<string, string>, overlay: HashMap<string, string>) -> HashMap<string, string> {
+    HashMap::new()
+}
+
+/// Overlay `env_map` onto `map` only for keys that already exist.
+fn overlay_matching(map: HashMap<string, string>, env_map: HashMap<string, string>) -> HashMap<string, string> {
+    HashMap::new()
+}
+
+/// defaults < file < matching env keys.
+fn resolve(
+    defaults: HashMap<string, string>,
+    file: HashMap<string, string>,
+    env_map: HashMap<string, string>,
+) -> HashMap<string, string> {
+    HashMap::new()
+}
+
+/// defaults < parsed config text < matching env keys.
+fn resolve_text(
+    defaults: HashMap<string, string>,
+    text: string,
+    format: string,
+    env_map: HashMap<string, string>,
+) -> Result<HashMap<string, string>, string> {
+    Err("" + "")
+}
+
+/// Backend configuration for WASM proxy (legacy project config).
+pub struct BackendConfig {
+    pub url: string,
+    pub api_key: Option<string>,
+    pub timeout: int,
+}
+
+pub fn get_backend() -> Option<BackendConfig> { None }
+pub fn has_backend() -> bool { false }
+pub fn get(key: string) -> Option<string> { None }
+pub fn get_or(key: string, default: string) -> string { default }

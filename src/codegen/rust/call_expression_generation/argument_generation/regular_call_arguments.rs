@@ -441,9 +441,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         } else {
                         let callee_owned = peel_sig.as_ref().is_some_and(|sig| {
                             let pidx = sig.arg_param_index(i);
-                            (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                sig, pidx,
-                            ) || gen.preregistered_free_call_arg_emits_owned(func_name, i))
+                            let emits_shared =
+                                crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                    sig, pidx,
+                                ) || sig
+                                    .emitted_rust_ref_params
+                                    .as_ref()
+                                    .and_then(|f| f.get(pidx))
+                                    .copied()
+                                    == Some(true);
+                            !emits_shared
+                                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    sig, pidx,
+                                ) || gen.preregistered_free_call_arg_emits_owned(func_name, i))
                                 && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                                     &gen.signature_registry,
                                     func_name,
@@ -451,7 +461,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     i,
                                 )
                         });
+                        // P3.390: demoted caller `&Vec` must not be re-cloned into shared-ref callees.
+                        let demoted_caller = gen.emitted_rust_ref_formals.contains(name)
+                            || gen.caller_formal_emitted_shared_ref(name);
                         if callee_owned
+                            && !demoted_caller
                             && !gen.callee_arg_expects_borrow_at_call(func_name, i)
                             && gen.local_binding_reused_after_current_statement(name)
                             && !coerced.ends_with(".clone()")

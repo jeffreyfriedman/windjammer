@@ -46,14 +46,15 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Gate | Status |
 |------|--------|
-| `demoted_vec_call_arg_must_not_to_string` (same-file private demote) | 🔧 tip fix in flight (2026-09-19) |
-| Product `bt_validation` / `blend_tree` `&.to_string()` on `&Vec<_>` | 🔧 same root cause |
+| `demoted_vec_call_arg_must_not_to_string` (same-file private demote) | ✅ tip GREEN (2026-09-19) |
+| Tip fixture bare `vec_contains(ancestors)` / `path_extend(ancestors)` | ✅ tip GREEN |
+| Product `bt_validation` / `blend_tree` | 🔧 tip-retranspile next |
 
-**Root cause:** IR terminal fallback rewrote **any** demoted formal's `.clone()` → `.to_string()` when `rewrite_borrowed_str_clone_to_to_string` returned false — including demoted `&Vec` (E0599).
+**Root cause:** (1) IR terminal clone→to_string on any demoted formal (E0599). (2) Post-IR owned-vec reuse clone + bare-Vec early-return treated demoted `&Vec` as owned (E0308).
 
-**Fix:** Gate that fallback on text formals only; for demoted non-text into shared-ref callees, strip stale `.clone()` and pass the bare binding (keep `.clone()` for owned callees / WDB-281).
+**Fix:** Text-only to_string; strip demoted non-text `.clone()` unless `emitted_rust_ref_params[idx]==false`; shared emission before bare-Vec denial; skip owned-vec reuse clone for demoted/shared callers.
 
-**Handoff:** GREEN the MultiFile gate + tip fixture; then tip-retranspile game-core / breach and cut residual E0599.
+**Handoff:** Tip-retranspile game-core / breach; cut residual rustc.
 
 ## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
 

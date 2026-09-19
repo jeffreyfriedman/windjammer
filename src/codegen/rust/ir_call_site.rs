@@ -3322,8 +3322,33 @@ impl<'ast> CodeGenerator<'ast> {
                 });
                 if is_text {
                     coerced = format!("{}.to_string()", name);
-                } else if callee_wants_shared {
-                    coerced = name.to_string();
+                } else {
+                    // Keep `.clone()` only when codegen confirmed owned emission (WDB-281).
+                    // Bare Vec AST makes `callee_wants_shared` false — do not gate on it.
+                    let mut live = sig.clone();
+                    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+                    let refresh_keys = [callee_name.to_string(), simple.to_string()];
+                    crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                        &mut live,
+                        registry,
+                        &refresh_keys,
+                    );
+                    if let Some(global) = self.global_signature_registry.as_ref() {
+                        crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
+                            &mut live,
+                            global,
+                            &refresh_keys,
+                        );
+                    }
+                    let pidx = live.arg_param_index(arg_index);
+                    let confirmed_owned_emit = live
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|f| f.get(pidx).copied())
+                        == Some(false);
+                    if !confirmed_owned_emit {
+                        coerced = name.to_string();
+                    }
                 }
             }
         }
@@ -5102,7 +5127,19 @@ impl<'ast> CodeGenerator<'ast> {
             || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
         if wants_shared_terminal && coerced.ends_with(".clone()") {
             let base = coerced.trim_end_matches(".clone()").trim();
-            *coerced = if base.starts_with('&') {
+            // Demoted caller `&T` is already shared — bare pass (P3.390).
+            *coerced = if let Expression::Identifier { name, .. } = arg_expr {
+                if self.emitted_rust_ref_formals.contains(name)
+                    || self.caller_formal_emitted_shared_ref(name)
+                    || self.identifier_already_ref(name)
+                {
+                    name.to_string()
+                } else if base.starts_with('&') {
+                    base.to_string()
+                } else {
+                    format!("&{base}")
+                }
+            } else if base.starts_with('&') {
                 base.to_string()
             } else {
                 format!("&{base}")
