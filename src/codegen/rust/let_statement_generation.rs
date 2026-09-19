@@ -599,6 +599,20 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                     let peer = if wj_int_slot {
                         Type::Int
+                    } else if var_name.is_some_and(|vn| {
+                        self.local_var_types.get(vn).is_some_and(|t| {
+                            matches!(
+                                t,
+                                Type::Custom(n)
+                                    if crate::codegen::rust::type_casting::assignment_int_peer_from_owner_type_name(
+                                        n,
+                                    )
+                                    .is_some()
+                            )
+                        })
+                    }) {
+                        // P3_ATOMIC_I64_LET_OWNER_PEER: AtomicI64 let RHS keeps i64 constructor peers in void builders.
+                        Type::Int
                     } else {
                         self.current_function_return_type
                             .as_ref()

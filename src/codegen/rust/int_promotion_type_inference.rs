@@ -259,6 +259,20 @@ impl<'ast> CodeGenerator<'ast> {
         if self.explicit_wj_int_annotated_locals.contains(name) {
             return;
         }
+        // P3_ATOMIC_I64_SYNC_I32_NOMINAL_GUARD: do not overwrite AtomicI64/struct locals when nested lit emitted _i32.
+        if let Some(ty) = self.local_var_types.get(name) {
+            let is_int_width = matches!(ty, Type::Int | Type::Int32 | Type::Uint)
+                || matches!(
+                    ty,
+                    Type::Custom(n) if matches!(
+                        n.as_str(),
+                        "int" | "i64" | "i32" | "u32" | "uint"
+                    )
+                );
+            if !is_int_width {
+                return;
+            }
+        }
         let i32_emitted = value_str.contains("_i32")
             || value_str.contains(" as i32")
             || value_str.contains("as i32)");

@@ -84,6 +84,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     gen.call_arg_expected_type = Some(ty);
                 }
             }
+            // P3_ATOMIC_I64_ASSOCIATED_OWNER_PEER: AtomicI64::new(0) owner width beats void/i32-coord let context.
+            if let Some(peer) = associated_receiver.as_deref().and_then(|n| {
+                crate::codegen::rust::type_casting::assignment_int_peer_from_owner_type_name(n)
+            }) {
+                gen.assignment_int_target_type = Some(peer);
+            }
             let scope = gen.arg_gen_scope();
             let mut arg_str = gen.generate_expression(arg);
             gen.restore_arg_gen_scope(scope);

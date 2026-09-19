@@ -194,7 +194,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn type_contains_wj_int_width(&self, t: &Type) -> bool {
         match Self::peel_option_result_payload(t) {
             Type::Int => true,
-            Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "SharedInt" | "Counter") => true,
+            Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "SharedInt" | "Counter" | "AtomicI64") => true,
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => true,
             Type::Tuple(elems) => elems.iter().any(|e| self.type_contains_wj_int_width(e)),
             Type::Vec(inner) | Type::Array(inner, _) => self.type_contains_wj_int_width(inner),
