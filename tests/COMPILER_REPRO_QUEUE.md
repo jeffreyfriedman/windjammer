@@ -27,20 +27,29 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Fix:** In `ir_call_site::apply_ir_call_site_coercion`, detect `is_string_const_identifier` / `FieldAccess` and emit `.to_string()` when the call site expects an owned pass (named string formal **or** Owned/emitted-owned contract, covering `Vec::push`).
 
-**Handoff:** Continue cutting residual ~357 tip-gen rustc errors (i32/i64, usize, over-borrow).
+**Handoff:** Continue cutting residual tip-gen rustc (~424 after P3.372b; next: demoted `&Vec` → spurious `.to_string()`, i32/i64).
 
 ## P3.372b — dual int-cast + clone must parenthesize (2026-09-18)
 
 | Gate | Status |
 |------|--------|
 | `i32_cast_before_clone_call_arg_must_parenthesize` (dual `round_pillar`) | ✅ tip GREEN (2026-09-19) |
-| Product `station_geometry` `pz as i32.clone()` | ⏳ tip retranspile |
+| Product `station_geometry` `pz as i32.clone()` | ✅ tip gen GREEN — `(pz as i32).clone()` both sites |
 
 **Root cause:** `append_int_cast` emitted bare `pz as i32`; a later `.clone()` binds tighter → invalid Rust. First reuse site often got `(pz as i32).clone()` via clone-then-cast; second site stayed broken.
 
 **Fix:** Always emit `({expr} as {suffix})` from `append_int_cast`.
 
-**Handoff:** GREEN gate → retranspile station_geometry.
+**Handoff:** Done for cast.clone. Residual: full-library `bt_validation` emits `ancestors.to_string()` into `&Vec` formals (product-only; small multipass isolate still `.clone()`).
+
+## P3.390 — demoted `&Vec` call arg must not `.to_string()` (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Product `bt_validation` / `blend_tree` `&.to_string()` on `&Vec<_>` | 🆕 RED / product-only (2026-09-19 tip gen) |
+| Small multipass `path_extend(ancestors)` isolate | ✅ tip emits `.clone()` (not yet product-shaped) |
+
+**Handoff:** Capture full-library multipass shape that demotes formals to `&Vec` **and** emits `.to_string()`; prefer `.clone()` / bare pass. Blocks ~80 E0599.
 
 ## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
 
