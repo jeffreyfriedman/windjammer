@@ -16,7 +16,7 @@
 //! Twin of WDB-298/303 for remaining tip-out/gen sites (artifact/bench/publish CLI):
 //!   `let mut i: u32 = 0_usize;` + `args[i + 1]` → E0308 / E0277.
 //! Product WJ is untyped `let mut i = 0` with `-> u32` and `args.len()` / `args[i+1]`.
-//! Adjacency/CDLP/LCC were synced (P3.390); wave1 CLI still RED on tip emit.
+//! Adjacency/CDLP/LCC were synced (P3.390); wave1 CLI MultiFile+tip GREEN (P3.400).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
