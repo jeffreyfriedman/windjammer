@@ -310,7 +310,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **PageRank `scores.clone()` → demoted `&Map` `f64_sum` must borrow** | `bug_wdb267_module_file_owned_map_clone_into_demoted_f64_sum_must_borrow_test` | 🆕 RED / filed (P3.357); twin WDB-223; gen lag |
 | P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.357); twin WDB-248/256 |
 | P1 | **LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors must reborrow** | `bug_wdb269_module_file_owned_graph_clone_into_demoted_lsqb_neighbors_must_reborrow_test` | ✅ tip GREEN (P3.383) — knows_neighbors Owned; in/out `&graph` |
-| P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` | 🆕 RED / filed (P3.358) |
+| P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` + `bug_owned_str_clone_into_demoted_str_must_reborrow_test` | ✅ GREEN (P3.384); finalize no longer restores `.clone()` into demoted `&str` |
 | P1 | **SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow must reborrow** | `bug_wdb271_module_file_owned_edge_batch_clone_into_demoted_to_arrow_must_reborrow_test` | 🆕 RED / filed (P3.363); gen lag |
 | P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | 🆕 RED / filed (P3.363); twin WDB-270 |
 | P1 | **WCC `csr.clone()` → demoted `&mut DenseCsr` afforest must reborrow** | `bug_wdb273_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | ✅ tip GREEN (P3.365) — tip-prefer; gen lag |
@@ -1414,7 +1414,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Gate | Status |
 |------|--------|
 | Tip **WDB-269** LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors | ❌ RED — tip/gen lsqb_query_engine (inverse WDB-220) |
-| Tip **WDB-270** wave1 `&owned.clone()` → demoted `&str` helpers | ❌ RED — tip wave1_publish / sf1_quiet |
+| Tip **WDB-270** wave1 `&owned.clone()` → demoted `&str` helpers | ✅ GREEN (P3.384) — finalize + Borrow peel |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–270**; sync tip-out→gen for LSQB neighbors + wave1 `&str`. No Phase 606+.

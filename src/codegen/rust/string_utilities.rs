@@ -1227,19 +1227,12 @@ pub fn finalize_explicit_user_clone_call_site<'ast>(
         return restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced);
     };
     let pidx = sig.arg_param_index(arg_index);
-    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
-        if let Some(name) =
-            crate::codegen::rust::expression_helpers::explicit_user_clone_binding_name(arg_expr)
-        {
-            let caller_param_owned = function_params.iter().any(|p| {
-                p.name == name
-                    && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                    && !emitted_rust_ref_formals.contains(name)
-            });
-            if caller_param_owned {
-                return restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced);
-            }
-        }
+    // Demoted `&str` / shared-ref formals: strip stale `.clone()` and reborrow.
+    // Caller owned `string` params must still pass `&binding` (not `binding.clone()`) —
+    // Rust cannot coerce owned `String` into `&str`, and keeping the clone was WDB-270 RED.
+    if crate::ir::signature_bridge::call_site_wants_shared_text_ref(sig, pidx)
+        || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
+    {
         let base = coerced.trim_end_matches(".clone()");
         return if base.starts_with('&') && !base.starts_with("&mut ") {
             base.to_string()
@@ -1739,5 +1732,58 @@ mod tests {
         let mut arg_str = "needle.to_string()".to_string();
         normalize_owned_string_producer_for_str_ref_param(arg, &mut arg_str);
         assert_eq!(arg_str, "&needle.to_string()");
+    }
+
+    #[test]
+    fn finalize_explicit_clone_into_demoted_str_reborrows_owned_caller_param() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::{Expression, Parameter};
+
+        let sig = FunctionSignature {
+            name: "dated_label_is_set".into(),
+            param_types: vec![Type::Reference(Box::new(Type::Custom("str".into())))],
+            formal_param_types: vec![Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Bool),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let binding = Expression::Identifier {
+            name: "dated_label".into(),
+            location: None,
+        };
+        let arg = Expression::MethodCall {
+            object: &binding,
+            method: "clone".into(),
+            type_args: None,
+            arguments: vec![],
+            location: None,
+        };
+        let params = vec![Parameter {
+            name: "dated_label".into(),
+            pattern: None,
+            type_: Type::String,
+            ownership: crate::parser::OwnershipHint::Inferred,
+            is_mutable: false,
+            decorators: vec![],
+        }];
+        let finished = finalize_explicit_user_clone_call_site(
+            &arg,
+            "dated_label.clone()",
+            "dated_label.clone()",
+            Some(&sig),
+            0,
+            &std::collections::HashSet::new(),
+            &params,
+        );
+        assert_eq!(
+            finished, "&dated_label",
+            "owned caller string into demoted &str must reborrow, not keep .clone()"
+        );
     }
 }

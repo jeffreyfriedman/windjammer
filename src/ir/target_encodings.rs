@@ -213,10 +213,19 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
     if crate::codegen::rust::expression_utilities::is_rust_string_literal_text(expr) {
         return expr.to_string();
     }
-    if needs_borrow_parentheses(expr) {
-        format!("&({expr})")
+    // Stale auto-/user-clone before Borrow: `&x.clone()` is never needed for a shared
+    // formal — peel to the binding then borrow (WDB-270 / demoted `&str`).
+    let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr).to_string();
+    if base.ends_with(".to_string()") {
+        base = base.trim_end_matches(".to_string()").to_string();
+    } else if base.ends_with(".to_owned()") {
+        base = base.trim_end_matches(".to_owned()").to_string();
+    }
+    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut base);
+    if needs_borrow_parentheses(&base) {
+        format!("&({base})")
     } else {
-        format!("&{expr}")
+        format!("&{base}")
     }
 }
 
@@ -596,6 +605,11 @@ mod tests {
     fn test_rust_shared_borrow_skips_string_literals() {
         assert_eq!(rust_shared_borrow(r#""</div>""#), r#""</div>""#);
         assert_eq!(rust_shared_borrow("key"), "&key");
+        assert_eq!(
+            rust_shared_borrow("dated_label.clone()"),
+            "&dated_label",
+            "Borrow must peel stale .clone() before &"
+        );
         // Owned String → &str still borrows non-literals.
         let actual = SafetyType::owned(BaseType::String);
         let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));
