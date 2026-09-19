@@ -2710,3 +2710,16 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** MultiFile **WDB-297**; remaining queue ❌. No Phase 606+.
+
+## P3.384 (2026-09-19) — AtomicI64 fields must not auto-derive Clone
+
+**Symptom:** `pub struct Counter { inner: AtomicI64 }` emitted `#[derive(Debug, Clone)]` → rustc E0277 (`AtomicI64: !Clone`).
+
+**Root cause:** `is_std_non_auto_debug_clone_type` omitted atomics (same class as `mpsc::Receiver`).
+
+**Fix:** list `AtomicBool` / `AtomicI64` / `AtomicU64` / … in `type_classification::is_std_non_auto_debug_clone_type`.
+
+**Test:** `bug_atomic_i64_struct_must_not_auto_derive_clone_test` (PASSING).
+
+**Note:** `wj-sync` keeps `Arc<AtomicI64>` Counter for Clone handles; bare AtomicI64 is now legal when Clone is not required. Do not add a WJ `SharedInt` stub in `std/sync.wj` — Copy stub poisons package `type SharedInt = Shared<int>`.
+
