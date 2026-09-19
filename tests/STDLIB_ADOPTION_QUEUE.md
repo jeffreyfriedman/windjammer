@@ -61,6 +61,14 @@ Definition of done per row:
 | `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `shared` / `shared_add` / `shared_get` (no WJ `SharedInt` stub — poisons package aliases) |
 | `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | ✅ GREEN | Hot `Counter` for `wj-sync`; P3.370/P3.380 void i64 peers; Atomic* skip auto-Clone (bare-Counter path) |
 
+## P1 — form / glob (beta week-one holes)
+
+| Need | Repro | Gate status (2026-09-19) | Fix hint |
+|---|---|---|---|
+| `std::encoding.form_parse` / `form_stringify` | `bug_std_encoding_form_urlencoded_wiring_test` | ❌ RED | Runtime form-urlencoded; ordered `Vec<(string,string)>`; `+`/`%20` space; thin-wrap `wj-querystring` |
+| `std::path.glob_match` | `bug_std_path_glob_match_wiring_test` | ❌ RED | Shell `*`/`?`/`**` segment rules; thin-wrap `wj-glob` |
+| `std::config.resolve` / `merge` owned HashMap | `bug_std_config_module_test` (`std_config_resolve_must_wire`) | ❌ RED (3/4) | Codegen: owned formals must accept demoted `&mut HashMap` (or infer owned at call site) |
+
 ## Run
 
 ```bash
@@ -69,4 +77,4 @@ unset CARGO_TARGET_DIR
 cargo test --release --test all --features skip_fixtures -- bug_std_ -- --test-threads=1
 ```
 
-Expected on tip: **24/24** `bug_std_*` green.
+Expected on tip: prior gates green; **form + glob + config.resolve** still RED until tip greens them.
