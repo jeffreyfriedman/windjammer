@@ -2691,6 +2691,23 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// True when the current function's emitted formal for `name` is shared `&T` / `&str`.
+    /// Preregistered formal strings are authoritative after formal emit (HashSet can lag).
+    pub(crate) fn caller_formal_emitted_shared_ref(&self, name: &str) -> bool {
+        if self.emitted_rust_ref_formals.contains(name) {
+            return true;
+        }
+        let Some(fn_name) = self.current_function_name.as_deref() else {
+            return false;
+        };
+        let needle = format!("{name}: &");
+        self.preregistered_free_function_emitted_params
+            .get(fn_name)
+            .into_iter()
+            .flatten()
+            .any(|formal| formal.contains(&needle) && !formal.contains(": &mut "))
+    }
+
     /// Demoted `&T` outer formal (multipass readonly reuse) passed into an owned callee.
     pub(crate) fn caller_demoted_non_copy_formal_into_owned_callee(&self, name: &str) -> bool {
         (self.emitted_rust_ref_formals.contains(name)
