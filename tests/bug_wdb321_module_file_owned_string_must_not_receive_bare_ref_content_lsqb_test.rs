@@ -40,8 +40,12 @@ fn wdb321_tip_out_lsqb_edge_must_not_pass_bare_ref_content_into_owned_string() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("lsqb");
-        // Bare &content (not &content.clone()) into owned formal.
-        if text.contains("lsqb_load_edge_csv_content(") && text.contains("&content)") {
+        // Only the call site into owned formals — not split_lines(&content).
+        let bad = text.lines().any(|line| {
+            line.contains("lsqb_load_edge_csv_content(")
+                && (line.contains("&content") || line.contains("&filename"))
+        });
+        if bad {
             bad_paths.push(path.display().to_string());
         }
     }
