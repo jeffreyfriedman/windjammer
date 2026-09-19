@@ -56,7 +56,7 @@ fn bad_clone_into_str(rs: &str) -> bool {
     rs.contains("dated_label_is_set(&dated_label.clone()")
         || rs.contains("clock_sql(&sql.clone()")
         || rs.contains("dated_label_is_set(dated_label.clone()")
-            && rs.contains("label: &str")
+        || rs.contains("clock_sql(sql.clone()")
 }
 
 #[test]

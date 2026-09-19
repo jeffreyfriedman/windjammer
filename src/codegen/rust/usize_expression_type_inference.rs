@@ -818,11 +818,19 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         let suffix = get_cast_suffix(to);
-        let needs_parens = matches!(expr, Expression::Binary { .. });
+        if let Some(base) = expr_str.strip_suffix(".clone()") {
+            if !base.contains(" as ") {
+                // Cast into cloned arg: `(n as usize).clone()`, never `n as usize.clone()`.
+                *expr_str = format!("({base} as {suffix}).clone()");
+                return;
+            }
+        }
+        let needs_parens = matches!(expr, Expression::Binary { .. })
+            || (expr_str.contains(' ') && !expr_str.starts_with('('));
         if needs_parens {
-            *expr_str = format!("({}) as {}", expr_str, suffix);
+            *expr_str = format!("({expr_str}) as {suffix}");
         } else {
-            *expr_str = format!("{} as {}", expr_str, suffix);
+            *expr_str = format!("{expr_str} as {suffix}");
         }
     }
 
@@ -856,11 +864,15 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         let suffix = get_cast_suffix(unified);
+        if let Some(base) = expr_str.strip_suffix(".clone()") {
+            *expr_str = format!("({base} as {suffix}).clone()");
+            return;
+        }
         let needs_parens = matches!(expr, Expression::Binary { .. });
         if needs_parens {
-            *expr_str = format!("({}) as {}", expr_str, suffix);
+            *expr_str = format!("({expr_str}) as {suffix}");
         } else {
-            *expr_str = format!("{} as {}", expr_str, suffix);
+            *expr_str = format!("{expr_str} as {suffix}");
         }
     }
 }

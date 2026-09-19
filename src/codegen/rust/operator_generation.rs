@@ -63,7 +63,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         let type_str = self.type_to_rust(type_);
-        format!("{} as {}", expr_str, type_str)
+        let cast = format!("{} as {}", expr_str, type_str);
+        crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&cast)
     }
 
     /// Generate code for unary expression (!expr, -expr, *expr, &expr, &mut expr)
