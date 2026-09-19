@@ -379,6 +379,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_wdb310_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
 | P1 | **timeseries/vertex_map residual `u32=0_usize`** | `bug_wdb311_module_file_u32_loop_residual_timeseries_vertex_map_test` | 🆕 RED / filed (P3.393); tip-out RED; twin WDB-298/308 |
 | P1 | **publish owned String must not receive `&dated_label.clone()`** | `bug_wdb312_module_file_owned_string_must_not_receive_ref_clone_publish_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
+| P1 | **pg_wire/OTLP residual `u32=0_usize`** | `bug_wdb313_module_file_u32_loop_residual_pg_wire_otlp_test` | 🆕 RED / filed (P3.394); tip-out RED; twin WDB-298/308/311 |
+| P1 | **hardware report owned String must not receive `&out`** | `bug_wdb314_module_file_owned_string_must_not_receive_ref_out_report_test` | 🆕 RED / filed (P3.394); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
+| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | 🆕 RED / filed (P3.394); MultiFile + tip-out RED |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2694,6 +2697,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb310_ wdb311_ wdb312_` → 2 passed / 3 failed (expected RED).
 
 **Compiler agent priority:** tip greens **WDB-310–312** (no `&owned.clone()` into owned String on LSQB/publish; u32 peer init on timeseries/vertex_map). No Phase 606+. No windjammer/src edits from DB agent.
+
+## P3.394 WindjammerDB CQ-C5 — coverage REDs WDB-313–315 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-313** pg_wire + OTLP `u32=0_usize` | ❌ RED — tip-out/gen residual beyond 308/311 |
+| Tip **WDB-314** hardware report `append_bool(&out)` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-312 |
+| MultiFile **WDB-315** usize `pos + 4_i32` (pg_wire) | ❌ RED — MultiFile + tip-out |
+| Tip **WDB-310–312** | ❌ still RED (P3.393) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb313_ wdb314_ wdb315_` → 1 passed / 4 failed (expected RED).
+
+**Compiler agent priority:** tip greens **WDB-313–315** (u32 peer on pg_wire/OTLP; no `&out` into owned String; usize peer for field-walk offsets). No Phase 606+. No windjammer/src edits from DB agent.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
