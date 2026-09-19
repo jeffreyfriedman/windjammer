@@ -25,16 +25,23 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
+// Product LCC: untyped `total = 0` under Custom return (not annotated i64).
 const SRC: &str = r#"
-pub fn sum_triangles(counts: Vec<u32>) -> u64 {
-    let mut total: i64 = 0
+pub struct LccEngine {
+    pub total_triangles: u64,
+}
+
+pub fn sum_triangles(counts: Vec<u32>) -> LccEngine {
+    let mut total = 0
     let mut i = 0
     while i < counts.len() {
         let triangles = counts[i]
         total = total + triangles as i64
         i = i + 1
     }
-    (total / 3) as u64
+    LccEngine {
+        total_triangles: (total / 3) as u64,
+    }
 }
 "#;
 
