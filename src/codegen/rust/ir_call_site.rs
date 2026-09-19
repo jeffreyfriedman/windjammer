@@ -3296,6 +3296,10 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 coerced = format!("&{coerced}");
             }
+            // Already-demoted caller `&str` / `&T`: bare at shared-ref call sites.
+            if self.caller_formal_emitted_shared_ref(name) && coerced == format!("&{name}") {
+                coerced = name.to_string();
+            }
 
             let mut tmp = coerced.clone();
             if crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(

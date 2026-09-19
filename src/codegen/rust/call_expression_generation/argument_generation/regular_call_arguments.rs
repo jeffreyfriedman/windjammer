@@ -682,6 +682,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             {
                                 coerced = format!("&{name}");
                             }
+                            if gen.caller_formal_emitted_shared_ref(name)
+                                && coerced == format!("&{name}")
+                            {
+                                coerced = name.to_string();
+                            }
                         }
                     }
                     if let Expression::Identifier { name, .. } = arg {

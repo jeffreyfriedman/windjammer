@@ -689,11 +689,19 @@ pub fn apply_call_site_borrow(decision: &CallSiteBorrowDecision, arg_str: &mut S
 }
 
 pub(crate) fn callee_formal_is_owned_vec_container(sig: &FunctionSignature, pidx: usize) -> bool {
+    // P3.390: shared-ref emission beats bare WJ `Vec` AST.
+    if callee_emits_shared_rust_ref_param(sig, pidx)
+        || sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(true)
+    {
+        return false;
+    }
     if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx) {
         return true;
-    }
-    if callee_emits_shared_rust_ref_param(sig, pidx) {
-        return false;
     }
     sig.formal_param_type(pidx)
         .or_else(|| sig.param_types.get(pidx))
