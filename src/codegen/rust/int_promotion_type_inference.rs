@@ -347,6 +347,15 @@ impl<'ast> CodeGenerator<'ast> {
             self.usize_variables.insert(name.to_string());
             return;
         }
+        // WDB-302: Custom-return builders register untyped `let mut total = 0` as Int32
+        // while the literal still emits `_i64`. Emitted suffix wins so compound assign
+        // does not append `as i32` onto `triangles as i64`, and `total / 3` peers i64
+        // (not `3_u64` from an outer `as u64`).
+        if emitted_rhs.ends_with("_i64") {
+            self.local_var_types.insert(name.to_string(), Type::Int);
+            self.codegen_i32_binding_names.remove(name);
+            return;
+        }
         if emitted_rhs.ends_with("_i32")
             || self.int_type_for_mixed_int_codegen(value) == IntType::I32
         {

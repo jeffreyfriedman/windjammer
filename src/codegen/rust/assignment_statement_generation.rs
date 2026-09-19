@@ -373,8 +373,13 @@ impl<'ast> CodeGenerator<'ast> {
                         let already_target_cast = right_str
                             .ends_with(&format!(" as {cast}"))
                             || right_str.ends_with(&format!(") as {cast}"));
+                        // WDB-302: never narrow an explicit `as i64` RHS to i32
+                        // (`triangles as i64 as i32`) — emitted i64 width wins.
+                        let rhs_explicit_i64 = right_str.ends_with(" as i64")
+                            || right_str.ends_with(") as i64");
                         if val_width != cast
                             && !already_target_cast
+                            && !(cast == "i32" && rhs_explicit_i64)
                             && !Self::compound_rhs_is_untyped_int_literal(right, &right_str)
                         {
                             if matches!(right, Expression::Binary { .. })
@@ -383,6 +388,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 right_str = format!("({right_str}) as {cast}");
                             } else {
                                 right_str = format!("{right_str} as {cast}");
+                            }
+                        }
+                        if rhs_explicit_i64 {
+                            if let Expression::Identifier { name, .. } = target {
+                                self.local_var_types.insert(name.to_string(), Type::Int);
+                                self.codegen_i32_binding_names.remove(name);
                             }
                         }
                     }

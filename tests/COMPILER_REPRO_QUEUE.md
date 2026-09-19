@@ -342,7 +342,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | 🆕 RED / filed (P3.381); tip-out RED (~8×); MultiFile isolate GREEN; twin WDB-241 |
 | P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | ✅ MultiFile GREEN (P3.386); tip-out still needs regen |
 | P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | ✅ tip GREEN (P3.387) — MultiFile + tip-out/gen sync; stale Borrowed no longer suppresses `.to_string()` / owned args |
-| P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
+| P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | ✅ tip GREEN (P3.388) — untyped `total=0` under Custom return syncs `_i64`; peer beats struct-field `u64` |
 | P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
@@ -2560,6 +2560,19 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Compiler agent priority:** tip greens **WDB-298–300**; signature-driven int-width peers + clone-after-cast ban + owned Vec into `Key::from_components`. No Phase 606+. No windjammer/src edits from DB agent.
 
+## P3.388 — WDB-302 i64 accum under Custom return (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-302** untyped `total = 0` + `as i64` / `(total / 3) as u64` | ✅ tip GREEN — no `as i64 as i32`; divisor peers `3_i64` |
+| Tip-out/gen LCC engine | ✅ synced (`as i64`, `total / 3_i64`) |
+
+**Root cause layer:** constraint/int-width — Custom-return registered untyped `0` as Int32 while literal emitted `_i64`; struct-field `u64` leaked onto nested division literals ahead of binary peer.
+
+**What became unnecessary:** dual-oracle Int32 binding vs `_i64` emit; struct-field width beating assign/peer for nested cast operands.
+
+**Gates:** `cargo test --release --test all -- wdb302_` → MultiFile + tip-out GREEN; tip `wj` productish emit `total += triangles as i64` / `(total / 3_i64) as u64`.
+
 ## P3.387 — WDB-301 owned LDBC string lit / path (2026-09-19)
 
 | Gate | Status |
@@ -2578,7 +2591,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | MultiFile **WDB-301** owned LDBC string / `&path.clone()` | ✅ tip GREEN (P3.387) |
-| Tip **WDB-302** `as i64 as i32` / `total / 3_u64` (LCC) | ❌ RED — tip-out/gen; MultiFile isolate GREEN with `total: i64` |
+| Tip **WDB-302** `as i64 as i32` / `total / 3_u64` (LCC) | ✅ tip GREEN (P3.388) |
 | Tip **WDB-303** `offsets[i + 1]` u32 index | ❌ RED — tip-out/gen adjacency; MultiFile isolate GREEN |
 | Tip **WDB-298–300** | ❌ still RED (P3.383); WDB-300 MultiFile GREEN (P3.386) |
 | Dogfood / tip-cluster | ❄️ frozen |

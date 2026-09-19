@@ -883,6 +883,20 @@ impl<'ast> CodeGenerator<'ast> {
                     return crate::codegen::rust::literals::generate_literal(lit);
                 }
                 use crate::type_inference::IntType;
+                // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer
+                // must beat struct-field width. Otherwise `total_triangles: (total / 3) as u64`
+                // leaks `u64` onto the divisor → `3_u64` while `total` is i64 (WDB-302).
+                if let Some(ctx_ty) = self
+                    .assignment_int_target_type
+                    .as_ref()
+                    .or(self.call_arg_expected_type.as_ref())
+                {
+                    if let Some(it) = Self::int_type_from_assignment_target(ctx_ty) {
+                        if it != IntType::Unknown {
+                            return format!("{}_{}", i, it.rust_suffix());
+                        }
+                    }
+                }
                 if self.in_struct_literal_field {
                     if let (Some(struct_name), Some(field_name)) = (
                         &self.current_struct_literal_name,
@@ -900,19 +914,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // Priority 0: explicit int/usize target from let/assign/call-arg context
-                // (annotated `let mut i: usize = 0` must not become `0_i64` under `-> int`).
-                if let Some(ctx_ty) = self
-                    .assignment_int_target_type
-                    .as_ref()
-                    .or(self.call_arg_expected_type.as_ref())
-                {
-                    if let Some(it) = Self::int_type_from_assignment_target(ctx_ty) {
-                        if it != IntType::Unknown {
-                            return format!("{}_{}", i, it.rust_suffix());
-                        }
-                    }
-                }
+                // Priority 1: UnifiedNumericInference (after explicit peer/assign targets).
                 let inferred = if let Some(ni) = &self.numeric_inference {
                     ni.get_int_type(expr)
                 } else {

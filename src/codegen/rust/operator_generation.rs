@@ -19,8 +19,12 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.250: outer call-arg / assignment int targets (e.g. `Vec<u8>::push`) must not
         // suffix nested bitop/shift literals as `_u8`. The cast result carries the target
         // width; the operand is typed from its own peers (i64 & 0xff → 255_i64).
+        // WDB-302: also clear struct-field width so `field: (total / 3) as u64` does not
+        // force `3_u64` inside the division.
         let prev_call_arg = self.call_arg_expected_type.take();
         let prev_assign_int = self.assignment_int_target_type.take();
+        let prev_in_struct_field = self.in_struct_literal_field;
+        self.in_struct_literal_field = false;
 
         // Add parentheses around binary expressions for correct precedence
         // because `as` has higher precedence than arithmetic in Rust:
@@ -34,6 +38,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         self.call_arg_expected_type = prev_call_arg;
         self.assignment_int_target_type = prev_assign_int;
+        self.in_struct_literal_field = prev_in_struct_field;
         // E0606 FIX: Cannot cast &T as U (e.g. &i32 as usize).
         // When the cast source is a borrowed parameter or a borrowed match arm
         // binding, auto-deref first.
