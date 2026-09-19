@@ -382,7 +382,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **publish owned String must not receive `&dated_label.clone()`** | `bug_wdb312_module_file_owned_string_must_not_receive_ref_clone_publish_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
 | P1 | **pg_wire/OTLP residual `u32=0_usize`** | `bug_wdb313_module_file_u32_loop_residual_pg_wire_otlp_test` | 🆕 RED / filed (P3.394); tip-out RED; twin WDB-298/308/311 |
 | P1 | **hardware report owned String must not receive `&out`** | `bug_wdb314_module_file_owned_string_must_not_receive_ref_out_report_test` | 🆕 RED / filed (P3.394); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
-| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | 🆕 RED / filed (P3.394); MultiFile + tip-out RED |
+| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | ✅ MultiFile GREEN (P3.395); tip-out lag |
 | P1 | **scale status owned String must not receive `&out`** | `bug_wdb316_module_file_owned_string_must_not_receive_ref_out_scale_status_test` | 🆕 RED / filed (P3.395); tip-out RED; MultiFile isolate GREEN; twin WDB-314 |
 | P1 | **vertex_map.hashmap/.vec residual `u32=0_usize`** | `bug_wdb317_module_file_u32_loop_residual_vertex_map_hashmap_vec_test` | 🆕 RED / filed (P3.395); tip-out RED; twin WDB-311 |
 | P1 | **publish owned String first formal must not receive `&out`** | `bug_wdb318_module_file_owned_string_first_formal_must_not_receive_ref_out_publish_test` | 🆕 RED / filed (P3.395); tip-out RED; MultiFile isolate GREEN; twin WDB-312/314 |
@@ -2720,7 +2720,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | Tip **WDB-313** pg_wire + OTLP `u32=0_usize` | ❌ RED — tip-out/gen residual beyond 308/311 |
 | Tip **WDB-314** hardware report `append_bool(&out)` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-312 |
-| MultiFile **WDB-315** usize `pos + 4_i32` (pg_wire) | ❌ RED — MultiFile + tip-out |
+| MultiFile **WDB-315** usize `pos + 4_i32` (pg_wire) | ✅ MultiFile GREEN (P3.395) — tip-out lag |
 | Tip **WDB-310–312** | ❌ still RED (P3.393) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
@@ -2735,12 +2735,25 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-316** scale status `append_rows(&out)` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-314 |
 | Tip **WDB-317** vertex_map.hashmap/.vec `u32=0_usize` | ❌ RED — tip-out/gen residual beyond WDB-311 main `.rs` |
 | Tip **WDB-318** publish `append_gate_rows(&out)` first formal | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-312/314 |
-| Tip **WDB-313–315** | ❌ still RED (P3.394) |
+| Tip **WDB-313–315** | ✅ WDB-315 MultiFile GREEN (P3.395 usize peers); 313–314 tip-out lag |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb316_ wdb317_ wdb318_` → 2 passed / 3 failed (expected RED).
 
 **Compiler agent priority:** tip greens **WDB-316–318** (no `&out` into owned String on scale/publish; u32 peer on hashmap/vec vertex_map). No Phase 606+. No windjammer/src edits from DB agent.
+
+## P3.395 — WDB-315 usize accum nested lit peers (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-315** `pos = pos + 4 + 2 + …` | ✅ tip GREEN MultiFile — emits `_usize` not `_i32` |
+| Tip-out/gen pg_wire | 🆕 RED lag until regen |
+
+**Root cause:** nested `usize + lit` chains let coord-builder i32 peer overwrite the assign-slot / usize operand peer (`4_i32` on `pos: usize`).
+
+**Fix:** keep `_usize` when assign slot or either binary operand is usize; `peer_type_for_int_literal_operand` prefers `expression_produces_usize` before coord i32.
+
+**Gate:** `cargo test --release --test all --features integration_tests -- wdb315_module_file_usize` → MultiFile pass (2026-09-19).
 
 ## P3.396 WindjammerDB CQ-C5 — coverage REDs WDB-319–321 (2026-09-19)
 
