@@ -11,10 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — human duration parse (`1h30m`) belongs in `std::time`.
-//!
-//! Ecosystem `wj-duration` implements `parse_ms` / `format_ms` in pure WJ.
-//! Graduation target: `std::time` Duration parse (or dedicated helper).
+//! Human duration parse (`1h30m`) belongs in `std::time` for `wj-duration` graduation.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -25,15 +22,24 @@ use std::time
 pub fn parse_human_ms(text: string) -> Result<int, string> {
     time.parse_duration_ms(text)
 }
+
+pub fn format_human_ms(ms: int) -> string {
+    time.format_duration_ms(ms)
+}
 "#;
 
 #[test]
 fn std_time_parse_duration_ms_must_wire() {
-    let generated = test_utils::compile_single(HUMAN);
+    let generated = test_utils::assert_stdlib_runtime_links(
+        HUMAN,
+        &[
+            "windjammer_runtime::time",
+            "parse_duration_ms",
+            "format_duration_ms",
+        ],
+    );
     assert!(
-        !generated.contains("compile_error!")
-            && !generated.contains("unresolved")
-            && (generated.contains("parse_duration_ms") || generated.contains("duration")),
-        "std::time.parse_duration_ms must be wired for human durations:\n{generated}"
+        generated.contains("parse_duration_ms") && generated.contains("format_duration_ms"),
+        "std::time duration helpers must reach runtime:\n{generated}"
     );
 }

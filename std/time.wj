@@ -143,6 +143,17 @@ impl Duration {
     }
 }
 
+
+/// Parse a human duration (`1h30m`, `5s`, `250ms`) into milliseconds.
+fn parse_duration_ms(text: string) -> Result<int, string> {
+    Err("import std::time — maps to windjammer_runtime::time::parse_duration_ms")
+}
+
+/// Format milliseconds as a compact duration (`5ms`, `3s`, `1h30m`).
+fn format_duration_ms(ms: int) -> string {
+    Err("import std::time — maps to windjammer_runtime::time::format_duration_ms")
+}
+
 // USAGE EXAMPLES (what users should write):
 //
 // use std::time
