@@ -731,7 +731,11 @@ impl<'ast> CodeGenerator<'ast> {
                     finished.trim_start_matches('&'),
                 );
             }
-            return Some(finished);
+            return Some(
+                crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
+                    &finished,
+                ),
+            );
         };
 
         // Specialize stdlib generics (`Vec::push(T)` → `push(String)` on `Vec<String>`).
@@ -3255,6 +3259,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+
+        // Terminal: never leave `n as usize.clone()` (WDB-300).
+        coerced = crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&coerced);
 
         Some(coerced)
     }
@@ -6605,7 +6612,7 @@ impl<'ast> CodeGenerator<'ast> {
                 && !s.ends_with(".to_string()")
                 && !s.ends_with(".to_owned()")
             {
-                s = format!("{s}.clone()");
+                s = crate::codegen::rust::expression_utilities::append_rust_clone(&s);
             }
             *coerced = s;
             return;

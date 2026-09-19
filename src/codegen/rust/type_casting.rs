@@ -412,7 +412,13 @@ pub fn coerce_arg_str_for_usize_formal(
                 .strip_prefix("&mut ")
                 .or_else(|| arg_str.strip_prefix('&'))
                 .unwrap_or(arg_str);
-            *arg_str = format!("{base} as usize");
+            // Auto-clone may already be present (`n.clone()`); cast inside the clone
+            // — never `n as usize.clone()` (WDB-300).
+            if let Some(inner) = base.strip_suffix(".clone()") {
+                *arg_str = format!("({inner} as usize).clone()");
+            } else {
+                *arg_str = format!("{base} as usize");
+            }
         }
         _ => {
             *arg_str = format!("({arg_str}) as usize");

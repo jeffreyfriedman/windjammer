@@ -312,7 +312,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors must reborrow** | `bug_wdb269_module_file_owned_graph_clone_into_demoted_lsqb_neighbors_must_reborrow_test` | ✅ tip GREEN (P3.383) — knows_neighbors Owned; in/out `&graph` |
 | P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` + `bug_owned_str_clone_into_demoted_str_must_reborrow_test` | ✅ GREEN (P3.384); finalize no longer restores `.clone()` into demoted `&str` |
 | P1 | **SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow must reborrow** | `bug_wdb271_module_file_owned_edge_batch_clone_into_demoted_to_arrow_must_reborrow_test` | 🆕 RED / filed (P3.363); gen lag |
-| P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | 🆕 RED / filed (P3.363); twin WDB-270 |
+| P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | ✅ GREEN tip-out gate (P3.385); twin WDB-270 |
 | P1 | **WCC `csr.clone()` → demoted `&mut DenseCsr` afforest must reborrow** | `bug_wdb273_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | ✅ tip GREEN (P3.365) — tip-prefer; gen lag |
 | P1 | **analytics `&self.csr` → owned `lcc_run_dense` must clone** | `bug_wdb274_module_file_demoted_csr_into_owned_lcc_run_dense_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241; inverse WDB-233 |
 | P1 | **PageRank `&Vec` → owned `arena_return_f64` must clone/move** | `bug_wdb275_module_file_demoted_vec_into_owned_arena_return_f64_must_clone_test` | 🆕 RED / filed (P3.365); twin WDB-241/261 |
@@ -340,7 +340,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **MultiFile CLI owned Vec reuse must clone (not `&args`)** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | ✅ tip GREEN (P3.379) — regression guard; tip-out WDB-291/294 also GREEN |
 | P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.381); tip-out RED (~17×); MultiFile isolate GREEN |
 | P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | 🆕 RED / filed (P3.381); tip-out RED (~8×); MultiFile isolate GREEN; twin WDB-241 |
-| P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | 🆕 RED / filed (P3.381); MultiFile + tip-out RED (PageRank / pg_serve) |
+| P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | ✅ MultiFile GREEN (P3.386); tip-out still needs regen |
 | P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | 🆕 RED / filed (P3.385); MultiFile + tip-out RED |
 | P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
 | P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
@@ -1407,7 +1407,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Gate | Status |
 |------|--------|
 | Tip **WDB-271** SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow | ❌ RED — gen graph_sql_datafusion_port (tip-out GREEN) |
-| Tip **WDB-272** wave1 `push_str(&owned.clone())` must reborrow | ❌ RED — tip wave1_publish_port (twin WDB-270) |
+| Tip **WDB-272** wave1 `push_str(&owned.clone())` must reborrow | ✅ GREEN tip-out gate (P3.385) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Compiler agent priority:** tip greens **177/218–272**; sync tip-out→gen for edge_batch to_arrow + wave1 `&str` clones. No Phase 606+.
@@ -2552,7 +2552,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | Tip **WDB-298** `u32 = 0_usize` loop init | ❌ RED — tip-out/gen adjacency/CDLP/LCC (~17×); MultiFile isolate GREEN |
 | Tip **WDB-299** `Key::from_components(&parts)` → owned Vec | ❌ RED — tip-out/gen layers (~8×); MultiFile isolate GREEN; twin WDB-241 |
-| MultiFile **WDB-300** `n as usize.clone()` | ❌ RED — MultiFile + tip-out PageRank/pg_serve |
+| MultiFile **WDB-300** `n as usize.clone()` | ✅ MultiFile GREEN (P3.386); tip-out still needs regen |
 | Tip **WDB-291–295/297** wave1 CLI | ✅ tip GREEN (P3.379) |
 | Dogfood / tip-cluster | ❄️ frozen; gen/mod.rs probe-junk cleaned locally (gitignored) |
 

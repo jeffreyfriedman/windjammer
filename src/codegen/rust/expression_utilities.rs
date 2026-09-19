@@ -130,6 +130,48 @@ pub fn borrow_base_expr(expr_str: &str) -> &str {
     expr_str
 }
 
+/// Rewrite illegal `expr as T.clone()` → `(expr as T).clone()` (WDB-300).
+///
+/// Rust parses `as` tighter than method call, so a naive `{cast}.clone()` append
+/// attaches `.clone()` to the type name. Call this as a terminal sanitize.
+pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
+    let t = expr.trim();
+    if !t.ends_with(".clone()") || !t.contains(" as ") {
+        return t.to_string();
+    }
+    if t.contains(").clone()") {
+        // Already parenthesized cast clone, or other `(…).clone()`.
+        return t.to_string();
+    }
+    let without_clone = t.trim_end_matches(".clone()");
+    // `n as usize` / `n as i64` / `(a + b) as f64` — whole-string cast.
+    if without_clone.contains(" as ") && !without_clone.ends_with(')') {
+        return format!("({without_clone}).clone()");
+    }
+    t.to_string()
+}
+
+/// Append `.clone()` for owned pass, parenthesizing casts/compounds.
+///
+/// `x as T.clone()` is illegal Rust (`as` binds tighter than method call). Always
+/// emit `(x as T).clone()` when `as` is present (WDB-300).
+pub fn append_rust_clone(expr: &str) -> String {
+    let t = expr.trim();
+    if t.ends_with(".clone()") || t.ends_with(".to_string()") || t.ends_with(".to_owned()") {
+        return sanitize_cast_trailing_clone(t);
+    }
+    if t.contains("std::mem::take(") {
+        return t.to_string();
+    }
+    if expr_needs_borrow_parentheses(t)
+        || (t.contains(" as ") && !t.starts_with('('))
+    {
+        format!("({t}).clone()")
+    } else {
+        format!("{t}.clone()")
+    }
+}
+
 /// Convert a borrowed/mut-borrowed call arg into an owned value for an owned formal.
 /// Avoids `key.clone().clone()` when the arg is already cloned.
 pub fn coerce_borrowed_arg_to_owned(expr_str: &str) -> String {
@@ -137,7 +179,7 @@ pub fn coerce_borrowed_arg_to_owned(expr_str: &str) -> String {
     if base.ends_with(".clone()") {
         base.to_string()
     } else {
-        format!("{base}.clone()")
+        append_rust_clone(base)
     }
 }
 
@@ -249,5 +291,20 @@ mod tests {
         assert_eq!(s, r#""</div>""#);
         assert!(is_rust_string_literal_text(r#""hi""#));
         assert!(is_rust_string_literal_text(r#"r"raw""#));
+    }
+
+    #[test]
+    fn append_rust_clone_parenthesizes_casts() {
+        assert_eq!(append_rust_clone("n as usize"), "(n as usize).clone()");
+        assert_eq!(append_rust_clone("n"), "n.clone()");
+        assert_eq!(append_rust_clone("n.clone()"), "n.clone()");
+        assert_eq!(
+            coerce_borrowed_arg_to_owned("n as usize"),
+            "(n as usize).clone()"
+        );
+        assert_eq!(
+            sanitize_cast_trailing_clone("n as usize.clone()"),
+            "(n as usize).clone()"
+        );
     }
 }

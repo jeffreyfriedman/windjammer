@@ -651,6 +651,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             );
                         }
                     }
+                    // Absolute terminal: never emit `n as usize.clone()` (WDB-300).
+                    coerced =
+                        crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
+                            &coerced,
+                        );
                     return vec![coerced];
                 }
                 debug_assert!(
@@ -660,10 +665,16 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                 // Phase 5: never fall through to legacy ownership when call_sites is on.
                 // IR is total for known callees — emit prepared arg as-is rather than
                 // re-entering ~1.5k LOC of pre-IR heuristics.
-                return vec![arg_str];
+                return vec![
+                    crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
+                        &arg_str,
+                    ),
+                ];
             }
 
-            vec![arg_str]
+            vec![
+                crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&arg_str),
+            ]
         })
         .collect()
 }

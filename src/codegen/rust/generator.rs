@@ -2858,11 +2858,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return arg_str.to_string();
         }
-        if arg_str.contains(" as ") && !arg_str.starts_with('(') {
-            format!("({}).clone()", arg_str)
-        } else {
-            format!("{arg_str}.clone()")
-        }
+        crate::codegen::rust::expression_utilities::append_rust_clone(arg_str)
     }
 
     /// Owned caller param → owned callee formal, used again at a later owned call site.

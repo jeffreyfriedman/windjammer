@@ -271,31 +271,14 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
         (Target::Rust, CoercionKind::Borrow) => rust_shared_borrow(expr),
         (Target::Rust, CoercionKind::MutBorrow) => rust_mut_borrow(expr),
         (Target::Rust, CoercionKind::Clone) => {
-            if expr.ends_with(".clone()")
-                || expr.ends_with(".to_string()")
-                || expr.ends_with(".to_owned()")
-            {
-                expr.to_string()
+            let core = if let Some(rest) = expr.strip_prefix("&mut ") {
+                rest
+            } else if let Some(rest) = expr.strip_prefix('&') {
+                rest
             } else {
-                let core = if let Some(rest) = expr.strip_prefix("&mut ") {
-                    rest
-                } else if let Some(rest) = expr.strip_prefix('&') {
-                    rest
-                } else {
-                    expr
-                };
-                let core = core
-                    .strip_prefix('(')
-                    .and_then(|s| s.strip_suffix(')'))
-                    .unwrap_or(core);
-                // Cast must bind before `.clone()` — `x as i32.clone()` is invalid Rust.
-                let wrapped = if core.contains(" as ") && !core.trim_start().starts_with('(') {
-                    format!("({core})")
-                } else {
-                    core.to_string()
-                };
-                format!("{wrapped}.clone()")
-            }
+                expr
+            };
+            crate::codegen::rust::expression_utilities::append_rust_clone(core)
         }
         (Target::Rust, CoercionKind::Deref) => {
             if expr.starts_with('*') {
