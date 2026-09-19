@@ -11,6 +11,9 @@
 ))]
 
 //! P3.372 Breach dogfood: int cast + auto-clone at call site must not emit `x as i32.clone()`.
+//!
+//! Product `station_geometry.wj` emits one correct `(pz as i32).clone()` and one broken
+//! `pz as i32.clone()` on consecutive identical `round_pillar(..., pz)` calls.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -21,6 +24,8 @@ const SRC: &str = r#"
 pub fn place(grid: VoxelGrid, pi: i32) {
     let zs = [18, 20, 35, 38]
     let pz = zs[(pi as usize)]
+    // Two reuse sites — product station_geometry dual round_pillar(pz).
+    round_pillar(grid, 27, 1, 2, pz)
     round_pillar(grid, 37, 1, 2, pz)
 }
 
@@ -38,6 +43,10 @@ fn i32_cast_before_clone_call_arg_must_parenthesize() {
     assert!(
         !rs.contains(" as i32.clone()"),
         "P3.372: cast must bind before .clone():\n{rs}"
+    );
+    assert!(
+        !rs.contains(" as i64.clone()") && !rs.contains(" as u32.clone()"),
+        "P3.372: any int cast must bind before .clone():\n{rs}"
     );
     test.cargo_check().expect("P3.372 cargo-check");
 }

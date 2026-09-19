@@ -150,14 +150,9 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
             return;
         }
     }
-    let needs_parens = matches!(arg, Expression::Binary { .. })
-        || arg_str.contains(' ')
-        || arg_str.contains('.');
-    if needs_parens {
-        *arg_str = format!("({}) as {}", arg_str, suffix);
-    } else {
-        *arg_str = format!("{} as {}", arg_str, suffix);
-    }
+    // Always wrap the cast so a later `.clone()` cannot bind tighter than `as`
+    // (`pz as i32.clone()` is invalid — must be `(pz as i32).clone()`, P3.372).
+    *arg_str = format!("({} as {})", arg_str, suffix);
 }
 
 /// P3.368: i32-coord locals/literals into `i64` / WJ `int` formals (ECS entity ids).

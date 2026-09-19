@@ -33,8 +33,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Gate | Status |
 |------|--------|
-| `i32_cast_before_clone_call_arg_must_parenthesize` (dual `round_pillar`) | ⏳ tip rebuild |
-| Product `station_geometry` `pz as i32.clone()` | ⏳ |
+| `i32_cast_before_clone_call_arg_must_parenthesize` (dual `round_pillar`) | ✅ tip GREEN (2026-09-19) |
+| Product `station_geometry` `pz as i32.clone()` | ⏳ tip retranspile |
 
 **Root cause:** `append_int_cast` emitted bare `pz as i32`; a later `.clone()` binds tighter → invalid Rust. First reuse site often got `(pz as i32).clone()` via clone-then-cast; second site stayed broken.
 

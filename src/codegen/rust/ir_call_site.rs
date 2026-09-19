@@ -3270,10 +3270,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Terminal: registry/preregister demoted `&str` callees must borrow owned
-        // caller params (`compare_identifiers` → `cmp_string(&left, &right)`).
+        // Terminal: codegen-confirmed demoted `&str` / preregistered shared formals must
+        // borrow owned caller params (`compare_identifiers` → `cmp_string(&left, &right)`).
+        // Stale registry `param_types: Reference(str)` alone must not force borrow when
+        // emission still owns `String` (P3.389 regression / join_path seed).
         if let Expression::Identifier { name, .. } = arg_expr {
-            let registry_wants_str = registry
+            let registry_emits_shared = registry
                 .get_signature(callee_name)
                 .or_else(|| {
                     let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
@@ -3281,13 +3283,9 @@ impl<'ast> CodeGenerator<'ast> {
                 })
                 .is_some_and(|rs| {
                     let pidx = rs.arg_param_index(arg_index);
-                    rs.param_types.get(pidx).is_some_and(|t| {
-                        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                    }) || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                        rs, pidx,
-                    )
+                    crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
                 });
-            let callee_wants_shared = registry_wants_str
+            let callee_wants_shared = registry_emits_shared
                 || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
                 || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
             if callee_wants_shared

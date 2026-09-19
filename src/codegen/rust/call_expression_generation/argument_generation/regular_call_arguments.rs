@@ -672,9 +672,11 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             .or_else(|| gen.signature_registry.get_signature(lookup.as_ref()))
                         {
                             let pidx = rs.arg_param_index(i);
-                            if rs.param_types.get(pidx).is_some_and(|t| {
-                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            }) && gen.caller_owned_non_copy_formal(name)
+                            // Emission-confirmed shared ref only — stale param_types
+                            // Reference(str) must not force `&` into owned String formals.
+                            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                rs, pidx,
+                            ) && gen.caller_owned_non_copy_formal(name)
                                 && !coerced.starts_with('&')
                                 && !coerced.starts_with("&mut ")
                             {

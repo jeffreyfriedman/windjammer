@@ -867,16 +867,13 @@ pub fn finalize_borrowed_text_call_site_arg<'ast>(
         };
 
     let param_idx = sig.arg_param_index(arg_index);
-    let registry_emits_rust_str = sig.param_types.get(param_idx).is_some_and(|t| {
-        crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-    });
     // Fail closed: codegen-confirmed owned `String` / plain WJ `string` contracts never
     // receive call-site `&` — stale analyzer `Reference(str)` must not win (join_path seed).
-    if !registry_emits_rust_str
-        && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-            || crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
-                sig, param_idx,
-            ))
+    // Emission flags (`emitted_owned` / `plain_string_passes_owned`) beat registry param_types.
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+        || crate::codegen::rust::call_site_borrow::plain_string_formal_passes_owned_at_call_site(
+            sig, param_idx,
+        )
     {
         return;
     }
