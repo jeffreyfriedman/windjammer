@@ -29,6 +29,7 @@ Definition of done per row:
 | `std::time.utc_now` | `bug_std_time_utc_now_test` | ✅ | Runtime `DateTime` + `utc_now` |
 | `DateTime.timestamp_millis` | `bug_std_time_timestamp_millis_test` | ✅ | Method on runtime `DateTime` |
 | `std::uuid.v4` | `bug_std_uuid_v4_module_test` | ✅ | `std/uuid.wj` + runtime module |
+| `std::uuid.v7` / `v7_from_timestamp` | `bug_std_uuid_v7_module_test` | ✅ | Runtime `uuid` `v7` + `std/uuid.wj`; thin-wrap `wj-uuid` |
 
 ## P0 — HTTP / files
 

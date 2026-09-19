@@ -3834,12 +3834,17 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         let body = func.body.as_slice();
+        // `body + ""` into owned concat2 must keep owned formals — do not early-return
+        // demote on readonly empty-append before checking owned-callee forwards.
+        let passed_into_owned = self.param_passed_as_call_argument(body, &param.name, func)
+            && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func);
         if (self.param_has_readonly_expression_use(body, &param.name)
             || self.param_only_appears_in_formatting_macro(body, &param.name))
             && !self.param_has_owning_method_use(body, &param.name, func)
             && !self.param_stored_in_owned_payload(body, &param.name)
             && !self.param_used_as_owned_string_add_operand(body, &param.name)
             && !self.param_used_in_return_struct_string_field(body, &param.name)
+            && !passed_into_owned
         {
             return false;
         }
@@ -3847,8 +3852,7 @@ impl<'ast> CodeGenerator<'ast> {
             || self.param_has_owning_method_use(body, &param.name, func)
             || self.param_used_as_owned_string_add_operand(body, &param.name)
             || self.param_used_in_return_struct_string_field(body, &param.name)
-            || (self.param_passed_as_call_argument(body, &param.name, func)
-                && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func))
+            || passed_into_owned
     }
 
     fn pub_vec_non_copy_custom_indexed_api(

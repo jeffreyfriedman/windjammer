@@ -3296,9 +3296,7 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 coerced = format!("&{coerced}");
             }
-        }
 
-        if let Expression::Identifier { name, .. } = arg_expr {
             let mut tmp = coerced.clone();
             if crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
                 &mut tmp,
@@ -3310,7 +3308,19 @@ impl<'ast> CodeGenerator<'ast> {
             } else if self.emitted_rust_ref_formals.contains(name)
                 && coerced.ends_with(".clone()")
             {
-                coerced = format!("{}.to_string()", name);
+                // Text demotions: `&str` → owned String needs `.to_string()`.
+                // P3.390: demoted `&Vec` / non-text must NEVER get `.to_string()` (E0599).
+                // Shared-ref callees: strip stale auto-clone and pass the already-borrowed
+                // binding. Owned callees: keep `.clone()` (WDB-281 / demoted→owned).
+                let is_text = self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                });
+                if is_text {
+                    coerced = format!("{}.to_string()", name);
+                } else if callee_wants_shared {
+                    coerced = name.to_string();
+                }
             }
         }
 

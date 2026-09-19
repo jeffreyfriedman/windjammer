@@ -371,6 +371,194 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// WDB-305: untyped `let mut best_count = 0` defaults to return-width i64 while later
+    /// `best_count = count` assigns a `u32` (CDLP majority). Prefer the later assign width.
+    pub(in crate::codegen::rust) fn mut_int_local_peer_width_from_later_assigns(
+        &self,
+        name: &str,
+    ) -> Option<Type> {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        let mut peer = None;
+        self.scan_stmts_for_mut_int_assign_peer(&body, name, &mut peer);
+        peer
+    }
+
+    fn scan_stmts_for_mut_int_assign_peer(
+        &self,
+        stmts: &[&crate::parser::Statement<'ast>],
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        use crate::parser::Statement;
+        for stmt in stmts {
+            match stmt {
+                Statement::Assignment { target, value, .. } => {
+                    if matches!(
+                        target,
+                        Expression::Identifier { name: n, .. } if n == name
+                    ) {
+                        // Resolve RHS width against the *full* function body so
+                        // `best_count = count` inside `if` still finds
+                        // `let count = counts[i]` in the enclosing while (WDB-305).
+                        let full: Vec<&crate::parser::Statement> =
+                            if !self.full_function_body_snapshot.is_empty() {
+                                self.full_function_body_snapshot.iter().copied().collect()
+                            } else {
+                                self.current_function_body.iter().copied().collect()
+                            };
+                        if let Some(ty) = self.int_width_type_from_assign_rhs(value, &full) {
+                            *peer = Some(ty);
+                        }
+                    }
+                }
+                Statement::While { body, .. } | Statement::For { body, .. } => {
+                    self.scan_stmts_for_mut_int_assign_peer(body, name, peer);
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    self.scan_stmts_for_mut_int_assign_peer(then_block, name, peer);
+                    if let Some(eb) = else_block {
+                        self.scan_stmts_for_mut_int_assign_peer(eb, name, peer);
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            self.scan_stmts_for_mut_int_assign_peer(statements, name, peer);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn int_width_type_from_assign_rhs(
+        &self,
+        value: &Expression<'ast>,
+        body: &[&crate::parser::Statement<'ast>],
+    ) -> Option<Type> {
+        if let Some(ty) = self.concrete_u32_or_i32_width(value) {
+            return Some(ty);
+        }
+        if let Expression::Index { object, .. } = value {
+            if let Some(ty) = self.vec_index_elem_u32_or_i32(object) {
+                return Some(ty);
+            }
+        }
+        // `best_count = count` where `let count = counts[i]` with `counts: Vec<u32>`.
+        if let Expression::Identifier { name, .. } = value {
+            if let Some(rhs) = Self::find_let_rhs_in_stmts(body, name) {
+                return self.int_width_type_from_assign_rhs(rhs, body);
+            }
+            if let Some(ty) = self.local_var_types.get(name.as_str()) {
+                return Self::parser_type_as_u32_or_i32_peer(ty);
+            }
+            for p in &self.current_function_params {
+                if p.name == *name {
+                    return Self::parser_type_as_u32_or_i32_peer(&p.type_);
+                }
+            }
+        }
+        None
+    }
+
+    fn vec_index_elem_u32_or_i32(&self, object: &Expression<'ast>) -> Option<Type> {
+        let Expression::Identifier { name, .. } = object else {
+            return None;
+        };
+        let ty = self
+            .local_var_types
+            .get(name.as_str())
+            .cloned()
+            .or_else(|| {
+                self.current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                    .map(|p| p.type_.clone())
+            })?;
+        let elem = match &ty {
+            Type::Vec(inner) => inner.as_ref(),
+            Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                Type::Vec(elem) => elem.as_ref(),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        Self::parser_type_as_u32_or_i32_peer(elem)
+    }
+
+    fn concrete_u32_or_i32_width(&self, value: &Expression<'ast>) -> Option<Type> {
+        self.infer_expression_type(value)
+            .as_ref()
+            .and_then(Self::parser_type_as_u32_or_i32_peer)
+    }
+
+    fn parser_type_as_u32_or_i32_peer(ty: &Type) -> Option<Type> {
+        match ty {
+            Type::Uint => Some(Type::Uint),
+            Type::Int32 => Some(Type::Int32),
+            Type::Custom(n) if n == "u32" => Some(Type::Uint),
+            Type::Custom(n) if n == "i32" => Some(Type::Int32),
+            _ => None,
+        }
+    }
+
+    fn find_let_rhs_in_stmts<'b>(
+        stmts: &[&'b crate::parser::Statement<'ast>],
+        name: &str,
+    ) -> Option<&'b Expression<'ast>> {
+        use crate::parser::{Pattern, Statement};
+        for stmt in stmts {
+            match stmt {
+                Statement::Let { pattern, value, .. } => {
+                    if matches!(
+                        pattern,
+                        Pattern::Identifier(n) | Pattern::MutBinding(n) if n == name
+                    ) {
+                        return Some(value);
+                    }
+                }
+                Statement::While { body, .. } | Statement::For { body, .. } => {
+                    if let Some(v) = Self::find_let_rhs_in_stmts(body, name) {
+                        return Some(v);
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if let Some(v) = Self::find_let_rhs_in_stmts(then_block, name) {
+                        return Some(v);
+                    }
+                    if let Some(eb) = else_block {
+                        if let Some(v) = Self::find_let_rhs_in_stmts(eb, name) {
+                            return Some(v);
+                        }
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            if let Some(v) = Self::find_let_rhs_in_stmts(statements, name) {
+                                return Some(v);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
 
     /// P3.345: `let seg = if segments < 4 { 4 } else { segments }` in void methods must
     /// register as i32 so `while i < seg` promotes the literal-init counter.
