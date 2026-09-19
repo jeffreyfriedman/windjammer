@@ -337,7 +337,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&args` → owned scale_status_cli_main must clone** | `bug_wdb295_module_file_demoted_vec_into_owned_wave1_scale_status_cli_must_clone_test` | ✅ tip GREEN (P3.379 tip-out wave1_cli); twin WDB-291 |
 | P1 | **gen-lag join_path `String::from` must match tip bare `&str`** | `bug_wdb296_module_file_gen_lag_join_path_string_from_must_match_tip_test` | ✅ GREEN (P3.377 tip→gen sync); twin WDB-225 |
 | P1 | **MultiFile CLI `&args` → owned Vec must clone** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | 🆕 RED / filed (P3.378); twin WDB-291/294 |
-| P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370) — i64 formals + SharedInt/Counter return width
+| P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
 | P1 | **if/else float lit must peer f32 then-branch** | `bug_let_if_else_f32_branch_must_peer_else_float_literal_test` | ✅ tip GREEN (P3.374) |
@@ -1364,6 +1364,22 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 **Fix:** peer-drive `Type::Int` from i64 formals; treat custom returns that carry WJ int width (`SharedInt`, `Counter`, …) as non–i32-coord builders via `type_contains_wj_int_width`.
 
 **Gates:** `cargo test --release --test all -- wj_sync_int_literal hashmap_none_zero vec_int_return std_sync_atomic_i64 generated_cargo_toml_release_profile_lto` → pass.
+
+
+## P3.380 (2026-09-18) — void `AtomicI64::new` / `fetch_add` must emit `_i64`
+
+| Gate | Status |
+|---|---|
+| `wj_sync_atomic_i64_void_main_literals_must_emit_i64` | ✅ tip GREEN (2026-09-18) |
+| `bug_wj_sync_int_literal_peers_must_emit_i64_test` (full) | ✅ tip GREEN |
+| `bug_std_sync_atomic_i64_wiring_test` | ✅ tip GREEN |
+
+**Root cause layer:** void/i32-coord let context forced `0_i32` into `AtomicI64::new(0)`; `sync_i32_coord_binding_after_let` then retyped the `AtomicI64` local as `i32`, so `fetch_add(1)` also demoted.
+
+**Fix:** associated-call owner peer (`AtomicI64::new`) overrides void i32 context; let RHS owner peer for AtomicI64 slots; refuse to overwrite non-int nominal locals in `sync_i32_coord_binding_after_let`; include `AtomicI64` in `type_contains_wj_int_width`.
+
+**Gates:** `cargo test --release --test all -- bug_wj_sync_int_literal_peers` → 7/7; tip probe emits `0_i64`/`1_i64`.
+
 
 
 ## P3.365 WindjammerDB CQ-C5 — coverage REDs WDB-273–276 WCC afforest + LCC/arena/par_bfs owned (2026-09-17)
