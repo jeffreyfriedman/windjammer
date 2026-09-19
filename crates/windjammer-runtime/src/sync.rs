@@ -69,6 +69,50 @@ pub fn channel<T>() -> (mpsc::Sender<T>, mpsc::Receiver<T>) {
     mpsc::channel()
 }
 
+/// Idiomatic alias for [`channel`] — `std::sync::unbounded` graduation vocabulary.
+pub fn unbounded<T>() -> (mpsc::Sender<T>, mpsc::Receiver<T>) {
+    mpsc::channel()
+}
+
+/// Send on an owned sender; returns the sender for reuse (wj-sync / std::sync shape).
+pub fn send<T>(tx: mpsc::Sender<T>, value: T) -> mpsc::Sender<T> {
+    let _ = tx.send(value);
+    tx
+}
+
+/// Blocking recv; returns `(receiver, Some(value))` or `(receiver, None)` on disconnect.
+pub fn recv<T>(rx: mpsc::Receiver<T>) -> (mpsc::Receiver<T>, Option<T>) {
+    match rx.recv() {
+        Ok(v) => (rx, Some(v)),
+        Err(_) => (rx, None),
+    }
+}
+
+/// Thread-safe shared cell — `std::sync::shared` (no Arc/Mutex in WJ source).
+pub struct SharedInt {
+    inner: Arc<Mutex<i64>>,
+}
+
+/// Create a shared int cell.
+pub fn shared(value: i64) -> SharedInt {
+    SharedInt {
+        inner: Arc::new(Mutex::new(value)),
+    }
+}
+
+/// Add `delta` to a shared int; returns the same handle.
+pub fn shared_add(s: SharedInt, delta: i64) -> SharedInt {
+    if let Ok(mut g) = s.inner.lock() {
+        *g += delta;
+    }
+    s
+}
+
+/// Read the current shared int value.
+pub fn shared_get(s: &SharedInt) -> i64 {
+    s.inner.lock().map(|g| *g).unwrap_or(0)
+}
+
 /// Create a bounded channel
 pub fn sync_channel<T>(bound: usize) -> (mpsc::SyncSender<T>, mpsc::Receiver<T>) {
     mpsc::sync_channel(bound)

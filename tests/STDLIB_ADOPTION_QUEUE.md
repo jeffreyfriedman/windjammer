@@ -56,8 +56,8 @@ Definition of done per row:
 
 | Need | Repro | Gate status | Fix hint |
 |---|---|---|---|
-| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `assert_stdlib_runtime_links` → `sync::unbounded` (not raw mpsc) |
-| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | 🆕 RED | `sync::shared` / `shared_add` / `shared_get` |
+| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `unbounded`/`send`/`recv` (not raw mpsc in WJ) |
+| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `shared` / `shared_add` / `shared_get` |
 | `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | ✅ GREEN | Hot `Counter` for `wj-sync`; runtime re-exports + P3.370/P3.380 void i64 peers for `AtomicI64::new` / `fetch_add` |
 
 ## Run

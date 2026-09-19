@@ -20,13 +20,14 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate | Status |
 |------|--------|
 | `string_const_into_owned_string_formal_must_auto_own` | ✅ tip GREEN (2026-09-18) — IR call-site own |
-| Product `game_loop.wj` `record_scope(SCOPE_GAME_LOOP_*, …)` | ⏳ tip retranspile / `wj game build` |
+| `string_const_into_vec_string_push_must_auto_own` | ⏳ tip rebuild — Vec::push(SCOPE_*) |
+| Product `profile_scopes.wj` `names.push(SCOPE_*)` | ⏳ E0308 expected `String`, found `&str` |
 
-**Root cause:** `pub const SCOPE_*: string` lowers to `&'static str`; IR types consts as owned WJ `string` so `compute_coercion` is Identity. Method-call finalize Owned+text path is skipped when `ir_cutover.call_sites` is on.
+**Root cause:** `pub const SCOPE_*: string` lowers to `&'static str`; IR types consts as owned WJ `string` so `compute_coercion` is Identity. Method-call finalize Owned+text path is skipped when `ir_cutover.call_sites` is on. `Vec::push(T)` formals are generic Owned — `call_site_param_expects_owned_string` alone misses them.
 
-**Fix:** In `ir_call_site::apply_ir_call_site_coercion`, after the string-literal→owned path, detect `is_string_const_identifier` / `FieldAccess` and emit `.to_string()` into owned string formals. (Finalize path kept as legacy fallback when call_sites off.)
+**Fix:** In `ir_call_site::apply_ir_call_site_coercion`, detect `is_string_const_identifier` / `FieldAccess` and emit `.to_string()` when the call site expects an owned pass (named string formal **or** Owned/emitted-owned contract, covering `Vec::push`).
 
-**Handoff:** Retranspile game-core / `wj game build` → drop SCOPE_* E0308 cluster.
+**Handoff:** Tip rebuild → GREEN both gates → retranspile game-core / `wj game build` → drop SCOPE_* E0308 cluster.
 
 ## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
 
@@ -2543,6 +2544,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 
 
+
+## P3.382 — tip-out bulk module-file sync (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| tip_out filter (~101 gates) | ✅ **87 passed** / 14 failed after `/tmp/wj_tip_out_regen_p380` → `.agent-wip/rel_tip_out` + `gen/` |
+| Tip **WDB-241** ecs `&ids`→owned | ✅ tip GREEN (regen emits `ids` move) |
+| Tip **WDB-248** multi_source | ⚠️ tip evolved: formal now owned `DenseCsr` + `self.csr.clone()`; gate updated to accept owned+clone or demoted+reborrow |
+| Residual tip_out RED | 177/193/196/204/208/212/233/245/253/256/257/262/269 (+248 until rebuild) — mix of tip codegen + stale `gen/relational_module_file/` |
+
+**Root cause layer:** tip-out/gen lag for greened cluster; residual needs signature/IR (Custom Key, clone→demoted Custom, u64 width) not peels.
+
+**Gates:** `all-… tip_out` → 87/101; `wdb283..wdb296` tip-out → 10/10.
+
 ## P3.379 — tip-out regen greened WDB-283/284/289–296 + wave1_cli flat lag (2026-09-18)
 
 | Gate | Status |
@@ -2598,7 +2613,18 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-292** wave1 `&args` → owned attest_cli | ✅ tip GREEN (P3.379 wave1_cli) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Compiler agent priority:** MultiFile **WDB-297**; remaining queue ❌. No Phase 606+.
+**Compiler agent priority:** remaining queue ❌ (gen-lag / tip-out twins). Product tip finance-screens GREEN. No Phase 606+.
+
+## P3.381 — windjammer-ui AuthFetch `impl Into<String>` builders (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `auth_fetch_string_builders_accept_impl_into_string` | ✅ GREEN |
+| Product finance-screens AuthFetch call sites | can drop `.to_string()` / `String::from` on builders |
+
+**Fix:** hand-maintained `generated/authfetch.rs` — `new` / `id` / `label` / `mount` / `class_name` take `impl Into<String>` (matches JsonPost / DatePicker / Chart).
+
+**Gate:** `cargo test --test finance_p0_components_test auth_fetch -- --nocapture` → pass.
 
 ## P3.378 WindjammerDB CQ-C5 — MultiFile CLI `&args`→owned (WDB-297) (2026-09-18)
 
