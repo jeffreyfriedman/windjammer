@@ -386,6 +386,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **scale status owned String must not receive `&out`** | `bug_wdb316_module_file_owned_string_must_not_receive_ref_out_scale_status_test` | 🆕 RED / filed (P3.395); tip-out RED; MultiFile isolate GREEN; twin WDB-314 |
 | P1 | **vertex_map.hashmap/.vec residual `u32=0_usize`** | `bug_wdb317_module_file_u32_loop_residual_vertex_map_hashmap_vec_test` | 🆕 RED / filed (P3.395); tip-out RED; twin WDB-311 |
 | P1 | **publish owned String first formal must not receive `&out`** | `bug_wdb318_module_file_owned_string_first_formal_must_not_receive_ref_out_publish_test` | 🆕 RED / filed (P3.395); tip-out RED; MultiFile isolate GREEN; twin WDB-312/314 |
+| P1 | **publish_check CLI owned String must not receive `&dated`** | `bug_wdb319_module_file_owned_string_must_not_receive_ref_dated_publish_check_test` | 🆕 RED / filed (P3.396); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
+| P1 | **publish_allows owned String must not receive bare `&dated_label`** | `bug_wdb320_module_file_owned_string_must_not_receive_bare_ref_publish_allows_test` | 🆕 RED / filed (P3.396); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
+| P1 | **LSQB edge owned String must not receive bare `&content`** | `bug_wdb321_module_file_owned_string_must_not_receive_bare_ref_content_lsqb_test` | 🆕 RED / filed (P3.396); tip-out RED; twin WDB-310 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2738,6 +2741,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb316_ wdb317_ wdb318_` → 2 passed / 3 failed (expected RED).
 
 **Compiler agent priority:** tip greens **WDB-316–318** (no `&out` into owned String on scale/publish; u32 peer on hashmap/vec vertex_map). No Phase 606+. No windjammer/src edits from DB agent.
+
+## P3.396 WindjammerDB CQ-C5 — coverage REDs WDB-319–321 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-319** publish_check CLI `&dated` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-312 |
+| Tip **WDB-320** publish_allows bare `&dated_label` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-312 |
+| Tip **WDB-321** LSQB edge bare `&content` → owned String | ❌ RED — tip-out/gen; twin WDB-310 (`&content.clone()` on vertex path) |
+| Tip **WDB-316–318** | ❌ still RED (P3.395) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb319_ wdb320_ wdb321_` → 2 passed / 3 failed (expected RED).
+
+**Compiler agent priority:** tip greens **WDB-319–321** (no bare `&owned` into owned String on publish_check/allows/LSQB edge). No Phase 606+. No windjammer/src edits from DB agent.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
