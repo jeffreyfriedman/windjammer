@@ -20,14 +20,14 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate | Status |
 |------|--------|
 | `string_const_into_owned_string_formal_must_auto_own` | ✅ tip GREEN (2026-09-18) — IR call-site own |
-| `string_const_into_vec_string_push_must_auto_own` | ⏳ tip rebuild — Vec::push(SCOPE_*) |
-| Product `profile_scopes.wj` `names.push(SCOPE_*)` | ⏳ E0308 expected `String`, found `&str` |
+| `string_const_into_vec_string_push_must_auto_own` | ✅ tip GREEN (2026-09-18) — Vec::push owned pass |
+| Product `profile_scopes.wj` `names.push(SCOPE_*)` | ⏳ tip retranspile / `wj game build` |
 
 **Root cause:** `pub const SCOPE_*: string` lowers to `&'static str`; IR types consts as owned WJ `string` so `compute_coercion` is Identity. Method-call finalize Owned+text path is skipped when `ir_cutover.call_sites` is on. `Vec::push(T)` formals are generic Owned — `call_site_param_expects_owned_string` alone misses them.
 
 **Fix:** In `ir_call_site::apply_ir_call_site_coercion`, detect `is_string_const_identifier` / `FieldAccess` and emit `.to_string()` when the call site expects an owned pass (named string formal **or** Owned/emitted-owned contract, covering `Vec::push`).
 
-**Handoff:** Tip rebuild → GREEN both gates → retranspile game-core / `wj game build` → drop SCOPE_* E0308 cluster.
+**Handoff:** Retranspile game-core / `wj game build` → drop SCOPE_* E0308 cluster.
 
 ## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
 
