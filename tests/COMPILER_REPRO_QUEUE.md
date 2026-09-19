@@ -21,13 +21,26 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |------|--------|
 | `string_const_into_owned_string_formal_must_auto_own` | ✅ tip GREEN (2026-09-18) — IR call-site own |
 | `string_const_into_vec_string_push_must_auto_own` | ✅ tip GREEN (2026-09-18) — Vec::push owned pass |
-| Product `profile_scopes.wj` `names.push(SCOPE_*)` | ⏳ tip retranspile / `wj game build` |
+| Product `profile_scopes.wj` `names.push(SCOPE_*)` | ✅ tip gen GREEN — `.to_string()` |
 
 **Root cause:** `pub const SCOPE_*: string` lowers to `&'static str`; IR types consts as owned WJ `string` so `compute_coercion` is Identity. Method-call finalize Owned+text path is skipped when `ir_cutover.call_sites` is on. `Vec::push(T)` formals are generic Owned — `call_site_param_expects_owned_string` alone misses them.
 
 **Fix:** In `ir_call_site::apply_ir_call_site_coercion`, detect `is_string_const_identifier` / `FieldAccess` and emit `.to_string()` when the call site expects an owned pass (named string formal **or** Owned/emitted-owned contract, covering `Vec::push`).
 
-**Handoff:** Retranspile game-core / `wj game build` → drop SCOPE_* E0308 cluster.
+**Handoff:** Continue cutting residual ~357 tip-gen rustc errors (i32/i64, usize, over-borrow).
+
+## P3.372b — dual int-cast + clone must parenthesize (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| `i32_cast_before_clone_call_arg_must_parenthesize` (dual `round_pillar`) | ⏳ tip rebuild |
+| Product `station_geometry` `pz as i32.clone()` | ⏳ |
+
+**Root cause:** `append_int_cast` emitted bare `pz as i32`; a later `.clone()` binds tighter → invalid Rust. First reuse site often got `(pz as i32).clone()` via clone-then-cast; second site stayed broken.
+
+**Fix:** Always emit `({expr} as {suffix})` from `append_int_cast`.
+
+**Handoff:** GREEN gate → retranspile station_geometry.
 
 ## P3.282 — library multipass Step 4B-pre mega-Program OOM (2026-09-15)
 
@@ -344,6 +357,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | ✅ tip GREEN (P3.387) — MultiFile + tip-out/gen sync; stale Borrowed no longer suppresses `.to_string()` / owned args |
 | P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | ✅ tip GREEN (P3.388) — untyped `total=0` under Custom return syncs `_i64`; peer beats struct-field `u64` |
 | P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
+| P1 | **`Some(x)` must not emit `Some(x.clone()).cloned()`** | `bug_wdb304_module_file_some_must_not_emit_cloned_chain_test` | 🆕 RED / filed (P3.391); MultiFile + tip-out RED (semantic) |
+| P1 | **CDLP `best_count` must peer `u32` (not `0_i64`)** | `bug_wdb305_module_file_cdlp_best_count_must_peer_u32_test` | 🆕 RED / filed (P3.391); MultiFile + tip-out RED |
+| P1 | **owned bakeoff String must not receive `&hw.clone()`** | `bug_wdb306_module_file_owned_string_must_not_receive_ref_clone_bakeoff_test` | 🆕 RED / filed (P3.391); tip-out RED; MultiFile isolate GREEN; twin WDB-301 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2613,6 +2629,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Census:** ~287 gen errors; next cluster after 301 is int-width (LCC double-cast, u32 index) + remaining tip-out lag.
 
 **Compiler agent priority:** tip greens **WDB-302–303** (+ 298–299 tip-out); ban double cast on i64 accum; usize index casts. No Phase 606+.
+
+## P3.391 WindjammerDB CQ-C5 — coverage REDs WDB-304–306 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-304** `Some(x.clone()).cloned()` | ❌ RED — MultiFile + tip-out semantic_mcp/model |
+| MultiFile **WDB-305** CDLP `best_count = 0_i64` vs u32 | ❌ RED — MultiFile + tip-out graph_cdlp_engine |
+| Tip **WDB-306** bakeoff `&hw.clone()` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN; twin WDB-301 |
+| Tip **WDB-298–303** | ✅ tip GREEN (P3.386–390) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb304_ wdb305_ wdb306_` → 1 passed / 5 failed (expected RED).
+
+**Compiler agent priority:** tip greens **WDB-304–306** (ban `.cloned()` on `Option<T>`; peer u32 for majority count; no `&owned.clone()` into owned String). No Phase 606+. No windjammer/src edits from DB agent.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
