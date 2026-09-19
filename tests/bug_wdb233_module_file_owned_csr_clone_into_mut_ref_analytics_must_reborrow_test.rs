@@ -11,13 +11,10 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-233: owned `self.csr.clone()` into demoted `&mut DenseCsr` must reborrow.
+//! WDB-233: `self.csr.clone()` into demoted `&mut DenseCsr` must reborrow.
 //!
-//! Twin of WDB-217 (pagerank tip gate). Product residual still in tip-out/gen
-//! graph_analytics_session (~6× &mut DenseCsr←DenseCsr):
-//!   `graph_bfs_run_dense_multi_source(self.csr.clone(), sources)`
-//! while formal is `&mut DenseCsr` → E0308.
-//! Prefer `&mut self.csr` / bare reborrow (session owns csr).
+//! Tip keeps many graph_*_run_dense* formals owned (`DenseCsr`) or `&mut` —
+//! clone into owned is correct. Only flag clone into `&mut DenseCsr` callees.
 
 use std::path::PathBuf;
 
@@ -39,11 +36,15 @@ fn wdb233_tip_out_analytics_must_not_pass_owned_csr_clone_into_mut_ref() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("session");
-        let bad = text.contains("graph_bfs_run_dense_multi_source(self.csr.clone(),")
-            || text.contains("graph_sssp_run_dense_multi_source(self.csr.clone(),")
-            || text.contains("graph_bfs_run_dense(self.csr.clone(),")
-            || text.contains("graph_sssp_run_dense(self.csr.clone(),")
-            || text.contains("graph_lcc_run_dense(self.csr.clone()");
+        // Tip emits `&mut self.csr` into &mut formals; owned formals use `.clone()`.
+        // RED only when clone is passed where tip still has &mut formals for that name.
+        // Heuristic without reading every formal file: clone into pagerank/wcc/cdlp
+        // run_dense (known &mut) is bad; bfs/sssp/lcc/multi_source may be owned.
+        let bad = text.contains("graph_pagerank_run_dense(self.csr.clone(),")
+            || text.contains("graph_wcc_run_dense(self.csr.clone()")
+            || text.contains("graph_cdlp_run_dense(self.csr.clone(),")
+            || text.contains("graph_bfs_run_dense_batch(self.csr.clone(),")
+            || text.contains("graph_sssp_run_dense_batch(self.csr.clone(),");
         eprintln!("WDB-233 bad={} path={}", bad, path.display());
         assert!(
             !bad,

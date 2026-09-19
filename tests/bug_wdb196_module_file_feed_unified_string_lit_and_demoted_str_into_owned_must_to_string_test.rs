@@ -127,8 +127,18 @@ fn wdb196_tip_out_feed_unified_must_to_string_into_owned_string_formals() {
         return;
     }
     let text = std::fs::read_to_string(&feed).expect("feed");
+    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
+    let wire = tip.join("relational_pg_wire_port.rs");
+    let wire_text = if wire.exists() {
+        std::fs::read_to_string(&wire).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let encode_owned = wire_text.contains("fn pg_wire_encode_startup_user_database(user: String");
     let mut bad = Vec::new();
-    if text.contains("pg_wire_encode_startup_user_database(\"wdb\", \"wdb\")")
+    // Tip demotes encode to `&str` — bare lits are correct; only flag when formal is owned.
+    if encode_owned
+        && text.contains("pg_wire_encode_startup_user_database(\"wdb\", \"wdb\")")
         && !text.contains("pg_wire_encode_startup_user_database(\"wdb\".to_string()")
         && !text.contains("String::from(\"wdb\")")
     {

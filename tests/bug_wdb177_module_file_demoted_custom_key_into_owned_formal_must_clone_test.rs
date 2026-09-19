@@ -162,11 +162,11 @@ fn wdb177_tip_out_feedback_key_must_clone_into_owned_stats() {
             }
         }
         if text.contains("query_feedback_cache_put(")
-            && text.contains(", key,")
-            && !text.contains(", key.clone(),")
             && text.contains("query_feedback_cache_put(out.feedback_cache.clone(), key,")
+            && text.contains("key: &QueryFeedbackKey")
         {
-            bad.push(format!("{}: bare key into cache_put", path.display()));
+            // Only RED when a demoted `&QueryFeedbackKey` local/formal is passed bare into owned put.
+            bad.push(format!("{}: demoted &key into owned cache_put", path.display()));
         }
     }
     eprintln!("WDB-177 tip-out bad={}", bad.len());

@@ -11,13 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-257: `&mut vertices.clone()` into demoted `&mut Vec<i64>` init_scores must reborrow.
+//! WDB-257: `vertices` into `graph_pagerank_init_scores` must match formal ownership.
 //!
-//! Product residual tip-out/gen graph_pagerank_engine:
-//!   `graph_pagerank_init_scores(vertices: &mut Vec<i64>)`
-//!   called as `graph_pagerank_init_scores(&mut vertices.clone())`
-//! → temporary mut-ref to clone (E0716 / wrong ownership), expected `&mut vertices`.
-//! Signature-driven: pass `&mut vertices` (no clone).
+//! Tip historically demoted `&mut Vec` while emitting `&mut vertices.clone()`. Tip now
+//! keeps owned `vertices: Vec<i64>` + `vertices.clone()` — correct. Gate accepts
+//! owned+clone or demoted+`&mut vertices` (no clone).
 
 use std::path::PathBuf;
 
@@ -33,6 +31,7 @@ fn wdb257_tip_out_pagerank_must_reborrow_mut_vec_into_demoted_init_scores() {
         gen.join("graph/graph_pagerank_engine.rs"),
     ];
     let mut demoted = false;
+    let mut owned = false;
     for path in &engine_paths {
         if !path.exists() {
             continue;
@@ -42,10 +41,14 @@ fn wdb257_tip_out_pagerank_must_reborrow_mut_vec_into_demoted_init_scores() {
             demoted = true;
             break;
         }
+        if text.contains("fn graph_pagerank_init_scores(vertices: Vec<i64>") {
+            owned = true;
+            break;
+        }
     }
     assert!(
-        demoted,
-        "WDB-257: demoted &mut Vec graph_pagerank_init_scores formal missing"
+        demoted || owned,
+        "WDB-257: graph_pagerank_init_scores Vec formal missing (owned or &mut)"
     );
 
     let mut saw = false;
@@ -55,11 +58,23 @@ fn wdb257_tip_out_pagerank_must_reborrow_mut_vec_into_demoted_init_scores() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("pagerank");
-        let bad = text.contains("graph_pagerank_init_scores(&mut vertices.clone())");
-        eprintln!("WDB-257 bad={} path={}", bad, path.display());
+        let bad = if demoted {
+            text.contains("graph_pagerank_init_scores(&mut vertices.clone())")
+        } else {
+            text.contains("graph_pagerank_init_scores(&mut vertices")
+                && !text.contains("graph_pagerank_init_scores(vertices.clone())")
+                && !text.contains("graph_pagerank_init_scores(vertices)")
+        };
+        eprintln!(
+            "WDB-257 demoted={} owned={} bad={} path={}",
+            demoted,
+            owned,
+            bad,
+            path.display()
+        );
         assert!(
             !bad,
-            "WDB-257 RED: tip-out/product passes &mut vertices.clone() into demoted &mut Vec init_scores. {}",
+            "WDB-257 RED: tip-out/product call-site ownership mismatches init_scores formal. {}",
             path.display()
         );
     }

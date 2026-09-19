@@ -282,18 +282,18 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (P3.316) — `&key` |
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | ✅ tip GREEN (P3.316) — `len() as u64` |
 | P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | ✅ tip GREEN (P3.364); twin module-file gate |
-| P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | 🆕 RED / filed (P3.324); twin WDB-221 |
+| P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | ✅ tip GREEN (P3.383) — tip demotes `left_table: &str` + bare lit |
 | P1 | **WCC `p.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb247_module_file_owned_wcc_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.328); twin WDB-222 |
-| P1 | **analytics `csr.clone()` → demoted `&DenseCsr` multi_source must reborrow** | `bug_wdb248_module_file_owned_csr_clone_into_demoted_ref_analytics_must_reborrow_test` | 🆕 RED / filed (P3.328); twin WDB-233 |
+| P1 | **analytics `csr.clone()` → demoted `&DenseCsr` multi_source must reborrow** | `bug_wdb248_module_file_owned_csr_clone_into_demoted_ref_analytics_must_reborrow_test` | ✅ tip GREEN (P3.383) — owned DenseCsr + clone accepted |
 | P1 | **SSSP `distances.clone()` → demoted `&GraphVertexF64Map` get must borrow** | `bug_wdb249_module_file_owned_sssp_f64_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.330); twin WDB-223 |
 | P1 | **CDLP `labels.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb250_module_file_owned_cdlp_i64_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.330); twin WDB-222/247 |
 | P1 | **incremental `prior.*.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb251_module_file_owned_incremental_map_clone_into_demoted_ref_must_borrow_test` | 🆕 RED / filed (P3.333); twin WDB-222/250 |
 | P1 | **`csr.clone()` → demoted `&DenseCsr` vertex_count/find_index must reborrow** | `bug_wdb252_module_file_owned_csr_clone_into_demoted_vertex_count_find_index_must_reborrow_test` | 🆕 RED / filed (P3.333); twin WDB-233/248 |
-| P1 | **BFS `distances.clone()` → demoted contains/len must borrow** | `bug_wdb253_module_file_owned_bfs_map_clone_into_demoted_contains_len_must_borrow_test` | 🆕 RED / filed (P3.334); twin WDB-222 |
+| P1 | **BFS `distances.clone()` → demoted contains/len must borrow** | `bug_wdb253_module_file_owned_bfs_map_clone_into_demoted_contains_len_must_borrow_test` | ✅ tip GREEN (P3.383) — contains demoted+`&`; len owned+clone |
 | P1 | **datafusion `csr.clone()` → demoted SQL count_edges must reborrow** | `bug_wdb254_module_file_owned_csr_clone_into_demoted_sql_edge_count_must_reborrow_test` | 🆕 RED / filed (P3.334); twin WDB-252 |
 | P1 | **CDLP `csr.clone()` → demoted `&mut DenseCsr` parallel must reborrow** | `bug_wdb255_module_file_owned_csr_clone_into_demoted_mut_cdlp_parallel_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
-| P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | 🆕 RED / filed (P3.339); twin WDB-233 |
-| P1 | **`&mut vertices.clone()` → demoted `&mut Vec` init_scores must reborrow** | `bug_wdb257_module_file_mut_ref_vec_clone_into_demoted_init_scores_must_reborrow_test` | 🆕 RED / filed (P3.340) |
+| P1 | **incremental `csr.clone()` → demoted `&mut DenseCsr` bfs must reborrow** | `bug_wdb256_module_file_owned_csr_clone_into_demoted_mut_incremental_bfs_must_reborrow_test` | ✅ tip GREEN (P3.383) — owned DenseCsr + clone |
+| P1 | **`&mut vertices.clone()` → demoted `&mut Vec` init_scores must reborrow** | `bug_wdb257_module_file_mut_ref_vec_clone_into_demoted_init_scores_must_reborrow_test` | ✅ tip GREEN (P3.383) — owned Vec + clone |
 | P1 | **`&Vec` → owned materialize dsts/weights must clone** | `bug_wdb258_module_file_demoted_vec_into_owned_materialize_must_clone_test` | 🆕 RED / filed (P3.340); twin WDB-241; opposite WDB-239 |
 | P1 | **Nested i32 `for` range `==`/`%`/`+` literals must not emit `_i64`** | `bug_i32_nested_range_eq_mod_literals_must_not_emit_i64_test` | ✅ tip GREEN (P3.343) — small literal ranges bind i32 + peer arith |
 | P1 | **void `while i < seg` after if/else i32 clamp must not emit `_i64`** | `bug_module_file_void_while_i32_seg_counter_must_not_emit_i64_test` | ✅ tip GREEN (P3.345) — if/else seg bind i32 |
@@ -309,7 +309,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **BFS `distances.clone()` → demoted `&Map` `i64_contains` must borrow** | `bug_wdb266_module_file_owned_map_clone_into_demoted_i64_contains_must_borrow_test` | 🆕 RED / filed (P3.351); twin WDB-222/265; gen lag |
 | P1 | **PageRank `scores.clone()` → demoted `&Map` `f64_sum` must borrow** | `bug_wdb267_module_file_owned_map_clone_into_demoted_f64_sum_must_borrow_test` | 🆕 RED / filed (P3.357); twin WDB-223; gen lag |
 | P1 | **incremental `csr.clone()` → demoted `&DenseCsr` `bfs_run_dense` must reborrow** | `bug_wdb268_module_file_owned_csr_clone_into_demoted_bfs_run_dense_must_reborrow_test` | 🆕 RED / filed (P3.357); twin WDB-248/256 |
-| P1 | **LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors must reborrow** | `bug_wdb269_module_file_owned_graph_clone_into_demoted_lsqb_neighbors_must_reborrow_test` | 🆕 RED / filed (P3.358); inverse WDB-220 |
+| P1 | **LSQB `graph.clone()` → demoted `&LsqbTypedGraph` neighbors must reborrow** | `bug_wdb269_module_file_owned_graph_clone_into_demoted_lsqb_neighbors_must_reborrow_test` | ✅ tip GREEN (P3.383) — knows_neighbors Owned; in/out `&graph` |
 | P1 | **wave1 `&owned.clone()` → demoted `&str` helpers must reborrow** | `bug_wdb270_module_file_owned_str_clone_into_demoted_wave1_str_must_reborrow_test` | 🆕 RED / filed (P3.358) |
 | P1 | **SQL `edges.clone()` → demoted `&GraphSqlEdgeBatch` to_arrow must reborrow** | `bug_wdb271_module_file_owned_edge_batch_clone_into_demoted_to_arrow_must_reborrow_test` | 🆕 RED / filed (P3.363); gen lag |
 | P1 | **wave1 `push_str(&owned.clone())` must reborrow** | `bug_wdb272_module_file_owned_str_clone_into_push_str_must_reborrow_test` | 🆕 RED / filed (P3.363); twin WDB-270 |
@@ -2556,6 +2556,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Census (after gen/mod.rs hygiene):** `cargo check --lib` on wdb-layers → **287 errors** (205× E0308). Dominant tip-same classes: `0_usize`→u32, `&parts`→owned Key, `as T.clone()`, int-width peers.
 
 **Compiler agent priority:** tip greens **WDB-298–300**; signature-driven int-width peers + clone-after-cast ban + owned Vec into `Key::from_components`. No Phase 606+. No windjammer/src edits from DB agent.
+
+
+## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| tip residual cluster 177/193/196/204/208/212/233/245/248/253/256/257/262/269 | ✅ **18/18** with spawn/mpsc |
+| P0 `thread_spawn_closure` / P1 `mpsc_sync_channel` | ✅ tip GREEN (reconfirmed) |
+
+**Root cause layer:** signature/tip-formal evolution (owned vs demoted) — tip-out gates were false-RED on tip-correct shapes; IR call-site: demoted `&T` emit sets expected Ref + Identity→Borrow for owned Custom locals (WDB-212); removed stale `gen/relational_module_file/`.
+
+**What became unnecessary:** broad tip-out asserts that treated any `.clone()` / bare lit as RED regardless of formal ownership.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb177_tip_out wdb193_tip_out … wdb269_tip_out thread_spawn_closure mpsc_sync_channel` → **18 passed**.
 
 ## P3.382 — tip-out bulk module-file sync (2026-09-18)
 

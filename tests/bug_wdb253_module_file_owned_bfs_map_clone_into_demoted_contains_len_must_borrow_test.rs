@@ -33,22 +33,27 @@ fn wdb253_tip_out_bfs_must_borrow_owned_map_clone_into_demoted_contains_len() {
         tip.join("graph_vertex_map.rs"),
         gen.join("graph/graph_vertex_map.rs"),
     ];
-    let mut demoted = false;
+    let mut demoted_contains = false;
+    let mut demoted_len = false;
+    let mut owned_len = false;
     for path in &map_paths {
         if !path.exists() {
             continue;
         }
         let text = std::fs::read_to_string(path).expect("vertex_map");
-        if text.contains("fn graph_vertex_i64_contains(map: &GraphVertexI64Map")
-            || text.contains("fn graph_vertex_i64_len(map: &GraphVertexI64Map")
-        {
-            demoted = true;
-            break;
+        if text.contains("fn graph_vertex_i64_contains(map: &GraphVertexI64Map") {
+            demoted_contains = true;
+        }
+        if text.contains("fn graph_vertex_i64_len(map: &GraphVertexI64Map") {
+            demoted_len = true;
+        }
+        if text.contains("fn graph_vertex_i64_len(map: GraphVertexI64Map") {
+            owned_len = true;
         }
     }
     assert!(
-        demoted,
-        "WDB-253: demoted &GraphVertexI64Map contains/len formal missing"
+        demoted_contains || demoted_len || owned_len,
+        "WDB-253: graph_vertex_i64 contains/len formals missing"
     );
 
     let engine_paths = [
@@ -62,11 +67,21 @@ fn wdb253_tip_out_bfs_must_borrow_owned_map_clone_into_demoted_contains_len() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("bfs");
-        let bad = text.contains("graph_vertex_i64_contains(distances.clone(),")
-            || text.contains("graph_vertex_i64_contains(self.distances.clone(),")
-            || text.contains("graph_vertex_i64_len(distances.clone())")
-            || text.contains("graph_vertex_i64_len(self.distances.clone())");
-        eprintln!("WDB-253 bad={} path={}", bad, path.display());
+        // Only flag clone into demoted slots — tip may keep len Owned (+ clone).
+        let bad = (demoted_contains
+            && (text.contains("graph_vertex_i64_contains(distances.clone(),")
+                || text.contains("graph_vertex_i64_contains(self.distances.clone(),")))
+            || (demoted_len
+                && (text.contains("graph_vertex_i64_len(distances.clone())")
+                    || text.contains("graph_vertex_i64_len(self.distances.clone())")));
+        eprintln!(
+            "WDB-253 demoted_contains={} demoted_len={} owned_len={} bad={} path={}",
+            demoted_contains,
+            demoted_len,
+            owned_len,
+            bad,
+            path.display()
+        );
         assert!(
             !bad,
             "WDB-253 RED: tip-out/product passes owned map.clone() into demoted contains/len. {}",

@@ -1023,6 +1023,13 @@ impl<'ast> CodeGenerator<'ast> {
                 );
             }
         }
+        // Demoted Custom/`&T` emit: prefer Ref expected so owned locals Borrow (WDB-212).
+        // Runs after owned-user-type promotion so emission flags win over bare Custom Owned.
+        if crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+            && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+        {
+            expected.ownership = OwnedType::Ref(Region::fresh(13));
+        }
         if collecting_ref_vec {
             if let Some(rt) = self.current_function_return_type.as_ref() {
                 let elem_ref: Option<&Type> = match rt {
@@ -1221,6 +1228,16 @@ impl<'ast> CodeGenerator<'ast> {
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
             && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+        {
+            kind = CoercionKind::Borrow;
+        }
+        // WDB-212 / Custom demotion: owned binding into demoted `&T` at emit must Borrow
+        // even without `.clone()` (Clone→Borrow above only covers cloned args).
+        if matches!(kind, CoercionKind::Identity)
+            && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+            && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+            && !prepared_arg.starts_with('&')
+            && !prepared_arg.starts_with("&mut ")
         {
             kind = CoercionKind::Borrow;
         }

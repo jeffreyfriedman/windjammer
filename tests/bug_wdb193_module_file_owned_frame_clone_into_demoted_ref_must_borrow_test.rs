@@ -122,24 +122,35 @@ fn wdb193_tip_out_pg_serve_must_borrow_frame_into_demoted_decode() {
         return;
     }
     let serve_text = std::fs::read_to_string(&serve).expect("serve");
-    let wire_text = if wire.exists() {
-        std::fs::read_to_string(&wire).unwrap_or_default()
+    // Prefer tip-out wire when present (gen may lag tip formal ownership).
+    let tip_wire = tip.join("relational_pg_wire_port.rs");
+    let wire_path = if tip_wire.exists() {
+        tip_wire
+    } else {
+        wire
+    };
+    let wire_text = if wire_path.exists() {
+        std::fs::read_to_string(&wire_path).unwrap_or_default()
     } else {
         String::new()
     };
-    let demoted = wire_text.contains("fn pg_wire_decode_simple_query_sql(frame: &PgWireFrame")
-        || wire_text.contains("fn pg_wire_decode_sync(frame: &PgWireFrame");
-    let bad = serve_text.contains("pg_wire_decode_simple_query_sql(frame.clone())")
-        || serve_text.contains("pg_wire_decode_parse(frame.clone())")
-        || serve_text.contains("pg_wire_decode_sync(frame.clone())");
+    // Only flag clone into formals that are actually demoted — tip keeps parse/bind/execute Owned.
+    let demoted_simple = wire_text.contains("fn pg_wire_decode_simple_query_sql(frame: &PgWireFrame");
+    let demoted_sync = wire_text.contains("fn pg_wire_decode_sync(frame: &PgWireFrame");
+    let demoted_parse = wire_text.contains("fn pg_wire_decode_parse(frame: &PgWireFrame");
+    let bad = (demoted_simple && serve_text.contains("pg_wire_decode_simple_query_sql(frame.clone())"))
+        || (demoted_sync && serve_text.contains("pg_wire_decode_sync(frame.clone())"))
+        || (demoted_parse && serve_text.contains("pg_wire_decode_parse(frame.clone())"));
     eprintln!(
-        "WDB-193 tip-out demoted={} bad={} path={}",
-        demoted,
+        "WDB-193 tip-out demoted_simple={} demoted_sync={} demoted_parse={} bad={} path={}",
+        demoted_simple,
+        demoted_sync,
+        demoted_parse,
         bad,
         serve.display()
     );
     assert!(
-        !(demoted && bad),
+        !bad,
         "WDB-193 RED: tip-out/product still passes frame.clone() into demoted decode. {}",
         serve.display()
     );

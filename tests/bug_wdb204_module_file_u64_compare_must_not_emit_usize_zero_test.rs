@@ -35,7 +35,8 @@ fn wdb204_tip_out_sysbench_must_not_compare_u64_to_usize_zero() {
         return;
     }
     let text = std::fs::read_to_string(&sysbench).expect("sysbench");
-    let bad = text.contains("== 0_usize") || text.contains("0_usize");
+    // Only u64==0_usize is RED — loop indices may legitimately use `0_usize`.
+    let bad = text.contains("== 0_usize") || text.contains("!= 0_usize");
     eprintln!("WDB-204 tip-out bad={} path={}", bad, sysbench.display());
     assert!(
         !bad,

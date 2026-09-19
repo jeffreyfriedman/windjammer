@@ -11,12 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-245: string lit into owned `String` `relational_df_sql_via_table_provider` must `.to_string()`.
+//! WDB-245: `"props"` into `relational_df_sql_via_table_provider` must match formal ownership.
 //!
-//! Product residual tip-out/gen relational_df_analytic_execute_port (~37× String←&str):
-//!   `relational_df_sql_via_table_provider(..., left_table: String, …)`
-//!   called with bare `"props"` → E0308 expected `String`, found `&str`.
-//! Twin of WDB-221 (lsqb edge_kind lit). Signature-driven: `"props".to_string()`.
+//! Historically owned `left_table: String` required `"props".to_string()`. Tip now demotes
+//! `left_table: &str` — bare `"props"` is correct. Gate accepts either owned+to_string or
+//! demoted+bare.
 
 use std::path::PathBuf;
 
@@ -32,21 +31,27 @@ fn wdb245_tip_out_df_analytic_must_to_string_props_lit_into_owned_table_provider
         gen.join("relational/relational_df_ffi_port.rs"),
     ];
     let mut owned = false;
+    let mut demoted = false;
     for path in &ffi_paths {
         if !path.exists() {
             continue;
         }
         let text = std::fs::read_to_string(path).expect("ffi");
-        if text.contains("fn relational_df_sql_via_table_provider(")
-            && text.contains("left_table: String")
-        {
+        if !text.contains("fn relational_df_sql_via_table_provider(") {
+            continue;
+        }
+        if text.contains("left_table: String") {
             owned = true;
+            break;
+        }
+        if text.contains("left_table: &str") {
+            demoted = true;
             break;
         }
     }
     assert!(
-        owned,
-        "WDB-245: owned String left_table formal for table_provider missing"
+        owned || demoted,
+        "WDB-245: left_table formal missing (String or &str)"
     );
 
     // Prefer tip-out when present (gen may lag behind tip multipass).
@@ -66,10 +71,20 @@ fn wdb245_tip_out_df_analytic_must_to_string_props_lit_into_owned_table_provider
             || text.contains("relational_df_sql_via_table_provider(left,\"props\",");
         let has_to_string = text.contains("\"props\".to_string()")
             || text.contains("String::from(\"props\")");
-        let bad = bare && !has_to_string;
+        let bad = if owned {
+            bare && !has_to_string
+        } else {
+            // Demoted &str: `.to_string()` / String::from into the call is the RED shape.
+            text.contains(
+                "relational_df_sql_via_table_provider(left, \"props\".to_string()",
+            ) || text.contains(
+                "relational_df_sql_via_table_provider(left, String::from(\"props\")",
+            )
+        };
         eprintln!(
-            "WDB-245 owned={} bare={} has_to_string={} bad={} path={}",
+            "WDB-245 owned={} demoted={} bare={} has_to_string={} bad={} path={}",
             owned,
+            demoted,
             bare,
             has_to_string,
             bad,
@@ -77,7 +92,7 @@ fn wdb245_tip_out_df_analytic_must_to_string_props_lit_into_owned_table_provider
         );
         assert!(
             !bad,
-            "WDB-245 RED: tip-out/product passes bare \"props\" lit into owned String table formal. {}",
+            "WDB-245 RED: tip-out/product call-site ownership mismatches left_table formal. {}",
             path.display()
         );
     }

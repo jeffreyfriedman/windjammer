@@ -45,17 +45,22 @@ fn wdb269_tip_out_lsqb_must_reborrow_owned_graph_clone_into_demoted_neighbors() 
         }
         saw = true;
         let formal = std::fs::read_to_string(formal_path).expect("typed_graph");
-        let demoted = formal.contains("fn lsqb_in_neighbors(graph: &LsqbTypedGraph")
-            || formal.contains("fn lsqb_out_neighbors(graph: &LsqbTypedGraph")
-            || formal.contains("fn lsqb_knows_neighbors(graph: &LsqbTypedGraph");
+        // Tip: in/out demoted `&`, knows_neighbors often Owned — only flag clone into demoted slots.
+        let demoted_in = formal.contains("fn lsqb_in_neighbors(graph: &LsqbTypedGraph");
+        let demoted_out = formal.contains("fn lsqb_out_neighbors(graph: &LsqbTypedGraph");
+        let demoted_knows = formal.contains("fn lsqb_knows_neighbors(graph: &LsqbTypedGraph");
         let call = std::fs::read_to_string(call_path).expect("query_engine");
-        let bad = demoted
-            && (call.contains("lsqb_in_neighbors(graph.clone(),")
-                || call.contains("lsqb_out_neighbors(graph.clone(),")
-                || call.contains("lsqb_knows_neighbors(graph.clone(),"));
+        let typed = std::fs::read_to_string(formal_path).expect("typed_graph calls");
+        // neighbors(clone) may live in typed_graph helpers, not only query_engine.
+        let hay = format!("{call}\n{typed}");
+        let bad = (demoted_in && hay.contains("lsqb_in_neighbors(graph.clone(),"))
+            || (demoted_out && hay.contains("lsqb_out_neighbors(graph.clone(),"))
+            || (demoted_knows && hay.contains("lsqb_knows_neighbors(graph.clone(),"));
         eprintln!(
-            "WDB-269 demoted={} bad={} path={}",
-            demoted,
+            "WDB-269 demoted_in={} demoted_out={} demoted_knows={} bad={} path={}",
+            demoted_in,
+            demoted_out,
+            demoted_knows,
             bad,
             call_path.display()
         );
