@@ -22,7 +22,7 @@ const MOD: &str = r#"
 pub mod panels
 "#;
 
-const PANELS: &str = r#"
+const PANELS: &str = r##"
 fn render_post_to_gl_block(
     kind_label: string,
     demo_id: string,
@@ -32,10 +32,18 @@ fn render_post_to_gl_block(
     refresh_sel: string,
     token: string,
 ) -> string {
-    kind_label + demo_id + post_path + body_id + button_id + refresh_sel + token
+    // Readonly uses only — demotes formals to `&str` (finance-screens list_panels).
+    let _ = kind_label.len()
+    let _ = demo_id.len()
+    let _ = post_path.len()
+    let _ = body_id.len()
+    let _ = button_id.len()
+    let _ = refresh_sel.len()
+    let _ = token.len()
+    kind_label
 }
 
-fn demo_id() -> string {
+fn make_demo_id() -> string {
     "demo-1"
 }
 
@@ -44,19 +52,19 @@ fn post_path_for(id: string) -> string {
 }
 
 pub fn render_bills_panel(token: string) -> string {
-    let demo_id = demo_id()
-    let post_path = post_path_for(demo_id())
+    let demo = make_demo_id()
+    let post_path = post_path_for(make_demo_id())
     render_post_to_gl_block(
         "bill",
-        demo_id,
+        demo,
         post_path,
         "billPostBody",
         "postBillGl",
-        "loadBills",
+        "#loadBills",
         token,
     )
 }
-"#;
+"##;
 
 fn bad_string_from_into_str(rs: &str) -> bool {
     let demoted = rs.contains("kind_label: &str")
