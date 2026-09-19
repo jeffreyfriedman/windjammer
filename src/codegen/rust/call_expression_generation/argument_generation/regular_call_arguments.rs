@@ -488,6 +488,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             signature.clone(),
                             gen.get_signature_with_global(func_name).cloned(),
                             gen.get_signature_with_global(lookup.as_ref()).cloned(),
+                            gen.preregistered_free_call_arg_expects_borrow(func_name, i)
+                                .then(|| gen.get_signature_with_global(func_name).cloned())
+                                .flatten(),
                         ];
                         let callee_wants_str = candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
@@ -497,17 +500,34 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                             }) || sig.formal_param_type(pidx).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            }) || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                                sig, pidx,
-                            ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                sig, pidx,
-                            )) || sig
+                            }) || sig
                                 .emitted_rust_ref_params
                                 .as_ref()
                                 .and_then(|f| f.get(pidx))
                                 .copied()
                                 == Some(true)
-                        });
+                        }) || gen.preregistered_free_call_arg_expects_borrow(func_name, i);
+                        let best_sig =
+                            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
+                                candidates,
+                            );
+                        // Defining-module owned `String` emission beats stale stubs that
+                        // lack `emitted_rust_ref_params` (WDB-301: do not `&` into owned).
+                        let callee_confirmed_owned_string = !callee_wants_str
+                            && best_sig.as_ref().is_some_and(|sig| {
+                                let pidx = sig.arg_param_index(i);
+                                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    sig, pidx,
+                                ) || (sig
+                                    .emitted_rust_ref_params
+                                    .as_ref()
+                                    .and_then(|f| f.get(pidx))
+                                    .copied()
+                                    == Some(false)
+                                    && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                        sig, pidx,
+                                    ))
+                            });
                         let caller_owned_text = (gen.current_function_params.iter().any(|p| {
                             p.name == *name
                                 && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
@@ -517,6 +537,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 crate::codegen::rust::types::is_windjammer_text_type(t)
                             });
                         if callee_wants_str
+                            && !callee_confirmed_owned_string
                             && caller_owned_text
                             && !coerced.starts_with('&')
                             && !coerced.starts_with("&mut ")
@@ -612,30 +633,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 || sig.formal_param_type(pidx).is_some_and(|t| {
                                     crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                                 })
-                                || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                                    sig, pidx,
-                                ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                    sig, pidx,
-                                ))
-                        });
-                        let text_any = candidates.iter().flatten().any(|sig| {
-                            let pidx = sig.arg_param_index(i);
-                            crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                                sig, pidx,
-                            ) || sig.param_types.get(pidx).is_some_and(|t| {
-                                crate::codegen::rust::types::is_windjammer_text_type(t)
-                            })
                         });
                         let confirmed_owned = candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
-                            sig.emitted_rust_ref_params
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, pidx,
+                            ) || (sig
+                                .emitted_rust_ref_params
                                 .as_ref()
                                 .and_then(|f| f.get(pidx))
                                 .copied()
                                 == Some(false)
                                 && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                                     sig, pidx,
-                                )
+                                ))
                         }) && !candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
                             sig.emitted_rust_ref_params
@@ -644,7 +655,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .copied()
                                 == Some(true)
                         });
-                        if wants_str || (text_any && !confirmed_owned) {
+                        // Only strip owned producers for confirmed shared-ref formals
+                        // (WDB-301: do not undo `.to_string()` into owned `String`).
+                        if wants_str && !confirmed_owned {
                             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                                 arg,
                                 &mut coerced,

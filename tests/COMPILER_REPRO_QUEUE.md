@@ -341,7 +341,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.381); tip-out RED (~17×); MultiFile isolate GREEN |
 | P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | 🆕 RED / filed (P3.381); tip-out RED (~8×); MultiFile isolate GREEN; twin WDB-241 |
 | P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | ✅ MultiFile GREEN (P3.386); tip-out still needs regen |
-| P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | 🆕 RED / filed (P3.385); MultiFile + tip-out RED |
+| P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | ✅ tip GREEN (P3.387) — MultiFile + tip-out/gen sync; stale Borrowed no longer suppresses `.to_string()` / owned args |
 | P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
 | P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
@@ -2560,19 +2560,32 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Compiler agent priority:** tip greens **WDB-298–300**; signature-driven int-width peers + clone-after-cast ban + owned Vec into `Key::from_components`. No Phase 606+. No windjammer/src edits from DB agent.
 
+## P3.387 — WDB-301 owned LDBC string lit / path (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-301** owned `validation_entry` / `validate_*` | ✅ tip GREEN — lit `.to_string()`; no `&path` / `&path.clone()` into owned `String` |
+| Tip-out/gen LDBC validation port | ✅ synced to tip shape (`"BFS".to_string()`, `path.clone()`); gitignored tip-out + wdb-layers gen |
+
+**Root cause layer:** signature/emission contract — `emitted_owned_arg_contract` / `emitted_rust_ref_params=false` beats stale analyzer `Borrowed` and stub “plain string → &str” guesses at call sites.
+
+**What became unnecessary:** early-return that skipped lit `.to_string()` when plain WJ string + (!emitted_owned || Borrowed); `plain && !emitted_owned` as `callee_wants_str` / strip-owned trigger (would `&` / peel into owned formals).
+
+**Gates:** `cargo test --release --test all -- wdb301_` → MultiFile + tip-out GREEN; unit `free_fn_owned_string_formal_with_stale_borrowed_owns_literal` GREEN.
+
 ## P3.385 WindjammerDB CQ-C5 — coverage REDs WDB-301–303 (2026-09-19)
 
 | Gate | Status |
 |------|--------|
-| MultiFile **WDB-301** owned LDBC string / `&path.clone()` | ❌ RED — MultiFile + tip-out validation_entry / validate_* |
+| MultiFile **WDB-301** owned LDBC string / `&path.clone()` | ✅ tip GREEN (P3.387) |
 | Tip **WDB-302** `as i64 as i32` / `total / 3_u64` (LCC) | ❌ RED — tip-out/gen; MultiFile isolate GREEN with `total: i64` |
 | Tip **WDB-303** `offsets[i + 1]` u32 index | ❌ RED — tip-out/gen adjacency; MultiFile isolate GREEN |
-| Tip **WDB-298–300** | ❌ still RED (P3.383) |
+| Tip **WDB-298–300** | ❌ still RED (P3.383); WDB-300 MultiFile GREEN (P3.386) |
 | Dogfood / tip-cluster | ❄️ frozen |
 
-**Census:** ~287 gen errors; next cluster after 298–300 is String ownership (~78) + int-width (LCC double-cast, u32 index).
+**Census:** ~287 gen errors; next cluster after 301 is int-width (LCC double-cast, u32 index) + remaining tip-out lag.
 
-**Compiler agent priority:** tip greens **WDB-301–303** (own string args; ban double cast on i64 accum; usize index casts). No Phase 606+.
+**Compiler agent priority:** tip greens **WDB-302–303** (+ 298–299 tip-out); ban double cast on i64 accum; usize index casts. No Phase 606+.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 

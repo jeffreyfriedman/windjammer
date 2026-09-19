@@ -1469,19 +1469,20 @@ impl<'ast> CodeGenerator<'ast> {
                 kind = CoercionKind::Identity;
             }
             if matches!(kind, CoercionKind::Clone) {
-                let user_param = |idx: usize| {
-                    if sig.has_self_receiver_slot() {
-                        idx > 0
-                    } else {
-                        true
-                    }
-                };
                 let this_arg_expects_borrow =
                     self.ir_sig_arg_expects_shared_borrow(&sig, arg_index);
                 let arg_is_current_fn_param =
                     self.current_function_params.iter().any(|p| p.name == *name);
                 if this_arg_expects_borrow && arg_is_current_fn_param {
-                    kind = CoercionKind::Identity;
+                    // Demoted `&str` formals pass bare; owned `String` formals need `&`.
+                    if self.emitted_rust_ref_formals.contains(name)
+                        || self.identifier_already_ref(name)
+                        || self.inferred_borrowed_params.contains(name)
+                    {
+                        kind = CoercionKind::Identity;
+                    } else {
+                        kind = CoercionKind::Borrow;
+                    }
                 }
             }
         }
@@ -3260,6 +3261,21 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // Terminal: preregistered demoted `&str` callees must borrow owned caller params
+        // (`compare_identifiers` → `cmp_string(&left, &right)` while caller keeps `String`).
+        if let Expression::Identifier { name, .. } = arg_expr {
+            let callee_wants_shared = self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
+            if callee_wants_shared
+                && self.caller_owned_non_copy_formal(name)
+                && !self.emitted_rust_ref_formals.contains(name)
+                && !coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                coerced = format!("&{coerced}");
+            }
+        }
+
         // Terminal: never leave `n as usize.clone()` (WDB-300).
         coerced = crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&coerced);
 
@@ -4082,6 +4098,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Stale `&` on owned user free-fn formals (circular-dep / multipass).
         let skip_stale_borrow = !callee_name.contains("::")
+            && !self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
             && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
                 registry,
                 self.global_signature_registry.as_deref(),
@@ -7367,6 +7384,17 @@ impl<'ast> CodeGenerator<'ast> {
         arg_str: &str,
     ) -> SafetyType {
         if arg_str.ends_with(".clone()") {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.emitted_rust_ref_formals.contains(name)
+                    || (self.inferred_borrowed_params.contains(name)
+                        && self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        }))
+                {
+                    return SafetyType::borrowed(BaseType::String, Region::fresh(12));
+                }
+            }
             let base = self
                 .infer_expression_type(arg_expr)
                 .as_ref()
@@ -7427,6 +7455,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .find(|p| p.name == *name)
             {
+                if self.emitted_rust_ref_formals.contains(name.as_str())
+                    && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                {
+                    return SafetyType::borrowed(BaseType::String, Region::fresh(13));
+                }
                 if self.is_type_copy(&param.type_)
                     && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                 {

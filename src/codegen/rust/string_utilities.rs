@@ -793,24 +793,18 @@ pub fn string_literal_needs_owned_coercion_with_enum(
         }
     }
 
-    // Plain WJ `string` formals default to bare literals unless codegen confirmed
-    // owned `String` emission (`temp_path("recover")` → `&str`, not `.to_string()`).
-    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
-        sig, arg_index,
-    ) && (!crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx)
-        || matches!(
-            sig.param_ownership.get(idx),
-            Some(crate::analyzer::OwnershipMode::Borrowed)
-        ))
+    // Shared-ref emission / `&str` formals keep bare literals. Everything else that is
+    // WJ text / owned `String` allocates — align with
+    // `plain_string_formal_passes_owned_at_call_site` (owned until confirmed `&str`).
+    // Stale analyzer `Borrowed` must not suppress `.to_string()` (WDB-301).
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx)
+        || param_is_rust_str_ref(param_type)
     {
         return false;
     }
-
-    // Owned `String` Rust formals always allocate for literals — even with stale Borrowed
-    // analyzer ownership (store-forced Owned emission).
     if param_is_owned_string_type(param_type)
-        && !param_is_rust_str_ref(param_type)
-        && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx)
+        || crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, idx)
+        || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx)
     {
         return true;
     }
@@ -818,8 +812,7 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     if matches!(
         crate::codegen::rust::call_signature_resolution::effective_param_ownership(sig, idx),
         crate::analyzer::OwnershipMode::Owned
-    ) && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx)
-    {
+    ) {
         return true;
     }
 
@@ -1490,6 +1483,35 @@ mod tests {
                 None,
             ),
             "plain String formals auto-own literals even with stale Borrowed ownership"
+        );
+    }
+
+    #[test]
+    fn free_fn_owned_string_formal_with_stale_borrowed_owns_literal() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        // WDB-301: `validation_entry(algorithm: string, …)` emits `String` but analyzer
+        // may still say Borrowed — literals must get `.to_string()`, not stay bare `&str`.
+        let sig = FunctionSignature {
+            name: "validation_entry".into(),
+            param_types: vec![Type::String, Type::String, Type::Int],
+            formal_param_types: vec![Type::String, Type::String, Type::Int],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Custom("Entry".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert!(
+            string_literal_needs_owned_coercion_with_enum(Some(&sig), 0, None, None, None),
+            "free-fn owned String formal must own string literals (WDB-301)"
         );
     }
 
