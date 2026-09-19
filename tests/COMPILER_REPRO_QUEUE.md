@@ -389,6 +389,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **publish_check CLI owned String must not receive `&dated`** | `bug_wdb319_module_file_owned_string_must_not_receive_ref_dated_publish_check_test` | 🆕 RED / filed (P3.396); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
 | P1 | **publish_allows owned String must not receive bare `&dated_label`** | `bug_wdb320_module_file_owned_string_must_not_receive_bare_ref_publish_allows_test` | 🆕 RED / filed (P3.396); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
 | P1 | **LSQB edge owned String must not receive bare `&content`** | `bug_wdb321_module_file_owned_string_must_not_receive_bare_ref_content_lsqb_test` | 🆕 RED / filed (P3.396); tip-out RED; twin WDB-310 |
+| P1 | **LSQB push_adj owned String key must not receive `&out_key`** | `bug_wdb322_module_file_owned_string_key_must_not_receive_ref_lsqb_push_adj_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
+| P1 | **Arrow FFI owned String must not receive `&vname`/`&lname`** | `bug_wdb323_module_file_owned_string_must_not_receive_ref_names_arrow_ffi_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
+| P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.398); twin WDB-298; blocks `wj game build` |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2768,6 +2771,34 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb319_ wdb320_ wdb321_` → 2 passed / 3 failed (expected RED).
 
 **Compiler agent priority:** tip greens **WDB-319–321** (no bare `&owned` into owned String on publish_check/allows/LSQB edge). No Phase 606+. No windjammer/src edits from DB agent.
+
+## P3.397 WindjammerDB CQ-C5 — coverage REDs WDB-322–323 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-322** LSQB `lsqb_push_adj(..., &out_key, …)` → owned String key | ✅ MultiFile + tip-out GREEN (2026-09-19) |
+| Tip **WDB-323** Arrow FFI `&vname`/`&lname` → owned String | ✅ MultiFile + tip-out GREEN (2026-09-19) |
+| Tip **WDB-319–321** | ❌ still RED (P3.396) |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb322_ wdb323_` → **4 passed** (2026-09-19).
+
+**Handoff:** Game session filed/verified; compiler agent can skip 322–323. Residual owned-String `&arg` cluster remains WDB-310–321 tip-out.
+
+## P3.398 — game-core tip rustc residual after library transpile (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| `wj game build --release` tip transpile | ✅ past `.wj → gen/` (2026-09-19) |
+| `windjammer_game_core` cargo | ❌ **354** rustc errors (E0308×197 dominant) |
+| Tip **WDB-324** navmesh `u32 = 0_usize` | 🆕 RED / filed |
+| Binary / MCP / Gate 1 | ❌ NO_BINARY |
+
+**Error mix (tip gen):** E0308 197 · E0277 76 · E0507 20 · E0505 18 · E0596 14 · E0599 5 (split/Into — Vec.to_string largely gone post-P3.390).
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb324_`
+
+**Compiler agent priority:** cut game-core tip E0308 (u32/usize/i32 peers) starting with WDB-324. Game session: repros + product dogfood only — no `windjammer/src` edits.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
