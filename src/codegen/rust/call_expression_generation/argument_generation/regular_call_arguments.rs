@@ -476,42 +476,51 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         coerced = gen.maybe_auto_clone_expr_path(arg, &coerced, Some(func_name), Some(i));
                     }
                     if let Expression::Identifier { name, .. } = arg {
-                        let sig_for_str_borrow = peel_sig.clone().or_else(|| {
-                            gen.get_signature_with_global(func_name)
-                                .cloned()
-                                .or_else(|| signature.clone())
-                        });
-                        if let Some(sig) = sig_for_str_borrow.as_ref() {
+                        let lookup = gen.signature_lookup_callee_name(func_name);
+                        let candidates = [
+                            peel_sig.clone(),
+                            signature.clone(),
+                            gen.get_signature_with_global(func_name).cloned(),
+                            gen.get_signature_with_global(lookup.as_ref()).cloned(),
+                        ];
+                        let callee_wants_str = candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
-                            let callee_wants_str = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 sig, pidx,
                             ) || sig.param_types.get(pidx).is_some_and(|t| {
                                 crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            })
-                                || sig.formal_param_type(pidx).is_some_and(|t| {
-                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                                });
-                            let caller_owned_text_formal = gen.current_function_params.iter().any(
-                                |p| {
-                                    p.name == *name
-                                        && crate::codegen::rust::types::is_windjammer_text_type(
-                                            &p.type_,
-                                        )
-                                },
-                            ) && !gen.emitted_rust_ref_formals.contains(name)
-                                && !gen.str_ref_optimized_params.contains(name);
-                            if callee_wants_str
-                                && caller_owned_text_formal
-                                && !coerced.starts_with('&')
-                                && !coerced.starts_with("&mut ")
-                            {
-                                coerced = format!(
-                                    "&{}",
-                                    crate::codegen::rust::expression_utilities::borrow_base_expr(
-                                        &coerced,
-                                    )
-                                );
-                            }
+                            }) || sig.formal_param_type(pidx).is_some_and(|t| {
+                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                            }) || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                sig, pidx,
+                            ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, pidx,
+                            )) || sig
+                                .emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(pidx))
+                                .copied()
+                                == Some(true)
+                        });
+                        let caller_owned_text = (gen.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                        }) && !gen.emitted_rust_ref_formals.contains(name)
+                            && !gen.str_ref_optimized_params.contains(name))
+                            || gen.local_var_types.get(name.as_str()).is_some_and(|t| {
+                                crate::codegen::rust::types::is_windjammer_text_type(t)
+                            });
+                        if callee_wants_str
+                            && caller_owned_text
+                            && !coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                        {
+                            coerced = format!(
+                                "&{}",
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &coerced,
+                                )
+                            );
                         }
                         let callee_mut = gen.callee_slot_emits_mut_borrow(func_name, i)
                             || peel_sig.as_ref().is_some_and(|sig| {

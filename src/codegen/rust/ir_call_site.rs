@@ -2302,6 +2302,48 @@ impl<'ast> CodeGenerator<'ast> {
                 ),
             );
         }
+        // P3.376: `pub const SCOPE_*: string` / module string consts lower to `&'static str`,
+        // but IR still types them as owned WJ `string` → compute_coercion is Identity.
+        // Owned `string` formals still need `.to_string()` (same as string literals).
+        // IR call-sites skip method-call finalize, so this must live here.
+        let arg_is_string_const = match arg_expr {
+            Expression::Identifier { name, .. } => {
+                crate::codegen::rust::string_utilities::is_string_const_identifier(
+                    name,
+                    self.auto_clone_analysis.as_ref(),
+                    Some(&self.module_string_consts),
+                )
+            }
+            Expression::FieldAccess { field, .. } => {
+                crate::codegen::rust::string_utilities::is_string_const_identifier(
+                    field,
+                    self.auto_clone_analysis.as_ref(),
+                    Some(&self.module_string_consts),
+                )
+            }
+            _ => false,
+        };
+        if arg_is_string_const
+            && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+            && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                &sig,
+                sig.arg_param_index(arg_index),
+            )
+            && (crate::codegen::rust::string_utilities::string_literal_needs_to_string(
+                &sig,
+                arg_index,
+            ) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &sig,
+                arg_index,
+            ))
+            && !crate::codegen::rust::string_utilities::already_owned_string_expr(&coerced)
+        {
+            return Some(
+                crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(
+                    coerced.trim_start_matches('&'),
+                ),
+            );
+        }
         let callee_has_ownership_collision =
             crate::codegen::rust::call_signature_resolution::has_ownership_collision_for_call(
                 self,
