@@ -332,6 +332,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&args` → owned parse_sf1_floor must clone** | `bug_wdb290_module_file_demoted_vec_into_owned_wave1_sf1_cli_floor_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
 | P1 | **wave1 `&args` → owned publish_check_cli must clone** | `bug_wdb291_module_file_demoted_vec_into_owned_wave1_publish_check_cli_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
 | P1 | **wave1 `&args` → owned attest_cli must clone** | `bug_wdb292_module_file_demoted_vec_into_owned_wave1_attest_cli_must_clone_test` | 🆕 RED / filed (P3.375); twin WDB-241 |
+| P1 | **LCC `&Vec` trio → owned simd_lcc_bind must clone** | `bug_wdb293_module_file_demoted_vec_into_owned_simd_lcc_all_ref_must_clone_test` | ✅ tip GREEN (P3.377 tip-out regen); evolved WDB-261 |
+| P1 | **wave1 `&args` → owned report_cli_is_report must clone** | `bug_wdb294_module_file_demoted_vec_into_owned_wave1_report_cli_must_clone_test` | 🆕 RED / filed (P3.377); twin WDB-291 |
+| P1 | **wave1 `&args` → owned scale_status_cli_main must clone** | `bug_wdb295_module_file_demoted_vec_into_owned_wave1_scale_status_cli_must_clone_test` | 🆕 RED / filed (P3.377); twin WDB-291 |
+| P1 | **gen-lag join_path `String::from` must match tip bare `&str`** | `bug_wdb296_module_file_gen_lag_join_path_string_from_must_match_tip_test` | ✅ GREEN (P3.377 tip→gen sync); twin WDB-225 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370) — i64 formals + SharedInt/Counter return width
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2521,6 +2525,18 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 
 
+
+## P3.377 WindjammerDB CQ-C5 — coverage REDs WDB-293–296 (2026-09-18)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-293** LCC `&Vec` trio → owned `simd_lcc_bind` | ✅ tip GREEN (tip-out regen) |
+| Tip **WDB-294** wave1 `&args` → owned `report_cli_is_report` | ❌ RED — tip wave1_cli |
+| Tip **WDB-295** wave1 `&args` → owned `scale_status_cli_main` | ❌ RED — tip wave1_cli |
+| Gen-lag **WDB-296** join_path `String::from` vs tip bare | ✅ GREEN after tip-out→gen sync |
+| Dogfood / tip-cluster | ❄️ frozen |
+
+**Compiler agent priority:** tip greens **289–292, 294–295** (CLI `&args`→owned + dremel). No Phase 606+.
 
 ## P3.376 — WDB tip-out Vec→owned cluster regen + finance raw-string gate (2026-09-18)
 
