@@ -1,0 +1,43 @@
+// std::sync — concurrency primitives (implementation: windjammer_runtime::sync)
+//
+// Graduation vocabulary for wj-sync thin-wrap: unbounded channels + shared int cells.
+// Prefer these names over raw mpsc / Arc / Mutex in application Windjammer.
+//
+// Note: do not declare a WJ `SharedInt` struct here — the runtime exports
+// `SharedInt`, and a stub with Copy fields poisons package type aliases of the
+// same name (wj-sync `type SharedInt = Shared<int>`).
+
+/// Create an unbounded channel; returns (sender, receiver).
+fn unbounded<T>() -> (T, T) {
+    Err("import std::sync — maps to windjammer_runtime::sync::unbounded")
+}
+
+/// Send on an owned sender; returns the sender for reuse.
+fn send<T>(tx: T, value: T) -> T {
+    Err("import std::sync — maps to windjammer_runtime::sync::send")
+}
+
+/// Blocking recv; returns (receiver, Some(value)) or (receiver, None) on disconnect.
+fn recv<T>(rx: T) -> (T, Option<T>) {
+    Err("import std::sync — maps to windjammer_runtime::sync::recv")
+}
+
+/// Create a shared int cell (runtime `SharedInt`).
+fn shared(value: int) -> int {
+    Err("import std::sync — maps to windjammer_runtime::sync::shared")
+}
+
+/// Add `delta` to a shared int; returns the same handle.
+fn shared_add(s: int, delta: int) -> int {
+    Err("import std::sync — maps to windjammer_runtime::sync::shared_add")
+}
+
+/// Read the current shared int value.
+fn shared_get(s: int) -> int {
+    Err("import std::sync — maps to windjammer_runtime::sync::shared_get")
+}
+
+/// Create a bounded channel with capacity `bound`.
+fn sync_channel<T>(bound: int) -> (T, T) {
+    Err("import std::sync — maps to windjammer_runtime::sync::sync_channel")
+}

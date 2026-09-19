@@ -56,9 +56,9 @@ Definition of done per row:
 
 | Need | Repro | Gate status | Fix hint |
 |---|---|---|---|
-| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `unbounded`/`send`/`recv` (not raw mpsc in WJ) |
-| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `shared` / `shared_add` / `shared_get` |
-| `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | ✅ GREEN | Hot `Counter` for `wj-sync`; runtime re-exports + P3.370/P3.380 void i64 peers for `AtomicI64::new` / `fetch_add` |
+| `std::sync` unbounded channel + send/recv | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `unbounded`/`send`/`recv`; `std/sync.wj` vocabulary; `wj-sync` thin-wraps `unbounded`/`bounded` |
+| `std::sync` Shared get/add | `bug_std_sync_channel_shared_wiring_test` | ✅ GREEN | runtime `shared` / `shared_add` / `shared_get` (no WJ `SharedInt` stub — poisons package aliases) |
+| `std::sync::atomic` AtomicI64 | `bug_std_sync_atomic_i64_wiring_test` | ✅ GREEN | Hot `Counter` for `wj-sync`; P3.370/P3.380 void i64 peers; Atomic* skip auto-Clone (bare-Counter path) |
 
 ## Run
 

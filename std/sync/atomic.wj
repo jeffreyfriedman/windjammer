@@ -1,0 +1,15 @@
+// std::sync::atomic — atomic integers (implementation: windjammer_runtime::sync::atomic)
+//
+// Hot-path counters: AtomicI64 + Ordering::Relaxed (wj-sync Counter).
+
+pub struct AtomicI64 {
+    _opaque: int,
+}
+
+pub enum Ordering {
+    Relaxed,
+    Acquire,
+    Release,
+    AcqRel,
+    SeqCst,
+}

@@ -422,6 +422,14 @@ pub fn is_std_non_auto_debug_clone_type(name: &str) -> bool {
             | "Child"
             | "Process"
             | "Channel"
+            // Atomics: Debug yes, Clone no — skip auto Debug+Clone (same pattern as Receiver).
+            | "AtomicBool"
+            | "AtomicI32"
+            | "AtomicI64"
+            | "AtomicU32"
+            | "AtomicU64"
+            | "AtomicUsize"
+            | "AtomicIsize"
     )
 }
 
