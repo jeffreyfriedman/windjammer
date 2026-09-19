@@ -49,6 +49,7 @@ sha2 = "0.10"
 bcrypt = "0.17"
 uuid = { version = "1", features = ["v4", "v7"] }
 serde_yaml = "0.9"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
 base64 = "0.21"
 hex = "0.4"
 urlencoding = "2.1"

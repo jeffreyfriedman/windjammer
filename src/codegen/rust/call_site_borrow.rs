@@ -762,6 +762,19 @@ pub(crate) fn clone_reused_binding_for_owned_vec_formal<'ast>(
         return None;
     };
     let pidx = sig.arg_param_index(arg_index);
+    // P3.390: demoted `&Vec` must not receive `.clone()` (owned Vec → E0308).
+    if callee_emits_shared_rust_ref_param(sig, pidx)
+        || sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(true)
+        || gen.emitted_rust_ref_formals.contains(name)
+        || gen.caller_formal_emitted_shared_ref(name)
+    {
+        return None;
+    }
     let caller_vec = gen.current_function_params.iter().any(|p| {
         p.name == *name && type_is_vec_container(&p.type_)
     });

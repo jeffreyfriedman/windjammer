@@ -76,7 +76,11 @@ fn demoted_vec_call_arg_must_not_to_string() {
         "P3.390 RED: demoted &Vec must not .to_string():\n{rs}"
     );
     assert!(
-        rs.contains("vec_contains(ancestors") || rs.contains("vec_contains(&ancestors"),
+        !rs.contains("ancestors.clone()"),
+        "P3.390 RED: demoted &Vec into shared-ref callee must not .clone():\n{rs}"
+    );
+    assert!(
+        rs.contains("vec_contains(ancestors,") || rs.contains("vec_contains(&ancestors,"),
         "P3.390: expected bare/borrowed ancestors into vec_contains:\n{rs}"
     );
 

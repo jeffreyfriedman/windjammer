@@ -878,6 +878,19 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     {
         return false;
     }
+    // P3.390: shared emission before bare-Vec owned denial.
+    if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx) {
+        return true;
+    }
+    if sig
+        .emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(param_idx))
+        .copied()
+        == Some(true)
+    {
+        return true;
+    }
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         return false;
     }
@@ -894,7 +907,6 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         return true;
     }
     call_site_expects_shared_borrow(sig, param_idx)
-        || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
 }
 
 /// Text callees: shared-ref from bridge, emission oracle, or registry `&str` param type.
