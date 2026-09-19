@@ -579,31 +579,70 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             ..
                         }
                     ) {
-                        let owned_sig = peel_sig.clone().or_else(|| signature.clone()).or_else(|| {
-                            gen.get_signature_with_global(func_name).cloned()
-                        });
-                        if let Some(sig) = owned_sig.as_ref() {
+                        let lookup = gen.signature_lookup_callee_name(func_name);
+                        let candidates = [
+                            peel_sig.clone(),
+                            signature.clone(),
+                            gen.get_signature_with_global(func_name).cloned(),
+                            gen.get_signature_with_global(lookup.as_ref()).cloned(),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.signature_registry
+                                .get_signature(lookup.as_ref())
+                                .cloned(),
+                        ];
+                        let wants_str = candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
-                            let callee_wants_str = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                sig, pidx,
+                            ) || sig
+                                .emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(pidx))
+                                .copied()
+                                == Some(true)
+                                || sig.param_types.get(pidx).is_some_and(|t| {
+                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                                })
+                                || sig.formal_param_type(pidx).is_some_and(|t| {
+                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                                })
+                                || (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                    sig, pidx,
+                                ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    sig, pidx,
+                                ))
+                        });
+                        let text_any = candidates.iter().flatten().any(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                                 sig, pidx,
                             ) || sig.param_types.get(pidx).is_some_and(|t| {
-                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            }) || sig.formal_param_type(pidx).is_some_and(|t| {
-                                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-                            }) || (matches!(
-                                sig.param_ownership.get(pidx),
-                                Some(crate::analyzer::OwnershipMode::Borrowed)
-                            ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                                sig, pidx,
-                            ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                sig, pidx,
-                            ));
-                            if callee_wants_str {
-                                crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
-                                    arg,
-                                    &mut coerced,
-                                );
-                            }
+                                crate::codegen::rust::types::is_windjammer_text_type(t)
+                            })
+                        });
+                        let confirmed_owned = candidates.iter().flatten().any(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            sig.emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(pidx))
+                                .copied()
+                                == Some(false)
+                                && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                                    sig, pidx,
+                                )
+                        }) && !candidates.iter().flatten().any(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            sig.emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(pidx))
+                                .copied()
+                                == Some(true)
+                        });
+                        if wants_str || (text_any && !confirmed_owned) {
+                            crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                                arg,
+                                &mut coerced,
+                            );
                         }
                     }
                     return vec![coerced];
