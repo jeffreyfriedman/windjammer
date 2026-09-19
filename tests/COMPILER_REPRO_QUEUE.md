@@ -338,12 +338,12 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&args` → owned scale_status_cli_main must clone** | `bug_wdb295_module_file_demoted_vec_into_owned_wave1_scale_status_cli_must_clone_test` | ✅ tip GREEN (P3.379 tip-out wave1_cli); twin WDB-291 |
 | P1 | **gen-lag join_path `String::from` must match tip bare `&str`** | `bug_wdb296_module_file_gen_lag_join_path_string_from_must_match_tip_test` | ✅ GREEN (P3.377 tip→gen sync); twin WDB-225 |
 | P1 | **MultiFile CLI owned Vec reuse must clone (not `&args`)** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | ✅ tip GREEN (P3.379) — regression guard; tip-out WDB-291/294 also GREEN |
-| P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | 🆕 RED / filed (P3.381); tip-out RED (~17×); MultiFile isolate GREEN |
-| P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | 🆕 RED / filed (P3.381); tip-out RED (~8×); MultiFile isolate GREEN; twin WDB-241 |
+| P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
+| P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN; twin WDB-241 |
 | P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | ✅ MultiFile GREEN (P3.386); tip-out still needs regen |
 | P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | ✅ tip GREEN (P3.387) — MultiFile + tip-out/gen sync; stale Borrowed no longer suppresses `.to_string()` / owned args |
 | P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | ✅ tip GREEN (P3.388) — untyped `total=0` under Custom return syncs `_i64`; peer beats struct-field `u64` |
-| P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | 🆕 RED / filed (P3.385); tip-out RED; MultiFile isolate GREEN |
+| P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2560,6 +2560,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Compiler agent priority:** tip greens **WDB-298–300**; signature-driven int-width peers + clone-after-cast ban + owned Vec into `Key::from_components`. No Phase 606+. No windjammer/src edits from DB agent.
 
+## P3.390 — tip-out/gen sync WDB-298/299/303 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-298** `u32 = 0_usize` | ✅ tip GREEN — tip emit already `0_u32`; tip-out/gen synced |
+| Tip **WDB-299** `Key::from_components(&parts)` | ✅ tip GREEN — tip emit already move/`parts`; tip-out/gen synced |
+| Tip **WDB-303** `offsets[i + 1]` u32 index | ✅ tip GREEN — tip emit already `(i + 1) as usize`; tip-out/gen synced |
+
+**Root cause layer:** tip-out/gen lag (tip MultiFile + productish `wj` emit already correct).
+
+**What became unnecessary:** false-RED tip-out asserts on stale snapshots.
+
+**Gates:** `cargo test --release --test all -- wdb298_ wdb299_ wdb303_` → **6 passed**.
+
 ## P3.388 — WDB-302 i64 accum under Custom return (2026-09-19)
 
 | Gate | Status |
@@ -2592,8 +2606,8 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | MultiFile **WDB-301** owned LDBC string / `&path.clone()` | ✅ tip GREEN (P3.387) |
 | Tip **WDB-302** `as i64 as i32` / `total / 3_u64` (LCC) | ✅ tip GREEN (P3.388) |
-| Tip **WDB-303** `offsets[i + 1]` u32 index | ❌ RED — tip-out/gen adjacency; MultiFile isolate GREEN |
-| Tip **WDB-298–300** | ❌ still RED (P3.383); WDB-300 MultiFile GREEN (P3.386) |
+| Tip **WDB-303** `offsets[i + 1]` u32 index | ✅ tip GREEN (P3.390 tip-out/gen sync) |
+| Tip **WDB-298–300** | ✅ 298/299 tip GREEN (P3.390); WDB-300 MultiFile GREEN (P3.386), tip-out may still lag cast-clone |
 | Dogfood / tip-cluster | ❄️ frozen |
 
 **Census:** ~287 gen errors; next cluster after 301 is int-width (LCC double-cast, u32 index) + remaining tip-out lag.
