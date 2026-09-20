@@ -882,15 +882,20 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Path-dep import aliases: dependency metadata `Borrowed` / `emitted_rust_ref_params`
     // must auto-borrow owned locals at the cross-crate boundary (apps/wj-find).
     let lookup_callee = gen.signature_lookup_callee_name(func_name);
-    let cross_crate_import = gen.is_import_alias_cross_crate_call(func_name)
-        || lookup_callee.as_ref() != func_name;
+    let import_alias = gen.is_import_alias_cross_crate_call(func_name);
+    let cross_crate_import =
+        import_alias || lookup_callee.as_ref().contains("::");
     if cross_crate_import {
         if let Some(global_reg) = gen.global_signature_registry.as_ref() {
             let lookup_ref = lookup_callee.as_ref();
             let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-            let dep_sig = global_reg
-                .get_signature(lookup_ref)
-                .or_else(|| global_reg.get_signature(simple));
+            let dep_sig = if import_alias {
+                global_reg.get_signature(lookup_ref)
+            } else {
+                global_reg
+                    .get_signature(lookup_ref)
+                    .or_else(|| global_reg.get_signature(simple))
+            };
             for (i, (_, arg)) in arguments.iter().enumerate() {
                 let Some(arg_str) = args.get_mut(i) else {
                     continue;
