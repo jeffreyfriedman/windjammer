@@ -419,6 +419,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Option presence must not `matches!(opt.clone(), Some(_))`** | `bug_wdb349_module_file_option_presence_must_not_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
 | P1 | **Copy usize cast must not emit `(key as usize).clone()`** | `bug_wdb350_module_file_copy_usize_cast_must_not_emit_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED; twin WDB-343 |
 | P1 | **`match expr.clone()` must not clone scrutinee** | `bug_wdb351_module_file_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
+| P1 | **i32 zero must not emit redundant `0_i32 as i32`** | `bug_wdb352_module_file_i32_zero_must_not_emit_redundant_as_i32_test` | 🆕 RED / filed (P3.415); **MultiFile + tip RED** |
+| P1 | **f32→usize must not emit `as i32 as usize`** | `bug_wdb353_module_file_f32_to_usize_must_not_double_cast_via_i32_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
+| P1 | **Result Ok must not emit `.map(|v| v.to_owned())`** | `bug_wdb354_module_file_result_ok_must_not_to_owned_borrow_break_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3288,4 +3291,18 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `wdb349_ wdb350_ wdb351_ wdb336_tip wdb339_tip wdb342_tip` → **6 passed / 3 failed** (MultiFile + 336/339/342 tip GREEN; 349–351 tip RED).
 
 **Compiler agent priority:** tip greens **WDB-349–351** (+ **332–333**, **338**, **340–341**, **343–348**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+
+## P3.415 WindjammerDB CQ-C5 — tip REDs WDB-352–354 (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-352** redundant `0_i32 as i32` / `1_i32 as i32` | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-353** `as i32 as usize` (terrain) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-354** Result `.map(\|v\| v.to_owned())` (loader) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+
+**TDD:** `wdb352_ wdb353_ wdb354_` → **2 passed / 4 failed** (353/354 MultiFile GREEN; 352 MultiFile+tip RED; all three tip RED).
+
+**Compiler agent priority:** tip greens **WDB-352–354** (+ **332–333**, **338**, **340–351**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
 
