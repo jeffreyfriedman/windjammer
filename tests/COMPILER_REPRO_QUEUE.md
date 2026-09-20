@@ -406,7 +406,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413) — strip clone before `&mut` wrap |
 | P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-336 |
 | P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.409); tip placeholder_assets RED |
-| P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | 🆕 RED / filed (P3.409); tip component_viewer RED |
+| P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | ✅ tip GREEN (P3.414 regen); `3_i32` peers |
 | P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
 | P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | 🆕 RED / filed (P3.410); **MultiFile + tip RED** |
 | P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-337 |
@@ -416,6 +416,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Copy f32 field must not emit `.x/.y/.z.clone()` (tps/fps)** | `bug_wdb346_module_file_copy_f32_field_must_not_emit_clone_test` | 🆕 RED / filed (P3.412); MultiFile GREEN; tip RED; twin WDB-344 |
 | P1 | **Copy f32 match binding must not emit `r.clone()` (jolt)** | `bug_wdb347_module_file_copy_f32_match_binding_must_not_emit_clone_test` | 🆕 RED / filed (P3.412); **MultiFile + tip RED** |
 | P1 | **owned String must not emit `path.clone().to_string()` (loader)** | `bug_wdb348_module_file_owned_string_must_not_clone_then_to_string_test` | 🆕 RED / filed (P3.412); MultiFile GREEN; tip RED; twin WDB-340 |
+| P1 | **Option presence must not `matches!(opt.clone(), Some(_))`** | `bug_wdb349_module_file_option_presence_must_not_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
+| P1 | **Copy usize cast must not emit `(key as usize).clone()`** | `bug_wdb350_module_file_copy_usize_cast_must_not_emit_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED; twin WDB-343 |
+| P1 | **`match expr.clone()` must not clone scrutinee** | `bug_wdb351_module_file_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3269,4 +3272,19 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `cargo test --test all --features integration_tests -- wdb336_ wdb337_ wdb342_` → **6 passed**.
 
 **Compiler agent priority:** tip greens **WDB-338–341**, **343–348**, **332–333**. No Phase 606+.
+
+
+## P3.414 WindjammerDB CQ-C5 — tip REDs WDB-349–351 + mark 339 GREEN (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-349** `matches!(mesh.clone(), Some(_))` (usd) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-350** `(key as usize).clone()` (save manager) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-351** `match body.shape.clone()` / `format.clone()` | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-339** i32 coord `N_i64 as i32` | ✅ tip GREEN (regen; `3_i32` peers) |
+| Tip **WDB-336/337/342** | ✅ tip GREEN (P3.413) |
+
+**TDD:** `wdb349_ wdb350_ wdb351_ wdb336_tip wdb339_tip wdb342_tip` → **6 passed / 3 failed** (MultiFile + 336/339/342 tip GREEN; 349–351 tip RED).
+
+**Compiler agent priority:** tip greens **WDB-349–351** (+ **332–333**, **338**, **340–341**, **343–348**). No Phase 606+. No `windjammer/src` edits from DB agent.
 
