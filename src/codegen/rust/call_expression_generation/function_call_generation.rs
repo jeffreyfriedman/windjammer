@@ -336,7 +336,8 @@ fn signature_lookup_for_call<'ast>(
             return (func_name.to_string(), Some(receiver.to_string()));
         }
     }
-    (func_name.to_string(), None)
+    let lookup = gen.signature_lookup_callee_name(func_name);
+    (lookup.into_owned(), None)
 }
 
 #[allow(clippy::too_many_lines)]
