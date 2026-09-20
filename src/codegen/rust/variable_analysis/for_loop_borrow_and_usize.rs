@@ -504,7 +504,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 name: src_name, ..
                             } = value
                             {
-                                if self.usize_variables.insert(src_name.clone()) {
+                                if !self.identifier_is_wj_int_i64_binding(src_name.as_str())
+                                    && self.usize_variables.insert(src_name.clone())
+                                {
                                     changed = true;
                                 }
                             }
@@ -622,6 +624,25 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Windjammer `int` params and i64 locals must not join `usize_variables` via loop bounds
+    /// or init back-propagation — codegen keeps them as `i64` and casts `.len()` instead.
+    pub(in crate::codegen::rust) fn identifier_is_wj_int_i64_binding(
+        &self,
+        name: &str,
+    ) -> bool {
+        if self
+            .current_function_params
+            .iter()
+            .any(|p| p.name == name && matches!(&p.type_, Type::Int))
+        {
+            return true;
+        }
+        self.local_var_types.get(name).is_some_and(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+        })
+    }
+
     fn mark_identifier_usize_if_bound_is_usize(
         &mut self,
         maybe_counter: &Expression,
@@ -630,22 +651,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = maybe_counter else {
             return;
         };
-        // Windjammer `int` (params or annotated/inferred locals) stays `i64`.
-        // Marking them `usize` here would suppress the usize→i64 cast on the bound
-        // while the binding is still emitted as `i64` → E0308 (`end < strings::len`).
-        if self
-            .current_function_params
-            .iter()
-            .any(|p| p.name == *name && matches!(&p.type_, Type::Int))
-        {
-            return;
-        }
-        // WJ `int` / i64 locals stay i64 for `.len() as int` style bounds (cast len, not counter).
-        if self
-            .local_var_types
-            .get(name.as_str())
-            .is_some_and(|t| matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64"))
-        {
+        if self.identifier_is_wj_int_i64_binding(name) {
             return;
         }
         // Inferred `i32` from return-type heuristics must not block usize counters when the

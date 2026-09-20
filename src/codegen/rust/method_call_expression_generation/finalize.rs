@@ -885,14 +885,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 if !needs_borrow {
                                     if let Some(rt) = receiver_type_name.as_deref() {
                                         if let Some(global) = self.global_signature_registry() {
-                                            use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site;
+                                            use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module;
                                             if let Some(resolved) =
-                                                resolve_method_for_call_site(
+                                                resolve_method_for_call_site_in_module(
                                                     &self.signature_registry,
                                                     Some(global),
                                                     rt,
                                                     method,
                                                     arguments.len(),
+                                                    self.current_caller_module_path().as_deref(),
                                                 )
                                             {
                                                 let gsig = resolved.sig;

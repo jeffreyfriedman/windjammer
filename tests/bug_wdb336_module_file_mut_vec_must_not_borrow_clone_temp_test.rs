@@ -81,7 +81,17 @@ fn wdb336_tip_out_game_core_mesh_renderer_must_not_mut_borrow_clone_temp() {
         saw = true;
         let text = std::fs::read_to_string(path).expect("mesh_renderer");
         let bad = text.lines().any(|line| {
-            line.contains("push_mat4(") && line.contains("&mut ") && line.contains(".clone()")
+            // Only flag mut-arg clone temps (`&mut data.clone()`), not owned peers
+            // like `push_mat4(&mut data, view.clone())`.
+            line.contains("&mut ")
+                && line
+                    .split("&mut ")
+                    .skip(1)
+                    .any(|rest| rest.trim_start().contains(".clone()") && {
+                        let place = rest.trim_start();
+                        let end = place.find([',', ')']).unwrap_or(place.len());
+                        place[..end].ends_with(".clone()")
+                    })
         });
         if bad {
             bad_paths.push(path.display().to_string());
