@@ -77,6 +77,7 @@ Definition of done per row:
 |---|---|---|---|
 | Loop `j = end` unify int/usize | `bug_int_loop_assign_end_bound_must_unify_test` | ❌ RED | Index assign from peer bound (`wj-url` authority scan) |
 | `std::url.parse` / `format` / `join` | `bug_std_url_parse_wiring_test` | ❌ RED | Runtime URL helpers; thin-wrap `wj-url` |
+| Owned struct arg must not auto-ref `&T` | `bug_owned_struct_arg_must_not_auto_ref_test` | ❌ RED | Cross-crate `parse(MultipartBody)` must not emit `parse(&MultipartBody)` |
 
 ## Run
 
