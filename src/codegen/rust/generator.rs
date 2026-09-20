@@ -928,6 +928,47 @@ impl<'ast> CodeGenerator<'ast> {
         let finalize =
             crate::codegen::rust::call_signature_resolution::finalize_call_site_signature;
 
+        // WDB-332: leaf-name collision keys (`AudioChannel::new`) are last-writer-wins across
+        // sibling modules. Prefer caller-module affinity before trusting the bare exact key.
+        if let Some(affinity_sig) =
+            self.lookup_method_signature_on_receiver_type(receiver_type, method, arg_count)
+        {
+            let mut resolved = finalize(affinity_sig);
+            if let Some(recv_ty) = crate::codegen::rust::stdlib_signature_specialization::receiver_type_from_name_and_hint(
+                Some(receiver_type),
+                None,
+                self.current_function_return_type.as_ref(),
+            ) {
+                crate::codegen::rust::stdlib_signature_specialization::specialize_signature_for_receiver(
+                    &mut resolved,
+                    &recv_ty,
+                );
+            }
+            // Refresh shared-ref metadata from the affinity key's module-qualified global
+            // entry when present — never from the poisoned bare leaf key alone.
+            if let Some(global) = self.global_signature_registry.as_ref() {
+                if let Some(resolved_mod) = crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module(
+                    &self.signature_registry,
+                    Some(global),
+                    receiver_type,
+                    method,
+                    arg_count,
+                    self.current_caller_module_path().as_deref(),
+                ) {
+                    if resolved_mod.sig.emitted_rust_ref_params
+                        .as_ref()
+                        .is_some_and(|flags| flags.iter().any(|&f| f))
+                    {
+                        crate::codegen::rust::signature_promotion::merge_codegen_refresh_metadata(
+                            &mut resolved,
+                            &resolved_mod.sig,
+                        );
+                    }
+                }
+            }
+            return Some(resolved);
+        }
+
         let local = self.signature_registry.get_signature(&qualified);
         let global_only = self
             .global_signature_registry

@@ -4332,12 +4332,25 @@ impl<'ast> CodeGenerator<'ast> {
                         if self.identifier_binding_already_rust_ref(name)
                 );
                 if arg_already_rust_ref {
-                    let cross_crate_import =
-                        self.is_import_alias_cross_crate_call(callee_name);
-                    let callee_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                        &sig, param_idx,
-                    ) || global_confirms_shared_ref(param_idx);
-                    if cross_crate_import && callee_shared {
+                    let lookup_callee = self.signature_lookup_callee_name(callee_name);
+                    let cross_crate_import = self.is_import_alias_cross_crate_call(callee_name)
+                        || lookup_callee.as_ref() != callee_name;
+                    let dep_emits_shared = cross_crate_import
+                        && self.global_signature_registry.as_ref().is_some_and(|g| {
+                            let lookup_ref = lookup_callee.as_ref();
+                            let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+                            g.get_signature(lookup_ref)
+                                .or_else(|| g.get_signature(simple))
+                                .is_some_and(|gs| {
+                                    let pidx = gs.arg_param_index(arg_index);
+                                    crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                        gs, pidx,
+                                    ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                        gs, pidx,
+                                    )
+                                })
+                        });
+                    if dep_emits_shared {
                         // Path-dep metadata: explicit `&` at import boundary even when the
                         // caller formal was demoted to `&str` / `&Vec` (apps/wj-find).
                         if let Expression::Identifier { name, .. } = arg_expr {

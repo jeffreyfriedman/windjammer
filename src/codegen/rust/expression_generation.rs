@@ -293,6 +293,10 @@ impl<'ast> CodeGenerator<'ast> {
                             arg_str,
                         );
                     }
+                    // P3.402: peel `&'.'` even when Pattern formal lookup missed.
+                    crate::codegen::rust::string_utilities::peel_amp_from_char_literal_arg(
+                        arg_expr, arg_str,
+                    );
                 }
 
                 format!("{}.{}({})", obj_str, method, args.join(", "))

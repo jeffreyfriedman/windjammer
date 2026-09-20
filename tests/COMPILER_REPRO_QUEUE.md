@@ -3105,12 +3105,12 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| `str_split_char_literal_must_not_emit_amp_char` | ❌ RED (filed) |
-| Tip-out asset_browser / scene_saver | ❌ RED |
+| `str_split_char_literal_must_not_emit_amp_char` | ✅ MultiFile GREEN |
+| Tip-out asset_browser / scene_saver | ✅ tip GREEN (peel `&'.'` in Pattern path + immut method emit) |
 
 **Product:** `path.split('.')` → `path.split(&'.')` (E0277 Pattern).
 
-**Compiler agent:** emit bare `'.'` / `"/"` Pattern, not `&char`.
+**Fix:** `peel_amp_from_char_literal_arg` in Pattern normalizer + unconditional peel in method finalize / immut expression emit when Pattern formal lookup misses.
 
 ## P3.403 — neg `while` counter vs literal peers must not widen i64 (2026-09-19)
 

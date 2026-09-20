@@ -879,6 +879,44 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         is_extern_call,
     );
 
+    // Path-dep import aliases: dependency metadata `Borrowed` / `emitted_rust_ref_params`
+    // must auto-borrow owned locals at the cross-crate boundary (apps/wj-find).
+    let lookup_callee = gen.signature_lookup_callee_name(func_name);
+    let cross_crate_import = gen.is_import_alias_cross_crate_call(func_name)
+        || lookup_callee.as_ref() != func_name;
+    if cross_crate_import {
+        if let Some(global_reg) = gen.global_signature_registry.as_ref() {
+            let lookup_ref = lookup_callee.as_ref();
+            let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+            let dep_sig = global_reg
+                .get_signature(lookup_ref)
+                .or_else(|| global_reg.get_signature(simple));
+            for (i, (_, arg)) in arguments.iter().enumerate() {
+                let Some(arg_str) = args.get_mut(i) else {
+                    continue;
+                };
+                let Expression::Identifier { name, .. } = arg else {
+                    continue;
+                };
+                let Some(gs) = dep_sig else {
+                    continue;
+                };
+                let pidx = gs.arg_param_index(i);
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(gs, pidx)
+                    || gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                {
+                    continue;
+                }
+                if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx) {
+                    continue;
+                }
+                if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                    *arg_str = format!("&{name}");
+                }
+            }
+        }
+    }
+
     // Legacy heuristic auto-borrow deleted (Phase 5): IR call-site coercion owns this.
 
     apply_callee_mut_borrow_to_call_args(gen, func_name, &signature, arguments, &mut args);

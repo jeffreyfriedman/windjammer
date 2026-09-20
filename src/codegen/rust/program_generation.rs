@@ -264,6 +264,25 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(alias_name.clone(), path.join("::"));
                 }
             }
+            if let Item::Use { path, alias: None, .. } = item {
+                // `use dep::fn` (no `as`): bare `fn(...)` call sites map to `dep::fn` for metadata.
+                if path.len() >= 2 {
+                    if let Some(last) = path.last() {
+                        if last
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_lowercase())
+                        {
+                            if !path.first().is_some_and(|seg| {
+                                matches!(seg.as_str(), "std" | "crate" | "super" | "self")
+                            }) {
+                                self.import_fn_alias_map
+                                    .insert(last.clone(), path.join("::"));
+                            }
+                        }
+                    }
+                }
+            }
             if let Item::Use { path, alias, .. } = item {
                 // `use std::map::Map` → `use std::collections::HashMap as Map`; preserve alias in types.
                 if alias.is_none()
