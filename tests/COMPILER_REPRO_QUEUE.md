@@ -401,12 +401,15 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **owned Vec3 must not receive `&test_x` (fps_camera)** | `bug_wdb331_module_file_owned_vec3_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
 | P1 | **i32 formal must not receive `priority.to_string()` (audio_mixer)** | `bug_wdb332_module_file_i32_formal_must_not_receive_to_string_test` | 🆕 RED / filed (P3.405); tip/game-core RED; distinct from P3.401 name-as-i32 |
 | P1 | **format temp into owned String must not receive `&_temp` (loader)** | `bug_wdb333_module_file_owned_string_format_temp_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
-| P1 | **tps owned Vec3 must not receive `&sample`** | `bug_wdb334_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | 🆕 RED / filed (P3.407); tip/game-core RED; twin WDB-331 |
-| P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.407); tip/game-core tps RED; opposite polarity of WDB-331 |
+| P1 | **tps owned Vec3 must not receive `&sample`** | `bug_wdb334_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | ✅ tip GREEN (P3.410 regen); twin WDB-331 |
+| P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.410 regen); opposite polarity of WDB-331 |
 | P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.407); tip/game-core mesh_renderer RED |
 | P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.409); tip meshing/viewer/vox RED; twin WDB-336 |
 | P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.409); tip placeholder_assets RED |
 | P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | 🆕 RED / filed (P3.409); tip component_viewer RED |
+| P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
+| P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | 🆕 RED / filed (P3.410); **MultiFile + tip RED** |
+| P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED; twin WDB-337 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3194,3 +3197,18 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb337_ wdb338_ wdb339_` → **3 MultiFile passed / 3 tip failed** (expected tip RED).
 
 **Compiler agent priority:** tip greens **WDB-337–339** (+ **334–336**, **330–333**). **WDB-328–329** GREEN (P3.409). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+
+## P3.410 WindjammerDB CQ-C5 — game-core tip REDs WDB-340–342 (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-340** `.to_string().to_string()` (bt/scripting/editor/sprite) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-341** `String::from(...).to_string()` (bt_validation) | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-342** `&mut active.clone()` (BT executor/csg/coverage/mesh_gen) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-334/335** tps sample/grid polarity | ✅ tip GREEN (gen regen: `collides_point(grid, sample, …)`) |
+| Tip **WDB-336–339** / **330–333** | ❌ still tip RED |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb340_ wdb341_ wdb342_ wdb334_tip wdb335_tip` → **4 passed / 4 failed** (334/335 tip + 340/342 MultiFile GREEN; 340/341/342 tip RED; 341 MultiFile RED).
+
+**Compiler agent priority:** tip greens **WDB-340–342** (+ **336–339**, **330–333**). No Phase 606+. No `windjammer/src` edits from DB agent.
