@@ -89,6 +89,13 @@ pub fn is_rust_string_literal_text(expr_str: &str) -> bool {
     expr_str.starts_with('"') || expr_str.starts_with("r\"") || expr_str.starts_with("r#\"")
 }
 
+/// True when `expr_str` is a Rust char literal (`'…'`).
+/// Char is Copy and implements `Pattern` by value; prefixing `&` yields `&char` (E0277).
+pub fn is_rust_char_literal_text(expr_str: &str) -> bool {
+    let t = expr_str.trim();
+    t.len() >= 3 && t.starts_with('\'') && t.ends_with('\'')
+}
+
 /// Prefix shared borrow on generated Rust, parenthesizing compound expressions.
 pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
     let t = expr_str.trim();
@@ -100,6 +107,10 @@ pub fn apply_shared_borrow_prefix(expr_str: &mut String) {
     }
     // String literals are already `&str` — never emit `&"…"`.
     if is_rust_string_literal_text(expr_str) {
+        return;
+    }
+    // P3.402: char literals must stay bare for Pattern (`split('.')`).
+    if is_rust_char_literal_text(expr_str) {
         return;
     }
     // Owned values from clone/to_string deref-coerce into shared-ref formals.
