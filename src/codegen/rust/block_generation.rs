@@ -574,10 +574,12 @@ impl<'ast> CodeGenerator<'ast> {
                     // (e.g., match &self.field, or method returning Option<&T>),
                     // simple binding returns (Some(x) => x) produce &T, but other arms
                     // may produce owned T. Clone/deref the binding to fix the mismatch.
+                    // WDB-326: skip when `.copied()` already owns Copy payloads (`Some(v) => v`).
                     let scrutinee_type_has_ref = self.expression_type_contains_reference(value);
-                    let match_binds_refs = scrutinee_needs_ref
-                        || self.match_expression_binds_refs(value)
-                        || scrutinee_type_has_ref;
+                    let match_binds_refs = !use_copied_option
+                        && (scrutinee_needs_ref
+                            || self.match_expression_binds_refs(value)
+                            || scrutinee_type_has_ref);
                     if match_binds_refs && !final_arm_str.ends_with(".clone()") {
                         let mut bound_vars = std::collections::HashSet::new();
                         self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);

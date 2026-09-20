@@ -364,7 +364,10 @@ pub fn expression_is_copy_literal(arg_expr: &Expression) -> bool {
             value: Literal::Int(_)
                 | Literal::IntSuffixed(_, _)
                 | Literal::Float(_)
-                | Literal::Bool(_),
+                | Literal::Bool(_)
+                // P3.402: `path.split('.')` — char is Copy and implements Pattern by value;
+                // prefixing `&` yields `&char`, which is not a valid Pattern (E0277).
+                | Literal::Char(_),
             ..
         }
     )
