@@ -3117,9 +3117,9 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-325** sql_exec | ✅ GREEN (P3.401 demoted-formal gate) |
 | Game-core cargo | ❌ **332** errors (E0308×188) |
 
-**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → WDB-326/327 **GREEN** (P3.406/P3.408); 328–329 tip RED.
+**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → WDB-326–329 **GREEN** (P3.406/P3.408/P3.409).
 
-**Compiler agent priority:** tip greens **WDB-328–329** (+ **330–336**). No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip greens **WDB-330–336**. No Phase 606+. No `windjammer/src` edits from DB agent.
 
 
 ## P3.405 WindjammerDB CQ-C5 — game-core tip REDs WDB-330–333 (2026-09-19)
