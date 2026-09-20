@@ -23,7 +23,16 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
+// Product shape (fps_camera::pseudo_random): wrapping_* intermediate + annotated
+// `let bits: u32 = (x >> 16) & 0x7FFF` inside a non-u32-returning fn. The assign
+// slot must keep `_u32` peers — not be overwritten by a default `_i64` peer of `x`.
 const SRC: &str = r#"
+fn pseudo_random(seed: u32) -> f32 {
+    let x = seed.wrapping_mul(1103515245).wrapping_add(12345)
+    let bits: u32 = (x >> 16) & 0x7FFF
+    bits as f32 / 16383.5 - 1.0
+}
+
 pub fn hash_bits(x: u32) -> u32 {
     (x >> 16) & 32767
 }
