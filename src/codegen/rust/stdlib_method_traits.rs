@@ -1395,6 +1395,15 @@ pub fn is_collection_key_lookup_with_project(
                     project_registry,
                 );
         }
+        // WDB-329: `Vec::remove` / `String::remove` are type-qualified with an *Owned*
+        // first arg. Never inherit HashMap::remove Borrowed consensus when receiver_type
+        // is None or a user impl name (`Blackboard`) — that forced `&idx as usize`.
+        // Wrappers like `MapCell::get` (Borrowed) still fall through to consensus below.
+        if from_callee.is_some_and(|b| !is_map_type_name(b) && !is_set_type_name(b))
+            && !callee_arg_expects_reference_param(sig, arg_index)
+        {
+            return false;
+        }
     }
     // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus —
     // only for method-shaped / self-receiver sigs (guard above).
@@ -1656,6 +1665,15 @@ mod pattern_registry_tests {
             .get_signature("Vec::remove")
             .expect("Vec::remove in stdlib_meta");
         assert!(!is_collection_key_lookup(sig, 0, Some("Vec")));
+        // WDB-329: unknown receiver must not inherit HashMap::remove Borrowed consensus.
+        assert!(
+            !is_collection_key_lookup(sig, 0, None),
+            "Vec::remove must not be a collection-key lookup when receiver_type is None"
+        );
+        assert!(
+            !is_collection_key_lookup(sig, 0, Some("Blackboard")),
+            "Vec::remove must not be a collection-key lookup under a user impl type name"
+        );
         assert!(first_arg_type(sig).is_some_and(is_usize_type));
     }
 

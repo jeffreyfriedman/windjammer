@@ -37,6 +37,48 @@ pub fn neighbor_offsets() -> i64 {
 }
 "#;
 
+/// Product shape: `SearchState::new` returns a struct with i32 fields; tip emits
+/// `let mut i = -1_i64` then `while i <= 1_i32` (mixed width).
+const SRC_SEARCH_STATE: &str = r#"
+pub struct Vec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Vec3 {
+    pub fn new(x: f32, y: f32, z: f32) -> Vec3 {
+        Vec3 { x: x, y: y, z: z }
+    }
+}
+
+pub struct SearchState {
+    pub search_points: Vec<Vec3>,
+    pub current_point: i32,
+}
+
+impl SearchState {
+    pub fn new(radius: f32) -> SearchState {
+        let mut search_points = Vec::new()
+        let mut i = -1
+        while i <= 1 {
+            let mut j = -1
+            while j <= 1 {
+                if i != 0 || j != 0 {
+                    search_points.push(Vec3::new(i as f32 * radius, 0.0, j as f32 * radius))
+                }
+                j = j + 1
+            }
+            i = i + 1
+        }
+        SearchState {
+            search_points: search_points,
+            current_point: 0,
+        }
+    }
+}
+"#;
+
 #[test]
 fn wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers() {
     let mut test = MultiFileTest::new();
@@ -50,6 +92,22 @@ fn wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers() {
         "WDB-328 RED: i64 neg-init loop emitted i32 lit peers:\n{rs}"
     );
     test.cargo_check().expect("WDB-328 cargo-check");
+}
+
+#[test]
+fn wdb328_module_file_search_state_neg_init_must_not_mix_i64_i32_loop_lits() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_SEARCH_STATE);
+    let map = test.compile().expect("WDB-328 SearchState compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-328 SearchState MultiFile lib.rs:\n{rs}");
+    let mixed = (rs.contains("-1_i64") || rs.contains("= -1_i64"))
+        && (rs.contains("1_i32") || rs.contains("0_i32"));
+    assert!(
+        !mixed,
+        "WDB-328 RED: SearchState neg-init loop mixes i64 binding with i32 lit peers:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-328 SearchState cargo-check");
 }
 
 #[test]

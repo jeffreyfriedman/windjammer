@@ -337,6 +337,16 @@ pub fn coerce_arg_str_for_usize_formal(
     if !formal.is_some_and(type_is_usize) {
         return;
     }
+    // WDB-329: stale `&idx as usize` (borrow prefixed without parens onto a cast) — peel
+    // so Owned usize formals receive `idx as usize`.
+    if let Some(rest) = arg_str.strip_prefix('&') {
+        if !rest.starts_with("mut ")
+            && rest.contains(" as usize")
+            && !rest.starts_with('(')
+        {
+            *arg_str = rest.to_string();
+        }
+    }
     if arg_already_usize {
         return;
     }

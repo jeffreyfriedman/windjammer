@@ -615,26 +615,43 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 } else if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
-                    && !matches!(
+                {
+                    // WDB-328: bare `let mut i = -1` (Unary Neg of Int, or Int lit) must
+                    // emit `_i32` in i32 builders — not stick to WJ `int`/i64 from default
+                    // literal inference (`infer_expression_type(Literal::Int) → Type::Int`).
+                    let bare_int_lit_init = matches!(
                         value,
                         Expression::Literal {
                             value: crate::parser::Literal::Int(_),
                             ..
                         }
-                    )
-                {
-                    let wj_int_slot = var_name.is_some_and(|vn| {
-                        if self.explicit_wj_int_annotated_locals.contains(vn) {
-                            return true;
-                        }
-                        matches!(
-                            self.local_var_types.get(vn),
-                            Some(Type::Int)
-                        ) || matches!(
-                            self.local_var_types.get(vn),
-                            Some(Type::Custom(n)) if n == "int" || n == "i64"
+                    ) || matches!(
+                        value,
+                        Expression::Unary {
+                            op: crate::parser::UnaryOp::Neg,
+                            operand,
+                            ..
+                        } if matches!(
+                            &**operand,
+                            Expression::Literal {
+                                value: crate::parser::Literal::Int(_),
+                                ..
+                            }
                         )
-                    });
+                    );
+                    let wj_int_slot = !bare_int_lit_init
+                        && var_name.is_some_and(|vn| {
+                            if self.explicit_wj_int_annotated_locals.contains(vn) {
+                                return true;
+                            }
+                            matches!(
+                                self.local_var_types.get(vn),
+                                Some(Type::Int)
+                            ) || matches!(
+                                self.local_var_types.get(vn),
+                                Some(Type::Custom(n)) if n == "int" || n == "i64"
+                            )
+                        });
                     let peer = if wj_int_slot {
                         Type::Int
                     } else if var_name.is_some_and(|vn| {

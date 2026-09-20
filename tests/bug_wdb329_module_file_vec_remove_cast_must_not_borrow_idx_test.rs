@@ -41,6 +41,37 @@ pub fn remove_at(board: Board, idx: i32) -> Board {
 }
 "#;
 
+/// Product shape: method on `self` with `find_index` → `remove(idx as usize)`.
+const SRC_SELF_METHOD: &str = r#"
+pub struct BlackboardEntry {
+    pub key: string,
+}
+
+pub struct Blackboard {
+    pub entries: Vec<BlackboardEntry>,
+}
+
+impl Blackboard {
+    fn find_index(self, key: string) -> i32 {
+        let mut i = 0
+        while i < self.entries.len() {
+            if self.entries[i].key == key {
+                return i as i32
+            }
+            i = i + 1
+        }
+        -1
+    }
+
+    pub fn remove(self, key: string) {
+        let idx = self.find_index(key)
+        if idx >= 0 {
+            self.entries.remove(idx as usize)
+        }
+    }
+}
+"#;
+
 #[test]
 fn wdb329_module_file_vec_remove_cast_must_not_borrow_idx() {
     let mut test = MultiFileTest::new();
@@ -54,6 +85,21 @@ fn wdb329_module_file_vec_remove_cast_must_not_borrow_idx() {
         "WDB-329 RED: Vec::remove emitted &idx as usize:\n{rs}"
     );
     test.cargo_check().expect("WDB-329 cargo-check");
+}
+
+#[test]
+fn wdb329_module_file_self_entries_remove_cast_must_not_borrow_idx() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_SELF_METHOD);
+    let map = test.compile().expect("WDB-329 self-method compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-329 self-method MultiFile lib.rs:\n{rs}");
+    let bad = rs.contains("&idx as usize") || rs.contains("remove(&idx");
+    assert!(
+        !bad,
+        "WDB-329 RED: self.entries.remove emitted &idx as usize:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-329 self-method cargo-check");
 }
 
 #[test]

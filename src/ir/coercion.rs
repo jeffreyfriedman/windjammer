@@ -288,12 +288,19 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         && !coerced.starts_with("&mut ")
         // Rust string literals are already `&str`; prefixing `&` yields `&&str`.
         && !crate::codegen::rust::expression_utilities::is_rust_string_literal_text(coerced)
+        // P3.402: char is Copy + Pattern by value; `&'.'` is not a valid Pattern.
+        && !crate::codegen::rust::expression_utilities::is_rust_char_literal_text(coerced)
+        // WDB-329: never borrow a cast-to-usize / cast-to-Copy index expr.
+        && !coerced.contains(" as usize")
+        && !coerced.contains(" as u32")
+        && !coerced.contains(" as i32")
         // `.clone()` / `.to_string()` already own; `&str` formals deref-coerce.
         && !coerced.ends_with(".clone()")
         && !coerced.ends_with(".to_string()")
         && !coerced.ends_with(".to_owned()")
     {
-        *coerced = format!("&{coerced}");
+        // Parenthesize compounds when borrowing (casts / binary).
+        *coerced = crate::ir::target_encodings::rust_shared_borrow(coerced);
         return;
     }
     // Ref binding → owned formal: deref Copy (`*through`) or clone non-Copy.

@@ -148,6 +148,7 @@ impl<'ast> CodeGenerator<'ast> {
             return None;
         }
 
+
         // User-written `&x` / `&mut x`: preserve only when callee expects a borrow.
         // Owned formals need IR coercion (clone/deref), not passthrough.
         if crate::codegen::rust::expression_helpers::is_reference_expression(arg_expr)
@@ -1229,6 +1230,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } if self.into_string_formal_params.contains(name)
         );
         let mut kind = compute_coercion(&actual, &expected);
+        // P3.402: Copy literals (incl. char) must pass by value — never Borrow→`&'.'`.
+        if matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
+            && crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
+        {
+            kind = CoercionKind::Identity;
+        }
         // WDB-170 / eco wj-toml: demoted `&str` into owned `String` must `.to_string()`, not `.clone()`.
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::coercion::is_string_base(&expected.base)
@@ -1251,6 +1258,14 @@ impl<'ast> CodeGenerator<'ast> {
             && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
             && !prepared_arg.starts_with('&')
             && !prepared_arg.starts_with("&mut ")
+            // WDB-329: `idx as usize` into Vec::remove Owned usize — never promote to Borrow
+            // (`&idx as usize` / `&(idx as usize)` are both wrong).
+            && !matches!(
+                arg_expr,
+                Expression::Cast { type_, .. }
+                    if crate::codegen::rust::type_casting::type_is_usize(type_)
+                        || self.is_type_copy(type_)
+            )
         {
             kind = CoercionKind::Borrow;
         }
@@ -4146,6 +4161,7 @@ impl<'ast> CodeGenerator<'ast> {
             false,
         );
 
+
         // Ownership-collision: do not keep IR/heuristic `&` from a conflicting
         // Borrowed snapshot (draw_text homonyms). Confirmed shared-ref formals skip.
         if has_ownership_collision
@@ -5259,25 +5275,33 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let callee_emits_owned = !global_confirms_shared_ref(param_idx)
-            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-                || Self::sig_arg_confirms_owned_emission(sig, arg_index)
-                || self.ir_callee_arg_emits_owned_contract(
-                    registry,
+        let callee_emits_owned = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            sig, param_idx,
+        ) || Self::sig_arg_confirms_owned_emission(sig, arg_index)
+            || self.ir_callee_arg_emits_owned_contract(
+                registry,
+                callee_name,
+                arg_index,
+                user_arg_count,
+                Some(sig),
+            )
+            || self.global_signature_registry.as_ref().is_some_and(|g| {
+                self.ir_callee_arg_emits_owned_contract(
+                    g,
                     callee_name,
                     arg_index,
                     user_arg_count,
                     Some(sig),
                 )
-                || self.global_signature_registry.as_ref().is_some_and(|g| {
-                    self.ir_callee_arg_emits_owned_contract(
-                        g,
-                        callee_name,
-                        arg_index,
-                        user_arg_count,
-                        Some(sig),
-                    )
-                }));
+            });
+        // Homonym shared-ref hits must not undo a confirmed owned formal on *this* sig
+        // (WDB-329: Vec::remove Owned usize vs Blackboard::remove Borrowed).
+        let callee_emits_owned = callee_emits_owned
+            && (!global_confirms_shared_ref(param_idx)
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                )
+                || Self::sig_arg_confirms_owned_emission(sig, arg_index));
         if callee_emits_owned {
             if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                 *coerced =
@@ -5296,10 +5320,14 @@ impl<'ast> CodeGenerator<'ast> {
             && !coerced.ends_with(".to_string()")
             && !coerced.ends_with(".to_owned()")
             && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+            // WDB-329: never re-borrow cast-to-usize after numeric formal peel.
             && !matches!(
                 arg_expr,
-                Expression::Call { .. } | Expression::MethodCall { .. }
+                Expression::Call { .. }
+                    | Expression::MethodCall { .. }
+                    | Expression::Cast { .. }
             )
+            && !coerced.contains(" as usize")
         {
             if coerced.ends_with(".clone()") {
                 let base = coerced.trim_end_matches(".clone()").trim();
@@ -6539,6 +6567,9 @@ impl<'ast> CodeGenerator<'ast> {
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
+                // P3.402: char / other Copy literals must not get `&` for Pattern/`&str`.
+                && !crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
+                && !crate::codegen::rust::expression_utilities::is_rust_char_literal_text(coerced)
             {
                 *coerced = format!("&{coerced}");
                 return;
@@ -6793,6 +6824,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // WDB-169/WDB-190: Call/MethodCall temps coerce to `&T` via Rust autoborrow —
             // never emit `&empty_bakeoff_run()` / `&encode_startup(…)` (E0308 / product gates).
+            // WDB-329: Cast-to-Copy/`usize` is a value (`idx as usize`), not a place —
+            // `&idx as usize` is E0606; Owned usize formals take the cast by value.
             if !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
@@ -6801,7 +6834,9 @@ impl<'ast> CodeGenerator<'ast> {
                     Expression::Call { .. }
                         | Expression::MethodCall { .. }
                         | Expression::Closure { .. }
+                        | Expression::Cast { .. }
                 )
+                && !coerced.contains(" as usize")
             {
                 *coerced = format!("&{coerced}");
             }

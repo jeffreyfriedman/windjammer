@@ -395,8 +395,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | ✅ MultiFile GREEN; tip GREEN (P3.401 gate — demoted `&str` sql_exec takes `&emit.*`) |
 | P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | ✅ MultiFile + tip gen GREEN (P3.406); twin WDB-134 |
 | P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | ✅ MultiFile + tip GREEN (P3.408) — narrow `_usize` emit reconcile (no `contains("_usize")` on `best_idx_usize`) |
-| P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | 🆕 RED / filed (P3.404); tip/game-core npc_behavior RED |
-| P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | 🆕 RED / filed (P3.404); tip/game-core blackboard RED |
+| P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | ✅ GREEN (P3.409); tip/game-core npc_behavior SearchState uses i32 peers |
+| P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | ✅ GREEN (P3.409); tip/game-core blackboard `remove(idx as usize)` |
 | P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_wdb330_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | 🆕 RED / filed (P3.405); tip/game-core RED |
 | P1 | **owned Vec3 must not receive `&test_x` (fps_camera)** | `bug_wdb331_module_file_owned_vec3_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
 | P1 | **i32 formal must not receive `priority.to_string()` (audio_mixer)** | `bug_wdb332_module_file_i32_formal_must_not_receive_to_string_test` | 🆕 RED / filed (P3.405); tip/game-core RED; distinct from P3.401 name-as-i32 |
@@ -404,6 +404,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **tps owned Vec3 must not receive `&sample`** | `bug_wdb334_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | 🆕 RED / filed (P3.407); tip/game-core RED; twin WDB-331 |
 | P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.407); tip/game-core tps RED; opposite polarity of WDB-331 |
 | P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.407); tip/game-core mesh_renderer RED |
+| P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.409); tip meshing/viewer/vox RED; twin WDB-336 |
+| P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.409); tip placeholder_assets RED |
+| P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | 🆕 RED / filed (P3.409); tip component_viewer RED |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3109,8 +3112,8 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | Tip **WDB-326** HashMap f32 get `Some(v) => *v` (astar/navmesh) | ✅ GREEN (P3.406) — block_generation skips `*v` after `.copied()` |
 | Tip **WDB-327** i32 coord `== goal as usize` (astar) | ✅ GREEN (P3.408) — indexed field load stays i32 |
-| Tip **WDB-328** i64 neg-init loop `_i32` lits (npc_behavior) | ❌ RED — MultiFile GREEN; tip RED; overlaps P3.403 eco gate |
-| Tip **WDB-329** `Vec::remove(&idx as usize)` (blackboard) | ❌ RED — MultiFile GREEN; tip RED (E0606) |
+| Tip **WDB-328** i64 neg-init loop `_i32` lits (npc_behavior) | ✅ GREEN (P3.409) — prefers_i32 bare int/neg-int init; tip regen clean |
+| Tip **WDB-329** `Vec::remove(&idx as usize)` (blackboard) | ✅ GREEN (P3.409) — Owned Copy/usize skips shared-ref emit; Cast excluded from bare `&` peels |
 | Tip **WDB-325** sql_exec | ✅ GREEN (P3.401 demoted-formal gate) |
 | Game-core cargo | ❌ **332** errors (E0308×188) |
 
@@ -3176,3 +3179,18 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **What became unnecessary:** Heuristic that treated any `_usize` substring in emitted RHS as usize width.
 
 **Gates:** `cargo test --release --test all -- wdb327_` → **3 passed**; `usize_i_plus_one_assign i32_inferred_loop_counter wdb327_ wdb308_ wdb303_` → **9 passed**.
+
+
+## P3.409 WindjammerDB CQ-C5 — game-core tip REDs WDB-337–339 (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-337** `&mut quads/grid/d.clone()` (meshing/viewer/vox) | 🆕 RED / filed — MultiFile GREEN; tip RED; twin WDB-336 |
+| Tip **WDB-338** `push_quad(mesh.clone(), …)` into `&mut Mesh` | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-339** `cy + N_i64 as i32` (component_viewer) | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-334–336** | ❌ still tip RED (P3.407) |
+| Tip **WDB-327** indexed | ✅ GREEN (P3.408) |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb337_ wdb338_ wdb339_` → **3 MultiFile passed / 3 tip failed** (expected tip RED).
+
+**Compiler agent priority:** tip greens **WDB-337–339** (+ **334–336**, **330–333**, **328–329**). No Phase 606+. No `windjammer/src` edits from DB agent.

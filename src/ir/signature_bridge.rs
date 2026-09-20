@@ -878,6 +878,27 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     {
         return false;
     }
+    // WDB-329: Owned Copy / usize formals (Vec::remove) never need a shared-ref borrow
+    // at emit — stale `emitted_rust_ref_params` / homonym refresh must not force
+    // `&idx as usize`.
+    let formal = sig
+        .formal_param_type(param_idx)
+        .or_else(|| sig.param_types.get(param_idx));
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Owned)
+    ) && formal.is_some_and(|t| {
+        let bare = match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        crate::codegen::rust::type_casting::type_is_usize(bare)
+            || crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+            || crate::type_classification::is_copy_pass_by_value_formal(bare)
+    }) && !matches!(formal, Some(Type::Reference(_) | Type::MutableReference(_)))
+    {
+        return false;
+    }
     // P3.390: shared emission before bare-Vec owned denial.
     if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx) {
         return true;
