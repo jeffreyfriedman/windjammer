@@ -25,13 +25,20 @@ use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
 const SRC: &str = r#"
-pub fn push_mat4(data: Vec<f32>, v: f32) {
-    data.push(v)
+pub struct Mat4 {
+    pub m: f32,
 }
 
-pub fn upload(data: Vec<f32>) -> Vec<f32> {
-    push_mat4(data, 1.0)
-    push_mat4(data, 2.0)
+pub fn push_mat4(data: Vec<f32>, m: Mat4) {
+    data.push(m.m)
+}
+
+// Product shape (mesh_renderer): local `let mut data` reused after demoted `&mut Vec`
+// must emit `&mut data`, never `&mut data.clone()`.
+pub fn upload(view: Mat4, proj: Mat4) -> Vec<f32> {
+    let mut data: Vec<f32> = Vec::new()
+    push_mat4(data, view)
+    push_mat4(data, proj)
     data
 }
 "#;

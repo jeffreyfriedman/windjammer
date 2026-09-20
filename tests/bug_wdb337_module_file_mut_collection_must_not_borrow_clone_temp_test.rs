@@ -27,19 +27,17 @@ use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
 const SRC: &str = r#"
-pub struct Grid {
-    pub ok: bool,
+pub fn greedy_mesh_axis_on(quads: Vec<i32>, axis: i32) {
+    quads.push(axis)
 }
 
-pub fn greedy_mesh_axis(grid: Grid, quads: Vec<i32>, axis: i32) {
-    if grid.ok {
-        quads.push(axis)
-    }
-}
-
-pub fn mesh_all(grid: Grid, quads: Vec<i32>) {
-    greedy_mesh_axis(grid, quads, 0)
-    greedy_mesh_axis(grid, quads, 1)
+// Product shape (meshing): local `let mut quads` reused into demoted `&mut Vec`
+// must emit `&mut quads`, never `&mut quads.clone()`.
+pub fn mesh_all() -> Vec<i32> {
+    let mut quads: Vec<i32> = Vec::new()
+    greedy_mesh_axis_on(quads, 0)
+    greedy_mesh_axis_on(quads, 1)
+    quads
 }
 "#;
 
