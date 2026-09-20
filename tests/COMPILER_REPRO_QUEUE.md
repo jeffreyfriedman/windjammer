@@ -397,6 +397,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | 🆕 RED / filed (P3.404); tip/game-core astar RED |
 | P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | 🆕 RED / filed (P3.404); tip/game-core npc_behavior RED |
 | P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | 🆕 RED / filed (P3.404); tip/game-core blackboard RED |
+| P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_wdb330_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | 🆕 RED / filed (P3.405); tip/game-core RED |
+| P1 | **owned Vec3 must not receive `&test_x` (fps_camera)** | `bug_wdb331_module_file_owned_vec3_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
+| P1 | **i32 formal must not receive `priority.to_string()` (audio_mixer)** | `bug_wdb332_module_file_i32_formal_must_not_receive_to_string_test` | 🆕 RED / filed (P3.405); tip/game-core RED; distinct from P3.401 name-as-i32 |
+| P1 | **format temp into owned String must not receive `&_temp` (loader)** | `bug_wdb333_module_file_owned_string_format_temp_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3110,4 +3114,19 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → **4 passed / 4 failed** (expected tip RED).
 
 **Compiler agent priority:** tip greens **WDB-326–329**. No Phase 606+. No `windjammer/src` edits from DB agent.
+
+
+## P3.405 WindjammerDB CQ-C5 — game-core tip REDs WDB-330–333 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-330** u32 `>>`/`&` with `_i64` lits (fps_camera) | 🆕 RED / filed |
+| Tip **WDB-331** owned Vec3 `&test_x` into collides_aabb | 🆕 RED / filed |
+| Tip **WDB-332** i32 priority `.to_string()` into AudioChannel::new | 🆕 RED / filed |
+| Tip **WDB-333** format `_temp` `&_temp1` into owned String load path | 🆕 RED / filed |
+| Tip **WDB-326–329** | ❌ still RED (P3.404) except recheck 328 |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb330_ wdb331_ wdb332_ wdb333_`
+
+**Compiler agent priority:** tip greens **WDB-330–333** (+ remaining **326–329**). No Phase 606+. No `windjammer/src` edits from DB agent.
 

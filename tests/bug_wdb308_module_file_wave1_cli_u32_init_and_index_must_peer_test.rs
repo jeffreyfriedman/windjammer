@@ -48,7 +48,11 @@ fn wdb308_module_file_u32_return_index_loop_must_not_emit_0_usize_or_bare_i_plus
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-308 MultiFile lib.rs:\n{rs}");
     let bad_init = rs.contains("u32 = 0_usize") || rs.contains(": u32 = 0_usize");
-    let bad_index = rs.contains("args[i + 1]") || rs.contains("args[i+1]");
+    // Bare `args[i + 1]` or wrong-precedence `i + 1 as usize` (must be `(i + 1) as usize`).
+    let bad_index = rs.contains("args[i + 1]")
+        || rs.contains("args[i+1]")
+        || rs.contains("i + 1 as usize")
+        || rs.contains("i+1 as usize");
     assert!(
         !bad_init && !bad_index,
         "WDB-308 RED: MultiFile u32 return + len() loop emitted init={bad_init} index={bad_index}:\n{rs}"
@@ -83,7 +87,10 @@ fn wdb308_tip_out_wave1_cli_must_not_emit_u32_eq_0_usize_or_index_by_u32() {
         saw = true;
         let text = std::fs::read_to_string(path).expect("cli");
         let bad_init = text.contains("u32 = 0_usize");
-        let bad_index = text.contains("args[i + 1]") || text.contains("args[i+1]");
+        let bad_index = text.contains("args[i + 1]")
+            || text.contains("args[i+1]")
+            || text.contains("i + 1 as usize")
+            || text.contains("i+1 as usize");
         if bad_init || bad_index {
             bad_paths.push(format!(
                 "{} (init={} index={})",

@@ -13,12 +13,9 @@
 
 //! WDB-325: owned `string` sql_exec formals must not receive `&emit.table` / `&emit.sql`.
 //!
-//! Product tip-out/gen relational_df_analytic_execute_port:
-//!   `left.sql_exec(right, &emit.table, &right_name, &emit.sql)`
-//!   with `left_table: string, right_table: string, sql: string` → E0308
-//!   (cross-crate `ArrowColumnarBatch::sql_exec` in wdb-types).
-//! Twin of WDB-306/320 (owned String call args). `.len()` demotes to `&str` — force
-//! owned via struct store (same pattern as WDB-320/322).
+//! Same-crate free-fn / MultiFile isolate: owned formals must stay owned at the call site.
+//! Cross-crate `ArrowColumnarBatch::sql_exec` is demoted to `&str` (WDB-244) — tip-out
+//! `&emit.table` is tip-correct there; tip gate skips when formals are demoted.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -80,6 +77,27 @@ fn wdb325_tip_out_df_analytic_must_not_pass_ref_into_owned_sql_exec() {
         .parent()
         .unwrap()
         .join("windjammerdb/crates/wdb-layers/gen");
+    let types_gen = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("windjammerdb/crates/wdb-types/gen/columnar_batch_arrow.rs");
+    // Cross-crate tip demotes `string` → `&str` on ArrowColumnarBatch::sql_exec (WDB-244).
+    // `&emit.table` is tip-correct when formals are demoted; only RED if formals stay owned.
+    let formals_owned = if types_gen.exists() {
+        let text = std::fs::read_to_string(&types_gen).expect("columnar");
+        text.lines().any(|line| {
+            line.contains("fn sql_exec(")
+                && (line.contains("left_table: String") || line.contains("left_table: mut String"))
+        })
+    } else {
+        true
+    };
+    if !formals_owned {
+        eprintln!(
+            "WDB-325 tip-out: sql_exec formals demoted to &str — &emit.* is tip-correct (WDB-244)"
+        );
+        return;
+    }
     let paths = [
         tip.join("relational_df_analytic_execute_port.rs"),
         tip.join("relational/relational_df_analytic_execute_port.rs"),
