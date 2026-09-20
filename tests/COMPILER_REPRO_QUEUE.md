@@ -405,7 +405,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.410 regen); opposite polarity of WDB-331 |
 | P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413) — strip clone before `&mut` wrap |
 | P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-336 |
-| P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.409); tip placeholder_assets RED |
+| P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.413 regen) |
 | P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | ✅ tip GREEN (P3.414 regen); `3_i32` peers |
 | P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
 | P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | 🆕 RED / filed (P3.410); **MultiFile + tip RED** |
@@ -3258,6 +3258,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | MultiFile + tip **WDB-336** mesh_renderer `push_mat4(&mut data, …)` | ✅ GREEN |
 | MultiFile + tip **WDB-337** meshing/viewer/vox `&mut quads` | ✅ GREEN |
 | MultiFile + tip **WDB-342** BT executor `&mut active`/`&mut running` | ✅ GREEN |
+| MultiFile + tip **WDB-338** placeholder_assets `push_quad(&mut mesh, …)` | ✅ GREEN (tip regen) |
 
 **Bug:** Local `let mut data = Vec::new()` reused into demoted `&mut Vec` emitted `&mut data.clone()` (temp / E0716 / discarded mutation).
 
