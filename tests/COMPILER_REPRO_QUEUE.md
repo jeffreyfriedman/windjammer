@@ -393,7 +393,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Arrow FFI owned String must not receive `&vname`/`&lname`** | `bug_wdb323_module_file_owned_string_must_not_receive_ref_names_arrow_ffi_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
 | P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | ✅ MultiFile + tip gen GREEN (P3.400); twin WDB-308/298 |
 | P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | ✅ MultiFile GREEN; tip GREEN (P3.401 gate — demoted `&str` sql_exec takes `&emit.*`) |
-| P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | 🆕 RED / filed (P3.404); tip/game-core RED; twin WDB-134 |
+| P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | ✅ MultiFile + tip gen GREEN (P3.406); twin WDB-134 |
 | P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | 🆕 RED / filed (P3.404); tip/game-core astar RED |
 | P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | 🆕 RED / filed (P3.404); tip/game-core npc_behavior RED |
 | P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | 🆕 RED / filed (P3.404); tip/game-core blackboard RED |
@@ -3104,16 +3104,16 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-326** HashMap f32 get `Some(v) => *v` (astar/navmesh) | ❌ RED — MultiFile GREEN; tip RED (E0614) |
+| Tip **WDB-326** HashMap f32 get `Some(v) => *v` (astar/navmesh) | ✅ GREEN (P3.406) — block_generation skips `*v` after `.copied()` |
 | Tip **WDB-327** i32 coord `== goal as usize` (astar) | ❌ RED — MultiFile GREEN; tip RED (E0308/E0277) |
 | Tip **WDB-328** i64 neg-init loop `_i32` lits (npc_behavior) | ❌ RED — MultiFile GREEN; tip RED; overlaps P3.403 eco gate |
 | Tip **WDB-329** `Vec::remove(&idx as usize)` (blackboard) | ❌ RED — MultiFile GREEN; tip RED (E0606) |
 | Tip **WDB-325** sql_exec | ✅ GREEN (P3.401 demoted-formal gate) |
 | Game-core cargo | ❌ **332** errors (E0308×188) |
 
-**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → **4 passed / 4 failed** (expected tip RED).
+**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → WDB-326 **2 passed** (P3.406); 327–329 tip RED.
 
-**Compiler agent priority:** tip greens **WDB-326–329**. No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip greens **WDB-327–329**. No Phase 606+. No `windjammer/src` edits from DB agent.
 
 
 ## P3.405 WindjammerDB CQ-C5 — game-core tip REDs WDB-330–333 (2026-09-19)
@@ -3124,9 +3124,24 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-331** owned Vec3 `&test_x` into collides_aabb | 🆕 RED / filed |
 | Tip **WDB-332** i32 priority `.to_string()` into AudioChannel::new | 🆕 RED / filed |
 | Tip **WDB-333** format `_temp` `&_temp1` into owned String load path | 🆕 RED / filed |
-| Tip **WDB-326–329** | ❌ still RED (P3.404) except recheck 328 |
+| Tip **WDB-326–329** | ⚠️ WDB-326 GREEN (P3.406); 327–329 still RED |
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb330_ wdb331_ wdb332_ wdb333_`
 
-**Compiler agent priority:** tip greens **WDB-330–333** (+ remaining **326–329**). No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip greens **WDB-330–333** (+ remaining **327–329**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+## P3.406 — WDB-326 HashMap f32 get `Some(v) => *v` after `.copied()` (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-326** `let g = match scores.get(...).copied()` | ✅ GREEN |
+| Tip gen **WDB-326** astar_grid / navmesh | ✅ GREEN (tip regen) |
+
+**Root cause:** `block_generation` `let x = match` path appended `.copied()` for Copy map values but still rewrote `Some(v) => v` → `*v` via `match_binds_refs` (ignored `use_copied_option`).
+
+**Fix:** gate the `*v`/`.clone()` arm rewrite on `!use_copied_option` (same as `match_binds_refs_flag`).
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb326_` → **2 passed**.
+
+**Compiler agent priority:** tip greens **WDB-327–329**. No Phase 606+.
 
