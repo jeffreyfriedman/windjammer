@@ -213,6 +213,10 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
     if crate::codegen::rust::expression_utilities::is_rust_string_literal_text(expr) {
         return expr.to_string();
     }
+    // P3.402: char is Copy + Pattern by value; `&'.'` is not a valid Pattern.
+    if crate::codegen::rust::expression_utilities::is_rust_char_literal_text(expr) {
+        return expr.to_string();
+    }
     // Stale auto-/user-clone before Borrow: `&x.clone()` is never needed for a shared
     // formal — peel to the binding then borrow (WDB-270 / demoted `&str`).
     let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr).to_string();
@@ -598,6 +602,14 @@ mod tests {
         let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));
         let encoded = encode_call_argument(&actual, &expected, Target::Rust, r#""</div>""#);
         assert_eq!(encoded, r#""</div>""#);
+    }
+
+    #[test]
+    fn test_rust_shared_borrow_skips_char_literals() {
+        // P3.402: `path.split('.')` must not emit `path.split(&'.')`.
+        assert_eq!(rust_shared_borrow("'.'"), "'.'");
+        assert_eq!(rust_shared_borrow("'/'"), "'/'");
+        assert_eq!(rust_shared_borrow("key"), "&key");
     }
 
     #[test]

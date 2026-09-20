@@ -394,7 +394,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | ✅ MultiFile + tip gen GREEN (P3.400); twin WDB-308/298 |
 | P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | ✅ MultiFile GREEN; tip GREEN (P3.401 gate — demoted `&str` sql_exec takes `&emit.*`) |
 | P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | ✅ MultiFile + tip gen GREEN (P3.406); twin WDB-134 |
-| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | 🆕 RED / filed (P3.404); tip RED; **indexed MultiFile also RED** (`goal_x as usize`, P3.407) |
+| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | ✅ MultiFile + tip GREEN (P3.408) — narrow `_usize` emit reconcile (no `contains("_usize")` on `best_idx_usize`) |
 | P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | 🆕 RED / filed (P3.404); tip/game-core npc_behavior RED |
 | P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | 🆕 RED / filed (P3.404); tip/game-core blackboard RED |
 | P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_wdb330_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | 🆕 RED / filed (P3.405); tip/game-core RED |
@@ -3108,15 +3108,15 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | Tip **WDB-326** HashMap f32 get `Some(v) => *v` (astar/navmesh) | ✅ GREEN (P3.406) — block_generation skips `*v` after `.copied()` |
-| Tip **WDB-327** i32 coord `== goal as usize` (astar) | ❌ RED — MultiFile GREEN; tip RED (E0308/E0277) |
+| Tip **WDB-327** i32 coord `== goal as usize` (astar) | ✅ GREEN (P3.408) — indexed field load stays i32 |
 | Tip **WDB-328** i64 neg-init loop `_i32` lits (npc_behavior) | ❌ RED — MultiFile GREEN; tip RED; overlaps P3.403 eco gate |
 | Tip **WDB-329** `Vec::remove(&idx as usize)` (blackboard) | ❌ RED — MultiFile GREEN; tip RED (E0606) |
 | Tip **WDB-325** sql_exec | ✅ GREEN (P3.401 demoted-formal gate) |
 | Game-core cargo | ❌ **332** errors (E0308×188) |
 
-**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → WDB-326 **2 passed** (P3.406); 327–329 tip RED.
+**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → WDB-326/327 **GREEN** (P3.406/P3.408); 328–329 tip RED.
 
-**Compiler agent priority:** tip greens **WDB-327–329**. No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip greens **WDB-328–329** (+ **330–336**). No Phase 606+. No `windjammer/src` edits from DB agent.
 
 
 ## P3.405 WindjammerDB CQ-C5 — game-core tip REDs WDB-330–333 (2026-09-19)
@@ -3156,11 +3156,23 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-335** tps `collides_point(grid.clone(), …)` into `&VoxelGrid` | 🆕 RED / filed — MultiFile GREEN; tip RED |
 | Tip **WDB-336** mesh_renderer `push_mat4(&mut data.clone(), …)` | 🆕 RED / filed — MultiFile GREEN; tip RED |
 | Tip **WDB-326** | ✅ GREEN (P3.406) |
-| Tip **WDB-330–333** / **327–329** | ❌ still tip RED |
+| Tip **WDB-330–333** / **328–329** | ❌ still tip RED |
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb334_ wdb335_ wdb336_` → **3 MultiFile passed / 3 tip failed** (expected tip RED).
 
 **Compiler agent priority:** tip greens **WDB-334–336** (+ **330–333**, **327–329**). No Phase 606+. No `windjammer/src` edits from DB agent.
 
 
-**Also (WDB-327 tighten):** indexed `open_set[best_idx_usize].x == goal_x` MultiFile now emits `goal_x as usize` → MultiFile RED (was GREEN on bare params). TDD: `wdb327_module_file_indexed` → **1 failed** (expected).
+**Also (WDB-327 tighten):** indexed `open_set[best_idx_usize].x == goal_x` MultiFile was RED under P3.407; **GREEN in P3.408**.
+
+## P3.408 — WDB-327 indexed i32 field vs `goal as usize` (2026-09-20)
+
+**Bug:** `let current_x = open_set[best_idx_usize].x` then `current_x == goal_x` emitted `goal_x as usize` (and later `current_x as i32` for neighbors).
+
+**Root cause layer:** (temporary) reconcile — `reconcile_ambiguous_int_local_after_let` used `emitted_rhs.contains("_usize")`, which matched the *identifier* `best_idx_usize` inside the field-load RHS and falsely widened the i32 binding to usize.
+
+**Fix:** Replace broad `contains("_usize")` with `emitted_rhs_indicates_usize_literal_width` (digit-before-`_usize` / ` as usize` / bare `*_usize` binding copy only).
+
+**What became unnecessary:** Heuristic that treated any `_usize` substring in emitted RHS as usize width.
+
+**Gates:** `cargo test --release --test all -- wdb327_` → **3 passed**; `usize_i_plus_one_assign i32_inferred_loop_counter wdb327_ wdb308_ wdb303_` → **9 passed**.

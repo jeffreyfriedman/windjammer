@@ -338,8 +338,10 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
         }
-        if emitted_rhs.ends_with("_usize")
-            || emitted_rhs.contains("_usize")
+        // WDB-327: do NOT use `contains("_usize")` — identifiers like `best_idx_usize`
+        // inside `open_set[best_idx_usize].x` falsely widened i32 field loads to usize
+        // (`current_x == goal_x as usize`). Only real usize *literal* suffixes / casts.
+        if Self::emitted_rhs_indicates_usize_literal_width(emitted_rhs)
             || self.int_type_for_mixed_int_codegen(value) == IntType::Usize
         {
             self.local_var_types
@@ -369,6 +371,31 @@ impl<'ast> CodeGenerator<'ast> {
         {
             self.local_var_types.insert(name.to_string(), Type::Uint);
         }
+    }
+
+    /// Emitted RHS is usize-width from a literal suffix / cast — not from an identifier
+    /// that merely contains the substring `_usize` (WDB-327 / `best_idx_usize`).
+    fn emitted_rhs_indicates_usize_literal_width(emitted: &str) -> bool {
+        if emitted.contains(" as usize") {
+            return true;
+        }
+        // `0_usize`, `i + 1_usize`, `(0_usize)` — digit immediately before `_usize`.
+        let mut rest = emitted;
+        while let Some(idx) = rest.find("_usize") {
+            if rest[..idx]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_ascii_digit())
+            {
+                return true;
+            }
+            rest = &rest[idx + "_usize".len()..];
+        }
+        // Bare copy of a usize-named binding: `let x = best_idx_usize`.
+        let trimmed = emitted
+            .trim()
+            .trim_matches(|c| c == '(' || c == ')');
+        trimmed.ends_with("_usize") && !trimmed.contains('.') && !trimmed.contains('[')
     }
 
     /// WDB-305: untyped `let mut best_count = 0` defaults to return-width i64 while later
