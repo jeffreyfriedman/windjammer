@@ -394,7 +394,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | ✅ MultiFile + tip gen GREEN (P3.400); twin WDB-308/298 |
 | P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | ✅ MultiFile GREEN; tip GREEN (P3.401 gate — demoted `&str` sql_exec takes `&emit.*`) |
 | P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | ✅ MultiFile + tip gen GREEN (P3.406); twin WDB-134 |
-| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | 🆕 RED / filed (P3.404); tip/game-core astar RED |
+| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | 🆕 RED / filed (P3.404); tip RED; **indexed MultiFile also RED** (`goal_x as usize`, P3.407) |
 | P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | 🆕 RED / filed (P3.404); tip/game-core npc_behavior RED |
 | P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | 🆕 RED / filed (P3.404); tip/game-core blackboard RED |
 | P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_wdb330_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | 🆕 RED / filed (P3.405); tip/game-core RED |
@@ -3162,3 +3162,5 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Compiler agent priority:** tip greens **WDB-334–336** (+ **330–333**, **327–329**). No Phase 606+. No `windjammer/src` edits from DB agent.
 
+
+**Also (WDB-327 tighten):** indexed `open_set[best_idx_usize].x == goal_x` MultiFile now emits `goal_x as usize` → MultiFile RED (was GREEN on bare params). TDD: `wdb327_module_file_indexed` → **1 failed** (expected).
