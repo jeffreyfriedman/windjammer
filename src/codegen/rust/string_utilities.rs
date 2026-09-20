@@ -493,30 +493,52 @@ pub fn callee_borrows_string_param(
 ///
 /// - `"lit".to_string()` → `"lit"` (literal is already `&str`)
 /// - other `….to_string()` / `….to_owned()` → `&….to_string()` (borrow for `Pattern`)
+/// Peel a leading `&` from char literals (`&'.'` → `'.'`).
+///
+/// P3.402: `str::split('.')` must emit bare `'.'` (Pattern by value). Call-site
+/// Borrow may still prefix `&` when Pattern formal lookup misses.
+pub fn peel_amp_from_char_literal_arg(
+    arg_expr: &crate::parser::Expression,
+    arg_str: &mut String,
+) {
+    let mut s = arg_str.trim().to_string();
+    while s.starts_with('&') && !s.starts_with("&mut ") {
+        s = s[1..].trim().to_string();
+    }
+    let is_char_ast = matches!(
+        arg_expr,
+        crate::parser::Expression::Literal {
+            value: crate::parser::Literal::Char(_),
+            ..
+        }
+    );
+    if is_char_ast
+        || crate::codegen::rust::expression_utilities::is_rust_char_literal_text(&s)
+    {
+        *arg_str = s;
+    }
+}
+
+/// Normalize an owned-string producer when the callee formal is `&str` / Pattern.
+///
+/// - `"lit".to_string()` → `"lit"` (literal is already `&str`)
+/// - other `….to_string()` / `….to_owned()` → `&….to_string()` (borrow for `Pattern`)
 pub fn normalize_owned_string_producer_for_str_ref_param(
     arg_expr: &crate::parser::Expression,
     arg_str: &mut String,
 ) {
     // P3.402: char is Copy + Pattern by value. Borrow may have prefixed `&`
     // (`split(&'.')` → E0277). Peel to a bare char literal.
+    peel_amp_from_char_literal_arg(arg_expr, arg_str);
+    if matches!(
+        arg_expr,
+        crate::parser::Expression::Literal {
+            value: crate::parser::Literal::Char(_),
+            ..
+        }
+    ) || crate::codegen::rust::expression_utilities::is_rust_char_literal_text(arg_str)
     {
-        let mut s = arg_str.trim().to_string();
-        while s.starts_with('&') && !s.starts_with("&mut ") {
-            s = s[1..].trim().to_string();
-        }
-        let is_char_ast = matches!(
-            arg_expr,
-            crate::parser::Expression::Literal {
-                value: crate::parser::Literal::Char(_),
-                ..
-            }
-        );
-        if is_char_ast
-            || crate::codegen::rust::expression_utilities::is_rust_char_literal_text(&s)
-        {
-            *arg_str = s;
-            return;
-        }
+        return;
     }
     if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
         // Peel `&String::from("lit")` / `"lit".to_string()` → bare `"lit"` for `&str`.

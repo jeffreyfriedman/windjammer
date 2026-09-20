@@ -1347,6 +1347,10 @@ impl<'ast> CodeGenerator<'ast> {
                 );
                 if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
             }
+            // P3.402: always peel `&'.'` even when Pattern formal lookup missed.
+            crate::codegen::rust::string_utilities::peel_amp_from_char_literal_arg(
+                arg_expr, arg_str,
+            );
         }
         if let Some(ref rt) = receiver_type_name {
             let qualified = format!("{rt}::{method}");

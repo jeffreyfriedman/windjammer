@@ -1722,14 +1722,18 @@ impl<'ast> CodeGenerator<'ast> {
         // free functions that actually emit owned `String` (circular-dep convergence).
         // Never suppress mut-borrow when the slot expects `&mut T`.
         if receiver_type_name.is_none()
-            && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
-                &self.signature_registry,
-                self.global_signature_registry.as_deref(),
-                callee_name,
-                &sig,
-                param_idx,
-                arg_index,
-            )
+            && {
+                let registry_lookup = self.signature_lookup_callee_name(callee_name);
+                crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
+                    &self.signature_registry,
+                    self.global_signature_registry.as_deref(),
+                    callee_name,
+                    &sig,
+                    param_idx,
+                    arg_index,
+                    registry_lookup.as_ref(),
+                )
+            }
             && coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
             && !self.ir_sig_arg_expects_mut_borrow(&sig, arg_index)
@@ -1782,14 +1786,18 @@ impl<'ast> CodeGenerator<'ast> {
             if self.in_user_written_closure && self.user_closure_params.contains(name))
             && !matches!(arg_expr, Expression::Closure { .. })
             && self.ir_sig_arg_expects_shared_borrow(&sig, arg_index))
-            && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
-            &self.signature_registry,
-            self.global_signature_registry.as_deref(),
-            callee_name,
-            &sig,
-            param_idx,
-            arg_index,
-        ) && coerced.starts_with('&')
+            && {
+                let registry_lookup = self.signature_lookup_callee_name(callee_name);
+                crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
+                    &self.signature_registry,
+                    self.global_signature_registry.as_deref(),
+                    callee_name,
+                    &sig,
+                    param_idx,
+                    arg_index,
+                    registry_lookup.as_ref(),
+                )
+            } && coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
         {
             coerced = coerced[1..].to_string();
@@ -2743,6 +2751,22 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_expr,
                 &mut coerced,
             );
+            if receiver_type_name.is_none()
+                && matches!(arg_expr, Expression::Identifier { .. })
+                && !coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && self.ir_callee_arg_expects_shared_borrow(
+                    registry,
+                    callee_name,
+                    arg_index,
+                    user_arg_count,
+                    Some(&sig),
+                )
+            {
+                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
+                    &mut coerced,
+                );
+            }
         } else if coerced.ends_with(".to_string().clone()") || coerced.ends_with(".to_owned().clone()")
         {
             crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
@@ -3314,16 +3338,26 @@ impl<'ast> CodeGenerator<'ast> {
         // Stale registry `param_types: Reference(str)` alone must not force borrow when
         // emission still owns `String` (P3.389 regression / join_path seed).
         if let Expression::Identifier { name, .. } = arg_expr {
-            let registry_emits_shared = registry
-                .get_signature(callee_name)
-                .or_else(|| {
-                    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-                    registry.get_signature(simple)
-                })
-                .is_some_and(|rs| {
-                    let pidx = rs.arg_param_index(arg_index);
-                    crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
-                });
+            let cross_crate_import = self.is_import_alias_cross_crate_call(callee_name);
+            let lookup_callee = self.signature_lookup_callee_name(callee_name);
+            let lookup_ref = lookup_callee.as_ref();
+            let registry_sig_shared = |reg: &SignatureRegistry| {
+                reg.get_signature(callee_name)
+                    .or_else(|| reg.get_signature(lookup_ref))
+                    .or_else(|| {
+                        let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+                        reg.get_signature(simple)
+                    })
+                    .is_some_and(|rs| {
+                        let pidx = rs.arg_param_index(arg_index);
+                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
+                    })
+            };
+            let registry_emits_shared = registry_sig_shared(registry)
+                || self
+                    .global_signature_registry
+                    .as_ref()
+                    .is_some_and(|g| registry_sig_shared(g));
             let callee_wants_shared = registry_emits_shared
                 || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
                 || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
@@ -3334,9 +3368,20 @@ impl<'ast> CodeGenerator<'ast> {
                 && !coerced.starts_with("&mut ")
             {
                 coerced = format!("&{coerced}");
+            } else if cross_crate_import
+                && callee_wants_shared
+                && !coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                // Path-dep metadata: honor dependency `Borrowed` / `emitted_rust_ref_params`
+                // even when the caller formal was demoted to `&str` (explicit `&` at boundary).
+                coerced = format!("&{coerced}");
             }
             // Already-demoted caller `&str` / `&T`: bare at shared-ref call sites.
-            if self.caller_formal_emitted_shared_ref(name) && coerced == format!("&{name}") {
+            if self.caller_formal_emitted_shared_ref(name)
+                && coerced == format!("&{name}")
+                && !cross_crate_import
+            {
                 coerced = name.to_string();
             }
 
@@ -4222,7 +4267,8 @@ impl<'ast> CodeGenerator<'ast> {
         );
 
         // Stale `&` on owned user free-fn formals (circular-dep / multipass).
-        let skip_stale_borrow = !callee_name.contains("::")
+        let registry_lookup = self.signature_lookup_callee_name(callee_name);
+        let skip_stale_borrow = !registry_lookup.contains("::")
             && !self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
             && crate::codegen::rust::call_site_borrow::skip_stale_borrow_on_owned_user_free_fn_with_global(
                 registry,
@@ -4231,6 +4277,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &sig,
                 param_idx,
                 arg_index,
+                registry_lookup.as_ref(),
             );
         if skip_stale_borrow
             && (coerced.starts_with("&mut ")
@@ -8287,10 +8334,19 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         let lookup_callee = self.signature_lookup_callee_name(callee_name);
         let lookup = lookup_callee.as_ref();
-        if self.preregistered_free_call_arg_expects_borrow(lookup, arg_index) {
+        // Preregistered tables are keyed by bare import alias (`glob_filter`), not qualified lookup.
+        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index) {
             return true;
         }
-        if self.preregistered_free_call_arg_emits_owned(lookup, arg_index) {
+        if lookup != callee_name
+            && self.preregistered_free_call_arg_expects_borrow(lookup, arg_index)
+        {
+            return true;
+        }
+        if self.preregistered_free_call_arg_emits_owned(callee_name, arg_index) {
+            return false;
+        }
+        if lookup != callee_name && self.preregistered_free_call_arg_emits_owned(lookup, arg_index) {
             return false;
         }
         // Prefer emitted owned contracts over stale Borrowed analyzer/global stubs.

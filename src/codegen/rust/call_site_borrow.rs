@@ -214,6 +214,7 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn(
         call_sig,
         param_idx,
         arg_index,
+        callee_name,
     )
 }
 
@@ -238,8 +239,10 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     call_sig: &FunctionSignature,
     param_idx: usize,
     arg_index: usize,
+    registry_lookup_name: &str,
 ) -> bool {
-    if callee_name.contains("::") {
+    // `use dep::fn as alias` → lookup is `dep::fn`; treat like module-qualified.
+    if registry_lookup_name.contains("::") {
         return false;
     }
     let check = |sig: &FunctionSignature, pidx: usize| -> bool {
@@ -276,9 +279,9 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     };
     if any_emits_shared_ref(call_sig)
         || global
-            .and_then(|g| lookup_free_fn_signature(g, callee_name))
+            .and_then(|g| lookup_free_fn_signature(g, registry_lookup_name))
             .is_some_and(any_emits_shared_ref)
-        || lookup_free_fn_signature(registry, callee_name).is_some_and(any_emits_shared_ref)
+        || lookup_free_fn_signature(registry, registry_lookup_name).is_some_and(any_emits_shared_ref)
     {
         return false;
     }
@@ -291,8 +294,8 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     if call_sig.emitted_rust_ref_params.is_some() {
         return false;
     }
-    lookup_free_fn_signature(registry, callee_name)
-        .or_else(|| global.and_then(|g| lookup_free_fn_signature(g, callee_name)))
+    lookup_free_fn_signature(registry, registry_lookup_name)
+        .or_else(|| global.and_then(|g| lookup_free_fn_signature(g, registry_lookup_name)))
         .is_some_and(|rs| {
             let pidx = rs.arg_param_index(arg_index);
             check(rs, pidx)

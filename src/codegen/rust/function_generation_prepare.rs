@@ -10800,7 +10800,11 @@ impl<'ast> CodeGenerator<'ast> {
                 callee_name,
             );
         let keys: Vec<&str> = if import_alias {
-            vec![lookup_ref]
+            if skip_bare_homonym {
+                vec![lookup_ref]
+            } else {
+                vec![lookup_ref, simple]
+            }
         } else if skip_bare_homonym {
             vec![callee_name, lookup_ref]
         } else {

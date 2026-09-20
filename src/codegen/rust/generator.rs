@@ -515,6 +515,14 @@ impl<'ast> CodeGenerator<'ast> {
         std::borrow::Cow::Borrowed(callee_name)
     }
 
+    /// Path-dep import alias (`use dep::fn as alias` → bare `alias` at call sites).
+    pub(in crate::codegen::rust) fn is_import_alias_cross_crate_call(
+        &self,
+        callee_name: &str,
+    ) -> bool {
+        !callee_name.contains("::") && self.import_fn_alias_map.contains_key(callee_name)
+    }
+
     /// Bare `error` after `use std::log` → `log_mod::error` when that import uniquely provides it.
     pub(in crate::codegen::rust) fn imported_runtime_qualified_callee(
         &self,
@@ -1935,12 +1943,14 @@ impl<'ast> CodeGenerator<'ast> {
         // Module-path qualified keys from library multipass (e.g. `foo::Type::method`).
         // Prefer caller-module affinity over first-match (WDB-332 dual AudioChannel).
         let suffix = format!("::{receiver_type}::{method}");
-        if let Some((_key, sig)) = crate::codegen::rust::call_signature_resolution::best_suffix_match_for_caller(
-            &self.signature_registry,
-            &suffix,
-            arg_count,
-            caller_module.as_deref(),
-        ) {
+        if let Some((_key, sig)) =
+            crate::codegen::rust::call_signature_resolution::best_suffix_match_for_caller(
+                &self.signature_registry,
+                &suffix,
+                arg_count,
+                caller_module.as_deref(),
+            )
+        {
             return Some(sig);
         }
         if let Some(global) = &self.global_signature_registry {

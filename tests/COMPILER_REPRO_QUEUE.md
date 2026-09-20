@@ -3270,9 +3270,9 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 - Never auto-clone override into mut formals; never append `.clone()` onto `&mut` places
 - Tip gates match mut-arg clone temps only (not owned peer `.clone()` on same line)
 
-**TDD:** `cargo test --test all --features integration_tests -- wdb336_ wdb337_ wdb342_` → **6 passed**.
+**TDD:** `cargo test --test all --features integration_tests -- wdb336_ wdb337_ wdb342_ wdb338_` → **8 passed**.
 
-**Compiler agent priority:** tip greens **WDB-338–341**, **343–348**, **332–333**. No Phase 606+.
+**Compiler agent priority:** tip greens **WDB-339–341**, **343–348**, **332–333**. No Phase 606+.
 
 
 ## P3.414 WindjammerDB CQ-C5 — tip REDs WDB-349–351 + mark 339 GREEN (2026-09-20)
