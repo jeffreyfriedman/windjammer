@@ -196,6 +196,15 @@ pub(crate) fn module_path_affinity(caller_module: &str, signature_key: &str) -> 
         .count()
 }
 
+pub(crate) fn best_suffix_match_for_caller(
+    registry: &SignatureRegistry,
+    suffix: &str,
+    arg_count: usize,
+    caller_module: Option<&str>,
+) -> Option<(String, FunctionSignature)> {
+    best_module_qualified_suffix_match(registry, suffix, arg_count, caller_module)
+}
+
 fn best_module_qualified_suffix_match(
     registry: &SignatureRegistry,
     suffix: &str,
