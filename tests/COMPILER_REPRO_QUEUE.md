@@ -378,13 +378,13 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 CLI residual `u32=0_usize` / `args[i+1]`** | `bug_wdb308_module_file_wave1_cli_u32_init_and_index_must_peer_test` | 🆕 RED / filed (P3.392); tip-out RED; twin WDB-298/303 coverage |
 | P1 | **owned csr into demoted `&mut` take must be `mut`** | `bug_wdb309_module_file_owned_into_mut_ref_must_declare_mut_test` | 🆕 RED / filed (P3.392); tip-out RED; MultiFile isolate GREEN |
 | P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_wdb310_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
-| P1 | **timeseries/vertex_map residual `u32=0_usize`** | `bug_wdb311_module_file_u32_loop_residual_timeseries_vertex_map_test` | 🆕 RED / filed (P3.393); tip-out RED; twin WDB-298/308 |
+| P1 | **timeseries/vertex_map residual `u32=0_usize`** | `bug_wdb311_module_file_u32_loop_residual_timeseries_vertex_map_test` | ✅ tip GREEN (P3.401 tip-out/gen sync); twin WDB-298/308 |
 | P1 | **publish owned String must not receive `&dated_label.clone()`** | `bug_wdb312_module_file_owned_string_must_not_receive_ref_clone_publish_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
-| P1 | **pg_wire/OTLP residual `u32=0_usize`** | `bug_wdb313_module_file_u32_loop_residual_pg_wire_otlp_test` | 🆕 RED / filed (P3.394); tip-out RED; twin WDB-298/308/311 |
+| P1 | **pg_wire/OTLP residual `u32=0_usize`** | `bug_wdb313_module_file_u32_loop_residual_pg_wire_otlp_test` | ✅ tip GREEN (P3.401 tip-out/gen sync); twin WDB-298/308/311 |
 | P1 | **hardware report owned String must not receive `&out`** | `bug_wdb314_module_file_owned_string_must_not_receive_ref_out_report_test` | 🆕 RED / filed (P3.394); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
 | P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | ✅ MultiFile GREEN (P3.395); tip-out lag |
 | P1 | **scale status owned String must not receive `&out`** | `bug_wdb316_module_file_owned_string_must_not_receive_ref_out_scale_status_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-314 |
-| P1 | **vertex_map.hashmap/.vec residual `u32=0_usize`** | `bug_wdb317_module_file_u32_loop_residual_vertex_map_hashmap_vec_test` | 🆕 RED / filed (P3.395); tip-out RED; twin WDB-311 |
+| P1 | **vertex_map.hashmap/.vec residual `u32=0_usize`** | `bug_wdb317_module_file_u32_loop_residual_vertex_map_hashmap_vec_test` | ✅ tip GREEN (P3.400 tip regen after WDB-308/324) |
 | P1 | **publish owned String first formal must not receive `&out`** | `bug_wdb318_module_file_owned_string_first_formal_must_not_receive_ref_out_publish_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312/314 |
 | P1 | **publish_check CLI owned String must not receive `&dated`** | `bug_wdb319_module_file_owned_string_must_not_receive_ref_dated_publish_check_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312 |
 | P1 | **publish_allows owned String must not receive bare `&dated_label`** | `bug_wdb320_module_file_owned_string_must_not_receive_bare_ref_publish_allows_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312 |
@@ -392,7 +392,11 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **LSQB push_adj owned String key must not receive `&out_key`** | `bug_wdb322_module_file_owned_string_key_must_not_receive_ref_lsqb_push_adj_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
 | P1 | **Arrow FFI owned String must not receive `&vname`/`&lname`** | `bug_wdb323_module_file_owned_string_must_not_receive_ref_names_arrow_ffi_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
 | P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | ✅ MultiFile + tip gen GREEN (P3.400); twin WDB-308/298 |
-| P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | 🆕 RED / filed (P3.399); tip-out RED; MultiFile isolate GREEN; twin WDB-306/320; cross-crate `ArrowColumnarBatch::sql_exec` |
+| P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | ✅ MultiFile GREEN; tip GREEN (P3.401 gate — demoted `&str` sql_exec takes `&emit.*`) |
+| P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | 🆕 RED / filed (P3.404); tip/game-core RED; twin WDB-134 |
+| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | 🆕 RED / filed (P3.404); tip/game-core astar RED |
+| P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | 🆕 RED / filed (P3.404); tip/game-core npc_behavior RED |
+| P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | 🆕 RED / filed (P3.404); tip/game-core blackboard RED |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -2806,14 +2810,14 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-325** DF analytic `sql_exec(..., &emit.table, &right_name, &emit.sql)` → owned String | ❌ RED — tip-out/gen; MultiFile isolate GREEN (struct-store owned formals) |
+| Tip **WDB-325** DF analytic `sql_exec(..., &emit.table, …)` | ✅ tip GREEN (P3.401) — demoted `&str` formals (WDB-244); MultiFile owned free-fn GREEN |
 | Tip **WDB-321** LSQB edge `&content` | ✅ tip GREEN after call-line-only assert (was false-RED on `split_lines(&content)`) |
 | Tip **WDB-324** navmesh `u32=0_usize` | ✅ GREEN (P3.400) |
-| Tip **WDB-311/313** | ❌ still RED (`u32=0_usize`) |
+| Tip **WDB-311/313/317** | ✅ tip GREEN (P3.401) |
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb321_tip wdb324_ wdb325_`
 
-**Compiler agent priority:** tip green **WDB-325** (cross-crate owned `sql_exec` string args). No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** next game-core tip REDs **WDB-326–329**. No Phase 606+. No `windjammer/src` edits from DB agent.
 
 ## P3.400 — WDB-308/324 u32 return-width counters vs `.len()` (2026-09-19)
 
@@ -2830,7 +2834,23 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb308_ wdb324_` → **4 passed**.
 
-**Compiler agent priority:** tip green **WDB-325** sql_exec `&emit.*`; residual u32 init **WDB-311/313/317**. No Phase 606+.
+**Compiler agent priority:** next game-core tip REDs **WDB-326–329**. No Phase 606+.
+
+## P3.401 — tip-out sync + WDB-325 demoted sql_exec gate (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-311/313/317** `u32=0_usize` tip-out/gen | ✅ GREEN (tip regen after P3.400) |
+| Tip **WDB-325** DF analytic `&emit.*` into sql_exec | ✅ GREEN — formals demoted `&str` (WDB-244); gate skips when demoted |
+| MultiFile **WDB-325** owned free-fn isolate | ✅ GREEN |
+
+**Root cause (325 false-RED):** tip-out asserted no `&emit.*` while cross-crate `ArrowColumnarBatch::sql_exec` is intentionally demoted to `&str`.
+
+**Fix:** tip gate checks columnar gen formals; only fail when `left_table: String` still receives `&emit.*`.
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb311_ wdb313_ wdb317_ wdb325_` → **5 passed**.
+
+**Compiler agent priority:** game-core tip E0308 cluster **WDB-326+**; stdlib form/glob wiring REDs. No Phase 606+.
 
 ## P3.383 — tip-out residual gate accuracy + Custom demotion Borrow (2026-09-19)
 
@@ -3021,4 +3041,56 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Gates:** `bug_eco_wj_semver_owned_into_demoted_str_tail_call_must_borrow_test`, `bug_eco_wj_toml_demoted_str_tuple_push_must_to_string_test` (PASSING).
 
 **Ecosystem:** `wj-timefmt` / `wj-semver` / `wj-toml` / `wj-config` tip GREEN.
+
+
+## P3.401 — string call arg into string formal must not cast i32 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| `string_call_arg_into_string_formal_must_not_cast_i32` | ❌ RED (filed) |
+| Tip-out `gen/audio/mixer.rs` `(name as i32)` | ❌ RED |
+
+**Product:** `AudioChannel::new(id, name)` → `AudioChannel::new(id, (name as i32))` (E0277 From<i32>).
+
+**Isolate:** same-file GREEN; multipass sibling `audio_mixer::AudioChannel::new(id, priority: i32)` poisons `mixer` string call (filed dual-mod fixture).
+
+**Compiler agent:** resolve `AudioChannel::new` to the *local* type's signature — never apply sibling-module `i32` formal casts to a `string` arg.
+
+## P3.402 — `str.split('.')` must not emit `split(&'.')` (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| `str_split_char_literal_must_not_emit_amp_char` | ❌ RED (filed) |
+| Tip-out asset_browser / scene_saver | ❌ RED |
+
+**Product:** `path.split('.')` → `path.split(&'.')` (E0277 Pattern).
+
+**Compiler agent:** emit bare `'.'` / `"/"` Pattern, not `&char`.
+
+## P3.403 — neg `while` counter vs literal peers must not widen i64 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| `i32_neg_while_literal_peers_must_not_widen_i64` | ❌ RED (filed) |
+| Tip-out `gen/ai/npc_behavior.rs` SearchState | ❌ RED |
+
+**Product:** `let mut i = -1; while i <= 1` → `i = -1_i64; while i <= 1_i32` (E0308/E0277).
+
+**Compiler agent:** keep counter + compare/add lit peers one integer width (prefer i32 for small grid loops).
+
+
+## P3.404 WindjammerDB CQ-C5 — game-core tip REDs WDB-326–329 (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-326** HashMap f32 get `Some(v) => *v` (astar/navmesh) | ❌ RED — MultiFile GREEN; tip RED (E0614) |
+| Tip **WDB-327** i32 coord `== goal as usize` (astar) | ❌ RED — MultiFile GREEN; tip RED (E0308/E0277) |
+| Tip **WDB-328** i64 neg-init loop `_i32` lits (npc_behavior) | ❌ RED — MultiFile GREEN; tip RED; overlaps P3.403 eco gate |
+| Tip **WDB-329** `Vec::remove(&idx as usize)` (blackboard) | ❌ RED — MultiFile GREEN; tip RED (E0606) |
+| Tip **WDB-325** sql_exec | ✅ GREEN (P3.401 demoted-formal gate) |
+| Game-core cargo | ❌ **332** errors (E0308×188) |
+
+**TDD:** `wdb326_ wdb327_ wdb328_ wdb329_` → **4 passed / 4 failed** (expected tip RED).
+
+**Compiler agent priority:** tip greens **WDB-326–329**. No Phase 606+. No `windjammer/src` edits from DB agent.
 
