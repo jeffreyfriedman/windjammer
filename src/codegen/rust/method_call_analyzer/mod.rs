@@ -108,6 +108,19 @@ impl MethodCallAnalyzer {
             return false;
         }
 
+        // P3.402: char is Copy and implements Pattern by value (`str::split('.')`).
+        // Adding `&` yields `&char`, which is not a Pattern (E0277).
+        let is_char_literal = matches!(
+            arg,
+            Expression::Literal {
+                value: Literal::Char(_),
+                ..
+            }
+        );
+        if is_char_literal {
+            return false;
+        }
+
         let is_integer_literal = matches!(
             arg,
             Expression::Literal {
