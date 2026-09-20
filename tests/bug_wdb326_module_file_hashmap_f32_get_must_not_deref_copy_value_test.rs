@@ -28,10 +28,11 @@ const SRC: &str = r#"
 use std::collections::HashMap
 
 pub fn lookup(scores: HashMap<(i32, i32), f32>, x: i32, y: i32) -> f32 {
-    match scores.get((x, y)) {
+    let current_g = match scores.get((x, y)) {
         Some(v) => v,
         None => 999999.0,
     }
+    current_g
 }
 "#;
 
