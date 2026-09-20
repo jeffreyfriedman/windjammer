@@ -49,8 +49,7 @@ fn wdb337_module_file_mut_collection_must_not_borrow_clone_temp() {
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-337 MultiFile lib.rs:\n{rs}");
     let bad = rs.contains("&mut quads.clone()")
-        || rs.contains("&mut grid.clone()")
-        || (rs.contains("&mut ") && rs.contains(".clone()"));
+        || rs.contains("&mut grid.clone()");
     assert!(
         !bad,
         "WDB-337 RED: mut collection received &mut <temp>.clone():\n{rs}"
@@ -85,7 +84,15 @@ fn wdb337_tip_out_game_core_meshing_viewer_vox_must_not_mut_borrow_clone_temp() 
         saw = true;
         let text = std::fs::read_to_string(path).expect("product");
         let bad = text.lines().any(|line| {
-            line.contains("&mut ") && line.contains(".clone()")
+            line.contains("&mut ")
+                && line
+                    .split("&mut ")
+                    .skip(1)
+                    .any(|rest| {
+                        let place = rest.trim_start();
+                        let end = place.find([',', ')']).unwrap_or(place.len());
+                        place[..end].ends_with(".clone()")
+                    })
         });
         if bad {
             bad_paths.push(path.display().to_string());

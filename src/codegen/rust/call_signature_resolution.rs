@@ -10,7 +10,8 @@ use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
 
 pub(crate) use super::signature_promotion::{
-    best_method_signature_for_receiver, body_borrow_must_not_replace_owned_copy_formal,
+    best_method_signature_for_receiver, best_method_signature_for_receiver_in_module,
+    body_borrow_must_not_replace_owned_copy_formal,
     body_borrow_must_not_replace_owned_formal_stub, effective_user_arg_count,
     has_stale_owned_non_copy_params, param_type_is_owned_non_text, pick_best_resolved_signature,
     prefer_converged_over_stub, signature_is_declaration_stub_like,
@@ -163,7 +164,31 @@ pub(crate) fn has_ownership_collision_for_call(
 ///
 /// **Key invariant**: bare `get_signature("push")` is NEVER attempted.
 /// Shared `::`-segment prefix length between caller module and a registry key.
-fn module_path_affinity(caller_module: &str, signature_key: &str) -> usize {
+///
+/// Full-module matches (`caller=audio::audio_mixer`, key=`audio::audio_mixer::AudioChannel::new`)
+/// score far above sibling-prefix ties (`audio::mixer::…` also shares `audio`).
+/// File-stem-only callers (`audio_mixer`) still beat siblings via `::{stem}::` containment.
+pub(crate) fn module_path_affinity(caller_module: &str, signature_key: &str) -> usize {
+    if caller_module.is_empty() {
+        return 0;
+    }
+    let prefix = format!("{caller_module}::");
+    if signature_key.starts_with(&prefix) || signature_key == caller_module {
+        return caller_module
+            .split("::")
+            .filter(|s| !s.is_empty())
+            .count()
+            .saturating_mul(100);
+    }
+    // Stem-only fallback: `audio_mixer` matches `…::audio_mixer::Type::method`.
+    if !caller_module.contains("::") {
+        let needle = format!("::{caller_module}::");
+        if signature_key.contains(&needle)
+            || signature_key.starts_with(&format!("{caller_module}::"))
+        {
+            return 50;
+        }
+    }
     caller_module
         .split("::")
         .zip(signature_key.split("::"))
@@ -528,18 +553,37 @@ pub fn resolve_method_for_call_site(
     method: &str,
     arg_count: usize,
 ) -> Option<ResolvedSignature> {
+    resolve_method_for_call_site_in_module(local, global, receiver_type, method, arg_count, None)
+}
+
+/// Like [`resolve_method_for_call_site`], but prefers signatures whose module path
+/// matches the caller (WDB-332: `audio::audio_mixer::AudioChannel::new` vs
+/// `audio::mixer::AudioChannel::new(name: string)`).
+pub fn resolve_method_for_call_site_in_module(
+    local: &SignatureRegistry,
+    global: Option<&SignatureRegistry>,
+    receiver_type: &str,
+    method: &str,
+    arg_count: usize,
+    caller_module: Option<&str>,
+) -> Option<ResolvedSignature> {
     let to_resolved = |registry: &SignatureRegistry| -> Option<ResolvedSignature> {
-        best_method_signature_for_receiver(registry, receiver_type, method, arg_count).map(
-            |(qualified_key, sig)| {
-                let collision_key = format!("{receiver_type}::{method}");
-                ResolvedSignature {
-                    sig,
-                    qualified_key,
-                    resolution_method: ResolutionMethod::ReceiverQualified,
-                    has_collision: registry.has_collision(&collision_key),
-                }
-            },
+        best_method_signature_for_receiver_in_module(
+            registry,
+            receiver_type,
+            method,
+            arg_count,
+            caller_module,
         )
+        .map(|(qualified_key, sig)| {
+            let collision_key = format!("{receiver_type}::{method}");
+            ResolvedSignature {
+                sig,
+                qualified_key,
+                resolution_method: ResolutionMethod::ReceiverQualified,
+                has_collision: registry.has_collision(&collision_key),
+            }
+        })
     };
 
     let local_resolved = to_resolved(local);
@@ -603,7 +647,13 @@ pub fn resolve_method_for_call_site(
                     );
                 }
             } else if let Some((_, refreshed)) =
-                best_method_signature_for_receiver(g, receiver_type, method, arg_count)
+                crate::codegen::rust::signature_promotion::best_method_signature_for_receiver_in_module(
+                    g,
+                    receiver_type,
+                    method,
+                    arg_count,
+                    caller_module,
+                )
             {
                 // Bare `Type::method` may have been filtered; module-qualified
                 // defining-module meta still carries `emitted_rust_ref_params`.
@@ -1653,6 +1703,92 @@ mod tests {
 
     fn empty_aliases() -> HashMap<String, String> {
         HashMap::new()
+    }
+
+    #[test]
+    fn wdb332_caller_module_affinity_picks_local_audiochannel_new() {
+        let mut reg = SignatureRegistry::empty();
+        // Sibling mixer: string second formal (wrong for audio_mixer callers).
+        reg.add_function(
+            "audio::mixer::AudioChannel::new".into(),
+            make_sig_with_types(
+                "new",
+                vec![Type::Int32, Type::String],
+                false,
+            ),
+        );
+        // Bare collision key often overwritten by last writer.
+        reg.add_function(
+            "AudioChannel::new".into(),
+            make_sig_with_types(
+                "new",
+                vec![Type::Int32, Type::String],
+                false,
+            ),
+        );
+        // Local audio_mixer: i32 priority formal.
+        reg.add_function(
+            "audio::audio_mixer::AudioChannel::new".into(),
+            make_sig_with_types(
+                "new",
+                vec![Type::Int32, Type::Int32],
+                false,
+            ),
+        );
+
+        assert_eq!(
+            module_path_affinity("audio::audio_mixer", "audio::audio_mixer::AudioChannel::new"),
+            200
+        );
+        assert_eq!(
+            module_path_affinity("audio::audio_mixer", "audio::mixer::AudioChannel::new"),
+            1
+        );
+        assert_eq!(
+            module_path_affinity("audio_mixer", "audio::audio_mixer::AudioChannel::new"),
+            50
+        );
+        assert_eq!(
+            module_path_affinity("audio_mixer", "audio::mixer::AudioChannel::new"),
+            0
+        );
+
+        let resolved = resolve_call_signature(
+            &reg,
+            "AudioChannel::new",
+            Some("AudioChannel"),
+            2,
+            &empty_aliases(),
+            &empty_aliases(),
+            Some("audio::audio_mixer"),
+        )
+        .expect("resolve AudioChannel::new");
+        assert!(
+            matches!(resolved.sig.param_types.get(1), Some(Type::Int32)),
+            "caller-module affinity must pick i32 priority formal, got {:?}",
+            resolved.sig.param_types
+        );
+        assert!(
+            resolved.qualified_key.contains("audio_mixer"),
+            "expected audio_mixer key, got {}",
+            resolved.qualified_key
+        );
+
+        let stem_resolved = resolve_call_signature(
+            &reg,
+            "AudioChannel::new",
+            Some("AudioChannel"),
+            2,
+            &empty_aliases(),
+            &empty_aliases(),
+            Some("audio_mixer"),
+        )
+        .expect("stem-only resolve");
+        assert!(
+            matches!(stem_resolved.sig.param_types.get(1), Some(Type::Int32)),
+            "file-stem affinity must pick i32 priority, got {:?}",
+            stem_resolved.sig.param_types
+        );
     }
 
     #[test]

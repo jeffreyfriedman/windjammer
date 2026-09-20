@@ -41,12 +41,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     // over per-body method_signatures_by_type (may infer Borrowed when a formal is reused
     // inside the callee). Method registry remains fallback for stdlib / not-yet-registered.
     let from_registry = type_name.as_ref().and_then(|tn| {
-        call_signature_resolution::resolve_method_for_call_site(
+        call_signature_resolution::resolve_method_for_call_site_in_module(
             &gen.signature_registry,
             gen.global_signature_registry(),
             tn,
             call_method,
             arguments.len(),
+            gen.current_caller_module_path().as_deref(),
         )
     });
 

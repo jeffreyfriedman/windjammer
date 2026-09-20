@@ -116,7 +116,12 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
                 crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str).to_string();
             continue;
         }
-        if needs_mut && !arg_str.starts_with("&mut ") {
+        if needs_mut {
+            // Always peel `&mut place.clone()` temps, even when already `&mut`-prefixed.
+            crate::codegen::rust::expression_utilities::sanitize_mut_borrow_clone_temp(arg_str);
+            if arg_str.starts_with("&mut ") {
+                continue;
+            }
             if let Expression::Identifier { name, .. } = arg_expr {
                 if gen.identifier_already_mut_ref(name)
                     || gen.emitted_rust_ref_formals.contains(name)
@@ -132,8 +137,8 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
             if arg_str.starts_with('&') {
                 continue;
             }
-            let stripped = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
-            *arg_str = format!("&mut {stripped}");
+            // Mut borrow needs an lvalue — never `&mut binding.clone()` (WDB-336/337/342).
+            crate::codegen::rust::expression_utilities::apply_mut_borrow_prefix(arg_str);
         }
     }
 }
@@ -876,6 +881,10 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Legacy heuristic auto-borrow deleted (Phase 5): IR call-site coercion owns this.
 
     apply_callee_mut_borrow_to_call_args(gen, func_name, &signature, arguments, &mut args);
+    // Terminal sanitize: never leave `&mut place.clone()` temps (WDB-336/337/342).
+    for arg in &mut args {
+        crate::codegen::rust::expression_utilities::sanitize_mut_borrow_clone_temp(arg);
+    }
     apply_owned_string_literal_coercion(gen, func_name, &signature, arguments, &mut args);
 
     let needs_format_temp = |arg_str: &str| -> bool {

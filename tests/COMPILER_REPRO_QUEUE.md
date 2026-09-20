@@ -403,13 +403,13 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **format temp into owned String must not receive `&_temp` (loader)** | `bug_wdb333_module_file_owned_string_format_temp_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
 | P1 | **tps owned Vec3 must not receive `&sample`** | `bug_wdb334_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | ✅ tip GREEN (P3.410 regen); twin WDB-331 |
 | P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.410 regen); opposite polarity of WDB-331 |
-| P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.407); tip/game-core mesh_renderer RED |
-| P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.409); tip meshing/viewer/vox RED; twin WDB-336 |
+| P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413) — strip clone before `&mut` wrap |
+| P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-336 |
 | P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.409); tip placeholder_assets RED |
 | P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | 🆕 RED / filed (P3.409); tip component_viewer RED |
 | P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
 | P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | 🆕 RED / filed (P3.410); **MultiFile + tip RED** |
-| P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED; twin WDB-337 |
+| P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-337 |
 | P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); **MultiFile + tip RED** |
 | P1 | **Copy f32 must not emit `.clone()`** | `bug_wdb344_module_file_copy_f32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED |
 | P1 | **`&mut Vec` must not receive owned `buf.clone()` (csg)** | `bug_wdb345_module_file_mut_vec_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED; twin WDB-338 |
@@ -3246,4 +3246,27 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb346_ wdb347_ wdb348_` → **2 passed / 4 failed** (346/348 MultiFile GREEN; 347 MultiFile+tip RED; all three tip RED).
 
-**Compiler agent priority:** tip greens **WDB-346–348** (+ **332–333**, **336–345**). No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip greens **WDB-346–348** (+ **332–333**, **338–341**, **343–345**). **WDB-336/337/342** GREEN (P3.413). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+## P3.413 — WDB-336/337/342 `&mut place.clone()` temps (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| MultiFile + tip **WDB-336** mesh_renderer `push_mat4(&mut data, …)` | ✅ GREEN |
+| MultiFile + tip **WDB-337** meshing/viewer/vox `&mut quads` | ✅ GREEN |
+| MultiFile + tip **WDB-342** BT executor `&mut active`/`&mut running` | ✅ GREEN |
+
+**Bug:** Local `let mut data = Vec::new()` reused into demoted `&mut Vec` emitted `&mut data.clone()` (temp / E0716 / discarded mutation).
+
+**Root cause:** Auto-clone for reuse fired before/alongside mut demotion; free-call `apply_callee_mut_borrow_to_call_args` wrapped without stripping `.clone()`, and already-`&mut`-prefixed args skipped sanitize.
+
+**Fix:**
+- `sanitize_mut_borrow_clone_temp` / `apply_mut_borrow_prefix` — rewrite `&mut place.clone()` → `&mut place`
+- Terminal sanitize on free-call args; strip before every `&mut` wrap (ir_call_site, typed_lowering, BorrowMut)
+- Never auto-clone override into mut formals; never append `.clone()` onto `&mut` places
+- Tip gates match mut-arg clone temps only (not owned peer `.clone()` on same line)
+
+**TDD:** `cargo test --test all --features integration_tests -- wdb336_ wdb337_ wdb342_` → **6 passed**.
+
+**Compiler agent priority:** tip greens **WDB-338–341**, **343–348**, **332–333**. No Phase 606+.
+

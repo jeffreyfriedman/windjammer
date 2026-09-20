@@ -141,6 +141,29 @@ pub fn borrow_base_expr(expr_str: &str) -> &str {
     expr_str
 }
 
+/// Prefix `&mut` for a call-site lvalue. Strips trailing `.clone()` first so we never
+/// emit `&mut binding.clone()` temps (WDB-336/337/342).
+pub fn apply_mut_borrow_prefix(expr_str: &mut String) {
+    if expr_str.starts_with("&mut ") {
+        sanitize_mut_borrow_clone_temp(expr_str);
+        return;
+    }
+    strip_trailing_clone(expr_str);
+    let base = borrow_base_expr(expr_str);
+    *expr_str = format!("&mut {base}");
+}
+
+/// Rewrite illegal `&mut place.clone()` → `&mut place` (WDB-336/337/342).
+pub fn sanitize_mut_borrow_clone_temp(expr_str: &mut String) {
+    if let Some(place) = expr_str.strip_prefix("&mut ") {
+        if place.ends_with(".clone()") {
+            let mut place = place.to_string();
+            strip_trailing_clone(&mut place);
+            *expr_str = format!("&mut {place}");
+        }
+    }
+}
+
 /// Rewrite illegal `expr as T.clone()` → `(expr as T).clone()` (WDB-300).
 ///
 /// Rust parses `as` tighter than method call, so a naive `{cast}.clone()` append
@@ -168,6 +191,10 @@ pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
 /// emit `(x as T).clone()` when `as` is present (WDB-300).
 pub fn append_rust_clone(expr: &str) -> String {
     let t = expr.trim();
+    // Never `&mut place.clone()` — mut places are lvalues (WDB-336/337).
+    if t.starts_with("&mut ") {
+        return t.to_string();
+    }
     if t.ends_with(".clone()") || t.ends_with(".to_string()") || t.ends_with(".to_owned()") {
         return sanitize_cast_trailing_clone(t);
     }
@@ -317,5 +344,25 @@ mod tests {
             sanitize_cast_trailing_clone("n as usize.clone()"),
             "(n as usize).clone()"
         );
+    }
+
+    #[test]
+    fn apply_mut_borrow_prefix_strips_clone_temp() {
+        let mut s = "data.clone()".to_string();
+        apply_mut_borrow_prefix(&mut s);
+        assert_eq!(s, "&mut data");
+
+        let mut already = "&mut data.clone()".to_string();
+        apply_mut_borrow_prefix(&mut already);
+        assert_eq!(already, "&mut data");
+    }
+
+    #[test]
+    fn sanitize_mut_borrow_clone_temp_rewrites_illegal_temp() {
+        let mut s = "&mut quads.clone()".to_string();
+        sanitize_mut_borrow_clone_temp(&mut s);
+        assert_eq!(s, "&mut quads");
+        sanitize_mut_borrow_clone_temp(&mut s);
+        assert_eq!(s, "&mut quads");
     }
 }

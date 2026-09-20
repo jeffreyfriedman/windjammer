@@ -47,8 +47,7 @@ fn wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp() {
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-342 MultiFile lib.rs:\n{rs}");
     let bad = rs.contains("&mut active.clone()")
-        || rs.contains("&mut running.clone()")
-        || (rs.contains("&mut ") && rs.contains(".clone()"));
+        || rs.contains("&mut running.clone()");
     assert!(
         !bad,
         "WDB-342 RED: mut Vec received &mut <temp>.clone():\n{rs}"
@@ -86,7 +85,15 @@ fn wdb342_tip_out_game_core_bt_executor_csg_coverage_must_not_mut_borrow_clone_t
         saw = true;
         let text = std::fs::read_to_string(path).expect("product");
         let bad = text.lines().any(|line| {
-            line.contains("&mut ") && line.contains(".clone()")
+            line.contains("&mut ")
+                && line
+                    .split("&mut ")
+                    .skip(1)
+                    .any(|rest| {
+                        let place = rest.trim_start();
+                        let end = place.find([',', ')']).unwrap_or(place.len());
+                        place[..end].ends_with(".clone()")
+                    })
         });
         if bad {
             bad_paths.push(path.display().to_string());

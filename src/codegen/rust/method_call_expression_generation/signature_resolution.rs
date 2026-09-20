@@ -3,6 +3,7 @@
 use crate::analyzer::FunctionSignature;
 use crate::parser::Expression;
 
+use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module;
 use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
@@ -121,8 +122,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         if let Some(ref tn) = type_name {
             use crate::codegen::rust::call_signature_resolution::{
-                finalize_call_site_signature, resolve_method_for_call_site, validate_arg_count,
-                ResolutionMethod, ResolvedSignature,
+                finalize_call_site_signature, resolve_method_for_call_site_in_module,
+                validate_arg_count, ResolutionMethod, ResolvedSignature,
             };
 
             let inferred_receiver_ty = self.infer_expression_type(object);
@@ -157,12 +158,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             });
 
-            let from_registry = resolve_method_for_call_site(
+            let from_registry = resolve_method_for_call_site_in_module(
                 &self.signature_registry,
                 self.global_signature_registry(),
                 tn,
                 method,
                 arguments.len(),
+                self.current_caller_module_path().as_deref(),
             );
 
             // Unified registry resolution (local + global, emitted-formal refresh) wins over
@@ -322,13 +324,14 @@ impl<'ast> CodeGenerator<'ast> {
             .filter(|s| is_usable(s));
 
         let global_upgraded = receiver_type_name.as_ref().and_then(|tn| {
-            use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site;
-            resolve_method_for_call_site(
+            use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module;
+            resolve_method_for_call_site_in_module(
                 &self.signature_registry,
                 self.global_signature_registry(),
                 tn,
                 method,
                 arguments.len(),
+                self.current_caller_module_path().as_deref(),
             )
             .map(|r| finalize_call_site_signature(r.sig))
             .filter(|g| is_usable(g))

@@ -1793,14 +1793,7 @@ impl<'ast> CodeGenerator<'ast> {
         let resolved_callee = import_qualified
             .or(owned_name)
             .unwrap_or_else(|| func_name.to_string());
-        let caller_module = self.library_source_root.as_ref().and_then(|root| {
-            if self.current_wj_file.as_os_str().is_empty() {
-                None
-            } else {
-                crate::analyzer::type_collector::wj_file_to_module_path(root, &self.current_wj_file)
-                    .map(|parts| parts.join("::"))
-            }
-        });
+        let caller_module = self.current_caller_module_path();
         let local = crate::codegen::rust::call_signature_resolution::resolve_call_signature(
             &self.signature_registry,
             resolved_callee.as_str(),
@@ -1885,26 +1878,33 @@ impl<'ast> CodeGenerator<'ast> {
             accept_method_resolution_for_receiver, validate_arg_count,
         };
 
+        let caller_module = self.current_caller_module_path();
+
+        // WDB-332: module-qualified registry keys + caller affinity BEFORE the leaf-name
+        // `method_signatures_by_type` map. That map collapses sibling types that share a
+        // leaf (`audio::mixer::AudioChannel` vs `audio::audio_mixer::AudioChannel`) into
+        // one entry — last writer wins and poisons `Type::new` formals.
+        if let Some(resolved) =
+            crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module(
+                &self.signature_registry,
+                self.global_signature_registry.as_deref(),
+                receiver_type,
+                method,
+                arg_count,
+                caller_module.as_deref(),
+            )
+        {
+            if accept_method_resolution_for_receiver(&resolved, receiver_type, method) {
+                return Some(resolved.sig);
+            }
+        }
+
         // Prefer signatures registered during codegen (analyzed ownership/types) over
         // declaration stubs in the registry (often all-Owned before convergence).
         if let Some(ms) = self.lookup_method_signature(receiver_type, method) {
             let sig = ms.to_function_signature();
             if validate_arg_count(&sig, arg_count) {
                 return Some(sig);
-            }
-        }
-
-        if let Some(resolved) =
-            crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site(
-                &self.signature_registry,
-                self.global_signature_registry.as_deref(),
-                receiver_type,
-                method,
-                arg_count,
-            )
-        {
-            if accept_method_resolution_for_receiver(&resolved, receiver_type, method) {
-                return Some(resolved.sig);
             }
         }
 
@@ -1933,21 +1933,26 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Module-path qualified keys from library multipass (e.g. `foo::Type::method`).
+        // Prefer caller-module affinity over first-match (WDB-332 dual AudioChannel).
         let suffix = format!("::{receiver_type}::{method}");
-        for (_key, sig) in self.signature_registry.signatures_matching_suffix(&suffix) {
-            if crate::codegen::rust::call_signature_resolution::validate_arg_count(
-                sig, arg_count,
-            ) {
-                return Some(sig.clone());
-            }
+        if let Some((_key, sig)) = crate::codegen::rust::call_signature_resolution::best_suffix_match_for_caller(
+            &self.signature_registry,
+            &suffix,
+            arg_count,
+            caller_module.as_deref(),
+        ) {
+            return Some(sig);
         }
         if let Some(global) = &self.global_signature_registry {
-            for (_key, sig) in global.signatures_matching_suffix(&suffix) {
-                if crate::codegen::rust::call_signature_resolution::validate_arg_count(
-                    sig, arg_count,
-                ) {
-                    return Some(sig.clone());
-                }
+            if let Some((_key, sig)) =
+                crate::codegen::rust::call_signature_resolution::best_suffix_match_for_caller(
+                    global,
+                    &suffix,
+                    arg_count,
+                    caller_module.as_deref(),
+                )
+            {
+                return Some(sig);
             }
         }
         None
@@ -1993,6 +1998,30 @@ impl<'ast> CodeGenerator<'ast> {
     /// Used with multipass library builds to resolve `use super::...::Type` across sibling `.wj` modules.
     pub fn set_library_source_root(&mut self, root: std::path::PathBuf) {
         self.library_source_root = Some(root);
+    }
+
+    /// Module path (`audio::audio_mixer`) for the `.wj` file currently being emitted.
+    /// Used to disambiguate leaf-name type homonyms across sibling modules (WDB-332).
+    pub(in crate::codegen::rust) fn current_caller_module_path(&self) -> Option<String> {
+        let from_root = self.library_source_root.as_ref().and_then(|root| {
+            if self.current_wj_file.as_os_str().is_empty() {
+                None
+            } else {
+                crate::analyzer::type_collector::wj_file_to_module_path(root, &self.current_wj_file)
+                    .map(|parts| parts.join("::"))
+            }
+        });
+        if from_root.is_some() {
+            return from_root;
+        }
+        // Fallback when multipass has not set `library_source_root` yet: use the
+        // file stem so `audio_mixer.wj` still beats sibling `mixer.wj` for
+        // `AudioChannel::new` (WDB-332).
+        self.current_wj_file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .filter(|s| *s != "mod" && !s.is_empty())
+            .map(|s| s.to_string())
     }
 
     pub fn set_type_defining_modules(

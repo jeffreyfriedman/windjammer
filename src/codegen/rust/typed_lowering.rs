@@ -57,10 +57,16 @@ impl ArgCoercion {
                 if expr.starts_with("&mut ") {
                     return;
                 }
+                // Mut borrow needs an lvalue — never `&mut binding.clone()` (WDB-336/337).
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(expr);
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr);
                 *expr = format!("&mut {base}");
             }
             ArgCoercion::Clone => {
+                // Never append `.clone()` onto an `&mut` place (WDB-336/337).
+                if expr.starts_with("&mut ") {
+                    return;
+                }
                 if !expr.ends_with(".clone()") {
                     *expr = format!("{}.clone()", expr);
                 }

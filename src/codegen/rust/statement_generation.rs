@@ -276,6 +276,28 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// WDB-330: annotated/`let bits: u32 = …` (or i32/usize) assign slots must not be
+    /// overwritten by a weak WJ-`int`/i64 peer before nested bitwise/arith literals emit.
+    pub(in crate::codegen::rust) fn narrow_assign_int_slot_beats_weak_peer(
+        slot: &Option<Type>,
+        peer: &Type,
+    ) -> bool {
+        use crate::type_inference::IntType;
+        let Some(slot_ty) = slot else {
+            return false;
+        };
+        let Some(slot_w) = Self::int_type_from_assignment_target(slot_ty) else {
+            return false;
+        };
+        let peer_w = Self::int_type_from_assignment_target(peer);
+        let slot_narrow = matches!(
+            slot_w,
+            IntType::U32 | IntType::I32 | IntType::Usize | IntType::U64 | IntType::Isize
+        );
+        let peer_weak = matches!(peer_w, None | Some(IntType::I64) | Some(IntType::Unknown));
+        slot_narrow && peer_weak
+    }
+
     pub(in crate::codegen::rust) fn is_float_numeric_type(t: &Type) -> bool {
         match t {
             Type::Float => true,

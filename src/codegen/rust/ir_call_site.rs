@@ -275,7 +275,17 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             }
             Expression::Identifier { .. }
-                if (!skip_auto_clone_for_borrow || auto_clone_wants)
+                // Mut formals: never auto-clone (reuse analysis must not override).
+                // Shared demoted formals may still take analysis-driven clones.
+                if (!skip_auto_clone_for_borrow
+                    || (auto_clone_wants
+                        && !self.ir_callee_arg_expects_mut_borrow(
+                            registry,
+                            callee_name,
+                            arg_index,
+                            user_arg_count,
+                            local_sig,
+                        )))
                     && !skip_auto_clone_for_field_extract
                     && !collecting_ref_vec =>
             {
@@ -289,7 +299,15 @@ impl<'ast> CodeGenerator<'ast> {
             // Field paths (`record.key`) moved into owned formals + reused in loops
             // need `.clone()`; identifier-only auto-clone misses them (regression-059).
             Expression::FieldAccess { .. } | Expression::Index { .. }
-                if (!skip_auto_clone_for_borrow || auto_clone_wants)
+                if (!skip_auto_clone_for_borrow
+                    || (auto_clone_wants
+                        && !self.ir_callee_arg_expects_mut_borrow(
+                            registry,
+                            callee_name,
+                            arg_index,
+                            user_arg_count,
+                            local_sig,
+                        )))
                     && !skip_auto_clone_for_field_extract =>
             {
                 self.maybe_auto_clone_call_arg(
@@ -756,12 +774,13 @@ impl<'ast> CodeGenerator<'ast> {
         // stale per-caller registry stubs do not beat converged defining-module metadata.
         if let Some(rt) = receiver_type_name {
             if let Some(resolved) =
-                crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site(
+                crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module(
                     registry,
                     self.global_signature_registry.as_deref(),
                     rt,
                     method_simple,
                     user_arg_count.unwrap_or(arg_index + 1),
+                    self.current_caller_module_path().as_deref(),
                 )
             {
                 sig = resolved.sig;
@@ -2010,7 +2029,9 @@ impl<'ast> CodeGenerator<'ast> {
             let this_arg_expects_mut = self.ir_sig_arg_expects_mut_borrow(&sig, arg_index);
             let preserve_explicit =
                 crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr);
-            if !preserve_explicit {
+            // Mut formals: always strip — `&mut x.clone()` is never a valid lvalue (WDB-336/337/342).
+            // Shared formals: preserve explicit user `.clone()` (WDB-106/108).
+            if this_arg_expects_mut || !preserve_explicit {
             match arg_expr {
                 Expression::Identifier { name, .. } => {
                     let arg_is_fn_param =
@@ -2023,21 +2044,24 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(
                             &mut coerced,
                         );
-                    } else if arg_is_fn_param
-                        && (this_arg_expects_borrow || this_arg_expects_mut)
+                    } else if this_arg_expects_mut
+                        || (arg_is_fn_param && this_arg_expects_borrow)
                     {
+                        // Locals reused into demoted `&mut Vec` must keep the binding
+                        // (`&mut data`), not a clone temp (WDB-336/337/342).
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(
                             &mut coerced,
                         );
                     }
                 }
                 Expression::FieldAccess { object, .. } => {
-                    // `&mut self.field` / `&self.field` — never `&mut self.field.clone()`.
-                    if (this_arg_expects_borrow || this_arg_expects_mut)
-                        && matches!(
-                            &**object,
-                            Expression::Identifier { name, .. } if name == "self"
-                        )
+                    // `&mut place.field` / `&place.field` — never `&mut place.field.clone()`.
+                    if this_arg_expects_mut
+                        || (this_arg_expects_borrow
+                            && matches!(
+                                &**object,
+                                Expression::Identifier { name, .. } if name == "self"
+                            ))
                     {
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(
                             &mut coerced,
@@ -7117,14 +7141,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if coerced.starts_with("&mut ") {
                     return;
                 }
-                if coerced.starts_with('&') {
-                    *coerced = format!(
-                        "&mut {}",
-                        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-                    );
-                } else {
-                    *coerced = format!("&mut {coerced}");
-                }
+                // Mut borrow needs an lvalue — never `&mut binding.clone()` (WDB-336/337/342).
+                // Auto-clone may have fired for reuse before demotion to `&mut Vec`.
+                crate::codegen::rust::expression_utilities::apply_mut_borrow_prefix(coerced);
                 return;
             }
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(

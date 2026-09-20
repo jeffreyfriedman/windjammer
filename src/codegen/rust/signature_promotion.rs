@@ -2033,6 +2033,18 @@ pub(crate) fn best_method_signature_for_receiver(
     method: &str,
     arg_count: usize,
 ) -> Option<(String, FunctionSignature)> {
+    best_method_signature_for_receiver_in_module(registry, receiver_type, method, arg_count, None)
+}
+
+/// Prefer registry keys whose module path matches `caller_module` when multiple
+/// types share a leaf name (WDB-332 dual `AudioChannel::new`).
+pub(crate) fn best_method_signature_for_receiver_in_module(
+    registry: &SignatureRegistry,
+    receiver_type: &str,
+    method: &str,
+    arg_count: usize,
+    caller_module: Option<&str>,
+) -> Option<(String, FunctionSignature)> {
     let lookup_candidates =
         crate::codegen::rust::stdlib_method_traits::stdlib_receiver_lookup_candidates(
             receiver_type,
@@ -2041,18 +2053,32 @@ pub(crate) fn best_method_signature_for_receiver(
     let leaf = base.rsplit("::").next().unwrap_or(base);
     let suffix = format!("::{base}::{method}");
     let leaf_suffix = format!("::{leaf}::{method}");
-    let mut best: Option<(String, FunctionSignature, bool)> = None;
+    let mut best: Option<(String, FunctionSignature, bool, usize)> = None;
 
     let mut consider = |key: &str, sig: &FunctionSignature| {
         if !arg_count_matches(sig, arg_count) {
             return;
         }
-        if let Some((_, ref best_sig, _)) = best {
+        let affinity = caller_module
+            .map(|caller| {
+                crate::codegen::rust::call_signature_resolution::module_path_affinity(caller, key)
+            })
+            .unwrap_or(0);
+        if let Some((_, ref best_sig, _, best_affinity)) = best {
+            // Caller-module affinity beats cross-file leaf-name homonyms before
+            // str-ref / stale-owned heuristics (WDB-332).
+            if affinity > best_affinity {
+                best = Some((key.to_string(), sig.clone(), false, affinity));
+                return;
+            }
+            if affinity < best_affinity {
+                return;
+            }
             if body_borrow_must_not_replace_owned_formal_stub(best_sig, sig) {
                 return;
             }
             if body_borrow_must_not_replace_owned_formal_stub(sig, best_sig) {
-                best = Some((key.to_string(), sig.clone(), false));
+                best = Some((key.to_string(), sig.clone(), false, affinity));
                 return;
             }
         }
@@ -2065,7 +2091,7 @@ pub(crate) fn best_method_signature_for_receiver(
             .iter()
             .filter(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t))
             .count();
-        let replace = best.as_ref().is_none_or(|(_, best_sig, prev_converged)| {
+        let replace = best.as_ref().is_none_or(|(_, best_sig, prev_converged, _)| {
             let best_emitted = method_registry_reflects_emitted_owned(best_sig);
             let best_codegen_refreshed = best_sig.emitted_rust_ref_params.is_some();
             if sig_codegen_refreshed && !best_codegen_refreshed {
@@ -2131,7 +2157,7 @@ pub(crate) fn best_method_signature_for_receiver(
             false
         });
         if replace {
-            best = Some((key.to_string(), sig.clone(), converged));
+            best = Some((key.to_string(), sig.clone(), converged, affinity));
         }
     };
 
@@ -2153,7 +2179,7 @@ pub(crate) fn best_method_signature_for_receiver(
         }
     }
 
-    best.map(|(key, sig, _)| (key, sig))
+    best.map(|(key, sig, _, _)| (key, sig))
 }
 
 /// User-visible argument count for a signature (call-site arity).

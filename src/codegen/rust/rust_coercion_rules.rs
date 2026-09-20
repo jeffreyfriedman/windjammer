@@ -93,6 +93,10 @@ impl Coercion {
                 }
             }
             Coercion::Clone => {
+                // Never append `.clone()` onto an `&mut` place (`&mut x.clone()` is a temp).
+                if expr_str.starts_with("&mut ") {
+                    return;
+                }
                 if !expr_str.ends_with(".clone()") {
                     *expr_str = format!("{}.clone()", expr_str);
                 }
@@ -102,6 +106,8 @@ impl Coercion {
             }
             Coercion::BorrowMut => {
                 if !expr_str.starts_with("&mut ") {
+                    // Mut borrow needs an lvalue — strip stale auto-clone temps (WDB-336/337).
+                    super::expression_utilities::strip_trailing_clone(expr_str);
                     let base = super::expression_utilities::borrow_base_expr(expr_str);
                     *expr_str = format!("&mut {base}");
                 }

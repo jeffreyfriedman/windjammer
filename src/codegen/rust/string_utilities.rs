@@ -497,6 +497,27 @@ pub fn normalize_owned_string_producer_for_str_ref_param(
     arg_expr: &crate::parser::Expression,
     arg_str: &mut String,
 ) {
+    // P3.402: char is Copy + Pattern by value. Borrow may have prefixed `&`
+    // (`split(&'.')` → E0277). Peel to a bare char literal.
+    {
+        let mut s = arg_str.trim().to_string();
+        while s.starts_with('&') && !s.starts_with("&mut ") {
+            s = s[1..].trim().to_string();
+        }
+        let is_char_ast = matches!(
+            arg_expr,
+            crate::parser::Expression::Literal {
+                value: crate::parser::Literal::Char(_),
+                ..
+            }
+        );
+        if is_char_ast
+            || crate::codegen::rust::expression_utilities::is_rust_char_literal_text(&s)
+        {
+            *arg_str = s;
+            return;
+        }
+    }
     if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
         // Peel `&String::from("lit")` / `"lit".to_string()` → bare `"lit"` for `&str`.
         // Do not early-return on leading `&` — that blocked the peel and left

@@ -234,13 +234,24 @@ impl<'ast> CodeGenerator<'ast> {
                 if assign_slot_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 } else if let Some(t) = peer_int_type(self, left) {
-                    self.assignment_int_target_type = Some(t);
+                    // WDB-330: `let bits: u32 = (x >> 16) & 0x7FFF` — keep the annotated
+                    // assign slot when a weak/default peer (WJ `int`/i64) would overwrite it
+                    // before nested shift/mask literals are emitted.
+                    if Self::narrow_assign_int_slot_beats_weak_peer(&prev_bin_int, &t) {
+                        self.assignment_int_target_type = prev_bin_int.clone();
+                    } else {
+                        self.assignment_int_target_type = Some(t);
+                    }
                 }
             } else if left_is_int_literal {
                 if assign_slot_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 } else if let Some(t) = peer_int_type(self, right) {
-                    self.assignment_int_target_type = Some(t);
+                    if Self::narrow_assign_int_slot_beats_weak_peer(&prev_bin_int, &t) {
+                        self.assignment_int_target_type = prev_bin_int.clone();
+                    } else {
+                        self.assignment_int_target_type = Some(t);
+                    }
                 }
             }
         }
