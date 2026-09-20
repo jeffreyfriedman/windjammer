@@ -413,6 +413,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); **MultiFile + tip RED** |
 | P1 | **Copy f32 must not emit `.clone()`** | `bug_wdb344_module_file_copy_f32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED |
 | P1 | **`&mut Vec` must not receive owned `buf.clone()` (csg)** | `bug_wdb345_module_file_mut_vec_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED; twin WDB-338 |
+| P1 | **Copy f32 field must not emit `.x/.y/.z.clone()` (tps/fps)** | `bug_wdb346_module_file_copy_f32_field_must_not_emit_clone_test` | 🆕 RED / filed (P3.412); MultiFile GREEN; tip RED; twin WDB-344 |
+| P1 | **Copy f32 match binding must not emit `r.clone()` (jolt)** | `bug_wdb347_module_file_copy_f32_match_binding_must_not_emit_clone_test` | 🆕 RED / filed (P3.412); **MultiFile + tip RED** |
+| P1 | **owned String must not emit `path.clone().to_string()` (loader)** | `bug_wdb348_module_file_owned_string_must_not_clone_then_to_string_test` | 🆕 RED / filed (P3.412); MultiFile GREEN; tip RED; twin WDB-340 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3230,3 +3233,17 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `wdb343_ wdb344_ wdb345_ wdb330_tip wdb331_tip` → **4 passed / 4 failed** (330/331 tip + 344/345 MultiFile GREEN; 343 MultiFile+tip RED; 344/345 tip RED).
 
 **Compiler agent priority:** tip greens **WDB-343–345** (+ **332–333**, **336–342**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+
+## P3.412 WindjammerDB CQ-C5 — game-core tip REDs WDB-346–348 (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-346** Copy f32 field `.x/.y/.z.clone()` (tps/fps camera) | 🆕 RED / filed — MultiFile GREEN; tip RED; twin WDB-344 |
+| Tip **WDB-347** Copy f32 match binding `r.clone()`/`h.clone()` (jolt) | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-348** owned String `path.clone().to_string()` (loader) | 🆕 RED / filed — MultiFile GREEN; tip RED; twin WDB-340 |
+| Tip **WDB-332–333**, **336–345**, **339–342** | ❌ still tip RED |
+
+**TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb346_ wdb347_ wdb348_` → **2 passed / 4 failed** (346/348 MultiFile GREEN; 347 MultiFile+tip RED; all three tip RED).
+
+**Compiler agent priority:** tip greens **WDB-346–348** (+ **332–333**, **336–345**). No Phase 606+. No `windjammer/src` edits from DB agent.
