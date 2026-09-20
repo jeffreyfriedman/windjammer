@@ -375,14 +375,14 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **CDLP `best_count` must peer `u32` (not `0_i64`)** | `bug_wdb305_module_file_cdlp_best_count_must_peer_u32_test` | ✅ MultiFile GREEN (P3.391); tip-out may lag until regen |
 | P1 | **owned bakeoff String must not receive `&hw.clone()`** | `bug_wdb306_module_file_owned_string_must_not_receive_ref_clone_bakeoff_test` | ✅ MultiFile GREEN (P3.389/391); tip-out RED lag; twin WDB-301 |
 | P1 | **`for` over owned field must not move when parent reused** | `bug_wdb307_module_file_for_field_must_not_move_when_parent_reused_test` | ✅ MultiFile GREEN (P3.392); tip-out lag (vector_topk) |
-| P1 | **wave1 CLI residual `u32=0_usize` / `args[i+1]`** | `bug_wdb308_module_file_wave1_cli_u32_init_and_index_must_peer_test` | 🆕 RED / filed (P3.392); tip-out RED; twin WDB-298/303 coverage |
+| P1 | **wave1 CLI residual `u32=0_usize` / `args[i+1]`** | `bug_wdb308_module_file_wave1_cli_u32_init_and_index_must_peer_test` | ✅ tip GREEN (P3.397) — u32 return-scan peers + `(i+1) as usize`; MultiFile + tip-out |
 | P1 | **owned csr into demoted `&mut` take must be `mut`** | `bug_wdb309_module_file_owned_into_mut_ref_must_declare_mut_test` | 🆕 RED / filed (P3.392); tip-out RED; MultiFile isolate GREEN |
-| P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_wdb310_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
+| P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_wdb310_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
 | P1 | **timeseries/vertex_map residual `u32=0_usize`** | `bug_wdb311_module_file_u32_loop_residual_timeseries_vertex_map_test` | ✅ tip GREEN (P3.401 tip-out/gen sync); twin WDB-298/308 |
-| P1 | **publish owned String must not receive `&dated_label.clone()`** | `bug_wdb312_module_file_owned_string_must_not_receive_ref_clone_publish_test` | 🆕 RED / filed (P3.393); tip-out RED; MultiFile isolate GREEN; twin WDB-306 |
+| P1 | **publish owned String must not receive `&dated_label.clone()`** | `bug_wdb312_module_file_owned_string_must_not_receive_ref_clone_publish_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
 | P1 | **pg_wire/OTLP residual `u32=0_usize`** | `bug_wdb313_module_file_u32_loop_residual_pg_wire_otlp_test` | ✅ tip GREEN (P3.401 tip-out/gen sync); twin WDB-298/308/311 |
-| P1 | **hardware report owned String must not receive `&out`** | `bug_wdb314_module_file_owned_string_must_not_receive_ref_out_report_test` | 🆕 RED / filed (P3.394); tip-out RED; MultiFile isolate GREEN; twin WDB-312 |
-| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | ✅ MultiFile GREEN (P3.395); tip-out lag |
+| P1 | **hardware report owned String must not receive `&out`** | `bug_wdb314_module_file_owned_string_must_not_receive_ref_out_report_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
+| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | ✅ tip GREEN (P3.396 tip-out sync + P3.395 MultiFile) |
 | P1 | **scale status owned String must not receive `&out`** | `bug_wdb316_module_file_owned_string_must_not_receive_ref_out_scale_status_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-314 |
 | P1 | **vertex_map.hashmap/.vec residual `u32=0_usize`** | `bug_wdb317_module_file_u32_loop_residual_vertex_map_hashmap_vec_test` | ✅ tip GREEN (P3.400 tip regen after WDB-308/324) |
 | P1 | **publish owned String first formal must not receive `&out`** | `bug_wdb318_module_file_owned_string_first_formal_must_not_receive_ref_out_publish_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312/314 |
@@ -2763,6 +2763,23 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Gate:** `cargo test --release --test all --features integration_tests -- wdb315_module_file_usize` → MultiFile pass (2026-09-19).
 
+
+## P3.397 — u32 return-scan peers + tip-out sync (WDB-308/311/313/315/317) (2026-09-19)
+
+| Gate | Status |
+|------|--------|
+| MultiFile **WDB-308** `-> u32` + `args.len()` / `args[i+1]` | ✅ GREEN — `0_u32` + `(i + 1) as usize` |
+| Tip **WDB-308/311/313/317** `u32 = 0_usize` residuals | ✅ tip GREEN after tip-out regen |
+| Tip **WDB-315** usize `pos + 4_i32` | ✅ tip GREEN (prior P3.395 MultiFile + tip-out sync) |
+| Tip owned-string **WDB-310/312/314/316/318/319** | ✅ tip GREEN (P3.396 tip-out sync; tip already correct) |
+| Tip **WDB-303** adjacency `offsets[i+1]` | ✅ tip GREEN — tip uses usize walkers; gate ignores usize `i` |
+
+**Root cause layer:** constraint/peer — `-> u32` return-width counters must not be overwritten by index-driven usize peers; index cast uses `({}) as usize` so `as` does not bind tighter than `+`.
+
+**What became unnecessary:** manual tip-out `0_u32` / cast patches for wave1 CLI once tip emit is correct.
+
+**Gates:** `cargo test --release --test all -- wdb308_ wdb298_ wdb303_module_file wdb311_tip_out wdb313_tip_out wdb317_tip_out wdb315_ wdb310_tip_out … wdb319_tip_out`.
+
 ## P3.396 WindjammerDB CQ-C5 — coverage REDs WDB-319–321 (2026-09-19)
 
 | Gate | Status |
@@ -3071,12 +3088,12 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| `i32_neg_while_literal_peers_must_not_widen_i64` | ❌ RED (filed) |
-| Tip-out `gen/ai/npc_behavior.rs` SearchState | ❌ RED |
+| `i32_neg_while_literal_peers_must_not_widen_i64` | ✅ MultiFile GREEN (consistent i32) |
+| Tip-out `gen/ai/npc_behavior.rs` SearchState | ❌ RED (`-1_i64` + `1_i32`) |
 
-**Product:** `let mut i = -1; while i <= 1` → `i = -1_i64; while i <= 1_i32` (E0308/E0277).
+**Product:** `let mut i = -1; while i <= 1` → `i = -1_i64; while i <= 1_i32` (E0308/E0277). Small isolate stays i32; full-library multipass widens.
 
-**Compiler agent:** keep counter + compare/add lit peers one integer width (prefer i32 for small grid loops).
+**Compiler agent:** under library multipass, keep SearchState-shaped neg while counters + lit peers one integer width (prefer i32).
 
 
 ## P3.404 WindjammerDB CQ-C5 — game-core tip REDs WDB-326–329 (2026-09-19)
