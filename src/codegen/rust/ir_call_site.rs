@@ -885,14 +885,20 @@ impl<'ast> CodeGenerator<'ast> {
             )
         {
             let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+            let lookup_callee = self.signature_lookup_callee_name(callee_name);
+            let lookup_ref = lookup_callee.as_ref();
             let skip_bare_spawn_homonym =
                 crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
                     callee_name,
                 );
             let refresh_keys = if skip_bare_spawn_homonym {
-                vec![callee_name.to_string()]
+                vec![callee_name.to_string(), lookup_ref.to_string()]
             } else {
-                vec![callee_name.to_string(), simple.to_string()]
+                vec![
+                    callee_name.to_string(),
+                    lookup_ref.to_string(),
+                    simple.to_string(),
+                ]
             };
             crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
                 &mut sig,
@@ -933,6 +939,9 @@ impl<'ast> CodeGenerator<'ast> {
             };
             if let Some(refreshed) =
                 crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    self.global_signature_registry
+                        .as_ref()
+                        .and_then(|g| g.get_signature(lookup_ref).cloned()),
                     self.global_signature_registry
                         .as_ref()
                         .and_then(|g| g.get_signature(callee_name).cloned()),
@@ -4177,12 +4186,14 @@ impl<'ast> CodeGenerator<'ast> {
             crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
                 callee_name,
             );
+        let lookup_callee = self.signature_lookup_callee_name(callee_name);
+        let lookup_ref = lookup_callee.as_ref();
         let global_confirms_shared_ref = |pidx: usize| {
             self.global_signature_registry.as_ref().is_some_and(|g| {
                 let keys: Vec<&str> = if skip_bare_homonym {
-                    vec![callee_name]
+                    vec![callee_name, lookup_ref]
                 } else {
-                    vec![callee_name, simple]
+                    vec![callee_name, lookup_ref, simple]
                 };
                 keys.into_iter()
                     .flat_map(|key| {
@@ -4321,6 +4332,20 @@ impl<'ast> CodeGenerator<'ast> {
                         if self.identifier_binding_already_rust_ref(name)
                 );
                 if arg_already_rust_ref {
+                    let cross_crate_import =
+                        self.is_import_alias_cross_crate_call(callee_name);
+                    let callee_shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                        &sig, param_idx,
+                    ) || global_confirms_shared_ref(param_idx);
+                    if cross_crate_import && callee_shared {
+                        // Path-dep metadata: explicit `&` at import boundary even when the
+                        // caller formal was demoted to `&str` / `&Vec` (apps/wj-find).
+                        if let Expression::Identifier { name, .. } = arg_expr {
+                            if !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                                *coerced = format!("&{name}");
+                            }
+                        }
+                    } else {
                     // Binding is already `&T` / `&mut T` in Rust — never prefix another `&`
                     // (`take_in_edges(&csr)` → `&&mut DenseCsr`).
                     *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
@@ -4349,6 +4374,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 coerced,
                             );
                         }
+                    }
                     }
                 } else {
                     // Fresher-sig shared-borrow reapply via IR contract (not should_borrow).
