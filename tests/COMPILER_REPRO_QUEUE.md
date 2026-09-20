@@ -3193,4 +3193,4 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **TDD:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb337_ wdb338_ wdb339_` → **3 MultiFile passed / 3 tip failed** (expected tip RED).
 
-**Compiler agent priority:** tip greens **WDB-337–339** (+ **334–336**, **330–333**, **328–329**). No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip greens **WDB-337–339** (+ **334–336**, **330–333**). **WDB-328–329** GREEN (P3.409). No Phase 606+. No `windjammer/src` edits from DB agent.
