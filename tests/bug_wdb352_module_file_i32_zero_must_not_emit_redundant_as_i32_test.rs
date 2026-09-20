@@ -40,7 +40,7 @@ fn wdb352_module_file_i32_zero_must_not_emit_redundant_as_i32() {
     let map = test.compile().expect("DB-352 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("DB-352 MultiFile lib.rs:\n{rs}");
-    let bad = rs.contains("0_i32 as i32") || rs.contains("0 as i32");
+    let bad = rs.contains("_i32 as i32") || rs.contains("0 as i32");
     assert!(
         !bad,
         "DB-352 RED: redundant i32 cast on zero:\n{rs}"
