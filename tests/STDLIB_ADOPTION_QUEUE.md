@@ -70,6 +70,14 @@ Definition of done per row:
 | `strings.contains` owned needle → `&str` | `bug_std_strings_contains_owned_needle_test` | ❌ RED | Codegen demote owned/interpolated needle (E0308) |
 | `std::config.resolve` / `merge` owned HashMap | `bug_std_config_module_test` (`std_config_resolve_must_wire`) | ❌ RED (3/4) | Codegen: owned formals must accept demoted `&mut HashMap` (or infer owned at call site) |
 
+
+## P1 — URL (week-one HTTP)
+
+| Need | Repro | Gate status (2026-09-19) | Fix hint |
+|---|---|---|---|
+| Loop `j = end` unify int/usize | `bug_int_loop_assign_end_bound_must_unify_test` | ❌ RED | Index assign from peer bound (`wj-url` authority scan) |
+| `std::url.parse` / `format` / `join` | `bug_std_url_parse_wiring_test` | ❌ RED | Runtime URL helpers; thin-wrap `wj-url` |
+
 ## Run
 
 ```bash
