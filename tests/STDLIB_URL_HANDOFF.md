@@ -1,6 +1,6 @@
 # Tip agent handoff — URL + int/usize loop unify
 
-**Status:** Ecosystem `wj-url` uses `break` (idiomatic) to avoid `j = auth_end` sentinel. Tip still owns greening index unify + `std::url`.
+**Status:** Ecosystem `wj-url` **15/15 tip green** — authority scan isolates host/port on a substring (no `j < auth_end` cross-bound). Tip still owns greening index unify + `std::url`.
 
 ## Ask
 
