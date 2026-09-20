@@ -1944,6 +1944,15 @@ impl<'ast> CodeGenerator<'ast> {
             )
         {
             if accept_method_resolution_for_receiver(&resolved, receiver_type, method) {
+                if std::env::var_os("WJ_DEBUG_WDB332").is_some()
+                    && receiver_type.contains("AudioChannel")
+                    && method == "new"
+                {
+                    eprintln!(
+                        "WDB332 lookup affinity: caller={:?} key={} params={:?}",
+                        caller_module, resolved.qualified_key, resolved.sig.param_types
+                    );
+                }
                 return Some(resolved.sig);
             }
         }

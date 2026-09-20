@@ -610,6 +610,23 @@ pub fn resolve_method_for_call_site_in_module(
             if body_borrow_must_not_replace_owned_formal_stub(&l.sig, &g.sig) {
                 g_out = None;
             }
+            // WDB-332: pick_best prefers local by default; when sibling leaf-name
+            // homonyms exist, higher caller-module affinity must win (bare
+            // `AudioChannel::new` affinity 0 vs `audio::audio_mixer::…` affinity 200).
+            if let Some(caller) = caller_module {
+                match (&l_out, &g_out) {
+                    (Some(lr), Some(gr)) => {
+                        let la = module_path_affinity(caller, &lr.qualified_key);
+                        let ga = module_path_affinity(caller, &gr.qualified_key);
+                        if ga > la {
+                            l_out = None;
+                        } else if la > ga {
+                            g_out = None;
+                        }
+                    }
+                    _ => {}
+                }
+            }
             (l_out, g_out)
         }
         _ => (local_resolved, global_resolved),

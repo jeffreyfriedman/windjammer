@@ -810,6 +810,13 @@ impl<'ast> CodeGenerator<'ast> {
         if expr_str.contains(" as i32") || expr_str.contains(" as i64") {
             return;
         }
+        // Already emitted at target width — never `0_i32 as i32` / `1_i32 as i32` (WDB-352).
+        if to == IntType::I32 && expr_str.ends_with("_i32") {
+            return;
+        }
+        if to == IntType::I64 && expr_str.ends_with("_i64") {
+            return;
+        }
         let mut from = self.natural_int_emission_type(expr).unwrap_or_else(|| {
             // Unannotated `let mut count = 0` defaults to WJ `int` → Rust `i64`.
             match expr {
@@ -844,7 +851,10 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } | Expression::Binary { .. }
             ) {
-                from = IntType::I64;
+                // Peer-suffixed i32 lits (`0_i32`) already match `-> i32` — keep from=I32.
+                if !expr_str.ends_with("_i32") {
+                    from = IntType::I64;
+                }
             }
         }
         if from == IntType::Unknown || from == to {
@@ -897,6 +907,18 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         if expr_str.contains(" as ") {
+            return;
+        }
+        // Already emitted at unified width — never `0_i32 as i32` (WDB-352).
+        let already_at_width = match unified {
+            crate::type_inference::IntType::I32 => expr_str.ends_with("_i32"),
+            crate::type_inference::IntType::I64 => expr_str.ends_with("_i64"),
+            crate::type_inference::IntType::U32 => expr_str.ends_with("_u32"),
+            crate::type_inference::IntType::U64 => expr_str.ends_with("_u64"),
+            crate::type_inference::IntType::Usize => expr_str.ends_with("_usize"),
+            _ => false,
+        };
+        if already_at_width {
             return;
         }
         let suffix = get_cast_suffix(unified);

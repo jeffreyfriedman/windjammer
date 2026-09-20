@@ -393,6 +393,29 @@ impl<'ast> CodeGenerator<'ast> {
                 from_reg,
                 from_local,
             ])
+        } else if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            callee_name,
+        ) {
+            // WDB-332: bare leaf keys (`AudioChannel::new`) are last-writer-wins across
+            // sibling modules. Prefer caller-module affinity (and the already-resolved
+            // `local_sig` from plain-call lookup) over `get_signature("Type::method")`.
+            let arg_count = user_arg_count.unwrap_or(arg_index + 1);
+            let affinity = callee_name.rsplit_once("::").and_then(|(receiver_ty, method)| {
+                self.lookup_method_signature_on_receiver_type(receiver_ty, method, arg_count)
+            });
+            affinity.or_else(|| local_sig.cloned()).or_else(|| {
+                let from_local = local_sig.cloned();
+                let from_reg = registry.get_signature(callee_name).cloned();
+                let from_global = self
+                    .global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(callee_name).cloned());
+                crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    from_local,
+                    from_reg,
+                    from_global,
+                ])
+            })
         } else {
             let from_local = local_sig.cloned();
             let from_reg = registry.get_signature(callee_name).cloned();
@@ -3347,29 +3370,53 @@ impl<'ast> CodeGenerator<'ast> {
         // Stale registry `param_types: Reference(str)` alone must not force borrow when
         // emission still owns `String` (P3.389 regression / join_path seed).
         if let Expression::Identifier { name, .. } = arg_expr {
-            let cross_crate_import = self.is_import_alias_cross_crate_call(callee_name);
             let lookup_callee = self.signature_lookup_callee_name(callee_name);
             let lookup_ref = lookup_callee.as_ref();
-            let registry_sig_shared = |reg: &SignatureRegistry| {
-                reg.get_signature(callee_name)
-                    .or_else(|| reg.get_signature(lookup_ref))
-                    .or_else(|| {
+            let import_alias_resolved = self.import_fn_alias_map.contains_key(callee_name);
+            let cross_crate_import = self.is_import_alias_cross_crate_call(callee_name)
+                || lookup_ref != callee_name;
+            let dep_emits_shared = (cross_crate_import || import_alias_resolved)
+                && self.global_signature_registry.as_ref().is_some_and(|g| {
+                    let dep_sig = if import_alias_resolved {
+                        g.get_signature(lookup_ref)
+                    } else {
                         let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-                        reg.get_signature(simple)
-                    })
-                    .is_some_and(|rs| {
-                        let pidx = rs.arg_param_index(arg_index);
-                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
-                    })
+                        g.get_signature(lookup_ref)
+                            .or_else(|| g.get_signature(simple))
+                    };
+                    dep_sig.is_some_and(|rs| {
+                            let pidx = rs.arg_param_index(arg_index);
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
+                                && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    rs, pidx,
+                                )
+                        })
+                });
+            let callee_wants_shared = if cross_crate_import || import_alias_resolved {
+                dep_emits_shared
+            } else {
+                let registry_sig_shared = |reg: &SignatureRegistry| {
+                    reg.get_signature(callee_name)
+                        .or_else(|| reg.get_signature(lookup_ref))
+                        .or_else(|| {
+                            let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+                            reg.get_signature(simple)
+                        })
+                        .is_some_and(|rs| {
+                            let pidx = rs.arg_param_index(arg_index);
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
+                        })
+                };
+                registry_sig_shared(registry)
+                    || self
+                        .global_signature_registry
+                        .as_ref()
+                        .is_some_and(|g| registry_sig_shared(g))
+                    || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+                    || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                        &sig, param_idx,
+                    )
             };
-            let registry_emits_shared = registry_sig_shared(registry)
-                || self
-                    .global_signature_registry
-                    .as_ref()
-                    .is_some_and(|g| registry_sig_shared(g));
-            let callee_wants_shared = registry_emits_shared
-                || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
-                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
             if callee_wants_shared
                 && self.caller_owned_non_copy_formal(name)
                 && !self.emitted_rust_ref_formals.contains(name)
@@ -3378,7 +3425,7 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 coerced = format!("&{coerced}");
             } else if cross_crate_import
-                && callee_wants_shared
+                && dep_emits_shared
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
             {
@@ -4166,7 +4213,16 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over stale
         // importer/collision stubs before any owned-formal peel (WDB-101 map getters).
-        let sig = self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, sig);
+        let mut sig = self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, sig);
+        // Import aliases: never let bare homonym metadata override the qualified dep fn.
+        if self.import_fn_alias_map.contains_key(callee_name) {
+            if let Some(global) = self.global_signature_registry.as_ref() {
+                let lookup = self.signature_lookup_callee_name(callee_name);
+                if let Some(dep) = global.get_signature(lookup.as_ref()) {
+                    sig = dep.clone();
+                }
+            }
+        }
         let param_idx = sig.arg_param_index(arg_index);
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         let is_collection_key_site = {
@@ -4188,9 +4244,12 @@ impl<'ast> CodeGenerator<'ast> {
             );
         let lookup_callee = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup_callee.as_ref();
+        let import_alias_resolved = self.import_fn_alias_map.contains_key(callee_name);
         let global_confirms_shared_ref = |pidx: usize| {
             self.global_signature_registry.as_ref().is_some_and(|g| {
-                let keys: Vec<&str> = if skip_bare_homonym {
+                let keys: Vec<&str> = if import_alias_resolved {
+                    vec![lookup_ref]
+                } else if skip_bare_homonym {
                     vec![callee_name, lookup_ref]
                 } else {
                     vec![callee_name, lookup_ref, simple]
@@ -4198,7 +4257,7 @@ impl<'ast> CodeGenerator<'ast> {
                 keys.into_iter()
                     .flat_map(|key| {
                         let mut out = vec![g.get_signature(key), g.lookup_method(key)];
-                        if !skip_bare_homonym {
+                        if !skip_bare_homonym && !import_alias_resolved {
                             out.push(g.find_unique_signature_ending_with(simple));
                         }
                         out
@@ -4307,11 +4366,16 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Shared-borrow reapply when IR used a stale stub and the refreshed sig borrows.
         // Skip on ownership collision unless codegen confirmed shared-ref emission.
-        let allow_shared = !has_ownership_collision
-            || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                &sig, param_idx,
-            )
-            || global_confirms_shared_ref(param_idx);
+        let allow_shared = if import_alias_resolved {
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
+                || global_confirms_shared_ref(param_idx)
+        } else {
+            !has_ownership_collision
+                || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                )
+                || global_confirms_shared_ref(param_idx)
+        };
         if allow_shared
             && !skip_stale_borrow
             && !crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
@@ -4334,14 +4398,18 @@ impl<'ast> CodeGenerator<'ast> {
                 if arg_already_rust_ref {
                     let lookup_callee = self.signature_lookup_callee_name(callee_name);
                     let cross_crate_import = self.is_import_alias_cross_crate_call(callee_name)
-                        || lookup_callee.as_ref() != callee_name;
-                    let dep_emits_shared = cross_crate_import
+                        || lookup_callee.as_ref().contains("::");
+                    let dep_emits_shared = (cross_crate_import || import_alias_resolved)
                         && self.global_signature_registry.as_ref().is_some_and(|g| {
                             let lookup_ref = lookup_callee.as_ref();
-                            let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-                            g.get_signature(lookup_ref)
-                                .or_else(|| g.get_signature(simple))
-                                .is_some_and(|gs| {
+                            let gs = if import_alias_resolved {
+                                g.get_signature(lookup_ref)
+                            } else {
+                                let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+                                g.get_signature(lookup_ref)
+                                    .or_else(|| g.get_signature(simple))
+                            };
+                            gs.is_some_and(|gs| {
                                     let pidx = gs.arg_param_index(arg_index);
                                     crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                         gs, pidx,
@@ -5934,6 +6002,25 @@ impl<'ast> CodeGenerator<'ast> {
         sig: &crate::analyzer::FunctionSignature,
         registry: &SignatureRegistry,
     ) {
+        // Import aliases: never let bare homonym metadata (`query_get`) override `dep::fn`.
+        if self.import_fn_alias_map.contains_key(callee_name) {
+            let lookup = self.signature_lookup_callee_name(callee_name);
+            let enforce_sig = self
+                .global_signature_registry
+                .as_ref()
+                .and_then(|g| g.get_signature(lookup.as_ref()).cloned())
+                .unwrap_or_else(|| sig.clone());
+            let pidx = enforce_sig.arg_param_index(arg_index);
+            self.enforce_call_site_ownership_contract(
+                coerced,
+                arg_expr,
+                &enforce_sig,
+                pidx,
+                callee_name,
+                arg_index,
+            );
+            return;
+        }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         let pidx = sig.arg_param_index(arg_index);
         let skip_bare_homonym =
