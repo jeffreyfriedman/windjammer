@@ -97,11 +97,18 @@ impl<'ast> CodeGenerator<'ast> {
                                 matches!(t, Type::Int)
                                     || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
                             });
+                            // WDB-361: explicit / inferred usize counters must not get
+                            // `(i as usize)` vs `.len()` — both sides are already usize.
+                            let local_is_usize = self.expression_produces_usize(left)
+                                || self.usize_variables.contains(name)
+                                || self.local_var_types.get(name).is_some_and(|t| {
+                                    matches!(t, Type::Custom(n) if n == "usize")
+                                });
                             if !param_is_wj_int
                                 && !local_is_i64
+                                && !local_is_usize
                                 && !condition_str.contains(" as usize")
                             {
-                                self.usize_variables.remove(name);
                                 let left_str = self.generate_expression(left);
                                 let right_str = self.generate_expression(right);
                                 let op_str = operators::binary_op_to_rust(op);

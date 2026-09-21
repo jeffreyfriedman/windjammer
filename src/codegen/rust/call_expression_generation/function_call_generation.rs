@@ -576,7 +576,9 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         ..
                     }
                 ) {
-                    format!("{}.to_string()", result)
+                    // WDB-341: `coerce_string_literals_to_owned` may already emit
+                    // `String::from("…")` — never stack `.to_string()` on top.
+                    crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&result)
                 } else if payload_wants_owned_string
                     && !crate::codegen::rust::string_utilities::already_owned_string_expr(&result)
                     && result.starts_with('&')

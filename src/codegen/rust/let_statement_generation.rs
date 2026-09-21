@@ -452,12 +452,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !value_str.ends_with(".clone()")
                                 && !value_str.ends_with(".to_string()")
                             {
+                                // WDB-343: `maybe_auto_clone` skips Copy scalars — do not
+                                // force-append `.clone()` after it (that undoes Copy skips).
                                 value_str = self.maybe_auto_clone(name, &value_str);
-                                if !value_str.ends_with(".clone()")
-                                    && !value_str.ends_with(".to_string()")
-                                {
-                                    value_str = format!("{}.clone()", value_str);
-                                }
                             }
                         }
                     }
@@ -751,12 +748,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !value_str.ends_with(".clone()")
                                 && !value_str.ends_with(".to_string()")
                             {
+                                // WDB-343: trust maybe_auto_clone (skips Copy; no force-append).
                                 value_str = self.maybe_auto_clone(name, &value_str);
-                                if !value_str.ends_with(".clone()")
-                                    && !value_str.ends_with(".to_string()")
-                                {
-                                    value_str = format!("{}.clone()", value_str);
-                                }
                             }
                         }
                     }
@@ -944,12 +937,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !value_str.ends_with(".clone()")
                                 && !value_str.ends_with(".to_string()")
                             {
+                                // WDB-343: trust maybe_auto_clone (skips Copy; no force-append).
                                 value_str = self.maybe_auto_clone(name, &value_str);
-                                if !value_str.ends_with(".clone()")
-                                    && !value_str.ends_with(".to_string()")
-                                {
-                                    value_str = format!("{}.clone()", value_str);
-                                }
                             }
                         }
                     }
