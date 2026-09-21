@@ -1049,6 +1049,22 @@ impl<'ast> CodeGenerator<'ast> {
             self.sync_call_sig_from_preregistered_free_fn_emission(callee_name, &mut sig);
         }
 
+        // WDB-332: leaf-name homonyms (`AudioChannel::new`) — caller-module affinity is
+        // final after refresh/prefer_method/global bare-key challenges, which otherwise
+        // re-poison formals (i32 → String → `.to_string()`).
+        if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            callee_name,
+        ) {
+            let arg_count = user_arg_count.unwrap_or(arg_index + 1);
+            if let Some((receiver_ty, method)) = callee_name.rsplit_once("::") {
+                if let Some(affinity_sig) =
+                    self.lookup_method_signature_on_receiver_type(receiver_ty, method, arg_count)
+                {
+                    sig = affinity_sig;
+                }
+            }
+        }
+
         let mut param_idx = sig.arg_param_index(arg_index);
         let mut expected = safety_type_from_signature_param(&sig, param_idx);
         if sig

@@ -399,7 +399,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | ✅ GREEN (P3.409); tip/game-core blackboard `remove(idx as usize)` |
 | P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_wdb330_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | ✅ tip GREEN (P3.411 regen); product-shape SRC strengthened |
 | P1 | **owned Vec3 must not receive `&test_x` (fps_camera)** | `bug_wdb331_module_file_owned_vec3_must_not_receive_ref_test` | ✅ tip GREEN (P3.411 regen); twin WDB-306 |
-| P1 | **i32 formal must not receive `priority.to_string()` (audio_mixer)** | `bug_wdb332_module_file_i32_formal_must_not_receive_to_string_test` | 🆕 RED / filed (P3.405); tip/game-core RED; distinct from P3.401 name-as-i32 |
+| P1 | **i32 formal must not receive `priority.to_string()` (audio_mixer)** | `bug_wdb332_module_file_i32_formal_must_not_receive_to_string_test` | ✅ MultiFile + tip GREEN (P3.418) — caller-module affinity final authority over bare leaf `AudioChannel::new` |
 | P1 | **format temp into owned String must not receive `&_temp` (loader)** | `bug_wdb333_module_file_owned_string_format_temp_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
 | P1 | **tps owned Vec3 must not receive `&sample`** | `bug_wdb334_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | ✅ tip GREEN (P3.410 regen); twin WDB-331 |
 | P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.410 regen); opposite polarity of WDB-331 |
@@ -3152,7 +3152,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | Tip **WDB-330** u32 `>>`/`&` with `_i64` lits (fps_camera) | 🆕 RED / filed |
 | Tip **WDB-331** owned Vec3 `&test_x` into collides_aabb | 🆕 RED / filed |
-| Tip **WDB-332** i32 priority `.to_string()` into AudioChannel::new | 🆕 RED / filed |
+| Tip **WDB-332** i32 priority `.to_string()` into AudioChannel::new | ✅ GREEN (P3.418 affinity) |
 | Tip **WDB-333** format `_temp` `&_temp1` into owned String load path | 🆕 RED / filed |
 | Tip **WDB-326–329** | ⚠️ WDB-326 GREEN (P3.406); 327–329 still RED |
 

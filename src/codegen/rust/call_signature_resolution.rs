@@ -1815,6 +1815,38 @@ mod tests {
             "file-stem affinity must pick i32 priority, got {:?}",
             stem_resolved.sig.param_types
         );
+
+        // Local bare leaf key (String) must not beat global module-qualified i32 via
+        // pick_best's local-first default (WDB-332 IR / resolve_method path).
+        let mut local = SignatureRegistry::empty();
+        local.add_function(
+            "AudioChannel::new".into(),
+            make_sig_with_types("new", vec![Type::Int32, Type::String], false),
+        );
+        let mut global = SignatureRegistry::empty();
+        global.add_function(
+            "audio::mixer::AudioChannel::new".into(),
+            make_sig_with_types("new", vec![Type::Int32, Type::String], false),
+        );
+        global.add_function(
+            "audio::audio_mixer::AudioChannel::new".into(),
+            make_sig_with_types("new", vec![Type::Int32, Type::Int32], false),
+        );
+        let cross = resolve_method_for_call_site_in_module(
+            &local,
+            Some(&global),
+            "AudioChannel",
+            "new",
+            2,
+            Some("audio::audio_mixer"),
+        )
+        .expect("cross local/global resolve");
+        assert!(
+            matches!(cross.sig.param_types.get(1), Some(Type::Int32)),
+            "global module affinity must beat local bare String formal, got {:?} key={}",
+            cross.sig.param_types,
+            cross.qualified_key
+        );
     }
 
     #[test]
