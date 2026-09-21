@@ -51,6 +51,25 @@ pub(crate) fn strip_partial_literal_float_casts(s: &str) -> String {
         .replace("_usize as f64", "_usize")
 }
 
+/// Strip redundant same-width int casts (`0_i32 as i32` → `0_i32`) — WDB-352.
+pub fn strip_redundant_same_width_int_cast(expr: &mut String) {
+    const PAIRS: &[(&str, &str)] = &[
+        ("_i32", " as i32"),
+        ("_i64", " as i64"),
+        ("_u32", " as u32"),
+        ("_u64", " as u64"),
+        ("_usize", " as usize"),
+    ];
+    for &(suffix, cast) in PAIRS {
+        if let Some(base) = expr.strip_suffix(cast) {
+            if base.ends_with(suffix) {
+                *expr = base.to_string();
+                return;
+            }
+        }
+    }
+}
+
 /// Auto-cast an integer call argument to float when the parameter expects f32/f64.
 ///
 /// Returns `true` (and mutates `arg_str`) if a cast was applied.

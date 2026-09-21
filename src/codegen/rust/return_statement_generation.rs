@@ -50,6 +50,9 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 self.maybe_cast_usize_to_int_target(&mut return_str, e, target);
                 self.maybe_cast_to_function_return_int_width(&mut return_str, e);
+                crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(
+                    &mut return_str,
+                );
             }
 
             self.coerce_option_ref_return_to_owned(&mut return_str, e);
