@@ -408,13 +408,13 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.413 regen) |
 | P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | ✅ tip GREEN (P3.414 regen); `3_i32` peers |
 | P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
-| P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | 🆕 RED / filed (P3.410); **MultiFile + tip RED** |
+| P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | ✅ MultiFile GREEN (P3.419) — `coerce_expr_to_owned_string`; tip-out pending regen |
 | P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-337 |
-| P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); **MultiFile + tip RED** |
+| P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.419) — skip Copy force-clone on let; tip-out pending regen |
 | P1 | **Copy f32 must not emit `.clone()`** | `bug_wdb344_module_file_copy_f32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED |
 | P1 | **`&mut Vec` must not receive owned `buf.clone()` (csg)** | `bug_wdb345_module_file_mut_vec_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED; twin WDB-338 |
 | P1 | **Copy f32 field must not emit `.x/.y/.z.clone()` (tps/fps)** | `bug_wdb346_module_file_copy_f32_field_must_not_emit_clone_test` | ✅ tip GREEN (P3.417 regen); twin WDB-344 |
-| P1 | **Copy f32 match binding must not emit `r.clone()` (jolt)** | `bug_wdb347_module_file_copy_f32_match_binding_must_not_emit_clone_test` | 🆕 RED / filed (P3.412); **MultiFile + tip RED** |
+| P1 | **Copy f32 match binding must not emit `r.clone()` (jolt)** | `bug_wdb347_module_file_copy_f32_match_binding_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.419) — skip Copy tuple clone; tip-out pending regen |
 | P1 | **owned String must not emit `path.clone().to_string()` (loader)** | `bug_wdb348_module_file_owned_string_must_not_clone_then_to_string_test` | 🆕 RED / filed (P3.412); MultiFile GREEN; tip RED; twin WDB-340 |
 | P1 | **Option presence must not `matches!(opt.clone(), Some(_))`** | `bug_wdb349_module_file_option_presence_must_not_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
 | P1 | **Copy usize cast must not emit `(key as usize).clone()`** | `bug_wdb350_module_file_copy_usize_cast_must_not_emit_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED; twin WDB-343 |
@@ -423,14 +423,20 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **f32→usize must not emit `as i32 as usize`** | `bug_wdb353_module_file_f32_to_usize_must_not_double_cast_via_i32_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
 | P1 | **Result Ok must not emit `.map(|v| v.to_owned())`** | `bug_wdb354_module_file_result_ok_must_not_to_owned_borrow_break_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
 | P1 | **Copy Vec3 must not emit `n.clone()` (placeholder)** | `bug_wdb355_module_file_copy_vec3_must_not_emit_clone_test` | 🆕 RED / filed (P3.416); MultiFile GREEN; tip RED; twin WDB-344 |
-| P1 | **Copy Mat4 must not emit `self.clone().method()`** | `bug_wdb356_module_file_copy_self_must_not_clone_before_owned_method_test` | 🆕 RED / filed (P3.416); **MultiFile + tip RED** |
+| P1 | **Copy Mat4 must not emit `self.clone().method()`** | `bug_wdb356_module_file_copy_self_must_not_clone_before_owned_method_test` | ✅ MultiFile GREEN (P3.419) — Copy aggregate skip on owned-self receiver; tip-out pending regen |
 | P1 | **owned string must not emit `impl Into<String>` + `.into()`** | `bug_wdb357_module_file_owned_string_must_not_emit_into_test` | 🆕 RED / filed (P3.416); MultiFile GREEN; tip RED |
 | P1 | **`&self` method must not emit `self.clone().method()`** | `bug_wdb358_module_file_self_method_must_not_clone_receiver_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-356 |
 | P1 | **index field access must not `chunks[i].clone().coord`** | `bug_wdb359_module_file_index_field_must_not_clone_element_test` | 🆕 RED / filed (P3.417); **MultiFile + tip RED** |
 | P1 | **`encode(grid)` must not force `grid.clone()`** | `bug_wdb360_module_file_encode_must_not_force_grid_clone_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-335 |
-| P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.418); **MultiFile + tip RED** |
+| P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | ✅ MultiFile GREEN (P3.419) — skip usize while-cast; tip-out pending regen |
 | P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_wdb362_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **indexed tuple field must not `].clone().rotation`** | `bug_wdb363_module_file_index_tuple_field_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
+| P1 | **usize lit must not emit `N_usize as usize`** | `bug_wdb364_module_file_usize_lit_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-361/352 |
+| P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED |
+| P1 | **BT tick must not force `tree.clone()`** | `bug_wdb366_module_file_bt_tick_must_not_force_tree_clone_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-360 |
+| P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | 🆕 RED / filed (P3.420); twin WDB-343 |
+| P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | 🆕 RED / filed (P3.420) |
+| P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | 🆕 RED / filed (P3.420) |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3356,6 +3362,31 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Compiler agent priority:** tip greens **WDB-361–363** (+ **332–333**, **340–360**). No Phase 606+. No `windjammer/src` edits from DB agent.
 
 
+## P3.419 WindjammerDB CQ-C5 — tip REDs WDB-364–366 + mark 332 GREEN (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-364** `N_usize as usize` redundant lit cast | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-365** `__wj_tmpN` statement temps | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-366** BT `tree.clone()` owned formal force-clone | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-332** i32 priority `.to_string()` | ✅ tip GREEN (P3.418 affinity) |
+
+**TDD:** `wdb364_ wdb365_ wdb366_ wdb332_tip` → **4 passed / 3 failed** (all MultiFile GREEN; 364–366 tip RED; 332 tip GREEN).
+
+**Compiler agent priority:** tip greens **WDB-364–366** (+ open **333**, **340–363**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+
+## P3.420 WindjammerDB CQ-C5 — tip REDs WDB-367–369 (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-367** `None.clone()` on Option/Copy None | 🆕 RED / filed |
+| Tip **WDB-368** `&*flag` / `&*key` into `&str` formals | 🆕 RED / filed |
+| Tip **WDB-369** `.key.clone() == key` string field eq | 🆕 RED / filed |
+
+**TDD:** `wdb367_ wdb368_ wdb369_` (run this session).
+
+**Compiler agent priority:** tip greens **WDB-367–369** (+ **364–366**, open cluster). No Phase 606+. No `windjammer/src` edits from DB agent.
 
 
 

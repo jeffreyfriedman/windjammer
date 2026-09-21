@@ -52,6 +52,12 @@ impl<'ast> CodeGenerator<'ast> {
             return base_name;
         }
 
+        // WDB-347: match-arm bindings are already owned (or `*`-deref'd for `&Copy`).
+        // Never auto-clone them — `r.clone()` on Copy f32 payload is noise / tip RED.
+        if self.match_arm_bindings.contains(name) {
+            return base_name;
+        }
+
         if (self.in_match_arm_needing_string || self.in_owned_value_context)
             && self.module_string_consts.contains(name)
             && !base_name.ends_with(".to_string()")

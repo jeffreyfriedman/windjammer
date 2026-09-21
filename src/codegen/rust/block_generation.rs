@@ -518,9 +518,13 @@ impl<'ast> CodeGenerator<'ast> {
                     // Track them so for-loops iterating over these bindings
                     // correctly identify the loop variable as borrowed.
                     let mut added_borrowed: Vec<String> = Vec::new();
+                    let mut bound_vars = std::collections::HashSet::new();
+                    self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
+                    // WDB-347: arm payload bindings must not auto-clone (Copy f32).
+                    for var in &bound_vars {
+                        self.match_arm_bindings.insert(var.clone());
+                    }
                     if match_binds_refs_flag {
-                        let mut bound_vars = std::collections::HashSet::new();
-                        self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
                         for var in &bound_vars {
                             self.borrowed_iterator_vars.insert(var.clone());
                             added_borrowed.push(var.clone());
@@ -544,6 +548,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     for var in &added_borrowed {
                         self.borrowed_iterator_vars.remove(var);
+                    }
+                    for var in &bound_vars {
+                        self.match_arm_bindings.remove(var);
                     }
 
                     let is_string_literal = matches!(

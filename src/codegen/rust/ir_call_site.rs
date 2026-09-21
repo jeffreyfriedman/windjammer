@@ -6970,7 +6970,34 @@ impl<'ast> CodeGenerator<'ast> {
                 && !s.ends_with(".to_string()")
                 && !s.ends_with(".to_owned()")
             {
-                s = crate::codegen::rust::expression_utilities::append_rust_clone(&s);
+                // WDB-343: Copy formals / Copy cast values auto-copy — never
+                // `(x as i32).clone()` into owned i32 slots.
+                let formal_is_copy = sig
+                    .formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| self.is_type_copy(t));
+                let arg_is_copy = self.expression_is_copy(arg_expr)
+                    || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                        let pointee = match &t {
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                inner.as_ref()
+                            }
+                            other => other,
+                        };
+                        self.is_type_copy(pointee)
+                    })
+                    || (s.contains(" as ")
+                        && (s.contains(" as i32")
+                            || s.contains(" as i64")
+                            || s.contains(" as u32")
+                            || s.contains(" as u64")
+                            || s.contains(" as usize")
+                            || s.contains(" as f32")
+                            || s.contains(" as f64")
+                            || s.contains(" as bool")));
+                if !formal_is_copy && !arg_is_copy {
+                    s = crate::codegen::rust::expression_utilities::append_rust_clone(&s);
+                }
             }
             *coerced = s;
             return;

@@ -129,7 +129,17 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     .flatten();
                 if let Some(recv_ty) = self.infer_expression_type(object) {
-                    if !self.is_type_copy(&recv_ty) {
+                    // WDB-356: Copy aggregates (Mat4, …) auto-copy from `&self` — never
+                    // `self.clone().owned_method()`. Prefer registry + enclosing struct.
+                    let recv_is_copy = self.is_type_copy(&recv_ty)
+                        || (name == "self"
+                            && self.current_struct_name.as_ref().is_some_and(|sn| {
+                                self.copy_types_registry.contains(sn.as_str())
+                                    || self
+                                        .copy_types_registry
+                                        .contains(sn.split('<').next().unwrap_or(sn))
+                            }));
+                    if !recv_is_copy {
                         let sig_opt = if let Some(ref qualified) = qualified_from_self {
                             self.get_signature_with_global(qualified)
                                 .or_else(|| self.signature_registry.get_signature(qualified))
@@ -250,7 +260,15 @@ impl<'ast> CodeGenerator<'ast> {
             && !obj_str.ends_with(".clone()")
         {
             if let Some(recv_ty) = self.infer_expression_type(object) {
-                if !self.is_type_copy(&recv_ty) {
+                // WDB-356: Copy aggregates auto-copy from `&self` field chains too.
+                let recv_is_copy = self.is_type_copy(&recv_ty)
+                    || self.current_struct_name.as_ref().is_some_and(|sn| {
+                        self.copy_types_registry.contains(sn.as_str())
+                            || self
+                                .copy_types_registry
+                                .contains(sn.split('<').next().unwrap_or(sn))
+                    });
+                if !recv_is_copy {
                     let mut needs_clone = false;
                     if let Some(tn) = Self::type_to_name(&recv_ty) {
                         let qualified = format!("{}::{}", tn, method);

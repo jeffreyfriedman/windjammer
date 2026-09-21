@@ -251,11 +251,13 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::literals::is_already_owned_string(&s)
                 {
                     let ty = self.infer_expression_type(e);
+                    // WDB-347: `match_arm_bindings` are owned payloads (ref arms live in
+                    // `borrowed_iterator_vars`). Do not force `.clone()` on Copy f32/i32
+                    // match bindings into return tuples.
                     let is_borrowed_binding = matches!(
                         e,
                         Expression::Identifier { name, .. }
                             if self.borrowed_iterator_vars.contains(name)
-                                || self.match_arm_bindings.contains(name)
                                 || self.identifier_already_ref(name)
                                 || self.local_var_types.get(name).is_some_and(|t| {
                                     matches!(t, Type::Reference(_) | Type::MutableReference(_))
@@ -285,7 +287,22 @@ impl<'ast> CodeGenerator<'ast> {
                             Some(Type::Reference(_)) | Some(Type::MutableReference(_))
                         ));
                     if needs_clone {
-                        s = format!("{}.clone()", s);
+                        let is_copy = ty.as_ref().is_some_and(|t| {
+                            let pointee = match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    inner.as_ref()
+                                }
+                                other => other,
+                            };
+                            self.is_type_copy(pointee)
+                        }) || matches!(
+                            e,
+                            Expression::Identifier { name, .. }
+                                if self.binding_is_copy_pass_by_value_scalar(name)
+                        );
+                        if !is_copy {
+                            s = format!("{}.clone()", s);
+                        }
                     } else if !self.suppress_borrowed_clone {
                         // Also clone non-Copy field accesses through references
                         // (e.g. from_stack.item.id where from_stack is behind &)

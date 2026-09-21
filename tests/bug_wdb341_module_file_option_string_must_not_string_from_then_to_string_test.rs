@@ -40,8 +40,6 @@ fn wdb341_module_file_option_string_must_not_string_from_then_to_string() {
     let map = test.compile().expect("WDB-341 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-341 MultiFile lib.rs:\n{rs}");
-    let bad = rs.contains("String::from(") && rs.contains(".to_string()");
-    // Narrow: String::from(...).to_string() chained
     let chained = rs.contains(").to_string()");
     assert!(
         !(rs.contains("String::from(") && chained),
