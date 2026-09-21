@@ -194,6 +194,9 @@ impl<'ast> CodeGenerator<'ast> {
                             };
                             self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
                             self.maybe_cast_to_function_return_int_width(&mut expr_str, expr);
+                            crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(
+                                &mut expr_str,
+                            );
                         }
 
                         self.coerce_option_ref_return_to_owned(&mut expr_str, expr);
@@ -314,6 +317,9 @@ impl<'ast> CodeGenerator<'ast> {
                                 };
                                 self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
                                 self.maybe_cast_to_function_return_int_width(&mut expr_str, expr);
+                                crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(
+                                    &mut expr_str,
+                                );
                             }
 
                             self.coerce_option_ref_return_to_owned(&mut expr_str, expr);
@@ -746,6 +752,9 @@ impl<'ast> CodeGenerator<'ast> {
                             };
                             self.maybe_cast_usize_to_int_target(&mut expr_str, expr, target);
                             self.maybe_cast_to_function_return_int_width(&mut expr_str, expr);
+                            crate::codegen::rust::type_classification_utilities::strip_redundant_same_width_int_cast(
+                                &mut expr_str,
+                            );
                         }
 
                         output.push_str(&expr_str);
