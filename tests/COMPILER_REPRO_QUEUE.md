@@ -426,7 +426,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Copy Mat4 must not emit `self.clone().method()`** | `bug_wdb356_module_file_copy_self_must_not_clone_before_owned_method_test` | ✅ MultiFile GREEN (P3.419) — Copy aggregate skip on owned-self receiver; tip-out pending regen |
 | P1 | **owned string must not emit `impl Into<String>` + `.into()`** | `bug_wdb357_module_file_owned_string_must_not_emit_into_test` | 🆕 RED / filed (P3.416); MultiFile GREEN; tip RED |
 | P1 | **`&self` method must not emit `self.clone().method()`** | `bug_wdb358_module_file_self_method_must_not_clone_receiver_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-356 |
-| P1 | **index field access must not `chunks[i].clone().coord`** | `bug_wdb359_module_file_index_field_must_not_clone_element_test` | 🆕 RED / filed (P3.417); **MultiFile + tip RED** |
+| P1 | **index field access must not `chunks[i].clone().coord`** | `bug_wdb359_module_file_index_field_must_not_clone_element_test` | ✅ MultiFile GREEN (P3.421) — skip Index clone when `in_field_access_object`; tip-out pending regen |
 | P1 | **`encode(grid)` must not force `grid.clone()`** | `bug_wdb360_module_file_encode_must_not_force_grid_clone_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-335 |
 | P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | ✅ MultiFile GREEN (P3.419) — skip usize while-cast; tip-out pending regen |
 | P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_wdb362_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
@@ -434,9 +434,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **usize lit must not emit `N_usize as usize`** | `bug_wdb364_module_file_usize_lit_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-361/352 |
 | P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED |
 | P1 | **BT tick must not force `tree.clone()`** | `bug_wdb366_module_file_bt_tick_must_not_force_tree_clone_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-360 |
-| P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | 🆕 RED / filed (P3.420); twin WDB-343 |
-| P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | 🆕 RED / filed (P3.420) |
-| P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | 🆕 RED / filed (P3.420) |
+| P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.421) — skip unit `None`/bool in struct-literal reuse clone; tip-out pending regen |
+| P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ MultiFile GREEN (P3.419+); tip-out pending regen |
+| P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3340,7 +3340,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | Tip **WDB-358** `self.clone().method()` on `&self` (streaming/squad/…) | 🆕 RED / filed — MultiFile GREEN; tip RED |
-| Tip **WDB-359** `chunks[i].clone().coord` (chunk_manager) | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-359** `chunks[i].clone().coord` (chunk_manager) | ✅ MultiFile GREEN (P3.421); tip-out pending regen |
 | Tip **WDB-360** `encode(grid.clone())` owned formal force-clone | 🆕 RED / filed — MultiFile GREEN; tip RED |
 | Tip **WDB-346** Copy f32 field `.x/.y/.z.clone()` | ✅ tip GREEN (regen) |
 
@@ -3380,13 +3380,28 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-367** `None.clone()` on Option/Copy None | 🆕 RED / filed |
-| Tip **WDB-368** `&*flag` / `&*key` into `&str` formals | 🆕 RED / filed |
-| Tip **WDB-369** `.key.clone() == key` string field eq | 🆕 RED / filed |
+| Tip **WDB-367** `None.clone()` on Option/Copy None | ✅ MultiFile GREEN (P3.421); tip-out pending regen |
+| Tip **WDB-368** `&*flag` / `&*key` into `&str` formals | ✅ MultiFile GREEN; tip-out pending regen |
+| Tip **WDB-369** `.key.clone() == key` string field eq | ✅ MultiFile GREEN (P3.421); tip-out pending regen |
 
-**TDD:** `wdb367_ wdb368_ wdb369_` (run this session).
+**TDD:** `wdb367_ wdb368_ wdb369_` MultiFile GREEN (P3.421).
 
-**Compiler agent priority:** tip greens **WDB-367–369** (+ **364–366**, open cluster). No Phase 606+. No `windjammer/src` edits from DB agent.
+**Compiler agent priority:** tip-regen game-core for **359/367–369** (+ **343/347/361** lag); then **364–366**. No Phase 606+.
+
+
+## P3.421 (2026-09-21) — coercion: stop Index/None/string-eq clones (WDB-359/367/369)
+
+| Gate | MultiFile | Tip-out |
+|------|-----------|---------|
+| **WDB-359** `chunks[i].clone().coord` | ✅ bare `chunks[i].coord` | pending regen |
+| **WDB-367** `None.clone()` in struct lit | ✅ bare `None` | pending regen |
+| **WDB-369** `.key.clone() ==` | ✅ `.key ==` | pending regen |
+
+**Root cause layer:** coercion/encoding (Copy/comparison context in Index + FieldAccess + struct-literal reuse).
+
+**What became unnecessary:** call-arg / owned-context Index `.clone()` when `in_field_access_object`; struct-literal `needs_clone_anywhere("None")` false-positive; index-field String clone under comparison `suppress_borrowed_clone`.
+
+**Gates:** `cargo test --release --test all -- wdb359_module_file_ wdb367_module_file_ wdb369_module_file_` → MultiFile GREEN; tip-out still lag until regen.
 
 
 

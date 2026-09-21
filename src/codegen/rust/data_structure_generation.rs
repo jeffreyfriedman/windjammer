@@ -604,10 +604,13 @@ impl<'ast> CodeGenerator<'ast> {
         // is true (correct for Copy fields like .score), but for non-Copy fields
         // like String, the resulting expression `vec[i].text` is still a move.
         // Fix: clone the field access result when the field type is non-Copy.
+        // WDB-369: comparisons set `suppress_borrowed_clone` — `String`/`&str`
+        // PartialEq works on refs, so `.key.clone() == key` is noise.
         if !self.generating_assignment_target
             && !self.in_explicit_clone_call
             && !self.in_field_access_object
             && !self.in_borrow_context
+            && !self.suppress_borrowed_clone
         {
             let object_has_index = matches!(object, Expression::Index { .. })
                 || matches!(object, Expression::FieldAccess { object: inner, .. }
@@ -909,27 +912,37 @@ impl<'ast> CodeGenerator<'ast> {
                         self.clone_non_copy_ref_binding_for_struct_field(expr, &expr_str);
                 }
 
+                // WDB-367: `None` / bool keywords are not bindings — auto_clone path
+                // can false-hit `"None"` at the wrong statement_idx → `None.clone()`.
+                // Unit Option::None is Copy when the field payload is Copy.
                 if let Expression::Identifier { name: id, .. } = expr {
-                    if let Some(ref analysis) = self.auto_clone_analysis {
-                        let needs_reuse_clone = analysis
-                            .needs_clone(id, self.current_statement_idx)
-                            .is_some()
-                            || analysis.needs_clone_anywhere(id);
-                        if needs_reuse_clone
-                            && !expr_str.ends_with(".clone()")
-                            && !expr_str.ends_with(".to_string()")
-                        {
-                            let is_copy = self
-                                .local_var_types
-                                .get(id)
-                                .is_some_and(|t| self.is_type_copy(t))
-                                || self
-                                    .current_function_params
-                                    .iter()
-                                    .find(|p| p.name == *id)
-                                    .is_some_and(|p| self.is_type_copy(&p.type_));
-                            if !is_copy {
-                                expr_str = format!("{}.clone()", expr_str);
+                    let is_unit_keyword = id == "None" || id == "true" || id == "false";
+                    if !is_unit_keyword {
+                        if let Some(ref analysis) = self.auto_clone_analysis {
+                            let needs_reuse_clone = analysis
+                                .needs_clone(id, self.current_statement_idx)
+                                .is_some()
+                                || analysis.needs_clone_anywhere(id);
+                            if needs_reuse_clone
+                                && !expr_str.ends_with(".clone()")
+                                && !expr_str.ends_with(".to_string()")
+                            {
+                                let is_copy = self
+                                    .local_var_types
+                                    .get(id)
+                                    .is_some_and(|t| self.is_type_copy(t))
+                                    || self
+                                        .current_function_params
+                                        .iter()
+                                        .find(|p| p.name == *id)
+                                        .is_some_and(|p| self.is_type_copy(&p.type_))
+                                    || self
+                                        .infer_expression_type(expr)
+                                        .as_ref()
+                                        .is_some_and(|t| self.is_type_copy(t));
+                                if !is_copy {
+                                    expr_str = format!("{}.clone()", expr_str);
+                                }
                             }
                         }
                     }
@@ -1117,7 +1130,12 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Owned call-site formals: clone non-Copy / Custom index elements (E0507). Empty WJ
         // std stubs (`Row {}`) may be misclassified Copy while runtime types are Clone-only.
-        if self.in_call_argument_generation && !self.generating_assignment_target {
+        // WDB-359: skip when this Index is only an intermediate object for FieldAccess
+        // (`chunks[i].coord`) — parent owns the ownership decision for the field.
+        if self.in_call_argument_generation
+            && !self.generating_assignment_target
+            && !self.in_field_access_object
+        {
             let et = self
                 .infer_expression_type(object)
                 .as_ref()
@@ -1154,6 +1172,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // TDD: Struct literal fields need owned values - force .clone() for Vec<String> etc.
         // Peel &Vec<T> (generated Rust for WJ `Vec<T>` params) so Copy element detection works.
+        // WDB-359: never force-clone an intermediate Index when a parent FieldAccess is
+        // reading a field (`chunks[i].coord`). `in_field_access_object` already marks
+        // chain intermediates — owned call-arg context must not undo that (else
+        // `chunks[i].clone().coord` for Copy fields).
         let element_type = self
             .infer_expression_type(object)
             .as_ref()
@@ -1161,6 +1183,7 @@ impl<'ast> CodeGenerator<'ast> {
             .cloned();
         let force_clone_for_owned_context = (self.in_struct_literal_field
             || self.in_owned_value_context)
+            && !self.in_field_access_object
             && element_type
                 .as_ref()
                 .map(|et| !self.is_type_copy(et))
