@@ -428,6 +428,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&self` method must not emit `self.clone().method()`** | `bug_wdb358_module_file_self_method_must_not_clone_receiver_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-356 |
 | P1 | **index field access must not `chunks[i].clone().coord`** | `bug_wdb359_module_file_index_field_must_not_clone_element_test` | 🆕 RED / filed (P3.417); **MultiFile + tip RED** |
 | P1 | **`encode(grid)` must not force `grid.clone()`** | `bug_wdb360_module_file_encode_must_not_force_grid_clone_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-335 |
+| P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.418); **MultiFile + tip RED** |
+| P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_wdb362_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
+| P1 | **indexed tuple field must not `].clone().rotation`** | `bug_wdb363_module_file_index_tuple_field_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3338,6 +3341,20 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `wdb358_ wdb359_ wdb360_ wdb346_tip` → **3 passed / 4 failed** (358/360 MultiFile + 346 tip GREEN; 359 MultiFile+tip RED; 358/360 tip RED).
 
 **Compiler agent priority:** tip greens **WDB-358–360** (+ **332–333**, **340–345**, **347–357**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+
+## P3.418 WindjammerDB CQ-C5 — tip REDs WDB-361–363 (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-361** `(i as usize)` on usize counter | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-362** `levels[i].clone().mesh_id()` | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-363** `a[idx].clone().rotation.N` | 🆕 RED / filed — MultiFile GREEN; tip RED |
+
+**TDD:** `wdb361_ wdb362_ wdb363_` → **2 passed / 4 failed** (362/363 MultiFile GREEN; 361 MultiFile+tip RED; all three tip RED).
+
+**Compiler agent priority:** tip greens **WDB-361–363** (+ **332–333**, **340–360**). No Phase 606+. No `windjammer/src` edits from DB agent.
+
 
 
 
