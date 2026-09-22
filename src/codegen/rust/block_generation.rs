@@ -483,6 +483,24 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if needs_clone_for_match && !value_str.ends_with(".clone()") {
                     output.push_str(&format!("{}.clone()", value_str));
                 } else {
+                    if let Some(analysis) = &self.auto_clone_analysis {
+                        if let Expression::Call { arguments, .. } = value {
+                            for (_label, arg) in arguments {
+                                if let Expression::Identifier { name, .. } = arg {
+                                    if analysis
+                                        .needs_clone(name, self.current_statement_idx)
+                                        .is_some()
+                                        && !value_str.contains(&format!("{name}.clone()"))
+                                    {
+                                        value_str = value_str.replace(
+                                            name,
+                                            &format!("{name}.clone()"),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
                     output.push_str(&value_str);
                 }
 

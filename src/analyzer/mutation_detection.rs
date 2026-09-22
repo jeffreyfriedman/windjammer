@@ -650,6 +650,22 @@ impl<'ast> Analyzer<'ast> {
                 // short-circuit on method-name lists (Vec::remove shares "remove").
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
+                        let receiver_type = self.receiver_type_base_for_param_method_call(
+                            name,
+                            object,
+                            param_type_hint,
+                        );
+                        // `out.push(item)` stores owned `item` into the receiver — not
+                        // `&mut item` (Vec::push self slot is MutBorrowed, arg is Owned).
+                        if Self::method_call_argument_stores_owned_payload(
+                            method,
+                            receiver_type.as_deref(),
+                            i,
+                            arguments.len(),
+                            registry,
+                        ) {
+                            continue;
+                        }
                         if let Some(sig) = registry.lookup_method(method) {
                             if sig
                                 .param_ownership_for_arg(i)

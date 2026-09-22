@@ -3424,10 +3424,32 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     dep_sig.is_some_and(|rs| {
                             let pidx = rs.arg_param_index(arg_index);
-                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
-                                && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                    rs, pidx,
-                                )
+                            if matches!(
+                                rs.param_ownership.get(pidx),
+                                Some(crate::analyzer::OwnershipMode::Owned)
+                            ) {
+                                return false;
+                            }
+                            if rs.param_types.get(pidx).is_some_and(|t| {
+                                matches!(t, crate::parser::Type::String)
+                                    || matches!(
+                                        t,
+                                        crate::parser::Type::Custom(n)
+                                            if n == "String"
+                                    )
+                            }) && rs
+                                .emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(pidx))
+                                != Some(&true)
+                            {
+                                return false;
+                            }
+                            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                rs, pidx,
+                            ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                rs, pidx,
+                            )
                         })
                 });
             let callee_wants_shared = if cross_crate_import || import_alias_resolved {
