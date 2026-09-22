@@ -518,14 +518,22 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             {
+                // P3.418: demoted `&mut String` / `&str` formals into owned String fields
+                // (console.set_search_query) must `.to_string()` — MutBorrowed is tracked in
+                // `inferred_mut_borrowed_params`, not only `inferred_borrowed_params`.
                 let target_type = self.infer_expression_type(target);
                 let owned_string_field = target_type.as_ref().is_some_and(|t| {
                     matches!(t, Type::String)
                         || matches!(t, Type::Custom(n) if n == "string" || n == "String")
                 });
+                let demoted_text_formal = self.inferred_borrowed_params.contains(name)
+                    || self.inferred_mut_borrowed_params.contains(name)
+                    || self.str_ref_optimized_params.contains(name)
+                    || self.emitted_rust_ref_formals.contains(name);
                 if owned_string_field
-                    && self.inferred_borrowed_params.contains(name)
+                    && demoted_text_formal
                     && !value_str.ends_with(".to_string()")
+                    && !value_str.ends_with(".clone()")
                     && !crate::codegen::rust::literals::is_already_owned_string(&value_str)
                 {
                     value_str = format!("{}.to_string()", value_str);
