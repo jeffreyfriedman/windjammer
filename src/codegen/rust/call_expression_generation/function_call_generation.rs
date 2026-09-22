@@ -883,21 +883,28 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     // Path-dep import aliases: dependency metadata `Borrowed` / `emitted_rust_ref_params`
     // must auto-borrow owned locals at the cross-crate boundary (apps/wj-find).
+    // Mixed formals (`field: &str`, `value: String`) must peel `&` only on owned slots
+    // (apps/wj-todo-cli → wj-validate) — never blanket-borrow every string arg.
     let lookup_callee = gen.signature_lookup_callee_name(func_name);
     let import_alias = gen.is_import_alias_cross_crate_call(func_name);
     let cross_crate_import =
         import_alias || lookup_callee.as_ref().contains("::");
     if cross_crate_import {
-        if let Some(global_reg) = gen.global_signature_registry.as_ref() {
-            let lookup_ref = lookup_callee.as_ref();
-            let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-            let dep_sig = if import_alias {
-                global_reg.get_signature(lookup_ref)
-            } else {
+        let lookup_ref = lookup_callee.as_ref();
+        let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+        let dep_sig = gen
+            .global_signature_registry
+            .as_ref()
+            .and_then(|global_reg| {
                 global_reg
                     .get_signature(lookup_ref)
                     .or_else(|| global_reg.get_signature(simple))
-            };
+                    .or_else(|| global_reg.find_unique_signature_ending_with(simple))
+            })
+            .or_else(|| signature.as_ref())
+            .or_else(|| gen.get_signature_with_global(func_name))
+            .or_else(|| gen.get_signature_with_global(simple));
+        if let Some(gs) = dep_sig {
             for (i, (_, arg)) in arguments.iter().enumerate() {
                 let Some(arg_str) = args.get_mut(i) else {
                     continue;
@@ -905,13 +912,23 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 let Expression::Identifier { name, .. } = arg else {
                     continue;
                 };
-                let Some(gs) = dep_sig else {
-                    continue;
-                };
                 let pidx = gs.arg_param_index(i);
                 if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(gs, pidx)
                     || gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                    || (matches!(
+                        gs.param_ownership.get(pidx),
+                        Some(OwnershipMode::Owned)
+                    ) && gs.param_types.get(pidx).is_some_and(|t| {
+                        matches!(t, Type::String)
+                            || crate::codegen::rust::types::is_windjammer_text_type(t)
+                                && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    }))
                 {
+                    if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                        *arg_str = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                            arg_str,
+                        );
+                    }
                     continue;
                 }
                 if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx) {

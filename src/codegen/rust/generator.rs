@@ -4131,6 +4131,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Only scalar Copy formals (i64/bool/…) skip clone. Copy aggregates/enums
         // (Value, Lsn, …) still need `.clone()` for multi-use owned moves (regression-063).
+        // WDB-343: module `pub const` of Copy type (u32 MAT_TRIM / VIEWER_GRID) auto-copies —
+        // never `G.clone()` / `(G as i32).clone()` / `(mats::MAT_TRIM as i32).clone()`.
         if self
             .current_function_params
             .iter()
@@ -4140,18 +4142,27 @@ impl<'ast> CodeGenerator<'ast> {
                 .local_var_types
                 .get(name)
                 .is_some_and(|t| self.is_type_copy(t))
+            || self
+                .module_const_type_for_binding(name)
+                .is_some_and(|t| self.is_type_copy(t))
         {
             return arg_str.to_string();
         }
         if self.binding_is_copy_pass_by_value_scalar(name) {
             return arg_str.to_string();
         }
-
-        if arg_str.contains(" as ") && !arg_str.starts_with('(') {
-            format!("({}).clone()", arg_str)
-        } else {
-            format!("{}.clone()", arg_str)
+        // WDB-343: `(x as i32)` / `(max_size as i32)` already yields a Copy scalar —
+        // array-for bindings and untyped `max()` locals must not grow `.clone()`.
+        if Self::arg_str_is_copy_scalar_numeric_cast(arg_str) {
+            return arg_str.to_string();
         }
+
+        crate::codegen::rust::expression_utilities::append_rust_clone(arg_str)
+    }
+
+    /// True when `arg_str` is a numeric/`bool` cast whose result is always Copy.
+    pub(crate) fn arg_str_is_copy_scalar_numeric_cast(arg_str: &str) -> bool {
+        crate::codegen::rust::expression_utilities::is_copy_scalar_numeric_cast(arg_str)
     }
 
     /// True when `name` is a scalar Copy pass-by-value binding (`i64`, `bool`, …),
@@ -4167,7 +4178,21 @@ impl<'ast> CodeGenerator<'ast> {
             };
             return crate::type_classification::is_copy_pass_by_value_formal(bare);
         }
+        if let Some(t) = self.module_const_type_for_binding(name) {
+            return crate::type_classification::is_copy_pass_by_value_formal(t);
+        }
         false
+    }
+
+    /// Resolve `CONST` or `module::CONST` against library-wide `module_const_types` (P3.280).
+    pub(crate) fn module_const_type_for_binding(&self, name: &str) -> Option<&Type> {
+        if let Some(t) = self.module_const_types.get(name) {
+            return Some(t);
+        }
+        name.rsplit("::")
+            .next()
+            .filter(|leaf| *leaf != name)
+            .and_then(|leaf| self.module_const_types.get(leaf))
     }
 
     /// Deref `&Copy` / `&mut Copy` expressions when the function returns an owned Copy type.

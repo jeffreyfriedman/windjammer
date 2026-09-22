@@ -128,11 +128,15 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
     if arg_str.contains(&format!(" as {suffix}")) {
         return;
     }
-    if let Some(base) = arg_str.strip_suffix(".clone()") {
-        if !base.contains(" as ") {
-            *arg_str = format!("({} as {}).clone()", base, suffix);
-            return;
-        }
+    // Integer/float casts yield Copy scalars. If auto-clone already appended `.clone()`
+    // on a multi-use binding, drop it — never emit `(x as i32).clone()` (WDB-343).
+    let without_clone = arg_str
+        .strip_suffix(".clone()")
+        .map(str::trim)
+        .unwrap_or(arg_str);
+    if without_clone != arg_str.as_str() && !without_clone.contains(" as ") {
+        *arg_str = format!("({without_clone} as {suffix})");
+        return;
     }
     if let Expression::Literal {
         value: Literal::Int(val),
@@ -152,7 +156,11 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
     }
     // Always wrap the cast so a later `.clone()` cannot bind tighter than `as`
     // (`pz as i32.clone()` is invalid — must be `(pz as i32).clone()`, P3.372).
-    *arg_str = format!("({} as {})", arg_str, suffix);
+    let core = arg_str
+        .strip_suffix(".clone()")
+        .map(str::trim)
+        .unwrap_or(arg_str.as_str());
+    *arg_str = format!("({core} as {suffix})");
 }
 
 /// P3.368: i32-coord locals/literals into `i64` / WJ `int` formals (ECS entity ids).
@@ -417,10 +425,10 @@ pub fn coerce_arg_str_for_usize_formal(
                 .strip_prefix("&mut ")
                 .or_else(|| arg_str.strip_prefix('&'))
                 .unwrap_or(arg_str);
-            // Auto-clone may already be present (`n.clone()`); cast inside the clone
-            // — never `n as usize.clone()` (WDB-300).
+            // Auto-clone may already be present (`n.clone()`); cast yields Copy usize —
+            // drop the clone (WDB-343). Never `n as usize.clone()` (WDB-300).
             if let Some(inner) = base.strip_suffix(".clone()") {
-                *arg_str = format!("({inner} as usize).clone()");
+                *arg_str = format!("({inner} as usize)");
             } else {
                 *arg_str = format!("{base} as usize");
             }

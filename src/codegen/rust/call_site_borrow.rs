@@ -241,10 +241,6 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     arg_index: usize,
     registry_lookup_name: &str,
 ) -> bool {
-    // `use dep::fn as alias` → lookup is `dep::fn`; treat like module-qualified.
-    if registry_lookup_name.contains("::") {
-        return false;
-    }
     let check = |sig: &FunctionSignature, pidx: usize| -> bool {
         // Codegen confirmed shared-ref (`&str`) — never skip the borrow prefix.
         if callee_emits_shared_rust_ref_param(sig, pidx) {
@@ -283,6 +279,23 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
             .is_some_and(any_emits_shared_ref)
         || lookup_free_fn_signature(registry, registry_lookup_name).is_some_and(any_emits_shared_ref)
     {
+        return false;
+    }
+    // Path-dep imports (`use dep::fn` → `dep::fn` lookup): per-arg global metadata decides
+    // auto-borrow vs owned move — never blanket-`&` all string args (wj-todo-cli validate).
+    if registry_lookup_name.contains("::") {
+        if let Some(global) = global {
+            if let Some(rs) = global
+                .get_signature(registry_lookup_name)
+                .or_else(|| lookup_free_fn_signature(global, registry_lookup_name))
+            {
+                let pidx = rs.arg_param_index(arg_index);
+                if any_emits_shared_ref(rs) {
+                    return false;
+                }
+                return check(rs, pidx);
+            }
+        }
         return false;
     }
     if check(call_sig, param_idx) {

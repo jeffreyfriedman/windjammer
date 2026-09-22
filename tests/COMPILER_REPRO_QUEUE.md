@@ -3246,7 +3246,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-343** Copy i32 `.clone()` (viewer/fps/svo) | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-343** Copy i32 `.clone()` (viewer/fps/svo) | ✅ MultiFile + tip GREEN (P3.425) |
 | Tip **WDB-344** Copy f32 `.clone()` (collision2d) | 🆕 RED / filed — MultiFile GREEN; tip RED |
 | Tip **WDB-345** `buf.clone()` into `&mut Vec` (csg) | 🆕 RED / filed — MultiFile GREEN; tip RED |
 | Tip **WDB-330/331** fps bitwise / Vec3& | ✅ tip GREEN (P3.411 regen) |
@@ -3262,7 +3262,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | Tip **WDB-346** Copy f32 field `.x/.y/.z.clone()` (tps/fps camera) | 🆕 RED / filed — MultiFile GREEN; tip RED; twin WDB-344 |
-| Tip **WDB-347** Copy f32 match binding `r.clone()`/`h.clone()` (jolt) | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-347** Copy f32 match binding `r.clone()`/`h.clone()` (jolt) | ✅ MultiFile + tip GREEN (P3.425) |
 | Tip **WDB-348** owned String `path.clone().to_string()` (loader) | 🆕 RED / filed — MultiFile GREEN; tip RED; twin WDB-340 |
 | Tip **WDB-332–333**, **336–345**, **339–342** | ❌ still tip RED |
 
@@ -3354,7 +3354,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| Tip **WDB-361** `(i as usize)` on usize counter | 🆕 RED / filed — **MultiFile + tip RED** |
+| Tip **WDB-361** `(i as usize)` on usize counter | ✅ MultiFile + tip GREEN (P3.425) |
 | Tip **WDB-362** `levels[i].clone().mesh_id()` | 🆕 RED / filed — MultiFile GREEN; tip RED |
 | Tip **WDB-363** `a[idx].clone().rotation.N` | 🆕 RED / filed — MultiFile GREEN; tip RED |
 
@@ -3410,6 +3410,24 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Gates:** `cargo test --release --test all -- wdb359_module_file_ wdb367_module_file_ wdb368_module_file_ wdb369_module_file_`
 
 **Still tip RED (MultiFile GREEN):** WDB-343 cast `.clone()`, WDB-347 jolt match, WDB-361 `(i as usize)` — follow-up.
+
+## P3.425 (2026-09-22) — WDB-343/347/361 tip GREEN (Copy const + match + usize counter)
+
+| Gate | MultiFile | Tip-out |
+|------|-----------|---------|
+| **WDB-343** path-qual Copy i32/f32 const + cast `.clone()` | ✅ | ✅ tip regen |
+| **WDB-347** Copy f32 match bindings after `body.shape.clone()` | ✅ | ✅ tip jolt/world |
+| **WDB-361** `-> i32` / Custom("i32") + `while i < …len()` | ✅ `usize` + `return i as i32` | ✅ tip systems/chunk/lod |
+
+**Root cause layer:** constraint/codegen (int width + match binding ownership) — not reconcile peels.
+
+**What became unnecessary / narrowed:**
+- Return-width `Custom("i32")` let ascription no longer demotes `.len()` while-counters out of `usize_variables` (WDB-361; keeps WDB-308 `-> u32` peer)
+- Expression-match `block_generation`: cloned scrutinee ⇒ owned arm payloads (no `r.clone()` / `h.clone()`)
+- Match statement path: `value_str.ends_with(".clone()")` ⇒ `owned_bindings_from_copy_deref`
+- Copy scalar module-const / cast trailing `.clone()` strip (WDB-343)
+
+**Gates:** `cargo test --release --test all -- wdb343_ wdb347_ wdb361_` → **6 passed**
 
 ## P3.422 WindjammerDB CQ-C5 — tip RED WDB-370 + TDD 367–369 (2026-09-21)
 

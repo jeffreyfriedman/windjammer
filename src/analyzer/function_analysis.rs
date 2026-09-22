@@ -575,6 +575,19 @@ impl<'ast> Analyzer<'ast> {
                     field_mutated_parameters.insert(param.name.clone());
                 }
             }
+            for param in &func.parameters {
+                if mutated_parameters.contains(&param.name)
+                    && (self.is_stored(&param.name, &func.body, registry)
+                        || self.is_stored_requiring_owned(
+                            &param.name,
+                            &param.type_,
+                            &func.body,
+                            registry,
+                        ))
+                {
+                    mutated_parameters.remove(&param.name);
+                }
+            }
 
             let const_static_optimizations = Vec::new();
             let smallvec_optimizations = Vec::new();

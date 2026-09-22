@@ -547,6 +547,8 @@ impl IntInference {
                 // TDD FIX: Pre-pass - populate var_types from return statements
                 // e.g. "return count" with return type u32 → var_types["count"] = u32
                 // Enables compound assignment "count += 1" to infer 1_u32 before we process it
+                // WDB-361: do NOT stamp `-> i32` onto a `while i < …len()` counter — that
+                // forces `let mut i: i32` + `(i as usize)` vs `.len()`. Prefer usize; cast at return.
                 if let Some(return_type) = &decl.return_type {
                     for stmt in &decl.body {
                         if let Statement::Return {
@@ -554,7 +556,9 @@ impl IntInference {
                             ..
                         } = stmt
                         {
-                            self.var_types.insert(name.clone(), return_type.clone());
+                            if !Self::body_has_len_while_counter(&decl.body, name) {
+                                self.var_types.insert(name.clone(), return_type.clone());
+                            }
                         }
                     }
                 }
@@ -566,6 +570,8 @@ impl IntInference {
                 for stmt in &decl.body {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
                 }
+                // After body constraints, drop return MustBe conflicts for len-while counters
+                // by not having stamped return type in the pre-pass (WDB-361).
                 // TDD FIX: Restore saved var_types (clear function-local variables)
                 self.var_types = saved_var_types;
             }
@@ -580,6 +586,7 @@ impl IntInference {
                             .insert(param.name.clone(), param.type_.clone());
                     }
                     // TDD FIX: Pre-pass - populate var_types from return statements (same as Function)
+                    // WDB-361: skip `-> i32` stamp on `while i < …len()` counters.
                     if let Some(return_type) = &func.return_type {
                         for stmt in &func.body {
                             if let Statement::Return {
@@ -587,7 +594,9 @@ impl IntInference {
                                 ..
                             } = stmt
                             {
-                                self.var_types.insert(name.clone(), return_type.clone());
+                                if !Self::body_has_len_while_counter(&func.body, name) {
+                                    self.var_types.insert(name.clone(), return_type.clone());
+                                }
                             }
                         }
                     }
@@ -638,6 +647,64 @@ impl IntInference {
                 self.current_file_module_path.pop();
             }
             _ => {}
+        }
+    }
+
+    /// True when `name` is the left side of `while name < … .len()` (WDB-361).
+    fn body_has_len_while_counter(body: &[&Statement<'_>], name: &str) -> bool {
+        for stmt in body {
+            match stmt {
+                Statement::While {
+                    condition:
+                        Expression::Binary {
+                            left: Expression::Identifier { name: n, .. },
+                            right,
+                            ..
+                        },
+                    body: while_body,
+                    ..
+                } if n == name => {
+                    if Self::expr_contains_len_call(right) {
+                        return true;
+                    }
+                    if Self::body_has_len_while_counter(while_body.as_slice(), name) {
+                        return true;
+                    }
+                }
+                Statement::While { body: while_body, .. }
+                | Statement::For { body: while_body, .. }
+                | Statement::Loop { body: while_body, .. } => {
+                    if Self::body_has_len_while_counter(while_body.as_slice(), name) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if Self::body_has_len_while_counter(then_block.as_slice(), name) {
+                        return true;
+                    }
+                    if let Some(b) = else_block {
+                        if Self::body_has_len_while_counter(b.as_slice(), name) {
+                            return true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_contains_len_call(expr: &Expression<'_>) -> bool {
+        match expr {
+            Expression::MethodCall { method, .. } if method == "len" => true,
+            Expression::MethodCall { object, .. } => Self::expr_contains_len_call(object),
+            Expression::FieldAccess { object, .. } => Self::expr_contains_len_call(object),
+            Expression::Call { function, .. } => Self::expr_contains_len_call(function),
+            _ => false,
         }
     }
 
@@ -731,14 +798,19 @@ impl IntInference {
                 value: Some(expr), ..
             } => {
                 self.collect_expression_constraints(expr, return_type);
-                if let Some(ret_ty) = return_type {
-                    if let Some(int_ty) = self.extract_int_type(ret_ty) {
-                        let expr_id = self.get_expr_id(expr);
-                        self.constraints.push(IntConstraint::MustBe(
-                            expr_id,
-                            int_ty,
-                            "return type".to_string(),
-                        ));
+                // WDB-361: Identifier returns must not MustBe-retype `.len()` while counters
+                // (`return i` with `-> i32` keeps `i: usize` from the while peer; codegen casts).
+                // Non-counter cases still get return width via the pre-pass `var_types` stamp.
+                if !matches!(expr, Expression::Identifier { .. }) {
+                    if let Some(ret_ty) = return_type {
+                        if let Some(int_ty) = self.extract_int_type(ret_ty) {
+                            let expr_id = self.get_expr_id(expr);
+                            self.constraints.push(IntConstraint::MustBe(
+                                expr_id,
+                                int_ty,
+                                "return type".to_string(),
+                            ));
+                        }
                     }
                 }
             }

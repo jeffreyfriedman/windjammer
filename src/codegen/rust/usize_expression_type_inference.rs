@@ -866,8 +866,9 @@ impl<'ast> CodeGenerator<'ast> {
         let suffix = get_cast_suffix(to);
         if let Some(base) = expr_str.strip_suffix(".clone()") {
             if !base.contains(" as ") {
-                // Cast into cloned arg: `(n as usize).clone()`, never `n as usize.clone()`.
-                *expr_str = format!("({base} as {suffix}).clone()");
+                // Cast to a Copy scalar — drop auto-clone (WDB-343). Keep parens so a
+                // later `.clone()` cannot bind tighter than `as` (P3.372).
+                *expr_str = format!("({base} as {suffix})");
                 return;
             }
         }
@@ -923,7 +924,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let suffix = get_cast_suffix(unified);
         if let Some(base) = expr_str.strip_suffix(".clone()") {
-            *expr_str = format!("({base} as {suffix}).clone()");
+            // Copy scalar cast — drop auto-clone (WDB-343).
+            *expr_str = format!("({base} as {suffix})");
             return;
         }
         let needs_parens = matches!(expr, Expression::Binary { .. });

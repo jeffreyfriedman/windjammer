@@ -26,6 +26,9 @@ use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
 const SRC: &str = r#"
+pub const MAT_TRIM: u32 = 7
+pub const VIEWER_GRID: u32 = 64
+
 pub fn set_cell(x: i32, mat: i32) -> i32 {
     x + mat
 }
@@ -37,6 +40,25 @@ pub fn place(x: i32) -> i32 {
         iy = iy + 1
     }
     set_cell(x, 7)
+    set_cell(x, MAT_TRIM)
+    set_cell(x, MAT_TRIM)
+    set_cell(x, VIEWER_GRID)
+    set_cell(x, VIEWER_GRID)
+}
+
+pub fn place_array(cx: i32, cz: i32) {
+    for x in [cx - 6, cx + 5] {
+        for z in [cz - 4, cz + 4] {
+            set_cell(x, MAT_TRIM)
+            set_cell(z, VIEWER_GRID)
+        }
+    }
+}
+
+pub fn place_max(w: i32, h: i32, d: i32) -> i32 {
+    let max_size = w.max(h).max(d)
+    set_cell(max_size, MAT_TRIM)
+    set_cell(max_size, VIEWER_GRID)
 }
 "#;
 

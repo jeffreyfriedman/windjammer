@@ -137,7 +137,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(t) = self.local_var_types.get(name) {
                     return Some(t.clone());
                 }
-                if let Some(t) = self.module_const_types.get(name) {
+                if let Some(t) = self.module_const_type_for_binding(name) {
                     return Some(t.clone());
                 }
                 // Check function parameters
@@ -280,6 +280,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                 }
                             }
+                        } else if let Some(t) = self.module_const_types.get(field.as_str()) {
+                            // WDB-343: `module::CONST` / `station_builder::MAT_TRIM` —
+                            // object is a module path prefix (not a typed local). Library-wide
+                            // const types are folded into `module_const_types` (P3.280).
+                            return Some(t.clone());
                         }
                     }
                 } else {

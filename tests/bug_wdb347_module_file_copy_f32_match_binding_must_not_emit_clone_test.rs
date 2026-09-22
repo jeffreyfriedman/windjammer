@@ -30,11 +30,40 @@ pub enum Shape {
     Capsule(f32, f32),
 }
 
+pub struct Body {
+    pub shape: Shape,
+    pub name: string,
+}
+
 pub fn dims(shape: Shape) -> (f32, f32, f32) {
     match shape {
         Shape::Sphere(r) => (r, 0.0, 0.0),
         Shape::Capsule(r, h) => (r, h, 0.0),
     }
+}
+
+pub fn dims_twice(body: Body) -> (f32, f32, f32) {
+    let _ = match body.shape {
+        Shape::Sphere(_) => 1,
+        Shape::Capsule(_, _) => 2,
+    }
+    match body.shape {
+        Shape::Sphere(r) => (r, 0.0, 0.0),
+        Shape::Capsule(r, h) => (r, h, 0.0),
+    }
+}
+
+/// Product shape: `let (x,y,z) = match body.shape` on a borrowed `body` (jolt add_body).
+pub fn dims_let_borrowed(body: Body) -> (f32, f32, f32) {
+    let _kind = match body.shape {
+        Shape::Sphere(_) => 1,
+        Shape::Capsule(_, _) => 2,
+    }
+    let dims = match body.shape {
+        Shape::Sphere(r) => (r, 0.0, 0.0),
+        Shape::Capsule(r, h) => (r, h, 0.0),
+    }
+    dims
 }
 "#;
 
@@ -45,7 +74,11 @@ fn wdb347_module_file_copy_f32_match_binding_must_not_emit_clone() {
     let map = test.compile().expect("WDB-347 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-347 MultiFile lib.rs:\n{rs}");
-    let bad = rs.contains(".clone()");
+    // Scrutinee `.clone()` on non-Copy `body.shape` is required; only binding clones are RED.
+    let bad = rs.lines().any(|line| {
+        (line.contains("r.clone()") || line.contains("h.clone()"))
+            && !line.trim_start().starts_with("//")
+    });
     assert!(
         !bad,
         "WDB-347 RED: Copy f32 match binding emitted .clone():\n{rs}"

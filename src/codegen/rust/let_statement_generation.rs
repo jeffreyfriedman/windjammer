@@ -505,10 +505,22 @@ impl<'ast> CodeGenerator<'ast> {
                     let later_peer = var_name.and_then(|vn| {
                         self.mut_int_local_peer_width_from_later_assigns(vn)
                     });
+                    // WDB-308: `-> u32` / later u32 peer wins over `.len()` usize marking.
+                    // WDB-361: `.len()` while-counters win over `-> i32` / later i32 peer.
+                    let prefer_usize_over_i32 = var_name
+                        .is_some_and(|vn| self.usize_variables.contains(vn))
+                        && !matches!(later_peer.as_ref(), Some(Type::Uint))
+                        && !self.function_returns_u32_for_loop_scan();
                     if let Some(Type::Uint) = later_peer.as_ref() {
                         output.push_str(": u32");
                         if let Some(vn) = var_name {
                             self.local_var_types.insert(vn.to_string(), Type::Uint);
+                        }
+                    } else if prefer_usize_over_i32 {
+                        output.push_str(": usize");
+                        if let Some(vn) = var_name {
+                            self.local_var_types
+                                .insert(vn.to_string(), Type::Custom("usize".into()));
                         }
                     } else if let Some(Type::Int32) = later_peer.as_ref() {
                         output.push_str(": i32");
@@ -519,12 +531,24 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if let Some(ret_ty) = &self.current_function_return_type {
                         match Self::peel_option_result_payload(ret_ty) {
                             Type::Int32 => {
-                                output.push_str(": i32");
-                                if let Some(vn) = var_name {
-                                    self.local_var_types.insert(vn.to_string(), Type::Int32);
-                                    self.codegen_i32_binding_names.insert(vn.to_string());
-                                    if self.function_returns_i32_for_loop_scan() {
-                                        self.usize_variables.remove(vn);
+                                // WDB-361: `.len()` while-counters already in `usize_variables`
+                                // must stay usize — do not stamp `: i32` from `-> i32` return.
+                                if var_name.is_some_and(|vn| self.usize_variables.contains(vn)) {
+                                    output.push_str(": usize");
+                                    if let Some(vn) = var_name {
+                                        self.local_var_types.insert(
+                                            vn.to_string(),
+                                            Type::Custom("usize".into()),
+                                        );
+                                    }
+                                } else {
+                                    output.push_str(": i32");
+                                    if let Some(vn) = var_name {
+                                        self.local_var_types.insert(vn.to_string(), Type::Int32);
+                                        self.codegen_i32_binding_names.insert(vn.to_string());
+                                        if self.function_returns_i32_for_loop_scan() {
+                                            self.usize_variables.remove(vn);
+                                        }
                                     }
                                 }
                             }
@@ -535,13 +559,28 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                             Type::Custom(n) if matches!(n.as_str(), "u32" | "i32") => {
-                                output.push_str(": ");
-                                output.push_str(n);
-                                if let Some(vn) = var_name {
-                                    self.local_var_types
-                                        .insert(vn.to_string(), Type::Custom(n.clone()));
-                                    if n == "i32" {
-                                        self.codegen_i32_binding_names.insert(vn.to_string());
+                                // WDB-361: `-> i32` often arrives as Custom("i32"); prefer
+                                // usize for `.len()` while-counters. WDB-308: `-> u32` stays u32.
+                                if n == "i32"
+                                    && var_name
+                                        .is_some_and(|vn| self.usize_variables.contains(vn))
+                                {
+                                    output.push_str(": usize");
+                                    if let Some(vn) = var_name {
+                                        self.local_var_types.insert(
+                                            vn.to_string(),
+                                            Type::Custom("usize".into()),
+                                        );
+                                    }
+                                } else {
+                                    output.push_str(": ");
+                                    output.push_str(n);
+                                    if let Some(vn) = var_name {
+                                        self.local_var_types
+                                            .insert(vn.to_string(), Type::Custom(n.clone()));
+                                        if n == "i32" {
+                                            self.codegen_i32_binding_names.insert(vn.to_string());
+                                        }
                                     }
                                 }
                             }
@@ -582,9 +621,15 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                // WDB-361: `.len()` while-counters already in `usize_variables` must not be
+                // demoted by `-> i32` return-width scan (cast at `return i` instead).
+                // WDB-308: `-> u32` still wins over usize for CLI/index loops.
+                let len_while_usize_counter =
+                    var_name.is_some_and(|n| self.usize_variables.contains(n));
                 let i32_return_scan_counter = mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
-                    && self.function_returns_i32_for_loop_scan();
+                    && self.function_returns_i32_for_loop_scan()
+                    && !len_while_usize_counter;
                 let u32_return_scan_counter = mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && (self.function_returns_u32_for_loop_scan()
@@ -592,9 +637,7 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(t, Type::Uint)
                                 || matches!(t, Type::Custom(n) if n == "u32")
                         }));
-                if var_name.is_some_and(|n| self.usize_variables.contains(n))
-                    && !i32_return_scan_counter
-                    && !u32_return_scan_counter
+                if len_while_usize_counter && !u32_return_scan_counter && !i32_return_scan_counter
                 {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }

@@ -168,27 +168,59 @@ pub fn sanitize_mut_borrow_clone_temp(expr_str: &mut String) {
 ///
 /// Rust parses `as` tighter than method call, so a naive `{cast}.clone()` append
 /// attaches `.clone()` to the type name. Call this as a terminal sanitize.
+///
+/// WDB-343: Copy scalar casts (`as i32` / `as usize` / …) never keep `.clone()`.
 pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
     let t = expr.trim();
     if !t.ends_with(".clone()") || !t.contains(" as ") {
         return t.to_string();
     }
+    let without_clone = t.trim_end_matches(".clone()").trim();
+    if is_copy_scalar_numeric_cast(without_clone) {
+        if without_clone.starts_with('(') {
+            return without_clone.to_string();
+        }
+        return format!("({without_clone})");
+    }
     if t.contains(").clone()") {
         // Already parenthesized cast clone, or other `(…).clone()`.
         return t.to_string();
     }
-    let without_clone = t.trim_end_matches(".clone()");
     // `n as usize` / `n as i64` / `(a + b) as f64` — whole-string cast.
     if without_clone.contains(" as ") && !without_clone.ends_with(')') {
+        if is_copy_scalar_numeric_cast(&format!("({without_clone})")) {
+            return format!("({without_clone})");
+        }
         return format!("({without_clone}).clone()");
     }
     t.to_string()
+}
+
+/// True when `expr` is a numeric/`bool` cast whose result is always Copy.
+pub fn is_copy_scalar_numeric_cast(expr: &str) -> bool {
+    let t = expr.trim();
+    t.contains(" as ")
+        && (t.contains(" as i32")
+            || t.contains(" as i64")
+            || t.contains(" as u32")
+            || t.contains(" as u64")
+            || t.contains(" as usize")
+            || t.contains(" as isize")
+            || t.contains(" as f32")
+            || t.contains(" as f64")
+            || t.contains(" as bool")
+            || t.contains(" as u8")
+            || t.contains(" as i8")
+            || t.contains(" as u16")
+            || t.contains(" as i16"))
 }
 
 /// Append `.clone()` for owned pass, parenthesizing casts/compounds.
 ///
 /// `x as T.clone()` is illegal Rust (`as` binds tighter than method call). Always
 /// emit `(x as T).clone()` when `as` is present (WDB-300).
+///
+/// WDB-343: never clone a Copy scalar cast — `(x as i32)` is already pass-by-value.
 pub fn append_rust_clone(expr: &str) -> String {
     let t = expr.trim();
     // WDB-367: unit keywords are constructors, not bindings — never `None.clone()`.
@@ -197,6 +229,9 @@ pub fn append_rust_clone(expr: &str) -> String {
     }
     // Never `&mut place.clone()` — mut places are lvalues (WDB-336/337).
     if t.starts_with("&mut ") {
+        return t.to_string();
+    }
+    if is_copy_scalar_numeric_cast(t) {
         return t.to_string();
     }
     if t.ends_with(".clone()") || t.ends_with(".to_string()") || t.ends_with(".to_owned()") {
@@ -337,16 +372,22 @@ mod tests {
 
     #[test]
     fn append_rust_clone_parenthesizes_casts() {
-        assert_eq!(append_rust_clone("n as usize"), "(n as usize).clone()");
+        // WDB-343: Copy scalar casts must not grow `.clone()`.
+        assert_eq!(append_rust_clone("n as usize"), "n as usize");
+        assert_eq!(append_rust_clone("(n as i32)"), "(n as i32)");
         assert_eq!(append_rust_clone("n"), "n.clone()");
         assert_eq!(append_rust_clone("n.clone()"), "n.clone()");
         assert_eq!(
             coerce_borrowed_arg_to_owned("n as usize"),
-            "(n as usize).clone()"
+            "n as usize"
         );
         assert_eq!(
             sanitize_cast_trailing_clone("n as usize.clone()"),
-            "(n as usize).clone()"
+            "(n as usize)"
+        );
+        assert_eq!(
+            sanitize_cast_trailing_clone("(n as i32).clone()"),
+            "(n as i32)"
         );
     }
 

@@ -666,11 +666,8 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return;
         }
-        if self.function_returns_i32_for_loop_scan()
-            && self.expression_is_usize_loop_bound(bound)
-        {
-            return;
-        }
+        // WDB-361: `-> i32` + `while i < …len()` must still mark `i` as usize (cast at
+        // `return i`). Blocking usize here forced `let mut i: i32` + `(i as usize)`.
         if self.expression_is_usize_loop_bound(bound) {
             self.usize_variables.insert(name.clone());
         }

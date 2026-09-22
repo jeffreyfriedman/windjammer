@@ -840,6 +840,12 @@ impl<'ast> CodeGenerator<'ast> {
         {
             owned_bindings_from_copy_deref = true;
         }
+        // WDB-347: `apply_match_scrutinee_move_clone_if_needed` appends `.clone()` when a
+        // non-Copy field/path is matched twice (`body.shape` → `body.shape.clone()`). The
+        // match then binds owned payloads — never treat them as `&f32` / force `r.clone()`.
+        if value_str.ends_with(".clone()") {
+            owned_bindings_from_copy_deref = true;
+        }
 
         // When codegen prepends `&` / `&mut` on the scrutinee (`match &node.children`),
         // pattern bindings are reference types even if `match_expression_binds_refs` is false.

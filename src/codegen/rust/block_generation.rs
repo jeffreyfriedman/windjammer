@@ -470,6 +470,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 };
 
+                // WDB-347: cloning the scrutinee (`body.shape.clone()`) owns the enum —
+                // arm payloads are owned Copy values, not `&f32` that need `.clone()`.
+                let mut scrutinee_owned_via_clone = value_str.ends_with(".clone()");
                 if has_string_literal && !is_tuple_match {
                     let scrutinee = string_utilities::maybe_append_as_str_for_match(
                         &value_str,
@@ -482,12 +485,14 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&format!("&{}", value_str));
                 } else if needs_clone_for_match && !value_str.ends_with(".clone()") {
                     output.push_str(&format!("{}.clone()", value_str));
+                    scrutinee_owned_via_clone = true;
                 } else {
                     value_str = self.apply_match_scrutinee_move_clone_if_needed(
                         value_str,
                         value,
                         arms,
                     );
+                    scrutinee_owned_via_clone = value_str.ends_with(".clone()");
                     output.push_str(&value_str);
                 }
 
@@ -513,15 +518,14 @@ impl<'ast> CodeGenerator<'ast> {
                 // Generate all arms with the flag set
                 let mut arm_strings: Vec<(String, bool)> = Vec::with_capacity(arms.len());
                 let match_binds_refs_flag = !use_copied_option
+                    && !scrutinee_owned_via_clone
                     && (scrutinee_needs_ref
                         || self.match_expression_binds_refs(value)
                         || self.expression_type_contains_reference(value));
 
                 for arm in arms.iter() {
-                    // When the scrutinee has a & prefix (or clones from a
-                    // borrowed param), enum struct bindings become references.
-                    // Track them so for-loops iterating over these bindings
-                    // correctly identify the loop variable as borrowed.
+                    // When the scrutinee has a & prefix (not when cloned to owned),
+                    // enum bindings become references.
                     let mut added_borrowed: Vec<String> = Vec::new();
                     let mut bound_vars = std::collections::HashSet::new();
                     self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
@@ -595,6 +599,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // WDB-326: skip when `.copied()` already owns Copy payloads (`Some(v) => v`).
                     let scrutinee_type_has_ref = self.expression_type_contains_reference(value);
                     let match_binds_refs = !use_copied_option
+                        && !scrutinee_owned_via_clone
                         && (scrutinee_needs_ref
                             || self.match_expression_binds_refs(value)
                             || scrutinee_type_has_ref);
