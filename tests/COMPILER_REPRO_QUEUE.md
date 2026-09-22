@@ -3403,5 +3403,14 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Gates:** `cargo test --release --test all -- wdb359_module_file_ wdb367_module_file_ wdb369_module_file_` → MultiFile GREEN; tip-out still lag until regen.
 
+## P3.422 — demoted `&mut String` into owned String field (2026-09-20)
 
+| Gate | Status |
+|------|--------|
+| `mut_string_formal_assign_to_owned_string_field_must_to_string` | ✅ MultiFile GREEN |
+| Tip-out `editor/console` / `hierarchy_panel` | ✅ tip GREEN (regen) |
+
+**Product:** `query: &mut String` → `self.search_query = query` (E0308).
+
+**Fix:** assignment codegen `.to_string()` when MutBorrowed / demoted text formals assign into owned String fields.
 
