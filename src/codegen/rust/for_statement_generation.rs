@@ -48,12 +48,15 @@ impl<'ast> CodeGenerator<'ast> {
             })
         };
 
+        // P3.423: nested `self.render_pipeline.passes` traces to self — not only direct
+        // `self.field`. When the body also uses `self` under `&mut self`, never shared-
+        // borrow the collection (E0505/E0507); clear needs_borrow so the clone path runs.
         let is_self_field_on_mut_self = self.inferred_mut_borrowed_params.contains("self")
-            && matches!(
+            && (matches!(
                 iterable,
                 Expression::FieldAccess { object, .. }
                     if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-            );
+            ) || self.codegen_expression_traces_to_self(iterable));
 
         let mut needs_borrow = self.should_borrow_for_iteration(iterable)
             || self.self_field_iterable_needs_borrow(iterable, body)
@@ -63,7 +66,8 @@ impl<'ast> CodeGenerator<'ast> {
                 // `for mut x in self.field` on &mut self: borrow mutably, never move the field.
                 needs_borrow = true;
             } else if Self::variable_used_in_statements(body, "self") {
-                // Body also uses `self` — clone for by-value iteration (E0505).
+                // Body also uses `self` — clone for by-value iteration (E0505/E0507).
+                needs_borrow = false;
             } else {
                 needs_borrow = true;
             }
