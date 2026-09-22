@@ -89,8 +89,18 @@ pub fn require_max_len(field: string, value: string, max: int) -> Result<string,
 use validate_pkg::require_nonempty
 use validate_pkg::require_max_len
 
+fn own(value: string) -> string {
+    value
+}
+
+fn check_nonempty(field: string, value: string) -> Result<string, string> {
+    let field = own(field)
+    let value = own(value)
+    require_nonempty(field, value)
+}
+
 fn check_title(field: string, value: string, max: int) -> Result<string, string> {
-    match require_nonempty(field, value) {
+    match check_nonempty(field, value) {
         Ok(v) => require_max_len(field, v, max),
         Err(e) => Err(e),
     }

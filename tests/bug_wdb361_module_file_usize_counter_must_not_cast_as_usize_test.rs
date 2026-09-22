@@ -37,6 +37,17 @@ pub fn count(m: Manager) -> usize {
     }
     n
 }
+
+pub fn find_in_order(m: Manager, target: i32) -> i32 {
+    let mut i = 0
+    while i < m.items.len() {
+        if m.items[i] == target {
+            return i
+        }
+        i = i + 1
+    }
+    -1
+}
 "#;
 
 #[test]
