@@ -200,6 +200,10 @@ fn strip_rust_ref_expr(expr: &str) -> &str {
 
 /// `text[s..e]` / `&text[s..e]` are `str` subslices — owned `String` formals need `.to_string()`.
 fn owned_coercion_for_str_subslice(inner: &str) -> String {
+    // WDB-367: unit keywords are constructors — never `.clone()`.
+    if inner == "None" || inner == "true" || inner == "false" {
+        return inner.to_string();
+    }
     if inner.contains('[') && inner.contains("..") {
         format!("({inner}).to_string()")
     } else {

@@ -540,24 +540,30 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            if let Some(ref analysis) = self.auto_clone_analysis {
-                if analysis
-                    .needs_clone(name, self.current_statement_idx)
-                    .is_some()
-                    && !value_str.ends_with(".clone()")
-                    && !value_str.starts_with('*')
-                {
-                    let target_type = self.infer_expression_type(target);
-                    let owned_string_field = target_type.as_ref().is_some_and(|t| {
-                        matches!(t, Type::String)
-                            || matches!(t, Type::Custom(n) if n == "string" || n == "String")
-                    });
-                    if owned_string_field
-                        && self.inferred_borrowed_params.contains(name)
+            // WDB-367: `None` / bool keywords are not bindings — auto_clone can
+            // false-hit `"None"` at the wrong statement_idx → `None.clone()`.
+            // Unit `None` never needs clone (Option::None is freely constructible).
+            let is_unit_keyword = name == "None" || name == "true" || name == "false";
+            if !is_unit_keyword {
+                if let Some(ref analysis) = self.auto_clone_analysis {
+                    if analysis
+                        .needs_clone(name, self.current_statement_idx)
+                        .is_some()
+                        && !value_str.ends_with(".clone()")
+                        && !value_str.starts_with('*')
                     {
-                        value_str = format!("{}.to_string()", value_str);
-                    } else {
-                        value_str = format!("{}.clone()", value_str);
+                        let target_type = self.infer_expression_type(target);
+                        let owned_string_field = target_type.as_ref().is_some_and(|t| {
+                            matches!(t, Type::String)
+                                || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                        });
+                        if owned_string_field
+                            && self.inferred_borrowed_params.contains(name)
+                        {
+                            value_str = format!("{}.to_string()", value_str);
+                        } else {
+                            value_str = format!("{}.clone()", value_str);
+                        }
                     }
                 }
             }

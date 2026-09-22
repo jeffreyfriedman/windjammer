@@ -45,11 +45,14 @@ impl<'ast> CodeGenerator<'ast> {
             base_name
         };
 
-        // `None` parses as Identifier but lowers to Option::None. It cannot be a binding
-        // name alongside normal locals/params — but auto_clone / needs_clone lookups can
-        // still hit a false-positive site at the wrong statement_idx, yielding `None.clone()`.
-        if name == "None" && !is_parameter && !is_local_variable {
-            return base_name;
+        // WDB-367: unit keywords are never binding names — auto_clone cross-function
+        // `needs_clone_anywhere("None")` must not yield `None.clone()` (tilemap/graph).
+        if name == "None" || name == "true" || name == "false" {
+            return if name == "None" {
+                "None".to_string()
+            } else {
+                name.to_string()
+            };
         }
 
         // WDB-347: match-arm bindings are already owned (or `*`-deref'd for `&Copy`).

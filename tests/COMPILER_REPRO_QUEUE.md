@@ -3434,3 +3434,13 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Product:** `for pass in &self.render_pipeline.passes` + `self.update_*()` → E0505/E0507.
 
 **Fix:** nested self-field iterables on MutBorrowed self clear `needs_borrow` when body uses `self`, so the existing clone-before-iterate path runs.
+
+## P3.424 — read-only method must not emit owned `self` (2026-09-20)
+
+| Gate | Status |
+|------|--------|
+| `readonly_method_must_emit_shared_self` | 🆕 RED / filed |
+
+**Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move.
+
+**Compiler agent:** infer `&self` (or `&mut self` if needed) for methods that do not consume `self`.

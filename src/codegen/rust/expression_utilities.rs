@@ -191,6 +191,10 @@ pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
 /// emit `(x as T).clone()` when `as` is present (WDB-300).
 pub fn append_rust_clone(expr: &str) -> String {
     let t = expr.trim();
+    // WDB-367: unit keywords are constructors, not bindings — never `None.clone()`.
+    if t == "None" || t == "true" || t == "false" {
+        return t.to_string();
+    }
     // Never `&mut place.clone()` — mut places are lvalues (WDB-336/337).
     if t.starts_with("&mut ") {
         return t.to_string();

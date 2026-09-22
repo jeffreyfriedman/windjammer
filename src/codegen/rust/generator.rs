@@ -4052,6 +4052,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
+        // WDB-367: unit keywords are not bindings — auto_clone false-hits → `None.clone()`.
+        if name == "None" || name == "true" || name == "false" {
+            return arg_str.to_string();
+        }
         if self.match_arm_bindings.contains(name) {
             return arg_str.to_string();
         }

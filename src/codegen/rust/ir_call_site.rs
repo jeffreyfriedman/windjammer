@@ -1303,6 +1303,22 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Identity;
         }
+        // WDB-367: unit keywords are constructors, not bindings — never `None.clone()`.
+        if matches!(kind, CoercionKind::Clone)
+            && matches!(
+                arg_expr,
+                Expression::Identifier { name, .. }
+                    if name == "None" || name == "true" || name == "false"
+            )
+        {
+            kind = CoercionKind::Identity;
+        }
+        // WDB-343: Copy cast targets must not receive trailing `.clone()` at call sites.
+        if matches!(kind, CoercionKind::Clone)
+            && matches!(arg_expr, Expression::Cast { type_, .. } if self.is_type_copy(type_))
+        {
+            kind = CoercionKind::Identity;
+        }
         // WDB-170 / eco wj-toml: demoted `&str` into owned `String` must `.to_string()`, not `.clone()`.
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::coercion::is_string_base(&expected.base)
@@ -3175,6 +3191,12 @@ impl<'ast> CodeGenerator<'ast> {
             && coerced.starts_with("&*")
         {
             coerced = coerced[1..].to_string();
+        } else if !crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
+            && coerced.starts_with("&*")
+        {
+            // WDB-368: compiler must not emit `&*ident` for owned `string` into demoted
+            // `&str` formals (match payloads / locals). Bare ident coerces via Deref.
+            coerced = coerced.trim_start_matches("&*").to_string();
         } else if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
             && matches!(arg_expr, Expression::FieldAccess { .. })
             && coerced.starts_with('&')
@@ -3982,6 +4004,11 @@ impl<'ast> CodeGenerator<'ast> {
         // (`let (row, id) = f(row); g(row)`).
         let needs = match arg_expr {
             Expression::Identifier { name, .. } => {
+                // WDB-367: unit keywords are not bindings — multipass `needs_clone_anywhere`
+                // on `"None"` yields `None.clone()` at unrelated push sites (tilemap/graph).
+                if name == "None" || name == "true" || name == "false" {
+                    false
+                } else {
                 let local = analysis
                     .needs_clone(name, self.current_statement_idx)
                     .is_some();
@@ -3996,9 +4023,16 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.binding_is_copy_pass_by_value_scalar(name)
                     && self.param_has_later_owned_formal_pass(name, self.current_statement_idx);
                 local || anywhere || reused_owned
+                }
             }
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
                 Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                    if path == "None"
+                        || path.ends_with(".None")
+                        || path.ends_with("::None")
+                    {
+                        return false;
+                    }
                     let local = analysis
                         .needs_clone(&path, self.current_statement_idx)
                         .is_some();
@@ -8047,6 +8081,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         match arg_expr {
             Expression::Identifier { name, .. } => {
+                if name == "None" || name == "true" || name == "false" {
+                    return arg_str.to_string();
+                }
                 if self.into_string_formal_params.contains(name) {
                     return arg_str.to_string();
                 }
@@ -8323,6 +8360,9 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(path) = Self::auto_clone_expr_path(arg_expr) else {
             return false;
         };
+        if path == "None" || path.ends_with(".None") || path.ends_with("::None") {
+            return false;
+        }
         let Some(analysis) = self.auto_clone_analysis.as_ref() else {
             return false;
         };
@@ -8376,6 +8416,10 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: Option<&str>,
         arg_index: Option<usize>,
     ) -> String {
+        // WDB-367: unit `None` / enum `Value::None` must not pick up reuse `.clone()`.
+        if arg_str == "None" || arg_str.ends_with("::None") {
+            return arg_str.to_string();
+        }
         if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
             // Still rewrite clone → mem::take for call-arg writeback behind &mut self.
             if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
