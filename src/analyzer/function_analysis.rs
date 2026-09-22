@@ -1500,6 +1500,27 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
+        for (idx, param) in func.decl.parameters.iter().enumerate() {
+            if has_self_receiver && idx == 0 && param.name == "self" {
+                continue;
+            }
+            if !self.is_copy_type(&param.type_)
+                && self.is_stored_requiring_owned(
+                    &param.name,
+                    &param.type_,
+                    &func.decl.body,
+                    registry,
+                )
+            {
+                if let Some(slot) = param_ownership.get_mut(idx) {
+                    *slot = OwnershipMode::Owned;
+                }
+                if let Some(ty) = param_types.get_mut(idx) {
+                    *ty = param.type_.clone();
+                }
+            }
+        }
+
         for (idx, ownership) in param_ownership.iter().enumerate() {
             if func.decl.is_extern {
                 continue;
