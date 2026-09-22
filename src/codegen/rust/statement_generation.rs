@@ -103,8 +103,31 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 Type::Custom(name.clone())
             }
+            Type::Tuple(elems) => {
+                if elems.iter().any(|e| Self::tuple_elem_is_wj_int_width(e)) {
+                    Type::Int
+                } else if elems.iter().any(|e| {
+                    matches!(Self::peel_option_result_payload(e), Type::Int32)
+                        || matches!(
+                            Self::peel_option_result_payload(e),
+                            Type::Custom(n) if n == "i32",
+                        )
+                }) {
+                    Type::Int32
+                } else {
+                    Type::Int32
+                }
+            }
             // Non-int return (e.g. VoxelGrid): prefer i32 for coordinate locals.
             _ => Type::Int32,
+        }
+    }
+
+    fn tuple_elem_is_wj_int_width(t: &Type) -> bool {
+        match Self::peel_option_result_payload(t) {
+            Type::Int => true,
+            Type::Custom(n) if matches!(n.as_str(), "int" | "i64") => true,
+            _ => false,
         }
     }
 
@@ -128,6 +151,21 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Custom(name.clone())
             }
             Type::Custom(name) if self.struct_fields_include_wj_int(name) => Type::Int,
+            Type::Tuple(elems) => {
+                if elems.iter().any(|e| self.type_contains_wj_int_width(e)) {
+                    Type::Int
+                } else if elems.iter().any(|e| {
+                    matches!(Self::peel_option_result_payload(e), Type::Int32)
+                        || matches!(
+                            Self::peel_option_result_payload(e),
+                            Type::Custom(n) if n == "i32",
+                        )
+                }) {
+                    Type::Int32
+                } else {
+                    Type::Int32
+                }
+            }
             _ => Type::Int32,
         }
     }

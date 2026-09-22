@@ -40,7 +40,7 @@ fn build_library(wj: &str, src_dir: &std::path::Path, out_dir: &std::path::Path)
 }
 
 #[test]
-fn cross_crate_validate_field_must_auto_borrow() {
+fn cross_crate_validate_field_must_auto_borrow_not_value() {
     let tmp = TempDir::new().expect("tempdir");
     let wj = env!("CARGO_BIN_EXE_wj");
 
@@ -154,6 +154,17 @@ pub fn add_title(title: string) -> Result<string, string> {
         .args(["check", "--quiet"])
         .output()
         .expect("cargo check");
+    assert!(
+        generated.contains("require_nonempty(&field, value)")
+            || generated.contains("require_nonempty(& field, value)"),
+        "field auto-borrow + owned value:\n{generated}"
+    );
+    assert!(
+        !generated.contains("require_nonempty(&field, &value)")
+            && !generated.contains("require_nonempty(& field, & value)"),
+        "must not over-borrow value:\n{generated}"
+    );
+
     assert!(
         check.status.success(),
         "cross-crate validate field must auto-borrow into &str.\ngenerated:\n{generated}\nstderr:\n{}",

@@ -3394,15 +3394,22 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | MultiFile | Tip-out |
 |------|-----------|---------|
-| **WDB-359** `chunks[i].clone().coord` | ✅ bare `chunks[i].coord` | pending regen |
-| **WDB-367** `None.clone()` in struct lit | ✅ bare `None` | pending regen |
-| **WDB-369** `.key.clone() ==` | ✅ `.key ==` | pending regen |
+| **WDB-359** `chunks[i].clone().coord` | ✅ bare `chunks[i].coord` | ✅ tip regen |
+| **WDB-367** `None.clone()` struct/assign/push | ✅ bare `None` | ✅ tip regen (tilemap/sprite/…) |
+| **WDB-368** `&*flag` | ✅ MultiFile | ✅ tip dialogue |
+| **WDB-369** `.key.clone() ==` | ✅ `.key ==` | ✅ tip regen |
 
-**Root cause layer:** coercion/encoding (Copy/comparison context in Index + FieldAccess + struct-literal reuse).
+**Root cause layer:** coercion/encoding (+ IR enforce owned_coercion for unit keywords).
 
-**What became unnecessary:** call-arg / owned-context Index `.clone()` when `in_field_access_object`; struct-literal `needs_clone_anywhere("None")` false-positive; index-field String clone under comparison `suppress_borrowed_clone`.
+**What became unnecessary:**
+- Index call-arg / owned-context `.clone()` when `in_field_access_object` (WDB-359)
+- struct-literal + assignment `needs_clone("None")` (WDB-367)
+- index-field String clone under comparison suppress (WDB-369)
+- `owned_coercion_for_str_subslice("None")` / `append_rust_clone("None")` false clones
 
-**Gates:** `cargo test --release --test all -- wdb359_module_file_ wdb367_module_file_ wdb369_module_file_` → MultiFile GREEN; tip-out still lag until regen.
+**Gates:** `cargo test --release --test all -- wdb359_module_file_ wdb367_module_file_ wdb368_module_file_ wdb369_module_file_`
+
+**Still tip RED (MultiFile GREEN):** WDB-343 cast `.clone()`, WDB-347 jolt match, WDB-361 `(i as usize)` — follow-up.
 
 ## P3.422 WindjammerDB CQ-C5 — tip RED WDB-370 + TDD 367–369 (2026-09-21)
 

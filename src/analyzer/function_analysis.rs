@@ -801,6 +801,12 @@ impl<'ast> Analyzer<'ast> {
             }
             if !self.is_copy_type(&param.type_)
                 && !returned_parameters.contains(&param.name)
+                && !self.is_stored_requiring_owned(
+                    &param.name,
+                    &param.type_,
+                    &func.body,
+                    registry,
+                )
                 && matches!(
                     self.infer_passthrough_ownership(
                         &param.name,

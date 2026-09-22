@@ -101,6 +101,7 @@ impl AutoCloneAnalysis {
         // and the root variable "s" has later uses, the field access must
         // be cloned to avoid a partial move error (E0382).
         analysis.detect_partial_moves(&usage_map, &func.body);
+        Self::detect_match_scrutinee_reuse(&func.body, &mut analysis);
 
         analysis
     }
@@ -460,6 +461,143 @@ impl AutoCloneAnalysis {
         UsageKind::Move
     }
 
+    fn free_call_arg_usage_kind(
+        function: &Expression,
+        arg_index: usize,
+        arg_count: usize,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> UsageKind {
+        let Some(registry) = registry else {
+            return UsageKind::Move;
+        };
+        let Some(callee_name) = Self::callee_name_from_call_function(function) else {
+            return UsageKind::Move;
+        };
+        let simple = callee_name.rsplit("::").next().unwrap_or(&callee_name);
+        let Some(sig) = registry
+            .get_signature(&callee_name)
+            .or_else(|| registry.lookup_method(&callee_name))
+            .or_else(|| registry.find_signature_ending_with(simple))
+        else {
+            return UsageKind::Move;
+        };
+        let user_args = if sig.has_self_receiver {
+            sig.param_ownership.len().saturating_sub(1)
+        } else {
+            sig.param_ownership.len()
+        };
+        if arg_count > 0 && user_args != arg_count {
+            return UsageKind::Move;
+        }
+        let pidx = sig.arg_param_index(arg_index);
+        if Self::sig_arg_is_shared_borrow_formal(sig, pidx) {
+            UsageKind::Read
+        } else {
+            UsageKind::Move
+        }
+    }
+
+    fn match_arm_reuses_binding(arm_body: &Expression, name: &str) -> bool {
+        match arm_body {
+            Expression::Block { statements, .. } => statements.iter().any(|s| {
+                Self::statement_uses_binding(s, name)
+            }),
+            other => Self::expression_uses_binding(other, name),
+        }
+    }
+
+    fn statement_uses_binding(stmt: &Statement, name: &str) -> bool {
+        match stmt {
+            Statement::Return { value: Some(e), .. } => Self::expression_uses_binding(e, name),
+            Statement::Expression { expr, .. } => Self::expression_uses_binding(expr, name),
+            Statement::Let { value, .. } => Self::expression_uses_binding(value, name),
+            _ => false,
+        }
+    }
+
+    fn expression_uses_binding(expr: &Expression, name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments.iter().any(|(_, a)| Self::expression_uses_binding(a, name))
+            }
+            Expression::Tuple { elements, .. } => {
+                elements.iter().any(|e| Self::expression_uses_binding(e, name))
+            }
+            Expression::FieldAccess { object, .. } => Self::expression_uses_binding(object, name),
+            _ => false,
+        }
+    }
+
+
+    fn detect_match_scrutinee_reuse(statements: &[&Statement], analysis: &mut AutoCloneAnalysis) {
+        let mut counter: usize = 0;
+        for stmt in statements {
+            let idx = counter;
+            counter += 1;
+            if let Statement::Match { value, arms, .. } = stmt {
+                if let Expression::Identifier { name, .. } = value {
+                        let reused = arms.iter().any(|arm| Self::match_arm_reuses_binding(arm.body, name));
+                        if reused {
+                            analysis.clone_sites.insert(
+                                (name.clone(), idx),
+                                CloneReason::MovedButUsedLater,
+                            );
+                        }
+                } else if let Expression::Call { arguments, .. } = value {
+                    for (_label, arg) in arguments {
+                        if let Expression::Identifier { name, .. } = arg {
+                            let reused = arms
+                                .iter()
+                                .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
+                            if reused {
+                                analysis.clone_sites.insert(
+                                    (name.clone(), idx),
+                                    CloneReason::MovedButUsedLater,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            Self::walk_stmt_for_counter(stmt, &mut counter);
+        }
+    }
+
+    fn walk_stmt_for_counter(stmt: &Statement, counter: &mut usize) {
+        match stmt {
+            Statement::If { then_block, else_block, .. } => {
+                for s in then_block {
+                    Self::collect_usages_from_statement(s, counter, false, &mut HashMap::new(), None);
+                }
+                if let Some(e) = else_block {
+                    for s in e {
+                        Self::collect_usages_from_statement(s, counter, false, &mut HashMap::new(), None);
+                    }
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => {
+                for s in body {
+                    Self::collect_usages_from_statement(s, counter, false, &mut HashMap::new(), None);
+                }
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    if let Expression::Block { statements, .. } = arm.body {
+                        for s in statements {
+                            Self::collect_usages_from_statement(
+                                s, counter, false, &mut HashMap::new(), None,
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Record that `expr` is only touched as the parent of a field projection
     /// (`buf` inside `buf.scores`). Nested chains mark each identifier root once.
     fn collect_field_projection_parent_usages(
@@ -595,7 +733,12 @@ impl AutoCloneAnalysis {
                         {
                             UsageKind::Read
                         } else {
-                            UsageKind::Move
+                            Self::free_call_arg_usage_kind(
+                                function,
+                                i,
+                                arguments.len(),
+                                registry,
+                            )
                         };
                         Self::collect_usages_from_expression(
                             arg_expr, idx, arg_kind, in_loop, map, registry,

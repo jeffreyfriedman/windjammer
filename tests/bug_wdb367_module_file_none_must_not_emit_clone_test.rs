@@ -39,6 +39,10 @@ pub struct Machine {
     pub initial_state: Option<StateId>,
 }
 
+pub struct Tile {
+    pub solid: bool,
+}
+
 pub fn new_sprite() -> Sprite {
     Sprite {
         src_x: None,
@@ -54,6 +58,16 @@ pub fn clear_machine(m: Machine) {
     m.current_state = None
     m.previous_state = None
     m.initial_state = None
+}
+
+pub fn fill_tiles(tiles: Vec<Option<Tile>>) -> Vec<Option<Tile>> {
+    let mut tiles = tiles
+    let mut i = 0
+    while i < 3 {
+        tiles.push(None)
+        i = i + 1
+    }
+    tiles
 }
 "#;
 
