@@ -437,6 +437,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.421) — skip unit `None`/bool in struct-literal reuse clone; tip-out pending regen |
 | P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ MultiFile GREEN (P3.419+); tip-out pending regen |
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
+| P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | 🆕 RED / filed (P3.422); twin WDB-359; tip RED |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3402,6 +3403,15 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **What became unnecessary:** call-arg / owned-context Index `.clone()` when `in_field_access_object`; struct-literal `needs_clone_anywhere("None")` false-positive; index-field String clone under comparison `suppress_borrowed_clone`.
 
 **Gates:** `cargo test --release --test all -- wdb359_module_file_ wdb367_module_file_ wdb369_module_file_` → MultiFile GREEN; tip-out still lag until regen.
+
+## P3.422 WindjammerDB CQ-C5 — tip RED WDB-370 + TDD 367–369 (2026-09-21)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-370** `].clone().coord.clone()` (streaming/chunk_manager) | 🆕 RED / filed |
+| Tip **WDB-367–369** | ❌ tip RED — MultiFile ✅ GREEN (see P3.421) |
+
+**TDD:** `wdb367_ wdb368_ wdb369_` → **3 passed / 3 failed** (expected tip RED). `wdb370_` → MultiFile + tip RED.
 
 ## P3.422 — demoted `&mut String` into owned String field (2026-09-20)
 
