@@ -3493,6 +3493,33 @@ impl<'ast> CodeGenerator<'ast> {
                 // even when the caller formal was demoted to `&str` (explicit `&` at boundary).
                 coerced = format!("&{coerced}");
             }
+            if (cross_crate_import || import_alias_resolved)
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+                && self.global_signature_registry.as_ref().is_some_and(|g| {
+                    let dep_sig = if import_alias_resolved {
+                        g.get_signature(lookup_ref)
+                    } else {
+                        let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+                        g.get_signature(lookup_ref)
+                            .or_else(|| g.get_signature(simple))
+                    };
+                    dep_sig.is_some_and(|rs| {
+                        let pidx = rs.arg_param_index(arg_index);
+                        matches!(
+                            rs.param_ownership.get(pidx),
+                            Some(crate::analyzer::OwnershipMode::Owned)
+                        ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            rs, pidx,
+                        )
+                    })
+                })
+            {
+                coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                    &coerced,
+                );
+            }
+
             // Already-demoted caller `&str` / `&T`: bare at shared-ref call sites.
             if self.caller_formal_emitted_shared_ref(name)
                 && coerced == format!("&{name}")

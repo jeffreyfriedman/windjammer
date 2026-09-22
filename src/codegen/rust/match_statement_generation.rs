@@ -12,6 +12,50 @@ use crate::parser::*;
 use super::{pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    fn match_arm_body_uses_binding(body: &Expression, name: &str) -> bool {
+        match body {
+            Expression::Block { statements, .. } => statements.iter().any(|s| match s {
+                Statement::Return { value: Some(e), .. }
+                | Statement::Expression { expr: e, .. } => Self::match_arm_body_uses_binding(e, name),
+                _ => false,
+            }),
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments.iter().any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
+            }
+            Expression::Tuple { elements, .. } => {
+                elements.iter().any(|e| Self::match_arm_body_uses_binding(e, name))
+            }
+            _ => false,
+        }
+    }
+
+    pub(in crate::codegen::rust) fn apply_match_scrutinee_move_clone_if_needed(
+        &self,
+        mut value_str: String,
+        value: &Expression,
+        arms: &[crate::parser::MatchArm],
+    ) -> String {
+        if let Expression::Call { arguments, .. } = value {
+            for (_label, arg) in arguments {
+                if let Expression::Identifier { name, .. } = arg {
+                    let arm_reuses = arms
+                        .iter()
+                        .any(|arm| Self::match_arm_body_uses_binding(arm.body, name));
+                    let analysis_wants = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                        a.needs_clone(name, self.current_statement_idx).is_some()
+                    });
+                    if (arm_reuses || analysis_wants)
+                        && !value_str.contains(&format!("{name}.clone()"))
+                    {
+                        value_str = value_str.replace(name, &format!("{name}.clone()"));
+                    }
+                }
+            }
+        }
+        value_str
+    }
+
     /// Generate code for a match statement
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_match_statement(
@@ -611,6 +655,9 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             value_str
         };
+
+        let value_str =
+            self.apply_match_scrutinee_move_clone_if_needed(value_str, value, arms);
 
         let needs_borrow_break = !self.match_scrutinee_allows_mut_binding_directly(value)
             && (self.match_scrutinee_is_self_method_call(value)
