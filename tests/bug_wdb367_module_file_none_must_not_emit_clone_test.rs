@@ -29,6 +29,16 @@ pub struct Sprite {
     pub src_y: Option<f32>,
 }
 
+pub struct StateId {
+    pub id: i32,
+}
+
+pub struct Machine {
+    pub current_state: Option<StateId>,
+    pub previous_state: Option<StateId>,
+    pub initial_state: Option<StateId>,
+}
+
 pub fn new_sprite() -> Sprite {
     Sprite {
         src_x: None,
@@ -38,6 +48,12 @@ pub fn new_sprite() -> Sprite {
 
 pub fn clear(s: Sprite) {
     s.src_x = None
+}
+
+pub fn clear_machine(m: Machine) {
+    m.current_state = None
+    m.previous_state = None
+    m.initial_state = None
 }
 "#;
 
