@@ -3868,6 +3868,24 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
+        // Name is the contract: only `Vec<NonCopyCustom>` pub index APIs stay owned.
+        // Copy-element Vecs (`i64`/`f64`/`i32`) and `Vec<string>` readonly scans demote
+        // to `&Vec<T>` (graph_pr_f64_get / get_line).
+        let elem = match &param.type_ {
+            Type::Vec(inner) => inner.as_ref(),
+            Type::Parameterized(name, args)
+                if name == "Vec" || name.ends_with("::Vec") =>
+            {
+                match args.first() {
+                    Some(t) => t,
+                    None => return false,
+                }
+            }
+            _ => return false,
+        };
+        if !(matches!(elem, Type::Custom(_)) && !self.is_type_copy(elem)) {
+            return false;
+        }
         self.param_is_indexed_in_body(func.body.as_slice(), &param.name)
     }
 

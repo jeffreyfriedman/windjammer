@@ -15,6 +15,26 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.428 (2026-09-23) — fail-closed + MutBorrowed Vec / readonly `&Vec`
+
+| Gate | Status |
+|------|--------|
+| `codegen_external_crate_qualified_call_gate_test` (bare-only + unknown crate) | ✅ restored fail-closed |
+| `ir_call_site_total_coercion_test::generate_program_fails_closed_on_missing_boundary_signature` | ✅ |
+| `auto_mut_borrow_arg_test` | ✅ `self.fill(&mut buf)` — AST bare Vec no longer owned-slot |
+| `bug_cross_module_vec_borrow_test` | ✅ readonly pub `Vec<i64>` demotes |
+| `reference_coercion_test::test_auto_borrow_owned_vec_to_ref_param` | ✅ `process_items(&v)` |
+| `e0507_ownership_inference_test::test_vec_string_index` | ✅ `(&lines[i]).to_string()` |
+| `hashmap_get_autoborrow_test::test_std_collections_hashmap_get_borrows_owned_key` | ✅ no `key.clone()` |
+| `reference_coercion_test::test_auto_deref_ref_copy_to_value_param` | ✅ `double(*r)` — `&i32` is already i32 after IR autoderef |
+| P3.329 timefmt cargo-check `text.clone()` into `&str` | ⚠️ leave to timefmt worktree |
+
+**Root cause layer:** signature — fail-closed without bare-homonym authorization; MutBorrowed beats AST `Vec`; analyzer Borrowed Vec is `&Vec` (not owned emission). Coercion/encoding — `coerce_arg_str_for_i32_formal` now treats `Reference(i32)` / mixed-int I32 as already-i32 (no `(*r as i32)`).
+
+**What became unnecessary:** `has_dependency_simple_sig` fail-open; `pub_vec_non_copy_custom_indexed_api` on Copy-element Vecs; AST-owned-slot blocking `&mut buf`; post-IR i32 cast on Copy autoderef.
+
+**Gates:** `cargo test --release --test all -- codegen_external_crate_qualified_call_gate_test ir_call_site_total_coercion_test::generate_program_fails_closed auto_mut_borrow_arg_test bug_cross_module_vec_borrow reference_coercion_test::test_auto_borrow_owned_vec_to_ref_param reference_coercion_test::test_auto_deref_ref_copy_to_value_param e0507_ownership_inference_test::test_vec_string_index hashmap_get_autoborrow_test::test_std_collections_hashmap_get_borrows_owned_key` → 11 passed. `cargo test --release --lib -- type_casting::tests::coerce_i32_formal_skips_copy_ref_autoderef` → 1 passed.
+
 ## P3.376 — string const into owned `string` formal must auto-own (2026-09-18)
 
 | Gate | Status |

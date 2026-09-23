@@ -1230,7 +1230,14 @@ impl<'ast> CodeGenerator<'ast> {
             match element_resolution {
                 Some((_, true)) => {
                     if force_clone_for_owned_context {
-                        return format!("{}.clone()", base_expr);
+                        // E0507: borrow the slot then own (`&vec[i]`), never move out.
+                        if element_type
+                            .as_ref()
+                            .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                        {
+                            return format!("(&{}).to_string()", base_expr);
+                        }
+                        return format!("(&{}).clone()", base_expr);
                     } else {
                         return format!("&{}", base_expr);
                     }

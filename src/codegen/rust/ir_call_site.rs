@@ -1739,6 +1739,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Ambiguous `Type::method` signatures (two modules define `Emitter::new` with
         // different param types): do not auto-cast int→float from the winning sig.
+        // Copy autoderef already yields the expected width (`*r` for `&i32` → `i32`).
+        if prepared_arg.starts_with('*')
+            && matches!(expected.ownership, OwnedType::Owned | OwnedType::Copy)
+        {
+            // Autoderef of a Copy ref already yields the formal width — drop
+            // redundant `as i32` (`double(*r as i32)` → `double(*r)`).
+            for suffix in [" as i32", " as i64", " as u32", " as u64"] {
+                if let Some(base) = prepared_arg.strip_suffix(suffix) {
+                    prepared_arg = base.to_string();
+                    break;
+                }
+            }
+            if matches!(kind, CoercionKind::NumericCast(_)) {
+                kind = CoercionKind::Identity;
+            }
+        }
         if matches!(kind, CoercionKind::NumericCast(_)) {
             let method = callee_name.rsplit("::").next().unwrap_or(callee_name);
             let type_name = receiver_type_name.or_else(|| {
@@ -4622,6 +4638,19 @@ impl<'ast> CodeGenerator<'ast> {
                         && !self.is_type_copy(t)
                         && !crate::codegen::rust::types::is_windjammer_text_type(t)
                 })
+                // AST bare `Vec`/`Custom` is not an owned slot when analysis/emission
+                // already inferred MutBorrowed (`fill(buf: Vec<f32>)` → `&mut Vec`).
+                && !matches!(
+                    crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                        &sig, arg_index,
+                    ),
+                    crate::analyzer::OwnershipMode::MutBorrowed
+                )
+                && !sig
+                    .param_types
+                    .get(param_idx)
+                    .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+                && !self.ir_sig_arg_expects_mut_borrow(&sig, arg_index)
         });
         let project_owned_slot = receiver_type_name.is_some_and(|rt| {
             self.resolve_method_function_signature(
@@ -5861,6 +5890,7 @@ impl<'ast> CodeGenerator<'ast> {
             coerced,
             formal.or(formal_for_usize),
             arg_ty.as_ref(),
+            mixed_int,
         );
         crate::codegen::rust::type_casting::coerce_arg_str_for_i64_formal(
             arg_expr,
@@ -8489,7 +8519,12 @@ impl<'ast> CodeGenerator<'ast> {
             if self.callee_slot_emits_mut_borrow(callee, idx)
                 || self.callee_arg_expects_borrow_at_call(callee, idx)
             {
-                return arg_str.to_string();
+                let mut kept = arg_str.to_string();
+                if !crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr)
+                {
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut kept);
+                }
+                return kept;
             }
         }
         if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {

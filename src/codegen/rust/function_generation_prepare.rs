@@ -2830,10 +2830,24 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         for stmt in body {
             match stmt {
-                Statement::For { iterable, body, .. } => {
+                Statement::For {
+                    pattern,
+                    iterable,
+                    body,
+                    ..
+                } => {
                     if let Expression::Identifier { name, .. } = iterable {
                         if name == param_name {
-                            return true;
+                            // `for i in items { ... *i ... }` is borrowed iteration, not a move.
+                            if let Pattern::Identifier(loop_var) = pattern {
+                                if Self::statements_deref_identifier(loop_var, body.as_slice()) {
+                                    // fall through — not consumed
+                                } else {
+                                    return true;
+                                }
+                            } else {
+                                return true;
+                            }
                         }
                     }
                     if self.param_consumed_as_for_loop_iterable(body.as_slice(), param_name) {
@@ -2872,6 +2886,50 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    fn statements_deref_identifier(name: &str, statements: &[&Statement<'ast>]) -> bool {
+        statements.iter().any(|stmt| match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Let { value: expr, .. }
+            | Statement::Assignment { value: expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => Self::expr_derefs_identifier(expr, name),
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::statements_deref_identifier(name, then_block.as_slice())
+                    || else_block.as_ref().is_some_and(|b| {
+                        Self::statements_deref_identifier(name, b.as_slice())
+                    })
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. } => {
+                Self::statements_deref_identifier(name, body.as_slice())
+            }
+            _ => false,
+        })
+    }
+
+    fn expr_derefs_identifier(expr: &Expression, name: &str) -> bool {
+        match expr {
+            Expression::Unary {
+                op: UnaryOp::Deref,
+                operand,
+                ..
+            } => matches!(&**operand, Expression::Identifier { name: id, .. } if id == name),
+            Expression::Binary { left, right, .. } => {
+                Self::expr_derefs_identifier(left, name) || Self::expr_derefs_identifier(right, name)
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| Self::expr_derefs_identifier(arg, name)),
+            _ => false,
+        }
     }
 
     /// True when `param_name` appears in a read context (comparison, field access chain, etc.).
@@ -2932,11 +2990,21 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_uses_param_as_read_operand(condition, param_name)
                     || self.param_used_as_read_operand(body.as_slice(), param_name)
             }
-            Statement::For { body, iterable, .. } => {
-                // `for x in items` consumes `items` — not a readonly operand (regression-006).
+            Statement::For {
+                pattern,
+                body,
+                iterable,
+                ..
+            } => {
+                // `for x in items` consumes `items` — not a readonly operand (regression-006)
+                // unless the body derefs the element (`*i` → borrowed `for i in &items`).
                 let iterable_consumes = matches!(
                     iterable,
                     Expression::Identifier { name, .. } if name == param_name
+                ) && !matches!(
+                    pattern,
+                    Pattern::Identifier(loop_var)
+                        if Self::statements_deref_identifier(loop_var, body.as_slice())
                 );
                 (!iterable_consumes
                     && self.expression_uses_param_as_read_operand(iterable, param_name))

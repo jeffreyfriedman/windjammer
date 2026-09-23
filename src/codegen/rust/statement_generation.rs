@@ -811,15 +811,18 @@ impl<'ast> CodeGenerator<'ast> {
         if value_str.starts_with("&mut ") {
             return;
         }
-        if value_str.ends_with(".clone()") || value_str.ends_with(".to_string()") {
-            return;
-        }
 
         let is_string = matches!(elem_type, Some(Type::String))
             || matches!(elem_type, Some(Type::Custom(ref n)) if n == "string");
+        if !is_string
+            && (value_str.ends_with(".clone()") || value_str.ends_with(".to_string()"))
+        {
+            return;
+        }
 
         if is_string {
-            // P3.329: owned `string` lets need `parts[i].to_string()`, never `&….to_string()`.
+            // E0507 + owned String: `(&vec[i]).to_string()` — not a move, not `&String`.
+            // Unparenthesized `&vec[i].to_string()` is `&String` (P3.329).
             let mut base = value_str
                 .strip_prefix('&')
                 .map(str::trim_start)
@@ -832,11 +835,10 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 base = inner;
             }
-            if base.ends_with(".to_string()") || base.ends_with(".clone()") {
-                *value_str = base;
-            } else {
-                *value_str = format!("{base}.to_string()");
-            }
+            let bare = base
+                .trim_end_matches(".to_string()")
+                .trim_end_matches(".clone()");
+            *value_str = format!("(&{bare}).to_string()");
         } else if value_str.starts_with('&') {
             let base = value_str
                 .strip_prefix('&')

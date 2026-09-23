@@ -39,6 +39,15 @@ pub fn type_is_i32(ty: &Type) -> bool {
     matches!(ty, Type::Int32) || matches!(ty, Type::Custom(n) if n == "i32")
 }
 
+/// `i32` after peeling `&` / `&mut` — Copy autoderef (`*r` from `&i32`) is already
+/// the formal width. Do not treat `Reference(Int32)` as a WJ `int` needing `as i32`.
+pub fn type_is_i32_value(ty: &Type) -> bool {
+    match ty {
+        Type::Reference(inner) | Type::MutableReference(inner) => type_is_i32_value(inner),
+        other => type_is_i32(other),
+    }
+}
+
 /// Drive int literal suffixes while generating a call argument (P3.353 `set_if` coords).
 pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
     if formal.is_some_and(type_is_i32) {
@@ -70,17 +79,22 @@ pub fn assignment_int_peer_from_owner_type_name(type_name: &str) -> Option<Type>
 ///
 /// Signature-driven: only when the resolved formal is `i32`. Literals already
 /// suffixed `_i32` are left alone; identifiers/`i64` bindings get `as i32`.
-/// Skip when the argument is already `i32` — avoids `quantity as i32` noise.
+/// Skip when the argument is already `i32` (including `&i32` / mixed-int I32
+/// after IR Copy autoderef) — avoids `double((*r as i32))`.
 pub fn coerce_arg_str_for_i32_formal(
     arg: &Expression,
     arg_str: &mut String,
     formal: Option<&Type>,
     arg_type: Option<&Type>,
+    mixed_int: Option<crate::type_inference::IntType>,
 ) {
     if !formal.is_some_and(type_is_i32) {
         return;
     }
-    if arg_type.is_some_and(type_is_i32) && !arg_str.contains("_i64") {
+    if (arg_type.is_some_and(type_is_i32_value)
+        || mixed_int == Some(crate::type_inference::IntType::I32))
+        && !arg_str.contains("_i64")
+    {
         return;
     }
     if arg_str.contains(" as i32") || arg_str.ends_with("_i32") {
@@ -216,7 +230,7 @@ pub fn apply_numeric_formal_coercions(
     mixed_int: Option<crate::type_inference::IntType>,
 ) {
     coerce_arg_str_for_usize_formal(None, arg, arg_str, formal, false);
-    coerce_arg_str_for_i32_formal(arg, arg_str, formal, arg_type);
+    coerce_arg_str_for_i32_formal(arg, arg_str, formal, arg_type, mixed_int);
     coerce_arg_str_for_i64_formal(arg, arg_str, formal, arg_type, mixed_int);
     coerce_arg_str_for_u32_formal(arg, arg_str, formal, arg_type, mixed_int);
 }
@@ -548,5 +562,32 @@ mod tests {
         );
         assert_eq!(s, "(i + j + 1) as usize");
         let _ = Literal::Int(0);
+    }
+
+    #[test]
+    fn coerce_i32_formal_skips_copy_ref_autoderef() {
+        let arg = Expression::Identifier {
+            name: "r".into(),
+            location: Default::default(),
+        };
+        let mut s = "*r".to_string();
+        coerce_arg_str_for_i32_formal(
+            &arg,
+            &mut s,
+            Some(&Type::Int32),
+            Some(&Type::Reference(Box::new(Type::Int32))),
+            None,
+        );
+        assert_eq!(s, "*r", "IR autoderef of &i32 must not become (*r as i32)");
+
+        let mut s = "*r".to_string();
+        coerce_arg_str_for_i32_formal(
+            &arg,
+            &mut s,
+            Some(&Type::Int32),
+            None,
+            Some(crate::type_inference::IntType::I32),
+        );
+        assert_eq!(s, "*r", "mixed-int I32 pointee must not cast after autoderef");
     }
 }
