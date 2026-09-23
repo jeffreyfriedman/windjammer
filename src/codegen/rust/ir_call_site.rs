@@ -8544,34 +8544,23 @@ impl<'ast> CodeGenerator<'ast> {
             false,
         );
         if needs {
-            // Only scalar Copy (i64/bool/…) skip clone; Copy aggregates/enums still need
-            // `.clone()` on multi-use owned moves (regression-063 Value).
-            let skip = match arg_expr {
+            // Copy values (scalars *and* aggregates like Coord/Vec3) are passed by
+            // value — never `.coord.clone()` / `pc.clone()` (WDB-370/371). Non-Copy
+            // enums (regression-063 Value) still clone on multi-use owned moves.
+            let skip = self.infer_expression_type(arg_expr).is_some_and(|t| {
+                let bare = match &t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(bare)
+            }) || match arg_expr {
                 Expression::Identifier { name, .. } => {
                     self.binding_is_copy_pass_by_value_scalar(name)
                 }
-                Expression::FieldAccess { field, .. } => {
-                    self.module_const_type_for_binding(field)
-                        .is_some_and(|t| {
-                            crate::type_classification::is_copy_pass_by_value_formal(t)
-                        })
-                        || self.infer_expression_type(arg_expr).is_some_and(|t| {
-                            let bare = match &t {
-                                Type::Reference(inner) | Type::MutableReference(inner) => {
-                                    inner.as_ref()
-                                }
-                                other => other,
-                            };
-                            crate::type_classification::is_copy_pass_by_value_formal(bare)
-                        })
-                }
-                _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
-                    let bare = match &t {
-                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                        other => other,
-                    };
-                    crate::type_classification::is_copy_pass_by_value_formal(bare)
-                }),
+                Expression::FieldAccess { field, .. } => self
+                    .module_const_type_for_binding(field)
+                    .is_some_and(|t| self.is_type_copy(t)),
+                _ => false,
             };
             if !skip {
                 // Clone yields an owned value. If a prior pass prefixed `&`, drop it

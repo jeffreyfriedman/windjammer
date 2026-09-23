@@ -32,6 +32,7 @@ pub struct Coord {
 
 pub struct Chunk {
     pub coord: Coord,
+    pub name: string,
 }
 
 pub fn chebyshev(a: Coord, b: Coord) -> i32 {
@@ -43,8 +44,14 @@ pub fn chebyshev(a: Coord, b: Coord) -> i32 {
     }
 }
 
-pub fn dist_from_chunk(chunks: Vec<Chunk>, i: usize, b: Coord) -> i32 {
-    chebyshev(chunks[i].coord, b)
+pub struct World {
+    pub chunks: Vec<Chunk>,
+}
+
+impl World {
+    pub fn dist_from_chunk(self, i: usize, b: Coord) -> i32 {
+        chebyshev(self.chunks[i].coord, b)
+    }
 }
 "#;
 

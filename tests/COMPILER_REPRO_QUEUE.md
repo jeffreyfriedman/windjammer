@@ -15,6 +15,21 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.429 (2026-09-23) — Copy aggregate field from non-Copy index must not `.clone()`
+
+| Gate | Status |
+|------|--------|
+| `bug_wdb370_module_file_copy_field_must_not_double_clone` (self.chunks[i].coord, non-Copy Chunk) | ✅ isolate GREEN — `self.chunks[i].coord` |
+| `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone` | ✅ isolate GREEN |
+| `bug_wdb372` / `bug_wdb373` isolates | ✅ isolate GREEN (unchanged) |
+| Tip-out 370/371/372/373 product `gen/` | ❌ stale tip-out — needs retranpile |
+
+**Root cause layer:** constraint/type — IR `maybe_auto_clone_expr_path` skipped clone only for scalar Copy (`is_copy_pass_by_value_formal`), so Copy aggregates (`Coord`, `Vec3`) still got `.coord.clone()`.
+
+**What became unnecessary:** scalar-only skip in `maybe_auto_clone_expr_path`; now `is_type_copy` covers Copy aggregates.
+
+**Gates:** `cargo test --release --test all -- bug_wdb370_module_file_copy_field_must_not_double_clone bug_wdb371_module_file_copy_vec3_field_must_not_double_clone bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee bug_wdb373_module_file_index_string_field_must_not_double_clone` → 4 isolate passed / 4 tip-out RED (stale gen).
+
 ## P3.428 (2026-09-23) — fail-closed + MutBorrowed Vec / readonly `&Vec`
 
 | Gate | Status |
@@ -457,8 +472,8 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile + tip GREEN (P3.427) — unit keywords + `Type::None` identifier paths |
 | P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ MultiFile GREEN (P3.419+); tip-out pending regen |
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
-| P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | 🆕 RED / filed (P3.422); twin WDB-359; tip RED |
-| P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370/355 |
+| P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429) — `is_type_copy` skip on Copy aggregates; tip-out pending regen |
+| P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429); tip-out pending regen; twin WDB-370/355 |
 | P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.426); twin WDB-351/359 |
 | P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370 |
 | P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | 🆕 RED / filed (P3.427); twin WDB-370 |
