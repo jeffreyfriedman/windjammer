@@ -3464,7 +3464,8 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| `readonly_method_must_emit_shared_self` | 🆕 RED / filed |
+| `nested_self_field_in_struct_lit_must_not_force_owned_self` | 🆕 RED / isolate GREEN `&self` when parent bound first; RED on `self.quality.steps` in struct lit |
+| Tip-out `update_raymarch_params(self)` | 🆕 RED |
 
 **Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move.
 
