@@ -39,10 +39,12 @@ pub struct Board {
     pub entries: Vec<Entry>,
 }
 
-pub fn get_f32(board: Board, idx: usize) -> Option<f32> {
-    match board.entries[idx].value {
-        Val::Float(v) => Some(v),
-        _ => None,
+impl Board {
+    pub fn get_f32(self, idx: usize) -> Option<f32> {
+        match self.entries[idx].value {
+            Val::Float(v) => Some(v),
+            _ => None,
+        }
     }
 }
 "#;

@@ -15,6 +15,21 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.430 (2026-09-23) — WDB-374–376 isolates + strengthen 372/373 `self.`
+
+| Gate | Status |
+|------|--------|
+| `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ GREEN |
+| `bug_mpsc_sync_channel_boundary_signature_test` | ✅ GREEN |
+| WDB-370–376 MultiFile isolates | ✅ GREEN (`is_type_copy` skip from P3.429; 372/373 now use `self.`) |
+| WDB-370–376 tip-out / `gen/` | ❌ stale product — needs retranpile with tip `wj` |
+
+**Root cause layer:** constraint/type — same `is_type_copy` skip as P3.429; no new reconcile. Filed missing TDD isolates for WDB-374/375/376 (queue rows had no tests).
+
+**What became unnecessary:** nothing new in codegen; product `].clone().state` / nested binding / `buffer_id` clones are already wrong vs tip isolate emit.
+
+**Gates:** `cargo test --release --test all -- bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_wdb370_ bug_wdb371_ bug_wdb372_ bug_wdb373_ bug_wdb374_ bug_wdb375_ bug_wdb376_` → 11 passed (2 spawn/mpsc + 7 isolates + extras) / 7 tip-out RED.
+
 ## P3.429 (2026-09-23) — Copy aggregate field from non-Copy index must not `.clone()`
 
 | Gate | Status |
@@ -474,11 +489,11 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
 | P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429) — `is_type_copy` skip on Copy aggregates; tip-out pending regen |
 | P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429); tip-out pending regen; twin WDB-370/355 |
-| P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.426); twin WDB-351/359 |
-| P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370 |
-| P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | 🆕 RED / filed (P3.427); twin WDB-370 |
-| P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | 🆕 RED / filed (P3.427); twin WDB-370/374 |
-| P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | 🆕 RED / filed (P3.427); twin WDB-343/346 |
+| P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | ✅ isolate GREEN (P3.429/430) — `self.entries[i].value`; tip-out pending regen |
+| P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429/430) — `self.watches[i].path`; tip-out pending regen |
+| P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.430) — `is_type_copy` skip; tip-out pending regen |
+| P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | ✅ isolate GREEN (P3.430) — nested `self.passes[i].bindings[j].binding_type`; tip-out pending regen |
+| P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | ✅ isolate GREEN (P3.430) — `self.lifetimes[i].buffer_id`; tip-out pending regen |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
