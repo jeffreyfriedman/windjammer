@@ -440,6 +440,7 @@ impl<'ast> CodeGenerator<'ast> {
                             &mut arg_str,
                             formal,
                             arg_ty.as_ref(),
+                            Some(self.int_type_for_mixed_int_codegen(arg)),
                         );
                     }
 

@@ -423,6 +423,23 @@ pub fn normalize_explicit_deref_copy_operand(arg_expr: &Expression, s: &str) -> 
                 }
             }
         }
+        Expression::Identifier { name, .. } => {
+            // Autoderef of `&i32` → `*r`; drop redundant width casts.
+            let mut t = s.trim();
+            if t.starts_with('(') && t.ends_with(')') {
+                t = t[1..t.len() - 1].trim();
+            }
+            if let Some(inner) = t.strip_prefix('*').map(str::trim) {
+                for suffix in [" as i32", " as i64", " as u32", " as u64"] {
+                    if let Some(base) = inner.strip_suffix(suffix) {
+                        let base = base.trim().trim_matches(|c| c == '(' || c == ')');
+                        if base == name {
+                            return format!("*{name}");
+                        }
+                    }
+                }
+            }
+        }
         _ => {}
     }
     s.to_string()
@@ -622,10 +639,18 @@ pub fn finalize_collection_key_call_site_arg(
         strip_leading_shared_ref(arg_str);
         return;
     }
-    if arg_binding_already_shared_ref
-        || !is_collection_key_arg(sig, arg_index, receiver_type)
-        || arg_str.starts_with('&')
+    if arg_binding_already_shared_ref || arg_already_rust_ref {
+        // Already `&str` / `&T` — HashMap::get wants `&Q`. Never `.clone()` into the key.
+        expression_utilities::strip_trailing_clone(arg_str);
+        return;
+    }
+    if is_collection_key_arg(sig, arg_index, receiver_type)
+        && arg_str.ends_with(".clone()")
+        && matches!(arg_expr, Expression::Identifier { .. })
     {
+        expression_utilities::strip_trailing_clone(arg_str);
+    }
+    if !is_collection_key_arg(sig, arg_index, receiver_type) || arg_str.starts_with('&') {
         return;
     }
     if arg_str.ends_with(".to_string()")
