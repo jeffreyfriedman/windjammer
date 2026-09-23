@@ -39,8 +39,14 @@ pub fn get_affected_files(dep: DepGraph, path: string) -> Vec<string> {
     out
 }
 
-pub fn affected(dep: DepGraph, watches: Vec<Watch>, i: usize) -> Vec<string> {
-    get_affected_files(dep, watches[i].path)
+pub struct Loader {
+    pub watches: Vec<Watch>,
+}
+
+impl Loader {
+    pub fn affected(self, dep: DepGraph, i: usize) -> Vec<string> {
+        get_affected_files(dep, self.watches[i].path)
+    }
 }
 "#;
 
