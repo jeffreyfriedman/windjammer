@@ -609,9 +609,14 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // WDB-308 / WDB-303: u32 (and i32) locals — including `i + 1` binaries — must index as usize.
         // Do this before expression_produces_usize early-return (binary peers often look like usize).
-        // Use `({}) as usize` so `as` does not bind tighter than `+` (`(i + 1 as usize)` is wrong).
+        // Binaries: `({}) as usize` so `as` does not bind tighter than `+`.
+        // Identifiers: `(i as usize)` — not `(i) as usize` (array_indexing_i32_test / field index).
         if self.index_expr_needs_u32_or_i32_usize_cast(index) && !idx_str.contains(" as usize") {
-            *idx_str = format!("({}) as usize", idx_str);
+            if matches!(index, Expression::Identifier { .. }) {
+                *idx_str = format!("({} as usize)", idx_str);
+            } else {
+                *idx_str = format!("({}) as usize", idx_str);
+            }
             return;
         }
         // P3.335: concrete `i32` locals always cast for slice/Vec index (before usize inference

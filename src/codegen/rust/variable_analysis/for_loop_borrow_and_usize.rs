@@ -539,6 +539,22 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
+                // WDB-361 / P3.335: `best_idx = i` when `i` is a `.len()` while-counter
+                // must keep `best_idx` as usize (cast at `return best_idx as i32`).
+                Statement::Assignment { target, value, .. } => {
+                    if let (
+                        Expression::Identifier { name: dst, .. },
+                        Expression::Identifier { name: src, .. },
+                    ) = (target, value)
+                    {
+                        if self.usize_variables.contains(src)
+                            && !self.identifier_is_wj_int_i64_binding(dst.as_str())
+                            && self.usize_variables.insert(dst.clone())
+                        {
+                            changed = true;
+                        }
+                    }
+                }
                 _ => {}
             }
         }

@@ -10,8 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! P3.335: `-> i32` + `let mut i = 0/1` + `while i < vec.len()` must not emit `i: i32 = N_usize`
-//! (autotiler / astar_grid product shape).
+//! P3.335 / WDB-361: `-> i32` + `let mut i = 0/1` + `while i < vec.len()` must not emit
+//! `i: i32 = N_usize` (autotiler / astar_grid product shape).
+//! Preferred emit (P3.425): `i: usize` + `return i as i32` (no `(i as usize)`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -95,9 +96,16 @@ fn i32_return_while_len_counter_must_not_emit_usize() {
         !bad_i32_counter_usize_literal(&combined),
         "P3.335: i32 return-width counters must not initialize with _usize:\n{combined}"
     );
+    // P3.425 / WDB-361: prefer native usize counters (`return i as i32`). Legacy
+    // i32 + `(i as usize)` remains acceptable if widths stay consistent.
+    let usize_style = combined.contains("let mut i: usize")
+        || combined.contains("let mut best_idx: usize")
+        || combined.contains(": usize = 0_usize")
+        || combined.contains(": usize = 1_usize");
+    let i32_cast_style = combined.contains(" as usize") && combined.contains("while");
     assert!(
-        combined.contains(" as usize") && combined.contains("while"),
-        "P3.335: i32 vs len() should cast counter to usize in while:\n{combined}"
+        usize_style || i32_cast_style,
+        "P3.335: expect usize counter or i32+cast vs len():\n{combined}"
     );
     test.cargo_check().expect("P3.335 cargo-check");
 }
