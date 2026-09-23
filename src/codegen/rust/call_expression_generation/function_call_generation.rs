@@ -886,12 +886,20 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Mixed formals (`field: &str`, `value: String`) must peel `&` only on owned slots
     // (apps/wj-todo-cli → wj-validate) — never blanket-borrow every string arg.
     let lookup_callee = gen.signature_lookup_callee_name(func_name);
+    let lookup_ref = lookup_callee.as_ref();
+    let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
     let import_alias = gen.is_import_alias_cross_crate_call(func_name);
-    let cross_crate_import =
-        import_alias || lookup_callee.as_ref().contains("::");
+    let cross_crate_import = import_alias
+        || lookup_ref.contains("::")
+        || gen
+            .global_signature_registry
+            .as_ref()
+            .is_some_and(|g| {
+                g.get_signature(lookup_ref).is_some()
+                    || g.get_signature(simple).is_some()
+                    || g.find_unique_signature_ending_with(simple).is_some()
+            });
     if cross_crate_import {
-        let lookup_ref = lookup_callee.as_ref();
-        let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
         let dep_sig = gen
             .global_signature_registry
             .as_ref()

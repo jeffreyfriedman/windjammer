@@ -69,6 +69,24 @@ pub fn fill_tiles(tiles: Vec<Option<Tile>>) -> Vec<Option<Tile>> {
     }
     tiles
 }
+
+pub enum Value {
+    None,
+    Float(f32),
+}
+
+pub struct Node {
+    pub inputs: Vec<Value>,
+}
+
+impl Node {
+    pub fn set_input(self, index: usize, value: Value) {
+        while self.inputs.len() <= index {
+            self.inputs.push(Value::None)
+        }
+        self.inputs[index] = value
+    }
+}
 "#;
 
 #[test]
@@ -105,7 +123,9 @@ fn wdb367_tip_out_game_core_must_not_none_clone() {
         tip.join("rendering/bvh.rs"),
         tip.join("rendering/mesh_generator.rs"),
         tip.join("dcc_pipeline/usd.rs"),
+        tip.join("visual_scripting/graph.rs"),
         game.join("gen/sprite/sprite.rs"),
+        game.join("gen/visual_scripting/graph.rs"),
         game.join("gen/state_machine/machine.rs"),
         game.join("gen/tilemap/tilemap.rs"),
         game.join("gen/ai/npc_behavior.rs"),
