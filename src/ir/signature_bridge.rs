@@ -83,23 +83,12 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::MutBorrowed)
     ) {
-        // Analyzer MutBorrowed covers both true `&mut T` and owned `mut T` bindings
-        // (field mutation on bare Custom). Prefer codegen emission / owned contract.
+        // Analyzer MutBorrowed is `&mut T` at call sites (`apply_rotation` /
+        // `fill_grid`). Owned `mut T` bindings (AppDeps) sync ownership to Owned
+        // after bare emission — they do not stay MutBorrowed. Only a confirmed
+        // owned-emission contract may treat this slot as owned-mut.
         let emits_owned_mut_binding =
-            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
-                || (sig
-                    .emitted_rust_ref_params
-                    .as_ref()
-                    .and_then(|flags| flags.get(param_idx))
-                    .copied()
-                    == Some(false)
-                    && !sig
-                        .param_types
-                        .get(param_idx)
-                        .is_some_and(|t| matches!(t, Type::MutableReference(_)))
-                    && !sig
-                        .formal_param_type(param_idx)
-                        .is_some_and(|t| matches!(t, Type::MutableReference(_))));
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx);
         if !emits_owned_mut_binding {
             if let Some(formal) = sig.formal_param_type(param_idx) {
                 return safety_type_from_parser_type(
@@ -302,10 +291,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                             .get(param_idx)
                             .is_some_and(|t| is_bare_vec_type(t));
                         if ast_bare_vec && ref_emission != Some(true) {
-                            return safety_type_from_parser_type(
-                                bare,
-                                Some(OwnershipMode::Owned),
-                            );
+                            return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
                         }
                         // Cross-file / pre-emission stubs keep bare `Vec` in param_types
                         // while ownership is Borrowed — call sites still need `&walls`.
@@ -329,14 +315,12 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     }
 
     // Plain WJ `string` with stale converged `&str` stays owned until codegen confirms emission.
-    if formal_is_plain_windjammer_string(
-        sig, param_idx,
-    ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-        sig, param_idx,
-    ) && sig.param_types.get(param_idx).is_some_and(|t| {
-        param_is_rust_str_ref(t)
-            || matches!(t, Type::Reference(_) | Type::MutableReference(_))
-    }) {
+    if formal_is_plain_windjammer_string(sig, param_idx)
+        && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
+        && sig.param_types.get(param_idx).is_some_and(|t| {
+            param_is_rust_str_ref(t) || matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        })
+    {
         return SafetyType {
             base: BaseType::String,
             ownership: OwnedType::Owned,
@@ -370,14 +354,13 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
             }
         }
-        if formal_is_plain_windjammer_string(
-            sig, param_idx,
-        ) || (sig.param_types.get(param_idx).is_none()
-            && sig.formal_param_type(param_idx).is_none()
-            && matches!(
-                sig.param_ownership.get(param_idx),
-                Some(OwnershipMode::Borrowed)
-            ))
+        if formal_is_plain_windjammer_string(sig, param_idx)
+            || (sig.param_types.get(param_idx).is_none()
+                && sig.formal_param_type(param_idx).is_none()
+                && matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Borrowed)
+                ))
         {
             return SafetyType {
                 base: BaseType::String,
@@ -398,9 +381,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Borrowed)
         )
-        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-            sig, param_idx,
-        )
+        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
     {
         return SafetyType {
             base: BaseType::String,
@@ -421,9 +402,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                 sig, param_idx,
             )
-            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
-            )
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
             && sig
                 .param_types
                 .get(param_idx)
@@ -446,9 +425,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
             }
             if matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-                && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                    sig, param_idx,
-                )
+                && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
             {
                 return safety_type_from_parser_type(ty, Some(OwnershipMode::Borrowed));
             }
@@ -457,9 +434,8 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             if is_plain_windjammer_string_type(bare) {
                 // Analyzer Borrowed alone must not force `&field` — owned until codegen
                 // confirms shared-ref emission (struct-field → owned `string` formal gate).
-                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                    sig, param_idx,
-                ) {
+                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
+                {
                     return SafetyType {
                         base: BaseType::String,
                         ownership: OwnedType::Ref(Region::fresh(3)),
@@ -584,14 +560,11 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     }
 
     // Plain WJ `string` formals pass owned `String` until codegen confirms `&str`.
-    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(
-        sig, param_idx,
-    ) {
+    if crate::ir::emission_contract::plain_string_formal_passes_owned_at_call_site(sig, param_idx) {
         // Stale Owned metadata must not beat converged `&str` emission.
         if let Some(ty) = sig.param_types.get(param_idx) {
-            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
-            ) || param_is_rust_str_ref(ty)
+            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
+                || param_is_rust_str_ref(ty)
                 || matches!(ty, Type::Reference(_))
             {
                 return SafetyType {
@@ -633,9 +606,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             };
         }
         if matches!(ty, Type::Reference(_) | Type::MutableReference(_))
-            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                sig, param_idx,
-            )
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
         {
             return safety_type_from_parser_type(ty, None);
         }
@@ -684,10 +655,11 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         if is_plain_string {
             if !sig.has_self_receiver {
                 // Stale converged Reference(str) without codegen confirmation stays owned.
-                if sig.param_types.get(param_idx).is_some_and(|t| {
-                    param_is_rust_str_ref(t)
-                        || matches!(t, Type::Reference(_))
-                }) {
+                if sig
+                    .param_types
+                    .get(param_idx)
+                    .is_some_and(|t| param_is_rust_str_ref(t) || matches!(t, Type::Reference(_)))
+                {
                     return SafetyType {
                         base: BaseType::String,
                         ownership: OwnedType::Owned,
@@ -725,9 +697,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
     }
 
     if let Some(ty) = sig.param_types.get(param_idx) {
-        if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-            sig, param_idx,
-        ) {
+        if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx) {
             if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
             {
                 if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
@@ -933,9 +903,10 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
 /// Text callees: shared-ref from bridge, emission oracle, or registry `&str` param type.
 pub fn call_site_wants_shared_text_ref(sig: &FunctionSignature, param_idx: usize) -> bool {
     call_site_needs_shared_ref_at_emit(sig, param_idx)
-        || sig.param_types.get(param_idx).is_some_and(|t| {
-            param_is_rust_str_ref(t)
-        })
+        || sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(|t| param_is_rust_str_ref(t))
 }
 
 pub fn ownership_mode_to_owned(mode: OwnershipMode) -> OwnedType {
@@ -1446,14 +1417,14 @@ mod tests {
     }
 
     #[test]
-    fn mut_borrowed_bare_custom_with_owned_emission_stays_owned() {
-        // create_export_job mutates deps fields → MutBorrowed analysis, but
-        // codegen emits `mut deps: AppDeps` (owned). Call sites must pass by value.
+    fn owned_bare_custom_after_owned_mut_emission_stays_owned() {
+        // create_export_job mutates deps fields, but codegen emits `mut deps: AppDeps`
+        // and syncs ownership to Owned. Call sites must pass by value.
         let sig = FunctionSignature {
             name: "create_export_job".into(),
             formal_param_types: vec![Type::Custom("AppDeps".into())],
             param_types: vec![Type::Custom("AppDeps".into())],
-            param_ownership: vec![OwnershipMode::MutBorrowed],
+            param_ownership: vec![OwnershipMode::Owned],
             return_type: Some(Type::Custom("ExportJobView".into())),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
@@ -1467,6 +1438,36 @@ mod tests {
         assert!(
             matches!(expected.ownership, OwnedType::Owned),
             "owned mut binding must not force MutRef at call sites"
+        );
+    }
+
+    #[test]
+    fn mut_borrowed_bare_custom_expects_mut_ref_at_call_site() {
+        // apply_rotation / fill_grid: analyzer MutBorrowed on bare Custom before
+        // formal emission wraps MutableReference. Call sites need `&mut self.field`.
+        let sig = FunctionSignature {
+            name: "apply_rotation".into(),
+            formal_param_types: vec![Type::Custom("Transform".into())],
+            param_types: vec![Type::Custom("Transform".into())],
+            param_ownership: vec![OwnershipMode::MutBorrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 0);
+        assert!(
+            matches!(expected.ownership, OwnedType::MutRef(_)),
+            "MutBorrowed bare Custom must stay MutRef (not owned-mut). Got {:?}",
+            expected.ownership
+        );
+        assert!(!crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, 0));
+        assert!(
+            !crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(&sig, 0)
         );
     }
 
