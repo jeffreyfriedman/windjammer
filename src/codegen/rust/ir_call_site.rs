@@ -77,6 +77,30 @@ impl<'ast> CodeGenerator<'ast> {
             .unwrap_or_else(|| sig.clone())
     }
 
+    /// Path-dep / import-alias metadata: this arg slot emits owned Rust (`String`), not `&str`.
+    /// Used to peel IR over-borrow (`&value` into `require_nonempty(field: &str, value: String)`).
+    fn cross_crate_dep_arg_confirms_owned(&self, callee_name: &str, arg_index: usize) -> bool {
+        let lookup = self.signature_lookup_callee_name(callee_name);
+        let lookup_ref = lookup.as_ref();
+        let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+        let Some(global) = self.global_signature_registry.as_ref() else {
+            return false;
+        };
+        let dep_sig = global
+            .get_signature(lookup_ref)
+            .or_else(|| global.get_signature(callee_name))
+            .or_else(|| global.get_signature(simple))
+            .or_else(|| global.find_unique_signature_ending_with(simple));
+        dep_sig.is_some_and(|rs| {
+            let pidx = rs.arg_param_index(arg_index);
+            matches!(
+                rs.param_ownership.get(pidx),
+                Some(crate::analyzer::OwnershipMode::Owned)
+            ) || Self::sig_arg_confirms_owned_emission(rs, arg_index)
+                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(rs, pidx)
+        })
+    }
+
     pub(crate) fn is_collection_key_lookup_at_site(
         &self,
         sig: &crate::analyzer::FunctionSignature,
@@ -3313,6 +3337,7 @@ impl<'ast> CodeGenerator<'ast> {
                 coerced = cloned;
             } else if callee_shared
                 && !Self::sig_arg_confirms_owned_emission(&slot_sig, arg_index)
+                && !self.cross_crate_dep_arg_confirms_owned(callee_name, arg_index)
                 && !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !self.identifier_binding_already_rust_ref(name)
@@ -3500,23 +3525,12 @@ impl<'ast> CodeGenerator<'ast> {
                 // even when the caller formal was demoted to `&str` (explicit `&` at boundary).
                 coerced = format!("&{coerced}");
             }
+            // Peel IR over-borrow into owned String slots (wj-todo-cli → wj-validate
+            // `require_nonempty(&field, &value)` → `(&field, value)`).
             if coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
-                && self.global_signature_registry.as_ref().is_some_and(|g| {
-                    let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-                    let dep_sig = g.get_signature(lookup_ref)
-                        .or_else(|| g.get_signature(callee_name))
-                        .or_else(|| g.get_signature(simple));
-                    dep_sig.is_some_and(|rs| {
-                        let pidx = rs.arg_param_index(arg_index);
-                        matches!(
-                            rs.param_ownership.get(pidx),
-                            Some(crate::analyzer::OwnershipMode::Owned)
-                        ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                            rs, pidx,
-                        )
-                    })
-                })
+                && (self.cross_crate_dep_arg_confirms_owned(callee_name, arg_index)
+                    || Self::sig_arg_confirms_owned_emission(&sig, arg_index))
             {
                 coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
                     &coerced,
