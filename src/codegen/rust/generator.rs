@@ -4052,8 +4052,13 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
-        // WDB-367: unit keywords are not bindings — auto_clone false-hits → `None.clone()`.
-        if name == "None" || name == "true" || name == "false" {
+        // WDB-367: unit keywords / `Type::Variant` paths are constructors, not bindings.
+        if name == "None"
+            || name == "true"
+            || name == "false"
+            || name.ends_with("::None")
+            || crate::type_classification::is_enum_variant_constructor_path(name)
+        {
             return arg_str.to_string();
         }
         if self.match_arm_bindings.contains(name) {
@@ -4420,7 +4425,14 @@ impl<'ast> CodeGenerator<'ast> {
         arg: &crate::parser::Expression,
         arg_str: &mut String,
     ) -> bool {
-        if let crate::parser::Expression::FieldAccess { object, .. } = arg {
+        // WDB-367: `Value::None` is a unit constructor, not a field move.
+        if arg_str.ends_with("::None") || arg_str == "None" {
+            return false;
+        }
+        if let crate::parser::Expression::FieldAccess { object, field, .. } = arg {
+            if field == "None" {
+                return false;
+            }
             let root_name = self.extract_root_identifier(arg);
             if let Some(ref name) = root_name {
                 let is_self_field = matches!(&**object, crate::parser::Expression::Identifier { name: n, .. } if n == "self");

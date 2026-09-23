@@ -371,21 +371,12 @@ impl<'ast> CodeGenerator<'ast> {
                         .as_ref()
                         .is_some_and(|g| g.get_signature(method_simple).is_some())
                     || local_sig.is_some());
-            // Cross-crate `mod::fn` from dependency metadata.json (keys are often bare `fn`).
-            let has_dependency_simple_sig = self
-                .global_signature_registry
-                .as_ref()
-                .is_some_and(|g| g.get_signature(method_simple).is_some());
-            // Fail closed only when dependency metadata exposes a bare homonym we must not
-            // mis-apply to a qualified path. With no registry entry at all, continue so
-            // call-site / IR inference can still promote `&mut` (scene_builder set_if).
-            if has_exact_module_sig || has_inline_simple_sig || has_dependency_simple_sig {
-                // resolved below via pick_codegen_refreshed_signature
-            } else if self
-                .global_signature_registry
-                .as_ref()
-                .is_some_and(|g| g.find_signature_ending_with(method_simple).is_some())
-            {
+            // Exact `mod::fn` or inline `mod` bare-name registration only.
+            // Bare dependency homonyms (`circuit_delta_from_edge_inserts` without
+            // `dep_crate::` alias) and unknown crates must fail closed — never guess
+            // ownership or continue into IR promotion (scene_builder `set_if` needs a
+            // registered `station_builder::set_if` / crate-prefix key).
+            if !has_exact_module_sig && !has_inline_simple_sig {
                 self.report_missing_boundary_signature(callee_name);
                 return Some(prepared_arg);
             }
@@ -4072,7 +4063,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => {
                 // WDB-367: unit keywords are not bindings — multipass `needs_clone_anywhere`
                 // on `"None"` yields `None.clone()` at unrelated push sites (tilemap/graph).
-                if name == "None" || name == "true" || name == "false" {
+                if name == "None"
+                    || name == "true"
+                    || name == "false"
+                    || name.ends_with("::None")
+                    || crate::type_classification::is_enum_variant_constructor_path(name)
+                {
                     false
                 } else {
                 let local = analysis
@@ -8145,7 +8141,12 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         match arg_expr {
             Expression::Identifier { name, .. } => {
-                if name == "None" || name == "true" || name == "false" {
+                if name == "None"
+                    || name == "true"
+                    || name == "false"
+                    || name.ends_with("::None")
+                    || crate::type_classification::is_enum_variant_constructor_path(name)
+                {
                     return arg_str.to_string();
                 }
                 if self.into_string_formal_params.contains(name) {
@@ -8483,6 +8484,13 @@ impl<'ast> CodeGenerator<'ast> {
         // WDB-367: unit `None` / enum `Value::None` must not pick up reuse `.clone()`.
         if arg_str == "None" || arg_str.ends_with("::None") {
             return arg_str.to_string();
+        }
+        if let (Some(callee), Some(idx)) = (callee_name, arg_index) {
+            if self.callee_slot_emits_mut_borrow(callee, idx)
+                || self.callee_arg_expects_borrow_at_call(callee, idx)
+            {
+                return arg_str.to_string();
+            }
         }
         if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
             // Still rewrite clone → mem::take for call-arg writeback behind &mut self.

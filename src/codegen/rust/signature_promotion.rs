@@ -933,11 +933,9 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
                         return true;
                     }
                 }
-                // Bare WJ `Vec` / map formals emit owned containers in Rust even when
-                // multipass field-read analysis left stale Borrowed (`graph_csr_sort_*`).
-                if bare_formal_is_vec_or_map(sig, param_idx) {
-                    return true;
-                }
+                // Analyzer Borrowed on Vec/map is `&Vec` / `&Map` (readonly `.len()` /
+                // `[i]` / `for i in items { *i }`). Consuming for-in is Owned at
+                // inference (step 6) — do not override Borrowed as owned emission.
                 return false;
             }
             return !param_type_is_borrowed_text(sig, param_idx);
@@ -950,12 +948,7 @@ pub(crate) fn emitted_owned_arg_contract(sig: &FunctionSignature, param_idx: usi
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
     ) {
-        // Bare WJ container formals (`Vec`, maps) emit owned Rust params unless codegen
-        // confirmed shared-ref emission. Analyzer Borrowed alone is not an owned denial
-        // (WDB-281 for-in consume → Borrowed while formal stays bare `Vec`).
-        if bare_formal_is_vec_or_map(sig, param_idx) {
-            return true;
-        }
+        // Borrowed Vec/map → shared-ref emission (`&Vec<T>`), not owned containers.
         return false;
     }
     let analyzer_mut = matches!(

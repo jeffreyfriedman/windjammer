@@ -497,6 +497,11 @@ impl<'ast> CodeGenerator<'ast> {
 
         let base_expr = format!("{}{}{}", obj_str, separator, field);
 
+        // WDB-367: unit enum constructors (`None`, `Value::None`) are not bindings.
+        if field == "None" || base_expr.ends_with("::None") {
+            return base_expr;
+        }
+
         // AUTO-CLONE: Check if this field access needs to be cloned
         // Extract the full path (e.g., "config.paths")
         // CRITICAL: Never clone assignment targets (left side of `=`)

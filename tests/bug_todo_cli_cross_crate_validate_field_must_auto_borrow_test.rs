@@ -74,7 +74,7 @@ pub fn require_max_len(field: string, value: string, max: int) -> Result<string,
     assert!(val_meta.exists(), "validate must emit metadata.json");
 
     let app_src = tmp.path().join("app_src");
-    fs::create_dir_all(app_src.join("domain")).expect("mkdir domain");
+    fs::create_dir_all(app_src.join("src").join("domain")).expect("mkdir src/domain");
     fs::write(
         app_src.join("wj.toml"),
         format!(
@@ -84,7 +84,17 @@ pub fn require_max_len(field: string, value: string, max: int) -> Result<string,
     )
     .unwrap();
     fs::write(
-        app_src.join("domain").join("todo.wj"),
+        app_src.join("src").join("mod.wj"),
+        "pub mod domain\n",
+    )
+    .unwrap();
+    fs::write(
+        app_src.join("src").join("domain").join("mod.wj"),
+        "pub mod todo\n",
+    )
+    .unwrap();
+    fs::write(
+        app_src.join("src").join("domain").join("todo.wj"),
         r#"
 use validate_pkg::require_nonempty
 use validate_pkg::require_max_len
@@ -114,15 +124,15 @@ pub fn add_title(title: string) -> Result<string, string> {
     .unwrap();
 
     let app_gen = tmp.path().join("app_gen");
+    // Multipass `src/` (wj-todo-cli) — single-file + `--metadata` already greens.
     let app_build = Command::new(wj)
         .args([
             "build",
-            app_src.join("domain").join("todo.wj").to_str().unwrap(),
+            app_src.join("src").to_str().unwrap(),
             "--output",
             app_gen.to_str().unwrap(),
             "--no-cargo",
-            "--metadata",
-            &format!("validate_pkg={}", val_meta.display()),
+            "--module-file",
         ])
         .output()
         .expect("app build");
@@ -132,8 +142,8 @@ pub fn add_title(title: string) -> Result<string, string> {
         String::from_utf8_lossy(&app_build.stderr)
     );
 
-    let generated = fs::read_to_string(app_gen.join("todo.rs")).unwrap_or_else(|_| {
-        fs::read_to_string(app_gen.join("domain").join("todo.rs")).unwrap_or_default()
+    let generated = fs::read_to_string(app_gen.join("domain").join("todo.rs")).unwrap_or_else(|_| {
+        fs::read_to_string(app_gen.join("todo.rs")).unwrap_or_default()
     });
     eprintln!("validate auto-borrow emit:\n{generated}");
 

@@ -45,9 +45,15 @@ impl<'ast> CodeGenerator<'ast> {
             base_name
         };
 
-        // WDB-367: unit keywords are never binding names — auto_clone cross-function
-        // `needs_clone_anywhere("None")` must not yield `None.clone()` (tilemap/graph).
-        if name == "None" || name == "true" || name == "false" {
+        // WDB-367: unit keywords / `Type::Variant` paths are constructors, not bindings.
+        // `Value::None` parses as one identifier (not FieldAccess) — auto_clone must
+        // not emit `Value::None.clone()` (visual_scripting/graph).
+        if name == "None"
+            || name == "true"
+            || name == "false"
+            || name.ends_with("::None")
+            || crate::type_classification::is_enum_variant_constructor_path(name)
+        {
             return if name == "None" {
                 "None".to_string()
             } else {

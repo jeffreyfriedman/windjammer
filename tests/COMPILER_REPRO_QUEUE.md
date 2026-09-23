@@ -434,13 +434,16 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **usize lit must not emit `N_usize as usize`** | `bug_wdb364_module_file_usize_lit_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-361/352 |
 | P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED |
 | P1 | **BT tick must not force `tree.clone()`** | `bug_wdb366_module_file_bt_tick_must_not_force_tree_clone_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-360 |
-| P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.421) — skip unit `None`/bool in struct-literal reuse clone; tip-out pending regen |
+| P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile + tip GREEN (P3.427) — unit keywords + `Type::None` identifier paths |
 | P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ MultiFile GREEN (P3.419+); tip-out pending regen |
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
 | P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | 🆕 RED / filed (P3.422); twin WDB-359; tip RED |
 | P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370/355 |
 | P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.426); twin WDB-351/359 |
 | P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370 |
+| P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | 🆕 RED / filed (P3.427); twin WDB-370 |
+| P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | 🆕 RED / filed (P3.427); twin WDB-370/374 |
+| P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | 🆕 RED / filed (P3.427); twin WDB-343/346 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3485,3 +3488,18 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **TDD:** `wdb371_ wdb372_ wdb373_` → **3 passed / 3 failed** (all MultiFile GREEN; all tip RED).
 
 **Compiler agent priority:** tip greens **WDB-371–373** (+ **364–370** open; **343/347/361** tip GREEN per P3.425). No Phase 606+. No `windjammer/src` edits from DB agent.
+
+## P3.427 (2026-09-22) — WDB-367 `Value::None` constructor must not clone
+
+| Gate | MultiFile | Tip-out |
+|------|-----------|---------|
+| **WDB-367** bare `None` + `tiles.push(None)` | ✅ | ✅ |
+| **WDB-367** `Value::None` (qualified identifier) | ✅ no `.clone()` | ✅ tip graph regen |
+
+**Root cause:** `Type::Variant` parses as one identifier (`Value::None`), not FieldAccess. Auto-clone treated it as a reuse binding.
+
+**Fix:** skip unit keywords and `is_enum_variant_constructor_path` in `generate_identifier` / `maybe_auto_clone` / call-arg reuse.
+
+**Gates:** `cargo test --test all -- wdb367_module_file`
+
+**Compiler agent priority:** tip greens **WDB-371–373**. No Phase 606+.
