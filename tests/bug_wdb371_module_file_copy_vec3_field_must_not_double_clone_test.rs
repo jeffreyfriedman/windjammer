@@ -34,14 +34,20 @@ pub struct Vertex {
     pub position: Vec3,
 }
 
-pub fn collect_positions(verts: Vec<Vertex>) -> Vec<Vec3> {
-    let mut out = Vec::new()
-    let mut i = 0
-    while i < verts.len() {
-        out.push(verts[i].position)
-        i = i + 1
+pub struct Mesh {
+    pub vertices: Vec<Vertex>,
+}
+
+impl Mesh {
+    pub fn collect_positions(self) -> Vec<Vec3> {
+        let mut out = Vec::new()
+        let mut i = 0
+        while i < self.vertices.len() {
+            out.push(self.vertices[i].position)
+            i = i + 1
+        }
+        out
     }
-    out
 }
 "#;
 
