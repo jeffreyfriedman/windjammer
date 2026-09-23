@@ -3482,6 +3482,6 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Tip **WDB-372** `match …].value.clone()` (blackboard) | 🆕 RED / filed |
 | Tip **WDB-373** `].clone().path.clone()` (live_reload/…) | 🆕 RED / filed |
 
-**TDD:** `wdb371_ wdb372_ wdb373_` (this session).
+**TDD:** `wdb371_ wdb372_ wdb373_` → **3 passed / 3 failed** (all MultiFile GREEN; all tip RED).
 
 **Compiler agent priority:** tip greens **WDB-371–373** (+ **364–370** open; **343/347/361** tip GREEN per P3.425). No Phase 606+. No `windjammer/src` edits from DB agent.
