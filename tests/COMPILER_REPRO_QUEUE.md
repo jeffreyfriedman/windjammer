@@ -15,6 +15,25 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.431 (2026-09-23) — MutBorrowed Copy/Custom call sites keep `&mut`
+
+| Gate | Status |
+|------|--------|
+| `copy_type_passthrough_mut_test::test_copy_type_self_field_passthrough_mut` | ✅ GREEN — `apply_rotation(&mut self.transform)` |
+| `reference_handling_test::test_mut_ref_no_double_borrow` | ✅ GREEN — `modify(&mut vec)` |
+| `cross_module_self_field_mut_test` | ✅ GREEN (fill_grid / mixed) |
+| `codegen_mut_owned_param_moved_test` | ✅ GREEN — AppDeps stays owned `mut deps` |
+| `auto_mut_borrow_arg_test` | ✅ GREEN |
+| `compiler_tests::test_automatic_reference_insertion` | ❌ pre-existing (`double(x)` / `greet(&name)`) |
+| `codegen_multi_use_struct_field_must_auto_clone_gate_test` | ❌ pre-existing (borrows `row.account_code` instead of clone) |
+| `e0507_ownership_inference_test::test_vec_index_method_owned_self_generates_clone` | ❌ pre-existing (missing `.clone().sample`) |
+
+**Root cause layer:** signature — (1) `emitted_owned_arg_contract` / `bare_formal_is_owned_user_type` no longer claim owned for MutBorrowed + bare Custom; (2) `pick_codegen_refreshed_signature` treats live MutBorrowed as mut-borrow refresh without requiring a MutableReference wrap; (3) `sync_call_sig_from_preregistered_free_fn_emission` was classifying `t: &mut T` as owned (because `: &mut` contains `: &`) and unwrapping to bare Custom. Constraint write-back: `wrap_converged_borrow_param_types` now wraps MutBorrowed Copy aggregates.
+
+**What became unnecessary:** MutBorrowed + bare Custom → owned claim in `emitted_owned_arg_contract` (both the `emitted=false` and no-record paths). AppDeps owned-mut is the post-sync **Owned** contract, not MutBorrowed.
+
+**Gates:** `cargo test --release --lib -- pick_prefers_mut_borrowed_over_ast_owned_custom_stub mut_borrowed_bare_custom_expects_mut_ref owned_bare_custom_after_owned_mut mut_borrowed_explicit_mut_ref mut_borrowed_bare_vec` → 5 passed. `cargo test --release --test all -- copy_type_passthrough_mut_test reference_handling_test::test_mut_ref_no_double_borrow cross_module_self_field_mut_test codegen_mut_owned_param_moved_test auto_mut_borrow_arg_test` → 14 passed / 1 pre-existing `compiler_tests` RED (not in this filter).
+
 ## P3.430 (2026-09-23) — WDB-374–376 isolates + strengthen 372/373 `self.`
 
 | Gate | Status |
