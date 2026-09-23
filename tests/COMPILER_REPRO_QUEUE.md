@@ -438,6 +438,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ MultiFile GREEN (P3.419+); tip-out pending regen |
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
 | P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | 🆕 RED / filed (P3.422); twin WDB-359; tip RED |
+| P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370/355 |
+| P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.426); twin WDB-351/359 |
+| P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | 🆕 RED / filed (P3.426); twin WDB-370 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3470,3 +3473,15 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 **Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move.
 
 **Compiler agent:** infer `&self` (or `&mut self` if needed) for methods that do not consume `self`.
+
+## P3.426 WindjammerDB CQ-C5 — tip REDs WDB-371–373 (2026-09-22)
+
+| Gate | Status |
+|------|--------|
+| Tip **WDB-371** `].clone().position.clone()` (mesh_ops/half_edge) | 🆕 RED / filed |
+| Tip **WDB-372** `match …].value.clone()` (blackboard) | 🆕 RED / filed |
+| Tip **WDB-373** `].clone().path.clone()` (live_reload/…) | 🆕 RED / filed |
+
+**TDD:** `wdb371_ wdb372_ wdb373_` (this session).
+
+**Compiler agent priority:** tip greens **WDB-371–373** (+ **364–370** open; **343/347/361** tip GREEN per P3.425). No Phase 606+. No `windjammer/src` edits from DB agent.
