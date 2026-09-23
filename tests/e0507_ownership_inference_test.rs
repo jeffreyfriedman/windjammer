@@ -66,21 +66,21 @@ fn main() {}
 
 #[test]
 fn test_vec_index_method_owned_self_generates_clone() {
-    // BoneTrack.sample(self, time) takes owned self - vec[i].sample(time) needs .clone()
-    // BoneTrack has String field (non-Copy) so we need .clone() when method takes owned self
+    // Returning bare `self` keeps owned-self (field getters demote to `&self` +
+    // field clone — see parameter_analysis). Index + owned-self must `.clone()`
+    // the element (E0507 cannot move out of index).
     let source = r#"
-pub struct Keyframe { pub time: f32 }
 pub struct BoneTrack { pub bone_id: u32, pub name: string }
 impl BoneTrack {
-    pub fn sample(self, time: f32) -> Keyframe { Keyframe { time } }
+    pub fn into_track(self) -> BoneTrack { self }
 }
 pub struct Clip { pub tracks: Vec<BoneTrack> }
 impl Clip {
-    pub fn sample_bone(self, bone_id: u32, time: f32) -> Option<Keyframe> {
+    pub fn track_for(self, bone_id: u32) -> Option<BoneTrack> {
         let mut i = 0
         while i < self.tracks.len() {
             if self.tracks[i].bone_id == bone_id {
-                return Some(self.tracks[i].sample(time))
+                return Some(self.tracks[i].into_track())
             }
             i = i + 1
         }
@@ -91,7 +91,12 @@ fn main() {}
 "#;
     let rust = test_utils::compile_single_result(source).expect("compile");
     assert!(
-        rust.contains(".clone().sample")
+        rust.contains("fn into_track(self)") || rust.contains("fn into_track(mut self)"),
+        "into_track must stay owned-self (returns self). Got:\n{}",
+        rust
+    );
+    assert!(
+        rust.contains(".clone().into_track")
             && (rust.contains("tracks[i") || rust.contains("tracks[i as usize]")),
         "Vec index + method(owned self) needs .clone(): {}",
         rust

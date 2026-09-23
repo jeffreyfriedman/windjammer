@@ -34,10 +34,15 @@ fn test_automatic_reference_insertion() {
         generated
     );
 
-    // Check that call sites pass Copy types by value (no &)
+    // Check that call sites pass Copy types by value (no &). Mixed-int may insert
+    // `x as i64` when the unannotated binding is i32 and the formal is `int` (i64).
+    let copy_by_value = generated.contains("double(x)")
+        || generated.contains("double((x as i64))")
+        || generated.contains("double(x as i64)");
     assert!(
-        generated.contains("double(x)"),
-        "Copy types should be passed by value at call site"
+        copy_by_value && !generated.contains("double(&x)"),
+        "Copy types should be passed by value at call site.\nGenerated:\n{}",
+        generated
     );
 
     // Check that owned String is borrowed when passed to &str parameter
