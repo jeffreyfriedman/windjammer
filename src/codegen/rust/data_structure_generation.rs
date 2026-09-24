@@ -515,6 +515,7 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.generating_assignment_target
             && !self.in_explicit_clone_call
             && !self.in_field_access_object
+            && !self.suppress_borrowed_clone
         {
             if let Some(path) = ast_utilities::extract_field_access_path(expr_to_generate) {
                 if let Some(ref analysis) = self.auto_clone_analysis {
