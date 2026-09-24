@@ -28,6 +28,7 @@ const SRC: &str = r#"
 pub enum Val {
     Float(f32),
     Bool(bool),
+    Text(string),
 }
 
 pub struct Entry {

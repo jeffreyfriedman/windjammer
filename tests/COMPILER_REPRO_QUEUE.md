@@ -529,6 +529,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.430) — `is_type_copy` skip; tip-out pending regen |
 | P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | ✅ isolate GREEN (P3.430) — nested `self.passes[i].bindings[j].binding_type`; tip-out pending regen |
 | P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | ✅ isolate GREEN (P3.430) — `self.lifetimes[i].buffer_id`; tip-out pending regen |
+| P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | 🆕 RED / filed (P3.433); twin WDB-374 |
+| P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | 🆕 RED / filed (P3.433); twin WDB-370/375 |
+| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | 🆕 RED / filed (P3.433) |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
