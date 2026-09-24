@@ -18,6 +18,9 @@ pub enum DependencySpec {
         path: Option<String>,
         git: Option<String>,
         branch: Option<String>,
+        /// Cargo `package` rename (`validate_pkg` → crate `validate_src`).
+        #[serde(default)]
+        package: Option<String>,
         /// Windjammer registry host (defaults to wj-registry.io).
         registry: Option<String>,
     },
@@ -290,6 +293,7 @@ impl WjConfig {
                         path,
                         git,
                         branch,
+                        package,
                         registry: _,
                     } => {
                         output.push_str(&format!("{} = {{ ", name));
@@ -309,6 +313,9 @@ impl WjConfig {
                         }
                         if let Some(b) = branch {
                             parts.push(format!("branch = \"{}\"", b));
+                        }
+                        if let Some(pkg) = package {
+                            parts.push(format!("package = \"{}\"", pkg));
                         }
 
                         output.push_str(&parts.join(", "));
@@ -333,6 +340,7 @@ impl WjConfig {
                         path,
                         git,
                         branch,
+                        package,
                         registry: _,
                     } => {
                         output.push_str(&format!("{} = {{ ", name));
@@ -352,6 +360,9 @@ impl WjConfig {
                         }
                         if let Some(b) = branch {
                             parts.push(format!("branch = \"{}\"", b));
+                        }
+                        if let Some(pkg) = package {
+                            parts.push(format!("package = \"{}\"", pkg));
                         }
 
                         output.push_str(&parts.join(", "));

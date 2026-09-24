@@ -236,6 +236,18 @@ fn compile_file_impl(
         &mut module_compiler.global_signatures,
     );
 
+    // App `--module-file` (no `--library` / `--metadata`): load wj.toml path-dep
+    // signatures so mixed formals are visible at call sites. Compiler multipass
+    // already does this; ModuleCompiler previously skipped it.
+    if !module_compiler.path_dep_signatures_loaded {
+        crate::compiler::load_path_dep_signatures_into_registry(
+            source_root,
+            &mut module_compiler.global_signatures,
+            Some(&mut module_compiler.analyzer),
+        );
+        module_compiler.path_dep_signatures_loaded = true;
+    }
+
     // Rust leakage linter: warn about &self, .unwrap(), .iter(), & in calls
     if module_compiler.enable_lint {
         let file_name = input_path.to_string_lossy().to_string();

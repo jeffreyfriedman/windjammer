@@ -36,6 +36,8 @@ pub struct ModuleCompiler {
     // BUG #8 FIX: Global signature registry for cross-file method signature resolution
     // This enables correct argument passing for methods defined in other modules
     pub global_signatures: analyzer::SignatureRegistry, // All method signatures from all files
+    /// Path-dep `metadata.json` loaded once per ModuleCompiler (legacy `--module-file`).
+    pub path_dep_signatures_loaded: bool,
     // CROSS-MODULE STRUCT FIELD TYPES: Track all struct field types across files
     // Enables type inference for field accesses on imported structs (e.g., stack.quantity → i32)
     // Without this, Copy-type fields on cross-module structs get unnecessary .clone()
@@ -66,6 +68,7 @@ impl ModuleCompiler {
             _trait_parsers: Vec::new(),          // ARENA FIX: Keep trait parsers alive
             compiling_files: HashSet::new(),     // RECURSION GUARD: Track compilation chain
             global_signatures: analyzer::SignatureRegistry::new(), // BUG #8 FIX: Global signatures
+            path_dep_signatures_loaded: false,
             global_struct_field_types: HashMap::new(), // Cross-module struct field types
         }
     }
@@ -313,6 +316,7 @@ impl ModuleCompiler {
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
         generator.set_numeric_inference(numeric_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
+        generator.set_global_signature_registry(std::sync::Arc::new(self.global_signatures.clone()));
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());
         // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums

@@ -15,6 +15,22 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.436 (2026-09-24) — Load path-dep signatures on `--module-file` ModuleCompiler path
+
+| Gate | Status |
+|------|--------|
+| `path_dep_module_file_load_keeps_mixed_owned_value_formal` | ✅ GREEN — `wj.toml` path-dep `metadata.json` registers mixed formals |
+| `merge_layered_fallback_keeps_mixed_owned_over_importer_stub` | ✅ GREEN — layered `merge` consults fallback, not overlay-only |
+| `promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN |
+| `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN (P3.435 + prefer_shared must not undo mixed) |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ❌ still RED — `require_nonempty(&field, &value)` |
+
+**Root cause layer:** signature — defining metadata is `[Borrowed, Owned]` / `[true, false]` after path-dep load. `apply_ir` still sees importer `[true, true]`. Layered `merge` used overlay-only `.signatures.get`, so fallback mixed was invisible; Step 3/`promote_overlapping`/`prefer_shared` now refuse to replace mixed with all-ref stubs. Call-site pick still lands on the stub (next: trace `from_local` / import-alias candidates after wrap).
+
+**What became unnecessary:** another `ir_call_site` peel for `&value` (existing peel can fire once apply_ir's `sig` is mixed).
+
+**Gates:** `cargo test --release --lib -- path_dep_module_file_load_keeps_mixed_owned_value_formal merge_layered_fallback_keeps_mixed_owned_over_importer_stub promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub pick_prefers_mixed_owned_string_over_all_ref_importer_stub` → 4 passed. Validate e2e still RED.
+
 ## P3.435 (2026-09-23) — Prefer mixed owned-emission signatures over all-ref stubs
 
 | Gate | Status |

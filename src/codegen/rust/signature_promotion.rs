@@ -1695,6 +1695,11 @@ pub(crate) fn prefer_shared_ref_signature(
         return preferred;
     };
     if let Some(ref pref) = preferred {
+        if defining_mixed_owned_emission_beats(pref, challenger) {
+            return Some(pref.clone());
+        }
+    }
+    if let Some(ref pref) = preferred {
         // Qualified runtime-std callee beats a same-suffix user homonym at its call site
         // (`csv::write` vs local `pub fn write`, `strings::join` vs local `join`).
         if signature_is_wj_std_stub_or_runtime_qualified(challenger)
@@ -2248,6 +2253,7 @@ pub(crate) fn promote_overlapping_global_signatures_into_local(
         };
         if owned_custom_beats_stale_mut_borrow(gsig, local_sig)
             || shared_ref_emission_beats(gsig, local_sig)
+            || defining_mixed_owned_emission_beats(gsig, local_sig)
             || codegen_refreshed_beats_analysis_only(gsig, local_sig)
         {
             *local_sig = gsig.clone();
@@ -2321,6 +2327,73 @@ mod promote_overlapping_tests {
             elapsed.as_millis() < 200,
             "promote of 5k globals over 1 local key must stay cheap, took {:?}",
             elapsed
+        );
+    }
+
+    #[test]
+    fn promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub() {
+        let mixed = FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let all_ref_stub = FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let mut local = SignatureRegistry::empty();
+        local
+            .signatures
+            .insert("require_nonempty".into(), all_ref_stub);
+        let mut global = SignatureRegistry::empty();
+        global.signatures.insert("require_nonempty".into(), mixed);
+
+        promote_overlapping_global_signatures_into_local(&mut local, &global);
+
+        let promoted = local
+            .signatures
+            .get("require_nonempty")
+            .expect("key stays local");
+        assert_eq!(
+            promoted.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            "path-dep mixed formals must replace importer all-ref stub at Step 4B-b"
+        );
+        assert_eq!(
+            promoted.emitted_rust_ref_params.as_deref(),
+            Some(&[true, false][..])
         );
     }
 }
@@ -2913,10 +2986,22 @@ pub fn join_tail(parts: Vec<string>) -> string {
             "defining mixed formals must beat importer all-ref stub"
         );
         let mixed_first =
-            pick_codegen_refreshed_signature([Some(mixed), Some(all_ref_stub)]).expect("pick");
+            pick_codegen_refreshed_signature([Some(mixed), Some(all_ref_stub.clone())])
+                .expect("pick");
         assert_eq!(
             mixed_first.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
+        );
+        let kept = prefer_shared_text_ref_signature(
+            Some(mixed_first.clone()),
+            Some(&all_ref_stub),
+            1,
+        )
+        .expect("prefer");
+        assert_eq!(
+            kept.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            "prefer_shared must not undo mixed owned value with importer all-ref stub"
         );
     }
 }

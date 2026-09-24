@@ -122,6 +122,9 @@ pub(crate) fn generate_main_rust_code<'ast>(
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
         generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
+        generator.set_global_signature_registry(std::sync::Arc::new(
+            module_compiler.global_signatures.clone(),
+        ));
 
         generator.set_source_file(input_path);
         let output_file_path =
@@ -186,6 +189,9 @@ pub(crate) fn generate_main_rust_code<'ast>(
     generator.set_analyzed_trait_methods(analyzed_trait_methods);
     generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
     generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
+    generator.set_global_signature_registry(std::sync::Arc::new(
+        module_compiler.global_signatures.clone(),
+    ));
 
     // IR cutover: when any cutover flag is enabled, run the IR pipeline and
     // attach the IrModule so codegen can read from SafetyType.

@@ -16,6 +16,7 @@ mod salsa_library_build;
 
 pub use cache_management::write_if_changed;
 pub use compilation_pipeline::{build_project, build_project_ext};
+pub(crate) use compilation_pipeline::load_path_dep_signatures_into_registry;
 
 use crate::parser::ast::core::Item;
 use anyhow::Result;

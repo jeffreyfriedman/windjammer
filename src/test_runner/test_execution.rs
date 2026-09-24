@@ -480,6 +480,7 @@ fn detect_and_compile_library(
                                     path,
                                     git,
                                     branch,
+                                    package,
                                     registry: _,
                                 } => {
                                     deps_section.push_str(&format!("{} = {{ ", dep_name));
@@ -507,6 +508,9 @@ fn detect_and_compile_library(
                                     }
                                     if let Some(b) = branch {
                                         deps_section.push_str(&format!("branch = \"{}\", ", b));
+                                    }
+                                    if let Some(pkg) = package {
+                                        deps_section.push_str(&format!("package = \"{}\", ", pkg));
                                     }
                                     if let Some(f) = features {
                                         deps_section.push_str(&format!("features = {:?}, ", f));

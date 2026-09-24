@@ -581,7 +581,12 @@ pub(crate) fn build_library_multipass(
                 }
                 let should_insert = match global_registry.get_signature(name) {
                     None => true,
-                    Some(old_sig) => SignatureRegistry::ownership_changed(old_sig, sig),
+                    Some(old_sig) => {
+                        SignatureRegistry::ownership_changed(old_sig, sig)
+                            && !crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
+                                old_sig, sig,
+                            )
+                    }
                 };
                 if should_insert {
                     pass_changed = true;
@@ -1295,6 +1300,13 @@ pub(crate) fn build_library_multipass(
                     &final_global_registry,
                 ));
             for (name, sig) in analysis.registry.signatures.iter() {
+                if let Some(existing) = full_registry.get_signature(name) {
+                    if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
+                        existing, sig,
+                    ) {
+                        continue;
+                    }
+                }
                 full_registry
                     .signatures
                     .insert(name.clone(), sig.clone());

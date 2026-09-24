@@ -31,6 +31,7 @@ pub fn execute(
             path: path.map(String::from),
             git: None,
             branch: None,
+            package: None,
             registry: None,
         }
     } else if path.is_some() {
@@ -40,6 +41,7 @@ pub fn execute(
             path: path.map(String::from),
             git: None,
             branch: None,
+            package: None,
             registry: None,
         }
     } else {
