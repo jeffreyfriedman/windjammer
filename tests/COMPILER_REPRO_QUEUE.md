@@ -600,9 +600,6 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-373 |
 | P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-374/377 |
 | P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | 🆕 RED / filed (P3.437); twin WDB-353 |
-| P1 | **indexed String mesh_id / event_description must not double-clone** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-373 |
-| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-374/377 |
-| P1 | **u32 index must not `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | 🆕 RED / filed (P3.437); twin WDB-353 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
