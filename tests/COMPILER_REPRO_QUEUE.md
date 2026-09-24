@@ -15,21 +15,39 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.437 (2026-09-24) — Mixed defining formals beat all-ref stubs; file WDB-380
+
+| Gate | Status |
+|------|--------|
+| `merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub` | ✅ GREEN |
+| `merge_refresh_upgrades_importer_stub_to_defining_mixed` | ✅ GREEN |
+| `registry_refresh_prefers_mixed_over_more_true_flags` | ✅ GREEN |
+| `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN |
+| `bare_pass_must_not_demote_path_dep_owned_emission_slot` | ✅ GREEN |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ GREEN — `require_nonempty(&field, value)` |
+| `wdb380_module_file_remaining_none_must_not_emit_clone` | ✅ isolate GREEN — bare `None` |
+| WDB-380 tip-out / `gen/` | ❌ stale product — needs retranpile with tip `wj` |
+
+**Root cause layer:** signature — `pick_stronger_codegen_refresh` / `merge_codegen_refresh_metadata` keep mixed `[&str, String]` over importer `[true, true]` (count-true-wins and OR-union destroyed owned slots). Bare-pass skips rewriting a path-dep owned-emission slot to `&str`. No extra `ir_call_site` peel required.
+
+**What became unnecessary:** treating last-true-count as stronger than a mixed owned-emission contract; call-site peel for `&value`.
+
+**Gates:** `cargo test --release --lib -- merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub merge_refresh_upgrades_importer_stub_to_defining_mixed registry_refresh_prefers_mixed_over_more_true_flags pick_prefers_mixed_owned_string_over_all_ref_importer_stub bare_pass_must_not_demote_path_dep_owned_emission_slot` → 5 passed. `cargo test --release --test all -- bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test wdb380_module_file` → todo-cli GREEN, isolate GREEN, tip-out RED.
+
 ## P3.436 (2026-09-24) — Load path-dep signatures on `--module-file` ModuleCompiler path
 
 | Gate | Status |
 |------|--------|
 | `path_dep_module_file_load_keeps_mixed_owned_value_formal` | ✅ GREEN — `wj.toml` path-dep `metadata.json` registers mixed formals |
-| `merge_layered_fallback_keeps_mixed_owned_over_importer_stub` | ✅ GREEN — layered `merge` consults fallback, not overlay-only |
-| `promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN |
-| `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN (P3.435 + prefer_shared must not undo mixed) |
-| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ❌ still RED — `require_nonempty(&field, &value)` |
+| `promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` | 🆕 — Step 4B-b must restore `[true, false]` over importer `[true, true]` |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ GREEN (P3.437) |
+| `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ no regression (P3.435) |
 
-**Root cause layer:** signature — defining metadata is `[Borrowed, Owned]` / `[true, false]` after path-dep load. `apply_ir` still sees importer `[true, true]`. Layered `merge` used overlay-only `.signatures.get`, so fallback mixed was invisible; Step 3/`promote_overlapping`/`prefer_shared` now refuse to replace mixed with all-ref stubs. Call-site pick still lands on the stub (next: trace `from_local` / import-alias candidates after wrap).
+**Root cause layer:** signature — (1) ModuleCompiler `--module-file` never loaded path-dep metadata; (2) `build_library` Step 3 `ownership_changed` + raw `insert` replaced defining `[true, false]` with importer `[true, true]`; Step 4B-b overlay did the same. `promote_overlapping` now restores via `defining_mixed_owned_emission_beats`.
 
-**What became unnecessary:** another `ir_call_site` peel for `&value` (existing peel can fire once apply_ir's `sig` is mixed).
+**What became unnecessary:** another `ir_call_site` peel for `&value` (existing peel can fire once Owned is in the local layered registry).
 
-**Gates:** `cargo test --release --lib -- path_dep_module_file_load_keeps_mixed_owned_value_formal merge_layered_fallback_keeps_mixed_owned_over_importer_stub promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub pick_prefers_mixed_owned_string_over_all_ref_importer_stub` → 4 passed. Validate e2e still RED.
+**Gates:** pending this session.
 
 ## P3.435 (2026-09-23) — Prefer mixed owned-emission signatures over all-ref stubs
 
@@ -578,6 +596,13 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-374 |
 | P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-370/375 |
 | P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen |
+| P1 | **remaining product `None.clone()` (tilemap/blend/music/…)** | `bug_wdb380_module_file_remaining_none_must_not_emit_clone_test` | ✅ isolate GREEN (P3.437); tip-out pending regen; twin WDB-367 |
+| P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-373 |
+| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-374/377 |
+| P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | 🆕 RED / filed (P3.437); twin WDB-353 |
+| P1 | **indexed String mesh_id / event_description must not double-clone** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-373 |
+| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-374/377 |
+| P1 | **u32 index must not `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | 🆕 RED / filed (P3.437); twin WDB-353 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3604,19 +3629,19 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| `nested_self_field_in_struct_lit_must_not_force_owned_self` | 🆕 RED / isolate GREEN `&self` when parent bound first; RED on `self.quality.steps` in struct lit |
-| Tip-out `update_raymarch_params(self)` | 🆕 RED |
+| `nested_self_field_in_struct_lit_must_not_force_owned_self` | ✅ MultiFile GREEN (2026-09-23) — `fn update_params(&self)` |
+| Tip-out `update_raymarch_params(self)` | 🆕 RED pending tip regen |
 
 **Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move.
 
-**Compiler agent:** infer `&self` (or `&mut self` if needed) for methods that do not consume `self`.
+**Fix:** Struct-literal field values no longer treat nested `self.a.b` as a last-segment lookup on `self` (that failed for `steps` and defaulted to “moves self”). Direct `self.field` stays conservative when the type is unknown; nested chains use `resolve_self_field_chain_type` (Copy leaf = read).
 
 ## P3.426 WindjammerDB CQ-C5 — tip REDs WDB-371–373 (2026-09-22)
 
 | Gate | Status |
 |------|--------|
 | Tip **WDB-371** `].clone().position.clone()` (mesh_ops/half_edge) | 🆕 RED / filed |
-| Tip **WDB-372** `match …].value.clone()` (blackboard) | 🆕 RED / filed |
+| Tip **WDB-372** `match …].value.clone()` (blackboard) | isolate ✅ P3.434; tip-out pending regen |
 | Tip **WDB-373** `].clone().path.clone()` (live_reload/…) | 🆕 RED / filed |
 
 **TDD:** `wdb371_ wdb372_ wdb373_` → **3 passed / 3 failed** (all MultiFile GREEN; all tip RED).
