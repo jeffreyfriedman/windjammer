@@ -15,6 +15,22 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.434 (2026-09-23) — Match scrutinee must not `.clone()` indexed non-Copy enums
+
+| Gate | Status |
+|------|--------|
+| `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ GREEN |
+| `bug_mpsc_sync_channel_boundary_signature_test` | ✅ GREEN |
+| `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee` | ✅ isolate GREEN — `Text(string)` non-Copy; `match &self.entries[idx].value` |
+| `bug_wdb377` / `bug_wdb378` / `bug_wdb379` isolates | ✅ isolate GREEN (already on tip; tip-out pending regen) |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ❌ still RED — `require_nonempty(&field, &value)` over-borrows owned `value` |
+
+**Root cause layer:** constraint/type — `generate_field_access` auto-cloned non-Copy index fields (`Val` with `Text(string)`). Match/if-let now set `suppress_borrowed_clone` and prefix `&` for `&self` field/index places instead of `.clone()`. Nested `self.quality.steps` struct-lit consume no longer treats the leaf name as a `self` field (analyzer).
+
+**What became unnecessary:** auto-clone on match scrutinees (if-let path previously suppressed only for tuple patterns). No new `ir_call_site` peel (path-dep validate peel reverted — it did not peel `&value`).
+
+**Gates:** `cargo test --release --test all -- bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test::wdb372_module_file_index_enum_match_must_not_clone_scrutinee bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test::wdb377_module_file_copy_pass_id_must_not_double_clone bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test::wdb378_module_file_index_struct_lit_must_not_clone_element_per_field bug_wdb379_module_file_format_must_not_emit_write_unwrap_test::wdb379_module_file_format_must_not_emit_write_unwrap` → 4 isolate passed; validate still RED.
+
 ## P3.432 (2026-09-23) — Align stale ownership gates with tip inference
 
 | Gate | Status |
@@ -524,14 +540,14 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
 | P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429) — `is_type_copy` skip on Copy aggregates; tip-out pending regen |
 | P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429); tip-out pending regen; twin WDB-370/355 |
-| P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | ✅ isolate GREEN (P3.429/430) — `self.entries[i].value`; tip-out pending regen |
+| P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | ✅ isolate GREEN (P3.434) — non-Copy `Text(string)`; `suppress_borrowed_clone` + `&` prefix; tip-out pending regen |
 | P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429/430) — `self.watches[i].path`; tip-out pending regen |
 | P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.430) — `is_type_copy` skip; tip-out pending regen |
 | P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | ✅ isolate GREEN (P3.430) — nested `self.passes[i].bindings[j].binding_type`; tip-out pending regen |
 | P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | ✅ isolate GREEN (P3.430) — `self.lifetimes[i].buffer_id`; tip-out pending regen |
-| P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | 🆕 RED / filed (P3.433); twin WDB-374 |
-| P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | 🆕 RED / filed (P3.433); twin WDB-370/375 |
-| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | 🆕 RED / filed (P3.433) |
+| P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-374 |
+| P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-370/375 |
+| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |

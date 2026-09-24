@@ -161,9 +161,9 @@ impl<'ast> CodeGenerator<'ast> {
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
             {
                 let prev_suppress = self.suppress_borrowed_clone;
-                if matches!(&arms[0].pattern, Pattern::Tuple(_)) {
-                    self.suppress_borrowed_clone = true;
-                }
+                // WDB-372: match/if-let scrutinees must not auto-clone indexed fields
+                // (`self.entries[i].value.clone()`). Prefer `&place` (prefix below).
+                self.suppress_borrowed_clone = true;
                 let value_str = if let Expression::MethodCall {
                     object,
                     method,
@@ -506,6 +506,9 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
 
+        let prev_suppress_scrutinee = self.suppress_borrowed_clone;
+        // WDB-372: do not auto-clone match scrutinees (`].value.clone()`).
+        self.suppress_borrowed_clone = true;
         let value_str = if let Expression::MethodCall {
             object,
             method,
@@ -542,6 +545,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             self.generate_expression(value)
         };
+        self.suppress_borrowed_clone = prev_suppress_scrutinee;
 
         let match_scrutinee_ty = self.infer_expression_type(value);
 
@@ -636,8 +640,17 @@ impl<'ast> CodeGenerator<'ast> {
                                 format!("*{}", value_str)
                             }
                         } else if root_name == "self" {
-                            // self is already &Self — no extra & needed.
-                            value_str
+                            // Indexed / field places behind `&self` still move non-Copy
+                            // payloads (E0507). Prefer `match &self.entries[i].value`
+                            // over `.clone()` (WDB-372).
+                            if matches!(
+                                value,
+                                Expression::FieldAccess { .. } | Expression::Index { .. }
+                            ) {
+                                format!("&{value_str}")
+                            } else {
+                                value_str
+                            }
                         } else {
                             // Non-Copy type behind shared ref: need & prefix to prevent
                             // moving out of the borrow. Match ergonomics will auto-ref bindings.

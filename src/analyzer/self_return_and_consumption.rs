@@ -1050,6 +1050,12 @@ impl<'ast> Analyzer<'ast> {
             // Moving non-Copy `self.field` values into the struct consumes `self` (builder pattern).
             // Read-only snapshots clone under `&self`; those are excluded via snapshot_factory in
             // `infer_impl_self_receiver_ownership`.
+            //
+            // P3.424: nested `self.quality.steps` must NOT use lookup_field_type_for_self("steps")
+            // (that's a leaf name on the parent type, not on `self`). Unresolved last-segment
+            // lookups used to default to "moves self" and emit `fn update_params(self)`.
+            // Direct `self.field` stays conservative when the type is unknown; nested chains
+            // go through FieldAccess + resolve_self_field_chain_type (Copy leaf = read).
             Expression::StructLiteral { fields, .. } => {
                 if fields.iter().any(
                     |(_, v)| matches!(v, Expression::Identifier { name, .. } if name == "self"),
@@ -1057,13 +1063,13 @@ impl<'ast> Analyzer<'ast> {
                     return true;
                 }
                 fields.iter().any(|(_, v)| {
-                    if self.expression_is_self_field_access(v) {
-                        if let Expression::FieldAccess { field, .. } = v {
+                    if let Expression::FieldAccess { object, field, .. } = v {
+                        if self.expression_is_self(object) {
                             if let Some(ft) = self.lookup_field_type_for_self(field) {
                                 return !self.is_copy_type(&ft);
                             }
+                            return true;
                         }
-                        return true;
                     }
                     self.expression_moves_non_copy_self_field(v)
                 })
