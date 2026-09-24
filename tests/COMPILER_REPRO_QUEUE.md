@@ -39,6 +39,21 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **P3.439 follow-up:** `local_owned_wj_string_api_beats_borrowed_homonym` keep `Owned || emitted_owned || flags==false` for user `join` vs `strings::join`; only refuse when `resolved` is a **non-stdlib** defining-module demotion (`shared_ref_emission_beats`). Full suite on P3.438 binary: **5381 passed, 167 failed** (majority tip-out/gen lag). Isolate still RED (pre-existing / mixed-formal class, not parquet): `user_join_two_strings_moves_owned_locals` emits mixed `join(base: &str, relative: String)` / `join(&base, relative.to_string())`; trait owned-string field gates still borrow. Next: signature/constraint so pub AST `string` formals stay owned when the body only interpolates — do not peel.
 
+## P3.440 (2026-09-24) — TDD WDB-377–383 tip RED cluster (DB agent)
+
+| Gate | Status |
+|------|--------|
+| WDB-377–379 MultiFile isolates | ✅ GREEN (3/3) — PassId / struct-lit / `format!` |
+| WDB-377–379 tip-out / `gen/` | ❌ RED (3/3) — shader_graph_compiler, shader_graph_builder, scene_file/asset_db/executor |
+| WDB-380–383 MultiFile isolates | ✅ GREEN (4/4) — remaining `None` / mesh_id / AssetType / u32 index |
+| WDB-380–383 tip-out / `gen/` | ❌ RED (4/4) — tilemap/blend/music, pbr+dispatcher, asset_browser, frame_analysis |
+
+**Root cause layer:** none this session — DB agent files gates only. Isolates already emit correctly; product tip-out is stale vs tip `wj`.
+
+**What became unnecessary:** nothing in codegen. WDB-367 tip GREEN was path-list incomplete (missed tilemap/voxel_scene/blend_tree/dialogue/timeline/music).
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_wdb377_ bug_wdb378_ bug_wdb379_` → **3 passed / 3 failed**. `… bug_wdb380_ bug_wdb381_ bug_wdb382_ bug_wdb383_` → **4 passed / 4 failed**.
+
 ## P3.437 (2026-09-24) — Mixed defining formals beat all-ref stubs; file WDB-380
 
 | Gate | Status |
@@ -617,13 +632,13 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.430) — `is_type_copy` skip; tip-out pending regen |
 | P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | ✅ isolate GREEN (P3.430) — nested `self.passes[i].bindings[j].binding_type`; tip-out pending regen |
 | P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | ✅ isolate GREEN (P3.430) — `self.lifetimes[i].buffer_id`; tip-out pending regen |
-| P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-374 |
-| P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-370/375 |
-| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen |
-| P1 | **remaining product `None.clone()` (tilemap/blend/music/…)** | `bug_wdb380_module_file_remaining_none_must_not_emit_clone_test` | ✅ isolate GREEN (P3.437); tip-out pending regen; twin WDB-367 |
-| P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.437) — `self.levels[i].mesh_id.clone()` once; tip-out pending regen; twin WDB-373 |
-| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437) — `self.assets[i].asset_type`; tip-out pending regen; twin WDB-374/377 |
-| P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437) — `bins[clamped as usize]`; tip-out pending regen; twin WDB-353 |
+| P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-374 |
+| P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-370/375 |
+| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD) |
+| P1 | **remaining product `None.clone()` (tilemap/blend/music/…)** | `bug_wdb380_module_file_remaining_none_must_not_emit_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-367 |
+| P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-373 |
+| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-374/377 |
+| P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-353 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -3651,11 +3666,14 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | `nested_self_field_in_struct_lit_must_not_force_owned_self` | ✅ MultiFile GREEN (2026-09-23) — `fn update_params(&self)` |
-| Tip-out `update_raymarch_params(self)` | 🆕 RED pending tip regen |
+| `cross_file_nested_self_field_in_struct_lit_must_not_force_owned_self` | 🆕 P3.424b — struct in types.wj, impl in renderer.wj (product shape) |
+| Tip-out `update_raymarch_params(self)` | ❌ RED after 2026-09-24 tip regen (same-file isolate GREEN) |
 
-**Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move.
+**Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move. Atmosphere/water update_* already emit `&self`. Engine cargo-check after regen: **288 rustc errors** (E0308×197, E0277×33, E0507×21).
 
-**Fix:** Struct-literal field values no longer treat nested `self.a.b` as a last-segment lookup on `self` (that failed for `steps` and defaulted to “moves self”). Direct `self.field` stays conservative when the type is unknown; nested chains use `resolve_self_field_chain_type` (Copy leaf = read).
+**Fix (same-file):** Struct-literal field values no longer treat nested `self.a.b` as a last-segment lookup on `self`. Direct `self.field` stays conservative when the type is unknown; nested chains use `resolve_self_field_chain_type` (Copy leaf = read).
+
+**Remaining:** unknown direct `self.field` in a split-impl struct literal still defaults to “moves self” when `lookup_field_type_for_self` misses cross-file VoxelGPURenderer fields.
 
 ## P3.426 WindjammerDB CQ-C5 — tip REDs WDB-371–373 (2026-09-22)
 

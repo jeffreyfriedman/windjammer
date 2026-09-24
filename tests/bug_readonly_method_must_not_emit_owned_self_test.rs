@@ -14,6 +14,9 @@
 //! P3.424: nested `self.quality.steps` in a struct literal must not force owned `self`.
 //! Product: voxel_gpu_passes `update_raymarch_params(self)` via `self.current_quality.max_raymarch_steps`.
 //! Binding the Copy parent first (`let q = self.current_quality`) correctly yields `&self`.
+//!
+//! Same-file isolate is GREEN. Product still emits owned `self` after tip regen because
+//! VoxelGPURenderer / AdaptiveQualityConfig live in sibling files (P3.424b).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -82,6 +85,78 @@ fn nested_self_field_in_struct_lit_must_not_force_owned_self() {
         "P3.424 RED: owned self on nested-field read method:\n{rs}"
     );
     test.cargo_check().expect("P3.424 cargo-check");
+}
+
+/// Product shape: struct in types.wj, impl in renderer.wj (VoxelGPURenderer / AdaptiveQualityConfig).
+const TYPES_SRC: &str = r#"
+pub struct Quality {
+    pub steps: u32,
+}
+
+pub struct Uni {
+    pub a: f32,
+    pub b: u32,
+    pub c: f32,
+}
+
+impl Uni {
+    pub fn to_bytes(self) -> Vec<u8> {
+        Vec::new()
+    }
+}
+
+extern fn gpu_update(h: i32, p: *const u8, n: usize)
+
+pub struct Resources {
+    pub handle: i32,
+}
+
+pub struct Renderer {
+    pub world_size: f32,
+    pub voxel_size: f32,
+    pub current_quality: Quality,
+    pub resources: Resources,
+}
+"#;
+
+const IMPL_SRC: &str = r#"
+use super::types::Renderer
+use super::types::Uni
+
+impl Renderer {
+    pub fn update_params(self) {
+        let params = Uni {
+            a: self.world_size,
+            b: self.current_quality.steps,
+            c: self.voxel_size,
+        }
+        let bytes = params.to_bytes()
+        gpu_update(self.resources.handle, bytes.as_ptr(), bytes.len())
+    }
+}
+"#;
+
+#[test]
+fn cross_file_nested_self_field_in_struct_lit_must_not_force_owned_self() {
+    let mut test = MultiFileTest::new();
+    test.add_file("mod.wj", "pub mod types\npub mod renderer\n");
+    test.add_file("types.wj", TYPES_SRC);
+    test.add_file("renderer.wj", IMPL_SRC);
+    let map = test.compile().expect("P3.424b compile");
+    let rs = map
+        .get("renderer.rs")
+        .or_else(|| map.get("renderer/mod.rs"))
+        .expect("renderer.rs");
+    eprintln!("P3.424b cross-file renderer.rs:\n{rs}");
+    assert!(
+        rs.contains("fn update_params(&self)") || rs.contains("fn update_params(&mut self)"),
+        "P3.424b RED: cross-file nested/direct Copy reads must not force owned self:\n{rs}"
+    );
+    assert!(
+        !rs.contains("fn update_params(self)"),
+        "P3.424b RED: owned self on cross-file read method:\n{rs}"
+    );
+    test.cargo_check().expect("P3.424b cargo-check");
 }
 
 #[test]

@@ -25,7 +25,12 @@ use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub fn label(name: string, n: i32) -> string {
-    format!("{}-{}", name, n)
+    let s = format!("{}-{}", name, n)
+    s
+}
+
+pub fn json_pair(id: string, name: string) -> string {
+    format!("{{\"id\":\"{}\",\"name\":\"{}\"", id, name)
 }
 "#;
 
