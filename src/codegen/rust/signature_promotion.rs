@@ -1620,6 +1620,15 @@ fn local_owned_wj_string_api_beats_borrowed_homonym(
     if !resolved_borrowed {
         return false;
     }
+    // Defining-module bare-pass demotion (`sf1_cli::run_parquet_load` with shared-ref
+    // flags) must not lose to an importer stub that still looks like a WJ string API
+    // (`Type::String` formals + stale `emitted=false`). Stdlib homonyms (`strings::join`)
+    // stay challengers so local `join(base: string, relative: string)` still wins.
+    if !signature_is_wj_std_stub_or_runtime_qualified(resolved)
+        && shared_ref_emission_beats(resolved, local)
+    {
+        return false;
+    }
     (0..local.param_ownership.len()).any(|idx| {
         if local.has_self_receiver && idx == 0 {
             return false;
@@ -1637,10 +1646,14 @@ fn local_owned_wj_string_api_beats_borrowed_homonym(
         if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(local, idx) {
             return false;
         }
-        // Require a live Owned formal. Importer stubs clone Borrowed + Type::String
-        // formals with stale `emitted=[false,…]`; `emitted_owned_arg_contract` would
-        // treat that as owned and beat defining-module `[true, true, false, …]`.
         matches!(local.param_ownership.get(idx), Some(OwnershipMode::Owned))
+            || emitted_owned_arg_contract(local, idx)
+            || local
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(idx))
+                .copied()
+                == Some(false)
     })
 }
 
