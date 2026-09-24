@@ -1185,8 +1185,11 @@ pub fn decode_startup(buf: Vec<u8>) -> int {
         let serve = parse_program(
             r#"
 use crate::wire::decode_startup
+fn buf_len(buf: Vec<u8>) -> int {
+    buf.len() as int
+}
 pub fn on_startup(buf: Vec<u8>) -> int {
-    let _n = buf.len()
+    let _n = buf_len(buf)
     decode_startup(buf)
 }
 "#,

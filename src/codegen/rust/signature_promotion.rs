@@ -1236,6 +1236,11 @@ fn sig_simple_name(name: &str) -> &str {
 
 /// User-owned refresh beats runtime-std shared-ref when they share a suffix but differ
 /// in qualification (`join` vs `strings::join`).
+///
+/// The shared-ref side must actually be a stdlib/runtime API. An importer stub
+/// (`run_parquet_load` all-false) must not beat defining-module crate-prefix
+/// demotion (`sf1_cli::run_parquet_load` `[true, true, false, …]`) just because
+/// the names differ.
 fn owned_user_refresh_beats_stdlib_shared_ref(
     owned: &FunctionSignature,
     shared: &FunctionSignature,
@@ -1243,6 +1248,7 @@ fn owned_user_refresh_beats_stdlib_shared_ref(
     method_registry_reflects_emitted_owned(owned)
         && !owned.formal_param_types.is_empty()
         && !signature_is_wj_std_stub_or_runtime_qualified(owned)
+        && signature_is_wj_std_stub_or_runtime_qualified(shared)
         && sig_simple_name(&shared.name) == sig_simple_name(&owned.name)
         && shared.name != owned.name
         && shared
@@ -1631,14 +1637,10 @@ fn local_owned_wj_string_api_beats_borrowed_homonym(
         if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(local, idx) {
             return false;
         }
+        // Require a live Owned formal. Importer stubs clone Borrowed + Type::String
+        // formals with stale `emitted=[false,…]`; `emitted_owned_arg_contract` would
+        // treat that as owned and beat defining-module `[true, true, false, …]`.
         matches!(local.param_ownership.get(idx), Some(OwnershipMode::Owned))
-            || emitted_owned_arg_contract(local, idx)
-            || local
-                .emitted_rust_ref_params
-                .as_ref()
-                .and_then(|flags| flags.get(idx))
-                .copied()
-                == Some(false)
     })
 }
 
@@ -1741,8 +1743,28 @@ pub(crate) fn prefer_shared_ref_signature(
     let Some(challenger) = challenger else {
         return preferred;
     };
+    // Runtime-scanned `&str`/`AsRef<str>` (empty WJ formal_param_types + Reference(str)
+    // + emitted). Detected via empty `formal_param_types`, not `formal_param_type()`
+    // (that falls back to `param_types`).
+    let challenger_runtime_str_ref = challenger.formal_param_types.is_empty()
+        && challenger
+            .param_types
+            .get(param_idx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+        && challenger
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(true);
     if let Some(ref pref) = preferred {
-        if defining_mixed_owned_emission_beats(pref, challenger) {
+        // Mixed defining formals beat importer all-ref stubs. Do not let that
+        // also freeze a WJ `strings::join` / `Connection::query` owned-string
+        // stub over a runtime-scanned `&str`/`AsRef<str>`.
+        if defining_mixed_owned_emission_beats(pref, challenger)
+            && !challenger_runtime_str_ref
+            && !signature_is_wj_std_stub_or_runtime_qualified(challenger)
+        {
             return Some(pref.clone());
         }
     }
@@ -1788,24 +1810,10 @@ pub(crate) fn prefer_shared_ref_signature(
     if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&pref, param_idx) {
         return Some(pref);
     }
-    // Runtime-scanned `&str`/`AsRef<str>` (empty WJ formal_param_types + Reference(str) + emitted)
-    // must beat WJ std stubs that recorded owned `String` emission for the same API.
-    // Body-converged trait demotions keep a plain WJ `string` formal — those must NOT
-    // beat an owned preferred contract (`authenticate(email: string)`).
-    //
-    // Note: `formal_param_type()` falls back to `param_types` when formals are empty, so
-    // runtime scans must be detected via `formal_param_types.is_empty()`, not `is_none()`.
-    let challenger_runtime_str_ref = challenger.formal_param_types.is_empty()
-        && challenger
-            .param_types
-            .get(param_idx)
-            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-        && challenger
-            .emitted_rust_ref_params
-            .as_ref()
-            .and_then(|flags| flags.get(param_idx))
-            .copied()
-            == Some(true);
+    // Runtime-scanned `&str`/`AsRef<str>` must beat WJ std stubs that recorded owned
+    // `String` emission for the same API. Body-converged trait demotions keep a
+    // plain WJ `string` formal — those must NOT beat an owned preferred contract
+    // (`authenticate(email: string)`).
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&pref, param_idx) {
         // Runtime-scanned `&str`/`AsRef<str>` at *this* slot beats WJ owned emission even
         // when preferred recorded mixed `emitted_rust_ref_params` (e.g. `self: &Self` +

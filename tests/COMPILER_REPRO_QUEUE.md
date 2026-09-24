@@ -15,6 +15,28 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.438 (2026-09-24) — Defining demotion beats importer stubs; runtime `&str` still wins
+
+| Gate | Status |
+|------|--------|
+| `refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub` | ✅ GREEN |
+| `local_user_fn_homonym_keeps_global_bare_pass_when_bare_names_match` | ✅ GREEN |
+| `bare_pass_skips_pub_vec_u8_owned_api_wdb175` | ✅ GREEN — fixture now has product `buf_len` + `decode_startup` |
+| `prefer_shared_ref_picks_runtime_str_over_wj_owned_emission` | ✅ GREEN |
+| `prefer_shared_ref_picks_runtime_connection_query_over_wj_owned_sql` | ✅ GREEN |
+| `refresh_join_delimiter_uses_runtime_fallback_from_stdlib` | ✅ GREEN |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ no regression |
+| `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ GREEN (already) |
+| `bug_mpsc_sync_channel_boundary_signature_test` | ✅ GREEN (already) |
+| WDB-381/382/383 isolates | ✅ isolate GREEN; tip-out ❌ stale product |
+| `promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN |
+
+**Root cause layer:** signature — (1) `owned_user_refresh_beats_stdlib_shared_ref` treated crate-prefix demotion (`sf1_cli::run_parquet_load`) as a stdlib homonym of the importer stub; (2) `local_owned_wj_string_api_beats_borrowed_homonym` treated Borrowed + stale `emitted=false` + `Type::String` formals as an owned user API; (3) P3.437 mixed-beats in `prefer_shared_ref_signature` froze WJ `strings::join` / `Connection::query` owned-string stubs over runtime-scanned `&str`/`AsRef<str>`.
+
+**What became unnecessary:** classifying importer all-false stubs as owned user APIs; mixed-beats blocking runtime-std challengers. No new `ir_call_site` peel.
+
+**Gates:** `cargo test --release --lib -- refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub local_user_fn_homonym_keeps_global_bare_pass_when_bare_names_match bare_pass_skips_pub_vec_u8_owned_api_wdb175 prefer_shared_ref_picks_runtime refresh_join_delimiter_uses_runtime_fallback_from_stdlib refresh_split pick_prefers_mixed_owned_string_over_all_ref_importer_stub merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub merge_refresh_upgrades_importer_stub_to_defining_mixed registry_refresh_prefers_mixed_over_more_true_flags promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` → 12 passed. `cargo test --release --test all -- bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test bug_wdb175_module_file_demoted_vec_into_owned_vec_must_clone bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 7 passed.
+
 ## P3.437 (2026-09-24) — Mixed defining formals beat all-ref stubs; file WDB-380
 
 | Gate | Status |
@@ -39,7 +61,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate | Status |
 |------|--------|
 | `path_dep_module_file_load_keeps_mixed_owned_value_formal` | ✅ GREEN — `wj.toml` path-dep `metadata.json` registers mixed formals |
-| `promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` | 🆕 — Step 4B-b must restore `[true, false]` over importer `[true, true]` |
+| `promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN (P3.438) |
 | `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ GREEN (P3.437) |
 | `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ no regression (P3.435) |
 
@@ -597,9 +619,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen; twin WDB-370/375 |
 | P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.433/434); tip-out pending regen |
 | P1 | **remaining product `None.clone()` (tilemap/blend/music/…)** | `bug_wdb380_module_file_remaining_none_must_not_emit_clone_test` | ✅ isolate GREEN (P3.437); tip-out pending regen; twin WDB-367 |
-| P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-373 |
-| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | 🆕 RED / filed (P3.437); twin WDB-374/377 |
-| P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | 🆕 RED / filed (P3.437); twin WDB-353 |
+| P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.437) — `self.levels[i].mesh_id.clone()` once; tip-out pending regen; twin WDB-373 |
+| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437) — `self.assets[i].asset_type`; tip-out pending regen; twin WDB-374/377 |
+| P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437) — `bins[clamped as usize]`; tip-out pending regen; twin WDB-353 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
