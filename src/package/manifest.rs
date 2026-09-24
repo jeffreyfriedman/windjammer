@@ -182,6 +182,7 @@ mod tests {
                 path: None,
                 git: None,
                 branch: None,
+                package: None,
                 registry: None,
             },
         );

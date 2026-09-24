@@ -141,6 +141,7 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
             path,
             git,
             branch,
+            package,
             registry: _,
         } => {
             let mut parts = Vec::new();
@@ -160,6 +161,9 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
             }
             if let Some(b) = branch {
                 parts.push(format!("branch = \"{}\"", b));
+            }
+            if let Some(pkg) = package {
+                parts.push(format!("package = \"{}\"", pkg));
             }
             format!("{} = {{ {} }}", name, parts.join(", "))
         }

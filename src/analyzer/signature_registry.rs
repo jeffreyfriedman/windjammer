@@ -1681,7 +1681,7 @@ impl SignatureRegistry {
             }
             // Never let a bare-Owned stub replace stdlib/meta `&T` key contracts
             // (`HashMap::get(key: &K)` poisoned by `std/collections.wj` `key: K`).
-            if let Some(existing) = self.signatures.get(name) {
+            if let Some(existing) = self.get_signature(name) {
                 if crate::codegen::rust::signature_promotion::existing_has_stronger_shared_ref_contract(
                     existing, sig,
                 ) {
@@ -1821,6 +1821,76 @@ mod tests {
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             "caller owned stub must not overwrite body-converged borrows"
         );
+    }
+
+    #[test]
+    fn merge_layered_fallback_keeps_mixed_owned_over_importer_stub() {
+        let mixed = FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let stub = FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::String)),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        let mut global = SignatureRegistry::empty();
+        global
+            .signatures
+            .insert("require_nonempty".into(), mixed);
+        let mut local = SignatureRegistry::layered(std::sync::Arc::new(global));
+        local.merge(&{
+            let mut incoming = SignatureRegistry::empty();
+            incoming
+                .signatures
+                .insert("require_nonempty".into(), stub);
+            incoming
+        });
+
+        let stored = local
+            .get_signature("require_nonempty")
+            .expect("require_nonempty");
+        assert_eq!(
+            stored.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            "layered merge must not overlay importer [true,true] over fallback mixed formals"
+        );
+        assert!(!local.has_signature_locally("require_nonempty"));
     }
 
     #[test]

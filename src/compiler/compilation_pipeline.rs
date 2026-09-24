@@ -37,6 +37,29 @@ fn merge_external_metadata_paths(
     external_paths
 }
 
+/// Load `wj.toml` path-dep + import `metadata.json` into a signature registry
+/// (bare + `crate_key::fn` aliases).
+///
+/// The compiler multipass already does this. The legacy ModuleCompiler path
+/// (`wj build src --module-file` without `--library` / `--metadata`) did not, so
+/// mixed formals (`require_nonempty(field: &str, value: String)`) were invisible
+/// and call sites over-borrowed owned slots.
+pub(crate) fn load_path_dep_signatures_into_registry(
+    build_path: &Path,
+    registry: &mut SignatureRegistry,
+    analyzer: Option<&mut Analyzer>,
+) -> HashMap<String, PathBuf> {
+    let external_paths = merge_external_metadata_paths(build_path, &[]);
+    if !external_paths.is_empty() {
+        crate::metadata::merge_external_crate_metadata_with_aliases(
+            &external_paths,
+            registry,
+            analyzer,
+        );
+    }
+    external_paths
+}
+
 /// Check if a Type is Copy in single-file context (overrides stale metadata Copy).
 fn is_type_copy_for_single_file_build(ty: &Type, analyzer: &Analyzer) -> bool {
     match ty {
@@ -402,4 +425,75 @@ pub fn build_project_ext(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyzer::OwnershipMode;
+    use crate::metadata::{CrateMetadata, FunctionSignature};
+
+    #[test]
+    fn path_dep_module_file_load_keeps_mixed_owned_value_formal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dep = tmp.path().join("validate_gen");
+        std::fs::create_dir_all(&dep).unwrap();
+        let mut functions = HashMap::new();
+        functions.insert(
+            "require_nonempty".to_string(),
+            FunctionSignature {
+                params: vec!["Reference(String)".to_string(), "String".to_string()],
+                formal_params: vec!["Reference(String)".to_string(), "String".to_string()],
+                return_type: None,
+                is_associated: false,
+                parent_type: None,
+                param_ownership: vec!["Borrowed".to_string(), "Owned".to_string()],
+                emitted_rust_ref_params: Some(vec![true, false]),
+                string_ref_string_formal_params: None,
+                forwarding_borrow_params: None,
+                has_self_receiver: false,
+                is_extern: false,
+            },
+        );
+        let meta = CrateMetadata {
+            structs: HashMap::new(),
+            functions,
+            copy_structs: Vec::new(),
+            version: "0.1.0".to_string(),
+        };
+        std::fs::write(dep.join("metadata.json"), serde_json::to_string(&meta).unwrap()).unwrap();
+
+        let app = tmp.path().join("app");
+        std::fs::create_dir_all(app.join("src")).unwrap();
+        std::fs::write(
+            app.join("wj.toml"),
+            format!(
+                "[package]\nname = \"todo_app\"\n\n[dependencies.validate_pkg]\npath = \"{}\"\npackage = \"validate_src\"\n",
+                dep.display()
+            ),
+        )
+        .unwrap();
+
+        let mut registry = SignatureRegistry::new();
+        let found = load_path_dep_signatures_into_registry(&app.join("src"), &mut registry, None);
+        assert!(
+            found.contains_key("validate_pkg"),
+            "expected path-dep discovery, got {found:?}"
+        );
+
+        let sig = registry
+            .get_signature("require_nonempty")
+            .or_else(|| registry.lookup_method("require_nonempty"))
+            .or_else(|| registry.get_signature("validate_pkg::require_nonempty"))
+            .expect("require_nonempty must be registered from path-dep metadata");
+        assert_eq!(
+            sig.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            "mixed formals: borrow field, own value"
+        );
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[true, false][..])
+        );
+    }
 }
