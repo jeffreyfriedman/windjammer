@@ -15,6 +15,20 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.435 (2026-09-23) — Prefer mixed owned-emission signatures over all-ref stubs
+
+| Gate | Status |
+|------|--------|
+| `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ❌ still RED — `require_nonempty(&field, &value)`; defining metadata is `[&str, String]` but call-site still over-borrows |
+| WDB-372 isolate / demoted-str auto-borrow | ✅ no regression |
+
+**Root cause layer:** signature pick/merge — `pick_codegen_refreshed_signature` kept the first `emitted_rust_ref_params` candidate with any `true` flag, so an importer `[true, true]` stub beat defining-module `[true, false]` mixed formals. Merge now refuses to overwrite a stronger owned-emission contract.
+
+**What became unnecessary:** extra regular_call peel for path-dep owned slots (never landed; did not peel `&value`).
+
+**Gates:** `cargo test --release --lib -- pick_prefers_mixed_owned_string_over_all_ref_importer_stub pick_prefers_mut_borrowed_over_ast_owned_custom_stub` → 2 passed. `cargo test --release --test all -- bug_owned_arg_into_demoted_str_formal_must_auto_borrow_test bug_cross_crate_demoted_str_owned_arg_must_auto_borrow_test bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test::wdb372_module_file_index_enum_match_must_not_clone_scrutinee` → 3 passed. Validate still RED.
+
 ## P3.434 (2026-09-23) — Match scrutinee must not `.clone()` indexed non-Copy enums
 
 | Gate | Status |

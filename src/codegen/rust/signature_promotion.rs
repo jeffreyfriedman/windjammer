@@ -1259,8 +1259,16 @@ where
                         .saturating_sub(usize::from(sig.has_self_receiver_slot()));
                     prev_n == sig_n
                 });
-                if arity_ok && shared_ref_refresh.is_none() {
-                    shared_ref_refresh = Some(sig);
+                if arity_ok {
+                    match &shared_ref_refresh {
+                        None => shared_ref_refresh = Some(sig),
+                        Some(incumbent)
+                            if defining_mixed_owned_emission_beats(&sig, incumbent) =>
+                        {
+                            shared_ref_refresh = Some(sig);
+                        }
+                        Some(_) => {}
+                    }
                 }
                 continue;
             }
@@ -1315,6 +1323,37 @@ where
         .or(mut_borrow_refresh)
         .or(refresh_without_shared_ref)
         .or(first)
+}
+
+/// Owned slots that codegen did **not** emit as Rust `&T` / `&str`.
+///
+/// Path-dep mixed formals (`field: &str`, `value: String`) score 1. An importer
+/// stub that marks every string slot shared-ref (`[true, true]`) scores 0.
+pub(crate) fn owned_emission_slot_count(sig: &FunctionSignature) -> usize {
+    sig.param_ownership
+        .iter()
+        .enumerate()
+        .filter(|(idx, own)| {
+            if sig.has_self_receiver && *idx == 0 {
+                return false;
+            }
+            matches!(own, OwnershipMode::Owned)
+                && sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|f| f.get(*idx))
+                    .copied()
+                    != Some(true)
+        })
+        .count()
+}
+
+/// Defining-module mixed formals beat importer stubs that over-borrow owned slots.
+pub(crate) fn defining_mixed_owned_emission_beats(
+    candidate: &FunctionSignature,
+    incumbent: &FunctionSignature,
+) -> bool {
+    owned_emission_slot_count(candidate) > owned_emission_slot_count(incumbent)
 }
 
 /// True when `preferred` recorded at least one `&mut T` formal and `other` did not.
@@ -2820,6 +2859,64 @@ pub fn join_tail(parts: Vec<string>) -> string {
             picked.param_ownership.first().copied(),
             Some(OwnershipMode::MutBorrowed),
             "live MutBorrowed must beat AST Owned Custom stub"
+        );
+    }
+
+    #[test]
+    fn pick_prefers_mixed_owned_string_over_all_ref_importer_stub() {
+        let mixed = FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let all_ref_stub = FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let stub_first =
+            pick_codegen_refreshed_signature([Some(all_ref_stub.clone()), Some(mixed.clone())])
+                .expect("pick stub-first");
+        assert_eq!(
+            stub_first.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            "defining mixed formals must beat importer all-ref stub"
+        );
+        let mixed_first =
+            pick_codegen_refreshed_signature([Some(mixed), Some(all_ref_stub)]).expect("pick");
+        assert_eq!(
+            mixed_first.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
         );
     }
 }

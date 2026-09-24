@@ -1687,6 +1687,11 @@ impl SignatureRegistry {
                 ) {
                     continue;
                 }
+                if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
+                    existing, sig,
+                ) {
+                    continue;
+                }
             }
             self.signatures.insert(name.clone(), sig.clone());
         }
