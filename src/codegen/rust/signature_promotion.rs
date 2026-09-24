@@ -687,6 +687,20 @@ fn pick_stronger_codegen_refresh<'a>(
 ) -> &'a FunctionSignature {
     match current {
         None => candidate,
+        // Mixed `[&str, String]` beats importer `[true, true]` even though the stub
+        // has more shared-ref flags (`count_true`). Count-true-wins destroyed owned slots.
+        Some(cur)
+            if signature_has_mixed_shared_and_owned_emission(cur)
+                && defining_mixed_owned_emission_beats(cur, candidate) =>
+        {
+            cur
+        }
+        Some(cur)
+            if signature_has_mixed_shared_and_owned_emission(candidate)
+                && defining_mixed_owned_emission_beats(candidate, cur) =>
+        {
+            candidate
+        }
         Some(cur) if shared_ref_emission_beats(candidate, cur) => candidate,
         Some(cur) if shared_ref_emission_beats(cur, candidate) => cur,
         Some(cur) if mut_borrow_emission_beats(candidate, cur) => candidate,
@@ -714,18 +728,32 @@ pub(crate) fn merge_codegen_refresh_metadata(
     let Some(ref from_flags) = from.emitted_rust_ref_params else {
         return;
     };
+    let into_mixed = signature_has_mixed_shared_and_owned_emission(into);
+    let from_mixed = signature_has_mixed_shared_and_owned_emission(from);
+    // Mixed defining formals (`field: &str`, `value: String`) must not absorb an
+    // importer all-ref stub via OR-union (`[true, false] | [true, true]` → `[true, true]`).
+    // All-owned WJ stubs vs runtime `&str` still OR-union (not mixed — no shared-ref yet).
+    if into_mixed && !defining_mixed_owned_emission_beats(from, into) {
+        return;
+    }
+    let replacing_with_mixed =
+        from_mixed && defining_mixed_owned_emission_beats(from, into);
     let prior_flags = into.emitted_rust_ref_params.clone();
-    let merged_flags: Vec<bool> = match &prior_flags {
-        Some(existing) => {
-            let n = from_flags.len().max(existing.len());
-            (0..n)
-                .map(|idx| {
-                    from_flags.get(idx).copied().unwrap_or(false)
-                        || existing.get(idx).copied().unwrap_or(false)
-                })
-                .collect()
+    let merged_flags: Vec<bool> = if replacing_with_mixed {
+        from_flags.clone()
+    } else {
+        match &prior_flags {
+            Some(existing) => {
+                let n = from_flags.len().max(existing.len());
+                (0..n)
+                    .map(|idx| {
+                        from_flags.get(idx).copied().unwrap_or(false)
+                            || existing.get(idx).copied().unwrap_or(false)
+                    })
+                    .collect()
+            }
+            None => from_flags.clone(),
         }
-        None => from_flags.clone(),
     };
     into.emitted_rust_ref_params = Some(merged_flags);
     let flags = from_flags;
@@ -735,7 +763,11 @@ pub(crate) fn merge_codegen_refresh_metadata(
     for idx in 0..flags.len().min(into.param_types.len()) {
         match flags.get(idx).copied() {
             Some(false) => {
-                if prior_flags.as_ref().and_then(|f| f.get(idx)).copied() == Some(true) {
+                // Keep a prior shared-ref unless we are replacing an importer stub
+                // with defining-module mixed formals (`[true, true]` → `[true, false]`).
+                if !replacing_with_mixed
+                    && prior_flags.as_ref().and_then(|f| f.get(idx)).copied() == Some(true)
+                {
                     continue;
                 }
                 // `false` means "not shared `&T`" — either owned or `&mut T`.
@@ -1348,12 +1380,27 @@ pub(crate) fn owned_emission_slot_count(sig: &FunctionSignature) -> usize {
         .count()
 }
 
-/// Defining-module mixed formals beat importer stubs that over-borrow owned slots.
+/// Defining-module mixed formals (`[&str, String]`) beat importer all-ref stubs.
+///
+/// The candidate must itself be mixed (at least one shared-ref slot *and* one
+/// owned-emission slot). An all-owned importer stub must not "win" just because
+/// it has more `false` flags than a correctly demoted mixed API.
 pub(crate) fn defining_mixed_owned_emission_beats(
     candidate: &FunctionSignature,
     incumbent: &FunctionSignature,
 ) -> bool {
-    owned_emission_slot_count(candidate) > owned_emission_slot_count(incumbent)
+    signature_has_mixed_shared_and_owned_emission(candidate)
+        && owned_emission_slot_count(candidate) > owned_emission_slot_count(incumbent)
+}
+
+/// Codegen recorded both a shared-ref slot and an owned-emission slot
+/// (`require_nonempty(field: &str, value: String)` → `[true, false]`).
+pub(crate) fn signature_has_mixed_shared_and_owned_emission(sig: &FunctionSignature) -> bool {
+    owned_emission_slot_count(sig) > 0
+        && sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|flags| flags.iter().any(|&f| f))
 }
 
 /// True when `preferred` recorded at least one `&mut T` formal and `other` did not.
@@ -3002,6 +3049,113 @@ pub fn join_tail(parts: Vec<string>) -> string {
             kept.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
             "prefer_shared must not undo mixed owned value with importer all-ref stub"
+        );
+    }
+
+    fn mixed_require_nonempty() -> FunctionSignature {
+        FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    fn all_ref_require_nonempty_stub() -> FunctionSignature {
+        FunctionSignature {
+            name: "require_nonempty".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    #[test]
+    fn merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub() {
+        let mut mixed = mixed_require_nonempty();
+        merge_codegen_refresh_metadata(&mut mixed, &all_ref_require_nonempty_stub());
+        assert_eq!(
+            mixed.emitted_rust_ref_params.as_deref(),
+            Some(&[true, false][..]),
+            "OR-union of emit flags must not turn owned value into shared-ref"
+        );
+        assert_eq!(
+            mixed.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
+        );
+    }
+
+    #[test]
+    fn merge_refresh_upgrades_importer_stub_to_defining_mixed() {
+        let mut stub = all_ref_require_nonempty_stub();
+        merge_codegen_refresh_metadata(&mut stub, &mixed_require_nonempty());
+        assert_eq!(
+            stub.emitted_rust_ref_params.as_deref(),
+            Some(&[true, false][..]),
+            "defining mixed must replace importer all-ref, not OR-union to [true, true]"
+        );
+        assert_eq!(
+            stub.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
+        );
+    }
+
+    #[test]
+    fn registry_refresh_prefers_mixed_over_more_true_flags() {
+        let mut local = SignatureRegistry::empty();
+        local.add_function("require_nonempty".into(), all_ref_require_nonempty_stub());
+        local.add_function(
+            "validate_pkg::require_nonempty".into(),
+            mixed_require_nonempty(),
+        );
+        let mut into = mixed_require_nonempty();
+        merge_registry_codegen_refresh_if_present(
+            &mut into,
+            &local,
+            &[
+                "require_nonempty".into(),
+                "validate_pkg::require_nonempty".into(),
+            ],
+        );
+        assert_eq!(
+            into.emitted_rust_ref_params.as_deref(),
+            Some(&[true, false][..]),
+            "pick_stronger must not prefer importer [true, true] over mixed [true, false]"
+        );
+        assert_eq!(
+            into.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
         );
     }
 }

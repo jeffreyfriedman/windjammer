@@ -668,6 +668,69 @@ mod tests {
         Box::leak(Box::new(parser.parse().expect("parse")))
     }
 
+    fn mixed_require_nonempty_sig() -> FunctionSignature {
+        FunctionSignature {
+            name: "require_nonempty".to_string(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    #[test]
+    fn bare_pass_must_not_demote_path_dep_owned_emission_slot() {
+        // Importer `require_nonempty(field, value)` has no callee body in this crate.
+        // Defining metadata already recorded `value: String` (emit false). Bare-pass
+        // must not rewrite that slot to `&str` / `[true, true]`.
+        let caller = parse_program(
+            r#"
+fn check_nonempty(field: string, value: string) -> Result<string, string> {
+    require_nonempty(field, value)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        let mixed = mixed_require_nonempty_sig();
+        registry
+            .signatures
+            .insert("require_nonempty".to_string(), mixed.clone());
+        registry
+            .signatures
+            .insert("validate_pkg::require_nonempty".to_string(), mixed);
+        let empty = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &[caller], &empty);
+        for key in ["require_nonempty", "validate_pkg::require_nonempty"] {
+            let sig = registry.get_signature(key).expect(key);
+            assert_eq!(
+                sig.param_ownership,
+                vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+                "{key} must keep path-dep mixed formals"
+            );
+            assert_eq!(
+                sig.emitted_rust_ref_params.as_deref(),
+                Some(&[true, false][..]),
+                "{key} must keep owned value emission"
+            );
+        }
+    }
+
     fn owned_custom_sig(name: &str, ty: &str) -> FunctionSignature {
         FunctionSignature {
             name: name.to_string(),
@@ -1543,6 +1606,23 @@ fn bare_pass_hint_should_skip(
     // demote them to Borrowed/`&Vec`. Doing so makes wrappers that forward bare into FFI
     // look like borrow-passthrough delegates and emit `&Vec` + bare into `Vec` (E0308).
     if sig.is_extern {
+        return true;
+    }
+    // Path-dep / defining-module codegen already recorded owned emission for this
+    // slot (`require_nonempty(value: String)` → emit false). Importer bare-pass
+    // cannot see `Ok(value)` in another crate and must not rewrite the slot to `&str`.
+    if matches!(mode, OwnershipMode::Borrowed)
+        && matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::Owned)
+        )
+        && sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(false)
+    {
         return true;
     }
     if matches!(mode, OwnershipMode::Borrowed)
