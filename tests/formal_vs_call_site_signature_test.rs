@@ -243,6 +243,7 @@ fn metadata_import_populates_formal_param_types_from_params() {
         forwarding_borrow_params: None,
         has_self_receiver: true,
         is_extern: false,
+        is_trait_method: false,
     };
 
     let sig = try_analyzer_signature_from_metadata("QuestManager::is_quest_active", &meta)
