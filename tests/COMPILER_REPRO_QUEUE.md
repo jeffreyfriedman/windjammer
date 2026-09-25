@@ -15,6 +15,8 @@
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_demoted_vec_param_into_owned_vec_callee_must_clone_test` → **1 passed**. Related `bug_demoted_vec_param…` + spawn/mpsc + WDB-179/185/195/216/124/126/127 + WDB-285/286 → **15 passed, 2 failed** (tip-out/gen-lag only).
 
+`bug_todo_cli_match_scrutinee_reuse_must_auto_clone_test` was a lexer-false RED (`r#"…\n…"#` two-char escape, not a newline). Fixture now uses a real newline → **GREEN** (no compiler change).
+
 ## P3.455 (2026-09-25) — `db::Connection` reuse must borrow, not `.clone()`
 
 | Gate | Status |
