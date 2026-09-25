@@ -574,12 +574,24 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(t) = type_ {
                         self.local_var_types.insert(name.clone(), t.clone());
                     }
-                    // Constraint: negative sentinels stay WJ `int` (`colon_at = -1`
-                    // then `colon_at = j` must not promote the binding to usize).
-                    if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
-                        self.local_var_types.insert(name.clone(), Type::Int);
+                    // Negative sentinels stay WJ `int` (`colon_at = -1`).
+                    // Untyped `let mut idx = 0` is recorded as a literal-init counter so
+                    // index sites still emit `as usize` after `.len()` usize promotion.
+                    let annotated_usize = type_.as_ref().is_some_and(|t| {
+                        crate::codegen::rust::type_casting::type_is_usize(t)
+                    });
+                    if !annotated_usize
+                        && crate::codegen::rust::type_casting::expression_is_int_literal_init(
+                            value,
+                        )
+                    {
                         self.literal_init_wj_int_loop_counters
                             .insert(name.clone());
+                    }
+                    if crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
+                        && !annotated_usize
+                    {
+                        self.local_var_types.insert(name.clone(), Type::Int);
                     } else {
                         let is_usize = self.expression_produces_usize(value)
                             || self.infer_expression_type_is_usize(value)
@@ -659,9 +671,6 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|p| p.name == name && matches!(&p.type_, Type::Int))
         {
-            return true;
-        }
-        if self.literal_init_wj_int_loop_counters.contains(name) {
             return true;
         }
         self.local_var_types.get(name).is_some_and(|t| {
