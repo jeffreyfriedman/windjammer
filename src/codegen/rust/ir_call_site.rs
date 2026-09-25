@@ -5903,7 +5903,48 @@ impl<'ast> CodeGenerator<'ast> {
     /// Do **not** treat `usize_variables` alone as emitted usize: loop-counter
     /// analysis marks `i` for comparisons (`while i < n`) while the Rust binding
     /// may still be `i64` (WDB-119). Match [`identifier_emits_as_usize`].
+    /// True when the expression still lowers as WJ `int` / i32 (not Rust `usize`).
+    /// Loop-vs-`.len()` may list the binding in `usize_variables` while emit stays i64.
+    fn expression_emits_as_wj_int_width(&self, expr: &Expression<'_>) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => self
+                .current_function_params
+                .iter()
+                .find(|p| p.name == *name)
+                .map(|p| &p.type_)
+                .or_else(|| self.local_var_types.get(name.as_str()))
+                .is_some_and(|t| crate::codegen::rust::type_casting::type_is_wj_int_formal(t)),
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            } => true,
+            Expression::Binary { op, left, right, .. }
+                if matches!(
+                    op,
+                    crate::parser::BinaryOp::Add
+                        | crate::parser::BinaryOp::Sub
+                        | crate::parser::BinaryOp::Mul
+                        | crate::parser::BinaryOp::Div
+                        | crate::parser::BinaryOp::Mod
+                ) =>
+            {
+                self.expression_emits_as_wj_int_width(left)
+                    || self.expression_emits_as_wj_int_width(right)
+            }
+            _ => self
+                .infer_expression_type(expr)
+                .as_ref()
+                .is_some_and(crate::codegen::rust::type_casting::type_is_wj_int_formal),
+        }
+    }
+
     pub(crate) fn arg_expression_already_usize(&self, arg: &Expression<'ast>) -> bool {
+        // Signature-driven usize formals must still wrap WJ `int` arith
+        // (`i + j + 1` → `(i + j + 1) as usize`), not skip because `.len()`
+        // comparison marked the Binary as usize.
+        if self.expression_emits_as_wj_int_width(arg) {
+            return false;
+        }
         match arg {
             Expression::Identifier { name, .. } => self.identifier_emits_as_usize(name),
             _ => self.infer_expression_type_is_usize(arg) || self.expression_produces_usize(arg),
@@ -6044,28 +6085,7 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 formal
             };
-        let already_usize = if formal_for_usize.is_some() {
-            let expr_is_wj_int = match arg_expr {
-                Expression::Identifier { name, .. } => self
-                    .current_function_params
-                    .iter()
-                    .find(|p| p.name == *name)
-                    .map(|p| &p.type_)
-                    .or_else(|| self.local_var_types.get(name))
-                    .is_some_and(|t| crate::codegen::rust::type_casting::type_is_wj_int_formal(t)),
-                _ => self
-                    .infer_expression_type(arg_expr)
-                    .as_ref()
-                    .is_some_and(crate::codegen::rust::type_casting::type_is_wj_int_formal),
-            };
-            if expr_is_wj_int {
-                false
-            } else {
-                self.arg_expression_already_usize(arg_expr)
-            }
-        } else {
-            self.arg_expression_already_usize(arg_expr)
-        };
+        let already_usize = self.arg_expression_already_usize(arg_expr);
         crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
             Some(self),
             arg_expr,

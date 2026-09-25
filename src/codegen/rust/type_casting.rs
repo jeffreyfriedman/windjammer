@@ -378,30 +378,30 @@ pub fn coerce_arg_str_for_usize_formal(
             *arg_str = rest.to_string();
         }
     }
-    if arg_already_usize {
-        return;
-    }
     if expression_must_not_usize_coerce(gen, arg, arg_str) {
         return;
     }
     // Whole-expression casts are done. Do **not** treat `i + j + 1_usize` as already
     // usize — that mixes i64 counters with a usize literal suffix (haystack / LedgerKit).
-    if arg_str.contains(" as usize") {
-        return;
-    }
-    if arg_str.ends_with("_usize") {
-        if matches!(
+    // Must run *before* `arg_already_usize`: loop-vs-`.len()` inference can mark the
+    // Binary usize while identifiers still emit i64.
+    if !arg_str.contains(" as usize") && arg_str.ends_with("_usize") {
+        if !matches!(
             arg,
             Expression::Literal {
                 value: Literal::Int(_),
                 ..
             }
         ) {
+            let cleaned = strip_embedded_usize_literal_suffixes(arg_str);
+            *arg_str = format!("({cleaned}) as usize");
             return;
         }
-        // Binary / nested expr with a mid-tree `_usize` literal: normalize then cast.
-        let cleaned = strip_embedded_usize_literal_suffixes(arg_str);
-        *arg_str = format!("({cleaned}) as usize");
+    }
+    if arg_already_usize {
+        return;
+    }
+    if arg_str.contains(" as usize") {
         return;
     }
     // Never usize-cast text / constructed values. A wrong suffix signature
@@ -545,6 +545,23 @@ mod tests {
         let (left, right) = cast_for_usize_binary_op("x", "y", false, false);
         assert_eq!(left, "x");
         assert_eq!(right, "y");
+    }
+
+    #[test]
+    fn coerce_usize_formal_wraps_mixed_even_when_already_usize() {
+        let arg = Expression::Identifier {
+            name: "i".into(),
+            location: Default::default(),
+        };
+        let mut s = "i + j + 1_usize".to_string();
+        coerce_arg_str_for_usize_formal(
+            None,
+            &arg,
+            &mut s,
+            Some(&Type::Custom("usize".into())),
+            true,
+        );
+        assert_eq!(s, "(i + j + 1) as usize");
     }
 
     #[test]

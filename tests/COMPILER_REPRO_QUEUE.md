@@ -1,5 +1,22 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.452 (2026-09-25) — usize formals wrap mixed i64 + `1_usize` arith
+
+| Gate | Status |
+|------|--------|
+| `bug_haystack_contains_substring_int_index_unify_test` | ✅ isolate GREEN — `(i + j + 1) as usize` (no `+ 1_usize`) |
+| hexagonal haystack `contains.rs` | ✅ isolate GREEN |
+| `bug_substring_int_indices_usize_test` / `bug_substring_end_i_plus_one_*` | ✅ GREEN |
+| spawn / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** encoding (`coerce_arg_str_for_usize_formal`). `strings::substring` formals are already `usize`. Binary emit suffixes only the literal (`i + j + 1_usize`) while `i`/`j` stay i64. Call-site wrap existed but was skipped when `arg_already_usize` was true (`.len()` comparison marked the Binary usize).
+
+**What became unnecessary:** Identifier-only WJ-int `already_usize` override in `apply_post_ir_numeric_formal_casts`; duplicated Identifier/`infer` match in `expression_generation`. Mixed-suffix wrap now runs *before* the already-usize return. No new `ir_call_site` peel.
+
+**Gates:** `cargo test --release --lib -- coerce_usize_formal_wraps_mixed` → **2 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_haystack_contains_substring_int_index_unify_test bug_substring_int_indices_usize_test bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **8 passed** (2 haystack + 2 substring + 4 spawn/mpsc).
+
+**Still RED (pre-existing, not this change):** `bug_vec_int_index_loop_test` (loop counter emits as `usize` with no index cast); `bug_int_loop_assign_end_bound_must_unify_test` (`-1_usize`).
+
 ## P3.451 (2026-09-25) — trait AST `string` stays owned at FieldAccess call sites
 
 | Gate | Status |
@@ -620,7 +637,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::mime` constants + fn wiring (`wj-mime`)** | `bug_std_mime_module_wiring_test` | ✅ tip GREEN (runtime consts + stdlib const scan) |
 | P1 | **Module `const string` return codegen as `&str` (`wj-mime`)** | `bug_module_const_string_return_test` | ✅ tip GREEN (`module_string_consts` + owned return/match coercion) |
 | P1 | **Recursive owned `Vec<string>` helper over-borrowed at call site (`wj-yaml`)** | `bug_recursive_owned_vec_call_site_test` | ✅ tip GREEN |
-| P1 | **`Vec` index with Windjammer `int` loop var (`wj-yaml`)** | `bug_vec_int_index_loop_test` (see also `bug_substring_int_indices_usize_test`) | ✅ tip GREEN (loop-promoted `int` counters still cast at index sites) |
+| P1 | **`Vec` index with Windjammer `int` loop var (`wj-yaml`)** | `bug_vec_int_index_loop_test` (see also `bug_substring_int_indices_usize_test`) | ❌ isolate RED (2026-09-25) — loop emits `let mut idx: usize` / `lines[idx]` with no `as usize` |
 | P1 | **`vec.len() - int` loop bound usize/i64 (`wj-migrate`)** | `bug_vec_len_minus_int_loop_test` | ✅ tip GREEN |
 | P1 | **`string` ordinal compare (`ch < "0"`) after substring (`wj-todo-cli`)** | `bug_string_char_ordinal_compare_test` | ✅ tip GREEN (owned text vs str literal → `.as_str()` in comparisons) |
 | P1 | **`HashMap.insert` as if-body expr must discard `Option` (`wj-todo-cli`)** | `bug_hashmap_insert_if_body_unit_test` | ✅ tip GREEN (void-block `let _ =` for non-unit expr stmts) |
@@ -659,7 +676,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **WDB-152: string lit into owned `string` formal must `.to_string()`** | `bug_wdb152_module_file_string_lit_into_owned_string_formal_must_to_string_test` | ✅ tip GREEN — `"worker_hb".to_string()` (recheck 2026-09-10) |
 | P1 | **LedgerKit clean row mapping without empty-concat** | `bug_ledgerkit_clean_row_mapping_no_plus_empty_test` | ✅ tip GREEN — P3.241 dogfood |
 | P1 | **WDB-116: mutually recursive owned struct fields → Box** | `wdb116_module_file_mutually_recursive_struct_fields_must_box_or_cargo_check` | ✅ tip GREEN (recheck 2026-09-10) |
-| P1 | **`strings.substring` int indices must not emit `i64 + 1_usize`** | `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN — `(i + j + 1) as usize` (cargo+CLI 2026-09-11) |
+| P1 | **`strings.substring` int indices must not emit `i64 + 1_usize`** | `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN (P3.452) — wrap before `already_usize`; `(i + j + 1) as usize` |
 | P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN — literal-equality pub APIs keep owned `String` |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
