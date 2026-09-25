@@ -1791,7 +1791,8 @@ pub(crate) fn prefer_shared_ref_signature(
     }
     if let Some(ref pref) = preferred {
         // Qualified runtime-std callee beats a same-suffix user homonym at its call site
-        // (`csv::write` vs local `pub fn write`, `strings::join` vs local `join`).
+        // (`csv::write` vs local `pub fn write`). Bare user `join(string, string)` must
+        // not inherit `strings::join` `&str` borrowing (wj-url).
         if signature_is_wj_std_stub_or_runtime_qualified(challenger)
             && !signature_is_wj_std_stub_or_runtime_qualified(pref)
             && sig_simple_name(&pref.name) == sig_simple_name(&challenger.name)
@@ -1800,6 +1801,9 @@ pub(crate) fn prefer_shared_ref_signature(
                 challenger, param_idx,
             )
         {
+            if local_owned_wj_string_api_beats_borrowed_homonym(pref, challenger) {
+                return Some(pref.clone());
+            }
             return Some(challenger.clone());
         }
         // User-owned API with confirmed WJ formals beats stdlib homonym for *bare* call
@@ -2568,6 +2572,87 @@ mod prefer_shared_runtime_tests {
     }
 
     #[test]
+    fn prefer_shared_ref_keeps_local_user_join_over_strings_join() {
+        let local = FunctionSignature {
+            name: "join".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Result(
+                Box::new(Type::String),
+                Box::new(Type::String),
+            )),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let std = runtime_join();
+        let merged = prefer_shared_ref_signature(Some(local), Some(&std), 0).unwrap();
+        assert_eq!(
+            merged.name, "join",
+            "bare user join must not inherit strings::join; got {}",
+            merged.name
+        );
+        assert_eq!(
+            merged.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false][..])
+        );
+    }
+
+    #[test]
+    fn local_user_join_beats_same_bare_name_stdlib_join() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Type;
+
+        let user = FunctionSignature {
+            name: "join".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let stdlib = FunctionSignature {
+            name: "strings::join".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Vec(Box::new(Type::String)))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let mut local = crate::analyzer::SignatureRegistry::new();
+        local.signatures.insert("join".into(), user.clone());
+        let picked = local_user_fn_beats_runtime_std_homonym(&local, "join", stdlib);
+        assert!(
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&picked, 1),
+            "user join relative slot must stay owned, not strings::join &str; got {:?}",
+            picked.emitted_rust_ref_params
+        );
+    }
+
+    #[test]
     fn prefer_shared_ref_picks_runtime_str_over_wj_owned_emission() {
         let preferred = Some(wj_owned_join());
         let runtime = runtime_join();
@@ -2903,55 +2988,6 @@ pub fn join_tail(parts: Vec<string>) -> string {
         assert!(
             crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&picked, 0),
             "same bare name: global demotion must beat importer stub"
-        );
-    }
-
-    #[test]
-    fn local_user_join_beats_same_bare_name_stdlib_join() {
-        use crate::analyzer::{FunctionSignature, OwnershipMode};
-        use crate::parser::Type;
-
-        let user = FunctionSignature {
-            name: "join".into(),
-            param_types: vec![
-                Type::Reference(Box::new(Type::Custom("str".into()))),
-                Type::String,
-            ],
-            formal_param_types: vec![Type::String, Type::String],
-            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
-            return_type: Some(Type::String),
-            return_ownership: OwnershipMode::Owned,
-            has_self_receiver: false,
-            is_extern: false,
-            emitted_rust_ref_params: Some(vec![true, false]),
-            string_ref_string_formal_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
-        };
-        let stdlib = FunctionSignature {
-            name: "strings::join".into(),
-            param_types: vec![
-                Type::Reference(Box::new(Type::Vec(Box::new(Type::String)))),
-                Type::Reference(Box::new(Type::Custom("str".into()))),
-            ],
-            formal_param_types: vec![],
-            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
-            return_type: Some(Type::String),
-            return_ownership: OwnershipMode::Owned,
-            has_self_receiver: false,
-            is_extern: false,
-            emitted_rust_ref_params: Some(vec![true, true]),
-            string_ref_string_formal_params: None,
-            field_extract_params: None,
-            forwarding_borrow_params: None,
-        };
-        let mut local = crate::analyzer::SignatureRegistry::new();
-        local.signatures.insert("join".into(), user.clone());
-        let picked = local_user_fn_beats_runtime_std_homonym(&local, "join", stdlib);
-        assert!(
-            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&picked, 1),
-            "user join relative slot must stay owned, not strings::join &str; got {:?}",
-            picked.emitted_rust_ref_params
         );
     }
 
