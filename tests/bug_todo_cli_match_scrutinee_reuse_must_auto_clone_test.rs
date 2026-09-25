@@ -20,7 +20,12 @@ use integration_test_helpers::MultiFileTest;
 #[test]
 fn match_scrutinee_move_and_arm_reuse_must_auto_clone() {
     let mut test = MultiFileTest::new();
-    test.add_file("mod.wj", r#"pub mod codec\npub mod run"#);
+    test.add_file(
+        "mod.wj",
+        r#"pub mod codec
+pub mod run
+"#,
+    );
     test.add_file(
         "codec.wj",
         r#"
