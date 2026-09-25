@@ -1,5 +1,20 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.456 (2026-09-25) — only-forward `Vec` formals stay owned (WDB-285 class)
+
+| Gate | Status |
+|------|--------|
+| `bug_demoted_vec_param_into_owned_vec_callee_must_clone_test` | ✅ isolate GREEN — `workload_verdict(samples: Vec<u64>)` + `samples.clone()` |
+| WDB-179 / 185 / 195 / 216 / 124 / 126 / 127 | ✅ isolate GREEN |
+| spawn / mpsc | ✅ GREEN — no regression |
+| WDB-285 / 286 tip-out/gen | ⚠️ gen-lag (`sysbench_opt_port` / `query_verdict` missing on this host) — not an isolate target |
+
+**Root cause layer:** signature / formal write-back. Analyzer + forwarding-delegate emit cascaded `&Vec` from `median_pair` (readonly `.len()`/`[i]`) up through `workload_verdict` (body is only `median_pair(samples)`), so `claim_cap` reborrowed `&samples` into a demoted sibling. WJ AST `Vec<T>` that is **only** used as a call argument now keeps the owned formal.
+
+**What became unnecessary:** cascading `&Vec` demotion through forwarding wrappers after the next sibling already emitted `&Vec`. No new `ir_call_site` peel / method-name list. Delete path: registry `param_ownership` Owned for those WJ formals should make the prepare/emit skip redundant.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_demoted_vec_param_into_owned_vec_callee_must_clone_test` → **1 passed**. Related `bug_demoted_vec_param…` + spawn/mpsc + WDB-179/185/195/216/124/126/127 + WDB-285/286 → **15 passed, 2 failed** (tip-out/gen-lag only).
+
 ## P3.455 (2026-09-25) — `db::Connection` reuse must borrow, not `.clone()`
 
 | Gate | Status |
@@ -788,7 +803,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **pg_wire `&Vec` → owned int64_matrix must clone** | `bug_wdb282_module_file_demoted_vec_into_owned_pg_wire_int64_matrix_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241 |
 | P1 | **incremental `&csr` → owned bfs_run_dense must clone** | `bug_wdb283_module_file_demoted_csr_into_owned_incremental_bfs_must_clone_test` | ✅ tip GREEN (P3.379 tip-out regen); twin WDB-241 |
 | P1 | **csr.clone() → demoted `&mut` afforest must reborrow** | `bug_wdb284_module_file_owned_csr_clone_into_demoted_mut_wcc_afforest_must_reborrow_test` | ✅ tip GREEN (P3.379 tip-out→gen sync); twin WDB-273 |
-| P1 | **sysbench `&samples` → owned workload_verdict must clone** | `bug_wdb285_module_file_demoted_vec_into_owned_sysbench_verdict_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241; inverse WDB-185 |
+| P1 | **sysbench `&samples` → owned workload_verdict must clone** | `bug_wdb285_module_file_demoted_vec_into_owned_sysbench_verdict_must_clone_test` + `bug_demoted_vec_param_into_owned_vec_callee_must_clone_test` | ✅ isolate GREEN (P3.456); tip-out/gen still host-lag |
 | P1 | **tpch `&samples` → owned query_verdict must clone** | `bug_wdb286_module_file_demoted_vec_into_owned_tpch_verdict_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-285 |
 | P1 | **wave1 `&line`/`&ord` → owned session_from_batches must clone** | `bug_wdb287_module_file_demoted_vec_into_owned_wave1_session_from_batches_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241 |
 | P1 | **pubsub `&backlog` → owned live_poll must clone** | `bug_wdb288_module_file_demoted_vec_into_owned_pubsub_live_poll_must_clone_test` | ✅ tip GREEN (P3.376 tip-out regen); twin WDB-241 |

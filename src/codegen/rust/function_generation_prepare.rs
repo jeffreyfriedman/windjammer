@@ -249,6 +249,11 @@ impl<'ast> CodeGenerator<'ast> {
                 ) {
                     continue;
                 }
+                if let Some(param) = func.parameters.iter().find(|p| p.name == param_name) {
+                    if self.vec_formal_only_forwards_as_call_arg(param, func) {
+                        continue;
+                    }
+                }
                 if self.param_only_used_in_discarding_let_binding(
                     func.body.as_slice(),
                     &param_name,
@@ -704,6 +709,9 @@ impl<'ast> CodeGenerator<'ast> {
                     if self.is_public_owned_non_copy_formal_api(param, func) {
                         continue;
                     }
+                    if self.vec_formal_only_forwards_as_call_arg(param, func) {
+                        continue;
+                    }
                     if self.param_is_single_arg_call_only_delegate(param, func)
                         && self.param_passed_to_owned_non_copy_method_arg(
                             func.body.as_slice(),
@@ -995,6 +1003,10 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             if self.is_public_owned_non_copy_formal_api(param, func) {
+                self.inferred_borrowed_params.remove(&param.name);
+                continue;
+            }
+            if self.vec_formal_only_forwards_as_call_arg(param, func) {
                 self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
@@ -1782,6 +1794,10 @@ impl<'ast> CodeGenerator<'ast> {
                 self.inferred_borrowed_params.remove(&param.name);
                 continue;
             }
+            if self.vec_formal_only_forwards_as_call_arg(param, func) {
+                self.inferred_borrowed_params.remove(&param.name);
+                continue;
+            }
             if type_analysis::is_copy_type(&param.type_) {
                 continue;
             }
@@ -1854,6 +1870,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+    }
+
+    /// WJ AST `Vec<T>` that only forwards as a call argument keeps the owned formal.
+    /// The next callee may demote (`median_pair` readonly `&Vec`); reuse sites must still
+    /// `.clone()` into this owned slot (WDB-285 / `workload_verdict`).
+    pub(in crate::codegen::rust) fn vec_formal_only_forwards_as_call_arg(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        Self::param_type_is_vec_container(&param.type_)
+            && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
     }
 
     /// True when every use of `param_name` is passing it as a call/method argument (no field reads).
