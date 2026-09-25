@@ -97,10 +97,7 @@ impl<'ast> CodeGenerator<'ast> {
         match var_type {
             Type::Parameterized(name, args) if args.len() == 1 => {
                 let leaf = crate::type_classification::type_name_leaf(name);
-                if matches!(
-                    leaf,
-                    "MutexGuard" | "RwLockReadGuard" | "RwLockWriteGuard"
-                ) {
+                if matches!(leaf, "MutexGuard" | "RwLockReadGuard" | "RwLockWriteGuard") {
                     Some(args[0].clone())
                 } else {
                     None
@@ -139,6 +136,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if let Some(t) = self.module_const_type_for_binding(name) {
                     return Some(t.clone());
+                }
+                if let Some(prim) =
+                    crate::type_classification::copy_primitive_associated_path_type(name)
+                {
+                    return Some(Type::Custom(prim.to_string()));
                 }
                 // Check function parameters
                 for param in &self.current_function_params {
@@ -285,6 +287,10 @@ impl<'ast> CodeGenerator<'ast> {
                             // object is a module path prefix (not a typed local). Library-wide
                             // const types are folded into `module_const_types` (P3.280).
                             return Some(t.clone());
+                        } else if crate::type_classification::is_copy_primitive(name) {
+                            // `f32::MAX` / `i32::MIN`: associated const on a Copy primitive
+                            // has that primitive type — never treat as an untyped reuse path.
+                            return Some(Type::Custom(name.clone()));
                         }
                     }
                 } else {
@@ -556,8 +562,7 @@ impl<'ast> CodeGenerator<'ast> {
                         name: type_name, ..
                     } = object
                     {
-                        if let Some(ret) =
-                            self.runtime_std_module_fn_return_type(type_name, field)
+                        if let Some(ret) = self.runtime_std_module_fn_return_type(type_name, field)
                         {
                             return Some(ret);
                         }
@@ -716,8 +721,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             &sig.param_types
         };
-        let mut subst: std::collections::HashMap<String, Type> =
-            std::collections::HashMap::new();
+        let mut subst: std::collections::HashMap<String, Type> = std::collections::HashMap::new();
         for (i, formal) in formals.iter().enumerate() {
             let Some((_, arg)) = arguments.get(i) else {
                 continue;
@@ -784,10 +788,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn apply_generic_subst(
-        ty: &Type,
-        subst: &std::collections::HashMap<String, Type>,
-    ) -> Type {
+    fn apply_generic_subst(ty: &Type, subst: &std::collections::HashMap<String, Type>) -> Type {
         match ty {
             Type::Generic(name) | Type::Custom(name)
                 if crate::analyzer::Analyzer::is_generic_type_param(ty) =>
@@ -806,9 +807,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .map(|e| Self::apply_generic_subst(e, subst))
                     .collect(),
             ),
-            Type::Option(inner) => {
-                Type::Option(Box::new(Self::apply_generic_subst(inner, subst)))
-            }
+            Type::Option(inner) => Type::Option(Box::new(Self::apply_generic_subst(inner, subst))),
             Type::Result(ok, err) => Type::Result(
                 Box::new(Self::apply_generic_subst(ok, subst)),
                 Box::new(Self::apply_generic_subst(err, subst)),
@@ -874,7 +873,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Expression statements in void blocks must not leave non-unit values as tail exprs.
     /// Uses inferred/signature return types — no callee name lists.
-    pub(in crate::codegen::rust) fn expression_needs_void_discard(&self, expr: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn expression_needs_void_discard(
+        &self,
+        expr: &Expression,
+    ) -> bool {
         if let Some(ty) = self.infer_expression_type(expr) {
             return !self.expression_type_is_unit(&ty);
         }

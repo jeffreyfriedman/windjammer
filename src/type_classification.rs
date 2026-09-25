@@ -44,6 +44,19 @@ pub fn is_copy_primitive(name: &str) -> bool {
     is_numeric_type(name) || matches!(name, "bool" | "char")
 }
 
+/// `f32::MAX` / `i32::MIN` / `bool::default`-style Identifier paths.
+///
+/// The parser folds `Type::ASSOC` into a single Identifier. Any associated
+/// path whose first segment is a Copy primitive has that primitive type —
+/// no MAX/MIN name list.
+pub fn copy_primitive_associated_path_type(name: &str) -> Option<&str> {
+    let (prefix, rest) = name.split_once("::")?;
+    if rest.is_empty() || !is_copy_primitive(prefix) {
+        return None;
+    }
+    Some(prefix)
+}
+
 /// Copy formals that stay pass-by-value in generated Rust signatures.
 ///
 /// Scalars and references pass by value; Copy **aggregates** (structs/enums registered
@@ -625,6 +638,20 @@ mod tests {
         assert!(is_copy_primitive("char"));
         assert!(!is_copy_primitive("String"));
         assert!(!is_copy_primitive("Vec"));
+    }
+
+    #[test]
+    fn copy_primitive_associated_path_is_that_primitive() {
+        assert_eq!(copy_primitive_associated_path_type("f32::MAX"), Some("f32"));
+        assert_eq!(copy_primitive_associated_path_type("f32::MIN"), Some("f32"));
+        assert_eq!(copy_primitive_associated_path_type("i32::MAX"), Some("i32"));
+        assert_eq!(
+            copy_primitive_associated_path_type("bool::default"),
+            Some("bool")
+        );
+        assert_eq!(copy_primitive_associated_path_type("f32"), None);
+        assert_eq!(copy_primitive_associated_path_type("String::new"), None);
+        assert_eq!(copy_primitive_associated_path_type("Vec3::ZERO"), None);
     }
 
     #[test]
