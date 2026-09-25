@@ -171,6 +171,11 @@ impl<'ast> CodeGenerator<'ast> {
             // bare MethodSignature stubs that drop `emitted_rust_ref_params`.
             if let Some(resolved) = from_registry {
                 let mut sig = resolved.sig;
+                crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                    &self.signature_registry,
+                    method,
+                    &mut sig,
+                );
                 if let Some(global) = self.global_signature_registry() {
                     crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
                         global,
@@ -183,6 +188,11 @@ impl<'ast> CodeGenerator<'ast> {
 
             if let Some(resolved) = from_method_registry {
                 let mut sig = resolved.sig;
+                crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                    &self.signature_registry,
+                    method,
+                    &mut sig,
+                );
                 if let Some(global) = self.global_signature_registry() {
                     crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
                         global,

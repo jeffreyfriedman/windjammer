@@ -73,6 +73,11 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     );
     let method_signature = resolved.as_ref().map(|r| {
         let mut sig = r.sig.clone();
+        call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+            &gen.signature_registry,
+            call_method,
+            &mut sig,
+        );
         if let Some(global) = gen.global_signature_registry() {
             call_signature_resolution::apply_trait_owned_string_call_site_contracts(
                 global,
@@ -171,6 +176,20 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 }
             }
         }
+        // Trait AST `string` must win after shared-ref refresh from impl keys
+        // (`SeedCredentialAuthenticator::authenticate` body-converged `&str`).
+        call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+            &gen.signature_registry,
+            call_method,
+            &mut sig,
+        );
+        if let Some(global) = gen.global_signature_registry() {
+            call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                global,
+                call_method,
+                &mut sig,
+            );
+        }
         call_signature_resolution::finalize_call_site_signature(sig)
     });
 
@@ -237,6 +256,24 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         }
     }
 
+    // Trait AST `string` must be last writer before the borrow post-pass —
+    // impl shared-ref refresh / `shared_ref_emission_beats` can re-pollute.
+    let method_signature = method_signature.map(|mut sig| {
+        call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+            &gen.signature_registry,
+            call_method,
+            &mut sig,
+        );
+        if let Some(global) = gen.global_signature_registry() {
+            call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                global,
+                call_method,
+                &mut sig,
+            );
+        }
+        sig
+    });
+
     // Borrow owned String args when the resolved signature says the callee
     // takes `string` by borrow (lowers to `&str` in Rust).
     // Skip when ownership collision detected for this method name.
@@ -251,6 +288,17 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             .enumerate()
             .map(|(i, arg_str)| {
                 let sig_param_idx = sig.arg_param_index(i);
+                if call_signature_resolution::global_trait_owned_plain_string_arg(
+                    &gen.signature_registry,
+                    call_method,
+                    i,
+                ) || gen.global_signature_registry().is_some_and(|g| {
+                    call_signature_resolution::global_trait_owned_plain_string_arg(
+                        g, call_method, i,
+                    )
+                }) {
+                    return arg_str.clone();
+                }
                 // Plain owned `string` trait formals pass `String` at the call site.
                 if sig.formal_param_type(sig_param_idx).is_some_and(|t| {
                     !matches!(t, Type::Reference(_) | Type::MutableReference(_))
@@ -445,7 +493,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
             type_name.as_deref(),
             receiver_is_text,
             &gen.signature_registry,
-        ) {
+        ) && !call_signature_resolution::global_trait_owned_plain_string_arg(
+            &gen.signature_registry,
+            call_method,
+            i,
+        ) && !gen.global_signature_registry().is_some_and(|g| {
+            call_signature_resolution::global_trait_owned_plain_string_arg(g, call_method, i)
+        }) {
             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                 arg_expr,
                 arg_str,

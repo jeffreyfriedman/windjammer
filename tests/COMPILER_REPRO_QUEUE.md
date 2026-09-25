@@ -1,5 +1,20 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.451 (2026-09-25) — trait AST `string` stays owned at FieldAccess call sites
+
+| Gate | Status |
+|------|--------|
+| `trait_owned_string_field_and_concat_must_cargo_check` | ✅ isolate GREEN — `authenticate(request.email, request.password)` (no `&`) |
+| `trait_method_owned_string_param_accepts_field_access_without_borrow` | ✅ isolate GREEN — `report_lines(demo_tenant().slug)` (no `&`) |
+| inherent `DbReportReader::report_lines` body-converged `&str` | ✅ unit GREEN — write-back skips non-impl homonyms |
+| spawn / mpsc / user_join / trait_owned_string_call | ✅ GREEN — no regression |
+
+**Root cause layer:** signature / registry write-back. Trait item `string` is Owned (E0053), but (1) impl analysis overwrote `Trait::method` with body-converged `&str`, (2) merge treated that as an Owned→Borrowed "refinement", (3) `method_call_arg_expects_pattern_str` then consulted the impl homonym and prefixed FieldAccess with `&` after IR reconcile.
+
+**What became unnecessary:** `Call(FieldAccess)` Pattern/`&str` re-borrow on non-text receivers when the resolved or trait contract is owned `string`. No new `ir_call_site` peel. Inherent `DbReportReader::report_lines` still body-converges to `&str`.
+
+**Gates:** `cargo test --release --lib -- write_back_restores_trait_impl_not_inherent_homonym apply_trait_owned_string_* merge_refresh_must_not_undo_trait_owned_string_password normalize_preserves_body_converged_borrow_for_instance_methods` → **6 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- trait_owned_string_field_and_concat_must_cargo_check trait_method_owned_string_param_accepts_field_access_without_borrow bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test user_join_two_strings_moves_owned_locals bug_trait_owned_string_call_must_not_over_borrow_test` → **8 passed**.
+
 ## P3.450 (2026-09-25) — WJ `int` module const in i32-coord builders
 
 | Gate | Status |
@@ -209,7 +224,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Gates:** `cargo test --release --lib -- refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub local_user_fn_homonym_keeps_global_bare_pass_when_bare_names_match bare_pass_skips_pub_vec_u8_owned_api_wdb175 prefer_shared_ref_picks_runtime refresh_join_delimiter_uses_runtime_fallback_from_stdlib refresh_split pick_prefers_mixed_owned_string_over_all_ref_importer_stub merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub merge_refresh_upgrades_importer_stub_to_defining_mixed registry_refresh_prefers_mixed_over_more_true_flags promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` → 12 passed. `cargo test --release --test all -- bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test bug_wdb175_module_file_demoted_vec_into_owned_vec_must_clone bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 7 passed. `cargo test --release --lib -- prefer_shared_runtime_tests promote_overlapping_tests multipass_bare_pass_demotion::tests` → 30 passed.
 
-**P3.439 follow-up:** `local_owned_wj_string_api_beats_borrowed_homonym` keep `Owned || emitted_owned || flags==false` for user `join` vs `strings::join`; only refuse when `resolved` is a **non-stdlib** defining-module demotion (`shared_ref_emission_beats`). Full suite on P3.438 binary: **5381 passed, 167 failed** (majority tip-out/gen lag). Isolate still RED (pre-existing / mixed-formal class, not parquet): `user_join_two_strings_moves_owned_locals` emits mixed `join(base: &str, relative: String)` / `join(&base, relative.to_string())`; trait owned-string field gates still borrow. Next: signature/constraint so pub AST `string` formals stay owned when the body only interpolates — do not peel.
+**P3.439 follow-up:** `local_owned_wj_string_api_beats_borrowed_homonym` keep `Owned || emitted_owned || flags==false` for user `join` vs `strings::join`; only refuse when `resolved` is a **non-stdlib** defining-module demotion (`shared_ref_emission_beats`). Full suite on P3.438 binary: **5381 passed, 167 failed** (majority tip-out/gen lag). `user_join_two_strings_moves_owned_locals` ✅ GREEN (P3.446). Trait owned-string field gates ✅ GREEN (P3.451).
 
 ## P3.440 (2026-09-24) — TDD WDB-377–383 tip RED cluster (DB agent)
 

@@ -497,13 +497,17 @@ impl<'ast> Analyzer<'ast> {
                             // Callers like `obj.method()` resolve to the direct impl in Rust,
                             // so the registry's Type::method entry must reflect the direct impl's
                             // signature (parameter types and ownership).
+                            registry.record_trait_impl_method_key(qualified_name.clone());
                             if registry.get_signature(&qualified_name).is_none() {
                                 registry.add_function(qualified_name.clone(), signature.clone());
                             }
-                            // Also register under Trait::method for trait-based lookups.
+                            // Trait definition keys stay the AST contract (E0053). Do not
+                            // overwrite `Trait::method` with impl-body borrow convergence.
                             if let Some(trait_name) = &impl_block.trait_name {
                                 let trait_qualified = format!("{}::{}", trait_name, func.name);
-                                registry.add_function(trait_qualified, signature.clone());
+                                if registry.get_signature(&trait_qualified).is_none() {
+                                    registry.add_function(trait_qualified, signature.clone());
+                                }
                             }
                         } else {
                             // Direct impl methods always take priority in the registry.
@@ -753,6 +757,9 @@ impl<'ast> Analyzer<'ast> {
                                     let qualified_name =
                                         format!("{}::{}", impl_block.type_name, func.name);
                                     if is_trait_impl {
+                                        registry.record_trait_impl_method_key(
+                                            qualified_name.clone(),
+                                        );
                                         if registry.get_signature(&qualified_name).is_none() {
                                             registry
                                                 .add_function(qualified_name, signature.clone());
@@ -760,8 +767,12 @@ impl<'ast> Analyzer<'ast> {
                                         if let Some(trait_name) = &impl_block.trait_name {
                                             let trait_qualified =
                                                 format!("{}::{}", trait_name, func.name);
-                                            registry
-                                                .add_function(trait_qualified, signature.clone());
+                                            if registry.get_signature(&trait_qualified).is_none() {
+                                                registry.add_function(
+                                                    trait_qualified,
+                                                    signature.clone(),
+                                                );
+                                            }
                                         }
                                     } else {
                                         registry.add_function(qualified_name, signature.clone());

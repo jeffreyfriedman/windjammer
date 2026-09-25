@@ -380,10 +380,13 @@ pub(crate) fn write_single_file_outputs<'ast>(
             match item {
                 parser::Item::Function { decl, .. } => {
                     if let Some(sig) = signatures.get_signature(&decl.name) {
-                        meta.functions.insert(
-                            decl.name.clone(),
-                            metadata_function_sig_from_analyzer(sig, false, None),
+                        let mut meta_sig = metadata_function_sig_from_analyzer(sig, false, None);
+                        crate::metadata::stamp_trait_method_flag(
+                            signatures,
+                            &decl.name,
+                            &mut meta_sig,
                         );
+                        meta.functions.insert(decl.name.clone(), meta_sig);
                     }
                 }
                 parser::Item::Impl { block, .. } => {
@@ -391,14 +394,31 @@ pub(crate) fn write_single_file_outputs<'ast>(
                     for func_decl in &block.functions {
                         let full_name = format!("{}::{}", type_name, func_decl.name);
                         if let Some(sig) = signatures.get_signature(&full_name) {
-                            meta.functions.insert(
-                                full_name,
-                                metadata_function_sig_from_analyzer(
-                                    sig,
-                                    true,
-                                    Some(type_name.clone()),
-                                ),
+                            let mut meta_sig = metadata_function_sig_from_analyzer(
+                                sig,
+                                true,
+                                Some(type_name.clone()),
                             );
+                            crate::metadata::stamp_trait_method_flag(
+                                signatures,
+                                &full_name,
+                                &mut meta_sig,
+                            );
+                            meta.functions.insert(full_name, meta_sig);
+                        }
+                    }
+                }
+                parser::Item::Trait { decl, .. } => {
+                    for method in &decl.methods {
+                        let full_name = format!("{}::{}", decl.name, method.name);
+                        if let Some(sig) = signatures.get_signature(&full_name) {
+                            let mut meta_sig = metadata_function_sig_from_analyzer(
+                                sig,
+                                true,
+                                Some(decl.name.clone()),
+                            );
+                            meta_sig.is_trait_method = true;
+                            meta.functions.insert(full_name, meta_sig);
                         }
                     }
                 }

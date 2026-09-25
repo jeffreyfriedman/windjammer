@@ -964,6 +964,14 @@ pub(crate) fn build_library_multipass(
                 &analysis.merged_trait_methods,
                 &mut full_registry,
             );
+            crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
+                &mut full_registry,
+            );
+            let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+            reg.merge(&full_registry);
+            crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
+                reg,
+            );
         }
 
         for (name, sig) in &full_registry.signatures {
@@ -1328,6 +1336,15 @@ pub(crate) fn build_library_multipass(
                     &analysis.merged_trait_methods,
                     &mut full_registry,
                 );
+                crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
+                    &mut full_registry,
+                );
+            }
+            {
+                let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+                crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
+                    reg,
+                );
             }
 
             // Crate-root main.wj is the binary entry ([[bin]]), not a library module.
@@ -1464,9 +1481,14 @@ pub(crate) fn build_library_multipass(
                     local_keys.push(name.clone());
                 }
             }
-            local_keys.sort();
-            local_keys.dedup();
         }
+        for name in final_global_registry.signatures.keys() {
+            if final_global_registry.is_trait_method_key(name) {
+                local_keys.push(name.clone());
+            }
+        }
+        local_keys.sort();
+        local_keys.dedup();
         for name in local_keys {
             // Prefer post-codegen `final_global_registry` (has `emitted_rust_ref_params`
             // after formal demotion) over pre-codegen `local_converged_sigs`.
@@ -1487,10 +1509,14 @@ pub(crate) fn build_library_multipass(
                 } else {
                     (false, None)
                 };
-                crate_metadata.functions.insert(
-                    name,
-                    metadata_function_sig_from_analyzer(&sig, is_associated, parent_type),
+                let mut meta_sig =
+                    metadata_function_sig_from_analyzer(&sig, is_associated, parent_type);
+                crate::metadata::stamp_trait_method_flag(
+                    final_global_registry.as_ref(),
+                    &name,
+                    &mut meta_sig,
                 );
+                crate_metadata.functions.insert(name, meta_sig);
             }
         }
         crate_metadata.copy_structs = global_copy_structs.iter().cloned().collect::<Vec<_>>();

@@ -48,6 +48,7 @@ fn test_metadata_round_trip() {
             forwarding_borrow_params: None,
             has_self_receiver: false,
             is_extern: false,
+            is_trait_method: false,
         },
     );
 
@@ -197,6 +198,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
                     forwarding_borrow_params: None,
                     has_self_receiver: true,
                     is_extern: false,
+                    is_trait_method: false,
                 },
             );
             fns
@@ -233,6 +235,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
                     forwarding_borrow_params: None,
                     has_self_receiver: true,
                     is_extern: false,
+                    is_trait_method: false,
                 },
             );
             fns

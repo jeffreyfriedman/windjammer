@@ -244,6 +244,9 @@ pub fn build_project_ext(
 
         analyzer
             .register_trait_methods_in_registry(&analyzer.analyzed_trait_methods, &mut registry);
+        crate::codegen::rust::call_signature_resolution::write_back_trait_owned_string_to_impls(
+            &mut registry,
+        );
 
         let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
         if !external_paths.is_empty() {
@@ -363,7 +366,10 @@ pub fn build_project_ext(
             let mut local_keys: Vec<String> = crate_metadata.functions.keys().cloned().collect();
             if local_keys.is_empty() {
                 for (name, _) in post_codegen.all_signatures() {
-                    if let Some(struct_name) = struct_name_from_method_key(name) {
+                    if post_codegen.is_trait_method_key(name) || registry.is_trait_method_key(name)
+                    {
+                        local_keys.push(name.clone());
+                    } else if let Some(struct_name) = struct_name_from_method_key(name) {
                         if local_struct_names.contains(struct_name) {
                             local_keys.push(name.clone());
                         }
@@ -385,10 +391,11 @@ pub fn build_project_ext(
                         } else {
                             (false, None)
                         };
-                    crate_metadata.functions.insert(
-                        name,
-                        metadata_function_sig_from_analyzer(sig, is_associated, parent_type),
-                    );
+                    let mut meta_sig =
+                        metadata_function_sig_from_analyzer(sig, is_associated, parent_type);
+                    crate::metadata::stamp_trait_method_flag(&registry, &name, &mut meta_sig);
+                    crate::metadata::stamp_trait_method_flag(post_codegen, &name, &mut meta_sig);
+                    crate_metadata.functions.insert(name, meta_sig);
                 }
             }
         }
@@ -453,6 +460,7 @@ mod tests {
                 forwarding_borrow_params: None,
                 has_self_receiver: false,
                 is_extern: false,
+                is_trait_method: false,
             },
         );
         let meta = CrateMetadata {

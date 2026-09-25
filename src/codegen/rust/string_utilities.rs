@@ -614,11 +614,21 @@ pub fn method_call_arg_expects_pattern_str(
     receiver_is_text: bool,
     registry: &crate::analyzer::SignatureRegistry,
 ) -> bool {
+    if crate::codegen::rust::call_signature_resolution::global_trait_owned_plain_string_arg(
+        registry, method, arg_index,
+    ) {
+        return false;
+    }
     if let Some(sig) = resolved_sig {
         if crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
             sig, arg_index,
         ) {
             return true;
+        }
+        // Resolved contract is not `&str`. Do not let impl-body / stdlib homonyms
+        // re-borrow FieldAccess args on non-text receivers (trait owned `string`).
+        if !receiver_is_text {
+            return false;
         }
     }
     // stdlib_meta registers text search methods on `String` even when the receiver

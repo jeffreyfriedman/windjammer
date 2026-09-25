@@ -231,6 +231,7 @@ mod tests {
                 has_self_receiver: false,
                 is_extern: true,
                 forwarding_borrow_params: None,
+                is_trait_method: false,
             },
         );
 
@@ -262,6 +263,7 @@ mod tests {
                 has_self_receiver: true,
                 is_extern: false,
                 forwarding_borrow_params: None,
+                is_trait_method: false,
             },
         );
 
