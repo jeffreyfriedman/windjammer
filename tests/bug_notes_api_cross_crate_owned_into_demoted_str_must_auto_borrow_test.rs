@@ -53,19 +53,24 @@ fn notes_api_owned_into_demoted_str_must_auto_borrow() {
     fs::write(
         log_src.join("lib.wj"),
         r#"
-use std::strings
-
 pub fn parse_level(text: string) -> Option<int> {
-    if strings.len(text) == 0 {
-        return None
+    match text {
+        "info" | "INFO" | "Info" => Some(1),
+        _ => None,
     }
-    Some(1)
 }
 
 pub fn log_tagged(level: string, tag: string, message: string) {
-    let _ = strings.len(level)
-    let _ = strings.len(tag)
-    let _ = strings.len(message)
+    match level {
+        "info" | "INFO" => (),
+        _ => (),
+    }
+    match tag {
+        _ => (),
+    }
+    match message {
+        _ => (),
+    }
 }
 "#,
     )
@@ -74,26 +79,33 @@ pub fn log_tagged(level: string, tag: string, message: string) {
     build_library(wj, &log_src, &log_gen);
     let log_meta = log_gen.join("metadata.json");
     assert!(log_meta.exists(), "log_pkg must emit metadata.json");
+    let log_rs = fs::read_to_string(log_gen.join("lib.rs")).unwrap_or_default();
+    assert!(
+        log_rs.contains("text: &str") || log_rs.contains("text: & str"),
+        "fixture parse_level must demote to &str:\n{log_rs}"
+    );
 
     let inflect_src = tmp.path().join("inflect_src");
     fs::create_dir_all(&inflect_src).expect("mkdir inflect_src");
     fs::write(
         inflect_src.join("lib.wj"),
         r#"
-use std::strings
-
 pub fn slugify(text: string) -> string {
-    let n = strings.len(text)
-    if n == 0 {
-        return ""
+    match text {
+        "" => "",
+        _ => "x",
     }
-    "x"
 }
 "#,
     )
     .unwrap();
     let inflect_gen = tmp.path().join("inflect_gen");
     build_library(wj, &inflect_src, &inflect_gen);
+    let inflect_rs = fs::read_to_string(inflect_gen.join("lib.rs")).unwrap_or_default();
+    assert!(
+        inflect_rs.contains("text: &str") || inflect_rs.contains("text: & str"),
+        "fixture slugify must demote to &str:\n{inflect_rs}"
+    );
 
     let app_src = tmp.path().join("app_src");
     fs::create_dir_all(app_src.join("src").join("domain")).expect("mkdir src/domain");

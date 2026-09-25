@@ -921,16 +921,22 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     continue;
                 };
                 let pidx = gs.arg_param_index(i);
-                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(gs, pidx)
+                // Shared-ref emission (`parse_level` / `slugify` → `&str`) beats stale
+                // analyzer `Owned` on bare WJ `string` — never peel then skip borrow.
+                if gen.cross_crate_dep_arg_confirms_shared(func_name, i)
+                    || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx)
+                    || gen.preregistered_free_call_arg_expects_borrow(func_name, i)
+                {
+                    if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                        *arg_str = format!("&{name}");
+                    }
+                    continue;
+                }
+                if gen.cross_crate_dep_arg_confirms_owned(func_name, i)
+                    || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        gs, pidx,
+                    )
                     || gen.preregistered_free_call_arg_emits_owned(func_name, i)
-                    || (matches!(
-                        gs.param_ownership.get(pidx),
-                        Some(OwnershipMode::Owned)
-                    ) && gs.param_types.get(pidx).is_some_and(|t| {
-                        matches!(t, Type::String)
-                            || crate::codegen::rust::types::is_windjammer_text_type(t)
-                                && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    }))
                 {
                     if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                         *arg_str = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
@@ -938,12 +944,6 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         );
                     }
                     continue;
-                }
-                if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx) {
-                    continue;
-                }
-                if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
-                    *arg_str = format!("&{name}");
                 }
             }
         }
