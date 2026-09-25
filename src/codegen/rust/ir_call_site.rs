@@ -19,6 +19,21 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
+        // Demoted `&mut Vec` / `&mut T` is never owned emission — the WDB-281 Vec/map
+        // shortcut must not override MutBorrowed (recursive `buf.clone()` into `&mut Vec`).
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(crate::analyzer::OwnershipMode::MutBorrowed)
+        ) || sig
+            .param_types
+            .get(pidx)
+            .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+            || sig
+                .formal_param_type(pidx)
+                .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+        {
+            return false;
+        }
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return true;
         }

@@ -30,21 +30,24 @@
 
 **Gates:** `cargo test --release --test all -- wdb385_module_file_f32_assoc_const_must_not_clone wdb344_module_file_copy_f32_must_not_emit_clone wdb355_module_file_copy_vec3_must_not_emit_clone` → isolate GREEN (3), tip-out stale RED (3). No-reg: spawn/mpsc/encode_line/WDB-125/Copy f32 formal/WDB-384/386/387 isolates GREEN.
 
-## P3.444 (2026-09-24) — i32-heavy impl `0..node.params.len()` + `buf.clone()` into `&mut Vec`
+## P3.444 (2026-09-25) — i32-heavy impl `0..node.params.len()` + `buf.clone()` into `&mut Vec`
 
 | Gate | Status |
 |------|--------|
-| `i32_heavy_impl_match_field_len_must_not_emit_i32_range` | 🆕 isolate RED (TDD) — CsgScene impl + Option match + poisoned custom `len() -> i32` |
-| `p3444_tip_out_game_core_csg_must_not_emit_i32_len_range` | 🆕 tip-out RED — `gen/csg/scene.rs` `0_i32..node.params.len()` + `buf.clone()` |
-| P3.359 `for_zero_to_len_must_not_emit_i32_range` | ✅ isolate GREEN — free `count_slots(node) -> int` (does not cover impl/match) |
-| WDB-345 MultiFile | ✅ isolate GREEN — free `emit_instruction(buf)` (does not cover recursive self + match) |
-| WDB-345 tip-out | ❌ RED — same product file |
+| `i32_heavy_impl_match_field_len_must_not_emit_i32_range` | ✅ isolate GREEN — match-bound `node.params.len()` is usize; recursive `buf` reborrows |
+| `p3444_tip_out_game_core_csg_must_not_emit_i32_len_range` | ❌ RED — stale product `gen/csg/scene.rs` (needs tip-out regen) |
+| `mut_borrowed_bare_vec_is_not_owned_emission` | ✅ unit GREEN |
+| P3.359 `for_zero_to_len_must_not_emit_i32_range` | ✅ isolate GREEN — no regression |
+| WDB-345 MultiFile | ✅ isolate GREEN — no regression |
+| WDB-345 tip-out | ❌ RED — same stale product file |
 
 **Product:** `CsgScene::emit_node_instructions` after `let node = match self.get_node(node_id)`. Engine rustc: `expected i32, found usize` on range end + `expected &mut Vec<f32>, found Vec<f32>` on `buf.clone()`.
 
-**Root cause layer (hyp):** `generate_range` `end_is_usize` is false when match-bound `node.params` type is unresolved **and** `consensus_return_is_usize("len")` is poisoned by a custom `len() -> i32`. Start literal then keeps `_i32` from i32-heavy body affinity. Recursive `buf: Vec<f32>` demotes to `&mut` but call sites still emit `buf.clone()`.
+**Root cause layer:** constraint/inference + emission contract. (1) `let node = match …` parses as `Block { Match }`; `infer_expression_type` ignored `Statement::Match`, so `node.params` was untyped and `consensus_return_is_usize("len")` was poisoned by `NameLen::len() -> i32`. Typing the match expression from `Some(n) => n` makes `Vec::len` resolve to usize. (2) `sig_arg_confirms_owned_emission` treated MutBorrowed bare `Vec` as owned (WDB-281 shortcut), so recursive calls cloned into `&mut Vec`. MutBorrowed / `MutableReference` now fail closed as not-owned.
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- i32_heavy_impl_match_field_len p3444_tip_out_game_core_csg`
+**What became unnecessary:** no new `ir_call_site` peel; no `len`/`emit_node_instructions` name heuristic. `bare_formal_is_vec_or_map` still describes AST shape; owned confirmation no longer overrides MutBorrowed.
+
+**Gates:** `cargo test --release --lib -- mut_borrowed_bare_vec_is_not_owned_emission` → 1 passed. `cargo test --release --test all --features integration_tests,codegen_tests -- i32_heavy_impl_match_field_len` → isolate GREEN, tip-out stale RED. No-reg: `for_zero_to_len_must_not_emit_i32_range`, WDB-345 isolate, spawn/mpsc, user_join, WDB-388 → 9 passed (WDB-345 tip-out stale).
 
 
 
