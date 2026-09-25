@@ -15,6 +15,27 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.441 (2026-09-24) — Same-file demoted Custom `&T` must borrow owned `.clone()`
+
+| Gate | Status |
+|------|--------|
+| `owned_custom_clone_text_into_ref_formal_prefixes_borrow` | ✅ GREEN |
+| `owned_string_clone_text_into_str_ref_keeps_clone_without_amp` | ✅ GREEN — `String.clone()` still deref-coerces to `&str` |
+| `demoted_encode_line_clone_must_auto_borrow` | ✅ GREEN — `encode_line(&item)` / `&item.clone()` into `todo: &Todo` |
+| `wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites` | ✅ isolate GREEN |
+| `wdb126_module_file_demoted_vec_formal_must_borrow_vec_literal_call_sites` | ✅ no regression |
+| `wdb169` / `wdb190` owned Call temps | ✅ no regression — `encode_startup()` stays Identity |
+| `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ GREEN |
+| `bug_mpsc_sync_channel_boundary_signature_test` | ✅ GREEN |
+
+**Root cause layer:** signature + coercion — (1) same-file demotion (`encode_line(todo: Todo)` → `todo: &Todo`) lived only on preregistered emitted formals; refreshed call-site sigs stayed AST-owned so `force_owned` peeled `&`. Write-back via `sync_call_sig_from_preregistered_free_fn_emission` after refresh. (2) `compute_coercion` / contract: `String.clone()` deref-coerces to `&str`; Custom `&T` does not (Rust will not auto-ref a function-arg temp).
+
+**What became unnecessary:** “`.clone()` satisfies `&T` via deref” for Custom (string-only now); rejected extra regular-call / function-call peels that duplicated IR. Temporary: `force_owned` still skips when preregistered expects borrow (delete once registry always carries same-file demotion).
+
+**Gates:** `cargo test --release --lib -- owned_custom_clone_text_into_ref_formal_prefixes_borrow owned_string_clone_text_into_str_ref_keeps_clone_without_amp` → 2 passed. `cargo test --release --test all -- demoted_encode_line_clone_must_auto_borrow demoted_struct_loop wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites wdb126_module_file_demoted_vec_formal_must_borrow wdb169_module_file_owned_helper_into_owned_formal_must_not_borrow wdb190_module_file_feed_unified_owned_startup_must_not_borrow bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 12 passed.
+
+**Still RED:** `user_join_two_strings_moves_owned_locals` — formals are mixed `(&str, String)` (interpolation demotes `base`; `Ok(relative)` keeps owned) but the call site emits `join(&base, &relative)` (over-borrows the owned slot). Next: signature/constraint so the owned `relative` slot is not borrowed as if `strings::join`.
+
 ## P3.440 (2026-09-24) — WDB-379 `format!` must not lower to `write!`/`unwrap`
 
 | Gate | Status |
@@ -3680,7 +3701,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 |------|--------|
 | `nested_self_field_in_struct_lit_must_not_force_owned_self` | ✅ MultiFile GREEN (2026-09-23) — `fn update_params(&self)` |
 | `cross_file_nested_self_field_in_struct_lit_must_not_force_owned_self` | ✅ MultiFile GREEN (2026-09-24) — `fn update_params(&self)` + cargo-check |
-| Tip-out `update_raymarch_params(self)` | ❌ RED pending regen with P3.424b tip |
+| Tip-out `update_raymarch_params(self)` | ✅ tip GREEN (2026-09-24 regen) — `fn update_raymarch_params(&self)` |
 
 **Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move. Atmosphere/water update_* already emit `&self`. Engine cargo-check after regen: **288 rustc errors** (E0308×197, E0277×33, E0507×21).
 
