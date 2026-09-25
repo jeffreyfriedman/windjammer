@@ -944,11 +944,24 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     apply_callee_mut_borrow_to_call_args(gen, func_name, &signature, arguments, &mut args);
     // Terminal sanitize: never leave `&mut place.clone()` temps (WDB-336/337/342).
     // `&x.clone()` is never a valid shared-ref encoding (Connection has no Clone).
+    // Shared-borrow last-writer must not undo Identity reborrow of `&mut T` / `&T`.
     for (i, arg) in args.iter_mut().enumerate() {
         crate::codegen::rust::expression_utilities::sanitize_mut_borrow_clone_temp(arg);
+        let already_rust_ref = arguments.get(i).is_some_and(|(_, expr)| {
+            matches!(
+                expr,
+                Expression::Identifier { name, .. }
+                    if gen.identifier_binding_already_rust_ref(name)
+            )
+        });
+        let stale_shared_clone =
+            arg.starts_with('&') && !arg.starts_with("&mut ") && arg.ends_with(".clone()");
+        if already_rust_ref {
+            continue;
+        }
         if gen.preregistered_free_call_arg_expects_borrow(func_name, i)
-            || gen.callee_arg_expects_borrow_at_call(func_name, i)
-            || (arg.starts_with('&') && !arg.starts_with("&mut ") && arg.ends_with(".clone()"))
+            || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
+            || stale_shared_clone
         {
             *arg = crate::ir::target_encodings::rust_shared_borrow(arg);
         }

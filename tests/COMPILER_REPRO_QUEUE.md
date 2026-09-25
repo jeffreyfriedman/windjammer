@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.458 (2026-09-25) — `&mut T` / `&T` reborrow stays Identity (`take_in_edges(csr)`)
+
+| Gate | Status |
+|------|--------|
+| `bug_mut_param_passthrough_no_shared_amp_test` | ✅ isolate GREEN — bare `csr` into `&mut` / `&T` callees |
+| WDB-217 codegen + tip-out pagerank | ✅ GREEN — no regression |
+| spawn / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** constraint/solver + coercion + signature emit-truth.
+
+1. `infer_actual_safety_type` now treats `identifier_already_mut_ref` as `MutRef` (not Owned).
+2. `compute_coercion`: `MutRef` → `Ref` is Identity (Rust reborrow), not Borrow (`&csr` / `&&mut T`).
+3. Last-writers in `regular_call_arguments` / `function_call_generation` no longer apply `rust_shared_borrow` for mut-expected slots or already-`&mut`/`&T` bindings. Shared-only helper is `callee_arg_expects_shared_borrow_at_call`.
+4. Method thin wrappers (`Host::run` → `take_edges`): AST-owned sibling lookup no longer beats field-write / emitted `&mut` (`method_call_arg_formal_is_owned_non_copy`).
+
+**What became unnecessary:** last-writer `callee_arg_expects_borrow_at_call` → `rust_shared_borrow` restack (dual-oracle that undid IR Identity + the existing 1996 peel). No new `ir_call_site` peel / method-name list.
+
+**Temporary remaining:** last-writers still sanitize `&x.clone()` and prefix shared borrow for *owned* non-ref bindings. Delete path: IR apply + 900–923 shared-ref path should own that; then last-writers can drop.
+
+**Gates:** `cargo test --release --lib -- mut_ref_to_shared_ref_is_identity_reborrow mut_ref_to_mut_ref_is_identity` → **2 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_mut_param_passthrough_no_shared_amp_test bug_thread_spawn_closure_must_not_be_ref_test bug_thread_spawn_move_keyword_must_be_preserved_test bug_mpsc_sync_channel_boundary_signature_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **11 passed**.
+
 ## P3.457 (2026-09-25) — owned `FnOnce` closures stay by-value (`spawn(move ||)`)
 
 | Gate | Status |
@@ -13,7 +34,7 @@
 
 **Gates:** `cargo test --release --lib -- rust_shared_borrow_keeps_move_closure_by_value` → **1 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_thread_spawn_move_keyword_must_be_preserved_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **6 passed**.
 
-**Follow-up isolate (still RED):** `bug_mut_param_passthrough_no_shared_amp_test` — `&mut DenseCsr` into `&mut` callee emits `take_in_edges(&csr)`.
+**Follow-up isolate:** `bug_mut_param_passthrough_no_shared_amp_test` → GREEN in P3.458.
 
 ## P3.456 (2026-09-25) — only-forward `Vec` formals stay owned (WDB-285 class)
 
@@ -1649,7 +1670,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Gate `bug_thin_vec_forwarder_must_not_demote_owned_test` | ✅ tip GREEN (2026-09-14) |
 | Gate `bug_hashmap_string_key_insert_must_not_cast_usize_test` | ✅ tip GREEN (2026-09-14) — untyped `HashMap::new()` keeps String insert keys |
 | Gate `bug_vec_custom_view_helper_must_not_over_borrow_test` | ✅ tip GREEN (isolate); product used `lines.clone()` interim |
-| Gate `bug_mut_param_passthrough_no_shared_amp_test` | ✅ tip GREEN (2026-09-14) — `&mut` formal → `&mut` callee reborrow, no `.clone()` |
+| Gate `bug_mut_param_passthrough_no_shared_amp_test` | ✅ isolate GREEN (P3.458) — `&mut`/`&T` reborrow Identity, no stacked `&csr` |
 | Gate `codegen_cross_module_match_arm_multi_use_owned_formal_gate_test::cross_module_match_arm_readonly_concat_demotes_to_str` | ✅ tip GREEN (2026-09-14) — `json + ""` readonly append demotes pub `string` to `&str` |
 | Gates `wdb214`–`wdb217` codegen fixtures (`library_multipass/`) | ✅ tip GREEN (2026-09-14) — borrow/clone/u64-len/mut-reborrow |
 | Tip-out product gates `wdb214`–`wdb217` (`.agent-wip/rel_tip_out`) | ⚠️ RED until rel_tip_out regen with tip `wj` |

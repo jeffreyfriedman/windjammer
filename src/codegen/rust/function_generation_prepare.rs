@@ -11115,6 +11115,27 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
     ) -> bool {
         if let Some(rt) = self.mc_infer_method_receiver_type_name(object) {
+            let qualified = format!("{rt}::{method}");
+            // Field-mutating / emitted `&mut T` slots are not owned contracts
+            // (`Host::take_edges(csr: DenseCsr)` → `csr: &mut DenseCsr`).
+            let ast_field_written = self
+                .struct_method_ast_param_field_written
+                .get(rt.as_str())
+                .and_then(|methods| methods.get(method))
+                .and_then(|flags| flags.get(arg_index))
+                .copied()
+                == Some(true);
+            let emitted_mut = self
+                .function_emitted_mut_arg_indices
+                .get(qualified.as_str())
+                .is_some_and(|set| set.contains(&arg_index))
+                || self
+                    .function_emitted_mut_arg_indices
+                    .get(method)
+                    .is_some_and(|set| set.contains(&arg_index));
+            if ast_field_written || emitted_mut {
+                return false;
+            }
             if self
                 .struct_method_ast_formal_param_types
                 .get(rt.as_str())

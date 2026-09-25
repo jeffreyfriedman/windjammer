@@ -108,7 +108,9 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
         }
         return match actual_own {
             OwnedType::Ref(_) => CoercionKind::Identity,
-            OwnedType::MutRef(_) => CoercionKind::Borrow,
+            // `&mut T` reborrows as `&T` in-place. Prefixing Borrow stacks
+            // `&` on an already-mut binding (`&csr` / `&&mut T`, E0308).
+            OwnedType::MutRef(_) => CoercionKind::Identity,
             OwnedType::Copy => CoercionKind::Borrow,
             OwnedType::Owned => {
                 if is_string_base(&expected.base)
@@ -181,8 +183,7 @@ fn emitted_rust_closure_value(expr: &str) -> bool {
     t.starts_with("move ||")
         || t.starts_with("||")
         || t.starts_with('|')
-        || (t.starts_with('(')
-            && (t.contains("move ||") || t.contains("||") || t.contains('|')))
+        || (t.starts_with('(') && (t.contains("move ||") || t.contains("||") || t.contains('|')))
 }
 
 fn strip_rust_ref_expr(expr: &str) -> &str {
@@ -548,6 +549,20 @@ mod tests {
             compute_coercion(&actual, &expected),
             CoercionKind::ToOwnedString
         );
+    }
+
+    #[test]
+    fn mut_ref_to_shared_ref_is_identity_reborrow() {
+        let actual = mut_borrowed(BaseType::Custom("DenseCsr".into()));
+        let expected = borrowed(BaseType::Custom("DenseCsr".into()));
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
+    }
+
+    #[test]
+    fn mut_ref_to_mut_ref_is_identity() {
+        let actual = mut_borrowed(BaseType::Custom("DenseCsr".into()));
+        let expected = mut_borrowed(BaseType::Custom("DenseCsr".into()));
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Identity);
     }
 
     #[test]
