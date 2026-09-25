@@ -45,16 +45,17 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return Some(ty);
         }
+        // Callee `Vec<u64>` / `&Vec<u64>` beats default `vec![10]` → i32 (WDB-127).
+        if let Some(from_call) =
+            self.infer_vec_element_from_function_call(var_name, &self.current_function_body)
+        {
+            return Some(from_call);
+        }
         let push_type =
             self.scan_statements_for_collection_usage(var_name, &self.current_function_body);
         // When push inference yields a generic Type::Float, also check function call context.
         // E.g. compare_rgba_buffers(pixels, ...) where param type is Vec<f32> → use f32, not f64.
         if matches!(push_type, Some(Type::Float)) {
-            if let Some(concrete) =
-                self.infer_vec_element_from_function_call(var_name, &self.current_function_body)
-            {
-                return Some(concrete);
-            }
             // No concrete type from function context. Bare float literals default to f32
             // (see literals.rs), so Vec element type must also be f32 for consistency.
             return Some(Type::Custom("f32".into()));
@@ -127,16 +128,19 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 for fn_name in &names_to_try {
                     if let Some(sig) = self.get_signature_with_global(fn_name) {
-                        let param_offset = if sig.has_self_receiver { 1 } else { 0 };
                         for (i, (_label, arg)) in arguments.iter().enumerate() {
                             if matches!(arg, Expression::Identifier { name, .. } if name == var_name)
                             {
-                                let param_idx = i + param_offset;
-                                if let Some(param_type) = sig.param_types.get(param_idx) {
-                                    if let Type::Vec(inner) = param_type {
-                                        if !matches!(**inner, Type::Float) {
-                                            return Some((**inner).clone());
-                                        }
+                                let pidx = sig.arg_param_index(i);
+                                let param_type = sig
+                                    .param_type_for_arg(i)
+                                    .or_else(|| sig.formal_param_type(pidx))
+                                    .or_else(|| sig.param_types.get(pidx));
+                                if let Some(elem) = param_type
+                                    .and_then(CodeGenerator::peeled_collection_element_type)
+                                {
+                                    if !matches!(elem, Type::Float) {
+                                        return Some(elem.clone());
                                     }
                                 }
                             }
@@ -157,15 +161,18 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 if let Some(sig) = self.get_signature_with_global(method) {
-                    let param_offset = if sig.has_self_receiver { 1 } else { 0 };
                     for (i, (_label, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name, .. } if name == var_name) {
-                            let param_idx = i + param_offset;
-                            if let Some(param_type) = sig.param_types.get(param_idx) {
-                                if let Type::Vec(inner) = param_type {
-                                    if !matches!(**inner, Type::Float) {
-                                        return Some((**inner).clone());
-                                    }
+                            let pidx = sig.arg_param_index(i);
+                            let param_type = sig
+                                .param_type_for_arg(i)
+                                .or_else(|| sig.formal_param_type(pidx))
+                                .or_else(|| sig.param_types.get(pidx));
+                            if let Some(elem) = param_type
+                                .and_then(CodeGenerator::peeled_collection_element_type)
+                            {
+                                if !matches!(elem, Type::Float) {
+                                    return Some(elem.clone());
                                 }
                             }
                         }

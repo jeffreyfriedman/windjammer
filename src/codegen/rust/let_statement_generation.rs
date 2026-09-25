@@ -27,7 +27,24 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 Some(n.as_str())
             }
-            Type::Vec(_) => return Some(base),
+            Type::Vec(inner) => {
+                // `vec![10, 20]` infers `Vec<int>`/`Vec<i32>`; callee `Vec<u64>` must win (WDB-127).
+                let default_elem = matches!(
+                    inner.as_ref(),
+                    Type::Int | Type::Int32 | Type::Float | Type::Uint
+                ) || matches!(
+                    inner.as_ref(),
+                    Type::Custom(n) if matches!(n.as_str(), "int" | "i32" | "i64" | "f32" | "f64")
+                );
+                if default_elem {
+                    if let Some(from_use) =
+                        var_name.and_then(|vn| self.infer_collection_element_type_from_usage(vn))
+                    {
+                        return Some(Type::Vec(Box::new(from_use)));
+                    }
+                }
+                return Some(base);
+            }
             Type::Parameterized(base_name, args)
                 if (crate::type_classification::is_single_elem_iterable_base(base_name)
                     || crate::type_classification::is_set_type_name(base_name))
@@ -291,6 +308,10 @@ impl<'ast> CodeGenerator<'ast> {
                             (None, None) => None,
                         }
                     }
+                    Expression::MacroInvocation { name, .. } if name == "vec" => {
+                        self.infer_let_value_type(value, var_name)
+                    }
+                    Expression::Array { .. } => self.infer_let_value_type(value, var_name),
                     Expression::Block { statements, .. } => {
                         let if_i32 = statements.last().and_then(|last_stmt| {
                             let Statement::If {
@@ -653,8 +674,31 @@ impl<'ast> CodeGenerator<'ast> {
                         self.usize_variables.remove(vn);
                         self.local_var_types.insert(vn.to_string(), Type::Uint);
                     }
-                } else if self.assignment_int_target_type.is_none()
+                } else if self.assignment_int_target_type.is_none() {
+                    if let Some(vn) = var_name {
+                        if let Some(elem) = self
+                            .local_var_types
+                            .get(vn)
+                            .and_then(Self::peeled_collection_element_type)
+                        {
+                            if let Some(peer) =
+                                crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                                    Some(elem),
+                                )
+                            {
+                                self.assignment_int_target_type = Some(peer);
+                            }
+                        }
+                    }
+                }
+                let collection_ctor_rhs = matches!(
+                    value,
+                    Expression::MacroInvocation { name, is_repeat, .. }
+                        if name == "vec" && !*is_repeat
+                ) || matches!(value, Expression::Array { .. });
+                if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
+                    && !collection_ctor_rhs
                 {
                     // WDB-328: bare `let mut i = -1` (Unary Neg of Int, or Int lit) must
                     // emit `_i32` in i32 builders — not stick to WJ `int`/i64 from default

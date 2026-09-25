@@ -61,6 +61,15 @@ pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
     }) {
         return Some(Type::Uint);
     }
+    // Signature width for `u64`/`usize`/narrow ints — `vec![10]` into `Vec<u64>` (WDB-127).
+    if let Some(Type::Custom(n)) = formal {
+        if matches!(
+            n.as_str(),
+            "u64" | "usize" | "isize" | "u8" | "i8" | "u16" | "i16"
+        ) {
+            return Some(Type::Custom(n.clone()));
+        }
+    }
     None
 }
 

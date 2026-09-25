@@ -1,4 +1,27 @@
 impl IntInference {
+    /// Unannotated `let xs = vec![10, 20]` / `[10, 20]` later passed to `Vec<u64>`
+    /// MustBe's the identifier (nested width) and MustMatch's it to the collection
+    /// expr — but element literals are separate nodes. Unify each element with the
+    /// collection so callee `Vec<u64>` writes back `_u64` (WDB-127). Language-level
+    /// collection homogeneity, not a callee-name heuristic.
+    fn unify_collection_element_int_width<'ast>(
+        &mut self,
+        collection: &Expression<'ast>,
+        elements: &[&'ast Expression<'ast>],
+    ) {
+        let collection_id = self.get_expr_id(collection);
+        for elem in elements {
+            let elem_id = self.get_expr_id(elem);
+            if elem_id != collection_id {
+                self.constraints.push(IntConstraint::MustMatch(
+                    elem_id,
+                    collection_id,
+                    "collection element shares inferred integer width".to_string(),
+                ));
+            }
+        }
+    }
+
     fn constrain_call_result_int_type<'ast>(
         &mut self,
         expr: &Expression<'ast>,
@@ -360,6 +383,7 @@ impl IntInference {
                         self.collect_expression_constraints(elem, return_type);
                     }
                 }
+                self.unify_collection_element_int_width(expr, elements);
             }
             Expression::MacroInvocation {
                 name,
@@ -402,6 +426,9 @@ impl IntInference {
                             self.collect_expression_constraints(arg, return_type);
                         }
                     }
+                    // Unannotated `let xs = vec![10, 20]` + later `f(xs)` where `f: Vec<u64>`
+                    // MustBe's the identifier, not the element literals (WDB-127).
+                    self.unify_collection_element_int_width(expr, args);
                 } else {
                     for arg in args {
                         self.collect_expression_constraints(arg, return_type);

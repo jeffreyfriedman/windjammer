@@ -1,5 +1,18 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.449 (2026-09-25) — unannotated `vec![10, 20]` inherits callee `Vec<u64>`
+
+| Gate | Status |
+|------|--------|
+| `wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` | ✅ isolate GREEN — `vec![10_u64, 20_u64]` + cargo-check |
+| encode / spawn / mpsc / WDB-125/126 / int-inference collections | ✅ GREEN — no regression |
+
+**Root cause layer:** constraint + signature write-back + encoding. Three gaps: (1) `vec!` / array element literals were not MustMatched to the collection expr, so Call `MustBe(U64)` on the identifier never reached `10`/`20`; (2) call-site `Vec<u64>` / `&Vec<u64>` was only consulted for float `Vec::new()` refinement, and `infer_let_value_type` early-returned `Vec<int>` from `vec![10]`; (3) `function_prefers_i32_coord_locals` is true for `-> u64`, so unannotated lets stamped `_i32` (Priority 0) and never read the solver. `assignment_int_peer_from_formal` also omitted `u64`/`usize`.
+
+**What became unnecessary:** i32-coord heuristic on `vec!`/`array` RHS; float-only call-site Vec refine; `Vec(_)` early-return that blocked callee width. No new `ir_call_site` peel.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` → 1 passed. Related: `wdb127_ wdb126_ wdb125_ spawn mpsc int_inference_generic_collections int_inference_vec_element int_inference_assignment struct_field_literal_typing test_cross_file_int_inference` → **30 passed**.
+
 ## P3.448 (2026-09-25) — import alias must keep remapped Owned identity
 
 | Gate | Status |
@@ -14,7 +27,7 @@
 
 **Gates:** `cargo test --release --lib -- import_alias_owned_get` → 1 passed. `cargo test --release --test all --features integration_tests,codegen_tests -- import_alias_must_not_steal_foreign_fn_ownership bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` → 6 passed.
 
-**Still RED:** WDB-127 isolate cargo-check — borrow is already present; `vec![10, 20]` emits `i32` into `Vec<u64>` (constraint / int-width, not this alias steal).
+**WDB-127 leftover:** ✅ GREEN (P3.449) — callee `Vec<u64>` now writes `_u64` into unannotated `vec![10, 20]`.
 
 ## P3.447 (2026-09-25) — same-crate `&T` passthrough + for-in-self shared borrow
 
