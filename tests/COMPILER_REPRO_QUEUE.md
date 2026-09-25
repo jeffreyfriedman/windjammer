@@ -4,8 +4,8 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-388 MultiFile | 🆕 isolate (P3.442 twin) — `Vec3::new(a, b, c)` must not `&a` |
-| WDB-388 tip-out | 🆕 product scan — `Vec3::new(&` in gen/ |
+| WDB-388 MultiFile | ✅ isolate GREEN — `Vec3::new(a, b, c)` must not `&a` |
+| WDB-388 tip-out | ✅ product scan GREEN — no `Vec3::new(&` in tip/gen |
 | `prefer_shared_ref_keeps_local_user_join_over_strings_join` | ✅ unit GREEN |
 | `codegen_user_join_must_not_borrow_owned_relative` | ✅ in-process GREEN |
 | `user_join_two_strings_moves_owned_locals` | ✅ isolate GREEN — mixed `(&str, String)`; call no longer `join(&base, &relative)` |
@@ -14,9 +14,7 @@
 
 **What became unnecessary:** post-IR `finalize_borrowed_text` was not the rewriter once `text_sig` stayed user; no new peel. `dep_shared` no longer consults `strings::join` for a same-crate `join`.
 
-**Gates:** `cargo test --release --lib -- codegen_user_join_must_not_borrow_owned_relative prefer_shared_ref_keeps_user_join two_string_join_shape prefer_shared_ref_picks_runtime_str refresh_join_delimiter codegen_strings_join_vec_arg` → 6 passed. `cargo test --release --test all -- user_join_two_strings_moves_owned_locals bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 5 passed.
-
-**Still 🆕:** WDB-388 Vec3::new isolate / tip-out.
+**Gates:** `cargo test --release --lib -- codegen_user_join_must_not_borrow_owned_relative prefer_shared_ref_keeps_user_join two_string_join_shape prefer_shared_ref_picks_runtime_str refresh_join_delimiter codegen_strings_join_vec_arg` → 6 passed. `cargo test --release --test all -- user_join_two_strings_moves_owned_locals bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 5 passed. `cargo test --release --test all -- wdb388_module_file_vec3_new_must_not_borrow_copy_local` → 2 passed (isolate + tip-out).
 
 ## P3.445 (2026-09-24) — `f32::MAX` associated path is Copy (no `.clone()`)
 
