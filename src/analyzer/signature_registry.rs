@@ -156,6 +156,9 @@ pub struct SignatureRegistry {
     /// Runtime `pub struct` names without `Copy` in `#[derive(...)]` (`Row`, `Connection`, …).
     /// Empty WJ std stubs must not be treated as Copy when indexing/moving at call sites.
     runtime_non_copy_types: HashSet<String>,
+    /// Runtime `pub struct` names without `Clone` in `#[derive(...)]` (`Connection`).
+    /// Auto-clone must not emit `.clone()` for these — rustc E0599; reuse must borrow.
+    runtime_non_clone_types: HashSet<String>,
     /// Qualified callees marked `wj-taint: sanitizer` in scanned runtime source.
     taint_sanitizer_callees: HashSet<String>,
     /// Read-only fallback for cross-file lookups without cloning the full crate registry.
@@ -210,6 +213,7 @@ impl SignatureRegistry {
             runtime_exported_types: HashMap::new(),
             runtime_type_fields: HashMap::new(),
             runtime_non_copy_types: HashSet::new(),
+            runtime_non_clone_types: HashSet::new(),
             taint_sanitizer_callees: HashSet::new(),
             global_fallback: None,
         }
@@ -607,6 +611,25 @@ impl SignatureRegistry {
     /// All runtime struct names registered as non-`Copy`.
     pub fn runtime_non_copy_types(&self) -> impl Iterator<Item = &str> {
         self.runtime_non_copy_types.iter().map(String::as_str)
+    }
+
+    /// Record a runtime struct that does not derive `Clone` (scanned from `#[derive(...)]`).
+    pub fn register_runtime_non_clone_type(&mut self, type_name: &str) {
+        if type_name.is_empty() {
+            return;
+        }
+        self.runtime_non_clone_types.insert(type_name.to_string());
+    }
+
+    /// True when a scanned runtime struct has no `Clone` impl (`Connection`).
+    pub fn runtime_type_is_non_clone(&self, type_name: &str) -> bool {
+        let base = type_name.rsplit("::").next().unwrap_or(type_name);
+        if self.runtime_non_clone_types.contains(base) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.runtime_type_is_non_clone(type_name))
     }
 
     /// Mark a scanned callee as a taint sanitizer (`/// wj-taint: sanitizer`).
@@ -1836,6 +1859,8 @@ impl SignatureRegistry {
         }
         self.runtime_non_copy_types
             .extend(other.runtime_non_copy_types.iter().cloned());
+        self.runtime_non_clone_types
+            .extend(other.runtime_non_clone_types.iter().cloned());
         self.taint_sanitizer_callees
             .extend(other.taint_sanitizer_callees.iter().cloned());
     }

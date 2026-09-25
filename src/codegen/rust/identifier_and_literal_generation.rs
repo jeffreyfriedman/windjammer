@@ -119,7 +119,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             });
 
-                    if !is_copy_type {
+                    if !is_copy_type && !self.binding_is_runtime_non_clone(name) {
                         return format!("{}.clone()", base_name);
                     }
                 }
