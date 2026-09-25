@@ -463,10 +463,21 @@ impl<'ast> CodeGenerator<'ast> {
             _ => return,
         };
 
-        if self.expression_produces_usize(expr) || self.method_call_rust_emits_usize(expr) {
-            if !expr_str.contains(" as i64") && !expr_str.contains(" as i32") {
-                *expr_str = format!("{expr_str}{cast_suffix}");
-            }
+        let rhs_is_usize = self.expression_produces_usize(expr)
+            || self.method_call_rust_emits_usize(expr)
+            || matches!(
+                expr,
+                Expression::Identifier { name, .. }
+                    if self.usize_variables.contains(name.as_str())
+                        || self.identifier_emits_as_usize(name)
+            );
+        if rhs_is_usize && !expr_str.contains(" as i64") && !expr_str.contains(" as i32") {
+            // Copy usize may have a stale `.clone()` from auto-clone; drop it before the width cast.
+            let base = expr_str
+                .strip_suffix(".clone()")
+                .unwrap_or(expr_str.as_str())
+                .trim();
+            *expr_str = format!("{base}{cast_suffix}");
         }
     }
 

@@ -2020,6 +2020,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Expression::Identifier { name, .. } => {
+                // Signed WJ `int` / i64 locals beat `usize_variables` back-prop
+                // (`let mut colon_at = -1` then `colon_at = j`).
+                if let Some(ty) = self.local_var_types.get(name) {
+                    if crate::codegen::rust::type_casting::type_is_wj_int_formal(ty)
+                        || matches!(ty, Type::Int32)
+                    {
+                        return Self::assignment_cast_target_for_type(ty);
+                    }
+                }
+                if self.identifier_is_wj_int_i64_binding(name) {
+                    return Some("int".to_string());
+                }
                 if self.usize_variables.contains(name) {
                     return Some("usize".to_string());
                 }
