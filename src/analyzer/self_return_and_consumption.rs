@@ -1043,8 +1043,10 @@ impl<'ast> Analyzer<'ast> {
                 if let Some(chain_type) = self.resolve_self_field_chain_type(expr) {
                     return !self.is_copy_type(&chain_type);
                 }
-                // Fallback if chain resolution fails: recurse conservatively
-                self.expression_moves_non_copy_self_field(object)
+                // P3.424b: failed chain lookup (Quality in a sibling file) used to recurse
+                // into `self.current_quality` and treat the Custom parent as a move.
+                // Unknown nested read is not a confirmed move — same as FieldAccess unknown.
+                false
             }
             // Struct literal: Foo { field: self.field, ... }
             // Moving non-Copy `self.field` values into the struct consumes `self` (builder pattern).
@@ -1068,7 +1070,11 @@ impl<'ast> Analyzer<'ast> {
                             if let Some(ft) = self.lookup_field_type_for_self(field) {
                                 return !self.is_copy_type(&ft);
                             }
-                            return true;
+                            // P3.424b: unknown direct field is not a confirmed move.
+                            // Split impls (VoxelGPURenderer in renderer.wj, method in
+                            // voxel_gpu_passes.wj) miss lookup_field_type_for_self and
+                            // used to default to owned `self`. Match FieldAccess: unknown = read.
+                            return false;
                         }
                     }
                     self.expression_moves_non_copy_self_field(v)

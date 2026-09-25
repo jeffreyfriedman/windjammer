@@ -298,10 +298,9 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         && !coerced.contains(" as usize")
         && !coerced.contains(" as u32")
         && !coerced.contains(" as i32")
-        // `.clone()` / `.to_string()` already own; `&str` formals deref-coerce.
-        && !coerced.ends_with(".clone()")
-        && !coerced.ends_with(".to_string()")
-        && !coerced.ends_with(".to_owned()")
+        // `.clone()` / `.to_string()` already own; only `&str` deref-coerces.
+        && !(rust_owned_temp_deref_coerces_into_shared_ref(expected)
+            && rust_arg_text_is_owned_temp(coerced))
     {
         // Parenthesize compounds when borrowing (casts / binary).
         *coerced = crate::ir::target_encodings::rust_shared_borrow(coerced);
@@ -413,6 +412,16 @@ fn is_float_base(base: &BaseType) -> bool {
 
 pub(crate) fn is_string_base(base: &BaseType) -> bool {
     matches!(base, BaseType::String)
+}
+
+/// `String.clone()` / `.to_string()` deref-coerce to `&str`. Custom `&T` formals
+/// do not (`item.clone()` → `&Todo` needs an explicit `&`).
+pub(crate) fn rust_owned_temp_deref_coerces_into_shared_ref(expected: &SafetyType) -> bool {
+    is_string_base(&expected.base) && matches!(expected.ownership, OwnedType::Ref(_))
+}
+
+fn rust_arg_text_is_owned_temp(expr: &str) -> bool {
+    expr.ends_with(".clone()") || expr.ends_with(".to_string()") || expr.ends_with(".to_owned()")
 }
 
 pub(crate) fn is_vec_base(base: &BaseType) -> bool {
@@ -546,6 +555,30 @@ mod tests {
         let actual = owned(BaseType::Custom("Key".into()));
         let expected = borrowed(BaseType::Custom("Key".into()));
         assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Borrow);
+    }
+
+    #[test]
+    fn owned_custom_clone_text_into_ref_formal_prefixes_borrow() {
+        let actual = owned(BaseType::Custom("Todo".into()));
+        let expected = borrowed(BaseType::Custom("Todo".into()));
+        let mut coerced = "item.clone()".to_string();
+        enforce_ownership_contract_on_coerced_arg(&mut coerced, &actual, &expected);
+        assert!(
+            coerced == "&item.clone()" || coerced == "&item",
+            "owned Custom clone into &T must borrow; got {coerced}"
+        );
+    }
+
+    #[test]
+    fn owned_string_clone_text_into_str_ref_keeps_clone_without_amp() {
+        let actual = owned(BaseType::String);
+        let expected = borrowed(BaseType::String);
+        let mut coerced = "path.clone()".to_string();
+        enforce_ownership_contract_on_coerced_arg(&mut coerced, &actual, &expected);
+        assert_eq!(
+            coerced, "path.clone()",
+            "String.clone() into &str deref-coerces; do not emit &path.clone()"
+        );
     }
 
     #[test]
