@@ -4182,6 +4182,9 @@ impl<'ast> CodeGenerator<'ast> {
     /// True when `name` is a scalar Copy pass-by-value binding (`i64`, `bool`, …),
     /// not a Copy aggregate/enum that still moves at the Rust ABI.
     pub(crate) fn binding_is_copy_pass_by_value_scalar(&self, name: &str) -> bool {
+        if crate::type_classification::copy_primitive_associated_path_type(name).is_some() {
+            return true;
+        }
         if let Some(p) = self.current_function_params.iter().find(|p| p.name == name) {
             return crate::type_classification::is_copy_pass_by_value_formal(&p.type_);
         }

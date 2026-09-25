@@ -1,5 +1,55 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.444 (2026-09-24) — i32-heavy impl `0..node.params.len()` + `buf.clone()` into `&mut Vec`
+
+| Gate | Status |
+|------|--------|
+| `i32_heavy_impl_match_field_len_must_not_emit_i32_range` | 🆕 isolate RED (TDD) — CsgScene impl + Option match + poisoned custom `len() -> i32` |
+| `p3444_tip_out_game_core_csg_must_not_emit_i32_len_range` | 🆕 tip-out RED — `gen/csg/scene.rs` `0_i32..node.params.len()` + `buf.clone()` |
+| P3.359 `for_zero_to_len_must_not_emit_i32_range` | ✅ isolate GREEN — free `count_slots(node) -> int` (does not cover impl/match) |
+| WDB-345 MultiFile | ✅ isolate GREEN — free `emit_instruction(buf)` (does not cover recursive self + match) |
+| WDB-345 tip-out | ❌ RED — same product file |
+
+**Product:** `CsgScene::emit_node_instructions` after `let node = match self.get_node(node_id)`. Engine rustc: `expected i32, found usize` on range end + `expected &mut Vec<f32>, found Vec<f32>` on `buf.clone()`.
+
+**Root cause layer (hyp):** `generate_range` `end_is_usize` is false when match-bound `node.params` type is unresolved **and** `consensus_return_is_usize("len")` is poisoned by a custom `len() -> i32`. Start literal then keeps `_i32` from i32-heavy body affinity. Recursive `buf: Vec<f32>` demotes to `&mut` but call sites still emit `buf.clone()`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- i32_heavy_impl_match_field_len p3444_tip_out_game_core_csg`
+
+
+
+## P3.445 (2026-09-24) — `f32::MAX` associated path is Copy (no `.clone()`)
+
+| Gate | Status |
+|------|--------|
+| WDB-385 MultiFile | ✅ isolate GREEN — `Vec3::new(f32::MAX, f32::MAX, f32::MAX)` |
+| WDB-385 tip-out | ❌ RED — voxel_scene stale product regen |
+| `copy_primitive_associated_path_is_that_primitive` | ✅ unit GREEN |
+
+**Root cause layer:** constraint/inference (type classification). Parser folds `f32::MAX` into Identifier `"f32::MAX"`. Auto-clone treated that as a reused move. `copy_primitive_associated_path_type` types any `Primitive::ASSOC` as that Copy primitive so the existing `binding_is_copy_pass_by_value_scalar` skip fires. No MAX/MIN name list; no new `ir_call_site` peel.
+
+**What became unnecessary:** FieldAccess-only guess for `f32.MAX`; extra clone-skip peels in `ir_call_site.rs`.
+
+**Gates:** `cargo test --release --test all -- wdb385_module_file_f32_assoc_const_must_not_clone wdb344_module_file_copy_f32_must_not_emit_clone wdb355_module_file_copy_vec3_must_not_emit_clone` → isolate GREEN (3), tip-out stale RED (3). No-reg: spawn/mpsc/encode_line/WDB-125/Copy f32 formal/WDB-384/386/387 isolates GREEN.
+
+## P3.444 (2026-09-24) — i32-heavy impl `0..node.params.len()` + `buf.clone()` into `&mut Vec`
+
+| Gate | Status |
+|------|--------|
+| `i32_heavy_impl_match_field_len_must_not_emit_i32_range` | 🆕 isolate RED (TDD) — CsgScene impl + Option match + poisoned custom `len() -> i32` |
+| `p3444_tip_out_game_core_csg_must_not_emit_i32_len_range` | 🆕 tip-out RED — `gen/csg/scene.rs` `0_i32..node.params.len()` + `buf.clone()` |
+| P3.359 `for_zero_to_len_must_not_emit_i32_range` | ✅ isolate GREEN — free `count_slots(node) -> int` (does not cover impl/match) |
+| WDB-345 MultiFile | ✅ isolate GREEN — free `emit_instruction(buf)` (does not cover recursive self + match) |
+| WDB-345 tip-out | ❌ RED — same product file |
+
+**Product:** `CsgScene::emit_node_instructions` after `let node = match self.get_node(node_id)`. Engine rustc: `expected i32, found usize` on range end + `expected &mut Vec<f32>, found Vec<f32>` on `buf.clone()`.
+
+**Root cause layer (hyp):** `generate_range` `end_is_usize` is false when match-bound `node.params` type is unresolved **and** `consensus_return_is_usize("len")` is poisoned by a custom `len() -> i32`. Start literal then keeps `_i32` from i32-heavy body affinity. Recursive `buf: Vec<f32>` demotes to `&mut` but call sites still emit `buf.clone()`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- i32_heavy_impl_match_field_len p3444_tip_out_game_core_csg`
+
+
+
 Cross-crate / multipass dogfooding surfaced these codegen gaps. Each row has a
 **codegen-shape** repro (emitted Rust assert) and/or a runtime fixture. Prefer the
 codegen gates as source of truth; fixtures alone can pass while multipass still
@@ -21,14 +71,14 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |------|--------|
 | WDB-384 MultiFile | ✅ isolate GREEN — `Face::PosX` |
 | WDB-384 tip-out | ❌ RED — mesh_generator / squad / npc / streaming / material_editor |
-| WDB-385 MultiFile | ❌ isolate RED — `Vec3::new(f32::MAX.clone(), …)` |
-| WDB-385 tip-out | ❌ RED — voxel_scene |
+| WDB-385 MultiFile | ✅ isolate GREEN (P3.445) — Copy primitive associated path |
+| WDB-385 tip-out | ❌ RED — voxel_scene stale regen |
 | WDB-386 MultiFile | ✅ isolate GREEN |
 | WDB-386 tip-out | ❌ RED — shader_graph_compiler / shader_effect_test |
 | WDB-387 MultiFile | ✅ isolate GREEN |
 | WDB-387 tip-out | ❌ RED — world_partition/streaming |
 
-**Root cause layer:** none this session — DB agent files gates only. **WDB-385 isolate is live tip RED** (associated const clone).
+**Root cause layer:** none this session — DB agent files gates only. **WDB-385 isolate GREEN in P3.445.**
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_wdb384_ bug_wdb385_ bug_wdb386_ bug_wdb387_` → **3 passed / 5 failed**.
 
@@ -703,7 +753,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-374/377 |
 | P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-353 |
 | P1 | **Copy enum variant must not `FaceDirection::PosX.clone()`** | `bug_wdb384_module_file_copy_enum_variant_must_not_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED |
-| P1 | **`f32::MAX`/`MIN` must not emit `.clone()`** | `bug_wdb385_module_file_f32_assoc_const_must_not_clone_test` | ❌ isolate + tip RED (P3.443 TDD) — live `f32::MAX.clone()` |
+| P1 | **`f32::MAX`/`MIN` must not emit `.clone()`** | `bug_wdb385_module_file_f32_assoc_const_must_not_clone_test` | ✅ isolate GREEN (P3.445) — `copy_primitive_associated_path_type`; tip-out pending regen |
 | P1 | **indexed Copy ShaderFile must not `].clone().shader_file`** | `bug_wdb386_module_file_copy_shader_file_must_not_double_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-377 |
 | P1 | **indexed `get_id()` must not `].clone().get_id()`** | `bug_wdb387_module_file_index_get_id_must_not_clone_element_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-362 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
