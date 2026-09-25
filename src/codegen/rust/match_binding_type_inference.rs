@@ -1,7 +1,7 @@
 //! Infers `match` / `if let` pattern binding types.
 
 use crate::codegen::rust::CodeGenerator;
-use crate::parser::{EnumPatternBinding, Expression, Pattern, Type};
+use crate::parser::{EnumPatternBinding, Expression, MatchArm, Pattern, Statement, Type};
 use std::collections::HashMap;
 
 impl<'ast> CodeGenerator<'ast> {
@@ -212,6 +212,70 @@ impl<'ast> CodeGenerator<'ast> {
                 vec![(var_name.clone(), owned_inner)]
             }
             _ => self.infer_match_bound_types_owned(scrutinee, pattern),
+        }
+    }
+
+    /// Type of `let x = match scrutinee { … }` (parsed as `Block { Match }`).
+    /// Diverging arms (`return` / `break`) are skipped so `Some(n) => n` yields `n`'s type.
+    pub(in crate::codegen::rust) fn infer_match_expression_type(
+        &self,
+        scrutinee: &Expression,
+        arms: &[MatchArm],
+    ) -> Option<Type> {
+        for arm in arms {
+            if Self::match_arm_body_diverges(arm.body) {
+                continue;
+            }
+            if let Some(ty) = self.infer_match_arm_body_type(scrutinee, arm) {
+                return Some(ty);
+            }
+        }
+        None
+    }
+
+    fn match_arm_body_diverges(body: &Expression) -> bool {
+        match body {
+            Expression::Block { statements, .. } => {
+                !statements.is_empty()
+                    && statements.iter().all(|s| {
+                        matches!(
+                            s,
+                            Statement::Return { .. }
+                                | Statement::Break { .. }
+                                | Statement::Continue { .. }
+                        )
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn infer_match_arm_body_type(&self, scrutinee: &Expression, arm: &MatchArm) -> Option<Type> {
+        let bindings = self.infer_match_bound_types(scrutinee, &arm.pattern);
+        match arm.body {
+            Expression::Identifier { name, .. } => bindings
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, t)| t.clone())
+                .or_else(|| self.infer_expression_type(arm.body)),
+            Expression::Block { statements, .. } => {
+                let last = statements.last()?;
+                match last {
+                    Statement::Expression { expr, .. } => {
+                        if let Expression::Identifier { name, .. } = expr {
+                            if let Some((_, t)) = bindings.iter().find(|(n, _)| n == name) {
+                                return Some(t.clone());
+                            }
+                        }
+                        self.infer_expression_type(expr)
+                    }
+                    Statement::Return { .. }
+                    | Statement::Break { .. }
+                    | Statement::Continue { .. } => None,
+                    _ => None,
+                }
+            }
+            _ => self.infer_expression_type(arm.body),
         }
     }
 }

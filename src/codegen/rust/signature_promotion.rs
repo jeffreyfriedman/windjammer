@@ -3609,4 +3609,38 @@ pub fn resolve() -> string {
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
         );
     }
+
+    #[test]
+    fn mut_borrowed_bare_vec_is_not_owned_emission() {
+        let sig = FunctionSignature {
+            name: "CsgScene::emit_node_instructions".into(),
+            param_types: vec![
+                Type::Custom("CsgScene".into()),
+                Type::Int32,
+                Type::Vec(Box::new(Type::Float)),
+            ],
+            formal_param_types: vec![
+                Type::Custom("CsgScene".into()),
+                Type::Int32,
+                Type::Vec(Box::new(Type::Float)),
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::MutBorrowed,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert!(
+            !emitted_owned_arg_contract(&sig, 2),
+            "demoted &mut Vec must not count as owned emission"
+        );
+    }
 }

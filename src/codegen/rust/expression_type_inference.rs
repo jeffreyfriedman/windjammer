@@ -487,6 +487,9 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             None
                         }
+                        Statement::Match { value, arms, .. } => {
+                            self.infer_match_expression_type(value, arms)
+                        }
                         _ => None,
                     }
                 } else {
