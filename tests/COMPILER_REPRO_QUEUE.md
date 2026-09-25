@@ -9,7 +9,7 @@
 
 **Root cause layer:** constraint + signature write-back + encoding. Three gaps: (1) `vec!` / array element literals were not MustMatched to the collection expr, so Call `MustBe(U64)` on the identifier never reached `10`/`20`; (2) call-site `Vec<u64>` / `&Vec<u64>` was only consulted for float `Vec::new()` refinement, and `infer_let_value_type` early-returned `Vec<int>` from `vec![10]`; (3) `function_prefers_i32_coord_locals` is true for `-> u64`, so unannotated lets stamped `_i32` (Priority 0) and never read the solver. `assignment_int_peer_from_formal` also omitted `u64`/`usize`.
 
-**What became unnecessary:** i32-coord heuristic on `vec!`/`array` RHS; float-only call-site Vec refine; `Vec(_)` early-return that blocked callee width. No new `ir_call_site` peel.
+**What became unnecessary:** float-only call-site Vec refine; `Vec(_)` early-return that blocked callee width. i32-coord still paints unannotated `vec!` when the element is default WJ `int` (void builders). No new `ir_call_site` peel.
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` → 1 passed. Related: `wdb127_ wdb126_ wdb125_ spawn mpsc int_inference_generic_collections int_inference_vec_element int_inference_assignment struct_field_literal_typing test_cross_file_int_inference` → **30 passed**.
 

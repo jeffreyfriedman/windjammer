@@ -681,24 +681,22 @@ impl<'ast> CodeGenerator<'ast> {
                             .get(vn)
                             .and_then(Self::peeled_collection_element_type)
                         {
-                            if let Some(peer) =
-                                crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
+                            // Only callee-narrow widths (`u64`, `i32`, …). Default WJ
+                            // `int`/`i64` from `vec![10]` must not block i32-coord paint.
+                            let default_wj_int = matches!(elem, Type::Int)
+                                || matches!(elem, Type::Custom(n) if n == "int" || n == "i64");
+                            if !default_wj_int {
+                                if let Some(peer) = crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
                                     Some(elem),
-                                )
-                            {
-                                self.assignment_int_target_type = Some(peer);
+                                ) {
+                                    self.assignment_int_target_type = Some(peer);
+                                }
                             }
                         }
                     }
                 }
-                let collection_ctor_rhs = matches!(
-                    value,
-                    Expression::MacroInvocation { name, is_repeat, .. }
-                        if name == "vec" && !*is_repeat
-                ) || matches!(value, Expression::Array { .. });
                 if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
-                    && !collection_ctor_rhs
                 {
                     // WDB-328: bare `let mut i = -1` (Unary Neg of Int, or Int lit) must
                     // emit `_i32` in i32 builders — not stick to WJ `int`/i64 from default
