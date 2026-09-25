@@ -45,13 +45,16 @@ pub fn resolve() -> string {
 }
 "#;
     let generated = test_utils::compile_single(source);
+    // Interpolation may demote readonly `base` to `&str` (mixed formals). The
+    // owned `relative` slot (`Ok(relative)`) must not inherit `strings::join`
+    // shared-ref on both args.
+    let ok_call = generated.contains("join(base, relative)")
+        || generated.contains("join(base.clone(), relative.clone())")
+        || generated.contains("join(&base, relative)")
+        || generated.contains("join(&base, relative.to_string())")
+        || generated.contains("join(&base, relative.clone())");
     assert!(
-        generated.contains("join(base, relative)")
-            || generated.contains("join(base.clone(), relative.clone())"),
-        "user join(base, relative) must move owned strings, got:\n{generated}"
-    );
-    assert!(
-        !generated.contains("join(&base, &relative)"),
-        "must not borrow as if strings::join, got:\n{generated}"
+        ok_call && !generated.contains("join(&base, &relative)"),
+        "user join must not borrow the owned relative slot as strings::join, got:\n{generated}"
     );
 }

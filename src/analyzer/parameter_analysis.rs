@@ -391,6 +391,13 @@ impl<'ast> Analyzer<'ast> {
             {
                 return Ok(OwnershipMode::Owned);
             }
+            // Pub free APIs: interpolation-only `string` formals stay Owned
+            // (`join(base, relative)` + `Ok("${base}/${relative}")` must not
+            // inherit `strings::join` `&str` demotion). Display reads are not
+            // a reason to peel the WJ `string` contract.
+            if func.is_pub && self.param_used_only_in_string_interpolation(param_name, body) {
+                return Ok(OwnershipMode::Owned);
+            }
             // Comparisons (`==`, `!=`, ordering) are PartialEq/Ord reads — do NOT force
             // Owned. Forcing Owned here wiped str_ref_optimizable (retain drops Owned)
             // and broke loop reuse of demoted `&str` formals.
@@ -660,6 +667,134 @@ impl<'ast> Analyzer<'ast> {
             Type::Parameterized(name, _) => {
                 crate::type_classification::is_map_or_set_type_name(name)
             }
+            _ => false,
+        }
+    }
+
+    /// Pub `join(base, relative)` + `Ok("${base}/${relative}")`: `base` is only a
+    /// format!/interpolation Display read. That must not demote the WJ `string` formal.
+    fn param_used_only_in_string_interpolation(
+        &self,
+        param_name: &str,
+        body: &[&Statement],
+    ) -> bool {
+        let used = body
+            .iter()
+            .any(|stmt| self.statement_uses_identifier(param_name, stmt));
+        used && !body
+            .iter()
+            .any(|stmt| self.statement_uses_ident_outside_format(param_name, stmt))
+    }
+
+    fn statement_uses_ident_outside_format(&self, name: &str, stmt: &Statement) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
+                self.expr_uses_ident_outside_format(name, expr)
+            }
+            Statement::Assignment { target, value, .. } => {
+                self.expr_uses_ident_outside_format(name, target)
+                    || self.expr_uses_ident_outside_format(name, value)
+            }
+            Statement::Return {
+                value: Some(expr), ..
+            } => self.expr_uses_ident_outside_format(name, expr),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_uses_ident_outside_format(name, condition)
+                    || then_block
+                        .iter()
+                        .any(|s| self.statement_uses_ident_outside_format(name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.statement_uses_ident_outside_format(name, s))
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_uses_ident_outside_format(name, condition)
+                    || body
+                        .iter()
+                        .any(|s| self.statement_uses_ident_outside_format(name, s))
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expr_uses_ident_outside_format(name, iterable)
+                    || body
+                        .iter()
+                        .any(|s| self.statement_uses_ident_outside_format(name, s))
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_uses_ident_outside_format(name, value)
+                    || arms
+                        .iter()
+                        .any(|arm| self.expr_uses_ident_outside_format(name, arm.body))
+            }
+            _ => false,
+        }
+    }
+
+    fn expr_uses_ident_outside_format(&self, name: &str, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::MacroInvocation {
+                name: macro_name,
+                args,
+                ..
+            } if matches!(
+                macro_name.as_str(),
+                "format" | "println" | "print" | "eprintln" | "eprint"
+            ) =>
+            {
+                false
+            }
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|arg| self.expr_uses_ident_outside_format(name, arg)),
+            Expression::Binary { left, right, .. } => {
+                self.expr_uses_ident_outside_format(name, left)
+                    || self.expr_uses_ident_outside_format(name, right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_uses_ident_outside_format(name, operand)
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_uses_ident_outside_format(name, arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                self.expr_uses_ident_outside_format(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expr_uses_ident_outside_format(name, arg))
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expr_uses_ident_outside_format(name, object)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expr_uses_ident_outside_format(name, object)
+                    || self.expr_uses_ident_outside_format(name, index)
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| self.expr_uses_ident_outside_format(name, v)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|el| self.expr_uses_ident_outside_format(name, el)),
+            Expression::Cast { expr, .. }
+            | Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. } => self.expr_uses_ident_outside_format(name, expr),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| self.statement_uses_ident_outside_format(name, s)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                self.expr_uses_ident_outside_format(name, k)
+                    || self.expr_uses_ident_outside_format(name, v)
+            }),
             _ => false,
         }
     }

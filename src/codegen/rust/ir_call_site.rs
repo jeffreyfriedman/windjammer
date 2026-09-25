@@ -80,7 +80,8 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Analyzer `Owned` on a bare WJ `string` is not enough — `parse_level` / `slugify`
     /// keep that flag after demoting the Rust formal to `&str`. Shared-ref emission
-    /// (`emitted_rust_ref_params` / `callee_emits_shared_rust_ref_param`) wins.
+    /// (`emitted_rust_ref_params` / `callee_emits_shared_rust_ref_param`) wins
+    /// **on the resolved callee**, not a stdlib homonym (`url::parse` vs local `parse`).
     pub(crate) fn cross_crate_dep_arg_confirms_owned(
         &self,
         callee_name: &str,
@@ -99,67 +100,85 @@ impl<'ast> CodeGenerator<'ast> {
         self.cross_crate_dep_arg_emission(callee_name, arg_index).0
     }
 
-    fn cross_crate_dep_arg_emission(&self, callee_name: &str, arg_index: usize) -> (bool, bool) {
+    /// One callee signature: path-qualified / import-alias first, then same-crate
+    /// exact local. Never OR every `parse`/`get` in the registry (Shared≠Lock).
+    pub(crate) fn resolve_cross_crate_dep_signature(
+        &self,
+        callee_name: &str,
+    ) -> Option<crate::analyzer::FunctionSignature> {
         let lookup = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup.as_ref();
         let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
+        let path_qualified = lookup_ref.contains("::")
+            || self.is_import_alias_cross_crate_call(callee_name);
 
-        let confirms_shared = |rs: &crate::analyzer::FunctionSignature| -> bool {
-            let pidx = rs.arg_param_index(arg_index);
-            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
-                || rs
-                    .emitted_rust_ref_params
+        let from_reg = |reg: &crate::analyzer::SignatureRegistry, key: &str| {
+            reg.get_signature(key).cloned()
+        };
+
+        if path_qualified {
+            if let Some(s) = from_reg(&self.signature_registry, lookup_ref).or_else(|| {
+                self.global_signature_registry
                     .as_ref()
-                    .and_then(|f| f.get(pidx))
-                    .copied()
-                    == Some(true)
-        };
-        let confirms_owned = |rs: &crate::analyzer::FunctionSignature| -> bool {
-            if confirms_shared(rs) {
-                return false;
+                    .and_then(|g| from_reg(g, lookup_ref))
+            }) {
+                return Some(s);
             }
-            let pidx = rs.arg_param_index(arg_index);
-            Self::sig_arg_confirms_owned_emission(rs, arg_index)
-                || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(rs, pidx)
-        };
-
-        let scan = |reg: &crate::analyzer::SignatureRegistry| -> (bool, bool) {
-            let mut shared = false;
-            let mut owned = false;
-            let mut consider = |rs: &crate::analyzer::FunctionSignature| {
-                if confirms_shared(rs) {
-                    shared = true;
-                }
-                if confirms_owned(rs) {
-                    owned = true;
-                }
-            };
-            if let Some(rs) = reg
-                .get_signature(lookup_ref)
-                .or_else(|| reg.get_signature(callee_name))
+            if let Some(s) = self
+                .global_signature_registry
+                .as_ref()
+                .and_then(|g| g.find_unique_signature_ending_with(simple).cloned())
+                .or_else(|| {
+                    self.signature_registry
+                        .find_unique_signature_ending_with(simple)
+                        .cloned()
+                })
             {
-                consider(rs);
+                return Some(s);
             }
-            for (_key, rs) in reg.signatures_for_method_name(simple) {
-                consider(rs);
-            }
-            if let Some(rs) = reg.get_signature(simple) {
-                consider(rs);
-            }
-            (shared, owned)
-        };
-
-        let mut shared = false;
-        let mut owned = false;
-        let (s, o) = scan(&self.signature_registry);
-        shared |= s;
-        owned |= o;
-        if let Some(g) = self.global_signature_registry.as_ref() {
-            let (s, o) = scan(g);
-            shared |= s;
-            owned |= o;
+            return None;
         }
-        (shared, owned)
+
+        // Bare same-crate name (`parse`, `get`, `stringify`): local exact wins.
+        // A global `url::parse` / `HashMap::get` must not steal the slot.
+        if let Some(s) = from_reg(&self.signature_registry, callee_name)
+            .or_else(|| from_reg(&self.signature_registry, lookup_ref))
+            .or_else(|| from_reg(&self.signature_registry, simple))
+        {
+            return Some(s);
+        }
+        if let Some(g) = self.global_signature_registry.as_ref() {
+            if let Some(s) = g.find_unique_signature_ending_with(simple).cloned() {
+                return Some(s);
+            }
+            if let Some(s) = from_reg(g, callee_name)
+                .or_else(|| from_reg(g, lookup_ref))
+                .or_else(|| from_reg(g, simple))
+            {
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    fn cross_crate_dep_arg_emission(&self, callee_name: &str, arg_index: usize) -> (bool, bool) {
+        let Some(rs) = self.resolve_cross_crate_dep_signature(callee_name) else {
+            return (false, false);
+        };
+        let pidx = rs.arg_param_index(arg_index);
+        let shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&rs, pidx)
+            || rs
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|f| f.get(pidx))
+                .copied()
+                == Some(true);
+        if shared {
+            return (true, false);
+        }
+        let owned = Self::sig_arg_confirms_owned_emission(&rs, arg_index)
+            || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&rs, pidx);
+        (false, owned)
     }
 
     pub(crate) fn is_collection_key_lookup_at_site(

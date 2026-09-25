@@ -521,7 +521,19 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .then(|| gen.get_signature_with_global(func_name).cloned())
                                 .flatten(),
                         ];
-                        let callee_wants_str = candidates.iter().flatten().any(|sig| {
+                        // Pick first — `strings::join` in the candidate set must not mark
+                        // a user `join` owned slot as `&str` (any-homonym leak).
+                        let best_sig = crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
+                            candidates,
+                        )
+                        .map(|sig| {
+                            crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
+                                &gen.signature_registry,
+                                func_name,
+                                sig,
+                            )
+                        });
+                        let slot_wants_shared = |sig: &crate::analyzer::FunctionSignature| {
                             let pidx = sig.arg_param_index(i);
                             crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                 sig, pidx,
@@ -535,11 +547,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 .and_then(|f| f.get(pidx))
                                 .copied()
                                 == Some(true)
-                        }) || gen.preregistered_free_call_arg_expects_borrow(func_name, i);
-                        let best_sig =
-                            crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature(
-                                candidates,
-                            );
+                        };
+                        let callee_wants_str = best_sig.as_ref().is_some_and(slot_wants_shared)
+                            || gen.preregistered_free_call_arg_expects_borrow(func_name, i);
                         // Defining-module owned `String` emission beats stale stubs that
                         // lack `emitted_rust_ref_params` (WDB-301: do not `&` into owned).
                         let callee_confirmed_owned_string = dep_owned
