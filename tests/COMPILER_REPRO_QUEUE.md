@@ -1,5 +1,20 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.457 (2026-09-25) — owned `FnOnce` closures stay by-value (`spawn(move ||)`)
+
+| Gate | Status |
+|------|--------|
+| `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ isolate GREEN — `spawn(move ||` not `spawn((move ||` |
+| spawn-not-ref / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** encoding. `rust_shared_borrow` treated `move || …` as a compound expr and wrapped `&(move || …)`. Last-writer then peeled `&` (closure Identity) and left `spawn((move || …))`. `move` was already inferred; the wrap was leftover Borrow encoding.
+
+**What became unnecessary:** `&(closure)` wrap + paren leftover after the closure peel. Closures are Identity in `rust_shared_borrow` (same as `apply_shared_borrow_prefix`). No new method-name list / `ir_call_site` peel.
+
+**Gates:** `cargo test --release --lib -- rust_shared_borrow_keeps_move_closure_by_value` → **1 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_thread_spawn_move_keyword_must_be_preserved_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **6 passed**.
+
+**Follow-up isolate (still RED):** `bug_mut_param_passthrough_no_shared_amp_test` — `&mut DenseCsr` into `&mut` callee emits `take_in_edges(&csr)`.
+
 ## P3.456 (2026-09-25) — only-forward `Vec` formals stay owned (WDB-285 class)
 
 | Gate | Status |
@@ -751,7 +766,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
 | P1 | **`mpsc::SyncSender` type for bounded channels (`Sender`≠`SyncSender`)** | `bug_mpsc_sync_sender_type_for_bounded_channel_test` | ✅ tip GREEN (P3.293) — `BoundedIntSender` cargo-checks; `wj-sync` bounded live |
 | P1 | **`std::thread::spawn(move \|\| …)` with Arc capture still wraps `&(move \|\|…)`** | `bug_thread_spawn_move_arc_must_not_be_ref_test` | ✅ tip GREEN (P3.294) — parser `move\|\|` closure + FnOnce Identity peel |
-| P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — emit `spawn(move \|\| …)`; cargo-check GREEN |
+| P1 | **`spawn(move \|\|)` must preserve `move` keyword (not emit bare `\|\|`)** | `bug_thread_spawn_move_keyword_must_be_preserved_test` | ✅ isolate GREEN (P3.457) — `spawn(move \|\|` (unwrap leftover `&(…)` wrap) |
 | P1 | **Library multipass strips `spawn(move \|\|)` `move` keyword** | `bug_module_file_spawn_move_keyword_must_be_preserved_test` | ✅ tip GREEN (P3.295) — library `--module-file` preserves `move` |
 | P1 | **Library multipass strips `spawn(move \|\|)` when closure starts with `while`** | `bug_module_file_spawn_move_in_worker_loop_must_be_preserved_test` | ✅ tip GREEN (2026-09-16) — P3.297 While/Loop capture analysis |
 | P1 | **`mut out: Vec<u8>` returned owned must not demote to `&Vec<u8>` (`wj-uuid`)** | `bug_mut_owned_vec_u8_return_must_not_demote_to_ref_test` | ✅ tip GREEN (2026-09-16) — P3.298 returned Vec must not demote |

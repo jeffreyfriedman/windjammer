@@ -204,8 +204,34 @@ pub fn encode_ownership(ownership: &OwnedType, target: Target) -> OwnershipEncod
     }
 }
 
+/// FnOnce / closure texts must stay by-value (`move || …`). Shared-borrow
+/// encoding used to emit `&(move || …)`; last-writer then peeled `&` and left
+/// `spawn((move || …))` (P3.457). Identity here matches `apply_shared_borrow_prefix`.
+fn rust_closure_identity(expr: &str) -> Option<String> {
+    let mut t = expr.trim();
+    while t.starts_with('&') && !t.starts_with("&mut ") {
+        t = t[1..].trim();
+    }
+    let inner = if t.starts_with('(') && t.ends_with(')') {
+        t[1..t.len() - 1].trim()
+    } else {
+        t
+    };
+    if inner.starts_with("move ||")
+        || inner.starts_with("||")
+        || (inner.starts_with('|') && inner.contains('|'))
+    {
+        Some(inner.to_string())
+    } else {
+        None
+    }
+}
+
 /// Wrap `expr` in a shared borrow, parenthesizing when needed for precedence.
 pub(crate) fn rust_shared_borrow(expr: &str) -> String {
+    if let Some(closure) = rust_closure_identity(expr) {
+        return closure;
+    }
     // Rust string literals are already `&str`; `&"…"` is `&&str`.
     if crate::codegen::rust::expression_utilities::is_rust_string_literal_text(expr) {
         return expr.to_string();
@@ -621,6 +647,15 @@ mod tests {
         assert_eq!(rust_shared_borrow("'.'"), "'.'");
         assert_eq!(rust_shared_borrow("'/'"), "'/'");
         assert_eq!(rust_shared_borrow("key"), "&key");
+    }
+
+    #[test]
+    fn rust_shared_borrow_keeps_move_closure_by_value() {
+        let body = "move || match cell.lock() { Ok(_) => {} Err(_) => {} }";
+        assert_eq!(rust_shared_borrow(body), body);
+        assert_eq!(rust_shared_borrow(&format!("&({body})")), body);
+        assert_eq!(rust_shared_borrow(&format!("({body})")), body);
+        assert_eq!(rust_shared_borrow("|| x"), "|| x");
     }
 
     #[test]
