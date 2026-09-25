@@ -66,6 +66,16 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // WDB-212: bare Custom in WJ AST is not owned emission when codegen demoted
                 // to `&T` (`timeseries_ingest_batch_point_count(batch: &Batch)`).
+                // Prefer `param_types` Reference wrap (sync from `conn: &Connection`) over
+                // the WJ AST formal — otherwise reuse clones a non-Clone runtime type.
+                if matches!(t, Type::Custom(_))
+                    && sig
+                        .param_types
+                        .get(pidx)
+                        .is_some_and(|pt| matches!(pt, Type::Reference(_)))
+                {
+                    return false;
+                }
                 matches!(t, Type::Custom(_))
                     && !crate::codegen::rust::stdlib_method_traits::is_map_type(t)
                     && !crate::codegen::rust::stdlib_method_traits::is_set_type(t)
@@ -326,7 +336,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .copied()
                     == Some(true);
                 if wants_borrow {
-                    return Some(arg_str.to_string());
+                    return Some(crate::ir::target_encodings::rust_shared_borrow(arg_str));
                 }
             }
         }
@@ -3927,6 +3937,8 @@ impl<'ast> CodeGenerator<'ast> {
             || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
                 sig, arg_index,
             )
+            || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+            || self.callee_arg_expects_borrow_at_call(callee_name, arg_index)
             || (sig
                 .formal_param_type(param_idx)
                 .or_else(|| sig.param_types.get(param_idx))
@@ -3934,42 +3946,25 @@ impl<'ast> CodeGenerator<'ast> {
                 && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     sig, param_idx,
                 ));
+        // Shared-ref formals reborrow — peel stale `.clone()` / `&x.clone()` via the
+        // encoding helper (Connection reuse; non-text identifiers used to fall through
+        // and preserve `conn.clone()`).
         if callee_wants_shared_ref {
-            let mut normalize_shared_ref_borrow = |mut base: String| -> String {
-                base =
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(&base).to_string();
-                if base.ends_with(".to_string()") {
-                    base = base.trim_end_matches(".to_string()").to_string();
-                }
-                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut base);
-                if base.starts_with('&') {
-                    base
-                } else {
-                    format!("&{base}")
-                }
-            };
-            match arg_expr {
-                Expression::Identifier { name, .. } => {
-                    let caller_text_borrow = self.str_ref_optimized_params.contains(name)
-                        || (self.emitted_rust_ref_formals.contains(name)
-                            && self.current_function_params.iter().any(|p| {
-                                p.name == *name
-                                    && crate::codegen::rust::types::is_windjammer_text_type(
-                                        &p.type_,
-                                    )
-                            }));
-                    if caller_text_borrow {
-                        return normalize_shared_ref_borrow(arg_str.to_string());
-                    }
-                }
-                Expression::FieldAccess { .. }
-                | Expression::Index { .. }
-                | Expression::Call { .. }
-                | Expression::MethodCall { .. } => {
-                    return normalize_shared_ref_borrow(arg_str.to_string());
-                }
-                _ => {}
-            }
+            return crate::ir::target_encodings::rust_shared_borrow(arg_str);
+        }
+        // Runtime types without Clone (`Connection`) cannot be auto-cloned; reuse
+        // must move or borrow. Never invent `.clone()` from reuse analysis.
+        let formal_non_clone = sig
+            .formal_param_type(param_idx)
+            .or_else(|| sig.param_types.get(param_idx))
+            .is_some_and(|t| self.type_is_runtime_non_clone(t));
+        if formal_non_clone
+            || matches!(
+                arg_expr,
+                Expression::Identifier { name, .. } if self.binding_is_runtime_non_clone(name)
+            )
+        {
+            return arg_str.to_string();
         }
         if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
             return rewritten;
@@ -4312,66 +4307,6 @@ impl<'ast> CodeGenerator<'ast> {
             _ => false,
         };
         if needs {
-            // Borrow callees never consume — loop reuse passes borrow/bare, not `.clone()`.
-            if callee_wants_shared_ref {
-                if let Expression::Identifier { name, .. } = arg_expr {
-                    let caller_text_borrow = self.str_ref_optimized_params.contains(name)
-                        || (self.emitted_rust_ref_formals.contains(name)
-                            && self.current_function_params.iter().any(|p| {
-                                p.name == *name
-                                    && crate::codegen::rust::types::is_windjammer_text_type(
-                                        &p.type_,
-                                    )
-                            }));
-                    if caller_text_borrow {
-                        let mut base =
-                            crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
-                                .to_string();
-                        if base.ends_with(".to_string()") {
-                            base = base.trim_end_matches(".to_string()").to_string();
-                        }
-                        crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut base);
-                        return base;
-                    }
-                }
-                if arg_str.starts_with('&') {
-                    return arg_str.to_string();
-                }
-                return format!(
-                    "&{}",
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
-                );
-            }
-            let preserve_for_reuse = match arg_expr {
-                Expression::Identifier { name, .. } => {
-                    analysis
-                        .needs_clone(name, self.current_statement_idx)
-                        .is_some()
-                        || self.caller_param_has_later_owned_formal_pass(name)
-                }
-                Expression::FieldAccess { .. } | Expression::Index { .. } => {
-                    Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
-                        analysis
-                            .needs_clone(&path, self.current_statement_idx)
-                            .is_some()
-                            || (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                sig, param_idx,
-                            ) && analysis.needs_clone_anywhere(&path))
-                    })
-                }
-                _ => false,
-            };
-            if crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
-                && !preserve_for_reuse
-            {
-                if arg_str.starts_with('&') {
-                    return arg_str.to_string();
-                }
-                return format!(
-                    "&{}",
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
-                );
-            }
             // Scalar Copy formals (i64/bool/…) need no clone; Copy aggregates/enums still do.
             let skip_clone = match arg_expr {
                 Expression::Identifier { name, .. } => {
@@ -8926,6 +8861,13 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         let lookup_callee = self.signature_lookup_callee_name(callee_name);
         let lookup = lookup_callee.as_ref();
+        // Codegen-confirmed `&T` formals beat stale analyzer Owned on bare Custom
+        // (`ensure_schema(conn: &Connection)` vs WJ `conn: db::Connection`).
+        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+            || self.preregistered_free_call_arg_expects_borrow(lookup, arg_index)
+        {
+            return false;
+        }
         if self.preregistered_free_call_arg_emits_owned(lookup, arg_index) {
             return true;
         }

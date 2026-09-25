@@ -1,5 +1,20 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.455 (2026-09-25) — `db::Connection` reuse must borrow, not `.clone()`
+
+| Gate | Status |
+|------|--------|
+| `bug_db_connection_helper_reuse_invalid_clone_test` | ✅ isolate GREEN — `ensure_schema(&conn)` / `count_rows(&conn)` |
+| spawn / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** signature (runtime non-`Clone` capability) + narrowed reconcile. Helpers already emit `conn: &Connection`. After IR encoded `ensure_schema(&conn)`, `apply_match_scrutinee_move_clone_if_needed` string-replaced `conn` → `conn.clone()` inside `&conn`, yielding `&conn.clone()` (E0599). Scanner now records runtime structs without `#[derive(Clone)]` (`Connection` yes, `Row` no).
+
+**What became unnecessary:** injecting `.clone()` on match-scrutinee call args that are already `&name` / `&mut name`, shared-ref callees, or scanned non-`Clone` types. `rust_shared_borrow` no longer early-returns on a leading `&` (that kept `&x.clone()`). No new method-name list.
+
+**Temporary reconcile remaining:** the match-scrutinee string rewrite itself (WDB-347 / todo-cli owned `Vec` reuse). Delete path: IR reuse + owned expected type should emit `.clone()` before match lowering so the rewrite can go.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_db_connection_helper_reuse_invalid_clone_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **5 passed**.
+
 ## P3.454 (2026-09-25) — `Vec[int]` index cast without undoing sentinel i64
 
 | Gate | Status |

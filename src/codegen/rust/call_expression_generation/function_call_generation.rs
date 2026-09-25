@@ -943,8 +943,15 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
 
     apply_callee_mut_borrow_to_call_args(gen, func_name, &signature, arguments, &mut args);
     // Terminal sanitize: never leave `&mut place.clone()` temps (WDB-336/337/342).
-    for arg in &mut args {
+    // `&x.clone()` is never a valid shared-ref encoding (Connection has no Clone).
+    for (i, arg) in args.iter_mut().enumerate() {
         crate::codegen::rust::expression_utilities::sanitize_mut_borrow_clone_temp(arg);
+        if gen.preregistered_free_call_arg_expects_borrow(func_name, i)
+            || gen.callee_arg_expects_borrow_at_call(func_name, i)
+            || (arg.starts_with('&') && !arg.starts_with("&mut ") && arg.ends_with(".clone()"))
+        {
+            *arg = crate::ir::target_encodings::rust_shared_borrow(arg);
+        }
     }
     apply_owned_string_literal_coercion(gen, func_name, &signature, arguments, &mut args);
 

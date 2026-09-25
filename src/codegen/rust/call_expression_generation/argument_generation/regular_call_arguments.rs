@@ -739,6 +739,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             coerced = tmp;
                         }
                     }
+                    // Codegen-confirmed `&T` formals: encode Borrow (peel stale `&x.clone()`).
+                    if gen.preregistered_free_call_arg_expects_borrow(func_name, i)
+                        || gen.callee_arg_expects_borrow_at_call(func_name, i)
+                        || (coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                            && coerced.ends_with(".clone()"))
+                    {
+                        coerced = crate::ir::target_encodings::rust_shared_borrow(&coerced);
+                    }
                     // Absolute terminal: never emit `n as usize.clone()` (WDB-300).
                     coerced =
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(

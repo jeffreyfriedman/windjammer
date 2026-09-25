@@ -36,8 +36,17 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression,
         arms: &[crate::parser::MatchArm],
     ) -> String {
-        if let Expression::Call { arguments, .. } = value {
-            for (_label, arg) in arguments {
+        if let Expression::Call {
+            function,
+            arguments,
+            ..
+        } = value
+        {
+            let callee = match function {
+                Expression::Identifier { name, .. } => Some(name.as_str()),
+                _ => None,
+            };
+            for (i, (_label, arg)) in arguments.iter().enumerate() {
                 if let Expression::Identifier { name, .. } = arg {
                     let arm_reuses = arms
                         .iter()
@@ -45,9 +54,20 @@ impl<'ast> CodeGenerator<'ast> {
                     let analysis_wants = self.auto_clone_analysis.as_ref().is_some_and(|a| {
                         a.needs_clone(name, self.current_statement_idx).is_some()
                     });
+                    let callee_shared = callee.is_some_and(|c| {
+                        self.preregistered_free_call_arg_expects_borrow(c, i)
+                            || self.callee_arg_expects_borrow_at_call(c, i)
+                    });
                     if (arm_reuses || analysis_wants)
                         && !value_str.contains(&format!("{name}.clone()"))
+                        && !self.binding_is_runtime_non_clone(name)
+                        && !callee_shared
+                        && !value_str.contains(&format!("&{name}"))
+                        && !value_str.contains(&format!("&mut {name}"))
                     {
+                        // Shared-ref / already-borrowed args do not move. String-replacing
+                        // `conn` inside `&conn` produced `&conn.clone()` (Connection has no
+                        // Clone). Runtime non-Clone types must never grow `.clone()`.
                         value_str = value_str.replace(name, &format!("{name}.clone()"));
                     }
                 }

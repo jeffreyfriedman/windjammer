@@ -231,6 +231,12 @@ pub fn append_rust_clone(expr: &str) -> String {
     if t.starts_with("&mut ") {
         return t.to_string();
     }
+    // Shared-borrow prefix + `.clone()` is `&x.clone()` (borrow-of-clone). Owned
+    // formals want `x.clone()`; shared-ref formals peel via `rust_shared_borrow`.
+    // Never emit `&x.clone()` here (WDB-184 / Connection reuse).
+    if t.starts_with('&') {
+        return append_rust_clone(borrow_base_expr(t));
+    }
     if is_copy_scalar_numeric_cast(t) {
         return t.to_string();
     }
@@ -377,6 +383,11 @@ mod tests {
         assert_eq!(append_rust_clone("(n as i32)"), "(n as i32)");
         assert_eq!(append_rust_clone("n"), "n.clone()");
         assert_eq!(append_rust_clone("n.clone()"), "n.clone()");
+        assert_eq!(
+            append_rust_clone("&conn"),
+            "conn.clone()",
+            "never emit &x.clone() — owned path wants x.clone(); shared-ref peels later"
+        );
         assert_eq!(
             coerce_borrowed_arg_to_owned("n as usize"),
             "n as usize"

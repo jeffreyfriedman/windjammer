@@ -3000,10 +3000,43 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .find(|p| p.name == name)
                 .is_some_and(|p| self.is_type_copy(&p.type_))
+            || self.binding_is_runtime_non_clone(name)
         {
             return arg_str.to_string();
         }
         crate::codegen::rust::expression_utilities::append_rust_clone(arg_str)
+    }
+
+    /// Scanned runtime struct with no `Clone` (`Connection`) — never emit `.clone()`.
+    pub(in crate::codegen::rust) fn type_is_runtime_non_clone(&self, ty: &Type) -> bool {
+        let bare = match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        let Type::Custom(name) = bare else {
+            return false;
+        };
+        let base = name.rsplit("::").next().unwrap_or(name.as_str());
+        self.signature_registry.runtime_type_is_non_clone(base)
+            || self
+                .global_signature_registry
+                .as_ref()
+                .is_some_and(|g| g.runtime_type_is_non_clone(base))
+    }
+
+    /// Binding whose resolved type is a scanned runtime non-`Clone` struct.
+    pub(in crate::codegen::rust) fn binding_is_runtime_non_clone(&self, name: &str) -> bool {
+        if self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == name)
+            .is_some_and(|p| self.type_is_runtime_non_clone(&p.type_))
+        {
+            return true;
+        }
+        self.local_var_types
+            .get(name)
+            .is_some_and(|t| self.type_is_runtime_non_clone(t))
     }
 
     /// Owned caller param → owned callee formal, used again at a later owned call site.
@@ -4207,6 +4240,9 @@ impl<'ast> CodeGenerator<'ast> {
         // WDB-343: `(x as i32)` / `(max_size as i32)` already yields a Copy scalar —
         // array-for bindings and untyped `max()` locals must not grow `.clone()`.
         if Self::arg_str_is_copy_scalar_numeric_cast(arg_str) {
+            return arg_str.to_string();
+        }
+        if self.binding_is_runtime_non_clone(name) {
             return arg_str.to_string();
         }
 

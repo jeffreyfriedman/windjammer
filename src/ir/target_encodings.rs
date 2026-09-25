@@ -206,9 +206,6 @@ pub fn encode_ownership(ownership: &OwnedType, target: Target) -> OwnershipEncod
 
 /// Wrap `expr` in a shared borrow, parenthesizing when needed for precedence.
 pub(crate) fn rust_shared_borrow(expr: &str) -> String {
-    if expr.starts_with('&') && !expr.starts_with("&mut ") {
-        return expr.to_string();
-    }
     // Rust string literals are already `&str`; `&"…"` is `&&str`.
     if crate::codegen::rust::expression_utilities::is_rust_string_literal_text(expr) {
         return expr.to_string();
@@ -217,8 +214,13 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
     if crate::codegen::rust::expression_utilities::is_rust_char_literal_text(expr) {
         return expr.to_string();
     }
+    // Keep `&mut place` — this encoder is shared-ref only.
+    if expr.starts_with("&mut ") {
+        return expr.to_string();
+    }
     // Stale auto-/user-clone before Borrow: `&x.clone()` is never needed for a shared
-    // formal — peel to the binding then borrow (WDB-270 / demoted `&str`).
+    // formal — peel to the binding then borrow (WDB-270 / Connection reuse / demoted `&str`).
+    // Must run even when `expr` already starts with `&` (early-return used to keep `&x.clone()`).
     let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr).to_string();
     if base.ends_with(".to_string()") {
         base = base.trim_end_matches(".to_string()").to_string();
@@ -226,6 +228,9 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
         base = base.trim_end_matches(".to_owned()").to_string();
     }
     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut base);
+    if base.starts_with('&') && !base.starts_with("&mut ") {
+        return base;
+    }
     if needs_borrow_parentheses(&base) {
         format!("&({base})")
     } else {
@@ -597,6 +602,12 @@ mod tests {
             "&dated_label",
             "Borrow must peel stale .clone() before &"
         );
+        assert_eq!(
+            rust_shared_borrow("&conn.clone()"),
+            "&conn",
+            "Borrow must peel stale &x.clone() (non-Clone Connection reuse)"
+        );
+        assert_eq!(rust_shared_borrow("&conn"), "&conn");
         // Owned String → &str still borrows non-literals.
         let actual = SafetyType::owned(BaseType::String);
         let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));

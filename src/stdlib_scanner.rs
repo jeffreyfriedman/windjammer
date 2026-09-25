@@ -145,6 +145,7 @@ fn scan_rust_file(
     let mut struct_fields: Vec<(String, String)> = Vec::new();
     let mut struct_body_depth: Option<i32> = None;
     let mut pending_struct_derives_copy: Option<bool> = None;
+    let mut pending_struct_derives_clone: Option<bool> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -159,8 +160,9 @@ fn scan_rust_file(
             pending_sanitizer = false;
         }
 
-        if let Some(has_copy) = parse_derive_declares_copy(trimmed) {
+        if let Some((has_copy, has_clone)) = parse_derive_declares_copy_and_clone(trimmed) {
             pending_struct_derives_copy = Some(has_copy);
+            pending_struct_derives_clone = Some(has_clone);
         }
 
         if brace_depth == 0 {
@@ -172,7 +174,11 @@ fn scan_rust_file(
                     if pending_struct_derives_copy != Some(true) {
                         registry.register_runtime_non_copy_type(&struct_name);
                     }
+                    if pending_struct_derives_clone != Some(true) {
+                        registry.register_runtime_non_clone_type(&struct_name);
+                    }
                     pending_struct_derives_copy = None;
+                    pending_struct_derives_clone = None;
                     current_struct = Some(struct_name);
                     struct_fields.clear();
                     struct_body_depth = None;
@@ -313,11 +319,20 @@ fn parse_named_struct_start(trimmed: &str) -> Option<String> {
 }
 
 /// True when `#[derive(..., Copy, ...)]`; false when derive exists without Copy; None otherwise.
-fn parse_derive_declares_copy(trimmed: &str) -> Option<bool> {
+fn parse_derive_declares_copy_and_clone(trimmed: &str) -> Option<(bool, bool)> {
     if !trimmed.starts_with("#[derive") {
         return None;
     }
-    Some(trimmed.split(|c: char| !c.is_ascii_alphanumeric()).any(|tok| tok == "Copy"))
+    let mut has_copy = false;
+    let mut has_clone = false;
+    for tok in trimmed.split(|c: char| !c.is_ascii_alphanumeric()) {
+        if tok == "Copy" {
+            has_copy = true;
+        } else if tok == "Clone" {
+            has_clone = true;
+        }
+    }
+    Some((has_copy, has_clone))
 }
 
 fn parse_pub_struct_field(trimmed: &str) -> Option<(String, String)> {
@@ -1259,6 +1274,14 @@ mod tests {
         assert!(
             crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_copy("Connection"),
             "runtime Connection is not Copy"
+        );
+        assert!(
+            crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_clone("Connection"),
+            "runtime Connection has no Clone — reuse must borrow, not .clone()"
+        );
+        assert!(
+            !crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_clone("Row"),
+            "runtime Row derives Clone — auto-clone remains valid"
         );
         let req_fields =
             crate::analyzer::SignatureRegistry::stdlib().runtime_type_fields("ServerRequest");
