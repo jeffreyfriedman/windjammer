@@ -1,5 +1,21 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.447 (2026-09-25) — same-crate `&T` passthrough + for-in-self shared borrow
+
+| Gate | Status |
+|------|--------|
+| WDB-217 isolate `touch(csr)` | ✅ GREEN — `run(csr: &DenseCsr) { touch(csr) }` not `touch(&csr)` |
+| WDB-217 tip-out pagerank | ✅ GREEN — no `csr.clone()` into `&mut DenseCsr` |
+| `test_for_in_self_field_borrows_when_self_used_in_body` | ✅ GREEN — `&self.passes` when body only shared-borrows self |
+| WDB-307 isolate + tip-out | ✅ GREEN — no regression |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** signature / lookup boundary + constraint write-back from emitted formals. Same-crate bare `touch` was treated as path-dep because the global/multipass registry also listed it (`cross_crate_import` / `dep_shared`), then a post-IR oracle re-prefixed `&` onto an already-`&DenseCsr` caller formal. `caller_owned_non_copy_formal` ignored preregistered `name: &T` strings when `emitted_rust_ref_formals` lagged. IR actual for emitted `&T` Custom formals is now Ref (Identity). P3.423 clone override only fires when the loop body mutates self / calls `&mut self`.
+
+**What became unnecessary:** same-crate names no longer enter the path-dep re-borrow block; `dep_shared` is false for bare local callees; P3.423 no longer clones `self.field` when the body only shared-borrows self. Existing `caller_formal_emitted_shared_ref` strip is no longer gated on callee registry lookup. No new `ir_call_site` peel.
+
+**Gates:** isolate cluster above → **11 passed**. No-reg: `wdb217_tip_out wdb125_ wdb126_ demoted_encode_line borrowed_dense_csr_cross_file` → **5 passed**. P3.444 tip-out still stale RED if included.
+
 ## P3.446 (2026-09-25) — TDD WDB-388 + user-join pick unit
 
 | Gate | Status |
@@ -3058,7 +3074,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 | Gate | Status |
 |------|--------|
-| MultiFile **WDB-307** `for node in index.graph.nodes` move | ❌ RED — MultiFile + tip-out vector_topk |
+| MultiFile **WDB-307** `for node in index.graph.nodes` move | ✅ isolate + tip-out GREEN (P3.447 recheck) |
 | Tip **WDB-308** wave1 CLI `u32=0_usize` / `args[i+1]` | ✅ MultiFile + tip-out GREEN (P3.400) |
 | Tip **WDB-309** BFS `&mut csr` without `mut` param | ❌ RED — tip-out/gen beamer_parallel; MultiFile isolate GREEN |
 | Tip **WDB-304–306** | ✅ MultiFile GREEN (P3.391); tip-out may lag |

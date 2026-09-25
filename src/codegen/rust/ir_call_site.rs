@@ -112,7 +112,19 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> bool {
+        // Same-crate bare names (`touch`, `join`) are decided by local registry + IR.
+        // Treating them as "dep shared" re-prefixes `&` onto already-`&T` formals
+        // (`run(csr: &DenseCsr) { touch(&csr) }` — WDB-217).
+        if !self.callee_is_path_qualified_or_import_alias(callee_name) {
+            return false;
+        }
         self.cross_crate_dep_arg_emission(callee_name, arg_index).0
+    }
+
+    /// Path-dep / `use pkg::fn as alias` — not a same-crate bare identifier.
+    pub(crate) fn callee_is_path_qualified_or_import_alias(&self, callee_name: &str) -> bool {
+        let lookup = self.signature_lookup_callee_name(callee_name);
+        lookup.contains("::") || self.is_import_alias_cross_crate_call(callee_name)
     }
 
     /// One callee signature: path-qualified / import-alias first, then same-crate
@@ -2063,6 +2075,8 @@ impl<'ast> CodeGenerator<'ast> {
                     crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced)
                 );
             } else if !coerced.starts_with('&')
+                && !arg_binding_already_rust_ref
+                && !matches!(actual.ownership, OwnedType::Ref(_))
                 && matches!(
                     arg_expr,
                     Expression::Identifier { .. } | Expression::FieldAccess { .. }
@@ -8050,6 +8064,16 @@ impl<'ast> CodeGenerator<'ast> {
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                 {
                     return SafetyType::borrowed(BaseType::String, Region::fresh(13));
+                }
+                // Any emitted `&T` formal (Custom / Vec / …) is already a Rust ref —
+                // do not classify as Owned and let later oracles re-prefix `&`.
+                if self.current_fn_emitted_formal_is_shared_ref(name)
+                    && !self.identifier_already_mut_ref(name)
+                {
+                    return self.safety_type_for_param_binding(
+                        arg_expr,
+                        OwnedType::Ref(Region::fresh(14)),
+                    );
                 }
                 if self.is_type_copy(&param.type_)
                     && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)

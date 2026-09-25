@@ -388,7 +388,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         && !coerced.starts_with("&mut ")
                     {
                         if let Expression::Identifier { name, .. } = arg {
-                            coerced = format!("&{name}");
+                            // Already-`&T` caller formals reborrow as the name (`touch(csr)`).
+                            if !gen.identifier_binding_already_rust_ref(name) {
+                                coerced = format!("&{name}");
+                            }
                         }
                     } else if (dep_owned
                         || (!func_name.contains("::")
@@ -723,11 +726,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             {
                                 coerced = format!("&{name}");
                             }
-                            if gen.caller_formal_emitted_shared_ref(name)
-                                && coerced == format!("&{name}")
-                            {
-                                coerced = name.to_string();
-                            }
+                        }
+                        // Always honor caller emit-truth: `run(csr: &DenseCsr)` → `touch(csr)`.
+                        // Must not sit behind callee registry lookup (WDB-217).
+                        if gen.caller_formal_emitted_shared_ref(name)
+                            && coerced == format!("&{name}")
+                        {
+                            coerced = name.to_string();
                         }
                     }
                     if let Expression::Identifier { name, .. } = arg {

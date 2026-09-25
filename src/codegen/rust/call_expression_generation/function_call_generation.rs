@@ -887,18 +887,11 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // (apps/wj-todo-cli → wj-validate) — never blanket-borrow every string arg.
     let lookup_callee = gen.signature_lookup_callee_name(func_name);
     let lookup_ref = lookup_callee.as_ref();
-    let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
     let import_alias = gen.is_import_alias_cross_crate_call(func_name);
-    let cross_crate_import = import_alias
-        || lookup_ref.contains("::")
-        || gen
-            .global_signature_registry
-            .as_ref()
-            .is_some_and(|g| {
-                g.get_signature(lookup_ref).is_some()
-                    || g.get_signature(simple).is_some()
-                    || g.find_unique_signature_ending_with(simple).is_some()
-            });
+    // Same-crate bare names (`touch`) must not be treated as path-dep just because
+    // the global/multipass registry also lists them — that re-prefixes `&` onto
+    // already-`&T` caller formals (WDB-217 `touch(&csr)`).
+    let cross_crate_import = import_alias || lookup_ref.contains("::");
     if cross_crate_import {
         let resolved_dep = gen.resolve_cross_crate_dep_signature(func_name);
         let dep_sig = resolved_dep.as_ref().or_else(|| signature.as_ref());
@@ -917,7 +910,10 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx)
                     || gen.preregistered_free_call_arg_expects_borrow(func_name, i)
                 {
-                    if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                    if !arg_str.starts_with('&')
+                        && !arg_str.starts_with("&mut ")
+                        && !gen.identifier_binding_already_rust_ref(name)
+                    {
                         *arg_str = format!("&{name}");
                     }
                     continue;

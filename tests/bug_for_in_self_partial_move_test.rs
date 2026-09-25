@@ -28,10 +28,7 @@ use std::process::Command;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_for_in_self_field_borrows_when_self_used_in_body() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
