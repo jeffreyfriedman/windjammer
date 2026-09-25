@@ -524,11 +524,22 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Bare `error` after `use std::log` → `log_mod::error` when that import uniquely provides it.
+    ///
+    /// A same-crate user free-fn with the exact bare name (`join` vs `strings::join`)
+    /// shadows the imported runtime module — do not rewrite the lookup key.
     pub(in crate::codegen::rust) fn imported_runtime_qualified_callee(
         &self,
         func_name: &str,
     ) -> Option<String> {
         use crate::analyzer::stdlib_method_traits::unique_imported_runtime_callee_key;
+        if let Some(local) = self.signature_registry.get_signature(func_name) {
+            if !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                local,
+            ) && !local.name.contains("::")
+            {
+                return None;
+            }
+        }
         let imports = &self.runtime_std_module_imports;
         unique_imported_runtime_callee_key(func_name, imports, &self.signature_registry)
             .or_else(|| {
@@ -1600,6 +1611,15 @@ impl<'ast> CodeGenerator<'ast> {
             .and_then(|g| g.get_signature(name));
         match (local, global) {
             (Some(l), Some(g))
+                if !crate::codegen::rust::signature_promotion::signature_param_shapes_compatible(
+                    l, g,
+                ) && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                    l,
+                ) =>
+            {
+                Some(l)
+            }
+            (Some(l), Some(g))
                 if crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
                     g, l,
                 ) =>
@@ -1730,6 +1750,15 @@ impl<'ast> CodeGenerator<'ast> {
         // Same refresh preference as `get_signature_with_global`: defining-module
         // owned emission must beat importer analysis stubs (create→post AppDeps).
         match (local, global) {
+            (Some(l), Some(g))
+                if !crate::codegen::rust::signature_promotion::signature_param_shapes_compatible(
+                    l, g,
+                ) && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                    l,
+                ) =>
+            {
+                Some(l)
+            }
             (Some(l), Some(g))
                 if crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
                     g, l,

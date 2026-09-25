@@ -1218,6 +1218,21 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
         .or_else(|| stdlib.get_fallback_signature(callee_name))
     {
         if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
+            // Bare user APIs with a different payload shape (`join(string, string)` vs
+            // `strings::join(Vec, str)`) must not inherit the runtime baseline borrow.
+            let user_shape_blocks = |sig: &crate::analyzer::FunctionSignature| {
+                !crate::codegen::rust::signature_promotion::signature_param_shapes_compatible(
+                    sig, baseline,
+                ) && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                    sig,
+                )
+            };
+            if !callee_name.contains("::")
+                && (signature.is_some_and(user_shape_blocks)
+                    || registry.get_signature(callee_name).is_some_and(user_shape_blocks))
+            {
+                return false;
+            }
             return true;
         }
     }

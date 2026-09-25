@@ -18,6 +18,54 @@ fn normalize_signature_param_types(types: &[Type]) -> Vec<Type> {
         .collect()
 }
 
+fn type_shape_eq(a: &Type, b: &Type) -> bool {
+    let a = match a {
+        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+        other => other,
+    };
+    let b = match b {
+        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+        other => other,
+    };
+    let text = |n: &str| matches!(n, "str" | "String" | "string");
+    match (a, b) {
+        (Type::String, Type::String) => true,
+        (Type::String, Type::Custom(n)) | (Type::Custom(n), Type::String) if text(n) => true,
+        (Type::Custom(x), Type::Custom(y)) if text(x) && text(y) => true,
+        (Type::Vec(x), Type::Vec(y)) => type_shape_eq(x, y),
+        (Type::Parameterized(n, xs), Type::Parameterized(m, ys))
+            if n == m && xs.len() == ys.len() =>
+        {
+            xs.iter().zip(ys.iter()).all(|(x, y)| type_shape_eq(x, y))
+        }
+        _ => a == b,
+    }
+}
+
+fn signature_user_param_shapes(sig: &FunctionSignature) -> Vec<Type> {
+    let raw = if !sig.formal_param_types.is_empty() {
+        normalize_signature_param_types(&sig.formal_param_types)
+    } else {
+        normalize_signature_param_types(&sig.param_types)
+    };
+    if sig.has_self_receiver && !raw.is_empty() {
+        raw.into_iter().skip(1).collect()
+    } else {
+        raw
+    }
+}
+
+/// Same-suffix APIs with incompatible payloads (`join(string, string)` vs
+/// `strings::join(Vec, str)`) are different functions — never first-shared-ref-wins.
+pub(crate) fn signature_param_shapes_compatible(
+    a: &FunctionSignature,
+    b: &FunctionSignature,
+) -> bool {
+    let a = signature_user_param_shapes(a);
+    let b = signature_user_param_shapes(b);
+    a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| type_shape_eq(x, y))
+}
+
 fn arg_count_matches(sig: &FunctionSignature, call_arg_count: usize) -> bool {
     effective_user_arg_count(sig) == call_arg_count
 }
@@ -725,6 +773,13 @@ pub(crate) fn merge_codegen_refresh_metadata(
     into: &mut FunctionSignature,
     from: &FunctionSignature,
 ) {
+    // Distinct APIs that share a suffix (`join(string, string)` vs `strings::join(Vec, str)`)
+    // must not OR-union emission flags. Same-API WJ stub vs runtime `&str` still merges.
+    if !signature_param_shapes_compatible(into, from)
+        && !signature_is_wj_std_stub_or_runtime_qualified(into)
+    {
+        return;
+    }
     let Some(ref from_flags) = from.emitted_rust_ref_params else {
         return;
     };
@@ -736,8 +791,7 @@ pub(crate) fn merge_codegen_refresh_metadata(
     if into_mixed && !defining_mixed_owned_emission_beats(from, into) {
         return;
     }
-    let replacing_with_mixed =
-        from_mixed && defining_mixed_owned_emission_beats(from, into);
+    let replacing_with_mixed = from_mixed && defining_mixed_owned_emission_beats(from, into);
     let prior_flags = into.emitted_rust_ref_params.clone();
     let merged_flags: Vec<bool> = if replacing_with_mixed {
         from_flags.clone()
@@ -862,7 +916,11 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
             continue;
         };
         if reg.emitted_rust_ref_params.is_some() {
-            best = Some(pick_stronger_codegen_refresh(best, reg));
+            if signature_param_shapes_compatible(into, reg)
+                || signature_is_wj_std_stub_or_runtime_qualified(into)
+            {
+                best = Some(pick_stronger_codegen_refresh(best, reg));
+            }
         }
     }
     if let Some(simple) = keys
@@ -870,7 +928,10 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
         .map(|k| k.rsplit("::").next().unwrap_or(k.as_str()))
     {
         if let Some(reg) = registry.find_unique_signature_ending_with(simple) {
-            if reg.emitted_rust_ref_params.is_some() {
+            if reg.emitted_rust_ref_params.is_some()
+                && (signature_param_shapes_compatible(into, reg)
+                    || signature_is_wj_std_stub_or_runtime_qualified(into))
+            {
                 best = Some(pick_stronger_codegen_refresh(best, reg));
             }
         }
@@ -1245,12 +1306,15 @@ fn owned_user_refresh_beats_stdlib_shared_ref(
     owned: &FunctionSignature,
     shared: &FunctionSignature,
 ) -> bool {
-    method_registry_reflects_emitted_owned(owned)
-        && !owned.formal_param_types.is_empty()
+    let same_suffix = sig_simple_name(&shared.name) == sig_simple_name(&owned.name);
+    let distinct_api =
+        shared.name != owned.name || !signature_param_shapes_compatible(owned, shared);
+    (method_registry_reflects_emitted_owned(owned) || !owned.formal_param_types.is_empty())
         && !signature_is_wj_std_stub_or_runtime_qualified(owned)
-        && signature_is_wj_std_stub_or_runtime_qualified(shared)
-        && sig_simple_name(&shared.name) == sig_simple_name(&owned.name)
-        && shared.name != owned.name
+        && same_suffix
+        && distinct_api
+        && (signature_is_wj_std_stub_or_runtime_qualified(shared)
+            || !signature_param_shapes_compatible(owned, shared))
         && shared
             .emitted_rust_ref_params
             .as_ref()
@@ -1300,9 +1364,16 @@ where
                 if arity_ok {
                     match &shared_ref_refresh {
                         None => shared_ref_refresh = Some(sig),
+                        Some(incumbent) if defining_mixed_owned_emission_beats(&sig, incumbent) => {
+                            shared_ref_refresh = Some(sig);
+                        }
                         Some(incumbent)
-                            if defining_mixed_owned_emission_beats(&sig, incumbent) =>
+                            if !signature_param_shapes_compatible(&sig, incumbent)
+                                && !signature_is_wj_std_stub_or_runtime_qualified(&sig)
+                                && signature_is_wj_std_stub_or_runtime_qualified(incumbent) =>
                         {
+                            // Distinct APIs (`join(string, string)` vs `strings::join(Vec, str)`):
+                            // do not let first-shared-ref keep the stdlib homonym.
                             shared_ref_refresh = Some(sig);
                         }
                         Some(_) => {}
@@ -1357,6 +1428,16 @@ where
             return Some(owned.clone());
         }
     }
+    // User `join(string, string)` with no `emitted_rust_ref_params` yet only lands
+    // in `first`. Do not let first-shared-ref keep `strings::join(Vec, str)`.
+    if let (Some(shared), Some(user)) = (&shared_ref_refresh, &first) {
+        if !signature_param_shapes_compatible(user, shared)
+            && !signature_is_wj_std_stub_or_runtime_qualified(user)
+            && signature_is_wj_std_stub_or_runtime_qualified(shared)
+        {
+            return Some(user.clone());
+        }
+    }
     shared_ref_refresh
         .or(mut_borrow_refresh)
         .or(refresh_without_shared_ref)
@@ -1371,17 +1452,13 @@ pub(crate) fn owned_emission_slot_count(sig: &FunctionSignature) -> usize {
     sig.param_ownership
         .iter()
         .enumerate()
-        .filter(|(idx, own)| {
+        .filter(|(idx, _)| {
             if sig.has_self_receiver && *idx == 0 {
                 return false;
             }
-            matches!(own, OwnershipMode::Owned)
-                && sig
-                    .emitted_rust_ref_params
-                    .as_ref()
-                    .and_then(|f| f.get(*idx))
-                    .copied()
-                    != Some(true)
+            // Codegen-owned `String` (`emitted=false`) counts even when analyzer
+            // ownership is still Borrowed from interpolation/`contains` reads.
+            emitted_owned_arg_contract(sig, *idx)
         })
         .count()
 }
@@ -1620,6 +1697,23 @@ fn local_owned_wj_string_api_beats_borrowed_homonym(
     if !resolved_borrowed {
         return false;
     }
+    // Distinct payload shapes (`(string, string)` vs `(Vec, str)`) are different APIs
+    // even when the stdlib sig is stored under the bare key `join`.
+    if !signature_param_shapes_compatible(local, resolved) {
+        return (0..local.param_ownership.len()).any(|idx| {
+            if local.has_self_receiver && idx == 0 {
+                return false;
+            }
+            matches!(local.param_ownership.get(idx), Some(OwnershipMode::Owned))
+                || emitted_owned_arg_contract(local, idx)
+                || local
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(idx))
+                    .copied()
+                    == Some(false)
+        });
+    }
     // Defining-module bare-pass demotion (`sf1_cli::run_parquet_load` with shared-ref
     // flags) must not lose to an importer stub that still looks like a WJ string API
     // (`Type::String` formals + stale `emitted=false`). Stdlib homonyms (`strings::join`)
@@ -1740,6 +1834,38 @@ pub(crate) fn skip_runtime_std_fallback_for_local_homonym(
     })
 }
 
+/// User `join(string, string)` owned slot vs runtime `strings::join(Vec, &str)`.
+///
+/// Distinct APIs that share a bare name must not inherit the stdlib slot's `&str`
+/// borrow when the local user formal emits owned `String`.
+pub(crate) fn user_owned_slot_beats_stdlib_homonym(
+    user: &FunctionSignature,
+    other: &FunctionSignature,
+    arg_index: usize,
+) -> bool {
+    if signature_is_wj_std_stub_or_runtime_qualified(user) {
+        return false;
+    }
+    if !signature_is_wj_std_stub_or_runtime_qualified(other) {
+        return false;
+    }
+    if signature_param_shapes_compatible(user, other) {
+        return false;
+    }
+    let pidx = user.arg_param_index(arg_index);
+    emitted_owned_arg_contract(user, pidx)
+        || user
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(false)
+        || (matches!(user.param_ownership.get(pidx), Some(OwnershipMode::Owned))
+            && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                user, pidx,
+            ))
+}
+
 /// Prefer defining-module refresh with shared-ref emission (`&str`, `&Vec`, …) over a
 /// stale call-site stub lacking `emitted_rust_ref_params` confirmation (regression-049).
 pub(crate) fn signature_is_wj_std_stub_or_runtime_qualified(sig: &FunctionSignature) -> bool {
@@ -1779,6 +1905,14 @@ pub(crate) fn prefer_shared_ref_signature(
             .copied()
             == Some(true);
     if let Some(ref pref) = preferred {
+        if !signature_param_shapes_compatible(pref, challenger) {
+            if !signature_is_wj_std_stub_or_runtime_qualified(pref) {
+                return Some(pref.clone());
+            }
+            if !signature_is_wj_std_stub_or_runtime_qualified(challenger) {
+                return Some(challenger.clone());
+            }
+        }
         // Mixed defining formals beat importer all-ref stubs. Do not let that
         // also freeze a WJ `strings::join` / `Connection::query` owned-string
         // stub over a runtime-scanned `&str`/`AsRef<str>`.
@@ -2062,8 +2196,16 @@ pub(crate) fn refresh_call_site_signature_for_arg(
             } else {
                 local.get_fallback_signature(simple)
             },
-            stdlib.get_signature(lookup_name),
-            stdlib.get_signature(simple),
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                stdlib.get_signature(lookup_name)
+            },
+            if skip_local_homonym_fallback {
+                None
+            } else {
+                stdlib.get_signature(simple)
+            },
         ]
     };
     for challenger in challengers {
@@ -2423,10 +2565,7 @@ mod promote_overlapping_tests {
                 Type::String,
             ],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -2440,10 +2579,7 @@ mod promote_overlapping_tests {
             param_types: vec![Type::String, Type::String],
             formal_param_types: vec![Type::String, Type::String],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -2572,16 +2708,75 @@ mod prefer_shared_runtime_tests {
     }
 
     #[test]
+    fn pick_prefers_user_join_without_emitted_flags_over_strings_join() {
+        let user = FunctionSignature {
+            name: "join".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let std = runtime_join();
+        let picked = pick_codegen_refreshed_signature([Some(std), Some(user)]).expect("pick");
+        assert_eq!(
+            picked.name, "join",
+            "first-shared-ref must not keep strings::join over user join, got {}",
+            picked.name
+        );
+    }
+
+    #[test]
+    fn two_string_join_shape_is_not_strings_join_vec() {
+        let user = FunctionSignature {
+            name: "join".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let std = runtime_join();
+        assert!(
+            !signature_param_shapes_compatible(&user, &std),
+            "user join(string, string) must not match strings::join(Vec, str)"
+        );
+        assert!(owned_user_refresh_beats_stdlib_shared_ref(&user, &std));
+        let mut infected = user.clone();
+        merge_codegen_refresh_metadata(&mut infected, &std);
+        assert!(
+            infected.emitted_rust_ref_params.is_none()
+                || infected.emitted_rust_ref_params.as_deref() == Some(&[true, false][..]),
+            "strings::join must not OR-union [true, true] onto user join, got {:?}",
+            infected.emitted_rust_ref_params
+        );
+        assert!(
+            matches!(infected.param_ownership.get(1), Some(OwnershipMode::Owned)),
+            "relative slot must stay Owned after refused merge, got {:?}",
+            infected.param_ownership
+        );
+    }
+
+    #[test]
     fn prefer_shared_ref_keeps_local_user_join_over_strings_join() {
         let local = FunctionSignature {
             name: "join".into(),
             param_types: vec![Type::String, Type::String],
             formal_param_types: vec![Type::String, Type::String],
             param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -2601,6 +2796,81 @@ mod prefer_shared_runtime_tests {
             merged.emitted_rust_ref_params.as_deref(),
             Some(&[false, false][..])
         );
+    }
+
+    #[test]
+    fn prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter() {
+        // Isolate reality: interpolation demotes `base` (`[true, false]`) while
+        // `Ok(relative)` keeps the second slot owned. Per-arg refresh at idx=1 must
+        // not treat runtime `strings::join`'s `&str` delimiter as the same API.
+        let local = FunctionSignature {
+            name: "join".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let std = runtime_join();
+        let merged = prefer_shared_ref_signature(Some(local.clone()), Some(&std), 1).unwrap();
+        assert_eq!(
+            merged.name, "join",
+            "owned relative slot must not inherit strings::join; got {}",
+            merged.name
+        );
+        let from_std = prefer_shared_ref_signature(Some(std.clone()), Some(&local), 1).unwrap();
+        assert_eq!(
+            from_std.name, "join",
+            "stdlib incumbent must yield to distinct-shape user join; got {}",
+            from_std.name
+        );
+        let mut borrowed_emit = local.clone();
+        borrowed_emit.param_ownership = vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed];
+        assert_eq!(
+            owned_emission_slot_count(&borrowed_emit),
+            1,
+            "emitted=false String slot counts as owned even if analyzer is Borrowed"
+        );
+        assert!(defining_mixed_owned_emission_beats(&borrowed_emit, &std));
+        assert!(
+            emitted_owned_arg_contract(&merged, 1),
+            "relative must stay owned-emission, got {:?}",
+            merged.emitted_rust_ref_params
+        );
+
+        let mut local_reg = crate::analyzer::SignatureRegistry::empty();
+        local_reg.add_function("join".into(), local.clone());
+        let refreshed = refresh_call_site_signature_for_arg(
+            Some(local),
+            "join",
+            1,
+            None,
+            &local_reg,
+            &HashMap::new(),
+        )
+        .expect("refresh");
+        assert_eq!(refreshed.name, "join");
+        assert!(
+            emitted_owned_arg_contract(&refreshed, 1),
+            "refresh(join, idx=1) must keep user owned relative, got {:?}",
+            refreshed.emitted_rust_ref_params
+        );
+
+        let picked =
+            pick_codegen_refreshed_signature([Some(std.clone()), Some(borrowed_emit.clone())])
+                .expect("pick");
+        assert_eq!(
+            picked.name, "join",
+            "first-shared-ref must not keep strings::join over distinct-shape user join; got {}",
+            picked.name
+        );
+        assert!(emitted_owned_arg_contract(&picked, 1));
     }
 
     #[test]
@@ -2859,6 +3129,88 @@ pub fn join_tail(parts: Vec<string>) -> string {
     }
 
     #[test]
+    fn codegen_user_join_must_not_borrow_owned_relative() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        let source = r#"
+use std::strings
+
+pub fn join(base: string, relative: string) -> Result<string, string> {
+    if strings.contains(relative, "://") {
+        return Ok(relative)
+    }
+    let mut parts = Vec::new()
+    parts.push("x")
+    let _ = strings.join(parts, "/")
+    Ok("${base}/${relative}")
+}
+
+pub fn resolve() -> string {
+    let base = "https://example.com/a/b"
+    let relative = "c"
+    match join(base, relative) {
+        Ok(out) => out,
+        Err(e) => e,
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let join_sig = registry.get_signature("join").cloned();
+        assert!(
+            join_sig.as_ref().is_some_and(|s| {
+                !signature_is_wj_std_stub_or_runtime_qualified(s)
+                    && matches!(s.param_ownership.get(1), Some(OwnershipMode::Owned))
+                    && s.formal_param_types.get(1).is_some_and(|t| {
+                        matches!(t, Type::String)
+                            || crate::codegen::rust::types::is_windjammer_text_type(t)
+                    })
+            }),
+            "analyzer registry join must be user (string, string), got {:#?}",
+            join_sig
+        );
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_global_signature_registry(std::sync::Arc::new(
+            crate::analyzer::SignatureRegistry::stdlib().clone(),
+        ));
+        let refreshed = codegen
+            .refresh_call_site_signature_for_arg(join_sig.clone(), "join", 1)
+            .expect("refresh");
+        assert_eq!(
+            refreshed.name, "join",
+            "refresh(join,1) must keep user join, got {:#?}",
+            refreshed
+        );
+        assert!(
+            matches!(refreshed.param_ownership.get(1), Some(OwnershipMode::Owned)),
+            "refresh(join,1) relative must stay Owned, got {:#?}",
+            refreshed
+        );
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            codegen.imported_runtime_qualified_callee("join").is_none(),
+            "local user join must shadow use std::strings → strings::join lookup"
+        );
+        let ok_call = generated.contains("join(base, relative)")
+            || generated.contains("join(base.clone(), relative.clone())")
+            || generated.contains("join(&base, relative)")
+            || generated.contains("join(&base, relative.to_string())")
+            || generated.contains("join(&base, relative.clone())");
+        assert!(
+            ok_call && !generated.contains("join(&base, &relative)"),
+            "user join must not borrow owned relative. registry={join_sig:#?} refresh={refreshed:#?}\n{generated}"
+        );
+    }
+
+    #[test]
     fn refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub() {
         use crate::analyzer::{FunctionSignature, OwnershipMode};
         use crate::parser::Type;
@@ -3109,10 +3461,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
                 Type::String,
             ],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -3126,10 +3475,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
             param_types: vec![Type::String, Type::String],
             formal_param_types: vec![Type::String, Type::String],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -3153,12 +3499,9 @@ pub fn join_tail(parts: Vec<string>) -> string {
             mixed_first.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
         );
-        let kept = prefer_shared_text_ref_signature(
-            Some(mixed_first.clone()),
-            Some(&all_ref_stub),
-            1,
-        )
-        .expect("prefer");
+        let kept =
+            prefer_shared_text_ref_signature(Some(mixed_first.clone()), Some(&all_ref_stub), 1)
+                .expect("prefer");
         assert_eq!(
             kept.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
@@ -3178,10 +3521,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
                 Type::String,
             ],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -3201,10 +3541,7 @@ pub fn join_tail(parts: Vec<string>) -> string {
             ],
             formal_param_types: vec![Type::String, Type::String],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,

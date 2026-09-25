@@ -6,12 +6,17 @@
 |------|--------|
 | WDB-388 MultiFile | 🆕 isolate (P3.442 twin) — `Vec3::new(a, b, c)` must not `&a` |
 | WDB-388 tip-out | 🆕 product scan — `Vec3::new(&` in gen/ |
-| `prefer_shared_ref_keeps_local_user_join_over_strings_join` | 🆕 unit — bare user `join` must not inherit `strings::join` |
-| `user_join_two_strings_moves_owned_locals` | ❌ isolate RED — formals mixed `(&str, String)`; call still `join(&base, &relative)` |
+| `prefer_shared_ref_keeps_local_user_join_over_strings_join` | ✅ unit GREEN |
+| `codegen_user_join_must_not_borrow_owned_relative` | ✅ in-process GREEN |
+| `user_join_two_strings_moves_owned_locals` | ✅ isolate GREEN — mixed `(&str, String)`; call no longer `join(&base, &relative)` |
 
-**Root cause layer:** signature pick (bootstrap). `prefer_shared_ref_signature` keeps local owned WJ string API when challenger is runtime-std `strings::join`. Isolate call-site still over-borrows the owned `relative` slot.
+**Root cause layer:** signature / lookup boundary. `use std::strings` rewrote bare `join` → `strings::join` via `imported_runtime_qualified_callee`, so `dep_shared` borrowed the owned `relative` slot. Shape-aware pick/prefer/merge keeps `join(string, string)` distinct from `strings::join(Vec, str)` (no first-shared-ref / OR-union). Local user free-fn shadows imported runtime module.
 
-**Gates:** not yet GREEN for isolate — next: pick by formal types (two `string` vs `Vec`+`&str`), not more peels.
+**What became unnecessary:** post-IR `finalize_borrowed_text` was not the rewriter once `text_sig` stayed user; no new peel. `dep_shared` no longer consults `strings::join` for a same-crate `join`.
+
+**Gates:** `cargo test --release --lib -- codegen_user_join_must_not_borrow_owned_relative prefer_shared_ref_keeps_user_join two_string_join_shape prefer_shared_ref_picks_runtime_str refresh_join_delimiter codegen_strings_join_vec_arg` → 6 passed. `cargo test --release --test all -- user_join_two_strings_moves_owned_locals bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 5 passed.
+
+**Still 🆕:** WDB-388 Vec3::new isolate / tip-out.
 
 ## P3.445 (2026-09-24) — `f32::MAX` associated path is Copy (no `.clone()`)
 
@@ -108,7 +113,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **Gates:** `cargo test --release --lib -- owned_custom_clone_text_into_ref_formal_prefixes_borrow owned_string_clone_text_into_str_ref_keeps_clone_without_amp` → 2 passed. `cargo test --release --test all -- demoted_encode_line_clone_must_auto_borrow demoted_struct_loop wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites wdb126_module_file_demoted_vec_formal_must_borrow wdb169_module_file_owned_helper_into_owned_formal_must_not_borrow wdb190_module_file_feed_unified_owned_startup_must_not_borrow bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 12 passed.
 
-**Still RED:** `user_join_two_strings_moves_owned_locals` — formals are mixed `(&str, String)` (interpolation demotes `base`; `Ok(relative)` keeps owned) but the call site emits `join(&base, &relative)` (over-borrows the owned slot). Next: signature/constraint so the owned `relative` slot is not borrowed as if `strings::join`.
+**Follow-up (P3.446):** `user_join_two_strings_moves_owned_locals` is now isolate GREEN — local user `join` shadows `use std::strings` lookup; shape-aware pick keeps the owned `relative` slot.
 
 ## P3.440 (2026-09-24) — WDB-379 `format!` must not lower to `write!`/`unwrap`
 
