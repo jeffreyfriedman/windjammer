@@ -38,7 +38,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 |------|--------|
 | `copy_local_into_owned_f32_formal_must_not_borrow` | ✅ MultiFile GREEN (2026-09-24) |
 | `cross_module_copy_local_into_vec3_new_must_not_borrow` | ✅ MultiFile GREEN (2026-09-24) — math/vec3 + nav |
-| Tip-out `gen/ai/navmesh.rs` | ❌ RED pending tip regen |
+| Tip-out `gen/ai/navmesh.rs` | ✅ tip GREEN (2026-09-24 regen) — no `Vec3::new(&x)` / `Triangle::new(&id)` |
 
 **Product:** engine cargo-check E0308 ×437 after P3.424b regen. Source is `Vec3::new(x, y, z)`; first identifier is over-borrowed into owned `f32`/`u32` formals.
 
