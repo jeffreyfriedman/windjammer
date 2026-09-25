@@ -104,6 +104,14 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
 
+    /// Library/file `const NAME: int` — type-driven, not a const-name list.
+    fn identifier_is_wj_int_module_const(&self, name: &str) -> bool {
+        self.module_const_type_for_binding(name).is_some_and(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if matches!(n.as_str(), "int" | "i64"))
+        })
+    }
+
     /// P3.353: WJ `int` const/locals in void/i32-coord builders (not `int` params).
     pub(in crate::codegen::rust) fn wj_int_coord_builder_operand(
         &self,
@@ -117,6 +125,9 @@ impl<'ast> CodeGenerator<'ast> {
         };
         if self.explicit_wj_int_annotated_locals.contains(name) {
             return false;
+        }
+        if self.identifier_is_wj_int_module_const(name) {
+            return true;
         }
         if self.current_function_params.iter().any(|p| {
             p.name == *name
@@ -204,6 +215,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if self.literal_init_wj_int_loop_counters.contains(name) {
                 return false;
+            }
+            if self.identifier_is_wj_int_module_const(name) {
+                return true;
             }
             return matches!(
                 self.local_var_types.get(name.as_str()),

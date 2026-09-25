@@ -1,5 +1,18 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.450 (2026-09-25) — WJ `int` module const in i32-coord builders
+
+| Gate | Status |
+|------|--------|
+| `i32_coord_literal_peers_must_not_emit_i64` | ✅ isolate GREEN — `VIEWER_GRID as i32 / 2_i32` + cargo-check |
+| spawn / mpsc / WDB-127 / i32 range/neg-while | ✅ GREEN — no regression |
+
+**Root cause layer:** encoding / mixed-int promotion. `const VIEWER_GRID: int` is i64 in Rust, but i32-coord promotion (`wj_int_coord_builder_operand` / `mixed_arith_should_prefer_i32_over_i64`) only treated *locals*, so `VIEWER_GRID / 2_i32` never got `as i32`. Type-driven: `module_const_types` is WJ `int`/`i64`, not a const-name list.
+
+**What became unnecessary:** no new peel. Existing P3.353 `as i32` path now fires for module consts. No `ir_call_site` change.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- i32_coord_literal_peers_must_not_emit_i64` → 1 passed. Related cluster (coord + spawn + mpsc + WDB-127 + i32 range/neg-while) → **10 passed**.
+
 ## P3.449 (2026-09-25) — unannotated `vec![10, 20]` inherits callee `Vec<u64>`
 
 | Gate | Status |
@@ -817,7 +830,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
-| P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.356) — coord prefer-i32 same-width literal peers |
+| P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.450) — module `int` const casts `as i32` in coord builders |
 | P1 | **generated Cargo.toml release profile must default LTO** | `bug_generated_cargo_toml_release_profile_lto_test` | ✅ tip GREEN (P3.355) |
 | P1 | **format temps → demoted `hash_join_semi` `&str` must borrow** | `bug_wdb246_module_file_format_temp_into_demoted_hash_join_must_borrow_test` | ✅ tip GREEN (P3.365) — module-file + tip-out; twin WDB-244 |
 | P1 | **demoted `&Vec` → owned `ecs_soa_archetype_new` must clone** | `bug_wdb241_module_file_demoted_vec_into_owned_ecs_archetype_must_clone_test` | 🆕 RED / filed (P3.320); twin WDB-224 |
