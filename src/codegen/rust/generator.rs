@@ -1571,14 +1571,23 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> Option<FunctionSignature> {
-        crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+        let mut sig = crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
             initial,
             callee_name,
             arg_index,
             self.global_signature_registry.as_deref(),
             &self.signature_registry,
             &self.import_fn_alias_map,
-        )
+        )?;
+        // Same-file demotion (`encode_line(todo: Todo)` → `todo: &Todo`) lives on
+        // preregistered emitted formals, not the AST/registry signature. Write it
+        // back so IR expected + force_owned see Ref, not a stale owned Custom.
+        if !crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
+            callee_name,
+        ) {
+            self.sync_call_sig_from_preregistered_free_fn_emission(callee_name, &mut sig);
+        }
+        Some(sig)
     }
 
     pub(crate) fn get_signature_with_global(&self, name: &str) -> Option<&FunctionSignature> {

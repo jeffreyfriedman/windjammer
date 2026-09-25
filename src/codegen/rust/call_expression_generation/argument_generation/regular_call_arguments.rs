@@ -379,9 +379,24 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         );
                     }
                     let lookup_callee = gen.signature_lookup_callee_name(func_name);
-                    if !func_name.contains("::")
-                        && (gen.preregistered_free_call_arg_emits_owned(func_name, i)
-                            || gen.preregistered_free_call_arg_emits_owned(lookup_callee.as_ref(), i))
+                    let dep_shared = gen.cross_crate_dep_arg_confirms_shared(func_name, i)
+                        || gen.cross_crate_dep_arg_confirms_shared(lookup_callee.as_ref(), i);
+                    let dep_owned = gen.cross_crate_dep_arg_confirms_owned(func_name, i)
+                        || gen.cross_crate_dep_arg_confirms_owned(lookup_callee.as_ref(), i);
+                    if dep_shared
+                        && !coerced.starts_with('&')
+                        && !coerced.starts_with("&mut ")
+                    {
+                        if let Expression::Identifier { name, .. } = arg {
+                            coerced = format!("&{name}");
+                        }
+                    } else if (dep_owned
+                        || (!func_name.contains("::")
+                            && (gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                                || gen.preregistered_free_call_arg_emits_owned(
+                                    lookup_callee.as_ref(),
+                                    i,
+                                ))))
                         && coerced.starts_with('&')
                         && !coerced.starts_with("&mut ")
                     {
@@ -527,8 +542,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             );
                         // Defining-module owned `String` emission beats stale stubs that
                         // lack `emitted_rust_ref_params` (WDB-301: do not `&` into owned).
-                        let callee_confirmed_owned_string = !callee_wants_str
-                            && best_sig.as_ref().is_some_and(|sig| {
+                        let callee_confirmed_owned_string = dep_owned
+                            || (!callee_wants_str
+                                && !dep_shared
+                                && best_sig.as_ref().is_some_and(|sig| {
                                 let pidx = sig.arg_param_index(i);
                                 crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                     sig, pidx,
@@ -541,7 +558,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                     && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
                                         sig, pidx,
                                     ))
-                            });
+                            }));
                         let caller_owned_text = (gen.current_function_params.iter().any(|p| {
                             p.name == *name
                                 && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)

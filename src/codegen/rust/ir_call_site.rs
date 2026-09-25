@@ -77,26 +77,89 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Path-dep / import-alias metadata: this arg slot emits owned Rust (`String`), not `&str`.
     /// Used to peel IR over-borrow (`&value` into `require_nonempty(field: &str, value: String)`).
-    fn cross_crate_dep_arg_confirms_owned(&self, callee_name: &str, arg_index: usize) -> bool {
+    ///
+    /// Analyzer `Owned` on a bare WJ `string` is not enough — `parse_level` / `slugify`
+    /// keep that flag after demoting the Rust formal to `&str`. Shared-ref emission
+    /// (`emitted_rust_ref_params` / `callee_emits_shared_rust_ref_param`) wins.
+    pub(crate) fn cross_crate_dep_arg_confirms_owned(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        let (shared, owned) = self.cross_crate_dep_arg_emission(callee_name, arg_index);
+        owned && !shared
+    }
+
+    /// Path-dep slot emits shared `&str` / `&T` (notes-api → `log_tagged` / `slugify`).
+    pub(crate) fn cross_crate_dep_arg_confirms_shared(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        self.cross_crate_dep_arg_emission(callee_name, arg_index).0
+    }
+
+    fn cross_crate_dep_arg_emission(&self, callee_name: &str, arg_index: usize) -> (bool, bool) {
         let lookup = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup.as_ref();
         let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-        let Some(global) = self.global_signature_registry.as_ref() else {
-            return false;
-        };
-        let dep_sig = global
-            .get_signature(lookup_ref)
-            .or_else(|| global.get_signature(callee_name))
-            .or_else(|| global.get_signature(simple))
-            .or_else(|| global.find_unique_signature_ending_with(simple));
-        dep_sig.is_some_and(|rs| {
+
+        let confirms_shared = |rs: &crate::analyzer::FunctionSignature| -> bool {
             let pidx = rs.arg_param_index(arg_index);
-            matches!(
-                rs.param_ownership.get(pidx),
-                Some(crate::analyzer::OwnershipMode::Owned)
-            ) || Self::sig_arg_confirms_owned_emission(rs, arg_index)
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(rs, pidx)
+                || rs
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|f| f.get(pidx))
+                    .copied()
+                    == Some(true)
+        };
+        let confirms_owned = |rs: &crate::analyzer::FunctionSignature| -> bool {
+            if confirms_shared(rs) {
+                return false;
+            }
+            let pidx = rs.arg_param_index(arg_index);
+            Self::sig_arg_confirms_owned_emission(rs, arg_index)
                 || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(rs, pidx)
-        })
+        };
+
+        let scan = |reg: &crate::analyzer::SignatureRegistry| -> (bool, bool) {
+            let mut shared = false;
+            let mut owned = false;
+            let mut consider = |rs: &crate::analyzer::FunctionSignature| {
+                if confirms_shared(rs) {
+                    shared = true;
+                }
+                if confirms_owned(rs) {
+                    owned = true;
+                }
+            };
+            if let Some(rs) = reg
+                .get_signature(lookup_ref)
+                .or_else(|| reg.get_signature(callee_name))
+            {
+                consider(rs);
+            }
+            for (_key, rs) in reg.signatures_for_method_name(simple) {
+                consider(rs);
+            }
+            if let Some(rs) = reg.get_signature(simple) {
+                consider(rs);
+            }
+            (shared, owned)
+        };
+
+        let mut shared = false;
+        let mut owned = false;
+        let (s, o) = scan(&self.signature_registry);
+        shared |= s;
+        owned |= o;
+        if let Some(g) = self.global_signature_registry.as_ref() {
+            let (s, o) = scan(g);
+            shared |= s;
+            owned |= o;
+        }
+        (shared, owned)
     }
 
     pub(crate) fn is_collection_key_lookup_at_site(
@@ -1902,6 +1965,8 @@ impl<'ast> CodeGenerator<'ast> {
             || coerced.ends_with(".to_owned()"))
             && coerced.starts_with('&')
             && !coerced.starts_with("&mut ")
+            // `String.clone()` deref-coerces to `&str`. Custom `&T` must keep `&item.clone()`.
+            && crate::ir::coercion::rust_owned_temp_deref_coerces_into_shared_ref(&expected)
         {
             coerced =
                 crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced).to_string();
@@ -7071,6 +7136,9 @@ impl<'ast> CodeGenerator<'ast> {
             // Never strip `&` for text formals the callee emits as `&str` / shared ref
             // (regression-049 `replay_to_lsn(&self.path)`).
             && !emits_shared_ref
+            // Same-file demotion is recorded on preregistered formals before sibling
+            // bodies run (`encode_line` → `todo: &Todo`). Do not force-owned peel.
+            && !self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
             // WDB-169: owned Call/MethodCall temps (`empty_bakeoff_run()`) must move into
             // owned Custom formals even when a stale global shared-ref homonym exists —
             // `&empty_bakeoff_run()` is never a valid shared-ref binding.
@@ -8950,7 +9018,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Same-file preregistered Rust formals beat stale homonym borrow metadata on `sig`
     /// (`join(base, relative)` vs `strings::join` scanner baseline).
-    fn sync_call_sig_from_preregistered_free_fn_emission(
+    pub(in crate::codegen::rust) fn sync_call_sig_from_preregistered_free_fn_emission(
         &self,
         callee_name: &str,
         sig: &mut crate::analyzer::FunctionSignature,
