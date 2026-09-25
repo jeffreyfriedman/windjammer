@@ -739,12 +739,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             coerced = tmp;
                         }
                     }
-                    // Codegen-confirmed `&T` formals: encode Borrow (peel stale `&x.clone()`).
-                    if gen.preregistered_free_call_arg_expects_borrow(func_name, i)
-                        || gen.callee_arg_expects_borrow_at_call(func_name, i)
-                        || (coerced.starts_with('&')
-                            && !coerced.starts_with("&mut ")
-                            && coerced.ends_with(".clone()"))
+                    // Shared-ref slots only: peel stale `&x.clone()`. Never restack
+                    // `&` onto an already-`&mut T` / `&T` binding (Identity reborrow).
+                    let already_rust_ref = matches!(
+                        arg,
+                        Expression::Identifier { name, .. }
+                            if gen.identifier_binding_already_rust_ref(name)
+                    );
+                    let stale_shared_clone = coerced.starts_with('&')
+                        && !coerced.starts_with("&mut ")
+                        && coerced.ends_with(".clone()");
+                    if !already_rust_ref
+                        && (gen.preregistered_free_call_arg_expects_borrow(func_name, i)
+                            || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
+                            || stale_shared_clone)
                     {
                         coerced = crate::ir::target_encodings::rust_shared_borrow(&coerced);
                     }

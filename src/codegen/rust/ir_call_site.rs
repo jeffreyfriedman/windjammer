@@ -146,12 +146,11 @@ impl<'ast> CodeGenerator<'ast> {
         let lookup = self.signature_lookup_callee_name(callee_name);
         let lookup_ref = lookup.as_ref();
         let simple = lookup_ref.rsplit("::").next().unwrap_or(lookup_ref);
-        let path_qualified = lookup_ref.contains("::")
-            || self.is_import_alias_cross_crate_call(callee_name);
+        let path_qualified =
+            lookup_ref.contains("::") || self.is_import_alias_cross_crate_call(callee_name);
 
-        let from_reg = |reg: &crate::analyzer::SignatureRegistry, key: &str| {
-            reg.get_signature(key).cloned()
-        };
+        let from_reg =
+            |reg: &crate::analyzer::SignatureRegistry, key: &str| reg.get_signature(key).cloned();
 
         if path_qualified {
             if let Some(s) = from_reg(&self.signature_registry, lookup_ref).or_else(|| {
@@ -5853,15 +5852,16 @@ impl<'ast> CodeGenerator<'ast> {
                 value: Literal::Int(_),
                 ..
             } => true,
-            Expression::Binary { op, left, right, .. }
-                if matches!(
-                    op,
-                    crate::parser::BinaryOp::Add
-                        | crate::parser::BinaryOp::Sub
-                        | crate::parser::BinaryOp::Mul
-                        | crate::parser::BinaryOp::Div
-                        | crate::parser::BinaryOp::Mod
-                ) =>
+            Expression::Binary {
+                op, left, right, ..
+            } if matches!(
+                op,
+                crate::parser::BinaryOp::Add
+                    | crate::parser::BinaryOp::Sub
+                    | crate::parser::BinaryOp::Mul
+                    | crate::parser::BinaryOp::Div
+                    | crate::parser::BinaryOp::Mod
+            ) =>
             {
                 self.expression_emits_as_wj_int_width(left)
                     || self.expression_emits_as_wj_int_width(right)
@@ -8120,7 +8120,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .unwrap_or(BaseType::Inferred);
                 return SafetyType::owned(base);
             }
-            if self.inferred_mut_borrowed_params.contains(name) {
+            if self.identifier_already_mut_ref(name) {
                 return self
                     .safety_type_for_param_binding(arg_expr, OwnedType::MutRef(Region::fresh(1)));
             }
@@ -8592,8 +8592,12 @@ impl<'ast> CodeGenerator<'ast> {
         emits_owned && analysis.needs_clone_anywhere(&path)
     }
 
-    /// Shared- or mut-borrow formal at this call (demoted `&str`, `&T`, …).
-    pub(in crate::codegen::rust) fn callee_arg_expects_borrow_at_call(
+    /// Shared-borrow formal at this call (demoted `&str`, `&T`, …) — not `&mut T`.
+    ///
+    /// Last-writers that encode `rust_shared_borrow` must use this, not
+    /// [`Self::callee_arg_expects_borrow_at_call`] (that includes mut slots and
+    /// would restack `&` onto an already-`&mut` binding).
+    pub(in crate::codegen::rust) fn callee_arg_expects_shared_borrow_at_call(
         &self,
         callee: &str,
         arg_index: usize,
@@ -8611,15 +8615,26 @@ impl<'ast> CodeGenerator<'ast> {
             None,
         ) || self.global_signature_registry.as_ref().is_some_and(|g| {
             self.ir_callee_arg_expects_shared_borrow(g, callee, arg_index, None, None)
-        }) || self.ir_callee_arg_expects_mut_borrow(
-            &self.signature_registry,
-            callee,
-            arg_index,
-            None,
-            None,
-        ) || self.global_signature_registry.as_ref().is_some_and(|g| {
-            self.ir_callee_arg_expects_mut_borrow(g, callee, arg_index, None, None)
         })
+    }
+
+    /// Shared- or mut-borrow formal at this call (demoted `&str`, `&T`, `&mut T`, …).
+    pub(in crate::codegen::rust) fn callee_arg_expects_borrow_at_call(
+        &self,
+        callee: &str,
+        arg_index: usize,
+    ) -> bool {
+        self.callee_arg_expects_shared_borrow_at_call(callee, arg_index)
+            || self.ir_callee_arg_expects_mut_borrow(
+                &self.signature_registry,
+                callee,
+                arg_index,
+                None,
+                None,
+            )
+            || self.global_signature_registry.as_ref().is_some_and(|g| {
+                self.ir_callee_arg_expects_mut_borrow(g, callee, arg_index, None, None)
+            })
     }
 
     /// Clone a field/index path when auto-clone analysis recorded a move+reuse site.
@@ -8790,7 +8805,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Prefer emitted owned contracts over stale Borrowed analyzer/global stubs.
         if let Some(sig) = local_sig {
             if crate::codegen::rust::call_signature_resolution::signature_matches_resolved_callee(
-                sig, callee_name, lookup,
+                sig,
+                callee_name,
+                lookup,
             ) {
                 if self.ir_callee_arg_emits_owned_contract(
                     registry,
@@ -8878,7 +8895,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Enclosing-fn homonyms (`pub fn write` while lowering `csv.write`) must not win.
         if let Some(sig) = local_sig {
             if crate::codegen::rust::call_signature_resolution::signature_matches_resolved_callee(
-                sig, callee_name, lookup,
+                sig,
+                callee_name,
+                lookup,
             ) {
                 return check(sig);
             }
